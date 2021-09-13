@@ -1691,7 +1691,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     even_flag = np.r_[[1 - s2[a] % 2 for a in axes]]
     target_shape = np.asarray(s2)
     for a in axes:
-        target_shape[a] += even_flag
+        target_shape[a] += even_flag[a]
 
     if any(target_shape != np.asarray(s2)):
         # padding axes where in2 is even
