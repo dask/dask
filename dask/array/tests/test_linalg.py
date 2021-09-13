@@ -1180,8 +1180,25 @@ def test_convolve_broadcastable():
         y = convolve(a, b.reshape(b_shape), method="fft")
         assert_eq(x, y)
 
-    def test_zero_rank(self):
-        a = 1289
-        b = 4567
-        c = convolve(a, b)
-        assert_eq(c, a * b)
+
+def test_zero_rank():
+    a = 1289
+    b = 4567
+    c = convolve(a, b)
+    assert_eq(c, a * b)
+
+
+def test_single_element():
+    a = np.array([4967])
+    b = np.array([3920])
+    c = convolve(a, b)
+    assert_eq(c, a * b)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_2d_arrays(method):
+    a = [[1, 2, 3], [3, 4, 5]]
+    b = [[2, 3, 4], [4, 5, 6]]
+    c = convolve(a, b, method=method)
+    d = np.array([[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]])
+    assert_eq(c, d)
