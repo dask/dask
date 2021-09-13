@@ -1717,7 +1717,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     if method == "auto":
         rng = np.random.default_rng()
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        rn_block = tuple(
+        rn_block = list(
             rng.integers(low=0, high=highs[i], size=1) for i in range(in1.ndim)
         )
         in1_block_test = in1.blocks[rn_block].compute()
