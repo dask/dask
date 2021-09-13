@@ -1671,23 +1671,42 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     if not len(axes):
         return in1 * in2
     # Calculating the depth of the ghosting zones in each dimension
-    depth = {i: s2[i] // 2 for i in range(in2.ndim)}
+    depth = {i: s2[i] // 2 for i in axes}
+
+    # Deals with the case where there is at least one dimension in which we do not
+    # do the convolution that has s2[i] == s1[i] != 1
+    not_axes_but_same_shape = [
+        a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
+    ]
+    if len(not_axes_but_same_shape):
+        to_rechunk = [a for a in not_axes_but_same_shape if len(in1.chunks[a]) != 1]
+        new_chunk_size = tuple(
+            -1 if a in to_rechunk else "auto" for a in range(in1.ndim)
+        )
+        in1 = in1.rechunk(new_chunk_size)
 
     # Flags even dimensions and removes them by adding zeros
     # This is done to avoid from having some results show up twice on the edge of blocks
 
-    even_flag = np.r_[[1 - i % 2 for i in s2]]
-    target_shape = tuple(np.asarray(s2) + even_flag)
+    even_flag = np.r_[[1 - s2[a] % 2 for a in axes]]
+    target_shape = list(s2)
+    for a in axes:
+        target_shape[a] += even_flag
 
-    if target_shape != s2:
+    if target_shape != list(s2):
         # padding axes where in2 is even
-        pad_width = tuple((i, 0) for i in even_flag)
+        pad_width = tuple(
+            (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
+        )
         in2 = pad(in2, pad_width)
 
     boundary = 0  # boundary used when mode != 'periodic'
 
     if mode == "full":
-        pad_width = tuple((depth[i] - even_flag[i], depth[i]) for i in depth.keys())
+        pad_width = tuple(
+            (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
+            for i in range(in1.ndim)
+        )
         in1 = pad(in1, pad_width)
 
     if mode == "periodic":

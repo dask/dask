@@ -1163,14 +1163,6 @@ def test_convolve_same(method):
     assert_eq(c, np.array([10, 22, 34], dtype="float"))
 
 
-@pytest.mark.parametrize("method", ["fft", "oa"])
-def test_convolve_complex(method):
-    x = da.from_array([1 + 1j, 2 + 1j, 3 + 1j])
-    y = np.array([1 + 1j, 2 + 1j])
-    z = convolve(x, y, method=method)
-    assert_eq(z, np.array([2j, 2 + 6j, 5 + 8j, 5 + 5j], dtype="complex128"))
-
-
 def test_convolve_broadcastable():
     a = np.arange(27).reshape(3, 3, 3)
     b = np.arange(3)
@@ -1255,20 +1247,59 @@ def test_input_swapping(method):
         convolve(small, big, "valid")
 
 
+@pytest.mark.parametrize("axes", ["", None, 0, [0], -1, [-1]])
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_real(axes, method):
+    a = np.array([1, 2, 3])
+    expected = np.array([1.0, 4.0, 10.0, 12.0, 9.0])
+
+    if axes == "":
+        out = convolve(a, a, method=method)
+    else:
+        out = convolve(a, a, method=method, axes=axes)
+    assert_eq(out, expected)
+
+
+@pytest.mark.parametrize("axes", [1, [1], -1, [-1]])
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_real_axes(axes, method):
+    a = np.array([1, 2, 3])
+    expected = np.array([1.0, 4.0, 10.0, 12.0, 9.0])
+    a = np.tile(a, [2, 1])
+    expected = np.tile(expected, [2, 1])
+
+    out = convolve(a, a, method=method, axes=axes)
+    assert_eq(out, expected)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+@pytest.mark.parametrize("axes", ["", None, 0, [0], -1, [-1]])
+def test_convolve_complex(method, axes):
+    a = np.array([1 + 1j, 2 + 2j, 3 + 3j], dtype="complex")
+    expected = np.array([0 + 2j, 0 + 8j, 0 + 20j, 0 + 24j, 0 + 18j], dtype="complex")
+
+    if axes == "":
+        out = convolve(a, a, method=method)
+    else:
+        out = convolve(a, a, axes=axes, method=method)
+    assert_eq(out, expected)
+
+
 @pytest.mark.slow
+@pytest.mark.parametrize("method", ["fft", "oa"])
 @pytest.mark.parametrize(
     "n",
     list(range(1, 100))
     + list(range(1000, 1500))
     + np.random.RandomState(1234).randint(1001, 10000, 5).tolist(),
 )
-def test_convolve_fft_many_sizes(n):
+def test_convolve_many_sizes(n, method):
     a = np.random.rand(n) + 1j * np.random.rand(n)
     b = np.random.rand(n) + 1j * np.random.rand(n)
     expected = scipy.signal.fftconvolve(a, b, "full")
 
-    out = convolve(a, b, "full", "fft")
+    out = convolve(a, b, mode="full", method=method)
     assert_eq(out, expected)
 
-    out = convolve(a, b, "full", "fft", [0])
+    out = convolve(a, b, mode="full", method=method, axes=[0])
     assert_eq(out, expected)
