@@ -493,6 +493,11 @@ def merge(
         left_on = right_on = on
         on = None
 
+    if how not in ("left", "right", "outer", "inner"):
+        raise Exception(
+            f"Type of merge how = '{how}' is not implemented or does not exist"
+        )
+
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
     ):
