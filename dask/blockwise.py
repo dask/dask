@@ -1452,7 +1452,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
     ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
 
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +SKIP
     [[('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)]]
