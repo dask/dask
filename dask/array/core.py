@@ -694,6 +694,8 @@ def map_blocks(
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
+        if any(i < 0 for i in drop_axis):
+            raise ValueError(f"Expected drop_axis to be non-negative; got {drop_axis}.")
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
         new_axis = range(len(chunks) - len(out_ind))
