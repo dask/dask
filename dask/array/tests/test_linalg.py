@@ -1166,7 +1166,7 @@ def test_convolve_same(method):
 def test_convolve_complex(method):
     x = da.from_array([1 + 1j, 2 + 1j, 3 + 1j])
     y = np.array([1 + 1j, 2 + 1j])
-    z = convolve(x, y, method="method")
+    z = convolve(x, y, method=method)
     assert_eq(z, np.array([2j, 2 + 6j, 5 + 8j, 5 + 5j], dtype="complex128"))
 
 
