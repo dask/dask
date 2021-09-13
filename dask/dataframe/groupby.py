@@ -498,25 +498,9 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
 
 def _nunique_df_chunk(df, *index, **kwargs):
-    levels = kwargs.pop("levels")
     name = kwargs.pop("name")
 
-    g = _groupby_raise_unaligned(df, by=index)
-    if len(df) > 0:
-        grouped = g[[name]].apply(M.drop_duplicates)
-        # we set the index here to force a possibly duplicate index
-        # for our reduce step
-        if isinstance(levels, list):
-            grouped.index = pd.MultiIndex.from_arrays(
-                [grouped.index.get_level_values(level=level) for level in levels]
-            )
-        else:
-            grouped.index = grouped.index.get_level_values(level=levels)
-    else:
-        # Manually create empty version, since groupby-apply for empty frame
-        # results in df with no columns
-        grouped = g[[name]].nunique()
-        grouped = grouped.astype(df.dtypes[grouped.columns].to_dict())
+    grouped = df[[name]].set_index(list(index)).drop_duplicates()
 
     return grouped
 
@@ -1889,6 +1873,7 @@ class SeriesGroupBy(_GroupBy):
         """
         name = self._meta.obj.name
         levels = _determine_levels(self.index)
+        print("LEVELS", levels)
 
         if isinstance(self.obj, DataFrame):
             chunk = _nunique_df_chunk
