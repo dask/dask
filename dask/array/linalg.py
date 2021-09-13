@@ -1591,8 +1591,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     These include but are not limited to :
 
     * Working out the case where both input are dask arrays.
-    * Giving users the possibility to specify the to have the `mode` argument differ between axes.
-    * Dealing with the case where :math:`\\exists  i \\notin` `axes` and ``in1.shape[i] == in2.shape[i] !=1``.
+    * Giving users the possibility to have the `mode` argument differ between axes.
 
 
 
@@ -1702,12 +1701,11 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
 
     boundary = 0  # boundary used when mode != 'periodic'
 
+    # if method == "auto", we time and compute the convolution of a random
+    # block with the second input with both methods and stick witht the fastest.
     if method == "auto":
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        print(highs)
         rn_block = list(np.random.randint(0, h) for h in highs)
-        print(rn_block)
-        print(in1.chunks)
         in1_block_test = in1.blocks[rn_block].compute()
         import time
 
