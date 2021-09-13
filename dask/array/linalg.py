@@ -1718,7 +1718,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         rng = np.random.default_rng()
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
         rn_block = tuple(
-            rng.integers(low=0, high=highs[i], size="1") for i in range(in1.ndim)
+            rng.integers(low=0, high=highs[i], size=1) for i in range(in1.ndim)
         )
         in1_block_test = in1.blocks[rn_block].compute()
         import time
@@ -1744,7 +1744,11 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         dtype = "float"
 
     in_cv = in1.map_overlap(
-        cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype
+        cv_func,
+        depth=depth,
+        boundary=boundary,
+        trim=True,
+        dtype=dtype,
     )
 
     if mode == "valid":
