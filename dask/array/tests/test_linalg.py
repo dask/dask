@@ -1179,3 +1179,9 @@ def test_convolve_broadcastable():
         x = convolve(a, b.reshape(b_shape), method="oa")
         y = convolve(a, b.reshape(b_shape), method="fft")
         assert_eq(x, y)
+
+    def test_zero_rank(self):
+        a = 1289
+        b = 4567
+        c = convolve(a, b)
+        assert_eq(c, a * b)
