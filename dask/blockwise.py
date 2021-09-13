@@ -1442,6 +1442,7 @@ def rewrite_blockwise(inputs):
         io_deps=io_deps,
     )
 
+
 @_deprecated()
 def zero_broadcast_dimensions(lol, nblocks):
     """
