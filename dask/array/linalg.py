@@ -1702,18 +1702,6 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
 
     boundary = 0  # boundary used when mode != 'periodic'
 
-    if mode == "full":
-        pad_width = tuple(
-            (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
-            for i in range(in1.ndim)
-        )
-        in1 = pad(in1, pad_width)
-
-    if mode == "periodic":
-        boundary = "periodic"
-
-    cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
-
     if method == "auto":
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
         print(highs)
@@ -1734,6 +1722,18 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         else:
             method = "fft"
 
+    if mode == "full":
+        pad_width = tuple(
+            (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
+            for i in range(in1.ndim)
+        )
+        in1 = pad(in1, pad_width)
+
+    if mode == "periodic":
+        boundary = "periodic"
+
+    cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
+
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
     complex_result = in1.dtype.kind == "c" or in2.dtype.kind == "c"
@@ -1744,11 +1744,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         dtype = "float"
 
     in_cv = in1.map_overlap(
-        cv_func,
-        depth=depth,
-        boundary=boundary,
-        trim=True,
-        dtype=dtype,
+        cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
     )
 
     if mode == "valid":
