@@ -1687,10 +1687,9 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     # Flags even dimensions and removes them by adding zeros
     # This is done to avoid from having some results show up twice on the edge of blocks
 
-    even_flag = np.r_[[1 - s2[a] % 2 for a in axes]]
+    even_flag = np.r_[[1 - s2[a] % 2 if a in axes else 0 for a in range(in1.ndim)]]
     target_shape = np.asarray(s2)
-    for i in range(len(axes)):
-        target_shape[axes[i]] += even_flag[i]
+    target_shape += even_flag
 
     if any(target_shape != np.asarray(s2)):
         # padding axes where in2 is even
