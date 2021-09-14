@@ -3,6 +3,8 @@ import pytest
 pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
+from itertools import product
+
 import numpy as np
 import scipy.linalg
 import scipy.signal
@@ -1285,21 +1287,153 @@ def test_convolve_complex(method, axes):
     assert_eq(out, expected)
 
 
+@pytest.mark.skip(reason="Utils function, not a test function")
+def gen_convolve_shapes(sizes):
+    return [(a, b) for a, b in product(sizes, repeat=2) if abs(a - b) > 3]
+
+
+@pytest.mark.skip(reason="Utils function, not a test function")
+def gen_convolve_shapes_eq(sizes):
+    return [(a, b) for a, b in product(sizes, repeat=2) if a >= b]
+
+
+@pytest.mark.skip(reason="Utils function, not a test function")
+def gen_convolve_shapes_2d(sizes):
+    shapes0 = gen_convolve_shapes_eq(sizes)
+    shapes1 = gen_convolve_shapes_eq(sizes)
+    shapes = [ishapes0 + ishapes1 for ishapes0, ishapes1 in zip(shapes0, shapes1)]
+
+    modes = ["full", "valid", "same"]
+    return [
+        ishapes + (imode,)
+        for ishapes, imode in product(shapes, modes)
+        if imode != "valid"
+        or (ishapes[0] > ishapes[1] and ishapes[2] > ishapes[3])
+        or (ishapes[0] < ishapes[1] and ishapes[2] < ishapes[3])
+    ]
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("method", ["fft", "oa"])
 @pytest.mark.parametrize(
-    "n",
-    list(range(1, 100))
-    + list(range(1000, 1500))
-    + np.random.RandomState(1234).randint(1001, 10000, 5).tolist(),
+    "shape_a_0, shape_b_0",
+    gen_convolve_shapes_eq(list(range(100)) + list(range(100, 1000, 23))),
 )
-def test_convolve_many_sizes(n, method):
-    a = np.random.rand(n) + 1j * np.random.rand(n)
-    b = np.random.rand(n) + 1j * np.random.rand(n)
-    expected = scipy.signal.fftconvolve(a, b, "full")
+def test_real_manylens(method, shape_a_0, shape_b_0):
+    a = np.random.rand(shape_a_0)
+    b = np.random.rand(shape_b_0)
 
-    out = convolve(a, b, mode="full", method=method)
+    expected = scipy.signal.fftconvolve(a, b)
+
+    out = convolve(a, b, method=method)
     assert_eq(out, expected)
 
-    out = convolve(a, b, mode="full", method=method, axes=[0])
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+@pytest.mark.parametrize("shape_a_0, shape_b_0", gen_convolve_shapes([50, 47, 6, 4]))
+@pytest.mark.parametrize("is_complex", [True, False])
+@pytest.mark.parametrize("mode", ["full", "valid", "same"])
+def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method):
+
+    a = np.random.rand(shape_a_0)
+    b = np.random.rand(shape_b_0)
+    if is_complex:
+        a = a + 1j * np.random.rand(shape_a_0)
+        b = b + 1j * np.random.rand(shape_b_0)
+
+    expected = scipy.signal.fftconvolve(a, b, mode=mode)
+
+    out = convolve(a, b, mode=mode, method=method)
+
+    assert_eq(out, expected)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+@pytest.mark.parametrize("axes", [0, 1])
+@pytest.mark.parametrize("shape_a_0, shape_b_0", gen_convolve_shapes([50, 47, 6, 4]))
+@pytest.mark.parametrize("shape_a_extra", [1, 3])
+@pytest.mark.parametrize("shape_b_extra", [1, 3])
+@pytest.mark.parametrize("is_complex", [True, False])
+@pytest.mark.parametrize("mode", ["full", "valid", "same"])
+def test_1d_axes(
+    axes, shape_a_0, shape_b_0, shape_a_extra, shape_b_extra, is_complex, mode, method
+):
+    ax_a = [shape_a_extra] * 2
+    ax_b = [shape_b_extra] * 2
+    ax_a[axes] = shape_a_0
+    ax_b[axes] = shape_b_0
+
+    a = np.random.rand(*ax_a)
+    b = np.random.rand(*ax_b)
+    if is_complex:
+        a = a + 1j * np.random.rand(*ax_a)
+        b = b + 1j * np.random.rand(*ax_b)
+
+    expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
+
+    out = convolve(a, b, mode=mode, method=method, axes=axes)
+
+    assert_eq(out, expected)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+@pytest.mark.parametrize(
+    "shape_a_0, shape_b_0, " "shape_a_1, shape_b_1, mode",
+    gen_convolve_shapes_2d([50, 47, 6, 4]),
+)
+@pytest.mark.parametrize("is_complex", [True, False])
+def test_2d_noaxes(
+    shape_a_0, shape_b_0, shape_a_1, shape_b_1, mode, is_complex, method
+):
+    a = np.random.rand(shape_a_0, shape_a_1)
+    b = np.random.rand(shape_b_0, shape_b_1)
+    if is_complex:
+        a = a + 1j * np.random.rand(shape_a_0, shape_a_1)
+        b = b + 1j * np.random.rand(shape_b_0, shape_b_1)
+
+    expected = scipy.signal.fftconvolve(a, b, mode=mode)
+
+    out = convolve(a, b, mode=mode, method=method)
+
+    assert_eq(out, expected)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+@pytest.mark.parametrize("axes", [[0, 1], [0, 2], [1, 2]])
+@pytest.mark.parametrize(
+    "shape_a_0, shape_b_0, " "shape_a_1, shape_b_1, mode",
+    gen_convolve_shapes_2d([50, 47, 6, 4]),
+)
+@pytest.mark.parametrize("shape_a_extra", [1, 3])
+@pytest.mark.parametrize("shape_b_extra", [1, 3])
+@pytest.mark.parametrize("is_complex", [True, False])
+def test_2d_axes(
+    axes,
+    shape_a_0,
+    shape_b_0,
+    shape_a_1,
+    shape_b_1,
+    mode,
+    shape_a_extra,
+    shape_b_extra,
+    is_complex,
+    method,
+):
+    ax_a = [shape_a_extra] * 3
+    ax_b = [shape_b_extra] * 3
+    ax_a[axes[0]] = shape_a_0
+    ax_b[axes[0]] = shape_b_0
+    ax_a[axes[1]] = shape_a_1
+    ax_b[axes[1]] = shape_b_1
+
+    a = np.random.rand(*ax_a)
+    b = np.random.rand(*ax_b)
+    if is_complex:
+        a = a + 1j * np.random.rand(*ax_a)
+        b = b + 1j * np.random.rand(*ax_b)
+
+    expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
+
+    out = convolve(a, b, mode=mode, method=method, axes=axes)
+
     assert_eq(out, expected)
