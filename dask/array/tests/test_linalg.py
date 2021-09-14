@@ -1121,9 +1121,7 @@ def test_convolve_invalid_flags():
     ):
         convolve([1], [2], mode="chips")
 
-    with pytest.raises(
-        ValueError, match="acceptable method flags are 'oa', 'auto' or 'fft'"
-    ):
+    with pytest.raises(ValueError, match="acceptable method flags are 'oa', or 'fft'"):
         convolve([1], [2], method="chips")
 
     with pytest.raises(ValueError, match="when provided, axes cannot be empty"):

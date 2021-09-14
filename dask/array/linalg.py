@@ -1513,7 +1513,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
     return r
 
 
-def convolve(in1, in2, mode="full", method="auto", axes=None):
+def convolve(in1, in2, mode="full", method="fft", axes=None):
     """Convolve a N-dimensional dask array with another N-dimensional array
     using either the fft or the overlap-add method.
 
@@ -1560,10 +1560,8 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         ``fft``
            Convolve `in1` and `in2` using the fast Fourier transform method.
            Can only output float arrays (int or object array inputs will be
-           cast to float).
-        ``auto``
-           Choose the method automatically by comparing the speed on a random
-           block of `in1`. (Default)
+           cast to float). (Default)
+
     axes : int or array_like of ints or None, optional
           Axes over which to compute the convolution.
           The default is over all axes.
@@ -1656,8 +1654,8 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         raise ValueError(
             "acceptable mode flags are 'valid'," " 'same', 'full' or 'periodic'"
         )
-    if method not in ["fft", "oa", "auto"]:
-        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
+    if method not in ["fft", "oa"]:
+        raise ValueError("acceptable method flags are 'oa', or 'fft'")
 
     in1, in2, axes = _init_freq_conv_axes(in1, in2, mode, axes, sorted_axes=False)
 
@@ -1711,27 +1709,6 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
             (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
         )
         in2 = pad(in2, pad_width)
-
-    # if method == "auto", we time and compute the convolution of a random
-    # block with the second input with both methods and stick witht the fastest.
-    if method == "auto":
-        highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        rng = np.random.default_rng()
-        rn_block = list(rng.integers(h) for h in highs)
-        print(rn_block, highs)
-        in1_block_test = in1.blocks[rn_block].compute()
-        import time
-
-        t0 = time.time()
-        oaconvolve(in1_block_test, in2, mode="same", axes=axes)
-        t_oa = time.time() - t0
-        t0 = time.time()
-        fftconvolve(in1_block_test, in2, mode="same", axes=axes)
-        t_fft = time.time() - t0
-        if t_oa < t_fft:
-            method = "oa"
-        else:
-            method = "fft"
 
     if mode != "valid":
         pad_width = tuple(
