@@ -1,5 +1,4 @@
 import itertools
-from operator import getitem
 
 import pytest
 from tlz import merge
@@ -23,6 +22,8 @@ from dask.array.slicing import (
     take,
 )
 from dask.array.utils import assert_eq, same_keys
+
+from ..chunk import getitem
 
 
 def test_slice_1d():
