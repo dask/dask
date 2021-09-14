@@ -1632,7 +1632,6 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
 
     from .core import asarray
     from .creation import pad, stack
-    from .numpy_compat import moveaxis
 
     in1 = asarray(in1)
 
@@ -1676,12 +1675,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         new_shape = tuple(s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1)
         in1 = in1.reshape(new_shape)
         for a in not_axes_but_s1_1:
-            in1 = stack([in1] * s2[a], axis=0)
-            in1 = moveaxis(
-                in1,
-                0,
-                a,
-            )
+            in1 = stack([in1] * s2[a], axis=a)
 
     # Deals with the case where there is at least one axis a in which we do not
     # do the convolution that has s2[a] == s1[a] != 1
