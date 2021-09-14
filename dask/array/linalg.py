@@ -1735,10 +1735,12 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
 
     if mode == "valid":
         output_slicing = tuple(
-            slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1) for i in depth.keys()
+            slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1)
+            if i in depth.keys()
+            else slice(0, None, None)
+            for i in range(in1.ndim)
         )
         in_cv = in_cv[output_slicing]
-
     elif mode != "full":
         output_slicing = tuple(
             slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
