@@ -1633,16 +1633,18 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     from scipy.signal.signaltools import _init_freq_conv_axes
 
     from .core import asarray
-    from .creation import pad
+    from .creation import pad, stack
+    from .numpy_compat import moveaxis
 
     in1 = asarray(in1)
+
     if hasattr(in2, "chunks"):
         raise ValueError(
-            "second input should be a sequential numpy array_like"
-            " and not %s" % type(in2)
+            "second input should be a sequential array" " and not %s" % type(in2)
         )
     in2 = np.asarray(in2)
 
+    # Checking for trivial cases and incorrect flags
     if in1.ndim == in2.ndim == 0:  # scalar inputs
         return in1 * in2
     elif in1.ndim != in2.ndim:
@@ -1654,6 +1656,8 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         raise ValueError(
             "acceptable mode flags are 'valid'," " 'same', 'full' or 'periodic'"
         )
+    if method not in ["fft", "oa", "auto"]:
+        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
 
     in1, in2, axes = _init_freq_conv_axes(in1, in2, mode, axes, sorted_axes=False)
 
@@ -1664,16 +1668,13 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     s1 = in1.shape
     s2 = in2.shape
 
-    if method not in ["fft", "oa", "auto"]:
-        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
-
     if not len(axes):
         return in1 * in2
     # Calculating the depth of the ghosting zones in each dimension
     depth = {i: s2[i] // 2 for i in axes}
 
-    # Deals with the case where there is at least one dimension in which we do not
-    # do the convolution that has s2[i] == s1[i] != 1
+    # Deals with the case where there is at least one axis a in which we do not
+    # do the convolution that has s2[a] == s1[a] != 1
     not_axes_but_same_shape = [
         a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
     ]
@@ -1684,9 +1685,22 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         )
         in1 = in1.rechunk(new_chunk_size)
 
+    not_axes_but_s1_1 = [
+        a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
+    ]
+    if len(not_axes_but_s1_1):
+        new_shape = tuple(s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1)
+        in1 = in1.reshape(new_shape)
+        for a in not_axes_but_s1_1:
+            in1 = stack([in1] * s2[a], axis=0)
+            in1 = moveaxis(
+                in1,
+                0,
+                a,
+            )
+
     # Flags even dimensions and removes them by adding zeros
     # This is done to avoid from having some results show up twice on the edge of blocks
-
     even_flag = np.r_[[1 - s2[a] % 2 if a in axes else 0 for a in range(in1.ndim)]]
     target_shape = np.asarray(s2)
     target_shape += even_flag
@@ -1697,8 +1711,6 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
             (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
         )
         in2 = pad(in2, pad_width)
-
-    boundary = 0  # boundary used when mode != 'periodic'
 
     # if method == "auto", we time and compute the convolution of a random
     # block with the second input with both methods and stick witht the fastest.
@@ -1719,7 +1731,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         else:
             method = "fft"
 
-    if mode == "full":
+    if mode != "valid":
         pad_width = tuple(
             (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
             for i in range(in1.ndim)
@@ -1728,6 +1740,8 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
 
     if mode == "periodic":
         boundary = "periodic"
+    else:
+        boundary = 0
 
     cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
 
@@ -1743,6 +1757,12 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     in_cv = in1.map_overlap(
         cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
     )
+
+    if mode != "full":
+        output_slicing = tuple(
+            slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
+        )
+        in_cv = in_cv[output_slicing]
 
     if mode == "valid":
         output_slicing = tuple(

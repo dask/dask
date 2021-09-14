@@ -1307,9 +1307,7 @@ def gen_convolve_shapes_2d(sizes):
     return [
         ishapes + (imode,)
         for ishapes, imode in product(shapes, modes)
-        if imode != "valid"
-        or (ishapes[0] > ishapes[1] and ishapes[2] > ishapes[3])
-        or (ishapes[0] < ishapes[1] and ishapes[2] < ishapes[3])
+        if imode != "valid" or (ishapes[0] > ishapes[1] and ishapes[2] > ishapes[3])
     ]
 
 
@@ -1340,12 +1338,13 @@ def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method):
     if is_complex:
         a = a + 1j * np.random.rand(shape_a_0)
         b = b + 1j * np.random.rand(shape_b_0)
+    if mode != "valid" or (shape_a_0 > shape_b_0):
 
-    expected = scipy.signal.fftconvolve(a, b, mode=mode)
+        expected = scipy.signal.fftconvolve(a, b, mode=mode)
 
-    out = convolve(a, b, mode=mode, method=method)
+        out = convolve(a, b, mode=mode, method=method)
 
-    assert_eq(out, expected)
+        assert_eq(out, expected)
 
 
 @pytest.mark.parametrize("method", ["fft", "oa"])
@@ -1369,11 +1368,12 @@ def test_1d_axes(
         a = a + 1j * np.random.rand(*ax_a)
         b = b + 1j * np.random.rand(*ax_b)
 
-    expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
+    if mode != "valid" or a.shape[axes] > b.shape[axes]:
+        expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
 
-    out = convolve(a, b, mode=mode, method=method, axes=axes)
+        out = convolve(a, b, mode=mode, method=method, axes=axes)
 
-    assert_eq(out, expected)
+        assert_eq(out, expected)
 
 
 @pytest.mark.parametrize("method", ["fft", "oa"])
