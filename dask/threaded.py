@@ -3,28 +3,53 @@ A threaded shared-memory scheduler
 
 See local.py
 """
-import atexit
 import multiprocessing.pool
 import sys
 import threading
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-from threading import Lock, current_thread
 
 from . import config
 from .local import MultiprocessingPoolExecutor, get_async
 from .system import CPU_COUNT
 from .utils_test import add, inc  # noqa: F401
 
+_EXECUTORS = threading.local()
+
+
+class _ExecutorPool:
+    """A thread-local pool of executors. When the thread closes, this pool will
+    be GC'd and all contained executors shutdown"""
+
+    def __init__(self):
+        self.executors = {}
+
+    def __del__(self):
+        for executor in self.executors.values():
+            executor.shutdown()
+
+    def get(self, num_workers):
+        if num_workers not in self.executors:
+            self.executors[num_workers] = ThreadPoolExecutor(num_workers)
+        return self.executors[num_workers]
+
+
+def get_executor(num_workers=None):
+    """Get a ThreadPoolExecutor given a specified number of workers.
+
+    Executors are local to their calling thread, and are cached between
+    subsequent calls. If the calling thread is closed, all executors will be
+    automatically cleaned up.
+    """
+    if not hasattr(_EXECUTORS, "pool"):
+        _EXECUTORS.pool = _ExecutorPool()
+    if not num_workers:  # treat both 0 and None the same
+        # TODO: if num_workers is 1 should we still use more threads?
+        num_workers = CPU_COUNT
+    return _EXECUTORS.pool.get(num_workers)
+
 
 def _thread_get_id():
-    return current_thread().ident
-
-
-main_thread = current_thread()
-default_pool = None
-pools = defaultdict(dict)
-pools_lock = Lock()
+    return threading.current_thread().ident
 
 
 def pack_exception(e, dumps):
@@ -55,30 +80,22 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
     >>> get(dsk, ['w', 'y'])
     (4, 2)
     """
-    global default_pool
+    # Older versions of dask supported configuring a ThreadPool to use across
+    # invocations, we preserve that here (even though we use
+    # concurrent.futures.Executor` instances now).
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None)
-    thread = current_thread()
 
-    with pools_lock:
-        if pool is None:
-            if num_workers is None and thread is main_thread:
-                if default_pool is None:
-                    default_pool = ThreadPoolExecutor(CPU_COUNT)
-                    atexit.register(default_pool.shutdown)
-                pool = default_pool
-            elif thread in pools and num_workers in pools[thread]:
-                pool = pools[thread][num_workers]
-            else:
-                pool = ThreadPoolExecutor(num_workers)
-                atexit.register(pool.shutdown)
-                pools[thread][num_workers] = pool
-        elif isinstance(pool, multiprocessing.pool.Pool):
-            pool = MultiprocessingPoolExecutor(pool)
+    if pool is None:
+        executor = get_executor(num_workers)
+    elif isinstance(pool, multiprocessing.pool.Pool):
+        executor = MultiprocessingPoolExecutor(pool)
+    else:
+        executor = pool
 
-    results = get_async(
-        pool.submit,
-        pool._max_workers,
+    return get_async(
+        executor.submit,
+        executor._max_workers,
         dsk,
         result,
         cache=cache,
@@ -86,14 +103,3 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
         pack_exception=pack_exception,
         **kwargs
     )
-
-    # Cleanup pools associated to dead threads
-    with pools_lock:
-        active_threads = set(threading.enumerate())
-        if thread is not main_thread:
-            for t in list(pools):
-                if t not in active_threads:
-                    for p in pools.pop(t).values():
-                        p.shutdown()
-
-    return results

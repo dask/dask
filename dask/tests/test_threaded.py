@@ -1,3 +1,4 @@
+import gc
 import os
 import signal
 import threading
@@ -9,7 +10,7 @@ import pytest
 
 import dask
 from dask.system import CPU_COUNT
-from dask.threaded import get
+from dask.threaded import get, get_executor
 from dask.utils_test import add, inc
 
 
@@ -74,6 +75,50 @@ def test_pool_kwarg(pool_typ):
 
     with pool_typ(3) as pool:
         assert get(dsk, "x", pool=pool) == 3
+
+
+@pytest.mark.parametrize("in_thread", [False, True])
+def test_num_workers_equals_cpu_count_or_0_uses_default_executor(in_thread):
+    """Ensure that within a thread, `None`, `0` and `CPU_COUNT` for
+    `num_workers` all result in the same executor with CPU_COUNT threads. Check
+    that this is true both for the main thread and in a background thread.
+    """
+
+    def test():
+        default = get_executor(None)
+        # reused, None means CPU_COUNT
+        assert get_executor(None) is default
+        # 0 means CPU_COUNT
+        assert get_executor(0) is default
+        # CPU_COUNT specified manually also reuses
+        assert get_executor(CPU_COUNT) is default
+
+    if in_thread:
+        t = threading.Thread(target=test)
+        t.start()
+        t.join()
+    else:
+        test()
+
+
+def test_executors_cleaned_up_when_background_thread_closes():
+    executor = None
+
+    def test():
+        nonlocal executor
+        executor = get_executor(2)
+
+    t = threading.Thread(target=test)
+    t.start()
+    t.join()
+
+    # Run a full GC cycle, just to be sure the background thread was collected
+    gc.collect()
+
+    # Unfortunately there's no public way to check if an executor is still
+    # active, the best we can do is try to use it and if it errors it's shutdown.
+    with pytest.raises(RuntimeError):
+        executor.submit(lambda x: x + 1, 1)
 
 
 def test_threaded_within_thread():
