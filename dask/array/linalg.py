@@ -1676,6 +1676,8 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         in1 = in1.reshape(new_shape)
         for a in not_axes_but_s1_1:
             in1 = stack([in1] * s2[a], axis=a)
+        print(in1.compute(), axes)
+        return convolve(in1, in2, mode=mode, method=method, axes=axes)
 
     # Deals with the case where there is at least one axis a in which we do not
     # do the convolution that has s2[a] == s1[a] != 1
