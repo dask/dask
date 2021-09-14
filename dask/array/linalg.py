@@ -1668,6 +1668,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     if not len(axes):
         return in1 * in2
 
+    # This is a hack most likely but it seems to work
     not_axes_but_s1_1 = [
         a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
     ]
@@ -1676,7 +1677,6 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         in1 = in1.reshape(new_shape)
         for a in not_axes_but_s1_1:
             in1 = stack([in1] * s2[a], axis=a)
-        print(in1.compute(), axes)
         return convolve(in1, in2, mode=mode, method=method, axes=axes)
 
     # Deals with the case where there is at least one axis a in which we do not
