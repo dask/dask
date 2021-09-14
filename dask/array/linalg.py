@@ -1718,7 +1718,7 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
         rng = np.random.default_rng()
         rn_block = list(rng.integers(h) for h in highs)
-        print(rn_block)
+        print(rn_block, highs)
         in1_block_test = in1.blocks[rn_block].compute()
         import time
 
