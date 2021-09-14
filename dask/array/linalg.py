@@ -1716,7 +1716,9 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     # block with the second input with both methods and stick witht the fastest.
     if method == "auto":
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        rn_block = list(np.random.randint(0, h) for h in highs)
+        rng = np.random.default_rng()
+        rn_block = list(rng.integers(h) for h in highs)
+        print(rn_block)
         in1_block_test = in1.blocks[rn_block].compute()
         import time
 
