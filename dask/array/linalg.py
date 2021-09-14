@@ -1672,7 +1672,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     not_axes_but_s1_1 = [
         a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
     ]
-    if len(not_axes_but_s1_1) and mode == "full":
+    if len(not_axes_but_s1_1) and (mode == "full" or mode == "valid"):
         new_shape = tuple(s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1)
         in1 = in1.reshape(new_shape)
         for a in not_axes_but_s1_1:
