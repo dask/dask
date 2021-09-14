@@ -186,15 +186,12 @@ def meta_nonempty_dataframe(x):
     return res
 
 
-_numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
-
-
 @meta_nonempty.register(pd.Index)
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif typ in _numeric_index_types:
+    elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(["a", "b"], name=idx.name)
