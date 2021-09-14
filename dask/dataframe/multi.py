@@ -493,9 +493,10 @@ def merge(
         left_on = right_on = on
         on = None
 
-    if how not in ("left", "right", "outer", "inner"):
+    supported_how = ("left", "right", "outer", "inner")
+    if how not in supported_how:
         raise Exception(
-            f"Type of merge how = '{how}' is not implemented or does not exist"
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}"
         )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
