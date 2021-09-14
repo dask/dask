@@ -23,7 +23,12 @@ logger = logging.getLogger(__name__)
 
 
 def _calculate_divisions(
-    df, partition_col, repartition, npartitions, upsample=1.0, partition_size=128e6
+    df,
+    partition_col,
+    repartition,
+    npartitions,
+    upsample=1.0,
+    partition_size=128e6,
 ):
     """
     Utility function to calculate divisions for calls to `map_partitions`
@@ -75,8 +80,6 @@ def sort_values(
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
-    if not ascending:
-        raise NotImplementedError("The ascending= keyword is not supported")
     if not isinstance(by, str):
         # support ["a"] as input
         if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
@@ -102,16 +105,22 @@ def sort_values(
     )
 
     if (
-        mins == sorted(mins)
-        and maxes == sorted(maxes)
-        and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+        mins == sorted(mins, reverse=not ascending)
+        and maxes == sorted(maxes, reverse=not ascending)
+        and all(
+            mx < mn
+            for mx, mn in zip(
+                maxes[:-1] if ascending else maxes[1:],
+                mins[1:] if ascending else mins[:-1],
+            )
+        )
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(M.sort_values, by)
+        return df.map_partitions(M.sort_values, by, ascending=ascending)
 
-    df = rearrange_by_divisions(df, by, divisions)
-    df = df.map_partitions(M.sort_values, by)
+    df = rearrange_by_divisions(df, by, divisions, ascending=ascending)
+    df = df.map_partitions(M.sort_values, by, ascending=ascending)
     return df
 
 
@@ -373,13 +382,20 @@ def shuffle(
     return df3
 
 
-def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
+def rearrange_by_divisions(
+    df,
+    column,
+    divisions,
+    max_branch=None,
+    shuffle=None,
+    ascending=True,
+):
     """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
-        set_partitions_pre, divisions=divisions, meta=meta
+        set_partitions_pre, divisions=divisions, ascending=ascending, meta=meta
     )
     df2 = df.assign(_partitions=partitions)
 
@@ -744,9 +760,12 @@ def collect(p, part, meta, barrier_token):
         return res if len(res) > 0 else meta
 
 
-def set_partitions_pre(s, divisions):
+def set_partitions_pre(s, divisions, ascending=True):
     try:
-        partitions = divisions.searchsorted(s, side="right") - 1
+        if ascending:
+            partitions = divisions.searchsorted(s, side="right") - 1
+        else:
+            partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     except TypeError:
         # When `searchsorted` fails with `TypeError`, it may be
         # caused by nulls in `s`. Try again with the null-values
@@ -754,8 +773,15 @@ def set_partitions_pre(s, divisions):
         partitions = np.empty(len(s), dtype="int32")
         partitions[s.isna()] = 0
         not_null = s.notna()
-        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
-    partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
+        if ascending:
+            partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
+        else:
+            partitions[not_null] = (
+                len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
+            )
+    partitions[(s >= divisions.iloc[-1]).values] = (
+        len(divisions) - 2 if ascending else 0
+    )
     return partitions
 
 

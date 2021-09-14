@@ -1205,11 +1205,15 @@ def test_set_index_nan_partition():
     assert_eq(a, a)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize(
     "npartitions",
     [10, 1],
 )
-def test_sort_values(npartitions):
+def test_sort_values(npartitions, ascending):
     df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
     ddf = dd.from_pandas(df, npartitions=npartitions)
-    assert_eq(ddf.sort_values("a"), df.sort_values("a"))
+    assert_eq(
+        ddf.sort_values(by="a", ascending=ascending),
+        df.sort_values(by="a", ascending=ascending),
+    )
