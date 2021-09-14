@@ -1669,8 +1669,6 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     if not len(axes):
         return in1 * in2
     # Calculating the depth of the ghosting zones in each dimension
-    depth = {i: s2[i] // 2 for i in axes}
-
     # Deals with the case where there is at least one axis a in which we do not
     # do the convolution that has s2[a] == s1[a] != 1
     not_axes_but_same_shape = [
@@ -1683,9 +1681,9 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         )
         in1 = in1.rechunk(new_chunk_size)
 
-    not_axes_but_s1_1 = [
-        a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
-    ]
+        not_axes_but_s1_1 = [
+            a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
+        ]
     if len(not_axes_but_s1_1):
         new_shape = tuple(s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1)
         in1 = in1.reshape(new_shape)
@@ -1696,6 +1694,9 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
                 0,
                 a,
             )
+        return convolve(in1, in2, mode=mode, method=method, axes=axes)
+
+    depth = {i: s2[i] // 2 for i in axes}
 
     # Flags even dimensions and removes them by adding zeros
     # This is done to avoid from having some results show up twice on the edge of blocks
