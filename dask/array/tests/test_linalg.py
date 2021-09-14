@@ -1328,7 +1328,8 @@ def test_real_manylens(method, shape_a_0, shape_b_0):
 @pytest.mark.parametrize("shape_a_0, shape_b_0", gen_convolve_shapes([50, 47, 6, 4]))
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("mode", ["full", "valid", "same"])
-def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method):
+@pytest.mark.parametrize("chunks", [5, 10])
+def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method, chunks):
 
     a = np.random.rand(shape_a_0)
     b = np.random.rand(shape_b_0)
@@ -1336,6 +1337,7 @@ def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method):
         a = a + 1j * np.random.rand(shape_a_0)
         b = b + 1j * np.random.rand(shape_b_0)
     if mode != "valid" or (shape_a_0 > shape_b_0):
+        a = da.from_array(a, chunks=chunks)
 
         expected = scipy.signal.fftconvolve(a, b, mode=mode)
 
@@ -1351,8 +1353,17 @@ def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method):
 @pytest.mark.parametrize("shape_b_extra", [1, 3])
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("mode", ["full", "valid", "same"])
+@pytest.mark.parametrize("chunks", [5, 10])
 def test_1d_axes(
-    axes, shape_a_0, shape_b_0, shape_a_extra, shape_b_extra, is_complex, mode, method
+    axes,
+    shape_a_0,
+    shape_b_0,
+    shape_a_extra,
+    shape_b_extra,
+    is_complex,
+    mode,
+    method,
+    chunks,
 ):
     ax_a = [shape_a_extra] * 2
     ax_b = [shape_b_extra] * 2
@@ -1366,6 +1377,8 @@ def test_1d_axes(
         b = b + 1j * np.random.rand(*ax_b)
 
     if mode != "valid" or a.shape[axes] > b.shape[axes]:
+        a = da.from_array(a, chunks=chunks)
+
         expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
 
         out = convolve(a, b, mode=mode, method=method, axes=axes)
@@ -1379,14 +1392,17 @@ def test_1d_axes(
     gen_convolve_shapes_2d([50, 47, 6, 4]),
 )
 @pytest.mark.parametrize("is_complex", [True, False])
+@pytest.mark.parametrize("chunks", [5, 10])
 def test_2d_noaxes(
-    shape_a_0, shape_b_0, shape_a_1, shape_b_1, mode, is_complex, method
+    shape_a_0, shape_b_0, shape_a_1, shape_b_1, mode, is_complex, method, chunks
 ):
     a = np.random.rand(shape_a_0, shape_a_1)
     b = np.random.rand(shape_b_0, shape_b_1)
     if is_complex:
         a = a + 1j * np.random.rand(shape_a_0, shape_a_1)
         b = b + 1j * np.random.rand(shape_b_0, shape_b_1)
+
+    a = da.from_array(a, chunks=chunks)
 
     expected = scipy.signal.fftconvolve(a, b, mode=mode)
 
@@ -1404,6 +1420,7 @@ def test_2d_noaxes(
 @pytest.mark.parametrize("shape_a_extra", [1, 3])
 @pytest.mark.parametrize("shape_b_extra", [1, 3])
 @pytest.mark.parametrize("is_complex", [True, False])
+@pytest.mark.parametrize("chunks", [5, 10])
 def test_2d_axes(
     axes,
     shape_a_0,
@@ -1415,6 +1432,7 @@ def test_2d_axes(
     shape_b_extra,
     is_complex,
     method,
+    chunks,
 ):
     ax_a = [shape_a_extra] * 3
     ax_b = [shape_b_extra] * 3
@@ -1429,6 +1447,7 @@ def test_2d_axes(
         a = a + 1j * np.random.rand(*ax_a)
         b = b + 1j * np.random.rand(*ax_b)
 
+    a = da.from_array(a, chunks=chunks)
     expected = scipy.signal.fftconvolve(a, b, mode=mode, axes=axes)
 
     out = convolve(a, b, mode=mode, method=method, axes=axes)
