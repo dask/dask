@@ -87,12 +87,12 @@ def test_make_meta():
         index=idx,
     )
     assert type(meta.index) is type(idx)
-    assert meta.index.dtype == "int"
+    assert meta.index.dtype == "int64"
     assert len(meta.index) == 0
 
     meta = make_meta(("a", "i8"), index=idx)
     assert type(meta.index) is type(idx)
-    assert meta.index.dtype == "int"
+    assert meta.index.dtype == "int64"
     assert len(meta.index) == 0
 
     # Categoricals
@@ -283,7 +283,7 @@ def test_meta_nonempty_uint64index():
     idx = pd.Index([1], name="foo", dtype="uint64")
     res = meta_nonempty(idx)
     assert isinstance(res, pd.Index)
-    assert res.dtype == "uint"
+    assert res.dtype == "uint64"
     assert res.name == idx.name
 
 
