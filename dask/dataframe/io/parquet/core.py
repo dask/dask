@@ -6,7 +6,8 @@ from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
-
+import uuid
+import time
 from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
@@ -655,7 +656,8 @@ def to_parquet(
     )
 
     # Use i_offset and df.npartitions to define file-name list
-    filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
+    prefix = uuid.uuid4().__str__()
+    filenames = [f"{prefix}-{int(time.time())}.parquet" for _ in range(df.npartitions)]
 
     # Construct IO graph
     dsk = {}
