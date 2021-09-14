@@ -1108,8 +1108,7 @@ def test_convolve_invalid_2nd_input():
     b = da.asarray([])
     with pytest.raises(
         ValueError,
-        match="second input should be a sequential numpy array_like"
-        " and not %s" % type(b),
+        match="second input should be a sequential array" " and not %s" % type(b),
     ):
         convolve(a, b)
 

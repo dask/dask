@@ -1733,15 +1733,15 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
     )
 
-    if mode != "full":
-        output_slicing = tuple(
-            slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
-        )
-        in_cv = in_cv[output_slicing]
-
     if mode == "valid":
         output_slicing = tuple(
             slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1) for i in depth.keys()
+        )
+        in_cv = in_cv[output_slicing]
+
+    elif mode != "full":
+        output_slicing = tuple(
+            slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
         )
         in_cv = in_cv[output_slicing]
 
