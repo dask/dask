@@ -3077,6 +3077,43 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
             dd.read_parquet(path, engine=engine)
 
 
+@PYARROW_MARK
+@pytest.mark.parametrize(
+    "write_cols",
+    [["col"], ["part", "col"]],
+)
+def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
+    # See: https://github.com/dask/dask/issues/8087
+
+    # Manually construct directory-partitioned dataset
+    path1 = tmpdir.mkdir("part=a")
+    path2 = tmpdir.mkdir("part=b")
+    path1 = os.path.join(path1, "data.parquet")
+    path2 = os.path.join(path2, "data.parquet")
+
+    # Write partitions without parquet metadata.
+    # Note that we always use pyarrow to do this
+    # (regardless of the `engine`)
+    _df1 = pd.DataFrame({"part": "a", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "col": range(5)})
+    t1 = pa.Table.from_pandas(
+        _df1[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t1, path1)
+    t2 = pa.Table.from_pandas(
+        _df2[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t2, path2)
+
+    # Check results
+    expect = pd.concat([_df1, _df2], ignore_index=True)
+    result = dd.read_parquet(str(tmpdir), engine=engine)
+    result["part"] = result["part"].astype("object")
+    assert_eq(result[list(expect.columns)], expect, check_index=False)
+
+
 @fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
