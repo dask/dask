@@ -1668,18 +1668,6 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
 
     if not len(axes):
         return in1 * in2
-    # Calculating the depth of the ghosting zones in each dimension
-    # Deals with the case where there is at least one axis a in which we do not
-    # do the convolution that has s2[a] == s1[a] != 1
-    not_axes_but_same_shape = [
-        a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
-    ]
-    if len(not_axes_but_same_shape):
-        to_rechunk = [a for a in not_axes_but_same_shape if len(in1.chunks[a]) != 1]
-        new_chunk_size = tuple(
-            -1 if a in to_rechunk else "auto" for a in range(in1.ndim)
-        )
-        in1 = in1.rechunk(new_chunk_size)
 
         not_axes_but_s1_1 = [
             a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
@@ -1694,7 +1682,18 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
                 0,
                 a,
             )
-        return convolve(in1, in2, mode=mode, method=method, axes=axes)
+
+    # Deals with the case where there is at least one axis a in which we do not
+    # do the convolution that has s2[a] == s1[a] != 1
+    not_axes_but_same_shape = [
+        a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
+    ]
+    if len(not_axes_but_same_shape):
+        to_rechunk = [a for a in not_axes_but_same_shape if len(in1.chunks[a]) != 1]
+        new_chunk_size = tuple(
+            -1 if a in to_rechunk else "auto" for a in range(in1.ndim)
+        )
+        in1 = in1.rechunk(new_chunk_size)
 
     depth = {i: s2[i] // 2 for i in axes}
 
