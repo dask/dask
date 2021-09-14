@@ -862,7 +862,7 @@ def test_merge_how_raises():
     )
 
     with pytest.raises(
-        Exception, match="dask.dataframe.merge does not support how='cross'"
+        ValueError, match="dask.dataframe.merge does not support how='cross'"
     ):
         dd.merge(left, right, how="cross")
 

@@ -495,7 +495,7 @@ def merge(
 
     supported_how = ("left", "right", "outer", "inner")
     if how not in supported_how:
-        raise Exception(
+        raise ValueError(
             f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}"
         )
 
