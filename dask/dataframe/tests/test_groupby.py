@@ -9,7 +9,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_133, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -470,6 +470,7 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
+@pytest.mark.skipif(PANDAS_GT_133, reason="https://github.com/dask/dask/issues/8137")
 def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
