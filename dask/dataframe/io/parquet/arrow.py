@@ -218,7 +218,8 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with fs.open(path, mode="rb") as fil:
+        cache_type = "none" if columns or row_groups != [None] else "all"
+        with fs.open(path, mode="rb", cache_type=cache_type) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,
