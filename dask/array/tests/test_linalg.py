@@ -1392,7 +1392,7 @@ def test_1d_axes(
     gen_convolve_shapes_2d([50, 47, 6, 4]),
 )
 @pytest.mark.parametrize("is_complex", [True, False])
-@pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.parametrize("chunks", [15, 25])
 def test_2d_noaxes(
     shape_a_0, shape_b_0, shape_a_1, shape_b_1, mode, is_complex, method, chunks
 ):
@@ -1411,6 +1411,7 @@ def test_2d_noaxes(
     assert_eq(out, expected)
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("method", ["fft", "oa"])
 @pytest.mark.parametrize("axes", [[0, 1], [0, 2], [1, 2]])
 @pytest.mark.parametrize(
@@ -1420,7 +1421,7 @@ def test_2d_noaxes(
 @pytest.mark.parametrize("shape_a_extra", [1, 3])
 @pytest.mark.parametrize("shape_b_extra", [1, 3])
 @pytest.mark.parametrize("is_complex", [True, False])
-@pytest.mark.parametrize("chunks", [5, 10])
+@pytest.mark.parametrize("chunks", [15, 25])
 def test_2d_axes(
     axes,
     shape_a_0,
