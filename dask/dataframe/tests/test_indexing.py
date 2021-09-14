@@ -648,3 +648,21 @@ def test_iloc_out_of_order_selection():
     assert a1.name == "C"
     assert b1.name == "A"
     assert c1.name == "B"
+
+
+def test_multi_loc():
+    df = pd.DataFrame(
+        {"A": 1},
+        index=pd.MultiIndex.from_product([["a", "b"], [0, 1, 2]], names=["l0", "l1"]),
+    )
+    ddf = dd.from_pandas(df, 2)
+    expected = df.loc[:, "A"]
+    result = ddf.loc[:, "A"]
+    assert_eq(result, expected)
+
+    expected = df.loc[:, ["A"]]
+    result = ddf.loc[:, ["A"]]
+    assert_eq(result, expected)
+
+    with pytest.raises(NotImplementedError, match="MultiIndex"):
+        ddf.loc[("a", 0), "a"]
