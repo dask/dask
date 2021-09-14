@@ -847,6 +847,24 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+def test_merge_how_raises():
+    left = pd.DataFrame(
+        {
+            "A": ["A0", "A1", "A2", "A3"],
+            "B": ["B0", "B1", "B2", "B3"],
+        }
+    )
+    right = pd.DataFrame(
+        {
+            "A": ["C0", "C1", "C2", "C3"],
+            "B": ["D0", "D1", "D2", "D3"],
+        }
+    )
+
+    with pytest.raises(Exception):
+        dd.merge(left, right, how="cross")
+
+
 @pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
