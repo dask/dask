@@ -202,13 +202,13 @@ def describe_numeric_aggregate(
         q = q.apply(lambda x: pd.to_timedelta(x))
 
     if is_datetime_col:
-        mean = pd.to_datetime(mean)
+        # mean is not implemented for datetime
         min = pd.to_datetime(min)
         max = pd.to_datetime(max)
         q = q.apply(lambda x: pd.to_datetime(x))
 
     if is_datetime_col:
-        part1 = typ([count, mean, min], index=["count", "mean", "min"])
+        part1 = typ([count, min], index=["count", "min"])
     else:
         part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 

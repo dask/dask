@@ -466,33 +466,37 @@ def test_describe(include, exclude, percentiles, subset):
     ddf = dd.from_pandas(df, 2)
 
     # Act
-    desc_ddf = ddf.describe(
+    actual = ddf.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
         datetime_is_numeric=True,
     )
-    desc_df = df.describe(
+    expected = df.describe(
         include=include,
         exclude=exclude,
         percentiles=percentiles,
         datetime_is_numeric=True,
     )
 
-    # Assert
-    assert_eq(desc_ddf, desc_df)
+    if "e" in expected:
+        expected.at["mean", "e"] = np.nan
+        expected.dropna(how="all", inplace=True)
+
+    assert_eq(actual, expected)
 
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            assert_eq(
-                df[col].describe(
-                    include=include, exclude=exclude, datetime_is_numeric=True
-                ),
-                ddf[col].describe(
-                    include=include, exclude=exclude, datetime_is_numeric=True
-                ),
+            expected = df[col].describe(
+                include=include, exclude=exclude, datetime_is_numeric=True
             )
+            if col == "e":
+                expected.drop("mean", inplace=True)
+            actual = ddf[col].describe(
+                include=include, exclude=exclude, datetime_is_numeric=True
+            )
+            assert_eq(expected, actual)
 
 
 def test_describe_without_datetime_is_numeric():
