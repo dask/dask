@@ -2466,9 +2466,18 @@ Dask Name: {name}, {task} tasks"""
         exclude=None,
         datetime_is_numeric=False,
     ):
+        if PANDAS_GT_110:
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
+        elif datetime_is_numeric:
+            raise NotImplementedError(
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+            )
+        else:
+            datetime_is_numeric_kwarg = {}
 
         if self._meta.ndim == 1:
-            meta = self._meta_nonempty.describe(datetime_is_numeric=datetime_is_numeric)
+
+            meta = self._meta_nonempty.describe(**datetime_is_numeric_kwarg)
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )
@@ -2522,7 +2531,7 @@ Dask Name: {name}, {task} tasks"""
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = self._meta_nonempty.describe(
-            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
+            include=include, exclude=exclude, **datetime_is_numeric_kwarg
         )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
@@ -2652,7 +2661,17 @@ Dask Name: {name}, {task} tasks"""
             (name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = data._meta_nonempty.describe(datetime_is_numeric=datetime_is_numeric)
+
+        if PANDAS_GT_110:
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
+        elif datetime_is_numeric:
+            raise NotImplementedError(
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+            )
+        else:
+            datetime_is_numeric_kwarg = {}
+
+        meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(
