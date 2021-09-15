@@ -1516,18 +1516,23 @@ def norm(x, ord=None, axis=None, keepdims=False):
 def convolve(in1, in2, mode="full", method="fft", axes=None):
     """Convolve a N-dimensional dask array with an N-dimensional array
     using either the fft or the overlap-add method.
+
     Some parts of this docstring are copied from scipy.signal.
     Convolve `in1` and `in2`, with the output size determined by the
     `mode` argument.
+
     Parameters
     ----------
     in1 : parallel array
         First input. Will be cast to a dask array
+
     in2 : sequential array_like
         Second input. Should have the same number of dimensions as `in1`.
         Will be cast to a numpy array.
+
     mode : str {'full', 'valid', 'same', 'periodic'}, optional
         A string indicating the size of the output.
+
         ``full``
            The output is the full discrete linear convolution
            of the inputs. (Default)
@@ -1541,8 +1546,10 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         ``periodic``
            `in1` is assumed to be periodic for padding purposes, The output
            is the same size as `in1`.
+
     method : str {'oa', 'fft'}, optional
         A string indicating which method to use to calculate the convolution.
+
         ``oa``
            Overlap-add method. This is generally much faster than `fft` when
            `in1` is much larger than `in2` but can be slower when only a few
@@ -1553,20 +1560,27 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
            Convolve `in1` and `in2` using the fast Fourier transform method.
            Can only output float arrays (int or object array inputs will be
            cast to float). (Default)
+
     axes : int or array_like of ints or None, optional
-          Axes over which to compute the convolution.
-          The default is over all axes.
+        Axes over which to compute the convolution.
+        The default is over all axes.
+
+
     Returns
     -------
     out : array
         An N-dimensional array containing a subset of the discrete linear
         convolution of `in1` with `in2`.
+
+
     See Also
     --------
     scipy.signal.oaconvolve : Equivalent Scipy operation for the overlap-add
         method
     scipy.signal.fftconvolve : Equivalent Scipy operation for the FFT
         method
+
+
     Notes
     -----
     This function is a work in progress and there are some possible improvements
@@ -1574,16 +1588,21 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     These include but are not limited to :
     * Working out the case where both input are dask arrays.
     * Giving users the possibility to have the `mode` argument differ between axes.
+
+
     Examples
     --------
     Convolve a 100,000 sample signal chunked in 100 1,000 elements chunks
     with a 512-sample filter.
+
     >>> from scipy import signal
     >>> import dask.array as da
     >>> rng = np.random.default_rng()
     >>> sig = da.from_array(rng.standard_normal(100000), chunks = (1000,))
     >>> filt = signal.firwin(512, 0.01)
     >>> fsig = da.linalg.convolve(sig, filt).compute()
+
+
     >>> import matplotlib.pyplot as plt
     >>> fig, (ax_orig, ax_mag) = plt.subplots(2, 1)
     >>> ax_orig.plot(sig)
@@ -1592,6 +1611,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     >>> ax_mag.set_title('Filtered noise')
     >>> fig.tight_layout()
     >>> fig.show()
+
     References
     ----------
     .. [1] Wikipedia, "Overlap-add_method".
@@ -1599,6 +1619,8 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     .. [2] Richard G. Lyons. Understanding Digital Signal Processing,
            Third Edition, 2011. Chapter 13.10.
            ISBN 13: 978-0137-02741-5
+
+
     """
 
     from scipy.signal import fftconvolve, oaconvolve
