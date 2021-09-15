@@ -257,8 +257,6 @@ def test_time_rolling_constructor():
     assert result.win_type is None
 
     assert result._win_type == "freq"
-    assert result._window == "4s"
-    assert result._min_periods == 1
 
 
 @pytest.mark.parametrize(
