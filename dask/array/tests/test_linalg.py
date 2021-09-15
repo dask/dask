@@ -1103,16 +1103,6 @@ def test_convolve_mismatched_dims(a, b):
         convolve(a, b)
 
 
-def test_convolve_invalid_2nd_input():
-    a = []
-    b = da.asarray([])
-    with pytest.raises(
-        ValueError,
-        match="second input should be a sequential array" " and not %s" % type(b),
-    ):
-        convolve(a, b)
-
-
 def test_convolve_invalid_flags():
     with pytest.raises(
         ValueError,

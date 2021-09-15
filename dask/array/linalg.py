@@ -1514,7 +1514,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
 
 
 def convolve(in1, in2, mode="full", method="fft", axes=None):
-    """Convolve a N-dimensional dask array with another N-dimensional array
+    """Convolve a N-dimensional dask array with an N-dimensional array
     using either the fft or the overlap-add method.
 
     Some parts of this docstring are copied from scipy.signal.
@@ -1524,10 +1524,10 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
 
     Parameters
     ----------
-    in1 : daskarray_like
-        First input.
+    in1 : parallel array
+        First input. Will be cast to a dask array
 
-    in2 : array_like
+    in2 : sequential array_like
         Second input. Should have the same number of dimensions as `in1`.
         Will be cast to a numpy array.
 
@@ -1548,7 +1548,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
            `in1` is assumed to be periodic for padding purposes, The output
            is the same size as `in1`.
 
-    method : str {'oa', 'fft','auto'}, optional
+    method : str {'oa', 'fft'}, optional
         A string indicating which method to use to calculate the convolution.
 
         ``oa``
@@ -1634,13 +1634,6 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     from .creation import pad, stack
 
     in1 = asarray(in1)
-
-    if hasattr(in2, "chunks"):
-        raise NotImplementedError(
-            "second input should be a sequential array" " and not %s" % type(in2)
-        )
-        # Unsure whether this is actually worthwhile to implement
-
     in2 = np.asarray(in2)
 
     # Checking for trivial cases and incorrect flags
@@ -1677,6 +1670,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     if not len(axes):
         in_cv = in1 * in2
         # This is the "full" output that is also valid.
+        # To get the "same" output we need to center in some dimensions.
         if mode == "same" or mode == "periodic":
             not_axes_but_s1_1 = [
                 a
@@ -1685,7 +1679,7 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
             ]
             in_cv = in_cv[
                 tuple(
-                    slice((s1[a] - 1) // 2, (s1[a] - 1) // 2 + 1)
+                    slice((s2[a] - 1) // 2, (s2[a] - 1) // 2 + 1)
                     if a in not_axes_but_s1_1
                     else slice(None, None)
                     for a in range(in1.ndim)
@@ -1722,7 +1716,8 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         depth = {i: s2[i] // 2 for i in axes}
 
         # Flags even dimensions and removes them by adding zeros
-        # This is done to avoid from having some results show up twice on the edge of blocks
+        # This is done to avoid from having some results show up twice
+        # at the edge of blocks
         even_flag = np.r_[[1 - s2[a] % 2 if a in axes else 0 for a in range(in1.ndim)]]
         target_shape = np.asarray(s2)
         target_shape += even_flag
@@ -1757,19 +1752,23 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
         else:
             dtype = "float"
 
+        # Actualy does the convolution with all the parameters preformatted
         in_cv = in1.map_overlap(
-            cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
+            cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype
         )
 
+        # The output as to be reduced depending on the `mode` argument
         if mode == "valid":
             output_slicing = tuple(
                 slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1)
                 if i in depth.keys()
-                else slice(0, None, None)
+                else slice(0, None)
                 for i in range(in1.ndim)
             )
             in_cv = in_cv[output_slicing]
+
         elif mode != "full":
+            # Only have to undo the padding
             output_slicing = tuple(
                 slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
             )
