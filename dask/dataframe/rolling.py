@@ -273,7 +273,7 @@ class Rolling:
         # that information here.
         # See https://github.com/pandas-dev/pandas/issues/15969
         self._window = pd_roll.window
-        self._win_type = pd_roll.win_type
+        self._win_type = None if isinstance(self._window, int) else "freq"
         self._min_periods = pd_roll.min_periods
 
     def _rolling_kwargs(self):
