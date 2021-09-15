@@ -1314,7 +1314,7 @@ def gen_convolve_shapes_2d(sizes):
     "shape_a_0, shape_b_0",
     gen_convolve_shapes_eq(list(range(100)) + list(range(100, 1000, 23))),
 )
-def test_real_manylens(method, shape_a_0, shape_b_0):
+def test_convolve_real_manylens(method, shape_a_0, shape_b_0):
     a = np.random.rand(shape_a_0)
     b = np.random.rand(shape_b_0)
 
@@ -1329,7 +1329,7 @@ def test_real_manylens(method, shape_a_0, shape_b_0):
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("mode", ["full", "valid", "same"])
 @pytest.mark.parametrize("chunks", [5, 10])
-def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method, chunks):
+def test_convolve_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method, chunks):
 
     a = np.random.rand(shape_a_0)
     b = np.random.rand(shape_b_0)
@@ -1354,7 +1354,7 @@ def test_1d_noaxes(shape_a_0, shape_b_0, is_complex, mode, method, chunks):
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("mode", ["full", "valid", "same"])
 @pytest.mark.parametrize("chunks", [5, 10])
-def test_1d_axes(
+def test_convolve_1d_axes(
     axes,
     shape_a_0,
     shape_b_0,
@@ -1393,7 +1393,7 @@ def test_1d_axes(
 )
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("chunks", [15, 25])
-def test_2d_noaxes(
+def test_convolve_2d_noaxes(
     shape_a_0, shape_b_0, shape_a_1, shape_b_1, mode, is_complex, method, chunks
 ):
     a = np.random.rand(shape_a_0, shape_a_1)
@@ -1422,7 +1422,7 @@ def test_2d_noaxes(
 @pytest.mark.parametrize("shape_b_extra", [1, 3])
 @pytest.mark.parametrize("is_complex", [True, False])
 @pytest.mark.parametrize("chunks", [15, 25])
-def test_2d_axes(
+def test_convolve_2d_axes(
     axes,
     shape_a_0,
     shape_b_0,

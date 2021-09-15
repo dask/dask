@@ -1636,9 +1636,11 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     in1 = asarray(in1)
 
     if hasattr(in2, "chunks"):
-        raise ValueError(
+        raise NotImplementedError(
             "second input should be a sequential array" " and not %s" % type(in2)
         )
+        # Unsure whether this is actually worthwhile to implement
+
     in2 = np.asarray(in2)
 
     # Checking for trivial cases and incorrect flags
@@ -1656,95 +1658,121 @@ def convolve(in1, in2, mode="full", method="fft", axes=None):
     if method not in ["fft", "oa"]:
         raise ValueError("acceptable method flags are 'oa', or 'fft'")
 
+    # Pre-formatting or the the inputs, mainly for the `axes` argument
     in1, in2, axes = _init_freq_conv_axes(in1, in2, mode, axes, sorted_axes=False)
 
+    # _init_freq_conv_axes calls a function that will swap out inputs if required
+    # when mode == "valid".We want to avoid having in2 be a dask array thus check
+    # to see if the inputs were swapped and raise an error.
     if type(in1) == np.ndarray:
         raise ValueError(
             "For 'valid' mode in1 has to be at least as large as in2 in every dimension"
         )
+
     s1 = in1.shape
     s2 = in2.shape
 
+    # If all axe were removed by the preformatting we only have to rely
+    # on multiplication broadcasting rules.
     if not len(axes):
-        return in1 * in2
+        in_cv = in1 * in2
+        # This is the "full" output that is also valid.
+        if mode == "same" or mode == "periodic":
+            not_axes_but_s1_1 = [
+                a
+                for a in range(in1.ndim)
+                if a not in axes and s1[a] == 1 and s2[a] != 1
+            ]
+            in_cv = in_cv[
+                tuple(
+                    slice((s1[a] - 1) // 2, (s1[a] - 1) // 2 + 1)
+                    if a in not_axes_but_s1_1
+                    else slice(None, None)
+                    for a in range(in1.ndim)
+                )
+            ]
+            return in_cv
 
-    # This is a hack most likely but it seems to work
-    not_axes_but_s1_1 = [
-        a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
-    ]
-    if len(not_axes_but_s1_1) and (mode == "full" or mode == "valid"):
-        new_shape = tuple(s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1)
-        in1 = in1.reshape(new_shape)
-        for a in not_axes_but_s1_1:
-            in1 = stack([in1] * s2[a], axis=a)
-        return convolve(in1, in2, mode=mode, method=method, axes=axes)
-
-    # Deals with the case where there is at least one axis a in which we do not
-    # do the convolution that has s2[a] == s1[a] != 1
-    not_axes_but_same_shape = [
-        a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
-    ]
-    if len(not_axes_but_same_shape):
-        to_rechunk = [a for a in not_axes_but_same_shape if len(in1.chunks[a]) != 1]
-        new_chunk_size = tuple(
-            -1 if a in to_rechunk else "auto" for a in range(in1.ndim)
-        )
-        in1 = in1.rechunk(new_chunk_size)
-
-    depth = {i: s2[i] // 2 for i in axes}
-
-    # Flags even dimensions and removes them by adding zeros
-    # This is done to avoid from having some results show up twice on the edge of blocks
-    even_flag = np.r_[[1 - s2[a] % 2 if a in axes else 0 for a in range(in1.ndim)]]
-    target_shape = np.asarray(s2)
-    target_shape += even_flag
-
-    if any(target_shape != np.asarray(s2)):
-        # padding axes where in2 is even
-        pad_width = tuple(
-            (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
-        )
-        in2 = pad(in2, pad_width)
-
-    if mode != "valid":
-        pad_width = tuple(
-            (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
-            for i in range(in1.ndim)
-        )
-        in1 = pad(in1, pad_width)
-
-    if mode == "periodic":
-        boundary = "periodic"
     else:
-        boundary = 0
+        # This is a hack but it seems to work reliably.
+        not_axes_but_s1_1 = [
+            a for a in range(in1.ndim) if a not in axes and s1[a] == 1 and s2[a] != 1
+        ]
+        if len(not_axes_but_s1_1) and (mode == "full" or mode == "valid"):
+            new_shape = tuple(
+                s1[i] for i in range(in1.ndim) if i not in not_axes_but_s1_1
+            )
+            in1 = in1.reshape(new_shape)
+            for a in not_axes_but_s1_1:
+                in1 = stack([in1] * s2[a], axis=a)
+            return convolve(in1, in2, mode=mode, method=method, axes=axes)
 
-    cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
+        # Deals with the case where there is at least one axis a in which we do not
+        # do the convolution that has s2[a] == s1[a] != 1
+        not_axes_but_same_shape = [
+            a for a in range(in1.ndim) if a not in axes and s1[a] == s2[a] != 1
+        ]
+        if len(not_axes_but_same_shape):
+            to_rechunk = [a for a in not_axes_but_same_shape if len(in1.chunks[a]) != 1]
+            new_chunk_size = tuple(
+                -1 if a in to_rechunk else "auto" for a in range(in1.ndim)
+            )
+            in1 = in1.rechunk(new_chunk_size)
 
-    cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
+        depth = {i: s2[i] // 2 for i in axes}
 
-    complex_result = in1.dtype.kind == "c" or in2.dtype.kind == "c"
+        # Flags even dimensions and removes them by adding zeros
+        # This is done to avoid from having some results show up twice on the edge of blocks
+        even_flag = np.r_[[1 - s2[a] % 2 if a in axes else 0 for a in range(in1.ndim)]]
+        target_shape = np.asarray(s2)
+        target_shape += even_flag
 
-    if complex_result:
-        dtype = "complex"
-    else:
-        dtype = "float"
+        if any(target_shape != np.asarray(s2)):
+            # padding axes where in2 is even
+            pad_width = tuple(
+                (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
+            )
+            in2 = pad(in2, pad_width)
 
-    in_cv = in1.map_overlap(
-        cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
-    )
+        if mode != "valid":
+            pad_width = tuple(
+                (depth[i] - even_flag[i], depth[i]) if i in axes else (0, 0)
+                for i in range(in1.ndim)
+            )
+            in1 = pad(in1, pad_width)
 
-    if mode == "valid":
-        output_slicing = tuple(
-            slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1)
-            if i in depth.keys()
-            else slice(0, None, None)
-            for i in range(in1.ndim)
+        if mode == "periodic":
+            boundary = "periodic"
+        else:
+            boundary = 0
+
+        cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
+
+        cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
+
+        complex_result = in1.dtype.kind == "c" or in2.dtype.kind == "c"
+
+        if complex_result:
+            dtype = "complex"
+        else:
+            dtype = "float"
+
+        in_cv = in1.map_overlap(
+            cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype, name=method
         )
-        in_cv = in_cv[output_slicing]
-    elif mode != "full":
-        output_slicing = tuple(
-            slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
-        )
-        in_cv = in_cv[output_slicing]
+
+        if mode == "valid":
+            output_slicing = tuple(
+                slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1)
+                if i in depth.keys()
+                else slice(0, None, None)
+                for i in range(in1.ndim)
+            )
+            in_cv = in_cv[output_slicing]
+        elif mode != "full":
+            output_slicing = tuple(
+                slice(p[0], -p[1]) if p != (0, 0) else slice(0, None) for p in pad_width
+            )
+            in_cv = in_cv[output_slicing]
 
     return in_cv
