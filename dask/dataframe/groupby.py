@@ -391,6 +391,11 @@ def _mul_cols(df, cols):
     for i, j in it.combinations_with_replacement(cols, 2):
         col = "%s%s" % (i, j)
         _df[col] = df[i] * df[j]
+
+    # Fix index in a groupby().apply() context
+    # https://github.com/dask/dask/issues/8137
+    # https://github.com/pandas-dev/pandas/issues/43568
+    _df.index = [None] * len(_df)
     return _df
 
 
@@ -429,8 +434,8 @@ def _cov_chunk(df, *index):
     g = _groupby_raise_unaligned(df, by=index)
     x = g.sum()
 
-    level = len(index)
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=level, drop=True)
+    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+
     n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
     return (x, mul, n, col_mapping)
 
@@ -495,23 +500,23 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 ###############################################################
 # nunique
 ###############################################################
+def _drop_duplicates_reindex(df):
+    # Fix index in a groupby().apply() context
+    # https://github.com/dask/dask/issues/8137
+    # https://github.com/pandas-dev/pandas/issues/43568
+    result = df.drop_duplicates()
+    result.index = [None] * len(result)
+    return result
 
 
 def _nunique_df_chunk(df, *index, **kwargs):
-    levels = kwargs.pop("levels")
     name = kwargs.pop("name")
 
     g = _groupby_raise_unaligned(df, by=index)
     if len(df) > 0:
-        grouped = g[[name]].apply(M.drop_duplicates)
-        # we set the index here to force a possibly duplicate index
-        # for our reduce step
-        if isinstance(levels, list):
-            grouped.index = pd.MultiIndex.from_arrays(
-                [grouped.index.get_level_values(level=level) for level in levels]
-            )
-        else:
-            grouped.index = grouped.index.get_level_values(level=levels)
+        grouped = (
+            g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
+        )
     else:
         # Manually create empty version, since groupby-apply for empty frame
         # results in df with no columns
@@ -521,24 +526,12 @@ def _nunique_df_chunk(df, *index, **kwargs):
     return grouped
 
 
-def _drop_duplicates_rename(df):
-    # Avoid duplicate index labels in a groupby().apply() context
-    # https://github.com/dask/dask/issues/3039
-    # https://github.com/pandas-dev/pandas/pull/18882
-    names = [None] * df.index.nlevels
-    return df.drop_duplicates().rename_axis(names, copy=False)
-
-
 def _nunique_df_combine(df, levels, sort=False):
-    result = df.groupby(level=levels, sort=sort).apply(_drop_duplicates_rename)
-
-    if isinstance(levels, list):
-        result.index = pd.MultiIndex.from_arrays(
-            [result.index.get_level_values(level=level) for level in levels]
-        )
-    else:
-        result.index = result.index.get_level_values(level=levels)
-
+    result = (
+        df.groupby(level=levels, sort=sort)
+        .apply(_drop_duplicates_reindex)
+        .reset_index(level=-1, drop=True)
+    )
     return result
 
 
