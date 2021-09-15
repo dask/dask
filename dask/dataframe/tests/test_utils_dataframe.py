@@ -212,7 +212,7 @@ def test_meta_nonempty_index():
     idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
     assert isinstance(res, pd.Index)
-    assert res.dtype == "int"
+    assert res.dtype == "int64"
     assert res.name == idx.name
 
     idx = pd.Index(["a"], name="foo")
