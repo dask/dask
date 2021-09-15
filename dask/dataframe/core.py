@@ -2466,6 +2466,7 @@ Dask Name: {name}, {task} tasks"""
         exclude=None,
         datetime_is_numeric=False,
     ):
+
         if PANDAS_GT_110:
             datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
         elif datetime_is_numeric:
@@ -2477,7 +2478,12 @@ Dask Name: {name}, {task} tasks"""
 
         if self._meta.ndim == 1:
 
-            meta = self._meta_nonempty.describe(**datetime_is_numeric_kwarg)
+            meta = self._meta_nonempty.describe(
+                percentiles=percentiles,
+                include=include,
+                exclude=exclude,
+                **datetime_is_numeric_kwarg,
+            )
             output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )

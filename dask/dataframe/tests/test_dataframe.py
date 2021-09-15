@@ -466,10 +466,8 @@ def test_describe(include, exclude, percentiles, subset):
     ddf = dd.from_pandas(df, 2)
 
     if PANDAS_GT_110:
-        datetime_is_numeric = True
         datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
     else:
-        datetime_is_numeric = None
         datetime_is_numeric_kwarg = {}
 
     # Act
@@ -486,7 +484,7 @@ def test_describe(include, exclude, percentiles, subset):
         **datetime_is_numeric_kwarg,
     )
 
-    if "e" in expected and datetime_is_numeric:
+    if "e" in expected and datetime_is_numeric_kwarg:
         expected.at["mean", "e"] = np.nan
         expected.dropna(how="all", inplace=True)
 
@@ -498,7 +496,7 @@ def test_describe(include, exclude, percentiles, subset):
             expected = df[col].describe(
                 include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
-            if col == "e" and datetime_is_numeric:
+            if col == "e" and datetime_is_numeric_kwarg:
                 expected.drop("mean", inplace=True)
             actual = ddf[col].describe(
                 include=include, exclude=exclude, **datetime_is_numeric_kwarg
