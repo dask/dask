@@ -1,13 +1,13 @@
 import math
 import warnings
+import uuid
+import time
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
-import uuid
-import time
 from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
@@ -655,10 +655,14 @@ def to_parquet(
         **kwargs_pass,
     )
 
-    # Use i_offset and df.npartitions to define file-name list
-    prefix = uuid.uuid4().__str__()
-    filenames = [f"{prefix}-{int(time.time())}.parquet" for _ in range(df.npartitions)]
-
+    
+    if (not overwrite) and (not isinstance(fs, LocalFileSystem)):
+        # Use random file name
+        filenames = [f"{uuid.uuid4().__str__()}-{int(time.time())}.parquet" for _ in range(df.npartitions)]
+    else:
+        # Use i_offset and df.npartitions to define file-name list
+        filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
+    
     # Construct IO graph
     dsk = {}
     name = "to-parquet-" + tokenize(
