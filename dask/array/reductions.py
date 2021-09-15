@@ -625,7 +625,8 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
     totals = deepmap(lambda pair: pair["total"], pairs)
     total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
 
-    return divide(total, n, dtype=dtype)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return divide(total, n, dtype=dtype)
 
 
 @derived_from(np)
