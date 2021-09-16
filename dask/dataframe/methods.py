@@ -183,7 +183,9 @@ def describe_aggregate(values):
     return pd.concat(values, axis=1, sort=False).reindex(names)
 
 
-def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
+def describe_numeric_aggregate(
+    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -199,7 +201,16 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
 
-    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+    if is_datetime_col:
+        # mean is not implemented for datetime
+        min = pd.to_datetime(min)
+        max = pd.to_datetime(max)
+        q = q.apply(lambda x: pd.to_datetime(x))
+
+    if is_datetime_col:
+        part1 = typ([count, min], index=["count", "min"])
+    else:
+        part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
     q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
