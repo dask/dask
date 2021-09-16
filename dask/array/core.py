@@ -13,7 +13,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
-from operator import add, getitem, mul
+from operator import add, mul
 from threading import Lock
 
 import numpy as np
@@ -60,6 +60,7 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import chunk
+from .chunk import getitem
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
