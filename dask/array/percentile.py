@@ -3,11 +3,11 @@ from functools import wraps
 from numbers import Number
 
 import numpy as np
-from tlz import merge, merge_sorted
+from tlz import merge
 
-from .core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from .core import Array
 
 
 @wraps(np.percentile)
@@ -18,14 +18,24 @@ def _percentile(a, q, interpolation="linear"):
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == "category":
-        result = np.percentile(a.codes, q, interpolation=interpolation)
+        result = np.percentile(a.cat.codes, q, interpolation=interpolation)
         import pandas as pd
 
-        return pd.Categorical.from_codes(result, a.categories, a.ordered), n
+        return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
+    if type(a.dtype).__name__ == "DatetimeTZDtype":
+        import pandas as pd
+
+        if isinstance(a, (pd.Series, pd.Index)):
+            a = a.values
+
     if np.issubdtype(a.dtype, np.datetime64):
-        a2 = a.astype("i8")
-        result = np.percentile(a2, q, interpolation=interpolation)
-        return result.astype(a.dtype), n
+        values = a
+        a2 = values.view("i8")
+        result = np.percentile(a2, q, interpolation=interpolation).astype(values.dtype)
+        if q[0] == 0:
+            # https://github.com/dask/dask/issues/6864
+            result[0] = min(result[0], values.min())
+        return result, n
     if not np.issubdtype(a.dtype, np.number):
         interpolation = "nearest"
     return np.percentile(a, q, interpolation=interpolation), n
@@ -81,16 +91,20 @@ def percentile(a, q, interpolation="linear", method="default"):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
+    from .dispatch import percentile_lookup as _percentile
+    from .utils import array_safe, meta_from_array
+
     if not a.ndim == 1:
         raise NotImplementedError("Percentiles only implemented for 1-d arrays")
     if isinstance(q, Number):
         q = [q]
-    q = np.array(q)
+    q = array_safe(q, like=meta_from_array(a))
     token = tokenize(a, q, interpolation)
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
-        dtype = (np.array([], dtype=dtype) / 0.5).dtype
+        dtype = (array_safe([], dtype=dtype, like=meta_from_array(a)) / 0.5).dtype
+    meta = meta_from_array(a, dtype=dtype)
 
     allowed_methods = ["default", "dask", "tdigest"]
     if method not in allowed_methods:
@@ -148,7 +162,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
     dsk = merge(dsk, dsk2)
     graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-    return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
+    return Array(graph, name2, chunks=((len(q),),), meta=meta)
 
 
 def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
@@ -180,9 +194,11 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
+    from .utils import array_safe
+
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
-    finalq = np.array(finalq)
+    finalq = array_safe(finalq, like=finalq)
     qs = list(map(list, qs))
     vals = list(vals)
     if Ns is None:
@@ -212,30 +228,24 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     # transform qs and Ns into number of observations between percentiles
     counts = []
     for q, N in zip(qs, Ns):
-        count = np.empty(len(q))
-        count[1:] = np.diff(q)
+        count = np.empty_like(finalq, shape=len(q))
+        count[1:] = np.diff(array_safe(q, like=q[0]))
         count[0] = q[0]
         count *= N
         counts.append(count)
 
     # Sort by calculated percentile values, then number of observations.
-    # >95% of the time in this function is spent in `merge_sorted` below.
-    # An alternative that uses numpy sort is shown.  It is sometimes
-    # comparable to, but typically slower than, `merge_sorted`.
-    #
-    # >>> A = np.concatenate(map(np.array, map(zip, vals, counts)))
-    # >>> A.sort(0, kind='mergesort')
-
-    combined_vals_counts = merge_sorted(*map(zip, vals, counts))
-    combined_vals, combined_counts = zip(*combined_vals_counts)
-
-    combined_vals = np.array(combined_vals)
-    combined_counts = np.array(combined_counts)
+    combined_vals = np.concatenate(vals)
+    combined_counts = array_safe(np.concatenate(counts), like=combined_vals)
+    sort_order = np.argsort(combined_vals)
+    combined_vals = np.take(combined_vals, sort_order)
+    combined_counts = np.take(combined_counts, sort_order)
 
     # percentile-like, but scaled by total number of observations
     combined_q = np.cumsum(combined_counts)
 
     # rescale finalq percentiles to match combined_q
+    finalq = array_safe(finalq, like=combined_vals)
     desired_q = finalq * sum(Ns)
 
     # the behavior of different interpolation methods should be

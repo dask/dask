@@ -191,6 +191,34 @@ def keys_in_tasks(keys, tasks, as_list=False):
     return ret if as_list else set(ret)
 
 
+def find_all_possible_keys(tasks) -> set:
+    """Returns all possible keys in `tasks` including hashable literals.
+
+    The definition of a key in a Dask graph is any hashable object
+    that is not a task. This function returns all such objects in
+    `tasks` even if the object is in fact a literal.
+
+    """
+    ret = set()
+    while tasks:
+        work = []
+        for w in tasks:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                work.extend(w[1:])
+            elif typ is list:
+                work.extend(w)
+            elif typ is dict:
+                work.extend(w.values())
+            else:
+                try:
+                    ret.add(w)
+                except TypeError:  # not hashable
+                    pass
+        tasks = work
+    return ret
+
+
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """Get the immediate tasks on which this task depends
 
@@ -298,8 +326,8 @@ def subs(task, key, val):
     Examples
     --------
 
-    >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
-    (inc, 1)
+    >>> subs((inc, 'x'), 'x', 1)  # doctest: +ELLIPSIS
+    (<function inc at ...>, 1)
     """
     type_task = type(task)
     if not (type_task is tuple and task and callable(task[0])):  # istask(task):
@@ -399,7 +427,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
 
 
 def toposort(dsk, dependencies=None):
-    """ Return a list of keys of dask sorted in topological order."""
+    """Return a list of keys of dask sorted in topological order."""
     return _toposort(dsk, dependencies=dependencies)
 
 
@@ -445,7 +473,7 @@ def isdag(d, keys):
     return not getcycle(d, keys)
 
 
-class literal(object):
+class literal:
     """A small serializable object to wrap literal values without copying"""
 
     __slots__ = ("data",)
@@ -469,7 +497,7 @@ def quote(x):
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
 
-    >>> quote((add, 1, 2))  # doctest: +SKIP
+    >>> quote((add, 1, 2))
     (literal<type=tuple>,)
     """
     if istask(x) or type(x) is list or type(x) is dict:

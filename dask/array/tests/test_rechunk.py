@@ -1,17 +1,26 @@
-from itertools import product
 import warnings
+from itertools import product
 
 import pytest
 
 np = pytest.importorskip("numpy")
 
 import dask
-from dask.utils import funcname
-from dask.array.utils import assert_eq
-from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
-from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d, _old_to_new
-from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
 import dask.array as da
+from dask.array.rechunk import (
+    _breakpoints,
+    _intersect_1d,
+    _old_to_new,
+    cumdims_label,
+    divide_to_width,
+    intersect_chunks,
+    merge_to_number,
+    normalize_chunks,
+    plan_rechunk,
+    rechunk,
+)
+from dask.array.utils import assert_eq
+from dask.utils import funcname
 
 
 def test_rechunk_internals_1():
@@ -53,7 +62,7 @@ def test_rechunk_internals_1():
 
 
 def test_intersect_1():
-    """ Convert 1 D chunks"""
+    """Convert 1 D chunks"""
     old = ((10, 10, 10, 10, 10),)
     new = ((25, 5, 20),)
     answer = [
@@ -66,7 +75,7 @@ def test_intersect_1():
 
 
 def test_intersect_2():
-    """ Convert 1 D chunks"""
+    """Convert 1 D chunks"""
     old = ((20, 20, 20, 20, 20),)
     new = ((58, 4, 20, 18),)
     answer = [
@@ -132,7 +141,7 @@ def test_rechunk_expand2():
 
 
 def test_rechunk_method():
-    """ Test rechunking can be done as a method of dask array."""
+    """Test rechunking can be done as a method of dask array."""
     old = ((5, 2, 3),) * 4
     new = ((3, 3, 3, 1),) * 4
     a = np.random.uniform(0, 1, 10000).reshape((10,) * 4)
@@ -143,7 +152,7 @@ def test_rechunk_method():
 
 
 def test_rechunk_blockshape():
-    """ Test that blockshape can be used."""
+    """Test that blockshape can be used."""
     new_shape, new_chunks = (10, 10), (4, 3)
     new_blockdims = normalize_chunks(new_chunks, new_shape)
     old_chunks = ((4, 4, 2), (3, 3, 3, 1))
@@ -400,7 +409,7 @@ def test_plan_rechunk_5d():
     _assert_steps(steps, [(c, c, c, f, c), (c, c, c, f, f)])
 
 
-def test_plan_rechunk_heterogenous():
+def test_plan_rechunk_heterogeneous():
     c = (10,) * 1  # coarse
     f = (1,) * 10  # fine
     cf = c + f
@@ -777,3 +786,122 @@ def test_rechunk_bad_keys():
         x.rechunk({-100: 4})
 
     assert "-100" in str(info.value)
+
+
+def test_balance_basics():
+    arr_len = 220
+
+    x = da.from_array(np.arange(arr_len), chunks=100)
+    balanced = x.rechunk(chunks=100, balance=True)
+    unbalanced = x.rechunk(chunks=100, balance=False)
+    assert unbalanced.chunks[0] == (100, 100, 20)
+    assert balanced.chunks[0] == (110, 110)
+
+
+def test_balance_chunks_unchanged():
+    arr_len = 220
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=100, balance=True)
+    unbalanced = x.rechunk(chunks=100, balance=False)
+    assert unbalanced.chunks[0] == (100, 100, 20)
+    assert balanced.chunks[0] == (110, 110)
+
+
+def test_balance_small():
+    arr_len = 13
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=4, balance=True)
+    unbalanced = x.rechunk(chunks=4, balance=False)
+    assert balanced.chunks[0] == (5, 5, 3)
+    assert unbalanced.chunks[0] == (4, 4, 4, 1)
+
+    arr_len = 7
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=3, balance=True)
+    unbalanced = x.rechunk(chunks=3, balance=False)
+    assert balanced.chunks[0] == (4, 3)
+    assert unbalanced.chunks[0] == (3, 3, 1)
+
+
+def test_balance_n_chunks_size():
+    arr_len = 100
+    n_chunks = 8
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=arr_len // n_chunks, balance=True)
+    unbalanced = x.rechunk(chunks=arr_len // n_chunks, balance=False)
+    assert balanced.chunks[0] == (13,) * 7 + (9,)
+    assert unbalanced.chunks[0] == (12,) * 8 + (4,)
+
+
+def test_balance_raises():
+    arr_len = 100
+    n_chunks = 11
+
+    x = da.from_array(np.arange(arr_len))
+    with pytest.warns(UserWarning, match="Try increasing the chunk size"):
+        balanced = x.rechunk(chunks=arr_len // n_chunks, balance=True)
+    unbalanced = x.rechunk(chunks=arr_len // n_chunks, balance=False)
+    assert balanced.chunks == unbalanced.chunks
+
+    n_chunks = 10
+    x.rechunk(chunks=arr_len // n_chunks, balance=True)
+
+
+def test_balance_basics_2d():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=(100, 100), balance=True)
+    unbalanced = x.rechunk(chunks=(100, 100), balance=False)
+    assert unbalanced.chunks == ((100, 100, 10), (100, 100, 10))
+    assert balanced.chunks == ((105, 105), (105, 105))
+
+
+def test_balance_2d_negative_dimension():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=(100, -1), balance=True)
+    unbalanced = x.rechunk(chunks=(100, -1), balance=False)
+    assert unbalanced.chunks == ((100, 100, 10), (N,))
+    assert balanced.chunks == ((105, 105), (N,))
+
+
+def test_balance_different_inputs():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=("10MB", -1), balance=True)
+    unbalanced = x.rechunk(chunks=("10MB", -1), balance=False)
+    assert balanced.chunks == unbalanced.chunks
+    assert balanced.chunks[1] == (N,)
+
+
+def test_balance_split_into_n_chunks():
+    # Some prime numbers around 1000
+    array_lens = [
+        991,
+        997,
+        1009,
+        1013,
+        1019,
+        1021,
+        1031,
+        1033,
+        1039,
+        1049,
+        1051,
+        1061,
+        1063,
+        1069,
+    ]
+
+    for N in array_lens:
+        for nchunks in range(1, 20):
+            x = da.from_array(np.random.uniform(size=N))
+            y = x.rechunk(chunks=len(x) // nchunks, balance=True)
+            assert len(y.chunks[0]) == nchunks

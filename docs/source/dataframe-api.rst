@@ -7,16 +7,24 @@ Dataframe
 ~~~~~~~~~
 
 .. autosummary::
+    :toctree: generated/
 
     DataFrame
+    DataFrame.abs
     DataFrame.add
+    DataFrame.align
+    DataFrame.all
+    DataFrame.any
     DataFrame.append
     DataFrame.apply
+    DataFrame.applymap
     DataFrame.assign
     DataFrame.astype
+    DataFrame.bfill
     DataFrame.categorize
     DataFrame.columns
     DataFrame.compute
+    DataFrame.copy
     DataFrame.corr
     DataFrame.count
     DataFrame.cov
@@ -25,40 +33,61 @@ Dataframe
     DataFrame.cumprod
     DataFrame.cumsum
     DataFrame.describe
+    DataFrame.diff
     DataFrame.div
+    DataFrame.divide
     DataFrame.drop
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.eq
+    DataFrame.eval
     DataFrame.explode
+    DataFrame.ffill
     DataFrame.fillna
+    DataFrame.first
     DataFrame.floordiv
+    DataFrame.ge
     DataFrame.get_partition
     DataFrame.groupby
+    DataFrame.gt
     DataFrame.head
+    DataFrame.idxmax
+    DataFrame.idxmin
     DataFrame.iloc
     DataFrame.index
+    DataFrame.info
+    DataFrame.isin
     DataFrame.isna
     DataFrame.isnull
+    DataFrame.items
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
     DataFrame.known_divisions
+    DataFrame.last
+    DataFrame.le
     DataFrame.loc
+    DataFrame.lt
     DataFrame.map_partitions
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
     DataFrame.merge
     DataFrame.min
     DataFrame.mod
+    DataFrame.mode
     DataFrame.mul
     DataFrame.ndim
+    DataFrame.ne
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
     DataFrame.prod
@@ -70,16 +99,24 @@ Dataframe
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
+    DataFrame.resample
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
     DataFrame.rmul
+    DataFrame.round
     DataFrame.rpow
     DataFrame.rsub
     DataFrame.rtruediv
     DataFrame.sample
+    DataFrame.select_dtypes
+    DataFrame.sem
     DataFrame.set_index
     DataFrame.shape
+    DataFrame.shuffle
+    DataFrame.size
+    DataFrame.sort_values
+    DataFrame.squeeze
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
@@ -89,10 +126,13 @@ Dataframe
     DataFrame.to_dask_array
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_html
     DataFrame.to_json
     DataFrame.to_parquet
     DataFrame.to_records
+    DataFrame.to_string
     DataFrame.to_sql
+    DataFrame.to_timestamp
     DataFrame.truediv
     DataFrame.values
     DataFrame.var
@@ -103,6 +143,7 @@ Series
 ~~~~~~
 
 .. autosummary::
+   :toctree: generated/
 
    Series
    Series.add
@@ -224,7 +265,12 @@ Groupby Operations
 
 .. currentmodule:: dask.dataframe.groupby
 
+DataFrame Groupby
+*****************
+
 .. autosummary::
+   :toctree: generated/
+
    DataFrameGroupBy.aggregate
    DataFrameGroupBy.apply
    DataFrameGroupBy.count
@@ -246,7 +292,12 @@ Groupby Operations
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
 
+Series Groupby
+**************
+
 .. autosummary::
+   :toctree: generated/
+
    SeriesGroupBy.aggregate
    SeriesGroupBy.apply
    SeriesGroupBy.count
@@ -267,7 +318,12 @@ Groupby Operations
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
 
+Custom Aggregation
+******************
+
 .. autosummary::
+   :toctree: generated/
+
    Aggregation
 
 Rolling Operations
@@ -276,6 +332,8 @@ Rolling Operations
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   :toctree: generated/
+
    rolling.map_overlap
    Series.rolling
    DataFrame.rolling
@@ -283,6 +341,8 @@ Rolling Operations
 .. currentmodule:: dask.dataframe.rolling
 
 .. autosummary::
+   :toctree: generated/
+
    Rolling.apply
    Rolling.count
    Rolling.kurt
@@ -303,6 +363,8 @@ Create DataFrames
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   :toctree: generated/
+
    read_csv
    read_table
    read_fwf
@@ -316,26 +378,36 @@ Create DataFrames
    from_dask_array
    from_delayed
    from_pandas
-   dask.bag.core.Bag.to_dataframe
+
+.. currentmodule:: dask.bag
+
+.. autosummary::
+   :toctree: generated/
+
+   Bag.to_dataframe
 
 Store DataFrames
 ~~~~~~~~~~~~~~~~
 
+.. currentmodule:: dask.dataframe
+
 .. autosummary::
+   :toctree: generated/
 
    to_csv
    to_parquet
    to_hdf
    to_records
    to_sql
-   to_bag
    to_json
 
 Convert DataFrames
 ~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
+   :toctree: generated/
 
+   DataFrame.to_bag
    DataFrame.to_dask_array
    DataFrame.to_delayed
 
@@ -345,115 +417,75 @@ Reshape DataFrames
 .. currentmodule:: dask.dataframe.reshape
 
 .. autosummary::
+   :toctree: generated/
 
    get_dummies
    pivot_table
    melt
 
-DataFrame Methods
-~~~~~~~~~~~~~~~~~
-
-.. currentmodule:: dask.dataframe
-
-.. autoclass:: DataFrame
-   :members:
-   :inherited-members:
-
-Series Methods
-~~~~~~~~~~~~~~
-
-.. autoclass:: Series
-   :members:
-   :inherited-members:
-
-.. currentmodule:: dask.dataframe.groupby
-
-DataFrameGroupBy
-~~~~~~~~~~~~~~~~
-
-.. autoclass:: DataFrameGroupBy
-   :members:
-   :inherited-members:
-
-SeriesGroupBy
-~~~~~~~~~~~~~
-
-.. autoclass:: SeriesGroupBy
-   :members:
-   :inherited-members:
-
-Custom Aggregation
-~~~~~~~~~~~~~~~~~~
-.. autoclass:: Aggregation
-
-
-Storage and Conversion
+Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.multi
 
-.. autofunction:: read_csv
-.. autofunction:: read_table
-.. autofunction:: read_fwf
-.. autofunction:: read_parquet
-.. autofunction:: read_orc
-.. autofunction:: read_hdf
-.. autofunction:: read_json
-.. autofunction:: read_sql_table
-.. autofunction:: from_array
-.. autofunction:: from_pandas
-.. autofunction:: from_bcolz
-.. autofunction:: from_dask_array
-.. autofunction:: from_delayed
-.. autofunction:: to_records
-.. autofunction:: to_csv
-.. autofunction:: to_bag
-.. autofunction:: to_hdf
-.. autofunction:: to_parquet
-.. autofunction:: to_json
-.. autofunction:: to_sql
+.. autosummary::
+   :toctree: generated/
 
-Rolling
-~~~~~~~
+   DataFrame.merge
+   concat
+   merge
+   merge_asof
 
-.. currentmodule:: dask.dataframe.rolling
-
-.. autofunction:: map_overlap
 
 Resampling
 ~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe.tseries.resample
 
-.. autoclass:: Resampler
-   :members:
-   :inherited-members:
+.. autosummary::
+   :toctree: generated/
+
+   Resampler
+   Resampler.agg
+   Resampler.count
+   Resampler.first
+   Resampler.last
+   Resampler.max
+   Resampler.mean
+   Resampler.median
+   Resampler.min
+   Resampler.nunique
+   Resampler.ohlc
+   Resampler.prod
+   Resampler.quantile
+   Resampler.sem
+   Resampler.size
+   Resampler.std
+   Resampler.sum
+   Resampler.var
+
 
 Dask Metadata
 ~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe.utils
 
-.. autofunction:: make_meta
+.. autosummary::
+   :toctree: generated/
+
+   make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe
 
-.. autofunction:: compute
-.. autofunction:: map_partitions
-.. autofunction:: to_datetime
-.. autofunction:: to_numeric
+.. autosummary::
+   :toctree: generated/
 
-.. currentmodule:: dask.dataframe.multi
+   compute
+   map_partitions
 
-.. autofunction:: concat
-.. autofunction:: merge
-.. autofunction:: merge_asof
+   to_datetime
+   to_numeric
 
-.. currentmodule:: dask.dataframe.reshape
-
-.. autofunction:: get_dummies
-.. autofunction:: pivot_table
-.. autofunction:: melt

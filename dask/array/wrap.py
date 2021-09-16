@@ -2,10 +2,10 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-
 from tlz import curry
 
 from ..base import tokenize
+from ..layers import BlockwiseCreateArray
 from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import meta_from_array
@@ -62,14 +62,15 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-
-    keys = product([name], *[range(len(bd)) for bd in chunks])
-    shapes = product(*chunks)
     func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
 
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype)
+    graph = BlockwiseCreateArray(
+        name,
+        func,
+        shape,
+        chunks,
+    )
+    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):
@@ -100,17 +101,6 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func, func_like, *args, **kwargs):
-    """
-    Safe implementation for wrap_func_like(), attempts to use func_like(),
-    if the shape keyword argument, falls back to func().
-    """
-    try:
-        return func_like(*args, **kwargs)
-    except TypeError:
-        return func(*args, **kwargs)
-
-
 @curry
 def wrap(wrap_func, func, **kwargs):
     func_like = kwargs.pop("func_like", None)
@@ -136,8 +126,11 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 
 @curry
-def _broadcast_trick_inner(func, shape, *args, **kwargs):
-    return np.broadcast_to(func((), *args, **kwargs), shape)
+def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
+    # cupy-specific hack. numpy is happy with hardcoded shape=().
+    null_shape = () if shape == () else 1
+
+    return np.broadcast_to(func(meta, shape=null_shape, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -159,22 +152,18 @@ def broadcast_trick(func):
     Note that those array are read-only and numpy will refuse to assign to them,
     so should be safe.
     """
-
     inner = _broadcast_trick_inner(func)
-
-    if func.__doc__ is not None:
-        inner.__doc__ = func.__doc__
-        inner.__name__ = func.__name__
-
+    inner.__doc__ = func.__doc__
+    inner.__name__ = func.__name__
     return inner
 
 
-ones = w(broadcast_trick(np.ones), dtype="f8")
-zeros = w(broadcast_trick(np.zeros), dtype="f8")
-empty = w(broadcast_trick(np.empty), dtype="f8")
+ones = w(broadcast_trick(np.ones_like), dtype="f8")
+zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
+empty = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
-w_like = wrap(wrap_func_like_safe)
+w_like = wrap(wrap_func_like)
 
 
 empty_like = w_like(np.empty, func_like=np.empty_like)
@@ -182,8 +171,14 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full))
+_full = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
+
+# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
+_full.__doc__ = _full.__doc__.replace(
+    "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+    "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+)
 
 
 def full(shape, fill_value, *args, **kwargs):
@@ -193,6 +188,8 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
+    if "dtype" not in kwargs:
+        kwargs["dtype"] = type(fill_value)
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 

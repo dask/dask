@@ -1,36 +1,29 @@
 import string
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
+from packaging.version import parse as parse_version
 
+PANDAS_VERSION = parse_version(pd.__version__)
+PANDAS_GT_104 = PANDAS_VERSION >= parse_version("1.0.4")
+PANDAS_GT_110 = PANDAS_VERSION >= parse_version("1.1.0")
+PANDAS_GT_120 = PANDAS_VERSION >= parse_version("1.2.0")
+PANDAS_GT_121 = PANDAS_VERSION >= parse_version("1.2.1")
+PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
+PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
+PANDAS_GT_133 = PANDAS_VERSION >= parse_version("1.3.3")
 
-PANDAS_VERSION = LooseVersion(pd.__version__)
-PANDAS_GT_0240 = PANDAS_VERSION >= LooseVersion("0.24.0")
-PANDAS_GT_0250 = PANDAS_VERSION >= LooseVersion("0.25.0")
-PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
-PANDAS_GT_104 = PANDAS_VERSION >= LooseVersion("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= LooseVersion("1.1.0")
-HAS_INT_NA = PANDAS_GT_0240
-
-
-if PANDAS_GT_100:
-    import pandas.testing as tm  # noqa: F401
-else:
-    import pandas.util.testing as tm  # noqa: F401
+import pandas.testing as tm
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):
-    if PANDAS_GT_100:
-        tm.assert_extension_array_equal(left, right, *args, **kwargs)
-        assert pd.api.types.is_categorical_dtype(
-            left.dtype
-        ), "{} is not categorical dtype".format(left)
-        assert pd.api.types.is_categorical_dtype(
-            right.dtype
-        ), "{} is not categorical dtype".format(right)
-    else:
-        return tm.assert_categorical_equal(left, right, *args, **kwargs)
+    tm.assert_extension_array_equal(left, right, *args, **kwargs)
+    assert pd.api.types.is_categorical_dtype(
+        left.dtype
+    ), "{} is not categorical dtype".format(left)
+    assert pd.api.types.is_categorical_dtype(
+        right.dtype
+    ), "{} is not categorical dtype".format(right)
 
 
 def assert_numpy_array_equal(left, right):

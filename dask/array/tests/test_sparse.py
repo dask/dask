@@ -2,22 +2,19 @@ import random
 
 import numpy as np
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117, _numpy_120
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip("sparse")
+SPARSE_VERSION = parse_version(sparse.__version__)
 if sparse:
     # Test failures on older versions of Numba.
     # Conda-Forge provides 0.35.0 on windows right now, causing failures like
     # searchsorted() got an unexpected keyword argument 'side'
     pytest.importorskip("numba", minversion="0.40.0")
-
-numpy_120_xfail = pytest.mark.xfail(
-    _numpy_120, reason="https://github.com/pydata/sparse/issues/383"
-)
 
 
 functions = [
@@ -26,37 +23,33 @@ functions = [
     lambda x: 2 * x,
     lambda x: x / 2,
     lambda x: x ** 2,
-    pytest.param(lambda x: x + x, marks=numpy_120_xfail),
-    pytest.param(lambda x: x * x, marks=numpy_120_xfail),
-    pytest.param(lambda x: x[0], marks=numpy_120_xfail),
-    pytest.param(lambda x: x[:, 1], marks=numpy_120_xfail),
-    pytest.param(lambda x: x[:1, None, 1:3], marks=numpy_120_xfail),
+    lambda x: x + x,
+    lambda x: x * x,
+    lambda x: x[0],
+    lambda x: x[:, 1],
+    lambda x: x[:1, None, 1:3],
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
-    pytest.param(lambda x: x.sum(), marks=numpy_120_xfail),
-    pytest.param(lambda x: x.mean(), marks=numpy_120_xfail),
+    lambda x: x.sum(),
     lambda x: x.moment(order=0),
     pytest.param(
+        lambda x: x.mean(),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
+    ),
+    pytest.param(
         lambda x: x.std(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
-        ),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
     ),
     pytest.param(
         lambda x: x.var(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
-        ),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
     ),
-    pytest.param(lambda x: x.dot(np.arange(x.shape[-1])), marks=numpy_120_xfail),
-    pytest.param(lambda x: x.dot(np.eye(x.shape[-1])), marks=numpy_120_xfail),
-    pytest.param(
-        lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
-        marks=numpy_120_xfail,
-    ),
-    pytest.param(lambda x: x.sum(axis=0), marks=numpy_120_xfail),
-    pytest.param(lambda x: x.max(axis=0), marks=numpy_120_xfail),
-    pytest.param(lambda x: x.sum(axis=(1, 2)), marks=numpy_120_xfail),
+    lambda x: x.dot(np.arange(x.shape[-1])),
+    lambda x: x.dot(np.eye(x.shape[-1])),
+    lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+    lambda x: x.sum(axis=0),
+    lambda x: x.max(axis=0),
+    lambda x: x.sum(axis=(1, 2)),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
     lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
@@ -66,9 +59,30 @@ functions = [
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
-    pytest.param(lambda x: x.rechunk((2, 2, 1)), marks=numpy_120_xfail),
+    lambda x: x.rechunk((2, 2, 1)),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
+    pytest.param(
+        lambda x: np.zeros_like(x),
+        marks=pytest.mark.xfail(
+            SPARSE_VERSION < parse_version("0.13.0"),
+            reason="https://github.com/pydata/xarray/issues/5654",
+        ),
+    ),
+    pytest.param(
+        lambda x: np.ones_like(x),
+        marks=pytest.mark.xfail(
+            SPARSE_VERSION < parse_version("0.13.0"),
+            reason="https://github.com/pydata/xarray/issues/5654",
+        ),
+    ),
+    pytest.param(
+        lambda x: np.full_like(x, fill_value=2),
+        marks=pytest.mark.xfail(
+            SPARSE_VERSION < parse_version("0.13.0"),
+            reason="https://github.com/pydata/xarray/issues/5654",
+        ),
+    ),
 ]
 
 
@@ -91,7 +105,7 @@ def test_basic(func):
 
 
 @pytest.mark.skipif(
-    sparse.__version__ < "0.7.0+10",
+    SPARSE_VERSION < parse_version("0.7.0+10"),
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
 def test_tensordot():
@@ -161,7 +175,6 @@ def test_mixed_output_type():
     assert zz.nnz == y.compute().nnz
 
 
-@numpy_120_xfail
 def test_metadata():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
@@ -176,16 +189,15 @@ def test_metadata():
     assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
     assert isinstance((y - z)._meta, sparse.COO)
     assert isinstance(y.persist()._meta, sparse.COO)
-    if IS_NEP18_ACTIVE:
-        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
-        assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
-        assert isinstance(np.stack([y, y])._meta, sparse.COO)
-        if _numpy_117:
-            assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
-            assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
+    assert isinstance(np.stack([y, y])._meta, sparse.COO)
+    assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():
+    pytest.importorskip("jinja2")
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
     y = y.map_blocks(sparse.COO.from_numpy)
@@ -197,7 +209,6 @@ def test_html_repr():
     assert "Bytes" not in text
 
 
-@numpy_120_xfail
 def test_from_delayed_meta():
     def f():
         return sparse.COO.from_numpy(np.eye(3))
@@ -208,7 +219,6 @@ def test_from_delayed_meta():
     assert_eq(x, x)
 
 
-@numpy_120_xfail
 def test_from_array():
     x = sparse.COO.from_numpy(np.eye(10))
     d = da.from_array(x, chunks=(5, 5))
@@ -218,7 +228,6 @@ def test_from_array():
     assert isinstance(d.compute(), sparse.COO)
 
 
-@numpy_120_xfail
 def test_map_blocks():
     x = da.eye(10, chunks=5)
     y = x.map_blocks(sparse.COO.from_numpy, meta=sparse.COO.from_numpy(np.eye(1)))
@@ -226,7 +235,6 @@ def test_map_blocks():
     assert_eq(y, y)
 
 
-@numpy_120_xfail
 def test_meta_from_array():
     x = sparse.COO.from_numpy(np.eye(1))
     y = da.utils.meta_from_array(x, ndim=2)

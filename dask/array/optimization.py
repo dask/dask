@@ -1,16 +1,16 @@
 from itertools import zip_longest
-from operator import getitem
+from numbers import Integral
 
 import numpy as np
 
-from .core import getter, getter_nofancy, getter_inline
-from ..blockwise import optimize_blockwise, fuse_roots
+from .. import config
+from ..blockwise import fuse_roots, optimize_blockwise
 from ..core import flatten, reverse_dict
-from ..optimization import cull, fuse, inline_functions
-from ..utils import ensure_dict
 from ..highlevelgraph import HighLevelGraph
-
-from numbers import Integral
+from ..optimization import fuse, inline_functions
+from ..utils import ensure_dict
+from .chunk import getitem
+from .core import getter, getter_inline, getter_nofancy
 
 # All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
@@ -35,39 +35,46 @@ def optimize(
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
     keys = list(flatten(keys))
 
-    # High level stage optimization
-    if isinstance(dsk, HighLevelGraph):
-        dsk = optimize_blockwise(dsk, keys=keys)
-        dsk = fuse_roots(dsk, keys=keys)
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+
+    dsk = optimize_blockwise(dsk, keys=keys)
+    dsk = fuse_roots(dsk, keys=keys)
+    dsk = dsk.cull(set(keys))
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
+        return dsk
+
+    dependencies = dsk.get_all_dependencies()
+    dsk = ensure_dict(dsk)
 
     # Low level task optimizations
-    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
-    dsk2, dependencies = cull(dsk, keys)
-    hold = hold_keys(dsk2, dependencies)
+    hold = hold_keys(dsk, dependencies)
 
-    dsk3, dependencies = fuse(
-        dsk2,
+    dsk, dependencies = fuse(
+        dsk,
         hold + keys + (fuse_keys or []),
         dependencies,
         rename_keys=rename_fused_keys,
     )
     if inline_functions_fast_functions:
-        dsk4 = inline_functions(
-            dsk3,
+        dsk = inline_functions(
+            dsk,
             keys,
             dependencies=dependencies,
             fast_functions=inline_functions_fast_functions,
         )
-    else:
-        dsk4 = dsk3
-    dsk5 = optimize_slices(dsk4)
 
-    return dsk5
+    return optimize_slices(dsk)
 
 
 def hold_keys(dsk, dependencies):

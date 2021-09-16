@@ -1,8 +1,9 @@
 import heapq
 import math
-
 import random as rnd
 from functools import partial
+
+from .core import Bag
 
 
 def sample(population, k):
@@ -20,11 +21,10 @@ def sample(population, k):
 
     Examples
     --------
-    >>> import dask.bag as db # doctest: +SKIP
-    ... from dask.bag import random
-    ...
-    ... b = db.from_sequence(range(5), npartitions=2)
-    ... list(random.sample(b, 3).compute())
+    >>> import dask.bag as db
+    >>> from dask.bag import random
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
     return _sample(population=population, k=k, replace=False)
@@ -43,11 +43,10 @@ def choices(population, k=1):
 
     Examples
     --------
-    >>> import dask.bag as db # doctest: +SKIP
-    ... from dask.bag import random
-    ...
-    ... b = db.from_sequence(range(5), npartitions=2)
-    ... list(random.choices(b, 3).compute())
+    >>> import dask.bag as db
+    >>> from dask.bag import random
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
     return _sample(population=population, k=k, replace=True)
@@ -57,6 +56,7 @@ def _sample(population, k, replace=False):
     return population.reduction(
         partial(_sample_map_partitions, k=k, replace=replace),
         partial(_sample_reduce, k=k, replace=replace),
+        out_type=Bag,
     )
 
 
@@ -79,6 +79,7 @@ def _sample_map_partitions(population, k, replace):
     k: int
         Number of elements to sample.
     """
+    population = list(population)
     lx = len(population)
     real_k = k if k <= lx else lx
     sample_func = rnd.choices if replace else rnd.sample

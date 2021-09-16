@@ -1,7 +1,7 @@
 import contextlib
 
+import numpy as np
 import pytest
-
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
@@ -81,9 +81,8 @@ def df_ddf():
         index=["E", "f", "g", "h"],
     )
 
-    if dd._compat.PANDAS_GT_100:
-        df["string_col"] = df["str_col"].astype("string")
-        df.loc["E", "string_col"] = pd.NA
+    df["string_col"] = df["str_col"].astype("string")
+    df.loc["E", "string_col"] = pd.NA
 
     ddf = dd.from_pandas(df, 2)
 
@@ -125,8 +124,7 @@ def test_str_accessor(df_ddf):
 
     # implemented methods are present in tab completion
     assert "upper" in dir(ddf.str_col.str)
-    if dd._compat.PANDAS_GT_100:
-        assert "upper" in dir(ddf.string_col.str)
+    assert "upper" in dir(ddf.string_col.str)
     assert "upper" in dir(ddf.index.str)
 
     # not implemented methods don't show up
@@ -137,19 +135,15 @@ def test_str_accessor(df_ddf):
     assert_eq(ddf.str_col.str.upper(), df.str_col.str.upper())
     assert set(ddf.str_col.str.upper().dask) == set(ddf.str_col.str.upper().dask)
 
-    if dd._compat.PANDAS_GT_100:
-        assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
-        assert set(ddf.string_col.str.upper().dask) == set(
-            ddf.string_col.str.upper().dask
-        )
+    assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
+    assert set(ddf.string_col.str.upper().dask) == set(ddf.string_col.str.upper().dask)
 
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
-    # make sure to pass thru args & kwargs
+    # make sure to pass through args & kwargs
     assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
-    if dd._compat.PANDAS_GT_100:
-        assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
+    assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
@@ -213,13 +207,20 @@ def test_str_accessor_cat(df_ddf):
         ddf.str_col.str.cat([ddf.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
         df.str_col.str.cat([df.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
     )
+    assert_eq(ddf.str_col.str.cat(sep=":"), df.str_col.str.cat(sep=":"))
 
     for o in ["foo", ["foo"]]:
         with pytest.raises(TypeError):
             ddf.str_col.str.cat(o)
 
-    with pytest.raises(NotImplementedError):
-        ddf.str_col.str.cat(sep=":")
+
+def test_str_accessor_cat_none():
+    s = pd.Series(["a", "a", "b", "b", "c", np.nan], name="foo")
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(ds.str.cat(), s.str.cat())
+    assert_eq(ds.str.cat(na_rep="-"), s.str.cat(na_rep="-"))
+    assert_eq(ds.str.cat(sep="_", na_rep="-"), s.str.cat(sep="_", na_rep="-"))
 
 
 def test_str_accessor_noexpand():
@@ -233,7 +234,9 @@ def test_str_accessor_noexpand():
 
 
 def test_str_accessor_expand():
-    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"])
+    s = pd.Series(
+        ["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], index=["row1", "row2", "row3"]
+    )
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:
@@ -267,7 +270,6 @@ def test_str_accessor_expand_more_columns():
     ds.str.split(n=10, expand=True).compute()
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="No StringDtype")
 def test_string_nullable_types(df_ddf):
     df, ddf = df_ddf
     assert_eq(ddf.string_col.str.count("A"), df.string_col.str.count("A"))

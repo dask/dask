@@ -1,41 +1,37 @@
 import gc
 import math
-import multiprocessing
 import os
 import random
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor
 from gzip import GzipFile
 from itertools import repeat
 
 import partd
 import pytest
-from tlz import merge, join, identity, valmap, groupby, pluck, unique
+from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
 from dask.bag.core import (
     Bag,
+    collect,
+    from_delayed,
+    inline_singleton_lists,
     lazify,
     lazify_task,
-    collect,
+    optimize,
+    partition,
     reduceby,
     reify,
-    partition,
-    inline_singleton_lists,
-    optimize,
-    from_delayed,
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
-from dask.utils import filetexts, tmpfile, tmpdir
-from dask.utils_test import inc, add
-
-
-# Needed to pickle the lambda functions used in this test suite
-pytest.importorskip("cloudpickle")
+from dask.utils import filetexts, tmpdir, tmpfile
+from dask.utils_test import add, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -59,6 +55,20 @@ def test_Bag():
 
 def test_keys():
     assert b.__dask_keys__() == sorted(dsk.keys())
+
+
+def test_bag_groupby_pure_hash():
+    # https://github.com/dask/dask/issues/6640
+    result = b.groupby(iseven).compute()
+    assert result == [(False, [1, 3] * 3), (True, [0, 2, 4] * 3)]
+
+
+def test_bag_groupby_normal_hash():
+    # https://github.com/dask/dask/issues/6640
+    result = b.groupby(lambda x: "even" if iseven(x) else "odd").compute()
+    assert len(result) == 2
+    assert ("odd", [1, 3] * 3) in result
+    assert ("even", [0, 2, 4] * 3) in result
 
 
 def test_bag_map():
@@ -619,7 +629,7 @@ def test_from_url():
     a = db.from_url(["http://google.com", "http://github.com"])
     assert a.npartitions == 2
 
-    b = db.from_url("http://raw.githubusercontent.com/dask/dask/master/README.rst")
+    b = db.from_url("http://raw.githubusercontent.com/dask/dask/main/README.rst")
     assert b.npartitions == 1
     assert b"Dask\n" in b.take(10)
 
@@ -676,6 +686,7 @@ def test_read_text_large_gzip():
         assert "".join(c.compute()) == data.decode()
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6914")
 @pytest.mark.slow
 @pytest.mark.network
 def test_from_s3():
@@ -716,6 +727,7 @@ def test_from_long_sequence():
 
 
 def test_from_empty_sequence():
+    pytest.importorskip("dask.dataframe")
     b = db.from_sequence([])
     assert b.npartitions == 1
     df = b.to_dataframe(meta={"a": "int"}).compute()
@@ -1091,7 +1103,7 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
-def test_to_delayed_optimize_graph():
+def test_to_delayed_optimize_graph(tmpdir):
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
     b2 = b.map(inc).map(inc).map(inc)
 
@@ -1110,7 +1122,7 @@ def test_to_delayed_optimize_graph():
     assert dict(d2.dask) == dict(x.dask)
     assert d.compute() == d2.compute()
 
-    [d] = b2.to_textfiles("foo.txt", compute=False)
+    [d] = b2.to_textfiles(str(tmpdir), compute=False)
     text = str(dict(d.dask))
     assert text.count("reify") <= 0
 
@@ -1375,7 +1387,7 @@ def test_empty():
 
 
 def test_bag_picklable():
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     b = db.from_sequence(range(100))
     b2 = loads(dumps(b))
@@ -1440,9 +1452,7 @@ def test_temporary_directory(tmpdir):
 
     # We use a pool to avoid a race condition between the pool close
     # cleaning up files, and the assert below.
-    pool = multiprocessing.Pool(4)
-
-    with pool:
+    with ProcessPoolExecutor(4) as pool:
         with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
             b2 = b.groupby(lambda x: x % 2)
             b2.compute()
@@ -1548,3 +1558,26 @@ def test_bagged_array_delayed():
     bag = db.from_delayed(obj)
     b = bag.compute()
     assert_eq(b, [1.0, 1.0, 1.0, 1.0, 1.0])
+
+
+def test_dask_layers():
+    a = db.from_sequence([1, 2], npartitions=2)
+    assert a.__dask_layers__() == (a.name,)
+    assert a.dask.layers.keys() == {a.name}
+    assert a.dask.dependencies == {a.name: set()}
+    i = a.min()
+    assert i.__dask_layers__() == (i.key,)
+    assert i.dask.layers.keys() == {a.name, i.key}
+    assert i.dask.dependencies == {a.name: set(), i.key: {a.name}}
+
+
+def test_dask_layers_to_delayed():
+    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
+    # match the key
+    da = pytest.importorskip("dask.array")
+    i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
+    name = i.key[0]
+    assert i.key[1:] == (0,)
+    assert i.dask.layers.keys() == {"delayed-" + name}
+    assert i.dask.dependencies == {"delayed-" + name: set()}
+    assert i.__dask_layers__() == ("delayed-" + name,)

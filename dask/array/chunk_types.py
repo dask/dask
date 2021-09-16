@@ -1,7 +1,4 @@
-from numbers import Number
-
 import numpy as np
-
 
 # Start list of valid chunk types, to be added to with guarded imports
 _HANDLED_CHUNK_TYPES = [np.ndarray, np.ma.MaskedArray]
@@ -27,7 +24,7 @@ def register_chunk_type(type):
     However, for multiple duck array types to interoperate properly, they need to
     properly defer to each other in arithmetic operations and NumPy functions/ufuncs
     according to a well-defined type casting hierarchy (
-    `see NEP 13<https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy>`_
+    `see NEP 13 <https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy>`__
     ). In an effort to maintain this hierarchy, Dask defers to all other duck array
     types except those in its internal registry. By default, this registry contains
 
@@ -137,7 +134,7 @@ except ImportError:
 
 
 def is_valid_chunk_type(type):
-    """ Check if given type is a valid chunk and downcast array type"""
+    """Check if given type is a valid chunk and downcast array type"""
     try:
         return type in _HANDLED_CHUNK_TYPES or issubclass(
             type, tuple(_HANDLED_CHUNK_TYPES)
@@ -147,9 +144,5 @@ def is_valid_chunk_type(type):
 
 
 def is_valid_array_chunk(array):
-    """ Check if given array is of a valid type to operate with"""
-    return (
-        array is None
-        or isinstance(array, Number)
-        or isinstance(array, tuple(_HANDLED_CHUNK_TYPES))
-    )
+    """Check if given array is of a valid type to operate with"""
+    return array is None or isinstance(array, tuple(_HANDLED_CHUNK_TYPES))

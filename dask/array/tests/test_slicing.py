@@ -1,5 +1,4 @@
 import itertools
-from operator import getitem
 
 import pytest
 from tlz import merge
@@ -7,32 +6,24 @@ from tlz import merge
 np = pytest.importorskip("numpy")
 
 import dask
-from dask import config, utils
 import dask.array as da
+from dask import config
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
-    new_blockdim,
-    sanitize_index,
-    slice_array,
-    take,
-    normalize_index,
-    slicing_plan,
-    make_block_sorted_slices,
-    shuffle_slice,
-)
-from dask.array.slicing import (
-    _sanitize_index_element,
-    _slice_1d,
-    new_blockdim,
-    sanitize_index,
-    slice_array,
-    take,
-    normalize_index,
-    slicing_plan,
     cached_cumsum,
+    make_block_sorted_slices,
+    new_blockdim,
+    normalize_index,
+    sanitize_index,
+    shuffle_slice,
+    slice_array,
+    slicing_plan,
+    take,
 )
 from dask.array.utils import assert_eq, same_keys
+
+from ..chunk import getitem
 
 
 def test_slice_1d():
@@ -460,7 +451,7 @@ def test_slice_list_then_None():
     assert_eq(y, np.zeros((1, 2, 5)))
 
 
-class ReturnItem(object):
+class ReturnItem:
     def __getitem__(self, key):
         return key
 
@@ -882,15 +873,34 @@ def test_slicing_plan(chunks, index, expected):
 
 
 def test_getitem_avoids_large_chunks():
-    a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
-    arr = da.from_array(a, chunks=(1, 500, 500))
-    indexer = [0, 1] + [2] * 100 + [3]
-    result = arr[indexer]
-    chunk_size = utils.parse_bytes(config.get("array.chunk-size"))
-    assert all(x.nbytes < chunk_size for x in result.blocks)
-    expected = a[indexer]
+    with dask.config.set({"array.chunk-size": "0.1Mb"}):
+        a = np.arange(2 * 128 * 128, dtype="int64").reshape(2, 128, 128)
+        arr = da.from_array(a, chunks=(1, 128, 128))
+        indexer = [0] + [1] * 11
+        expected = a[indexer]
 
-    assert_eq(result, expected)
+        # By default, we warn
+        with pytest.warns(da.PerformanceWarning):
+            result = arr[indexer]
+
+        assert_eq(result, expected)
+        assert result.chunks == ((1, 11), (128,), (128,))
+
+        # Users can silence the warning
+        with dask.config.set({"array.slicing.split-large-chunks": False}):
+            with pytest.warns(None) as e:
+                result = arr[indexer]
+            assert len(e) == 0
+            assert_eq(result, expected)
+
+        # Users can silence the warning
+        with dask.config.set({"array.slicing.split-large-chunks": True}):
+            with pytest.warns(None) as e:
+                result = arr[indexer]
+            assert len(e) == 0  # no
+            assert_eq(result, expected)
+
+            assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
 @pytest.mark.parametrize(
@@ -906,49 +916,52 @@ def test_getitem_avoids_large_chunks():
 def test_getitem_avoids_large_chunks_missing(chunks):
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
-    arr = da.from_array(a, chunks=(1, 500, 500))
-    arr._chunks = chunks
-    indexer = [0, 1] + [2] * 100 + [3]
-    expected = a[indexer]
-    result = arr[indexer]
-    assert_eq(result, expected)
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
+        a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
+        arr = da.from_array(a, chunks=(1, 500, 500))
+        arr._chunks = chunks
+        indexer = [0, 1] + [2] * 100 + [3]
+        expected = a[indexer]
+        result = arr[indexer]
+        assert_eq(result, expected)
 
 
 def test_take_avoids_large_chunks():
     # unit test for https://github.com/dask/dask/issues/6270
-    chunks = ((1, 1, 1, 1), (500,), (500,))
-    itemsize = 8
-    index = np.array([0, 1] + [2] * 101 + [3])
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 51, 50, 1), (500,), (500,))
-    assert len(dsk) == 5
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
+        chunks = ((1, 1, 1, 1), (500,), (500,))
+        itemsize = 8
+        index = np.array([0, 1] + [2] * 101 + [3])
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 51, 50, 1), (500,), (500,))
+        assert len(dsk) == 5
 
-    index = np.array([0] * 101 + [1, 2, 3])
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((51, 50, 1, 1, 1), (500,), (500,))
-    assert len(dsk) == 5
+        index = np.array([0] * 101 + [1, 2, 3])
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((51, 50, 1, 1, 1), (500,), (500,))
+        assert len(dsk) == 5
 
-    index = np.array([0, 1, 2] + [3] * 101)
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 1, 51, 50), (500,), (500,))
-    assert len(dsk) == 5
+        index = np.array([0, 1, 2] + [3] * 101)
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 1, 51, 50), (500,), (500,))
+        assert len(dsk) == 5
 
-    chunks = ((500,), (1, 1, 1, 1), (500,))
-    index = np.array([0, 1, 2] + [3] * 101)
-    chunks2, dsk = take("a", "b", chunks, index, itemsize, axis=1)
-    assert chunks2 == ((500,), (1, 1, 1, 51, 50), (500,))
-    assert len(dsk) == 5
+        chunks = ((500,), (1, 1, 1, 1), (500,))
+        index = np.array([0, 1, 2] + [3] * 101)
+        chunks2, dsk = take("a", "b", chunks, index, itemsize, axis=1)
+        assert chunks2 == ((500,), (1, 1, 1, 51, 50), (500,))
+        assert len(dsk) == 5
 
 
 def test_take_uses_config():
-    chunks = ((1, 1, 1, 1), (500,), (500,))
-    index = np.array([0, 1] + [2] * 101 + [3])
-    itemsize = 8
-    with config.set(**{"array.chunk-size": "10GB"}):
-        chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
-    assert len(dsk) == 4
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
+        chunks = ((1, 1, 1, 1), (500,), (500,))
+        index = np.array([0, 1] + [2] * 101 + [3])
+        itemsize = 8
+        with config.set({"array.chunk-size": "10GB"}):
+            chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
+        assert len(dsk) == 4
 
 
 def test_pathological_unsorted_slicing():

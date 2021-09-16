@@ -1,10 +1,11 @@
-import pandas as pd
 from textwrap import dedent
 
-import dask.dataframe as dd
-import dask.array as da
 import numpy as np
+import pandas as pd
+import pytest
 
+import dask.array as da
+import dask.dataframe as dd
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -42,6 +43,7 @@ def test_repr_meta_mutation():
 
 
 def test_dataframe_format():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -135,6 +137,7 @@ def test_dataframe_format():
 
 
 def test_dataframe_format_with_index():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -219,6 +222,7 @@ def test_dataframe_format_with_index():
 
 
 def test_dataframe_format_unknown_divisions():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -315,6 +319,7 @@ def test_dataframe_format_unknown_divisions():
 
 
 def test_dataframe_format_long():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame(
         {
             "A": [1, 2, 3, 4, 5, 6, 7, 8] * 10,
@@ -405,7 +410,7 @@ def test_dataframe_format_long():
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
@@ -530,6 +535,7 @@ def test_duplicate_columns_repr():
 
 
 def test_empty_repr():
+    pytest.importorskip("jinja2")
     df = pd.DataFrame()
     ddf = dd.from_pandas(df, npartitions=1)
     exp = (

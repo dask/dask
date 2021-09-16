@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
-from .io import from_delayed, from_pandas
+
 from ... import delayed
 from .. import methods
+from .io import from_delayed, from_pandas
 
 
 def read_sql_table(
@@ -22,7 +22,7 @@ def read_sql_table(
     schema=None,
     meta=None,
     engine_kwargs=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create dataframe from an SQL table.
@@ -49,7 +49,7 @@ def read_sql_table(
         ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
         the textfield ``id`` to ``BigInteger``.
 
-        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+        Note ``sql``, ``cast``, ``types`` methods comes from ``sqlalchemy`` module.
 
         Labeling columns created by functions or arithmetic operations is
         required.
@@ -125,10 +125,8 @@ def read_sql_table(
         if columns
         else list(table.columns)
     )
-    if index_col not in columns:
-        columns.append(
-            table.columns[index_col] if isinstance(index_col, str) else index_col
-        )
+    if index not in columns:
+        columns.append(index)
 
     if isinstance(index_col, str):
         kwargs["index_col"] = index_col
@@ -141,7 +139,7 @@ def read_sql_table(
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
 
-        if head.empty:
+        if len(head) == 0:
             # no results at all
             name = table.name
             schema = table.schema
@@ -224,8 +222,12 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     engine = sa.create_engine(uri, **engine_kwargs)
     df = pd.read_sql(q, engine, **kwargs)
     engine.dispose()
-    if df.empty:
+    if len(df) == 0:
         return meta
+    elif len(meta.dtypes.to_dict()) == 0:
+        # only index column in loaded
+        # required only for pandas < 1.0.0
+        return df
     else:
         return df.astype(meta.dtypes.to_dict(), copy=False)
 
@@ -344,13 +346,15 @@ def to_sql(
     >>> from dask.utils import tmpfile
     >>> from sqlalchemy import create_engine
     >>> with tmpfile() as f:
-    ...     db = 'sqlite:///%s' % f
+    ...     db = 'sqlite:///%s' %f
     ...     ddf.to_sql('test', db)
     ...     engine = create_engine(db, echo=False)
     ...     result = engine.execute("SELECT * FROM test").fetchall()
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
+    if not isinstance(uri, str):
+        raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
@@ -362,15 +366,8 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        method=method,
     )
-
-    if method:
-        if not PANDAS_GT_0240:
-            raise NotImplementedError(
-                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
-            )
-        else:
-            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)
@@ -388,7 +385,7 @@ def to_sql(
                 d.to_sql,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
             )
             for d in df.to_delayed()
         ]
@@ -402,7 +399,7 @@ def to_sql(
                     d.to_sql,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
                 )
             )
             last = result[-1]

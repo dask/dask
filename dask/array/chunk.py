@@ -1,15 +1,14 @@
 """ A set of NumPy functions to apply per chunk """
+import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
+from numbers import Integral
 
-from tlz import concat
 import numpy as np
-from . import numpy_compat as npcompat
+from tlz import concat
 
 from ..core import flatten
-from ..utils import ignoring
-
-from numbers import Integral
+from . import numpy_compat as npcompat
 
 try:
     from numpy import take_along_axis
@@ -72,17 +71,17 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
 var = np.var
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanvar = np.nanvar
 
 std = np.std
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanstd = np.nanstd
 
 
@@ -259,9 +258,23 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     ]
 
 
-def arange(start, stop, step, length, dtype):
-    res = np.arange(start, stop, step, dtype)
+def arange(start, stop, step, length, dtype, like=None):
+    from .utils import arange_safe
+
+    res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
+
+
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from .core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
 
 
 def astype(x, astype_dtype=None, **kwargs):
@@ -270,10 +283,16 @@ def astype(x, astype_dtype=None, **kwargs):
 
 def view(x, dtype, order="C"):
     if order == "C":
-        x = np.ascontiguousarray(x)
+        try:
+            x = np.ascontiguousarray(x, like=x)
+        except TypeError:
+            x = np.ascontiguousarray(x)
         return x.view(dtype)
     else:
-        x = np.asfortranarray(x)
+        try:
+            x = np.asfortranarray(x, like=x)
+        except TypeError:
+            x = np.asfortranarray(x)
         return x.T.view(dtype).T
 
 
@@ -299,6 +318,10 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     x sliced along axis, using only the elements of idx that fall inside the
     current chunk.
     """
+    from .utils import asarray_safe, meta_from_array
+
+    idx = asarray_safe(idx, like=meta_from_array(x))
+
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
 
@@ -373,3 +396,33 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
             idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
         )
     ]
+
+
+def getitem(obj, index):
+    """Getitem function
+
+    This function creates a copy of the desired selection for array-like
+    inputs when the selection is smaller than half of the original array. This
+    avoids excess memory usage when extracting a small portion from a large array.
+    For more information, see
+    https://numpy.org/doc/stable/reference/arrays.indexing.html#basic-slicing-and-indexing.
+
+    Parameters
+    ----------
+    obj: ndarray, string, tuple, list
+        Object to get item from.
+    index: int, list[int], slice()
+        Desired selection to extract from obj.
+
+    Returns
+    -------
+    Selection obj[index]
+
+    """
+    result = obj[index]
+    try:
+        if not result.flags.owndata and obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

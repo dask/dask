@@ -44,7 +44,7 @@ among the various worker processes or threads:
    # or
    client = Client(processes=False)  # start local workers as threads
 
-If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
+If you have `Bokeh <https://docs.bokeh.org>`_ installed, then this starts up a
 diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
@@ -288,6 +288,8 @@ Additionally, for iterative algorithms, you can add more futures into the
        if condition(y):
            new_future = client.submit(...)
            seq.add(new_future)  # add back into the loop
+
+or use ``seq.update(futures)`` to add multiple futures at once.
 
 
 Fire and Forget
@@ -722,9 +724,6 @@ providing an additional channel of communication between ongoing tasks.
 
 Actors
 ------
-
-.. note:: This is an advanced feature and is rarely necessary in the common case.
-.. note:: This is an experimental feature and is subject to change without notice.
 
 Actors allow workers to manage rapidly changing state without coordinating with
 the central scheduler.  This has the advantage of reducing latency

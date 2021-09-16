@@ -2,9 +2,10 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from dask.array.wrap import ones
-import dask.array as da
 import numpy as np
+
+import dask.array as da
+from dask.array.wrap import ones
 
 
 def test_ones():
@@ -12,7 +13,7 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), "i4")).all()
 
-    assert a.name.startswith("ones-")
+    assert a.name.startswith("ones_like-")
 
 
 def test_size_as_list():
@@ -39,7 +40,7 @@ def test_full():
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
-    assert a.name.startswith("full-")
+    assert a.name.startswith("full_like-")
 
 
 def test_full_error_nonscalar_fill_value():

@@ -15,6 +15,7 @@ Array
    array-stats.rst
    array-linear-operator.rst
    array-slicing.rst
+   array-assignment.rst
    array-stack.rst
    array-gufunc.rst
 
@@ -47,11 +48,11 @@ Design
    :align: right
 
 Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
-sufficiently NumPy-like in API such as CuPy or Spare arrays) arranged into a
+sufficiently NumPy-like in API such as CuPy or Sparse arrays) arranged into a
 grid. These arrays may live on disk or on other machines.
 
 New duck array chunk types (types below Dask on
-`NEP-13's type-casting heirarchy`_) can be registered via
+`NEP-13's type-casting hierarchy`_) can be registered via
 :func:`~dask.array.register_chunk_type`. Any other duck array types that are
 not registered will be deferred to in binary operations and NumPy
 ufuncs/functions (that is, Dask will return ``NotImplemented``). Note, however,
@@ -109,4 +110,4 @@ transfer costs, and because NumPy releases the GIL well.  It is also quite
 effective on a cluster using the `dask.distributed`_ scheduler.
 
 .. _`dask.distributed`: https://distributed.dask.org/en/latest/
-.. _`NEP-13's type-casting heirarchy`: https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy
+.. _`NEP-13's type-casting hierarchy`: https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy

@@ -1,159 +1,23 @@
 import warnings
-from operator import getitem
-from itertools import product
-from numbers import Integral
-from tlz import merge, pipe, concat, partial, get
+from numbers import Integral, Number
+
+import numpy as np
+from tlz import concat, get, partial
 from tlz.curried import map
 
-from . import chunk, wrap
-from .core import (
-    Array,
-    map_blocks,
-    concatenate,
-    concatenate3,
-    reshapelist,
-    unify_chunks,
-)
-from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
-from ..core import flatten
-from ..utils import concrete
+from ..highlevelgraph import HighLevelGraph
+from ..layers import ArrayOverlapLayer
+from ..utils import derived_from
+from . import chunk, numpy_compat
+from .core import Array, concatenate, map_blocks, unify_chunks
+from .creation import empty_like, full_like
 
 
-def fractional_slice(task, axes):
-    """
-
-    >>> fractional_slice(('x', 5.1), {0: 2})  # doctest: +SKIP
-    (getitem, ('x', 6), (slice(0, 2),))
-
-    >>> fractional_slice(('x', 3, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, ('x', 3, 5), (slice(None, None, None), slice(-3, None)))
-
-    >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
-    """
-    rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
-
-    index = []
-    for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
-        depth = axes.get(i, 0)
-        if isinstance(depth, tuple):
-            left_depth = depth[0]
-            right_depth = depth[1]
-        else:
-            left_depth = depth
-            right_depth = depth
-
-        if t == r:
-            index.append(slice(None, None, None))
-        elif t < r and right_depth:
-            index.append(slice(0, right_depth))
-        elif t > r and left_depth:
-            index.append(slice(-left_depth, None))
-        else:
-            index.append(slice(0, 0))
-    index = tuple(index)
-
-    if all(ind == slice(None, None, None) for ind in index):
-        return task
-    else:
-        return (getitem, rounded, index)
-
-
-def expand_key(k, dims, name=None, axes=None):
-    """Get all neighboring keys around center
-
-    Parameters
-    ----------
-    k: tuple
-        They key around which to generate new keys
-    dims: Sequence[int]
-        The number of chunks in each dimension
-    name: Option[str]
-        The name to include in the output keys, or none to include no name
-    axes: Dict[int, int]
-        The axes active in the expansion.  We don't expand on non-active axes
-
-    Examples
-    --------
-    >>> expand_key(('x', 2, 3), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE
-    [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
-     [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
-     [('y', 2.9, 2.1), ('y', 2.9, 3), ('y', 2.9, 3.9)]]
-
-    >>> expand_key(('x', 0, 4), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE
-    [[('y',   0, 3.1), ('y',   0,   4)],
-     [('y', 0.9, 3.1), ('y', 0.9,   4)]]
-    """
-
-    def inds(i, ind):
-        rv = []
-        if ind - 0.9 > 0:
-            rv.append(ind - 0.9)
-        rv.append(ind)
-        if ind + 0.9 < dims[i] - 1:
-            rv.append(ind + 0.9)
-        return rv
-
-    shape = []
-    for i, ind in enumerate(k[1:]):
-        num = 1
-        if ind > 0:
-            num += 1
-        if ind < dims[i] - 1:
-            num += 1
-        shape.append(num)
-
-    args = [
-        inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])
-    ]
-    if name is not None:
-        args = [[name]] + args
-    seq = list(product(*args))
-    shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
-    result = reshapelist(shape2, seq)
-    return result
-
-
-def overlap_internal(x, axes):
-    """Share boundaries between neighboring blocks
-
-    Parameters
-    ----------
-
-    x: da.Array
-        A dask array
-    axes: dict
-        The size of the shared boundary per axis
-
-    The axes input informs how many cells to overlap between neighboring blocks
-    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
-    """
-    dims = list(map(len, x.chunks))
-    expand_key2 = partial(expand_key, dims=dims, axes=axes)
-
-    # Make keys for each of the surrounding sub-arrays
-    interior_keys = pipe(
-        x.__dask_keys__(), flatten, map(expand_key2), map(flatten), concat, list
-    )
-
-    name = "overlap-" + tokenize(x, axes)
-    getitem_name = "getitem-" + tokenize(x, axes)
-    interior_slices = {}
-    overlap_blocks = {}
-    for k in interior_keys:
-        frac_slice = fractional_slice((x.name,) + k, axes)
-        if (x.name,) + k != frac_slice:
-            interior_slices[(getitem_name,) + k] = frac_slice
-        else:
-            interior_slices[(getitem_name,) + k] = (x.name,) + k
-            overlap_blocks[(name,) + k] = (
-                concatenate3,
-                (concrete, expand_key2((None,) + k, name=getitem_name)),
-            )
-
+def _overlap_internal_chunks(original_chunks, axes):
+    """Get new chunks for array with overlap."""
     chunks = []
-    for i, bds in enumerate(x.chunks):
+    for i, bds in enumerate(original_chunks):
         depth = axes.get(i, 0)
         if isinstance(depth, tuple):
             left_depth = depth[0]
@@ -171,9 +35,35 @@ def overlap_internal(x, axes):
             for bd in bds[1:-1]:
                 mid.append(bd + left_depth + right_depth)
             chunks.append(left + mid + right)
+    return chunks
 
-    dsk = merge(interior_slices, overlap_blocks)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+
+def overlap_internal(x, axes):
+    """Share boundaries between neighboring blocks
+
+    Parameters
+    ----------
+
+    x: da.Array
+        A dask array
+    axes: dict
+        The size of the shared boundary per axis
+
+    The axes input informs how many cells to overlap between neighboring blocks
+    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
+    """
+    token = tokenize(x, axes)
+    name = "overlap-" + token
+
+    graph = ArrayOverlapLayer(
+        name=x.name,
+        axes=axes,
+        chunks=x.chunks,
+        numblocks=x.numblocks,
+        token=token,
+    )
+    graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
+    chunks = _overlap_internal_chunks(x.chunks, axes)
 
     return Array(graph, name, chunks, meta=x)
 
@@ -358,22 +248,17 @@ def nearest(x, axis, depth):
 
 
 def constant(x, axis, depth, value):
-    """ Add constant slice to either side of array """
+    """Add constant slice to either side of array"""
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
-    try:
-        c = wrap.full_like(
-            getattr(x, "_meta", x),
-            value,
-            shape=tuple(map(sum, chunks)),
-            chunks=tuple(chunks),
-            dtype=x.dtype,
-        )
-    except TypeError:
-        c = wrap.full(
-            tuple(map(sum, chunks)), value, chunks=tuple(chunks), dtype=x.dtype
-        )
+    c = full_like(
+        x,
+        value,
+        shape=tuple(map(sum, chunks)),
+        chunks=tuple(chunks),
+        dtype=x.dtype,
+    )
 
     return concatenate([c, x, c], axis=axis)
 
@@ -422,6 +307,57 @@ def boundaries(x, depth=None, kind=None):
     return x
 
 
+def ensure_minimum_chunksize(size, chunks):
+    """Determine new chunks to ensure that every chunk >= size
+
+    Parameters
+    ----------
+    size: int
+        The maximum size of any chunk.
+    chunks: tuple
+        Chunks along one axis, e.g. ``(3, 3, 2)``
+
+    Examples
+    --------
+    >>> ensure_minimum_chunksize(10, (20, 20, 1))
+    (20, 11, 10)
+    >>> ensure_minimum_chunksize(3, (1, 1, 3))
+    (5,)
+
+    See Also
+    --------
+    overlap
+    """
+    if size <= min(chunks):
+        return chunks
+
+    # add too-small chunks to chunks before them
+    output = []
+    new = 0
+    for c in chunks:
+        if c < size:
+            if new > size + (size - c):
+                output.append(new - (size - c))
+                new = size
+            else:
+                new += c
+        if new >= size:
+            output.append(new)
+            new = 0
+        if c >= size:
+            new += c
+    if new >= size:
+        output.append(new)
+    elif len(output) >= 1:
+        output[-1] += new
+    else:
+        raise ValueError(
+            f"The overlapping depth {size} is larger than your " f"array {sum(chunks)}."
+        )
+
+    return tuple(output)
+
+
 def overlap(x, depth, boundary):
     """Share boundaries between neighboring blocks
 
@@ -440,6 +376,9 @@ def overlap(x, depth, boundary):
     The depth input informs how many cells to overlap between neighboring
     blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
     Axes missing from this input will not be overlapped.
+
+    Any axis containing chunks smaller than depth will be rechunked if
+    possible.
 
     Examples
     --------
@@ -477,18 +416,14 @@ def overlap(x, depth, boundary):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
-    # is depth larger than chunk size?
-    depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
-    for d, c in zip(depth_values, x.chunks):
-        maxd = max(d) if isinstance(d, tuple) else d
-        if maxd > min(c):
-            raise ValueError(
-                "The overlapping depth %d is larger than your\n"
-                "smallest chunk size %d. Rechunk your array\n"
-                "with a larger chunk size or a chunk size that\n"
-                "more evenly divides the shape of your array." % (d, min(c))
-            )
-    x2 = boundaries(x, depth2, boundary2)
+    # rechunk if new chunks are needed to fit depth in every chunk
+    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
+    new_chunks = tuple(
+        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+    )
+    x1 = x.rechunk(new_chunks)  # this is a no-op if x.chunks == new_chunks
+
+    x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
     trim = dict(
         (k, v * 2 if boundary2.get(k, "none") != "none" else 0)
@@ -517,15 +452,12 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks = list(x.chunks)
             empty_chunks[k] = (d,)
 
-            try:
-                empty = wrap.empty_like(
-                    getattr(x, "_meta", x),
-                    shape=empty_shape,
-                    chunks=empty_chunks,
-                    dtype=x.dtype,
-                )
-            except TypeError:
-                empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
+            empty = empty_like(
+                getattr(x, "_meta", x),
+                shape=empty_shape,
+                chunks=empty_chunks,
+                dtype=x.dtype,
+            )
 
             out_chunks = list(x.chunks)
             ax_chunks = list(out_chunks[k])
@@ -544,7 +476,14 @@ def map_overlap(
     """Map a function over blocks of arrays with some overlap
 
     We share neighboring zones between blocks of the array, map a
-    function, and then trim away the neighboring strips.
+    function, and then trim away the neighboring strips. If depth is
+    larger than any chunk along a particular axis, then the array is
+    rechunked.
+
+    Note that this function will attempt to automatically determine the output
+    array type before computing it, please refer to the ``meta`` keyword argument
+    in ``map_blocks`` if you expect that the function will not succeed when
+    operating on 0-d arrays.
 
     Parameters
     ----------
@@ -653,6 +592,36 @@ def map_overlap(
     10
     >>> da.map_overlap(func, x, **block_args, depth=1).compute()
     12
+
+    For functions that may not handle 0-d arrays, it's also possible to specify
+    ``meta`` with an empty array matching the type of the expected result. In
+    the example below, ``func`` will result in an ``IndexError`` when computing
+    ``meta``:
+
+    >>> x = np.arange(16).reshape((4, 4))
+    >>> d = da.from_array(x, chunks=(2, 2))
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+    >>> y
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+    >>> y.compute()
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
+
+    Similarly, it's possible to specify a non-NumPy array to ``meta``:
+
+    >>> import cupy  # doctest: +SKIP
+    >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
+    >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+    >>> y  # doctest: +SKIP
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
+    >>> y.compute()  # doctest: +SKIP
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
     """
     # Look for invocation using deprecated single-array signature
     # map_overlap(x, func, depth, boundary=None, trim=True, **kwargs)
@@ -700,6 +669,10 @@ def map_overlap(
         inds = [list(reversed(range(x.ndim))) for x in args]
         _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
 
+    # Escape to map_blocks if depth is zero (a more efficient computation)
+    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+        return map_blocks(func, *args, **kwargs)
+
     for i, x in enumerate(args):
         for j in range(x.ndim):
             if isinstance(depth[i][j], tuple) and boundary[i][j] != "none":
@@ -713,6 +686,8 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
+    if not trim and "chunks" not in kwargs:
+        kwargs["chunks"] = args[0].chunks
     args = [overlap(x, depth=d, boundary=b) for x, d, b in zip(args, depth, boundary)]
     assert_int_chunksize(args)
     x = map_blocks(func, *args, **kwargs)
@@ -721,7 +696,18 @@ def map_overlap(
         # Find index of array argument with maximum rank and break ties by choosing first provided
         i = sorted(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
         # Trim using depth/boundary setting for array of highest rank
-        return trim_internal(x, depth[i], boundary[i])
+        depth = depth[i]
+        boundary = boundary[i]
+        # remove any dropped axes from depth and boundary variables
+        drop_axis = kwargs.pop("drop_axis", None)
+        if drop_axis is not None:
+            if isinstance(drop_axis, Number):
+                drop_axis = [drop_axis]
+            kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
+            # note that keys are relabeled to match values in range(x.ndim)
+            depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
+            boundary = {n: boundary[ax] for n, ax in enumerate(kept_axes)}
+        return trim_internal(x, depth, boundary)
     else:
         return x
 
@@ -735,9 +721,16 @@ def coerce_depth(ndim, depth):
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
     if isinstance(depth, dict):
-        for i in range(ndim):
-            if i not in depth:
-                depth[i] = 0
+        depth = {ax: depth.get(ax, default) for ax in range(ndim)}
+    return coerce_depth_type(ndim, depth)
+
+
+def coerce_depth_type(ndim, depth):
+    for i in range(ndim):
+        if isinstance(depth[i], tuple):
+            depth[i] = tuple(int(d) for d in depth[i])
+        else:
+            depth[i] = int(depth[i])
     return depth
 
 
@@ -750,7 +743,67 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
     if isinstance(boundary, dict):
-        for i in range(ndim):
-            if i not in boundary:
-                boundary[i] = default
+        boundary = {ax: boundary.get(ax, default) for ax in range(ndim)}
     return boundary
+
+
+@derived_from(numpy_compat)
+def sliding_window_view(x, window_shape, axis=None):
+    from numpy.core.numeric import normalize_axis_tuple
+
+    window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
+
+    window_shape_array = np.array(window_shape)
+    if np.any(window_shape_array <= 0):
+        raise ValueError("`window_shape` must contain values > 0")
+
+    if axis is None:
+        axis = tuple(range(x.ndim))
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Since axis is `None`, must provide "
+                f"window_shape for all dimensions of `x`; "
+                f"got {len(window_shape)} window_shape elements "
+                f"and `x.ndim` is {x.ndim}."
+            )
+    else:
+        axis = normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Must provide matching length window_shape and "
+                f"axis; got {len(window_shape)} window_shape "
+                f"elements and {len(axis)} axes elements."
+            )
+
+    depths = [0] * x.ndim
+    for ax, window in zip(axis, window_shape):
+        depths[ax] += window - 1
+
+    # Ensure that each chunk is big enough to leave at least a size-1 chunk
+    # after windowing (this is only really necessary for the last chunk).
+    safe_chunks = tuple(
+        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
+    )
+    x = x.rechunk(safe_chunks)
+
+    # result.shape = x_shape_trimmed + window_shape,
+    # where x_shape_trimmed is x.shape with every entry
+    # reduced by one less than the corresponding window size.
+    # trim chunks to match x_shape_trimmed
+    newchunks = tuple(c[:-1] + (c[-1] - d,) for d, c in zip(depths, x.chunks)) + tuple(
+        (window,) for window in window_shape
+    )
+
+    return map_overlap(
+        numpy_compat.sliding_window_view,
+        x,
+        depth=tuple((0, d) for d in depths),  # Overlap on +ve side only
+        boundary="none",
+        meta=x._meta,
+        new_axis=range(x.ndim, x.ndim + len(axis)),
+        chunks=newchunks,
+        trim=False,
+        align_arrays=False,
+        window_shape=window_shape,
+        axis=axis,
+    )

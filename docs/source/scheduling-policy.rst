@@ -1,3 +1,7 @@
+:orphan:
+
+.. _scheduling-policy:
+
 Scheduling in Depth
 ===================
 

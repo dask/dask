@@ -22,9 +22,9 @@ following two ways:
        helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
        helm repo update                             # get latest Helm charts
        # For single-user deployments, use dask/dask
-       helm install dask/dask                       # deploy standard Dask chart
+       helm install my-dask dask/dask               # deploy standard Dask chart
        # For multi-user deployments, use dask/daskhub
-       helm install dask/daskhub                    # deploy JupyterHub & Dask
+       helm install my-dask dask/daskhub            # deploy JupyterHub & Dask
 
     This is a good choice if you want to do the following:
 
@@ -35,6 +35,16 @@ following two ways:
         like Amazon, Google, or Microsoft Azure where you already have
         a Kubernetes cluster. If you don't already have Kubernetes deployed,
         see our :doc:`Cloud documentation <cloud>`.
+
+    You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
+    Helm Dask cluster from within your Python session.
+
+    .. code-block:: python
+
+       from dask_kubernetes import HelmCluster
+
+       cluster = HelmCluster(release_name="myrelease")
+       cluster.scale(10)
 
     .. note::
 

@@ -1,15 +1,14 @@
 import io
 import os
-from contextlib import contextmanager
-from functools import partial
-from distutils.version import LooseVersion
 import shlex
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
+from functools import partial
 
 import pytest
-import numpy as np
+from packaging.version import parse as parse_version
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
@@ -17,19 +16,16 @@ moto = pytest.importorskip("moto", minversion="1.3.14")
 pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
+from fsspec.compression import compr
+from fsspec.core import open_files
+from s3fs import S3FileSystem as DaskS3FileSystem
 from tlz import concat, valmap
 
 from dask import compute
-from dask.bytes.core import read_bytes, open_files
-from s3fs import S3FileSystem as DaskS3FileSystem
+from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
-from fsspec.compression import compr
-
 
 compute = partial(compute, scheduler="sync")
-numpy_120_mark = pytest.mark.xfail(
-    LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
-)
 
 
 test_bucket_name = "test"
@@ -143,6 +139,7 @@ def s3_with_yellow_tripdata(s3):
     * s3://test/nyc-taxi/2014/yellow_tripdata_2015-mm.csv
       for mm from 01 - 12.
     """
+    np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
 
     data = {
@@ -431,16 +428,25 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-@numpy_120_mark
-def test_parquet(s3, engine, s3so):
+@pytest.mark.parametrize("metadata_file", [True, False])
+def test_parquet(s3, engine, s3so, metadata_file):
+    import s3fs
+
     dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
     from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
-    if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
+    lib_version = parse_version(lib.__version__)
+    if engine == "pyarrow" and lib_version < parse_version("0.13.1"):
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
-    import pandas as pd
-    import numpy as np
+    if (
+        engine == "pyarrow"
+        and lib_version.major == 2
+        and parse_version(s3fs.__version__) > parse_version("0.5.0")
+    ):
+        pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -449,32 +455,36 @@ def test_parquet(s3, engine, s3so):
             "i32": np.arange(1000, dtype=np.int32),
             "i64": np.arange(1000, dtype=np.int64),
             "f": np.arange(1000, dtype=np.float64),
-            "bhello": np.random.choice([u"hello", u"you", u"people"], size=1000).astype(
+            "bhello": np.random.choice(["hello", "you", "people"], size=1000).astype(
                 "O"
             ),
         },
         index=pd.Index(np.arange(1000), name="foo"),
     )
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, engine=engine, storage_options=s3so)
+    df.to_parquet(
+        url, engine=engine, storage_options=s3so, write_metadata_file=metadata_file
+    )
 
     files = [f.split("/")[-1] for f in s3.ls(url)]
-    assert "_common_metadata" in files
+    if metadata_file:
+        assert "_common_metadata" in files
+        assert "_metadata" in files
     assert "part.0.parquet" in files
 
-    df2 = dd.read_parquet(url, index="foo", engine=engine, storage_options=s3so)
+    df2 = dd.read_parquet(
+        url, index="foo", gather_statistics=True, engine=engine, storage_options=s3so
+    )
     assert len(df2.divisions) > 1
 
     tm.assert_frame_equal(data, df2.compute())
 
 
-@numpy_120_mark
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")
-
-    import pandas as pd
-    import numpy as np
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -497,5 +507,7 @@ def test_parquet_wstoragepars(s3, s3so):
 
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
+    if parse_version(pa.__version__).major >= 2:
+        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)

@@ -1,29 +1,28 @@
 import warnings
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+import pytest
 
+import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
-    align_partitions,
-    merge_indexed_dataframes,
-    hash_join,
-    concat_indexed_dataframes,
     _maybe_align_partitions,
+    align_partitions,
+    concat_indexed_dataframes,
+    hash_join,
+    merge_indexed_dataframes,
 )
 from dask.dataframe.utils import (
-    assert_eq,
     assert_divisions,
-    make_meta,
-    has_known_categories,
+    assert_eq,
     clear_known_categories,
+    has_known_categories,
+    make_meta,
 )
-
-import pytest
 
 
 def test_align_partitions():
@@ -583,6 +582,58 @@ def test_merge_asof_unsorted_raises():
         result.compute()
 
 
+def test_merge_asof_with_empty():
+    good_df = pd.DataFrame({"index_col": list(range(10)), "good_val": list(range(10))})
+    good_dd = dd.from_pandas(good_df, npartitions=2)
+    empty_df = (
+        good_df[good_df.index_col < 0].copy().rename(columns={"good_val": "empty_val"})
+    )
+    empty_dd = dd.from_pandas(empty_df, npartitions=2)
+
+    # left good, right empty
+    result_dd = dd.merge_asof(
+        good_dd.set_index("index_col"),
+        empty_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        good_df.set_index("index_col"),
+        empty_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+    # left empty, right good
+    result_dd = dd.merge_asof(
+        empty_dd.set_index("index_col"),
+        good_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        empty_df.set_index("index_col"),
+        good_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+    # left/right both empty
+    result_dd = dd.merge_asof(
+        empty_dd.set_index("index_col"),
+        empty_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        empty_df.set_index("index_col"),
+        empty_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
@@ -796,6 +847,7 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
@@ -1497,7 +1549,7 @@ def test_concat2():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"})
+    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(dsk, "x", meta, [None, None])
     dsk = {
         ("y", 0): pd.DataFrame({"a": [10, 20, 30], "b": [40, 50, 60]}),
@@ -1510,7 +1562,7 @@ def test_concat2():
         ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
         ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
     }
-    meta = make_meta({"b": "i8", "c": "i8"})
+    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
     c = dd.DataFrame(dsk, "y", meta, [None, None])
 
     dsk = {
@@ -1521,7 +1573,11 @@ def test_concat2():
             {"b": [40, 50, 60], "c": [30, 20, 10], "d": [90, 80, 70]}, index=[3, 4, 5]
         ),
     }
-    meta = make_meta({"b": "i8", "c": "i8", "d": "i8"}, index=pd.Index([], "i8"))
+    meta = make_meta(
+        {"b": "i8", "c": "i8", "d": "i8"},
+        index=pd.Index([], "i8"),
+        parent_meta=pd.DataFrame(),
+    )
     d = dd.DataFrame(dsk, "y", meta, [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]
@@ -1931,7 +1987,7 @@ def test_append2():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"})
+    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     ddf1 = dd.DataFrame(dsk, "x", meta, [None, None])
 
     dsk = {
@@ -1945,7 +2001,7 @@ def test_append2():
         ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
         ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
     }
-    meta = make_meta({"b": "i8", "c": "i8"})
+    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
     ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
 
     assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
@@ -2078,9 +2134,10 @@ def test_merge_outer_empty():
 
     for x in range(0, k_clusters + 1):
         assert_eq(
-            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
-            df[df.cluster == x].compute(),
+            dd.merge(empty_df, df[df.cluster == x], how="outer"),
+            df[df.cluster == x],
             check_index=False,
+            check_divisions=False,
         )
 
 
@@ -2095,6 +2152,7 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_groupby_concat_cudf(engine):
 
@@ -2141,3 +2199,226 @@ def test_groupby_concat_cudf(engine):
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
 
     assert_eq(res_dd.compute().sort_index(), res.sort_index())
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_concat_ignore_order(ordered):
+    pdf1 = pd.DataFrame(
+        {
+            "x": pd.Categorical(
+                ["a", "b", "c", "a"], categories=["a", "b", "c"], ordered=ordered
+            )
+        }
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame(
+        {
+            "x": pd.Categorical(
+                ["c", "b", "a"], categories=["c", "b", "a"], ordered=ordered
+            )
+        }
+    )
+    ddf2 = dd.from_pandas(pdf2, 2)
+    expected = pd.concat([pdf1, pdf2])
+    expected["x"] = expected["x"].astype("category")
+    result = dd.concat([ddf1, ddf2], ignore_order=True)
+    assert_eq(result, expected)
+
+
+def test_categorical_join():
+    # https://github.com/dask/dask/issues/6134
+    df = pd.DataFrame(
+        {
+            "join_col": ["a", "a", "b", "b"],
+            "a": [0, 0, 10, 10],
+        }
+    )
+    df2 = pd.DataFrame({"b": [1, 2, 1, 2]}, index=["a", "a", "b", "b"])
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
+    ddf["join_col"] = ddf["join_col"].astype("category")
+    ddf2.index = ddf2.index.astype("category")
+
+    expected = ddf.compute().join(ddf2.compute(), on="join_col", how="left")
+
+    actual_dask = ddf.join(ddf2, on="join_col", how="left")
+    assert actual_dask.join_col.dtype == "category"
+
+    actual = actual_dask.compute()
+    assert actual.join_col.dtype == "category"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge_with_columns_missing_from_left():
+    df1 = pd.DataFrame({"A": [0, 1], "B": pd.Categorical(["a", "b"])})
+    df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})
+
+    expected = pd.merge(df2, df1, left_index=True, right_on="A")
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
+    assert actual.C.dtype == "category"
+    assert actual.B.dtype == "category"
+    assert actual.A.dtype == "int64"
+    assert actual.index.dtype == "int64"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
+    df1 = pd.DataFrame({"A": pd.Categorical([0, 1]), "B": pd.Categorical(["a", "b"])})
+    df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})
+
+    expected = pd.merge(df2, df1, left_index=True, right_on="A")
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+
+    actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
+    assert actual.C.dtype == "category"
+    assert actual.B.dtype == "category"
+    assert actual.A.dtype == "int64"
+    assert actual.index.dtype == "int64"
+    assert assert_eq(expected, actual)
+
+
+def test_categorical_merge_retains_category_dtype():
+    # https://github.com/dask/dask/issues/6142
+    a = pd.DataFrame({"A": [0, 1, 2, 3], "B": [4, 5, 6, 7]})
+    b = pd.DataFrame({"A": [0, 1, 2, 4], "C": [4, 5, 7, 7]})
+
+    df1 = dd.from_pandas(a, 2)
+    df1["A"] = df1.A.astype("category")
+
+    df2 = dd.from_pandas(b, 2)
+    df2["A"] = df2.A.astype("category")
+
+    actual_dask = df1.merge(df2, on="A")
+    assert actual_dask.A.dtype == "category"
+
+    actual = actual_dask.compute()
+    assert actual.A.dtype == "category"
+
+
+def test_categorical_merge_does_not_raise_setting_with_copy_warning():
+    # https://github.com/dask/dask/issues/7087
+    df1 = pd.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
+    df2 = pd.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
+
+    ddf1 = dd.from_pandas(df1, npartitions=1)
+
+    df2 = df2.astype({"B": "category"})
+    assert_eq(df1.join(df2), ddf1.join(df2))
+
+
+@pytest.mark.parametrize("how", ["inner", "left", "right"])
+@pytest.mark.parametrize("npartitions", [28, 32])
+@pytest.mark.parametrize("base", ["lg", "sm"])
+def test_merge_tasks_large_to_small(how, npartitions, base):
+
+    size_lg = 3000
+    size_sm = 300
+    npartitions_lg = 30
+    npartitions_sm = 3
+    broadcast_bias = 1.0  # Prioritize broadcast
+
+    lg = pd.DataFrame(
+        {
+            "x": np.random.choice(np.arange(100), size_lg),
+            "y": np.arange(size_lg),
+        }
+    )
+    ddf_lg = dd.from_pandas(lg, npartitions=npartitions_lg)
+
+    sm = pd.DataFrame(
+        {
+            "x": np.random.choice(np.arange(100), size_sm),
+            "y": np.arange(size_sm),
+        }
+    )
+    ddf_sm = dd.from_pandas(sm, npartitions=npartitions_sm)
+
+    if base == "lg":
+        left = lg
+        ddf_left = ddf_lg
+        right = sm
+        ddf_right = ddf_sm
+    else:
+        left = sm
+        ddf_left = ddf_sm
+        right = lg
+        ddf_right = ddf_lg
+
+    dd_result = dd.merge(
+        ddf_left,
+        ddf_right,
+        on="y",
+        how=how,
+        npartitions=npartitions,
+        broadcast=broadcast_bias,
+        shuffle="tasks",
+    )
+    pd_result = pd.merge(left, right, on="y", how=how)
+
+    # Make sure `on` dtypes match
+    dd_result["y"] = dd_result["y"].astype(np.int32)
+    pd_result["y"] = pd_result["y"].astype(np.int32)
+
+    if npartitions:
+        assert dd_result.npartitions == npartitions
+
+    assert_eq(
+        dd_result.compute().sort_values("y"),
+        pd_result.sort_values("y"),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize("how", ["right", "inner"])
+def test_pairwise_rejects_unsupported_join_types(how):
+    base_df = dd.from_pandas(
+        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
+    )
+    dfs = [
+        dd.from_pandas(
+            pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]), 3
+        ),
+        dd.from_pandas(
+            pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]), 3
+        ),
+    ]
+
+    with pytest.raises(ValueError) as e:
+        base_df.join(dfs, how=how)
+    e.match("merge_multi only supports left or outer joins")
+
+
+@pytest.mark.parametrize("how", ["left", "outer"])
+@pytest.mark.parametrize("npartitions_base", [1, 2, 3])
+@pytest.mark.parametrize("npartitions_other", [1, 2, 3])
+def test_pairwise_merge_results_in_identical_output_df(
+    how, npartitions_base, npartitions_other
+):
+    dfs_to_merge = []
+    for i in range(10):
+        df = pd.DataFrame(
+            {
+                f"{i}A": [5, 6, 7, 8],
+                f"{i}B": [4, 3, 2, 1],
+            },
+            index=[0, 1, 2, 3],
+        )
+        ddf = dd.from_pandas(df, npartitions_other)
+        dfs_to_merge.append(ddf)
+
+    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
+    for ddf in dfs_to_merge:
+        ddf_loop = ddf_loop.join(ddf, how=how)
+
+    ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
+
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
+
+    assert_eq(ddf_pairwise, ddf_loop)

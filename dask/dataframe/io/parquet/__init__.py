@@ -1,1 +1,1 @@
-from .core import read_parquet, to_parquet, read_parquet_part
+from .core import create_metadata_file, read_parquet, read_parquet_part, to_parquet

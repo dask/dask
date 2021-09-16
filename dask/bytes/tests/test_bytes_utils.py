@@ -3,11 +3,10 @@ import os
 import pathlib
 
 import pytest
-
-from dask.bytes.core import (
+from fsspec.utils import (
+    infer_storage_options,
     read_block,
     seek_delimiter,
-    infer_storage_options,
     stringify_path,
 )
 

@@ -1,28 +1,35 @@
-from collections import OrderedDict
-from collections.abc import Mapping, Iterator
-from functools import partial
-from hashlib import md5
-from operator import getitem
+import datetime
 import inspect
-import pickle
 import os
+import pickle
 import threading
 import uuid
-from distutils.version import LooseVersion
+from collections import OrderedDict
+from concurrent.futures import Executor
+from contextlib import contextmanager
+from dataclasses import fields, is_dataclass
+from functools import partial
+from hashlib import md5
+from numbers import Number
+from operator import getitem
+from typing import Iterator, Mapping, Set
 
-from tlz import merge, groupby, curry, identity
+from packaging.version import parse as parse_version
+from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from .compatibility import is_dataclass, dataclass_fields
-from .context import thread_state
-from .core import flatten, quote, get as simple_get, literal
-from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
-
+from .context import thread_state
+from .core import flatten
+from .core import get as simple_get
+from .core import literal, quote
+from .hashing import hash_buffer_hex
+from .system import CPU_COUNT
+from .utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
     "DaskMethodsMixin",
+    "annotate",
     "is_dask_collection",
     "compute",
     "persist",
@@ -30,7 +37,121 @@ __all__ = (
     "visualize",
     "tokenize",
     "normalize_token",
+    "get_collection_names",
+    "get_name_from_key",
+    "replace_name_in_key",
+    "clone_key",
 )
+
+
+@contextmanager
+def annotate(**annotations):
+    """Context Manager for setting HighLevelGraph Layer annotations.
+
+    Annotations are metadata or soft constraints associated with
+    tasks that dask schedulers may choose to respect: They signal intent
+    without enforcing hard constraints. As such, they are
+    primarily designed for use with the distributed scheduler.
+
+    Almost any object can serve as an annotation, but small Python objects
+    are preferred, while large objects such as NumPy arrays are discouraged.
+
+    Callables supplied as an annotation should take a single *key* argument and
+    produce the appropriate annotation. Individual task keys in the annotated collection
+    are supplied to the callable.
+
+    Parameters
+    ----------
+    **annotations : key-value pairs
+
+    Examples
+    --------
+
+    All tasks within array A should have priority 100 and be retried 3 times
+    on failure.
+
+    >>> import dask
+    >>> import dask.array as da
+    >>> with dask.annotate(priority=100, retries=3):
+    ...     A = da.ones((10000, 10000))
+
+    Prioritise tasks within Array A on flattened block ID.
+
+    >>> nblocks = (10, 10)
+    >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
+    ...     A = da.ones((1000, 1000), chunks=(100, 100))
+
+    Annotations may be nested.
+
+    >>> with dask.annotate(priority=1):
+    ...     with dask.annotate(retries=3):
+    ...         A = da.ones((1000, 1000))
+    ...     B = A + 1
+    """
+
+    # Sanity check annotations used in place of
+    # legacy distributed Client.{submit, persist, compute} keywords
+    if "workers" in annotations:
+        if isinstance(annotations["workers"], (list, set, tuple)):
+            annotations["workers"] = list(annotations["workers"])
+        elif isinstance(annotations["workers"], str):
+            annotations["workers"] = [annotations["workers"]]
+        elif callable(annotations["workers"]):
+            pass
+        else:
+            raise TypeError(
+                "'workers' annotation must be a sequence of str, a str or a callable, but got %s."
+                % annotations["workers"]
+            )
+
+    if (
+        "priority" in annotations
+        and not isinstance(annotations["priority"], Number)
+        and not callable(annotations["priority"])
+    ):
+        raise TypeError(
+            "'priority' annotation must be a Number or a callable, but got %s"
+            % annotations["priority"]
+        )
+
+    if (
+        "retries" in annotations
+        and not isinstance(annotations["retries"], Number)
+        and not callable(annotations["retries"])
+    ):
+        raise TypeError(
+            "'retries' annotation must be a Number or a callable, but got %s"
+            % annotations["retries"]
+        )
+
+    if (
+        "resources" in annotations
+        and not isinstance(annotations["resources"], dict)
+        and not callable(annotations["resources"])
+    ):
+        raise TypeError(
+            "'resources' annotation must be a dict, but got %s"
+            % annotations["resources"]
+        )
+
+    if (
+        "allow_other_workers" in annotations
+        and not isinstance(annotations["allow_other_workers"], bool)
+        and not callable(annotations["allow_other_workers"])
+    ):
+        raise TypeError(
+            "'allow_other_workers' annotations must be a bool or a callable, but got %s"
+            % annotations["allow_other_workers"]
+        )
+
+    prev_annotations = config.get("annotations", {})
+    new_annotations = {
+        **prev_annotations,
+        **{f"annotations.{k}": v for k, v in annotations.items()},
+    }
+
+    with config.set(new_annotations):
+        yield
 
 
 def is_dask_collection(x):
@@ -41,7 +162,7 @@ def is_dask_collection(x):
         return False
 
 
-class DaskMethodsMixin(object):
+class DaskMethodsMixin:
     """A mixin adding standard dask collection methods"""
 
     __slots__ = ()
@@ -95,7 +216,7 @@ class DaskMethodsMixin(object):
             filename=filename,
             format=format,
             optimize_graph=optimize_graph,
-            **kwargs
+            **kwargs,
         )
 
     def persist(self, **kwargs):
@@ -169,7 +290,7 @@ class DaskMethodsMixin(object):
 
     def __await__(self):
         try:
-            from distributed import wait, futures_of
+            from distributed import futures_of, wait
         except ImportError as e:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
@@ -190,7 +311,7 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
 
     Allows for applying the same optimizations and default scheduler."""
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
-    dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+    dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
     return schedule(dsk2, keys, **kwargs)
 
 
@@ -202,37 +323,32 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
-    optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
+    from .highlevelgraph import HighLevelGraph
+
+    optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
 
-        _opt_list = []
+        graphs = []
         for opt, val in groups.items():
             dsk, keys = _extract_graph_and_keys(val)
-            groups[opt] = (dsk, keys)
-            _opt = opt(dsk, keys, **kwargs)
-            _opt_list.append(_opt)
+            dsk = opt(dsk, keys, **kwargs)
 
-        for opt in optimizations:
-            _opt_list = []
-            group = {}
-            for k, (dsk, keys) in groups.items():
-                _opt = opt(dsk, keys, **kwargs)
-                group[k] = (_opt, keys)
-                _opt_list.append(_opt)
-            groups = group
+            for opt_inner in optimizations:
+                dsk = opt_inner(dsk, keys, **kwargs)
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                _opt_list,
-            )
-        )
+            graphs.append(dsk)
+
+        # Merge all graphs
+        if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+            dsk = HighLevelGraph.merge(*graphs)
+        else:
+            dsk = merge(*map(ensure_dict, graphs))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -317,7 +433,7 @@ def unpack_collections(*args, **kwargs):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in dataclass_fields(expr)
+                            for f in fields(expr)
                         ],
                     ),
                 )
@@ -367,10 +483,11 @@ def optimize(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> a2, b2 = optimize(a, b)
+    >>> a2, b2 = d.optimize(a, b)
 
     >>> a2.compute() == a.compute()
     True
@@ -419,15 +536,16 @@ def compute(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> compute(a, b)
+    >>> d.compute(a, b)
     (45, 4.5)
 
     By default, dask objects inside python collections will also be computed:
 
-    >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
+    >>> d.compute({'a': a, 'b': b, 'c': 1})
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
     traverse = kwargs.pop("traverse", True)
@@ -455,15 +573,15 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several dask graphs at once.
+    Visualize several low level dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    dsk : dict(s) or collection(s)
-        The dask graph(s) to visualize.
+    args : dict(s) or collection(s)
+        The low level dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -475,8 +593,10 @@ def visualize(*args, **kwargs):
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
     color : {None, 'order'}, optional
-        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        Options to color nodes.
         colormap
+        - None, the default, no colors.
+        - 'order', colors the nodes' border based on the order they appear in the graph
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -533,8 +653,9 @@ def visualize(*args, **kwargs):
     color = kwargs.get("color")
 
     if color == "order":
-        from .order import order
         import matplotlib.pyplot as plt
+
+        from .order import order
 
         o = order(dsk)
         try:
@@ -681,7 +802,19 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
+    (
+        int,
+        float,
+        str,
+        bytes,
+        type(None),
+        type,
+        slice,
+        complex,
+        type(Ellipsis),
+        datetime.date,
+    ),
+    identity,
 )
 
 
@@ -782,21 +915,16 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
-    # to avoid ImportErrors from extra dependencies
-    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
+    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
 
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
-        if PANDAS_GT_0240:
-            values = ind.array
-        else:
-            values = ind.values
+        values = ind.array
         return [ind.name, normalize_token(values)]
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):
-        codes = ind.codes if PANDAS_GT_0240 else ind.levels
+        codes = ind.codes
         return (
             [ind.name]
             + [normalize_token(x) for x in ind.levels]
@@ -807,34 +935,40 @@ def register_pandas():
     def normalize_categorical(cat):
         return [normalize_token(cat.codes), normalize_token(cat.dtype)]
 
-    if PANDAS_GT_0240:
+    @normalize_token.register(pd.arrays.PeriodArray)
+    @normalize_token.register(pd.arrays.DatetimeArray)
+    @normalize_token.register(pd.arrays.TimedeltaArray)
+    def normalize_period_array(arr):
+        return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
 
-        @normalize_token.register(pd.arrays.PeriodArray)
-        @normalize_token.register(pd.arrays.DatetimeArray)
-        @normalize_token.register(pd.arrays.TimedeltaArray)
-        def normalize_period_array(arr):
-            return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
-
-        @normalize_token.register(pd.arrays.IntervalArray)
-        def normalize_interval_array(arr):
-            return [
-                normalize_token(arr.left),
-                normalize_token(arr.right),
-                normalize_token(arr.closed),
-            ]
+    @normalize_token.register(pd.arrays.IntervalArray)
+    def normalize_interval_array(arr):
+        return [
+            normalize_token(arr.left),
+            normalize_token(arr.right),
+            normalize_token(arr.closed),
+        ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):
         return [
             s.name,
             s.dtype,
-            normalize_token(s._data.blocks[0].values),
+            normalize_token(s._values),
             normalize_token(s.index),
         ]
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        data = [block.values for block in df._data.blocks]
+        mgr = df._data
+
+        if PANDAS_GT_130:
+            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
+            # attribute that returns the column arrays/block arrays for both
+            # BlockManager and ArrayManager
+            data = list(mgr.arrays)
+        else:
+            data = [block.values for block in mgr.blocks]
         data.extend([df.columns, df.index])
         return list(map(normalize_token, data))
 
@@ -865,8 +999,7 @@ def register_numpy():
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
-                    x.ctypes.get_as_parameter().value
-                    - x.base.ctypes.get_as_parameter().value
+                    x.ctypes._as_parameter_.value - x.base.ctypes._as_parameter_.value
                 )
             else:
                 offset = 0  # root memmap's have mmap object as base
@@ -1029,17 +1162,26 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
             return scheduler.get
-        elif scheduler.lower() in named_schedulers:
-            return named_schedulers[scheduler.lower()]
-        elif scheduler.lower() in ("dask.distributed", "distributed"):
-            from distributed.worker import get_client
+        elif isinstance(scheduler, str):
+            scheduler = scheduler.lower()
+            if scheduler in named_schedulers:
+                return named_schedulers[scheduler]
+            elif scheduler in ("dask.distributed", "distributed"):
+                from distributed.worker import get_client
 
-            return get_client().get
-        else:
-            raise ValueError(
-                "Expected one of [distributed, %s]"
-                % ", ".join(sorted(named_schedulers))
+                return get_client().get
+            else:
+                raise ValueError(
+                    "Expected one of [distributed, %s]"
+                    % ", ".join(sorted(named_schedulers))
+                )
+        elif isinstance(scheduler, Executor):
+            num_workers = getattr(
+                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
             )
+            return partial(local.get_async, scheduler.submit, num_workers)
+        else:
+            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 
@@ -1086,3 +1228,98 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return wait(x, timeout=timeout, return_when=return_when)
     except (ImportError, ValueError):
         return x
+
+
+def get_collection_names(collection) -> Set[str]:
+    """Infer the collection names from the dask keys, under the assumption that all keys
+    are either tuples with matching first element, and that element is a string, or
+    there is exactly one key and it is a string.
+
+    Examples
+    --------
+    >>> a.__dask_keys__()  # doctest: +SKIP
+    ["foo", "bar"]
+    >>> get_collection_names(a)  # doctest: +SKIP
+    {"foo", "bar"}
+    >>> b.__dask_keys__()  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
+    >>> get_collection_names(b)  # doctest: +SKIP
+    {"foo-123"}
+    """
+    if not is_dask_collection(collection):
+        raise TypeError(f"Expected Dask collection; got {type(collection)}")
+    return {get_name_from_key(k) for k in flatten(collection.__dask_keys__())}
+
+
+def get_name_from_key(key) -> str:
+    """Given a dask collection's key, extract the collection name.
+
+    Parameters
+    ----------
+    key: string or tuple
+        Dask collection's key, which must be either a single string or a tuple whose
+        first element is a string (commonly referred to as a collection's 'name'),
+
+    Examples
+    --------
+    >>> get_name_from_key("foo")
+    'foo'
+    >>> get_name_from_key(("foo-123", 1, 2))
+    'foo-123'
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return key[0]
+    if isinstance(key, str):
+        return key
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+def replace_name_in_key(key, rename: Mapping[str, str]):
+    """Given a dask collection's key, replace the collection name with a new one.
+
+    Parameters
+    ----------
+    key: string or tuple
+        Dask collection's key, which must be either a single string or a tuple whose
+        first element is a string (commonly referred to as a collection's 'name'),
+    rename:
+        Mapping of zero or more names from : to. Extraneous names will be ignored.
+        Names not found in this mapping won't be replaced.
+
+    Examples
+    --------
+    >>> replace_name_in_key("foo", {})
+    'foo'
+    >>> replace_name_in_key("foo", {"foo": "bar"})
+    'bar'
+    >>> replace_name_in_key(("foo-123", 1, 2), {"foo-123": "bar-456"})
+    ('bar-456', 1, 2)
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return (rename.get(key[0], key[0]),) + key[1:]
+    if isinstance(key, str):
+        return rename.get(key, key)
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+def clone_key(key, seed):
+    """Clone a key from a Dask collection, producing a new key with the same prefix and
+    indices and a token which a deterministic function of the previous token and seed.
+
+    Examples
+    --------
+    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
+    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return (clone_key(key[0], seed),) + key[1:]
+    if isinstance(key, str):
+        prefix = key_split(key)
+        token = key[len(prefix) + 1 :]
+        if token:
+            return prefix + "-" + tokenize(token, seed)
+        else:
+            return tokenize(key, seed)
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")

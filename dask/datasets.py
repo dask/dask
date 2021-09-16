@@ -71,12 +71,11 @@ def _generate_mimesis(field, schema_description, records_per_partition, seed):
     --------
     _make_mimesis
     """
-    from mimesis.schema import Schema, Field
+    from mimesis.schema import Field, Schema
 
     field = Field(seed=seed, **field)
     schema = Schema(schema=lambda: schema_description(field))
-    for i in range(records_per_partition):
-        yield schema.create(iterations=1)[0]
+    return [schema.create(iterations=1)[0] for i in range(records_per_partition)]
 
 
 def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):

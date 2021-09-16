@@ -29,10 +29,10 @@ codebase:
 - **Amazon S3**: ``s3://`` - Amazon S3 remote binary store, often used with Amazon EC2,
   using the library s3fs_.
 
-- **Google Cloud Storage**: ``gcs://`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
+- **Google Cloud Storage**: ``gcs://`` or ``gs://`` - Google Cloud Storage, typically used with Google Compute
   resource using gcsfs_.
 
-- **Microsoft Azure Storage**: ``adl://`` or ``abfs://`` - Microsoft Azure Storage using adlfs_.
+- **Microsoft Azure Storage**: ``adl://``, ``abfs://`` or ``az://`` - Microsoft Azure Storage using adlfs_.
 
 - **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers.
 
@@ -316,7 +316,7 @@ their input locations (file system, S3, HDFS), line delimiters, and compression
 formats.
 
 Both functions are *lazy*, returning either
-point to blocks of bytes (``read_bytes``) or open file objects
+pointers to blocks of bytes (``read_bytes``) or open file objects
 (``open_files``).  They can handle different storage backends by prepending
 protocols like ``s3://`` or ``hdfs://`` (see below). They handle compression formats
 listed in ``fsspec.compression``, some of which may require additional packages
