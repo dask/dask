@@ -11,6 +11,7 @@ PANDAS_GT_120 = PANDAS_VERSION >= parse_version("1.2.0")
 PANDAS_GT_121 = PANDAS_VERSION >= parse_version("1.2.1")
 PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
+PANDAS_GT_133 = PANDAS_VERSION >= parse_version("1.3.3")
 
 import pandas.testing as tm
 

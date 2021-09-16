@@ -726,6 +726,16 @@ def test_object_reduction(method):
     assert result == 1
 
 
+def test_mean_func_does_not_warn():
+    # non-regression test for https://github.com/pydata/xarray/issues/5151
+    xr = pytest.importorskip("xarray")
+    a = xr.DataArray(da.from_array(np.full((10, 10), np.nan)))
+
+    with pytest.warns(None) as rec:
+        a.mean().compute()
+    assert not rec  # did not warn
+
+
 @pytest.mark.parametrize("func", ["nanvar", "nanstd"])
 def test_nan_func_does_not_warn(func):
     # non-regression test for #6105
