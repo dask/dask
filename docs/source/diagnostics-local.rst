@@ -185,7 +185,7 @@ These can be analyzed separately or viewed in a bokeh plot using the provided
             marginwidth="0" marginheight="0" scrolling="no"
             width="650" height="300" style="border:none"></iframe>
 
-To view multiple profilers at the same time, the ``dask.diagnostics.visualize``
+To view multiple profilers at the same time, the :func:`dask.diagnostics.visualize`
 function can be used. This takes a list of profilers and creates a vertical
 stack of plots aligned along the x-axis:
 
