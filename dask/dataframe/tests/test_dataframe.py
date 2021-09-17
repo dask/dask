@@ -415,10 +415,6 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-# TODO(pandas) deal with this describe warning instead of ignoring
-@pytest.mark.filterwarnings(
-    "ignore:Treating datetime data as categorical|casting:FutureWarning"
-)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -469,20 +465,86 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    # Act
-    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    if PANDAS_GT_110:
+        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
+    else:
+        datetime_is_numeric_kwarg = {}
 
-    # Assert
-    assert_eq(desc_ddf, desc_df)
+    # Act
+    actual = ddf.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+    expected = df.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+
+    if "e" in expected and datetime_is_numeric_kwarg:
+        expected.at["mean", "e"] = np.nan
+        expected.dropna(how="all", inplace=True)
+
+    assert_eq(actual, expected)
 
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            assert_eq(
-                df[col].describe(include=include, exclude=exclude),
-                ddf[col].describe(include=include, exclude=exclude),
+            expected = df[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
+            if col == "e" and datetime_is_numeric_kwarg:
+                expected.drop("mean", inplace=True)
+            actual = ddf[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            )
+            assert_eq(expected, actual)
+
+
+def test_describe_without_datetime_is_numeric():
+    data = {
+        "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        "c": [None, 0, 1, 2, 3, 4] * 2,
+        "d": [None, 0, 1] * 4,
+        "e": [
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 07:56:23.858694"),
+            pd.Timestamp("2017-05-09 05:59:58.938999"),
+            None,
+            None,
+        ]
+        * 2,
+    }
+    # Arrange
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, 2)
+
+    # Assert
+    assert_eq(ddf.describe(), df.describe())
+
+    # Check series
+    for col in ["a", "c"]:
+        assert_eq(df[col].describe(), ddf[col].describe())
+
+    if PANDAS_GT_110:
+        with pytest.warns(
+            FutureWarning,
+            match=(
+                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+            ),
+        ):
+            ddf.e.describe()
+    else:
+        assert_eq(df.e.describe(), ddf.e.describe())
+        with pytest.raises(
+            NotImplementedError,
+            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
+        ):
+            ddf.e.describe(datetime_is_numeric=True)
 
 
 def test_describe_empty():
@@ -3376,9 +3438,7 @@ def test_info():
     pandas_format._put_lines = put_lines
 
     test_frames = [
-        pd.DataFrame(
-            {"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=pd.Int64Index(range(4))
-        ),  # No RangeIndex in dask
+        pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=[0, 1, 2, 3]),
         pd.DataFrame(),
     ]
 
@@ -3448,8 +3508,8 @@ def test_categorize_info():
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": pd.Series(list("aabc")), "z": pd.Series(list("aabc"))},
-        index=pd.Int64Index(range(4)),
-    )  # No RangeIndex in dask
+        index=[0, 1, 2, 3],
+    )
     ddf = dd.from_pandas(df, npartitions=4).categorize(["y"])
 
     # Verbose=False
@@ -3683,6 +3743,13 @@ def test_getitem_with_bool_dataframe_as_key():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
     assert_eq(df[df > 3], ddf[ddf > 3])
+
+
+def test_getitem_with_non_series():
+    s = pd.Series(list(range(10)), index=list("abcdefghij"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
 
 def test_ipython_completion():
