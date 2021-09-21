@@ -405,12 +405,18 @@ def single_partition_join(left, right, **kwargs):
             for i, right_key in enumerate(right.__dask_keys__())
         }
 
+        divisions = [None for _ in right.divisions]
+
     elif right.npartitions == 1 and kwargs["how"] in allowed_left:
         right_key = first(right.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
             for i, left_key in enumerate(left.__dask_keys__())
         }
+        if kwargs.get("left_index") or left._contains_index_name(kwargs.get("left_on")):
+            divisions = left.divisions
+        else:
+            divisions = [None for _ in left.divisions]
 
     else:
         raise NotImplementedError(
@@ -418,7 +424,7 @@ def single_partition_join(left, right, **kwargs):
         )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    return new_dd_object(graph, name, meta, left.divisions)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def warn_dtype_mismatch(left, right, left_on, right_on):
