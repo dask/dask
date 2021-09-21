@@ -75,11 +75,14 @@ def sort_values(
     by,
     npartitions=None,
     ascending=True,
+    na_position="last",
     upsample=1.0,
     partition_size=128e6,
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
+    if na_position not in ("first", "last"):
+        raise ValueError("na_position must be either 'first' or 'last'")
     if not isinstance(by, str):
         # support ["a"] as input
         if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
@@ -105,7 +108,8 @@ def sort_values(
     )
 
     if (
-        mins == sorted(mins, reverse=not ascending)
+        all(not pd.isna(x) for x in divisions)
+        and mins == sorted(mins, reverse=not ascending)
         and maxes == sorted(maxes, reverse=not ascending)
         and all(
             mx < mn
@@ -117,10 +121,16 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(M.sort_values, by, ascending=ascending)
+        return df.map_partitions(
+            M.sort_values, by, ascending=ascending, na_position=na_position
+        )
 
-    df = rearrange_by_divisions(df, by, divisions, ascending=ascending)
-    df = df.map_partitions(M.sort_values, by, ascending=ascending)
+    df = rearrange_by_divisions(
+        df, by, divisions, ascending=ascending, na_position=na_position
+    )
+    df = df.map_partitions(
+        M.sort_values, by, ascending=ascending, na_position=na_position
+    )
     return df
 
 
@@ -389,13 +399,18 @@ def rearrange_by_divisions(
     max_branch=None,
     shuffle=None,
     ascending=True,
+    na_position="last",
 ):
     """Shuffle dataframe so that column separates along divisions"""
-    divisions = df._meta._constructor_sliced(divisions)
+    divisions = df._meta._constructor_sliced(divisions).drop_duplicates()
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
-        set_partitions_pre, divisions=divisions, ascending=ascending, meta=meta
+        set_partitions_pre,
+        divisions=divisions,
+        ascending=ascending,
+        na_position=na_position,
+        meta=meta,
     )
     df2 = df.assign(_partitions=partitions)
 
@@ -760,7 +775,7 @@ def collect(p, part, meta, barrier_token):
         return res if len(res) > 0 else meta
 
 
-def set_partitions_pre(s, divisions, ascending=True):
+def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     try:
         if ascending:
             partitions = divisions.searchsorted(s, side="right") - 1
@@ -779,9 +794,10 @@ def set_partitions_pre(s, divisions, ascending=True):
             partitions[not_null] = (
                 len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
             )
-    partitions[(s >= divisions.iloc[-1]).values] = (
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
+    partitions[pd.isna(s).values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
