@@ -506,8 +506,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     return dsk
 
 
-def _maybe_sort(a, check_index=True):
-    # sort by values, then by index
+def _maybe_sort(a):
+    # sort by value, then index
     try:
         if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
@@ -519,11 +519,7 @@ def _maybe_sort(a, check_index=True):
             a = a.sort_values()
     except (TypeError, IndexError, ValueError):
         pass
-    if check_index:
-        a = a.sort_index()
-    else:
-        a = a.reset_index(drop=True)
-    return a
+    return a.sort_index()
 
 
 def assert_eq(
@@ -546,17 +542,20 @@ def assert_eq(
     assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtype)
     b = _check_dask(b, check_names=check_names, check_dtypes=check_dtype)
+    if not check_index:
+        a = a.reset_index(drop=True)
+        b = b.reset_index(drop=True)
     if hasattr(a, "to_pandas"):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
     if isinstance(a, pd.DataFrame):
-        a = _maybe_sort(a, check_index=check_index)
-        b = _maybe_sort(b, check_index=check_index)
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_frame_equal(a, b, check_dtype=check_dtype, **kwargs)
     elif isinstance(a, pd.Series):
-        a = _maybe_sort(a, check_index=check_index)
-        b = _maybe_sort(b, check_index=check_index)
+        a = _maybe_sort(a)
+        b = _maybe_sort(b)
         tm.assert_series_equal(
             a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
         )

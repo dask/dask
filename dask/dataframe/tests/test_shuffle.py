@@ -95,9 +95,9 @@ def test_shuffle_npartitions_lt_input_partitions_task():
 
 @pytest.mark.parametrize("method", ["disk", "tasks"])
 def test_index_with_non_series(method):
-    from dask.dataframe.tests.test_multi import assert_eq
+    from dask.dataframe.tests.test_multi import list_eq
 
-    assert_eq(shuffle(d, d.b, shuffle=method), shuffle(d, "b", shuffle=method))
+    list_eq(shuffle(d, d.b, shuffle=method), shuffle(d, "b", shuffle=method))
 
 
 @pytest.mark.parametrize("method", ["disk", "tasks"])
@@ -337,13 +337,13 @@ def test_rearrange_disk_cleanup_with_exception():
 
 
 def test_rearrange_by_column_with_narrow_divisions():
-    from dask.dataframe.tests.test_multi import assert_eq
+    from dask.dataframe.tests.test_multi import list_eq
 
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])
 
     df = rearrange_by_divisions(a, "x", (0, 2, 5))
-    assert_eq(df, a)
+    list_eq(df, a)
 
 
 def test_maybe_buffered_partd():
