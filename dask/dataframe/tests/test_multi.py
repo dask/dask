@@ -209,20 +209,16 @@ def test_hash_join(how, shuffle):
     B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
     b = dd.repartition(B, [0, 2, 5])
 
-    c = hash_join(a, "y", b, "y", how)
-
-    result = c.compute()
+    actual = hash_join(a, "y", b, "y", how)
     expected = pd.merge(A, B, how, "y")
-    assert_eq(result, expected)
+    assert_eq(actual, expected, check_index=False)
 
     # Different columns and npartitions
-    c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle)
-    assert c.npartitions == 3
-
-    result = c.compute(scheduler="single-threaded")
+    actual = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle)
     expected = pd.merge(A, B, "outer", None, "x", "z")
 
-    assert_eq(result, expected)
+    assert actual.npartitions == 3
+    assert_eq(actual, expected, check_index=False)
 
     assert (
         hash_join(a, "y", b, "y", "inner", shuffle=shuffle)._name
@@ -761,12 +757,14 @@ def test_merge(how, shuffle):
     )
 
     result = dd.merge(a, b, on="y", how=how)
-    assert_eq(result, pd.merge(A, B, on="y", how=how))
+
+    assert_eq(result, pd.merge(A, B, on="y", how=how), check_index=False)
     assert all(d is None for d in result.divisions)
 
     assert_eq(
         dd.merge(a, b, left_on="x", right_on="z", how=how, shuffle=shuffle),
         pd.merge(A, B, left_on="x", right_on="z", how=how),
+        check_index=False,
     )
     assert_eq(
         dd.merge(
@@ -779,16 +777,20 @@ def test_merge(how, shuffle):
             shuffle=shuffle,
         ),
         pd.merge(A, B, left_on="x", right_on="z", how=how, suffixes=("1", "2")),
+        check_index=False,
     )
 
-    assert_eq(dd.merge(a, b, how=how, shuffle=shuffle), pd.merge(A, B, how=how))
-    assert_eq(dd.merge(a, B, how=how, shuffle=shuffle), pd.merge(A, B, how=how))
-    assert_eq(dd.merge(A, b, how=how, shuffle=shuffle), pd.merge(A, B, how=how))
-    assert_eq(dd.merge(A, B, how=how, shuffle=shuffle), pd.merge(A, B, how=how))
+    expected = pd.merge(A, B, how=how)
+
+    assert_eq(dd.merge(a, b, how=how, shuffle=shuffle), expected, check_index=False)
+    assert_eq(dd.merge(a, B, how=how, shuffle=shuffle), expected, check_index=False)
+    assert_eq(dd.merge(A, b, how=how, shuffle=shuffle), expected, check_index=False)
+    assert_eq(dd.merge(A, B, how=how, shuffle=shuffle), expected, check_index=False)
 
     assert_eq(
         dd.merge(a, b, left_index=True, right_index=True, how=how, shuffle=shuffle),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
+        check_index=False,
     )
     assert_eq(
         dd.merge(
@@ -801,11 +803,13 @@ def test_merge(how, shuffle):
             shuffle=shuffle,
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how, suffixes=("1", "2")),
+        check_index=False,
     )
 
     assert_eq(
         dd.merge(a, b, left_on="x", right_index=True, how=how, shuffle=shuffle),
         pd.merge(A, B, left_on="x", right_index=True, how=how),
+        check_index=False,
     )
     assert_eq(
         dd.merge(
@@ -820,9 +824,10 @@ def test_merge(how, shuffle):
         pd.merge(A, B, left_on="x", right_index=True, how=how, suffixes=("1", "2")),
     )
 
-    # pandas result looks buggy
-    # assert_eq(dd.merge(a, B, left_index=True, right_on='y'),
-    #         pd.merge(A, B, left_index=True, right_on='y'))
+    # assert_eq(
+    #     dd.merge(a, B, left_index=True, right_on='y'),
+    #     pd.merge(A, B, left_index=True, right_on='y')
+    # )
 
 
 @pytest.mark.gpu
