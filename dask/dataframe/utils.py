@@ -507,7 +507,8 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
 
 
 def _maybe_sort(a):
-    # sort by value, then index
+    # sort by index, then by values
+    a = a.sort_index()
     try:
         if is_dataframe_like(a):
             if set(a.index.names) & set(a.columns):
@@ -519,7 +520,7 @@ def _maybe_sort(a):
             a = a.sort_values()
     except (TypeError, IndexError, ValueError):
         pass
-    return a.sort_index()
+    return a
 
 
 def assert_eq(

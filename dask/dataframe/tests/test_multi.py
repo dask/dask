@@ -1152,27 +1152,32 @@ def test_join_by_index_patterns(how, shuffle):
                 pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"),
             )
 
-            """
-            # temporary disabled bacause pandas may incorrectly raise
-            # IndexError for empty DataFrame
-            # https://github.com/pydata/pandas/pull/10826
-
-            list_assert_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
-                    pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
-
-            assert_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
-                    pdr.join(pdl, how=how, on='c', lsuffix='l', rsuffix='r'))
+            assert_eq(
+                ddl.join(ddr, how=how, on="a", lsuffix="l", rsuffix="r"),
+                pdl.join(pdr, how=how, on="a", lsuffix="l", rsuffix="r"),
+            )
+            assert_eq(
+                ddr.join(ddl, how=how, on="c", lsuffix="l", rsuffix="r"),
+                pdr.join(pdl, how=how, on="c", lsuffix="l", rsuffix="r"),
+            )
 
             # merge with index and columns
-            assert_eq(ddl.merge(ddr, how=how, left_on='a', right_index=True),
-                    pdl.merge(pdr, how=how, left_on='a', right_index=True))
-            assert_eq(ddr.merge(ddl, how=how, left_on='c', right_index=True),
-                    pdr.merge(pdl, how=how, left_on='c', right_index=True))
-            assert_eq(ddl.merge(ddr, how=how, left_index=True, right_on='c'),
-                    pdl.merge(pdr, how=how, left_index=True, right_on='c'))
-            assert_eq(ddr.merge(ddl, how=how, left_index=True, right_on='a'),
-                    pdr.merge(pdl, how=how, left_index=True, right_on='a'))
-            """
+            assert_eq(
+                ddl.merge(ddr, how=how, left_on="a", right_index=True),
+                pdl.merge(pdr, how=how, left_on="a", right_index=True),
+            )
+            assert_eq(
+                ddr.merge(ddl, how=how, left_on="c", right_index=True),
+                pdr.merge(pdl, how=how, left_on="c", right_index=True),
+            )
+            assert_eq(
+                ddl.merge(ddr, how=how, left_index=True, right_on="c"),
+                pdl.merge(pdr, how=how, left_index=True, right_on="c"),
+            )
+            assert_eq(
+                ddr.merge(ddl, how=how, left_index=True, right_on="a"),
+                pdr.merge(pdl, how=how, left_index=True, right_on="a"),
+            )
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -1376,12 +1381,12 @@ def test_cheap_single_partition_merge_divisions():
     assert_divisions(actual)
 
 
-@pytest.mark.parametrize("how", ["left", "right"])
+@pytest.mark.parametrize("how", ["left", "right", "inner"])
 def test_cheap_single_parition_merge_left_right(how):
     a = pd.DataFrame({"x": range(8), "z": list("ababbdda")}, index=range(8))
     aa = dd.from_pandas(a, npartitions=1)
 
-    b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")}, index=range(4))
+    b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")}, index=list("abcd"))
     bb = dd.from_pandas(b, npartitions=1)
 
     actual = aa.merge(bb, left_index=True, right_on="x", how=how)
@@ -1389,8 +1394,8 @@ def test_cheap_single_parition_merge_left_right(how):
 
     assert_eq(actual, expected)
 
-    actual = aa.merge(bb, left_on="x", right_index=True, how=how)
-    expected = a.merge(b, left_on="x", right_index=True, how=how)
+    actual = aa.merge(bb, left_on="z", right_index=True, how=how)
+    expected = a.merge(b, left_on="z", right_index=True, how=how)
 
     assert_eq(actual, expected)
 

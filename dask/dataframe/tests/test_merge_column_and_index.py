@@ -125,7 +125,7 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, ddf_right.divisions)
+    assert result.divisions == tuple(None for _ in range(11))
     assert len(result.__dask_graph__()) < 30
 
 
@@ -140,7 +140,7 @@ def test_merge_known_to_unknown(
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, tuple(None for _ in range(11)))
+    assert result.divisions == tuple(None for _ in range(11))
     assert len(result.__dask_graph__()) >= 390
 
 
