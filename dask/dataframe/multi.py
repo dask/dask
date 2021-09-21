@@ -509,14 +509,14 @@ def merge(
     if not is_dask_collection(left):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
-            left_on = False
+            left_on = None
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
     if not is_dask_collection(right):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
-            right_on = False
+            right_on = None
             right_index = True
         right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
