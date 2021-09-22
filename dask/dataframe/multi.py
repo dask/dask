@@ -394,10 +394,17 @@ def single_partition_join(left, right, **kwargs):
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
 
+    use_left = kwargs.get("right_index") or right._contains_index_name(
+        kwargs.get("right_on")
+    )
+    use_right = kwargs.get("left_index") or left._contains_index_name(
+        kwargs.get("left_on")
+    )
+
     if len(meta) == 0:
-        if kwargs.get("right_index"):
+        if use_left:
             meta.index = meta.index.astype(left.index.dtype)
-        elif kwargs.get("left_index"):
+        elif use_right:
             meta.index = meta.index.astype(right.index.dtype)
         else:
             meta.index = meta.index.astype("int64")
@@ -407,32 +414,32 @@ def single_partition_join(left, right, **kwargs):
 
     name = "merge-" + tokenize(left, right, **kwargs)
 
-    if left.npartitions == 1 and kwargs["how"] in allowed_right:
+    if right.npartitions == 1 and kwargs["how"] in allowed_left:
+        right_key = first(right.__dask_keys__())
+        dsk = {
+            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
+            for i, left_key in enumerate(left.__dask_keys__())
+        }
+        if use_left:
+            divisions = left.divisions
+        elif use_right and len(right.divisions) == len(left.divisions):
+            divisions = right.divisions
+        else:
+            divisions = [None for _ in left.divisions]
+
+    elif left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
             for i, right_key in enumerate(right.__dask_keys__())
         }
 
-        if kwargs.get("left_index"):
+        if use_right:
             divisions = right.divisions
-        elif len(left.divisions) == len(right.divisions):
+        elif use_left and len(left.divisions) == len(right.divisions):
             divisions = left.divisions
         else:
             divisions = [None for _ in right.divisions]
-
-    elif right.npartitions == 1 and kwargs["how"] in allowed_left:
-        right_key = first(right.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, left_key in enumerate(left.__dask_keys__())
-        }
-        if kwargs.get("right_index"):
-            divisions = left.divisions
-        elif len(right.divisions) == len(left.divisions):
-            divisions = right.divisions
-        else:
-            divisions = [None for _ in left.divisions]
 
     else:
         raise NotImplementedError(
