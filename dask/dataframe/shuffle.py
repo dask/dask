@@ -126,7 +126,12 @@ def sort_values(
         )
 
     df = rearrange_by_divisions(
-        df, by, divisions, ascending=ascending, na_position=na_position
+        df,
+        by,
+        divisions,
+        ascending=ascending,
+        na_position=na_position,
+        duplicates=False,
     )
     df = df.map_partitions(
         M.sort_values, by, ascending=ascending, na_position=na_position
@@ -400,9 +405,13 @@ def rearrange_by_divisions(
     shuffle=None,
     ascending=True,
     na_position="last",
+    duplicates=True,
 ):
     """Shuffle dataframe so that column separates along divisions"""
-    divisions = df._meta._constructor_sliced(divisions).drop_duplicates()
+    divisions = df._meta._constructor_sliced(divisions)
+    # duplicates need to be removed sometimes to properly sort null dataframes
+    if not duplicates:
+        divisions = divisions.drop_duplicates()
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
