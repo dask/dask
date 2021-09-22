@@ -393,6 +393,15 @@ def single_partition_join(left, right, **kwargs):
     # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
+
+    if len(meta) == 0:
+        if kwargs.get("right_index"):
+            meta.index = meta.index.astype(left.index.dtype)
+        elif kwargs.get("left_index"):
+            meta.index = meta.index.astype(right.index.dtype)
+        else:
+            meta.index = meta.index.astype("int64")
+
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
@@ -405,7 +414,12 @@ def single_partition_join(left, right, **kwargs):
             for i, right_key in enumerate(right.__dask_keys__())
         }
 
-        divisions = [None for _ in right.divisions]
+        if kwargs.get("left_index"):
+            divisions = right.divisions
+        elif len(left.divisions) == len(right.divisions):
+            divisions = left.divisions
+        else:
+            divisions = [None for _ in right.divisions]
 
     elif right.npartitions == 1 and kwargs["how"] in allowed_left:
         right_key = first(right.__dask_keys__())
@@ -413,8 +427,10 @@ def single_partition_join(left, right, **kwargs):
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
             for i, left_key in enumerate(left.__dask_keys__())
         }
-        if kwargs.get("left_index") or left._contains_index_name(kwargs.get("left_on")):
+        if kwargs.get("right_index"):
             divisions = left.divisions
+        elif len(right.divisions) == len(left.divisions):
+            divisions = right.divisions
         else:
             divisions = [None for _ in left.divisions]
 
