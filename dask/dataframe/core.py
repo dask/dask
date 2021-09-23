@@ -3883,7 +3883,11 @@ class Index(Series):
 
     @derived_from(pd.Index)
     def to_series(self):
-        return self.map_partitions(M.to_series, meta=self._meta.to_series())
+        return self.map_partitions(
+            M.to_series,
+            meta=self._meta.to_series(),
+            transform_divisions=False,
+        )
 
     @derived_from(pd.Index, ua_args=["index"])
     def to_frame(self, index=True, name=None):
