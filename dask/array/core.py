@@ -1682,6 +1682,9 @@ class Array(DaskMethodsMixin):
             self._chunks = y.chunks
             return
 
+        if np.isnan(self.shape).any():
+            raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+
         # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
         value = asanyarray(value)
