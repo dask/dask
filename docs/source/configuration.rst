@@ -462,7 +462,7 @@ Dask
 
 
 Distributed Client
-~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.client
@@ -470,7 +470,7 @@ Distributed Client
     :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
 
 Distributed Comm
-~~~~
+~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.comm
@@ -479,7 +479,7 @@ Distributed Comm
 
 
 Distributed Dashboard
-~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.dashboard
@@ -488,7 +488,7 @@ Distributed Dashboard
 
 
 Distributed Deploy
-~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.deploy
@@ -497,7 +497,7 @@ Distributed Deploy
 
 
 Distributed Scheduler
-~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.scheduler
@@ -506,7 +506,7 @@ Distributed Scheduler
 
 
 Distributed Worker
-~~~~~~
+~~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.worker
@@ -515,7 +515,7 @@ Distributed Worker
 
 
 Distributed Nanny
-~~~~~
+~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.nanny
@@ -524,7 +524,7 @@ Distributed Nanny
 
 
 Distributed Admin
-~~~~~
+~~~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.admin
@@ -533,7 +533,7 @@ Distributed Admin
 
 
 Distributed RMM
-~~~
+~~~~~~~~~~~~~~~
 
 .. dask-config-block::
     :location: distributed.rmm
