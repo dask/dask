@@ -1,7 +1,7 @@
 FAQ
 ===
 
-**Question**: *Is appropriate for adoption within a larger institutional context?*
+**Question**: *Is Dask appropriate for adoption within a larger institutional context?*
 
 **Answer**: *Yes.* Dask is used within the world's largest banks, national labs,
 retailers, technology companies, and government agencies.  It is used in highly
@@ -128,6 +128,13 @@ Dask differs from Apache Spark in a few ways:
    might be more natural.
 
 See the section :doc:`spark`.
+
+
+Are there companies that we can get support from?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are several companies that offer support for dask in different capacities. See
+`Paid support <https://docs.dask.org/en/latest/support.html#paid-support>`_ for a full list.
 
 
 For IT
@@ -390,6 +397,7 @@ Dask supports various ways to communicate with SQL databases, some
 requiring extra packages to be installed; see the section
 :doc:`dataframe-sql`.
 
+
 Does Dask work on GPUs?
 ~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -409,6 +417,7 @@ Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
 <futures>`.
 
 See the section :doc:`gpu`.
+
 
 How do I cite Dask?
 ~~~~~~~~~~~~~~~~~~~
@@ -435,6 +444,7 @@ A BibTeX entry for LaTeX users follows::
 
 The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
 
+
 Are there papers about Dask?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -453,3 +463,14 @@ Scheduling." (2015).
      editor    = { Kathryn Huff and James Bergstra }
    }
 
+
+For Marketing
+-------------
+
+There is a special subsite dedicated to addressing marketing concerns. You can
+find it at `marketing.dask.org <https://marketing.dask.org>`_.
+
+Do you have any standardized logos?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Yes! You can find them at :doc:`logos`.

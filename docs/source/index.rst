@@ -133,6 +133,8 @@ messy situations in everyday problems.
    install.rst
    10-minutes-to-dask.rst
    presentations.rst
+   best-practices.rst
+   how-to.rst
    faq.rst
 
 .. toctree::
@@ -147,7 +149,7 @@ messy situations in everyday problems.
    futures.rst
    scheduling.rst
    graphs.rst
-   best-practices.rst
+   internals.rst
 
 .. toctree::
    :maxdepth: 1

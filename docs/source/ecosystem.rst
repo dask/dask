@@ -1,3 +1,7 @@
+:orphan:
+
+.. this page is referenced from the topbar which comes from the theme
+
 Ecosystem
 =========
 
