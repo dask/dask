@@ -1,4 +1,5 @@
 # Do not include azure-functions-worker as it may conflict with the Azure Functions platform
 
 azure-functions
--e "../../../[complete,test]" 
+
+# All other dependencies of the parent Dask project are assumed to have been already installed

@@ -11,7 +11,7 @@ import versioneer
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
     "array": ["numpy >= 1.18"],
-    "backends": ["numpy >= 1.18"],
+    "backends": ["numpy >= 1.18", "azure-functions"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
     "distributed": ["distributed == 2021.09.1"],
