@@ -625,6 +625,20 @@ def test_from_delayed():
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
 
 
+def test_from_delayed_preserves_hlgs():
+    df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
+    parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
+    dfs = [delayed(parts.__getitem__)(i) for i in range(4)]
+    meta = dfs[0].compute()
+
+    chained = [d.a for d in dfs]
+    hlg = dd.from_delayed(chained, meta=meta).dask
+    for d in chained:
+        for layer_name, layer in d.dask.layers.items():
+            assert hlg.layers[layer_name] == layer
+            assert hlg.dependencies[layer_name] == d.dask.dependencies[layer_name]
+
+
 def test_from_delayed_misordered_meta():
     df = pd.DataFrame(
         columns=["(1)", "(2)", "date", "ent", "val"],
