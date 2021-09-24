@@ -248,11 +248,6 @@ def _tail_timedelta(prevs, current, before):
     return selected
 
 
-def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
-    rolling = df.rolling(**rolling_kwargs)
-    return getattr(rolling, name)(*args, **kwargs)
-
-
 class Rolling:
     """Provides rolling window calculations."""
 
@@ -295,16 +290,21 @@ class Rolling:
             or self.obj.npartitions == 1
         )
 
+    @staticmethod
+    def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
+        rolling = df.rolling(**rolling_kwargs)
+        return getattr(rolling, name)(*args, **kwargs)
+
     def _call_method(self, method_name, *args, **kwargs):
         rolling_kwargs = self._rolling_kwargs()
-        meta = pandas_rolling_method(
+        meta = self.pandas_rolling_method(
             self.obj._meta_nonempty, rolling_kwargs, method_name, *args, **kwargs
         )
 
         if self._has_single_partition:
             # There's no overlap just use map_partitions
             return self.obj.map_partitions(
-                pandas_rolling_method,
+                self.pandas_rolling_method,
                 rolling_kwargs,
                 method_name,
                 *args,
@@ -323,7 +323,7 @@ class Rolling:
             before = self.window - 1
             after = 0
         return map_overlap(
-            pandas_rolling_method,
+            self.pandas_rolling_method,
             self.obj,
             before,
             after,
@@ -438,14 +438,6 @@ class Rolling:
         )
 
 
-def pandas_groupby_rolling_method(
-    df, groupby_kwargs, rolling_kwargs, slice, name, *args, **kwargs
-):
-    groupby = df.groupby(**groupby_kwargs)[slice]
-    rolling = groupby.rolling(**rolling_kwargs)
-    return getattr(rolling, name)(*args, **kwargs).sort_index(level=-1)
-
-
 class RollingGroupby(Rolling):
     def __init__(
         self,
@@ -457,11 +449,11 @@ class RollingGroupby(Rolling):
         axis=0,
     ):
         self._groupby_kwargs = groupby._groupby_kwargs
-        self._slice = groupby._slice
+        self._groupby_slice = groupby._slice
 
         obj = groupby.obj
-        if self._slice:
-            sliced_plus = [self._slice, groupby.index]
+        if self._groupby_slice:
+            sliced_plus = [self._groupby_slice, groupby.index]
             obj = obj[sliced_plus]
 
         super().__init__(
@@ -473,54 +465,27 @@ class RollingGroupby(Rolling):
             axis=axis,
         )
 
+    @staticmethod
+    def pandas_rolling_method(
+        df,
+        rolling_kwargs,
+        name,
+        *args,
+        groupby_kwargs=None,
+        groupby_slice=None,
+        **kwargs
+    ):
+        groupby = df.groupby(**groupby_kwargs)
+        if groupby_slice:
+            groupby = groupby[groupby_slice]
+        rolling = groupby.rolling(**rolling_kwargs)
+        return getattr(rolling, name)(*args, **kwargs).sort_index(level=-1)
+
     def _call_method(self, method_name, *args, **kwargs):
-        rolling_kwargs = self._rolling_kwargs()
-        groupby_kwargs = self._groupby_kwargs
-
-        meta = pandas_groupby_rolling_method(
-            self.obj._meta_nonempty,
-            groupby_kwargs,
-            rolling_kwargs,
-            self._slice,
+        return super()._call_method(
             method_name,
             *args,
-            **kwargs,
-        )
-
-        if self._has_single_partition:
-            # There's no overlap just use map_partitions
-            return self.obj.map_partitions(
-                pandas_groupby_rolling_method,
-                groupby_kwargs,
-                rolling_kwargs,
-                self._slice,
-                method_name,
-                *args,
-                token=method_name,
-                meta=meta,
-                **kwargs,
-            )
-        # Convert window to overlap
-        if self.center:
-            before = self.window // 2
-            after = self.window - before - 1
-        elif self._win_type == "freq":
-            before = pd.Timedelta(self.window)
-            after = 0
-        else:
-            before = self.window - 1
-            after = 0
-        return map_overlap(
-            pandas_groupby_rolling_method,
-            self.obj,
-            before,
-            after,
-            groupby_kwargs,
-            rolling_kwargs,
-            self._slice,
-            method_name,
-            *args,
-            token=method_name,
-            meta=meta,
+            groupby_kwargs=self._groupby_kwargs,
+            groupby_slice=self._groupby_slice,
             **kwargs,
         )
