@@ -1,7 +1,7 @@
 from . import config, datasets
 from ._version import get_versions
 from .base import annotate, compute, is_dask_collection, optimize, persist, visualize
-from .core import istask
+from .type_checks import istask
 from .delayed import delayed
 from .local import get_sync as get
 

@@ -1,0 +1,12 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Attach to Python Functions",
+      "type": "python",
+      "request": "attach",
+      "port": 9091,
+      "preLaunchTask": "func: host start"
+    }
+  ]
+}

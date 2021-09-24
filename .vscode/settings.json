@@ -1,0 +1,13 @@
+{
+    "python.testing.pytestArgs": [
+        "."
+    ],
+    "python.testing.unittestEnabled": false,
+    "python.testing.pytestEnabled": true,
+    "azureFunctions.deploySubpath": "executors/azure_functions/phase2_worker",
+    "azureFunctions.scmDoBuildDuringDeployment": true,
+    "azureFunctions.projectLanguage": "Python",
+    "azureFunctions.projectRuntime": "~3",
+    "debug.internalConsoleOptions": "neverOpen",
+    "azureFunctions.projectSubpath": "executors/azure_functions/phase2_worker"
+}

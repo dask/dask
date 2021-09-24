@@ -11,6 +11,7 @@ import versioneer
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
     "array": ["numpy >= 1.18"],
+    "backends": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
     "distributed": ["distributed == 2021.09.1"],
@@ -30,12 +31,14 @@ install_requires = [
     "packaging >= 20.0",
     "partd >= 0.3.10",
     "pyyaml",
+    "requests",
     "toolz >= 0.8.2",
 ]
 
 packages = [
     "dask",
     "dask.array",
+    "dask.backends.azure_functions",
     "dask.bag",
     "dask.bytes",
     "dask.dataframe",

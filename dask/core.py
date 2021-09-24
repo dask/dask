@@ -1,43 +1,10 @@
 from collections import defaultdict
-
+from .azure_functions_client import AzureFunctionsClient
+from . import config
+from .type_checks import ishashable, istask
 from .utils_test import add, inc  # noqa: F401
 
 no_default = "__no_default__"
-
-
-def ishashable(x):
-    """Is x hashable?
-
-    Examples
-    --------
-
-    >>> ishashable(1)
-    True
-    >>> ishashable([1])
-    False
-    """
-    try:
-        hash(x)
-        return True
-    except TypeError:
-        return False
-
-
-def istask(x):
-    """Is x a runnable task?
-
-    A task is a tuple with a callable first argument
-
-    Examples
-    --------
-
-    >>> inc = lambda x: x + 1
-    >>> istask((inc, 1))
-    True
-    >>> istask(1)
-    False
-    """
-    return type(x) is tuple and x and callable(x[0])
 
 
 def has_tasks(dsk, x):
@@ -111,6 +78,12 @@ def _execute_task(arg, cache, dsk=None):
     >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
+    backend = config.get("backend", default=None)
+    if backend == 'azure_functions':
+        client = AzureFunctionsClient()
+        # TODO Eliminate the need for 'cache'.
+        return client.exec(arg, cache)
+
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
     elif istask(arg):
