@@ -2,6 +2,7 @@ import collections
 import itertools as it
 import operator
 import warnings
+from numbers import Integral
 
 import numpy as np
 import pandas as pd
@@ -1102,6 +1103,16 @@ class _GroupBy:
         )
 
     @property
+    def _groupby_kwargs(self):
+        return {
+            "by": self.index,
+            "group_keys": self.group_keys,
+            **self.dropna,
+            "sort": self.sort,
+            **self.observed,
+        }
+
+    @property
     def _meta_nonempty(self):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
@@ -1797,6 +1808,57 @@ class _GroupBy:
         )
 
         return df3
+
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+        """Provides rolling transformations.
+
+        Parameters
+        ----------
+        window : int, str, offset
+           Size of the moving window. This is the number of observations used
+           for calculating the statistic. When not using a ``DatetimeIndex``,
+           the window size must not be so large as to span more than one
+           adjacent partition. If using an offset or offset alias like '5D',
+           the data must have a ``DatetimeIndex``
+
+           .. versionchanged:: 0.15.0
+
+              Now accepts offsets and string offset aliases
+
+        min_periods : int, default None
+            Minimum number of observations in window required to have a value
+            (otherwise result is NA).
+        center : boolean, default False
+            Set the labels at the center of the window.
+        win_type : string, default None
+            Provide a window type. The recognized window types are identical
+            to pandas.
+        axis : int, default 0
+
+        Returns
+        -------
+        a Rolling object on which to call a method to compute a statistic
+        """
+        from dask.dataframe.rolling import RollingGroupby
+
+        if isinstance(window, Integral):
+            if window < 0:
+                raise ValueError("window must be >= 0")
+
+        if min_periods is not None:
+            if not isinstance(min_periods, Integral):
+                raise ValueError("min_periods must be an integer")
+            if min_periods < 0:
+                raise ValueError("min_periods must be >= 0")
+
+        return RollingGroupby(
+            self,
+            window=window,
+            min_periods=min_periods,
+            center=center,
+            win_type=win_type,
+            axis=axis,
+        )
 
 
 class DataFrameGroupBy(_GroupBy):

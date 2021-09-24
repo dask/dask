@@ -436,3 +436,91 @@ class Rolling:
                 if v is not None
             )
         )
+
+
+def pandas_groupby_rolling_method(
+    df, groupby_kwargs, rolling_kwargs, slice, name, *args, **kwargs
+):
+    groupby = df.groupby(**groupby_kwargs)[slice]
+    rolling = groupby.rolling(**rolling_kwargs)
+    return getattr(rolling, name)(*args, **kwargs).sort_index(level=-1)
+
+
+class RollingGroupby(Rolling):
+    def __init__(
+        self,
+        groupby,
+        window=None,
+        min_periods=None,
+        center=False,
+        win_type=None,
+        axis=0,
+    ):
+        self._groupby_kwargs = groupby._groupby_kwargs
+        self._slice = groupby._slice
+
+        obj = groupby.obj
+        if self._slice:
+            sliced_plus = [self._slice, groupby.index]
+            obj = obj[sliced_plus]
+
+        super().__init__(
+            obj,
+            window=window,
+            min_periods=min_periods,
+            center=center,
+            win_type=win_type,
+            axis=axis,
+        )
+
+    def _call_method(self, method_name, *args, **kwargs):
+        rolling_kwargs = self._rolling_kwargs()
+        groupby_kwargs = self._groupby_kwargs
+
+        meta = pandas_groupby_rolling_method(
+            self.obj._meta_nonempty,
+            groupby_kwargs,
+            rolling_kwargs,
+            self._slice,
+            method_name,
+            *args,
+            **kwargs,
+        )
+
+        if self._has_single_partition:
+            # There's no overlap just use map_partitions
+            return self.obj.map_partitions(
+                pandas_groupby_rolling_method,
+                groupby_kwargs,
+                rolling_kwargs,
+                self._slice,
+                method_name,
+                *args,
+                token=method_name,
+                meta=meta,
+                **kwargs,
+            )
+        # Convert window to overlap
+        if self.center:
+            before = self.window // 2
+            after = self.window - before - 1
+        elif self._win_type == "freq":
+            before = pd.Timedelta(self.window)
+            after = 0
+        else:
+            before = self.window - 1
+            after = 0
+        return map_overlap(
+            pandas_groupby_rolling_method,
+            self.obj,
+            before,
+            after,
+            groupby_kwargs,
+            rolling_kwargs,
+            self._slice,
+            method_name,
+            *args,
+            token=method_name,
+            meta=meta,
+            **kwargs,
+        )
