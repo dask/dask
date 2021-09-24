@@ -2,17 +2,6 @@ from ..serialization_utils import serialize, deserialize
 import azure.functions as func
 import logging
 
-# Note:
-# We need to import dask because the client side code may have
-# used the dask module in the functions being executed.
-# Not having it imported may break this.
-import dask
-
-# Note:
-# Some of the dask operations depend on numpy so importing that too.
-# Not having it imported may break this.
-import numpy
-
 
 def generate_response(body: bytes, status_code: int) -> func.HttpResponse:
     """Generate an HTTP response from the given body and status code.

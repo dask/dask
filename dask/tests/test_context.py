@@ -26,6 +26,28 @@ def test_with_get():
     assert var[0] == 1
 
 
+def test_with_get_on_azure_functions_backend():
+    da = pytest.importorskip("dask.array")
+    var = [0]
+
+    def myget(dsk, keys, **kwargs):
+        var[0] = var[0] + 1
+        return dask.get(dsk, keys, **kwargs)
+
+    x = da.ones(10, chunks=(5,))
+
+    assert x.sum().compute() == 10
+    assert var[0] == 0
+
+    with dask.config.set(scheduler=myget, backend="azure_functions"):
+        assert x.sum().compute() == 10
+    assert var[0] == 1
+
+    # Make sure we've cleaned up
+    assert x.sum().compute() == 10
+    assert var[0] == 1
+
+
 def foo():
     return "foo"
 
