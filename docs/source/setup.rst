@@ -79,7 +79,7 @@ how to set up Dask on a variety of local and distributed hardware.
     - :doc:`Cloud <setup/cloud>` for current recommendations on how to
       deploy Dask and Jupyter on common cloud providers like Amazon, Google, or
       Microsoft Azure.
-- Hosted / managed Dask clusters:
+- Hosted / managed Dask clusters (listed in alphabetical order):
     - `Coiled <https://coiled.io/>`_ handles the creation and management of
       Dask clusters on cloud computing environments (AWS, Azure, and GCP).
     - `Saturn Cloud <https://saturncloud.io/>`_ lets users create
