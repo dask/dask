@@ -82,6 +82,8 @@ how to set up Dask on a variety of local and distributed hardware.
 - Hosted / managed Dask clusters:
     - `Coiled <https://coiled.io/>`_ handles the creation and management of
       Dask clusters on cloud computing environments (AWS, Azure, and GCP).
+    - `Saturn Cloud <https://saturncloud.io/>`_ lets users create
+      Dask clusters in a hosted platform or within their own AWS accounts.
 
 .. toctree::
    :maxdepth: 1
