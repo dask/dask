@@ -11,6 +11,7 @@ from ... import array as da
 from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
@@ -611,7 +612,7 @@ def from_delayed(
         dfs = [delayed(make_meta)(meta)]
 
     name = prefix + "-" + tokenize(*dfs)
-    dsk = merge(df.dask for df in dfs)
+    dsk = {}
     if verify_meta:
         for (i, df) in enumerate(dfs):
             dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
@@ -626,7 +627,9 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = new_dd_object(dsk, name, meta, divs)
+    df = new_dd_object(
+        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+    )
 
     if divisions == "sorted":
         from ..shuffle import compute_and_set_divisions
