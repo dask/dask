@@ -42,6 +42,7 @@ extensions = [
     "numpydoc",
     "sphinx_click.ext",
     "dask_config_sphinx_ext",
+    "sphinx_tabs.tabs",
 ]
 
 numpydoc_show_class_members = False

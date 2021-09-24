@@ -2,6 +2,7 @@ numpydoc
 sphinx>=4.0.0
 git+https://github.com/jsignell/dask-sphinx-theme@docs-refresh
 sphinx-click
+sphinx-tabs
 toolz
 cloudpickle
 pandas>=0.25.0
