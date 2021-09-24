@@ -8,7 +8,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_100,
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     check_matching_columns,
@@ -82,14 +81,18 @@ def test_make_meta():
     assert meta.name == "a"
 
     # With index
+    idx = pd.Index([1, 2], name="foo")
     meta = make_meta(
         {"a": "i8", "b": "i4"},
-        index=pd.Int64Index([1, 2], name="foo"),
+        index=idx,
     )
-    assert isinstance(meta.index, pd.Int64Index)
+    assert type(meta.index) is type(idx)
+    assert meta.index.dtype == "int64"
     assert len(meta.index) == 0
-    meta = make_meta(("a", "i8"), index=pd.Int64Index([1, 2], name="foo"))
-    assert isinstance(meta.index, pd.Int64Index)
+
+    meta = make_meta(("a", "i8"), index=idx)
+    assert type(meta.index) is type(idx)
+    assert meta.index.dtype == "int64"
     assert len(meta.index) == 0
 
     # Categoricals
@@ -206,9 +209,10 @@ def test_meta_nonempty_index():
     assert type(res) is pd.RangeIndex
     assert res.name == idx.name
 
-    idx = pd.Int64Index([1], name="foo")
+    idx = pd.Index([1], name="foo", dtype="int")
     res = meta_nonempty(idx)
-    assert type(res) is pd.Int64Index
+    assert type(res) is type(idx)
+    assert res.dtype == "int64"
     assert res.name == idx.name
 
     idx = pd.Index(["a"], name="foo")
@@ -248,7 +252,7 @@ def test_meta_nonempty_index():
     assert res.ordered == idx.ordered
     assert res.name == idx.name
 
-    levels = [pd.Int64Index([1], name="a"), pd.Float64Index([1.0], name="b")]
+    levels = [pd.Index([1], name="a"), pd.Index([1.0], name="b")]
     codes = [[0], [0]]
     idx = pd.MultiIndex(levels=levels, names=["a", "b"], codes=codes)
     res = meta_nonempty(idx)
@@ -259,7 +263,7 @@ def test_meta_nonempty_index():
     assert res.names == idx.names
 
     levels = [
-        pd.Int64Index([1], name="a"),
+        pd.Index([1], name="a"),
         pd.CategoricalIndex(data=["xyx"], categories=["xyx"], name="b"),
         pd.TimedeltaIndex([np.timedelta64(1, "D")], name="timedelta"),
     ]
@@ -276,9 +280,10 @@ def test_meta_nonempty_index():
 
 
 def test_meta_nonempty_uint64index():
-    idx = pd.UInt64Index([1], name="foo")
+    idx = pd.Index([1], name="foo", dtype="uint64")
     res = meta_nonempty(idx)
-    assert type(res) is pd.UInt64Index
+    assert type(res) is type(idx)
+    assert res.dtype == "uint64"
     assert res.name == idx.name
 
 
@@ -375,6 +380,21 @@ def test_check_meta():
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
+
+    # pandas dtype metadata error
+    with pytest.raises(ValueError) as err:
+        check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
+    assert str(err.value) == (
+        "Metadata mismatch found.\n"
+        "\n"
+        "Partition type: `pandas.core.series.Series`\n"
+        "+----------+--------+\n"
+        "|          | dtype  |\n"
+        "+----------+--------+\n"
+        "| Found    | object |\n"
+        "| Expected | string |\n"
+        "+----------+--------+"
+    )
 
 
 def test_check_matching_columns_raises_appropriate_errors():
@@ -477,7 +497,6 @@ def test_apply_and_enforce_message():
         apply_and_enforce(_func=func, _meta=meta)
 
 
-@pytest.mark.skipif(not PANDAS_GT_100, reason="Only pandas>1")
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
     with pytest.warns(None) as w:

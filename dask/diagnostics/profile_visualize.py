@@ -1,9 +1,9 @@
 import random
 from bisect import bisect_left
-from distutils.version import LooseVersion
 from itertools import cycle
 from operator import add, itemgetter
 
+from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
@@ -372,7 +372,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         line_width=4,
         **{
             "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
+            if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "% CPU"
         }
     )
@@ -390,7 +390,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         line_width=4,
         **{
             "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
+            if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "Memory"
         }
     )

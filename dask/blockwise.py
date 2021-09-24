@@ -23,6 +23,7 @@ from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import (
+    _deprecated,
     apply,
     ensure_dict,
     homogeneous_deepmap,
@@ -113,8 +114,8 @@ class BlockwiseDepDict(BlockwiseDep):
     that the function will be passed a single input object when
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
-    >>> import pandas as pd  # doctest: +SKIP
-    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+    >>> import pandas as pd
+    >>> func = lambda x: pd.read_csv(**x)
 
     Use ``BlockwiseDepDict`` to define the input argument to
     ``func`` for each block/partition:
@@ -134,7 +135,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...             "names": ["a", "b"],
     ...         },
     ...     }
-    ... )  # doctest: +SKIP
+    ... )
 
     Construct a Blockwise Layer with ``dep`` speficied
     in the ``indices`` list:
@@ -145,7 +146,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     dsk={"collection-name": (func, '_0')},
     ...     indices=[(dep, "i")],
     ...     numblocks={},
-    ... )  # doctest: +SKIP
+    ... )
 
     See Also
     --------
@@ -508,7 +509,7 @@ class Blockwise(Layer):
                 if val_is_a_key:
                     keys2.append(key)
                     indices2.append((val, index))
-                    global_dependencies.add(val)
+                    global_dependencies.add(stringify(val))
                 else:
                     dsk[key] = val  # Literal
             else:
@@ -659,9 +660,12 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
+            if ind is None:
+                try:
+                    if arg in all_hlg_keys:
+                        const_deps.add(arg)
+                except TypeError:
+                    pass  # unhashable
 
         # Get dependencies for each output block
         key_deps = {}
@@ -1439,6 +1443,7 @@ def rewrite_blockwise(inputs):
     )
 
 
+@_deprecated()
 def zero_broadcast_dimensions(lol, nblocks):
     """
     >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
@@ -1447,7 +1452,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
     ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
 
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +SKIP
     [[('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)]]

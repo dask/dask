@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from io import StringIO
-from operator import add, getitem, sub
+from operator import add, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
@@ -21,7 +21,6 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe
 from dask.array.core import (
     Array,
     blockdims_from_blockshape,
@@ -43,7 +42,6 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -53,6 +51,7 @@ from dask.delayed import Delayed, delayed
 from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
+from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 
@@ -1573,6 +1572,7 @@ def test_repr_meta():
 
 
 def test_repr_html_array_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
@@ -2675,7 +2675,6 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
 @pytest.mark.parametrize("one_d", [True, False])
 @mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
 def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
@@ -3955,9 +3954,10 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
-    # RHS has extra leading size 1 dimensions compared to LHS
-    x = np.arange(12).reshape((3, 4))
-    dx = da.from_array(x, chunks=(2, 3))
+    # RHS doesn't have chunks set
+    dx = da.unique(da.random.random([10]))
+    with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
+        dx[0] = 0
 
 
 def test_zero_slice_dtypes():
@@ -4208,6 +4208,21 @@ def test_normalize_chunks_nan():
     with pytest.raises(ValueError) as info:
         normalize_chunks(((np.nan, np.nan), "auto"), (10, 10), limit=10, dtype=np.uint8)
     assert "auto" in str(info.value)
+
+
+def test_pandas_from_dask_array():
+    pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+
+    a = da.ones((12,), chunks=4)
+    s = pd.Series(a, index=range(12))
+
+    if PANDAS_GT_130 and not PANDAS_GT_131:
+        # https://github.com/pandas-dev/pandas/issues/38645
+        assert s.dtype != a.dtype
+    else:
+        assert s.dtype == a.dtype
+        assert_eq(s.values, a)
 
 
 def test_from_zarr_unique_name():

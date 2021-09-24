@@ -6,7 +6,7 @@ import pytest
 
 import dask
 from dask.blockwise import Blockwise, blockwise_token
-from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
 
 
@@ -47,6 +47,20 @@ def test_keys_values_items_to_dict_methods():
     assert list(values) == [hg[i] for i in hg]
     assert list(items) == list(zip(keys, values))
     assert hg.to_dict() == dict(hg)
+
+
+def test_keyset_deprecated():
+    a = {"x": 1, "y": (inc, "x")}
+    hg = HighLevelGraph({"a": a}, {"a": set()})
+    with pytest.warns(FutureWarning, match="HighLevelGraph.keys"):
+        assert hg.keyset() == hg.keys()
+
+
+def test_dicts_deprecated():
+    a = {"x": 1, "y": (inc, "x")}
+    hg = HighLevelGraph({"a": a}, {"a": set()})
+    with pytest.warns(FutureWarning, match="HighLevelGraph.layers"):
+        assert hg.dicts == hg.layers
 
 
 def test_getitem():
@@ -129,6 +143,7 @@ def test_cull_layers():
 
 
 def test_repr_html_hlg_layers():
+    pytest.importorskip("jinja2")
     hg = HighLevelGraph(
         {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}},
         {"a": set(), "b": set()},
@@ -251,3 +266,23 @@ def test_len_does_not_materialize():
     assert len(hg) == len(a) + len(b) == 7
 
     assert not hg.layers["b"].is_materialized()
+
+
+def test_node_tooltips_exist():
+    da = pytest.importorskip("dask.array")
+    pytest.importorskip("graphviz")
+
+    a = da.ones((1000, 1000), chunks=(100, 100))
+    b = a + a.T
+    c = b.sum(axis=1)
+
+    hg = c.dask
+    g = to_graphviz(hg)
+
+    for layer in g.body:
+        if "label" in layer:
+            assert "tooltip" in layer
+            start = layer.find('tooltip="') + len('tooltip="')
+            end = layer.find('"', start)
+            tooltip = layer[start:end]
+            assert len(tooltip) > 0

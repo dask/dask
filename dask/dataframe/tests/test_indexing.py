@@ -4,7 +4,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -35,32 +35,11 @@ def test_loc():
     assert_eq(d.loc[3:], full.loc[3:])
     assert_eq(d.loc[[5]], full.loc[[5]])
 
-    expected_warning = FutureWarning
-
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(expected_warning):
-            assert_eq(d.loc[[3, 4, 1, 8]], full.loc[[3, 4, 1, 8]])
-        with pytest.warns(expected_warning):
-            assert_eq(d.loc[[3, 4, 1, 9]], full.loc[[3, 4, 1, 9]])
-        with pytest.warns(expected_warning):
-            assert_eq(d.loc[np.array([3, 4, 1, 9])], full.loc[np.array([3, 4, 1, 9])])
-
     assert_eq(d.a.loc[5], full.a.loc[5:5])
     assert_eq(d.a.loc[3:8], full.a.loc[3:8])
     assert_eq(d.a.loc[:8], full.a.loc[:8])
     assert_eq(d.a.loc[3:], full.a.loc[3:])
     assert_eq(d.a.loc[[5]], full.a.loc[[5]])
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(expected_warning):
-            assert_eq(d.a.loc[[3, 4, 1, 8]], full.a.loc[[3, 4, 1, 8]])
-        with pytest.warns(expected_warning):
-            assert_eq(d.a.loc[[3, 4, 1, 9]], full.a.loc[[3, 4, 1, 9]])
-        with pytest.warns(expected_warning):
-            assert_eq(
-                d.a.loc[np.array([3, 4, 1, 9])], full.a.loc[np.array([3, 4, 1, 9])]
-            )
     assert_eq(d.a.loc[[]], full.a.loc[[]])
     assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
 
@@ -181,12 +160,6 @@ def test_loc2d():
 
     with pytest.raises(pd.core.indexing.IndexingError):
         d.a.loc[d.a % 2 == 0, 3]
-
-
-@pytest.mark.skip(PANDAS_GT_100, reason="Removed in pandas 1.0")
-def test_loc2d_some_missing():
-    with pytest.warns(FutureWarning):
-        assert_eq(d.loc[[3, 4, 3], ["a"]], full.loc[[3, 4, 3], ["a"]])
 
 
 def test_loc2d_with_known_divisions():
@@ -525,57 +498,43 @@ def test_getitem_period_str():
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
 
 
-def test_to_series():
-
-    # Test for time index
-    df = pd.DataFrame(
-        {"A": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
-    )
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        range(100),  # numerical index
+    ],
+)
+def test_to_series(index):
+    df = pd.DataFrame({"A": np.random.randn(100)}, index=index)
     ddf = dd.from_pandas(df, 10)
 
-    assert_eq(df.index.to_series(), ddf.index.to_series())
+    expected = df.index.to_series()
+    actual = ddf.index.to_series()
 
-    # Test for numerical index
-    df = pd.DataFrame({"A": np.random.randn(100)}, index=range(100))
+    assert actual.known_divisions
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.date_range("2011-01-01", freq="H", periods=100),  # time index
+        range(100),  # numerical index
+    ],
+)
+def test_to_frame(index):
+    df = pd.DataFrame({"A": np.random.randn(100)}, index=index)
     ddf = dd.from_pandas(df, 10)
 
-    assert_eq(df.index.to_series(), ddf.index.to_series())
+    expected = df.index.to_frame()
+    actual = ddf.index.to_frame()
 
+    assert actual.known_divisions
+    assert_eq(expected, actual)
 
-def test_to_frame():
-
-    # Test for time index
-    df = pd.DataFrame(
-        {"A": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
-    )
-    ddf = dd.from_pandas(df, 10)
-
-    assert_eq(df.index.to_frame(), ddf.index.to_frame())
-
-    # Test for numerical index
-    df = pd.DataFrame({"A": np.random.randn(100)}, index=range(100))
-    ddf = dd.from_pandas(df, 10)
-
-    assert_eq(df.index.to_frame(), ddf.index.to_frame())
-
-
-def test_to_frame_name():
-    # Test for time index
-    df = pd.DataFrame(
-        {"A": np.random.randn(100)},
-        index=pd.date_range("2011-01-01", freq="H", periods=100),
-    )
-    ddf = dd.from_pandas(df, 10)
-
+    # test name option
     assert_eq(df.index.to_frame(name="foo"), ddf.index.to_frame(name="foo"))
-
-    # Test for numerical index
-    df = pd.DataFrame({"A": np.random.randn(100)}, index=range(100))
-    ddf = dd.from_pandas(df, 10)
-
-    assert_eq(df.index.to_frame(name="bar"), ddf.index.to_frame(name="bar"))
 
 
 @pytest.mark.parametrize("indexer", [0, [0], [0, 1], [1, 0], [False, True, True]])

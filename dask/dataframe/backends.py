@@ -12,8 +12,11 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.dispatch import percentile_lookup
+from dask.array.percentile import _percentile
+from dask.sizeof import SimpleSizeof, sizeof
+
 from ..utils import is_arraylike, typename
-from ._compat import PANDAS_GT_100
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
@@ -101,13 +104,13 @@ def make_meta_object(x, index=None):
     Examples
     --------
 
-    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
+    >>> make_meta_object([('a', 'i8'), ('b', 'O')])
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
+    >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')                         # doctest: +SKIP
+    >>> make_meta_object('i8')
     1
     """
 
@@ -179,12 +182,8 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
-    if PANDAS_GT_100:
-        res.attrs = x.attrs
+    res.attrs = x.attrs
     return res
-
-
-_numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
 
 
 @meta_nonempty.register(pd.Index)
@@ -192,7 +191,7 @@ def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif typ in _numeric_index_types:
+    elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(["a", "b"], name=idx.name)
@@ -279,10 +278,7 @@ def _nonempty_series(s, idx=None):
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_100:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = pd.SparseArray([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
@@ -293,8 +289,7 @@ def _nonempty_series(s, idx=None):
         data = np.array([entry, entry], dtype=dtype)
 
     out = pd.Series(data, name=s.name, index=idx)
-    if PANDAS_GT_100:
-        out.attrs = s.attrs
+    out.attrs = s.attrs
     return out
 
 
@@ -341,6 +336,23 @@ def hash_object_pandas(
     )
 
 
+class ShuffleGroupResult(SimpleSizeof, dict):
+    def __sizeof__(self) -> int:
+        """
+        The result of the shuffle split are typically small dictionaries
+        (#keys << 100; typically <= 32) The splits are often non-uniformly
+        distributed. Some of the splits may even be empty. Sampling the
+        dictionary for size estimation can cause severe errors.
+
+        See also https://github.com/dask/distributed/issues/4962
+        """
+        total_size = super().__sizeof__()
+        for k, df in self.items():
+            total_size += sizeof(k)
+            total_size += sizeof(df)
+        return total_size
+
+
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
     indexer, locations = pd._libs.algos.groupsort_indexer(
@@ -352,7 +364,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
         for a, b in zip(locations[:-1], locations[1:])
     ]
-    return dict(zip(range(k), parts))
+    return ShuffleGroupResult(zip(range(k), parts))
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
@@ -520,6 +532,11 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
+@percentile_lookup.register((pd.Series, pd.Index))
+def percentile(a, q, interpolation="linear"):
+    return _percentile(a, q, interpolation)
+
+
 ######################################
 # cuDF: Pandas Dataframes on the GPU #
 ######################################
@@ -532,5 +549,6 @@ def is_categorical_dtype_pandas(obj):
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
+@percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401

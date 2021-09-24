@@ -1,6 +1,5 @@
 import contextlib
 import numbers
-import warnings
 from itertools import chain, product
 from numbers import Integral
 from operator import getitem
@@ -9,7 +8,7 @@ import numpy as np
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, random_state_data, skip_doctest
+from ..utils import _deprecated, derived_from, random_state_data, skip_doctest
 from .core import (
     Array,
     asarray,
@@ -21,12 +20,9 @@ from .core import (
 from .creation import arange
 
 
+@_deprecated()
 def doc_wraps(func):
     """Copy docstring from one function to another"""
-    warnings.warn(
-        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
-        FutureWarning,
-    )
 
     def _(func2):
         if func.__doc__ is not None:
