@@ -1821,10 +1821,6 @@ class _GroupBy:
            adjacent partition. If using an offset or offset alias like '5D',
            the data must have a ``DatetimeIndex``
 
-           .. versionchanged:: 0.15.0
-
-              Now accepts offsets and string offset aliases
-
         min_periods : int, default None
             Minimum number of observations in window required to have a value
             (otherwise result is NA).

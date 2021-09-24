@@ -452,8 +452,15 @@ class RollingGroupby(Rolling):
         self._groupby_slice = groupby._slice
 
         obj = groupby.obj
-        if self._groupby_slice:
-            sliced_plus = [self._groupby_slice, groupby.index]
+        if self._groupby_slice is not None:
+            if isinstance(self._groupby_slice, str):
+                sliced_plus = [self._groupby_slice]
+            else:
+                sliced_plus = list(self._groupby_slice)
+            if isinstance(groupby.index, str):
+                sliced_plus.append(groupby.index)
+            else:
+                sliced_plus.extend(groupby.index)
             obj = obj[sliced_plus]
 
         super().__init__(
