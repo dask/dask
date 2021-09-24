@@ -16,8 +16,8 @@ We normally import dask as follows:
 
 Based on the type of data you are working with, you might not need all of these.
 
-Create an Collection
---------------------
+Create a Collection
+-------------------
 
 You can make a Dask collection from scratch by supplying existing data and optionally
 including information about how the chunks should be structured.
@@ -141,7 +141,7 @@ Computation
 Dask is lazily evaluated. The result from a computation isn't computed until
 you ask for it. Instead, a Dask task graph for the computation is produced.
 
-Anytime you have a Dask object and you want to get the result. You can call compute:
+Anytime you have a Dask object and you want to get the result, call ``compute``:
 
 .. tabs::
 
