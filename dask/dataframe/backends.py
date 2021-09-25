@@ -17,7 +17,7 @@ from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
+from .core import DataFrame, Index, MultiIndex, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
     concat,
@@ -315,6 +315,11 @@ def get_parallel_type_dataframe(_):
 @get_parallel_type.register(pd.Index)
 def get_parallel_type_index(_):
     return Index
+
+
+@get_parallel_type.register(pd.MultiIndex)
+def get_parallel_type_multiindex(_):
+    return MultiIndex
 
 
 @get_parallel_type.register(_Frame)

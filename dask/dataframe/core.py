@@ -2,7 +2,7 @@ import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
-from functools import partial, wraps
+from functools import partial, reduce, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
@@ -467,11 +467,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _repr_divisions(self):
         name = "npartitions={0}".format(self.npartitions)
+        # tupleize_cols to avoid name issues with MultiIndex
+        # TODO: consider overriding.
         if self.known_divisions:
-            divisions = pd.Index(self.divisions, name=name)
+            divisions = pd.Index(self.divisions, name=name, tupleize_cols=False)
         else:
             # avoid to be converted to NaN
-            divisions = pd.Index([""] * (self.npartitions + 1), name=name)
+            divisions = pd.Index(
+                [""] * (self.npartitions + 1), name=name, tupleize_cols=False
+            )
         return divisions
 
     def __repr__(self):
@@ -3818,6 +3822,10 @@ class Index(Series):
         msg = "'{0}' object has no attribute 'index'"
         raise AttributeError(msg.format(self.__class__.__name__))
 
+    @property
+    def nlevels(self):
+        return self._meta.nlevels
+
     def __array_wrap__(self, array, context=None):
         return pd.Index(array, name=self.name)
 
@@ -3927,6 +3935,65 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
+
+
+class MultiIndex(Index):
+    _partition_type = pd.MultiIndex
+    # Attributes
+    #  codes : FrozenList[int]
+    #  'equal_levels',?
+    #  'from_arrays',
+    #  'from_frame',
+    #  'from_product',
+    #  'from_tuples',
+    #  'get_loc_level',
+    #  'get_locs',
+    #  'is_lexsorted': not supported
+    #  'levels': perhaps
+    #  'levshape': not supported
+    #  'lexsort_depth': require sorted, then ok?
+    #  'remove_unused_levels':
+    #  'reorder_levels',
+    #  'set_codes',
+    #  'set_levels',
+    #  'swaplevel',
+    #  'truncate'}
+
+    def from_arrays():
+        raise NotImplementedError(
+            "dask.dataframe.MultiIndex does not implement from_arrays"
+        )
+
+    @property
+    def names(self):
+        return self._meta.names
+
+    @names.setter
+    def names(self, names):
+        raise NotImplementedError("Cannot set the names of a MultiIndex")
+
+    @property
+    def levels(self):
+        """
+        The levels of a MultiIndex.
+
+        .. warning:
+
+           The contents of the returned list are :class:`dask.delayed.Delayed`
+           objects, since the contents of the levels depend on the values present
+           in the data.
+        """
+        nlevels = self.nlevels
+        levels = []  # TODO: FrozenList
+        plevels = [partition.levels for partition in self.to_delayed()]
+        for i in range(nlevels):
+            vals = [level[i] for level in plevels]
+            levels.append(reduce(lambda a, b: a.union(b, sort=False), vals))
+
+        return levels
+
+    def remove_unused_levels(self):
+        return self.map_partitions(M.remove_unused_levels)
 
 
 class DataFrame(_Frame):
@@ -4047,6 +4114,14 @@ class DataFrame(_Frame):
             "Depending on which of these results you need, use either "
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
+
+    def _repartition_quantiles(self, npartitions, upsample=1.0):
+        """Approximate quantiles of Series used for repartitioning"""
+        from .partitionquantiles import partition_quantiles_multi
+
+        assert len(self.columns)
+
+        return partition_quantiles_multi(self, npartitions, upsample=upsample)
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
