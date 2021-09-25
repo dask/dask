@@ -12,6 +12,7 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
@@ -28,7 +29,6 @@ from .dispatch import (
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
-    percentile_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -186,15 +186,12 @@ def meta_nonempty_dataframe(x):
     return res
 
 
-_numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
-
-
 @meta_nonempty.register(pd.Index)
 def _nonempty_index(idx):
     typ = type(idx)
     if typ is pd.RangeIndex:
         return pd.RangeIndex(2, name=idx.name)
-    elif typ in _numeric_index_types:
+    elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
         return pd.Index(["a", "b"], name=idx.name)
@@ -535,7 +532,7 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
-@percentile_dispatch.register((pd.Series, np.ndarray, pd.Index))
+@percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
@@ -552,6 +549,6 @@ def percentile(a, q, interpolation="linear"):
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
-@percentile_dispatch.register_lazy("cudf")
+@percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
