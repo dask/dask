@@ -7,11 +7,12 @@ Dask :doc:`command line interface <cli>`,
 or automatically using either the ``SSHCluster`` Python command or the
 ``dask-ssh`` command line tool. This document describes both of these options.
 
-Before instaniating a ``SSHCluster`` it is recommended to configure keyless SSH
-for your local machine and other machines. For example, on a Mac to SSH into
-localhost (local machine) you need to ensure the Remote Login option is set in
-System Preferences -> Sharing. In addition, ``id_rsa.pub`` should be in
-``authorized_keys`` for keyless login.
+.. note::
+   Before instaniating a ``SSHCluster`` it is recommended to configure keyless SSH
+   for your local machine and other machines. For example, on a Mac to SSH into
+   localhost (local machine) you need to ensure the Remote Login option is set in
+   System Preferences -> Sharing. In addition, ``id_rsa.pub`` should be in
+   ``authorized_keys`` for keyless login.
 
 Python Interface
 ----------------
