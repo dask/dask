@@ -1090,7 +1090,7 @@ class FastParquetEngine(Engine):
     def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
         _meta = copy.copy(fmd)
         if parts:
-            rgs = []
+            rgs = _meta.row_groups
             for rg in parts:
                 if rg is not None:
                     if isinstance(rg, list):
