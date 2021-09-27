@@ -1477,9 +1477,6 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            #
-            # Note that we also generate a new fragment if the user
-            # has passed in an explicit `arrow_fs` object.
             if (partitions and partition_keys is None) or (
                 partitioning and _need_fragments(filters, partition_keys)
             ):
