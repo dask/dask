@@ -5,6 +5,7 @@ import pickle
 import threading
 import uuid
 from collections import OrderedDict
+from concurrent.futures import Executor
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from functools import partial
@@ -23,6 +24,7 @@ from .core import flatten
 from .core import get as simple_get
 from .core import literal, quote
 from .hashing import hash_buffer_hex
+from .system import CPU_COUNT
 from .utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
@@ -1160,17 +1162,26 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
             return scheduler.get
-        elif scheduler.lower() in named_schedulers:
-            return named_schedulers[scheduler.lower()]
-        elif scheduler.lower() in ("dask.distributed", "distributed"):
-            from distributed.worker import get_client
+        elif isinstance(scheduler, str):
+            scheduler = scheduler.lower()
+            if scheduler in named_schedulers:
+                return named_schedulers[scheduler]
+            elif scheduler in ("dask.distributed", "distributed"):
+                from distributed.worker import get_client
 
-            return get_client().get
-        else:
-            raise ValueError(
-                "Expected one of [distributed, %s]"
-                % ", ".join(sorted(named_schedulers))
+                return get_client().get
+            else:
+                raise ValueError(
+                    "Expected one of [distributed, %s]"
+                    % ", ".join(sorted(named_schedulers))
+                )
+        elif isinstance(scheduler, Executor):
+            num_workers = getattr(
+                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
             )
+            return partial(local.get_async, scheduler.submit, num_workers)
+        else:
+            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 

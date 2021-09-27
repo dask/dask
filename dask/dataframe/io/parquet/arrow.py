@@ -218,7 +218,8 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with fs.open(path, mode="rb") as fil:
+        cache_type = "none" if columns or row_groups != [None] else "all"
+        with fs.open(path, mode="rb", cache_type=cache_type) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,
@@ -886,6 +887,7 @@ class ArrowDatasetEngine(Engine):
                 if v not in hive_categories[k]:
                     hive_categories[k].append(v)
 
+        physical_schema = ds.schema
         if file_frag is not None:
             # Check/correct order of `categories` using last file_frag
             #
@@ -916,6 +918,8 @@ class ArrowDatasetEngine(Engine):
                     k: hive_categories[k] for k in cat_keys if k in hive_categories
                 }
 
+            physical_schema = file_frag.physical_schema
+
         partition_names = list(hive_categories)
         for name in partition_names:
             partition_obj.append(PartitionObj(name, hive_categories[name]))
@@ -940,6 +944,7 @@ class ArrowDatasetEngine(Engine):
         #
         return {
             "ds": ds,
+            "physical_schema": physical_schema,
             "has_metadata_file": has_metadata_file,
             "schema": ds.schema,
             "fs": fs,
@@ -994,7 +999,7 @@ class ArrowDatasetEngine(Engine):
         else:
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
-            column_names = schema.names
+            column_names = dataset_info.get("physical_schema", schema).names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
