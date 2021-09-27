@@ -479,6 +479,27 @@ def test_parquet(s3, engine, s3so, metadata_file):
 
     tm.assert_frame_equal(data, df2.compute())
 
+    # Check that a simple append operation works
+    if metadata_file:
+        df.to_parquet(
+            url,
+            engine=engine,
+            storage_options=s3so,
+            write_metadata_file=metadata_file,
+            ignore_divisions=True,
+            append=True,
+        )
+
+        df3 = dd.read_parquet(
+            url,
+            index="foo",
+            gather_statistics=True,
+            engine=engine,
+            storage_options=s3so,
+        )
+
+        assert len(df3) == 2 * len(df2)
+
 
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
