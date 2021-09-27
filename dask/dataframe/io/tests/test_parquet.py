@@ -3643,9 +3643,8 @@ def test_extra_file(tmpdir, engine):
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(tmpdir, engine=engine)
-    open(os.path.join(tmpdir, "_SUCCESS"), 'w').close()
-    open(os.path.join(tmpdir, "part.0.parquet.crc"), 'w').close()
+    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir)
     assert_eq(out, df)
-
