@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from io import StringIO
-from operator import add, getitem, sub
+from operator import add, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
@@ -21,7 +21,6 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe
 from dask.array.core import (
     Array,
     blockdims_from_blockshape,
@@ -52,6 +51,7 @@ from dask.delayed import Delayed, delayed
 from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
+from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 
@@ -3954,9 +3954,10 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
-    # RHS has extra leading size 1 dimensions compared to LHS
-    x = np.arange(12).reshape((3, 4))
-    dx = da.from_array(x, chunks=(2, 3))
+    # RHS doesn't have chunks set
+    dx = da.unique(da.random.random([10]))
+    with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
+        dx[0] = 0
 
 
 def test_zero_slice_dtypes():

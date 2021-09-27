@@ -1,6 +1,59 @@
 Changelog
 =========
 
+2021.09.1
+---------
+
+Released on September 21, 2021
+
+- Fix ``groupby`` for future pandas (:pr:`8151`) `Julia Signell`_
+- Remove warning filters in tests that are no longer needed (:pr:`8155`) `Julia Signell`_
+- Add link to diagnostic visualize function in local diagnostic docs (:pr:`8157`) `David Hoese`_
+- Add ``datetime_is_numeric`` to ``dataframe.describe`` (:pr:`7719`) `Julia Signell`_
+- Remove references to ``pd.Int64Index`` in anticipation of deprecation (:pr:`8144`) `Julia Signell`_
+- Use ``loc`` if needed for series ``__get_item__`` (:pr:`7953`) `Julia Signell`_
+- Specifically ignore warnings on mean for empty slices (:pr:`8125`) `Julia Signell`_
+- Skip ``groupby`` ``nunique`` test for pandas >= 1.3.3 (:pr:`8142`) `Julia Signell`_
+- Implement ``ascending`` arg for ``sort_values`` (:pr:`8130`) `Charles Blackmon-Luca`_
+- Replace ``operator.getitem``  (:pr:`8015`) `Naty Clementi`_
+- Deprecate ``zero_broadcast_dimensions`` and ``homogeneous_deepmap`` (:pr:`8134`) `SnkSynthesis`_
+- Add error if ``drop_index`` is negative (:pr:`8064`) `neel iyer`_
+- Allow ``scheduler`` to be an ``Executor`` (:pr:`8112`) `John A Kirkham`_
+- Handle ``asarray``/``asanyarray`` cases where ``like`` is a ``dask.Array`` (:pr:`8128`) `Peter Andreas Entschev`_
+- Fix ``index_col`` duplication if ``index_col`` is type ``str`` (:pr:`7661`) `McToel`_
+- Add ``dtype`` and ``order`` to ``asarray`` and ``asanyarray`` definitions (:pr:`8106`) `Julia Signell`_
+- Deprecate ``dask.dataframe.Series.__contains__`` (:pr:`7914`) `Julia Signell`_
+- Fix edge case with ``like``-arrays in ``_wrapped_qr`` (:pr:`8122`) `Peter Andreas Entschev`_
+- Deprecate ``boundary_slice`` kwarg: ``kind`` for pandas compat (:pr:`8037`) `Julia Signell`_
+
+
+2021.09.0
+---------
+
+Released on September 3, 2021
+
+- Fewer open files (:pr:`7303`) `Julia Signell`_
+- Add ``FileNotFound`` to expected http errors (:pr:`8109`) `Martin Durant`_
+- Add ``DataFrame.sort_values`` to API docs (:pr:`8107`) `Benjamin Zaitlen`_
+- Change to ``dask.order``: be more eager at times (:pr:`7929`) `Erik Welch`_
+- Add pytest color to CI (:pr:`8090`) `James Bourbeau`_
+- FIX: ``make_people`` works with ``processes`` scheduler (:pr:`8103`) `Dahn`_
+- Adds ``deep`` param to Dataframe copy method and restrict it to ``False`` (:pr:`8068`) `João Paulo Lacerda`_
+- Fix typo in configuration docs (:pr:`8104`) `Robert Hales`_
+- Update formatting in ``DataFrame.query`` docstring (:pr:`8100`) `James Bourbeau`_
+- Un-xfail ``sparse`` tests for 0.13.0 release (:pr:`8102`) `James Bourbeau`_
+- Add axes property to DataFrame and Series (:pr:`8069`) `Jordan Jensen`_
+- Add CuPy support in ``da.unique`` (values only) (:pr:`8021`) `Peter Andreas Entschev`_
+- Unit tests for ``sparse.zeros_like`` (xfailed) (:pr:`8093`) `Guido Imperiale`_
+- Add explicit ``like`` kwarg support to array creation functions (:pr:`8054`) `Peter Andreas Entschev`_
+- Separate Array and DataFrame mindeps builds (:pr:`8079`) `James Bourbeau`_
+- Fork out ``percentile_dispatch`` to ``dask.array`` (:pr:`8083`) `GALI PREM SAGAR`_
+- Ensure ``filepath`` exists in ``to_parquet`` (:pr:`8057`) `James Bourbeau`_
+- Update scheduler plugin usage in ``test_scheduler_highlevel_graph_unpack_import`` (:pr:`8080`) `James Bourbeau`_
+- Add ``DataFrame.shuffle`` to API docs (:pr:`8076`) `Martin Fleischmann`_
+- Order requirements alphabetically (:pr:`8073`) `John A Kirkham`_
+
+
 2021.08.1
 ---------
 
@@ -4484,3 +4537,10 @@ Other
 .. _`aa1371`: https://github.com/aa1371
 .. _`Gregory R. Lee`: https://github.com/grlee77
 .. _`Louis Maddox`: https://github.com/lmmx
+.. _`Dahn`: https://github.com/DahnJ
+.. _`Jordan Jensen`: https://github.com/dotNomad
+.. _`Martin Fleischmann`: https://github.com/martinfleis
+.. _`Robert Hales`: https://github.com/robalar
+.. _`João Paulo Lacerda`: https://github.com/jopasdev
+.. _`SnkSynthesis`: https://github.com/SnkSynthesis
+.. _`neel iyer`: https://github.com/spiyer99

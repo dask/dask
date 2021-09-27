@@ -13,7 +13,7 @@ from collections.abc import Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
-from operator import add, getitem, mul
+from operator import add, mul
 from threading import Lock
 
 import numpy as np
@@ -60,11 +60,12 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import chunk
+from .chunk import getitem
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .numpy_compat import _Recurser
+from .numpy_compat import _numpy_120, _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
@@ -694,6 +695,8 @@ def map_blocks(
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
+        if any(i < 0 for i in drop_axis):
+            raise ValueError(f"Expected drop_axis to be non-negative; got {drop_axis}.")
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
         new_axis = range(len(chunks) - len(out_ind))
@@ -1534,6 +1537,12 @@ class Array(DaskMethodsMixin):
         da_func = getattr(module, func.__name__)
         if da_func is func:
             return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if has_keyword(da_func, "like"):
+            kwargs["like"] = self
+
         return da_func(*args, **kwargs)
 
     @property
@@ -1672,6 +1681,9 @@ class Array(DaskMethodsMixin):
             self._name = y.name
             self._chunks = y.chunks
             return
+
+        if np.isnan(self.shape).any():
+            raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
 
         # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
@@ -4108,18 +4120,38 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, **kwargs):
+def asarray(
+    a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
+):
     """Convert the input to a dask array.
 
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4138,20 +4170,30 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
-    if isinstance(a, Array):
-        return a
-    elif hasattr(a, "to_dask_array"):
-        return a.to_dask_array()
-    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-        return asarray(a.data)
-    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
-    elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asarray(a)
+    if like is None:
+        if isinstance(a, Array):
+            return a
+        elif hasattr(a, "to_dask_array"):
+            return a.to_dask_array()
+        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
+            return asarray(a.data)
+        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+            return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
+        elif not isinstance(getattr(a, "shape", None), Iterable):
+            a = np.asarray(a, dtype=dtype, order=order)
+    else:
+        if not _numpy_120:
+            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
+        like_meta = meta_from_array(like)
+        if isinstance(a, Array):
+            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
+        else:
+            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a):
+def asanyarray(a, dtype=None, order=None, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4159,7 +4201,25 @@ def asanyarray(a):
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4178,16 +4238,26 @@ def asanyarray(a):
     >>> da.asanyarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
-    if isinstance(a, Array):
-        return a
-    elif hasattr(a, "to_dask_array"):
-        return a.to_dask_array()
-    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-        return asanyarray(a.data)
-    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a)
-    elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asanyarray(a)
+    if like is None:
+        if isinstance(a, Array):
+            return a
+        elif hasattr(a, "to_dask_array"):
+            return a.to_dask_array()
+        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
+            return asanyarray(a.data)
+        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+            return stack(a)
+        elif not isinstance(getattr(a, "shape", None), Iterable):
+            a = np.asanyarray(a, dtype=dtype, order=order)
+    else:
+        if not _numpy_120:
+            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
+        like_meta = meta_from_array(like)
+        if isinstance(a, Array):
+            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+        else:
+            a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
