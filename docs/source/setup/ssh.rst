@@ -11,7 +11,7 @@ Before instaniating a ``SSHCluster`` it is recommended to configure keyless SSH
 for your local machine and other machines. For example, on a Mac to SSH into
 localhost (local machine) you need to ensure the Remote Login option is set in
 System Preferences -> Sharing. In addition, ``id_rsa.pub`` should be in
-``authorized_keys``.
+``authorized_keys`` for keyless login.
 
 Python Interface
 ----------------
