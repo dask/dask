@@ -186,10 +186,12 @@ def _determine_pf_parts(fs, paths, gather_statistics, ignore_metadata_file, **kw
 
         elif gather_statistics is not False:
             # Scan every file
+            paths = [path for path in paths if path.endswith((".parq", ".parquet"))]
             pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
         else:
             # Use _common_metadata file if it is available.
             # Otherwise, just use 0th file
+            paths = [path for path in paths if path.endswith((".parq", ".parquet"))]
             if _common_metadata_exists:
                 pf = ParquetFile(
                     fs.sep.join([base, "_common_metadata"]),
@@ -1088,13 +1090,15 @@ class FastParquetEngine(Engine):
     def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
         _meta = copy.copy(fmd)
         if parts:
+            rgs = []
             for rg in parts:
                 if rg is not None:
                     if isinstance(rg, list):
                         for r in rg:
-                            _meta.row_groups.append(r)
+                            rgs.append(r)
                     else:
-                        _meta.row_groups.append(rg)
+                        rgs.append(rg)
+            _meta.row_groups = rgs
             fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, _meta, open_with=fs.open, no_row_groups=False
