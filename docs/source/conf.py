@@ -47,6 +47,8 @@ extensions = [
 
 numpydoc_show_class_members = False
 
+sphinx_tabs_disable_tab_closing = True
+
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
