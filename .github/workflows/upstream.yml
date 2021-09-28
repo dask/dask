@@ -102,7 +102,7 @@ jobs:
             const variables = {
                 owner: context.repo.owner,
                 name: context.repo.repo,
-                label: 'CI,upstream',
+                label: 'upstream',
                 creator: "github-actions[bot]"
             }
             const result = await github.graphql(query, variables)
