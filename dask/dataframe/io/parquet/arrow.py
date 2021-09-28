@@ -748,7 +748,8 @@ class ArrowDatasetEngine(Engine):
                 # No dataset to append to
                 return fmd, i_offset, False
             try:
-                fmd = pq.read_metadata(fs.sep.join([path, "_metadata"]))
+                with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
+                    fmd = pq.read_metadata(fil)
             except (IOError, FileNotFoundError):
                 # No _metadata file present - No appending allowed (for now)
                 if not ignore_divisions:
