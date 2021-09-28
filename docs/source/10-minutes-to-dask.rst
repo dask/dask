@@ -16,8 +16,8 @@ We normally import dask as follows:
 
 Based on the type of data you are working with, you might not need all of these.
 
-Create a Collection
--------------------
+Create a High-Level Collection
+------------------------------
 
 You can make a Dask collection from scratch by supplying existing data and optionally
 including information about how the chunks should be structured.
@@ -338,6 +338,60 @@ triggering computation, we can inspect the task graph to figure out what's going
 
       .. image:: images/10_minutes_dataframe_graph.png
 
+Low-Level Interfaces
+--------------------
+Often when parallelizing existing code bases or building custom algorithms, you
+run into code that is parallelizable, but isn't just a big DataFrame or array.
+
+.. tabs::
+
+   .. group-tab:: Delayed: Lazy
+
+      Dask Delayed let you to wrap individual function calls into a lazily constructed task graph:
+
+      .. code-block:: python
+
+         @dask.delayed
+         def inc(x):
+            return x + 1
+
+         @dask.delayed
+         def add(x, y):
+            return x + y
+
+         a = inc(1)       # no work has happened yet
+         b = inc(2)       # no work has happened yet
+         c = add(a, b)    # no work has happened yet
+
+         c = c.compute()  # This triggers all of the above computations
+
+   .. group-tab:: Futures: Immediate
+
+      Unlike the interfaces described so far, Futures are eager. Computation starts as soon
+      as the function is submitted.
+
+      .. code-block:: python
+
+         from dask.distributed import Client
+         client = Client()
+
+         def inc(x):
+            return x + 1
+
+         def add(x, y):
+            return x + y
+
+         a = client.submit(inc, 1)     # work starts immediately
+         b = client.submit(inc, 2)     # work starts immediately
+         c = client.submit(add, a, b)  # work starts immediately
+
+         c = c.result()                # block until work finishes, then gather result
+
+      .. note::
+
+         Futures can only be used with distributed cluster. See the section below for more
+         information.
+
 
 Scheduling
 ----------
@@ -378,7 +432,7 @@ on both single and multiple machines. Think of it as the "advanced scheduler".
          <Client: 'tcp://127.0.0.1:41703' processes=4 threads=12, memory=31.08 GiB>
 
       There are a variety of ways to set up a remote cluster. Refer to
-      :doc:`how to deploy dask clusters <how-to/deploy-dask-clusters>` for more
+      :doc:`how to deploy dask clusters <setup>` for more
       information.
 
 Once you create a client, any computation will run on the cluster that it points to.

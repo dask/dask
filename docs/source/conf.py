@@ -357,7 +357,6 @@ redirect_files = [
     ("cite.html", "faq.html#how-do-I-cite-dask"),
     ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
     ("debugging.html", "how-to/debug"),
-    ("setup.html", "how-to/deploy-dask-clusters"),
 ]
 
 
