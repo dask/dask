@@ -435,7 +435,6 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
     lib_version = parse_version(lib.__version__)
@@ -477,7 +476,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    tm.assert_frame_equal(data, df2.compute())
+    pd.testing.assert_frame_equal(data, df2.compute())
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
@@ -486,7 +485,6 @@ def test_parquet_append(s3, engine, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    from dask.dataframe._compat import tm
 
     url = "s3://%s/test.parquet.append" % test_bucket_name
 
@@ -528,7 +526,7 @@ def test_parquet_append(s3, engine, s3so):
         storage_options=s3so,
     )
 
-    tm.assert_frame_equal(
+    pd.testing.assert_frame_equal(
         pd.concat([data, data], ignore_index=True),
         df2.compute().reset_index(drop=True),
     )
