@@ -697,8 +697,10 @@ def map_blocks(
     if drop_axis:
         ndim_out = len(out_ind)
         if any(i < -ndim_out or i >= ndim_out for i in drop_axis):
-            raise ValueError(f"drop_axis out of range (drop_axis={drop_axis}, "
-                             f"but output is {ndim_out}d).")
+            raise ValueError(
+                f"drop_axis out of range (drop_axis={drop_axis}, "
+                f"but output is {ndim_out}d)."
+            )
         drop_axis = [i % ndim_out for i in drop_axis]
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):

@@ -3131,7 +3131,9 @@ def test_map_blocks_with_negative_drop_axis():
 
     for drop_axis in [0, -2]:
         # test with equivalent positive and negative drop_axis
-        e = d.map_blocks(lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype)
+        e = d.map_blocks(
+            lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype
+        )
         assert e.chunks == ((4, 4),)
         assert_eq(e, x.sum(axis=0))
 
@@ -3142,7 +3144,9 @@ def test_map_blocks_with_invalid_drop_axis():
 
     for drop_axis in [x.ndim, -x.ndim - 1]:
         with pytest.raises(ValueError):
-            d.map_blocks(lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype)
+            d.map_blocks(
+                lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype
+            )
 
 
 def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
