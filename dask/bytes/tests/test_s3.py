@@ -476,7 +476,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    pd.testing.assert_frame_equal(data, df2.compute())
+    dd.utils.assert_eq(data, df2)
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
@@ -526,9 +526,10 @@ def test_parquet_append(s3, engine, s3so):
         storage_options=s3so,
     )
 
-    pd.testing.assert_frame_equal(
-        pd.concat([data, data], ignore_index=True),
-        df2.compute().reset_index(drop=True),
+    dd.utils.assert_eq(
+        pd.concat([data, data]),
+        df2,
+        check_index=False,
     )
 
 
