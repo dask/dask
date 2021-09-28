@@ -1,6 +1,6 @@
 numpydoc
 sphinx>=4.0.0
-git+https://github.com/jsignell/dask-sphinx-theme@docs-refresh
+git+https://github.com/jacobtomlinson/dask-sphinx-theme@book-theme
 sphinx-click
 sphinx-tabs
 toolz
