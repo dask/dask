@@ -4212,7 +4212,7 @@ class DataFrame(_Frame):
         ascending: bool, optional
             Sort ascending vs. descending.
             Defaults to True.
-        na_position: bool, optional
+        na_position: {'last', 'first'}, optional
             Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
             Defaults to 'last'.
 
