@@ -1118,27 +1118,6 @@ class ArrowDatasetEngine(Engine):
             # Use 128 files per task by deault
             metadata_task_size = 128
 
-        # Add common kwargs
-        common_kwargs = {
-            "partitioning": partitioning_method,
-            "partitions": partitions,
-            "categories": categories,
-            "filters": filters,
-            "schema": schema,
-        }
-
-        # Check if this is a very simple case where we can just return
-        # the path names
-        if not gather_statistics and not (split_row_groups or filters):
-            return (
-                [
-                    {"piece": (full_path, None, None)}
-                    for full_path in sorted(ds.files, key=natural_sort_key)
-                ],
-                [],
-                common_kwargs,
-            )
-
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
         # We also don't "need" to gather statistics if we don't
@@ -1174,6 +1153,27 @@ class ArrowDatasetEngine(Engine):
         # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
+
+        # Add common kwargs
+        common_kwargs = {
+            "partitioning": partitioning_method,
+            "partitions": partitions,
+            "categories": categories,
+            "filters": filters,
+            "schema": schema,
+        }
+
+        # Check if this is a very simple case where we can just return
+        # the path names
+        if gather_statistics is False and not split_row_groups:
+            return (
+                [
+                    {"piece": (full_path, None, None)}
+                    for full_path in sorted(ds.files, key=natural_sort_key)
+                ],
+                [],
+                common_kwargs,
+            )
 
         # Get/transate filters
         ds_filters = None

@@ -427,7 +427,7 @@ class FastParquetEngine(Engine):
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
-                if gather_statistics is False:
+                if not gather_statistics:
                     parts = [fs.sep.join([base, fn]) for fn in fns]
         else:
             # This is a list of files
@@ -456,7 +456,7 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
-                if gather_statistics is False:
+                if not gather_statistics:
                     parts = paths.copy()
 
         # Check the `aggregate_files` setting
@@ -623,23 +623,6 @@ class FastParquetEngine(Engine):
             # Use 128 files per task by deault
             metadata_task_size = 128
 
-        # Define common_kwargs
-        common_kwargs = {
-            "categories": categories_dict or categories,
-            "root_cats": pf.cats,
-            "root_file_scheme": pf.file_scheme,
-            "root_path": base_path,
-        }
-
-        # Check if `parts` is just a list of paths
-        # (not splitting by row-group or collecting statistics)
-        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
-            return (
-                [{"piece": (full_path, None)} for full_path in parts],
-                [],
-                common_kwargs,
-            )
-
         # We don't "need" to gather statistics if we don't
         # want to apply filters, aggregate files, or calculate
         # divisions.
@@ -683,6 +666,31 @@ class FastParquetEngine(Engine):
         # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
+
+        # Define common_kwargs
+        common_kwargs = {
+            "categories": categories_dict or categories,
+            "root_cats": pf.cats,
+            "root_file_scheme": pf.file_scheme,
+            "root_path": base_path,
+        }
+
+        # Check if this is a very simple case where we can just
+        # return the path names. This requires that `parts`
+        # already be a list of paths. Also, we cannot be splitting
+        # by row-group or collecting statistics.
+        if (
+            gather_statistics is False
+            and not split_row_groups
+            and isinstance(parts, list)
+            and len(parts)
+            and isinstance(parts[0], str)
+        ):
+            return (
+                [{"piece": (full_path, None)} for full_path in parts],
+                [],
+                common_kwargs,
+            )
 
         dataset_info_kwargs = {
             "fs": fs,
