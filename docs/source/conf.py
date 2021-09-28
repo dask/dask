@@ -372,8 +372,6 @@ redirect_template = """\
 </html>
 """
 
-html_css_files = ["_static/theme_overrides.css"]  # override wide tables in RTD theme
-
 # Rate limiting issue for github: https://github.com/sphinx-doc/sphinx/issues/7388
 linkcheck_ignore = [
     r"^https?:\/\/(?:www\.)?github.com\/",
