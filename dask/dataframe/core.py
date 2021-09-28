@@ -4210,8 +4210,11 @@ class DataFrame(_Frame):
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
         ascending: bool, optional
-            Non ascending sort is not supported by Dask.
+            Sort ascending vs. descending.
             Defaults to True.
+        na_position: bool, optional
+            Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
+            Defaults to 'last'.
 
         Examples
         --------
