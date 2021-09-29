@@ -785,25 +785,18 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
-    try:
-        if ascending:
-            partitions = divisions.searchsorted(s, side="right") - 1
-        else:
-            partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
-    except TypeError:
-        # `searchsorted` fails if `s` contains nulls and strings
-        partitions = np.empty(len(s), dtype="int32")
-        not_null = s.notna()
-        if ascending:
-            partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
-        else:
-            partitions[not_null] = (
-                len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
-            )
+    partitions = np.zeros(len(s))
+    not_null = s.notna().values
+    if ascending:
+        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
+    else:
+        partitions[not_null] = (
+            len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
+        )
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
-    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
