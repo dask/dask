@@ -847,19 +847,18 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
-@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
     "engine",
     [
-        "cudf",
         pytest.param(
             "pandas",
             marks=pytest.mark.xfail(
                 reason="Pandas does not support leftsemi or leftanti"
             ),
         ),
+        pytest.param("cudf", marks=pytest.mark.gpu),
     ],
 )
 def test_merge_tasks_semi_anti_cudf(engine, how, parts):
@@ -2148,8 +2147,9 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer

@@ -2240,8 +2240,13 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pandas",
+        pytest.param("cudf", marks=pytest.mark.gpu),
+    ],
+)
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":
