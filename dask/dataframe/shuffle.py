@@ -806,7 +806,7 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
-    partitions[pd.isna(s).values] = len(divisions) - 2 if na_position == "last" else 0
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
