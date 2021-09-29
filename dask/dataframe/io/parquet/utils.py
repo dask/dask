@@ -681,10 +681,10 @@ def _set_metadata_task_size(metadata_task_size, fs):
     # if the kwarg value was not specified
     if metadata_task_size is None:
         # If a default value is not specified in the config file,
-        # we use "128" for remote file systems and "0" otherwise
-        if isinstance(fs, LocalFileSystem):
-            return config.get("dataframe.parquet.metadata-task-size-local", 0)
-        else:
-            return config.get("dataframe.parquet.metadata-task-size-remote", 128)
+        # otherwise we use "0"
+        config_str = "dataframe.parquet." + (
+            "local" if isinstance(fs, LocalFileSystem) else "remote"
+        )
+        return config.get(config_str, 0)
 
     return metadata_task_size
