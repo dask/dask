@@ -682,7 +682,7 @@ def _set_metadata_task_size(metadata_task_size, fs):
     if metadata_task_size is None:
         # If a default value is not specified in the config file,
         # otherwise we use "0"
-        config_str = "dataframe.parquet." + (
+        config_str = "dataframe.parquet.metadata-task-size-" + (
             "local" if isinstance(fs, LocalFileSystem) else "remote"
         )
         return config.get(config_str, 0)
