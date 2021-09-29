@@ -754,7 +754,7 @@ class FastParquetEngine(Engine):
     ):
 
         # Check if metadata_task_size is set
-        if metadata_task_size is not None:
+        if metadata_task_size:
             raise ValueError("metadata_task_size not supported in FastParquetEngine")
 
         # Define the parquet-file (pf) object to use for metadata,

@@ -218,8 +218,7 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        cache_type = "none" if columns or row_groups != [None] else "all"
-        with fs.open(path, mode="rb", cache_type=cache_type) as fil:
+        with fs.open(path, mode="rb") as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,
@@ -325,15 +324,15 @@ class ArrowDatasetEngine(Engine):
         dataset_info = cls._collect_dataset_info(
             paths,
             fs,
-            categories=categories,
-            index=index,
-            gather_statistics=gather_statistics,
-            filters=filters,
-            split_row_groups=split_row_groups,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
-            ignore_metadata_file=ignore_metadata_file,
-            metadata_task_size=metadata_task_size,
+            categories,
+            index,
+            gather_statistics,
+            filters,
+            split_row_groups,
+            chunksize,
+            aggregate_files,
+            ignore_metadata_file,
+            metadata_task_size,
             **kwargs.get("dataset", {}),
         )
 
@@ -748,15 +747,15 @@ class ArrowDatasetEngine(Engine):
         cls,
         paths,
         fs,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        chunksize=None,
-        aggregate_files=None,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
+        chunksize,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
         **dataset_kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -1670,15 +1669,15 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         cls,
         paths,
         fs,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        chunksize=None,
-        aggregate_files=None,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
+        chunksize,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
         **dataset_kwargs,
     ):
         """pyarrow-legacy version of _collect_dataset_info
