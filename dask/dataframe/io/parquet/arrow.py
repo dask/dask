@@ -776,7 +776,7 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwarg" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        partitioning_method = _dataset_kwargs.pop(
+        partitioning = _dataset_kwargs.pop(
             "partitioning",
             {"obj": pa_ds.HivePartitioning},
         )
@@ -800,9 +800,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=partitioning_method["obj"].discover(
-                        *partitioning_method.get("args", []),
-                        **partitioning_method.get("kwargs", {}),
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 has_metadata_file = True
@@ -819,9 +819,9 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=fs,
-                        partitioning=partitioning_method["obj"].discover(
-                            *partitioning_method.get("args", []),
-                            **partitioning_method.get("kwargs", {}),
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
                         ),
                     )
                     has_metadata_file = True
@@ -839,9 +839,9 @@ class ArrowDatasetEngine(Engine):
                 paths,
                 filesystem=fs,
                 format="parquet",
-                partitioning=partitioning_method["obj"].discover(
-                    *partitioning_method.get("args", []),
-                    **partitioning_method.get("kwargs", {}),
+                partitioning=partitioning["obj"].discover(
+                    *partitioning.get("args", []),
+                    **partitioning.get("kwargs", {}),
                 ),
             )
 
@@ -870,11 +870,6 @@ class ArrowDatasetEngine(Engine):
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
-        #
-        # TODO: We should be able to avoid this pass over the file
-        # fragments if we are not converting hive-partitioned columns
-        # to "category" data-types.
-        #
         partition_obj = []  # See `partition_info` description below
         hive_categories = defaultdict(list)
         file_frag = None
@@ -938,7 +933,7 @@ class ArrowDatasetEngine(Engine):
         #          pyarrow.dataset-based logic.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
-        #    - "partitioning_method" : (dict) The `partitioning` options
+        #    - "partitioning" : (dict) The `partitioning` options
         #          used for file discovory by pyarrow.
         #
         return {
@@ -958,7 +953,7 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
             "partition_names": partition_names,
-            "partitioning_method": partitioning_method,
+            "partitioning": partitioning,
             "metadata_task_size": metadata_task_size,
         }
 
@@ -1105,7 +1100,7 @@ class ArrowDatasetEngine(Engine):
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
         partition_names = dataset_info["partition_names"]
-        partitioning_method = dataset_info["partitioning_method"]
+        partitioning = dataset_info["partitioning"]
         partitions = dataset_info["partitions"]
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["has_metadata_file"]
@@ -1155,7 +1150,7 @@ class ArrowDatasetEngine(Engine):
 
         # Add common kwargs
         common_kwargs = {
-            "partitioning": partitioning_method,
+            "partitioning": partitioning,
             "partitions": partitions,
             "categories": categories,
             "filters": filters,
@@ -1184,7 +1179,7 @@ class ArrowDatasetEngine(Engine):
             "fs": fs,
             "split_row_groups": split_row_groups,
             "gather_statistics": gather_statistics,
-            "partitioning_method": partitioning_method,
+            "partitioning": partitioning,
             "filters": filters,
             "ds_filters": ds_filters,
             "schema": schema,
@@ -1283,15 +1278,15 @@ class ArrowDatasetEngine(Engine):
                 ], None
 
             # Need more information - convert the path to a fragment
-            partitioning_method = dataset_info_kwargs["partitioning_method"]
+            partitioning = dataset_info_kwargs["partitioning"]
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=fs,
                     format="parquet",
-                    partitioning=partitioning_method["obj"].discover(
-                        *partitioning_method.get("args", []),
-                        **partitioning_method.get("kwargs", {}),
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 ).get_fragments()
             )
@@ -1690,7 +1685,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if ignore_metadata_file:
             raise ValueError("ignore_metadata_file not supported in ArrowLegacyEngine")
 
-        if metadata_task_size is not None:
+        if metadata_task_size:
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
         (
