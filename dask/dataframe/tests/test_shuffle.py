@@ -592,13 +592,26 @@ def test_set_index_sorts():
     assert ddf.set_index("timestamp").index.compute().is_monotonic is True
 
 
-def test_set_index():
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
+def test_set_index(engine):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        dask_cudf = pytest.importorskip("dask_cudf")
+
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 2, 6]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 5, 8]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [9, 1, 8]}, index=[9, 9, 9]),
     }
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+
+    if engine == "cudf":
+        d = dask_cudf.from_dask_dataframe(d)
+
     full = d.compute()
 
     d2 = d.set_index("b", npartitions=3)
