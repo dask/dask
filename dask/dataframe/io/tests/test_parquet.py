@@ -3687,19 +3687,30 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     )
 
     # Read back
-    if engine != "pyarrow-legacy":
+    if engine == "pyarrow-dataset" or not metadata_task_size:
         ddf2a = dd.read_parquet(
             str(tmpdir),
             engine=engine,
             gather_statistics=True,
-            metadata_task_size=metadata_task_size,
         )
         ddf2b = dd.read_parquet(
             str(tmpdir),
             engine=engine,
             gather_statistics=True,
+            metadata_task_size=metadata_task_size,
         )
         assert_eq(ddf2a, ddf2b)
+
+        with dask.config.set(
+            {"dataframe.parquet.metadata-task-size-local": metadata_task_size}
+        ):
+            ddf2c = dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+            )
+        assert_eq(ddf2b, ddf2c)
+
     else:
         # Check that other engines raise a ValueError
         with pytest.raises(ValueError):

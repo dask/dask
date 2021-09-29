@@ -182,11 +182,14 @@ def read_parquet(
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
         metadata may be gathered and processed in parallel. Parallel metadata
         processing is currently supported for ``ArrowDatasetEngine`` only.
-    metadata_task_size : int, default engine-specific
+    metadata_task_size : int, default configurable
         If parquet metadata is processed in parallel (see ``ignore_metadata_file``
         description above), this argument can be used to specify the number of
         dataset files to be processed by each task in the Dask graph.  If this
         argument is set to ``0``, parallel metadata processing will be disabled.
+        The default values for local and remote filesystems can be specified
+        with the "metadata-task-size-local" and "metadata-task-size-remote"
+        config fields, respectively (see "dataframe.parquet").
     split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).

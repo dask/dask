@@ -35,6 +35,7 @@ from .utils import (
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
+    _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
 
@@ -358,15 +359,15 @@ class FastParquetEngine(Engine):
         cls,
         paths,
         fs,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        chunksize=None,
-        aggregate_files=None,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
+        chunksize,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
         **kwargs,
     ):
 
@@ -618,10 +619,11 @@ class FastParquetEngine(Engine):
         has_metadata_file = dataset_info["has_metadata_file"]
         metadata_task_size = dataset_info["metadata_task_size"]
 
-        # Check metadata_task_size setting
-        if metadata_task_size is None:
-            # Use 128 files per task by deault
-            metadata_task_size = 128
+        # Ensure metadata_task_size is set
+        # (Using config file or defaults)
+        metadata_task_size = _set_metadata_task_size(
+            dataset_info["metadata_task_size"], fs
+        )
 
         # We don't "need" to gather statistics if we don't
         # want to apply filters, aggregate files, or calculate
@@ -844,15 +846,15 @@ class FastParquetEngine(Engine):
         dataset_info = cls._collect_dataset_info(
             paths,
             fs,
-            categories=categories,
-            index=index,
-            gather_statistics=gather_statistics,
-            filters=filters,
-            split_row_groups=split_row_groups,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
-            ignore_metadata_file=ignore_metadata_file,
-            metadata_task_size=metadata_task_size,
+            categories,
+            index,
+            gather_statistics,
+            filters,
+            split_row_groups,
+            chunksize,
+            aggregate_files,
+            ignore_metadata_file,
+            metadata_task_size,
             **{
                 # Support "file" key for backward compat
                 **kwargs.get("file", {}),
