@@ -785,7 +785,7 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
-    partitions = np.zeros(len(s))
+    partitions = np.zeros_like(s)
     not_null = s.notna().values
     if ascending:
         partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
