@@ -709,7 +709,11 @@ class FastParquetEngine(Engine):
             "has_metadata_file": has_metadata_file,
         }
 
-        if has_metadata_file or metadata_task_size == 0 or len(paths) == 1:
+        if (
+            has_metadata_file
+            or metadata_task_size == 0
+            or metadata_task_size > len(paths)
+        ):
             # Use original `ParquetFile` object to construct plan,
             # since it is based on a global _metadata file
             pf_or_paths = pf if has_metadata_file else paths
