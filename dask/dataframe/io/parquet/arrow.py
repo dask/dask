@@ -1086,7 +1086,7 @@ class ArrowDatasetEngine(Engine):
         that should be passed to the ``read_partition`` call for
         every output partition).
 
-        This method is overridden in `ArrowDatasetEngine`.
+        This method is overridden in `ArrowLegacyEngine`.
         """
 
         # Collect necessary dataset information from dataset_info
