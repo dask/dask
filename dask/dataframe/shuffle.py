@@ -791,11 +791,8 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
         else:
             partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     except TypeError:
-        # When `searchsorted` fails with `TypeError`, it may be
-        # caused by nulls in `s`. Try again with the null-values
-        # explicitly mapped to the first partition.
+        # `searchsorted` fails if `s` contains nulls and strings
         partitions = np.empty(len(s), dtype="int32")
-        partitions[s.isna()] = 0
         not_null = s.notna()
         if ascending:
             partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
@@ -806,7 +803,7 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
-    partitions[pd.isna(s).values] = len(divisions) - 2 if na_position == "last" else 0
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
