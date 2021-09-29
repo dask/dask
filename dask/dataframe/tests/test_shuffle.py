@@ -633,8 +633,9 @@ def test_set_index(engine):
     assert_eq(d5, full.set_index(["b"]))
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
@@ -661,8 +662,9 @@ def test_set_index_interpolate(engine):
     assert d2.divisions[3] == 2.0
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate_int(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
@@ -684,8 +686,9 @@ def test_set_index_interpolate_int(engine):
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate_large_uint(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
