@@ -3687,7 +3687,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     )
 
     # Read back
-    if engine == "pyarrow-dataset" or not metadata_task_size:
+    if engine != "pyarrow-legacy" or not metadata_task_size:
         ddf2a = dd.read_parquet(
             str(tmpdir),
             engine=engine,
