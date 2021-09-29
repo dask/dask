@@ -174,10 +174,10 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with suppress(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
