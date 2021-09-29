@@ -26,6 +26,7 @@ from .utils import (
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
+    _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
 
@@ -315,7 +316,7 @@ class ArrowDatasetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
-        metadata_task_size=None,
+        metadata_task_size=0,
         **kwargs,
     ):
 
@@ -1104,12 +1105,12 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
-        metadata_task_size = dataset_info["metadata_task_size"]
 
-        # Check metadata_task_size setting
-        if metadata_task_size is None:
-            # Use 128 files per task by deault
-            metadata_task_size = 128
+        # Ensure metadata_task_size is set
+        # (Using config file or defaults)
+        metadata_task_size = _set_metadata_task_size(
+            dataset_info["metadata_task_size"], fs
+        )
 
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
