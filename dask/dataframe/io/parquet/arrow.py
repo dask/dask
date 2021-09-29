@@ -1,5 +1,4 @@
 import json
-import re
 import warnings
 from collections import defaultdict
 from datetime import datetime
@@ -887,8 +886,8 @@ class ArrowDatasetEngine(Engine):
             #
             # Note that `_get_partition_keys` does NOT preserve the
             # partition-hierarchy order of the keys. Therefore, we
-            # use custom regex logic to determine the "correct"
-            # ordering of the `categories` output.
+            # use custom logic to determine the "correct" oredering
+            # of the `categories` output.
             #
             # Example (why we need to "reorder" `categories`):
             #
@@ -903,9 +902,9 @@ class ArrowDatasetEngine(Engine):
             #        dict_keys(['c', 'b'])
             #
             cat_keys = [
-                o.split("=")[0]
-                # Assume arrow always uses a normalized "/" sep
-                for o in re.findall("[^/]*=", file_frag.path)
+                part.split("=")[0]
+                for part in file_frag.path.split(fs.sep)
+                if "=" in part
             ]
             if set(hive_categories) == set(cat_keys):
                 hive_categories = {
