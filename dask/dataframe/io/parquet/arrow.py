@@ -1190,7 +1190,11 @@ class ArrowDatasetEngine(Engine):
         }
 
         # Main parts/stats-construction
-        if has_metadata_file or metadata_task_size == 0:
+        if (
+            has_metadata_file
+            or metadata_task_size == 0
+            or metadata_task_size > len(ds.files)
+        ):
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
 

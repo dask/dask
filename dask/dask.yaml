@@ -3,8 +3,8 @@ temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /l
 dataframe:
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
   parquet:
-    metadata-task-size-local: 0  # Number of files per local metadata-processing task
-    metadata-task-size-remote: 128  # Number of files per remote metadata-processing task
+    metadata-task-size-local: 512  # Number of files per local metadata-processing task
+    metadata-task-size-remote: 16  # Number of files per remote metadata-processing task
 
 array:
   svg:
