@@ -72,7 +72,6 @@ jobs:
       always()
       && github.event_name != 'pull_request'
       && github.repository == 'dask/dask'
-      && needs.check.outputs.test-upstream == 'true'
       && needs.build.result == 'failure'
     runs-on: ubuntu-latest
     defaults:
