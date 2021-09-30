@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.9
+  - packaging
   - numpy
   - pandas
   # test dependencies
@@ -60,6 +61,7 @@ dependencies:
   - pandas-datareader
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed

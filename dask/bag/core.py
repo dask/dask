@@ -77,9 +77,11 @@ def lazify_task(task, start=True):
 
     Examples
     --------
-    >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
-    >>> lazify_task(task)  # doctest: +SKIP
-    (sum, (map, inc, [1, 2, 3]))
+    >>> def inc(x):
+    ...     return x + 1
+    >>> task = (sum, (list, (map, inc, [1, 2, 3])))
+    >>> lazify_task(task)  # doctest: +ELLIPSIS
+    (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
     if type(task) is list and len(task) < 50:
         return [lazify_task(arg, False) for arg in task]
@@ -108,9 +110,9 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
     """Inline lists that are only used once.
 
     >>> d = {'b': (list, 'a'),
-    ...      'c': (f, 'b', 1)}     # doctest: +SKIP
-    >>> inline_singleton_lists(d)  # doctest: +SKIP
-    {'c': (f, (list, 'a'), 1)}
+    ...      'c': (sum, 'b', 1)}
+    >>> inline_singleton_lists(d, 'c')
+    {'c': (<built-in function sum>, (<class 'list'>, 'a'), 1)}
 
     Pairs nicely with lazify afterwards.
     """
@@ -131,7 +133,7 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
 
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
-    """ Optimize a dask from a dask Bag. """
+    """Optimize a dask from a dask Bag."""
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     kwargs = {}
@@ -329,7 +331,7 @@ class StringAccessor:
 
 
 def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc. """
+    """A weak version of wraps that only copies doc."""
 
     def _(wrapped):
         wrapped.__doc__ = wrapper.__doc__
@@ -432,7 +434,7 @@ class Bag(DaskMethodsMixin):
 
     >>> import dask.bag as db
     >>> b = db.from_sequence(range(5))
-    >>> list(b.filter(lambda x: x % 2 == 0).map(lambda x: x * 10))  # doctest: +SKIP
+    >>> list(b.filter(lambda x: x % 2 == 0).map(lambda x: x * 10))
     [0, 20, 40]
 
     Create Bag from filename or globstring of filenames
@@ -446,10 +448,10 @@ class Bag(DaskMethodsMixin):
     ...        ('x', 2): (range, 5)}
     >>> b = db.Bag(dsk, 'x', npartitions=3)
 
-    >>> sorted(b.map(lambda x: x * 10))  # doctest: +SKIP
+    >>> sorted(b.map(lambda x: x * 10))
     [0, 0, 0, 10, 10, 10, 20, 20, 20, 30, 30, 30, 40, 40, 40]
 
-    >>> int(b.fold(lambda x, y: x + y))  # doctest: +SKIP
+    >>> int(b.fold(lambda x, y: x + y))
     30
     """
 
@@ -633,7 +635,7 @@ class Bag(DaskMethodsMixin):
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.filter(iseven))  # doctest: +SKIP
+        >>> list(b.filter(iseven))
         [0, 2, 4]
         """
         name = "filter-{0}-{1}".format(funcname(predicate), tokenize(self, predicate))
@@ -687,7 +689,7 @@ class Bag(DaskMethodsMixin):
 
         >>> import dask.bag as db
         >>> b = db.from_sequence(range(5))
-        >>> list(b.remove(iseven))  # doctest: +SKIP
+        >>> list(b.remove(iseven))
         [1, 3]
         """
         name = "remove-{0}-{1}".format(funcname(predicate), tokenize(self, predicate))
@@ -747,9 +749,9 @@ class Bag(DaskMethodsMixin):
         >>> import dask.bag as db
         >>> b = db.from_sequence([{'name': 'Alice', 'credits': [1, 2, 3]},
         ...                       {'name': 'Bob',   'credits': [10, 20]}])
-        >>> list(b.pluck('name'))  # doctest: +SKIP
+        >>> list(b.pluck('name'))
         ['Alice', 'Bob']
-        >>> list(b.pluck('credits').pluck(0))  # doctest: +SKIP
+        >>> list(b.pluck('credits').pluck(0))
         [1, 10]
         """
         name = "pluck-" + tokenize(self, key, default)
@@ -1047,44 +1049,44 @@ class Bag(DaskMethodsMixin):
             return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
-        """ Sum all elements """
+        """Sum all elements"""
         return self.reduction(sum, sum, split_every=split_every)
 
     def max(self, split_every=None):
-        """ Maximum element """
+        """Maximum element"""
         return self.reduction(max, max, split_every=split_every)
 
     def min(self, split_every=None):
-        """ Minimum element """
+        """Minimum element"""
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """Are any of the elements truthy? 
-        
+        """Are any of the elements truthy?
+
         Examples
         --------
         >>> import dask.bag as db
         >>> bool_bag = db.from_sequence([True, True, False])
         >>> bool_bag.any().compute()
-        True         
+        True
         """
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """Are all elements truthy? 
-        
+        """Are all elements truthy?
+
         Examples
         --------
         >>> import dask.bag as db
         >>> bool_bag = db.from_sequence([True, True, False])
         >>> bool_bag.all().compute()
-        False        
+        False
         """
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """Count the number of elements. 
-        
+        """Count the number of elements.
+
         Examples
         --------
         >>> import dask.bag as db
@@ -1095,7 +1097,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(count, sum, split_every=split_every)
 
     def mean(self):
-        """ Arithmetic mean """
+        """Arithmetic mean"""
 
         def mean_chunk(seq):
             total, n = 0.0, 0
@@ -1111,13 +1113,13 @@ class Bag(DaskMethodsMixin):
         return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
     def var(self, ddof=0):
-        """ Variance """
+        """Variance"""
         return self.reduction(
             chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
         )
 
     def std(self, ddof=0):
-        """ Standard deviation """
+        """Standard deviation"""
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
@@ -1190,7 +1192,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
-        """ Cartesian product between two bags. """
+        """Cartesian product between two bags."""
         assert isinstance(other, Bag)
         name = "product-" + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
@@ -1588,7 +1590,7 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta(meta)
+            meta = dd.utils.make_meta(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)
@@ -1706,7 +1708,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
-    """ Partition a bag along a grouper, store partitions on disk. """
+    """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
@@ -1717,7 +1719,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
 
 
 def collect(grouper, group, p, barrier_token):
-    """ Collect partitions from disk and yield k,v group pairs. """
+    """Collect partitions from disk and yield k,v group pairs."""
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
 
@@ -1774,22 +1776,22 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')  # doctest: +SKIP
-    >>> a.npartitions  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')
+    >>> a.npartitions
     1
 
     >>> a.take(8)  # doctest: +SKIP
     (b'Dask\\n',
      b'====\\n',
      b'\\n',
-     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|\\n',
      b'\\n',
      b'Dask is a flexible parallel computing library for analytics.  See\\n',
      b'documentation_ for more information.\\n',
      b'\\n')
 
-    >>> b = from_url(['http://github.com', 'http://google.com'])  # doctest: +SKIP
-    >>> b.npartitions  # doctest: +SKIP
+    >>> b = from_url(['http://github.com', 'http://google.com'])
+    >>> b.npartitions
     2
     """
     if isinstance(urls, str):
@@ -1952,18 +1954,19 @@ def bag_zip(*bags):
 
     Incorrect usage:
 
-    >>> numbers = db.range(20) # doctest: +SKIP
-    >>> fizz = numbers.filter(lambda n: n % 3 == 0) # doctest: +SKIP
-    >>> buzz = numbers.filter(lambda n: n % 5 == 0) # doctest: +SKIP
-    >>> fizzbuzz = db.zip(fizz, buzz) # doctest: +SKIP
-    >>> list(fizzbuzzz) # doctest: +SKIP
+    >>> numbers = db.range(31, npartitions=1)
+    >>> fizz = numbers.filter(lambda n: n % 3 == 0)
+    >>> buzz = numbers.filter(lambda n: n % 5 == 0)
+    >>> fizzbuzz = db.zip(fizz, buzz)
+    >>> list(fizzbuzz)
     [(0, 0), (3, 5), (6, 10), (9, 15), (12, 20), (15, 25), (18, 30)]
 
     When what you really wanted was more along the lines of the following:
 
-    >>> list(fizzbuzzz) # doctest: +SKIP
-    [(0, 0), (3, None), (None, 5), (6, None), (None 10), (9, None),
-    (12, None), (15, 15), (18, None), (None, 20), (None, 25), (None, 30)]
+    >>> list(fizzbuzz) # doctest: +SKIP
+    (0, 0), (3, None), (None, 5), (6, None), (9, None), (None, 10),
+    (12, None), (15, 15), (18, None), (None, 20),
+    (21, None), (24, None), (None, 25), (27, None), (30, 30)
     """
     npartitions = bags[0].npartitions
     assert all(bag.npartitions == npartitions for bag in bags)

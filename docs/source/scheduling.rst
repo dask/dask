@@ -198,13 +198,19 @@ specify the desired number of workers:
    with dask.config.set(num_workers=4):
        x.compute()
 
-Note that Dask also supports custom ``concurrent.futures.Executor`` subclasses, such as the 
-reusable ``ProcessPoolExecutor`` from loky_:
+Note that Dask also supports custom ``concurrent.futures.Executor`` subclasses,
+such as the ``ReusablePoolExecutor`` from loky_:
 
 .. _loky: https://github.com/joblib/loky
 
 .. code-block:: python
 
    from loky import get_reusable_executor
-   with dask.config.set(pool=get_reusable_executor(max_workers=4)):
+   with dask.config.set(scheduler=get_reusable_executor()):
        x.compute()
+
+Other libraries like ipyparallel_ and mpi4py_ also supply
+``concurrent.futures.Executor`` subclasses that could be used as well.
+
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/examples/Futures.html#Executors
+.. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.futures.html

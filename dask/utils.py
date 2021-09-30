@@ -6,16 +6,17 @@ import shutil
 import sys
 import tempfile
 import uuid
+import warnings
 from _thread import RLock
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, TypeVar
+from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
@@ -36,6 +37,63 @@ def apply(func, args, kwargs=None):
         return func(*args)
 
 
+def _deprecated(
+    *,
+    version: str = None,
+    message: str = None,
+    use_instead: str = None,
+    category: Type[Warning] = FutureWarning,
+):
+    """Decorator to mark a function as deprecated
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of Dask in which the function was deprecated.
+        If specified, the version will be included in the default
+        warning message.
+    message : str, optional
+        Custom warning message to raise.
+    use_instead : str, optional
+        Name of function to use in place of the deprecated function.
+        If specified, this will be included in the default warning
+        message.
+    category : type[Warning], optional
+        Type of warning to raise. Defaults to ``FutureWarning``.
+
+    Examples
+    --------
+
+    >>> from dask.utils import _deprecated
+    >>> @_deprecated(version="X.Y.Z", use_instead="bar")
+    ... def foo():
+    ...     return "baz"
+    """
+
+    def decorator(func):
+        if message is None:
+            msg = f"{func.__name__} "
+            if version is not None:
+                msg += f"was deprecated in version {version} "
+            else:
+                msg += "is deprecated "
+            msg += "and will be removed in a future release."
+
+            if use_instead is not None:
+                msg += f" Please use {use_instead} instead."
+        else:
+            msg = message
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(msg, category=category, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
+
+
 def deepmap(func, *seqs):
     """Apply function inside nested lists
 
@@ -53,6 +111,7 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+@_deprecated()
 def homogeneous_deepmap(func, seq):
     if not seq:
         return seq
@@ -84,12 +143,13 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.suppress from the standard library"
+)
 @contextmanager
 def ignoring(*exceptions):
-    try:
+    with suppress(*exceptions):
         yield
-    except exceptions:
-        pass
 
 
 def import_required(mod_name, error_msg):
@@ -114,10 +174,10 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with ignoring(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
@@ -130,10 +190,10 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                with ignoring(OSError):
+                with suppress(OSError):
                     shutil.rmtree(dirname)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(dirname)
 
 
@@ -169,9 +229,13 @@ def tmp_cwd(dir=None):
             yield dirname
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.nullcontext from the standard library"
+)
 @contextmanager
 def noop_context():
-    yield
+    with nullcontext():
+        yield
 
 
 class IndexCallable:
@@ -207,7 +271,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else noop_context()):
+    with (tmp_cwd() if use_tmpdir else nullcontext()):
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -226,7 +290,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
         for filename in d:
             if os.path.exists(filename):
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 
@@ -480,28 +544,26 @@ class Dispatch:
 
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
-        # Fast path with direct lookup on cls
         lk = self._lookup
-        try:
-            impl = lk[cls]
-        except KeyError:
-            pass
-        else:
-            return impl
-        # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition(".")
-        try:
-            register = self._lazy.pop(toplevel)
-        except KeyError:
-            pass
-        else:
-            register()
-            return self.dispatch(cls)  # recurse
-        # Walk the MRO and cache the lookup result
-        for cls2 in inspect.getmro(cls)[1:]:
-            if cls2 in lk:
-                lk[cls] = lk[cls2]
-                return lk[cls2]
+        for cls2 in cls.__mro__:
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
+            # Is a lazy registration function present?
+            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                register = self._lazy.pop(toplevel)
+            except KeyError:
+                pass
+            else:
+                register()
+                return self.dispatch(cls)  # recurse
         raise TypeError("No dispatch for {0}".format(cls))
 
     def __call__(self, arg, *args, **kwargs):
@@ -609,7 +671,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
 
 
 def unsupported_arguments(doc, args):
-    """ Mark unsupported arguments with a disclaimer """
+    """Mark unsupported arguments with a disclaimer"""
     lines = doc.split("\n")
     for arg in args:
         subset = [
@@ -623,8 +685,10 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
-    """ Helper function for derived_from to ease testing """
+def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
+    """Helper function for derived_from to ease testing"""
+    ua_args = ua_args or []
+
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -663,7 +727,7 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
+def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -684,6 +748,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
     """
+    ua_args = ua_args or []
 
     def wrapper(method):
         try:
@@ -745,7 +810,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ):
+def typename(typ, short=False):
     """
     Return the name of a type
 
@@ -757,11 +822,22 @@ def typename(typ):
     >>> from dask.core import literal
     >>> typename(literal)
     'dask.core.literal'
+    >>> typename(literal, short=True)
+    'dask.literal'
     """
-    if not typ.__module__ or typ.__module__ == "builtins":
-        return typ.__name__
-    else:
-        return typ.__module__ + "." + typ.__name__
+    if not isinstance(typ, type):
+        return typename(type(typ))
+    try:
+        if not typ.__module__ or typ.__module__ == "builtins":
+            return typ.__name__
+        else:
+            if short:
+                module, *_ = typ.__module__.split(".")
+            else:
+                module = typ.__module__
+            return module + "." + typ.__name__
+    except AttributeError:
+        return str(typ)
 
 
 def ensure_bytes(s):
@@ -1059,7 +1135,7 @@ class OperatorMethodMixin:
 
     @classmethod
     def _bind_operator(cls, op):
-        """ bind operator to this class """
+        """bind operator to this class"""
         name = op.__name__
 
         if name.endswith("_"):
@@ -1083,12 +1159,12 @@ class OperatorMethodMixin:
 
     @classmethod
     def _get_unary_operator(cls, op):
-        """ Must return a method used by unary operator """
+        """Must return a method used by unary operator"""
         raise NotImplementedError
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
-        """ Must return a method used by binary operator """
+        """Must return a method used by binary operator"""
         raise NotImplementedError
 
 
@@ -1151,7 +1227,7 @@ def is_arraylike(x):
 
 
 def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
+    """Looks like a Pandas DataFrame"""
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
@@ -1161,7 +1237,7 @@ def is_dataframe_like(df):
 
 
 def is_series_like(s):
-    """ Looks like a Pandas Series """
+    """Looks like a Pandas Series"""
     typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
@@ -1171,7 +1247,7 @@ def is_series_like(s):
 
 
 def is_index_like(s):
-    """ Looks like a Pandas Index """
+    """Looks like a Pandas Index"""
     typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
@@ -1246,7 +1322,9 @@ def parse_bytes(s):
     1000000
     >>> parse_bytes(123)
     123
-    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    >>> parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
     ValueError: Could not interpret 'foos' as a byte unit
     """
     if isinstance(s, (int, float)):

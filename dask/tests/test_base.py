@@ -1,3 +1,4 @@
+import datetime
 import os
 import subprocess
 import sys
@@ -16,6 +17,7 @@ from dask.base import (
     clone_key,
     collections_to_dsk,
     compute,
+    compute_as_if_collection,
     function_cache,
     get_collection_names,
     get_name_from_key,
@@ -34,6 +36,7 @@ from dask.base import (
 from dask.core import literal
 from dask.delayed import Delayed
 from dask.diagnostics import Profiler
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
 from dask.utils_test import dec, import_or_none, inc
 
@@ -219,7 +222,7 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, "1", slice(1, 2, 3)]:
+    for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25)]:
         assert normalize_token(i) is i
 
 
@@ -282,13 +285,12 @@ def test_tokenize_pandas_extension_array():
         ),
     ]
 
-    if dd._compat.PANDAS_GT_100:
-        arrays.extend(
-            [
-                pd.array(["a", "b", None], dtype="string"),
-                pd.array([True, False, None], dtype="boolean"),
-            ]
-        )
+    arrays.extend(
+        [
+            pd.array(["a", "b", None], dtype="string"),
+            pd.array([True, False, None], dtype="boolean"),
+        ]
+    )
 
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
@@ -442,6 +444,17 @@ def test_tokenize_object_with_recursion_error_returns_uuid():
     cycle["a"] = cycle
 
     assert len(tokenize(cycle)) == 32
+
+
+def test_tokenize_datetime_date():
+    # Same date
+    assert tokenize(datetime.date(2021, 6, 25)) == tokenize(datetime.date(2021, 6, 25))
+    # Different year
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2022, 6, 25))
+    # Different month
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 7, 25))
+    # Different day
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
 def test_is_dask_collection():
@@ -954,6 +967,23 @@ def test_visualize():
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
 
+        # To see if visualize() works when the filename parameter is set to None
+        # If the function raises an error, the test will fail
+        x.visualize(filename=None)
+
+
+@pytest.mark.skipif("not da")
+@pytest.mark.skipif(
+    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+)
+def test_visualize_highlevelgraph():
+    graphviz = pytest.importorskip("graphviz")
+    with tmpdir() as d:
+        x = da.arange(5, chunks=2)
+        viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
+        # check visualization will automatically render in the jupyter notebook
+        assert isinstance(viz, graphviz.dot.Digraph)
+
 
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
@@ -1316,10 +1346,12 @@ def test_raise_get_keyword():
 
 def test_get_scheduler():
     assert get_scheduler() is None
+    assert get_scheduler(scheduler=dask.local.get_sync) is dask.local.get_sync
     assert get_scheduler(scheduler="threads") is dask.threaded.get
     assert get_scheduler(scheduler="sync") is dask.local.get_sync
+    assert callable(get_scheduler(scheduler=dask.local.synchronous_executor))
     with dask.config.set(scheduler="threads"):
-        assert get_scheduler(scheduler="threads") is dask.threaded.get
+        assert get_scheduler() is dask.threaded.get
     assert get_scheduler() is None
 
 
@@ -1375,3 +1407,29 @@ def test_clone_key():
     )
     with pytest.raises(TypeError):
         clone_key(1, 2)
+
+
+def test_compte_as_if_collection_low_level_task_graph():
+    # See https://github.com/dask/dask/pull/7969
+    da = pytest.importorskip("dask.array")
+    x = da.arange(10)
+
+    # Boolean flag to ensure MyDaskArray.__dask_optimize__ is called
+    optimized = False
+
+    class MyDaskArray(da.Array):
+        """Dask Array subclass with validation logic in __dask_optimize__"""
+
+        @classmethod
+        def __dask_optimize__(cls, dsk, keys, **kwargs):
+            # Ensure `compute_as_if_collection` don't convert to a low-level task graph
+            assert type(dsk) is HighLevelGraph
+            nonlocal optimized
+            optimized = True
+            return super().__dask_optimize__(dsk, keys, **kwargs)
+
+    result = compute_as_if_collection(
+        MyDaskArray, x.__dask_graph__(), x.__dask_keys__()
+    )[0]
+    assert optimized
+    da.utils.assert_eq(x, result)

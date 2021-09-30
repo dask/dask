@@ -67,16 +67,16 @@ def unpack_collections(expr):
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
-    >>> task  # doctest: +SKIP
+    >>> task
     ['a', 'b', 3]
-    >>> collections  # doctest: +SKIP
-    (a, b)
+    >>> collections
+    (Delayed('a'), Delayed('b'))
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
-    >>> task  # doctest: +SKIP
-    (dict, [['a', 1], ['b', 2]])
-    >>> collections  # doctest: +SKIP
-    {a, b}
+    >>> task
+    (<class 'dict'>, [['a', 1], ['b', 2]])
+    >>> collections
+    (Delayed('a'), Delayed('b'))
     """
     if isinstance(expr, Delayed):
         return expr._key, (expr,)
@@ -109,7 +109,11 @@ def unpack_collections(expr):
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
 
         return (apply, typ, (), (dict, args)), collections
@@ -187,7 +191,11 @@ def to_task_dask(expr):
 
     if is_dataclass(expr):
         args, dsk = to_task_dask(
-            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
 
         return (apply, typ, (), (dict, args)), dsk
@@ -276,7 +284,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     11
 
     >>> x = delayed(inc, pure=True)(10)
-    >>> type(x) == Delayed              # doctest: +SKIP
+    >>> type(x) == Delayed
     True
     >>> x.compute()
     11
@@ -350,7 +358,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
     >>> a = delayed([1, 2, 3])
-    >>> isinstance(a, Delayed)      # doctest: +SKIP
+    >>> isinstance(a, Delayed)
     True
     >>> a.compute()
     [1, 2, 3]
@@ -370,14 +378,14 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     Delayed results act as a proxy to the underlying object. Many operators
     are supported:
 
-    >>> (a + [1, 2]).compute()      # doctest: +SKIP
+    >>> (a + [1, 2]).compute()
     [1, 2, 3, 1, 2]
-    >>> a[1].compute()              # doctest: +SKIP
+    >>> a[1].compute()
     2
 
     Method and attribute access also works:
 
-    >>> a.count(2).compute()        # doctest: +SKIP
+    >>> a.count(2).compute()
     1
 
     Note that if a method doesn't exist, no error will be thrown until runtime:
@@ -711,5 +719,5 @@ except AttributeError:
 
 
 def single_key(seq):
-    """ Pick out the only element of this list, a list of keys """
+    """Pick out the only element of this list, a list of keys"""
     return seq[0]

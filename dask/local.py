@@ -66,7 +66,7 @@ Examples
 >>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
  'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
- 'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+ 'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
  'finished': set(),
  'ready': ['z'],
  'released': set(),
@@ -148,7 +148,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
-     'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+     'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
      'finished': set(),
      'ready': ['z'],
      'released': set(),
@@ -181,7 +181,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
     ready_set = set([k for k, v in waiting.items() if not v])
-    ready = sorted(ready_set, key=sortkey)
+    ready = sorted(ready_set, key=sortkey, reverse=True)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {
@@ -262,7 +262,7 @@ def finish_task(
 
     Mutates.  This should run atomically (with a lock).
     """
-    for dep in sorted(state["dependents"][key], key=sortkey):
+    for dep in sorted(state["dependents"][key], key=sortkey, reverse=True):
         s = state["waiting"][dep]
         s.remove(key)
         if not s:
@@ -456,18 +456,22 @@ def get_async(
                 raise ValueError("Found no accessible jobs in dask")
 
             def fire_tasks(chunksize):
-                """ Fire off a task to the thread pool """
+                """Fire off a task to the thread pool"""
                 # Determine chunksize and/or number of tasks to submit
                 nready = len(state["ready"])
                 if chunksize == -1:
                     ntasks = nready
                     chunksize = -(ntasks // -num_workers)
                 else:
-                    ntasks = min(nready, chunksize * num_workers)
+                    used_workers = -(len(state["running"]) // -chunksize)
+                    avail_workers = max(num_workers - used_workers, 0)
+                    ntasks = min(nready, chunksize * avail_workers)
 
                 # Prep all ready tasks for submission
                 args = []
-                for i, key in zip(range(ntasks), state["ready"]):
+                for _ in range(ntasks):
+                    # Get the next task to compute (most recently added)
+                    key = state["ready"].pop()
                     # Notify task is running
                     state["running"].add(key)
                     for f in pretask_cbs:
@@ -487,7 +491,6 @@ def get_async(
                             pack_exception,
                         )
                     )
-                del state["ready"][:ntasks]
 
                 # Batch submit
                 for i in range(-(len(args) // -chunksize)):

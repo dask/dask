@@ -301,6 +301,7 @@ extlinks = {
 #  --Options for sphinx extensions -----------------------------------------------
 
 intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
     "pandas": (
         "https://pandas.pydata.org/pandas-docs/stable/",
         "https://pandas.pydata.org/pandas-docs/stable/objects.inv",
@@ -314,6 +315,11 @@ intersphinx_mapping = {
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "zarr": (
+        "https://zarr.readthedocs.io/en/latest/",
+        "https://zarr.readthedocs.io/en/latest/objects.inv",
+    ),
+    "skimage": ("https://scikit-image.org/docs/dev/", None),
 }
 
 # Redirects
@@ -326,10 +332,12 @@ redirect_files = [
     ("dataframe-overview.html", "dataframe.html"),
     ("dataframe-performance.html", "dataframe-best-practices.html"),
     ("delayed-overview.html", "delayed.html"),
+    ("educational-resources.html", "presentations.html"),
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
     ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
+    ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
     ("examples/array-hdf5.html", "https://examples.dask.org"),

@@ -1,13 +1,14 @@
+import contextlib
 import os
-from distutils.version import LooseVersion
 from operator import add, mul
 from time import sleep
 
 import pytest
+from packaging.version import parse as parse_version
 
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.threaded import get
-from dask.utils import apply, ignoring, tmpfile
+from dask.utils import apply, tmpfile
 
 try:
     import bokeh
@@ -44,7 +45,7 @@ def test_profiler_works_under_error():
     div = lambda x, y: x / y
     dsk = {"x": (div, 1, 1), "y": (div, "x", 2), "z": (div, "y", 0)}
 
-    with ignoring(ZeroDivisionError):
+    with contextlib.suppress(ZeroDivisionError):
         with prof:
             get(dsk, "z")
 
@@ -325,10 +326,10 @@ def test_plot_multiple():
     p = visualize(
         [prof, rprof], label_size=50, title="Not the default", show=False, save=False
     )
-    bokeh_version = LooseVersion(bokeh.__version__)
-    if bokeh_version >= "1.1.0":
+    bokeh_version = parse_version(bokeh.__version__)
+    if bokeh_version >= parse_version("1.1.0"):
         figures = [r[0] for r in p.children[1].children]
-    elif bokeh_version >= "0.12.0":
+    elif bokeh_version >= parse_version("0.12.0"):
         figures = [r.children[0] for r in p.children[1].children]
     else:
         figures = [r[0] for r in p.children]
@@ -363,7 +364,7 @@ def test_get_colors():
     from dask.diagnostics.profile_visualize import get_colors
 
     # 256-color palettes were added in bokeh 1.4.0
-    if LooseVersion(bokeh.__version__) >= "1.4.0":
+    if parse_version(bokeh.__version__) >= parse_version("1.4.0"):
         from bokeh.palettes import Blues256
 
         funcs = list(range(11))

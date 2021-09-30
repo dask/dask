@@ -11,6 +11,7 @@ from ... import array as da
 from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
@@ -20,7 +21,7 @@ lock = Lock()
 
 
 def _meta_from_array(x, columns=None, index=None, meta=None):
-    """ Create empty DataFrame or Series which has correct dtype """
+    """Create empty DataFrame or Series which has correct dtype"""
 
     if x.ndim > 2:
         raise ValueError(
@@ -499,14 +500,26 @@ def _link(token, result):
     return None
 
 
-def _df_to_bag(df, index=False):
+def _df_to_bag(df, index=False, format="tuple"):
     if isinstance(df, pd.DataFrame):
-        return list(map(tuple, df.itertuples(index)))
+        if format == "tuple":
+            return list(map(tuple, df.itertuples(index)))
+        elif format == "dict":
+            if index:
+                return [
+                    {**{"index": idx}, **values}
+                    for values, idx in zip(df.to_dict("records"), df.index)
+                ]
+            else:
+                return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
-        return list(df.iteritems()) if index else list(df)
+        if format == "tuple":
+            return list(df.iteritems()) if index else list(df)
+        elif format == "dict":
+            return df.to_frame().to_dict(orient="records")
 
 
-def to_bag(df, index=False):
+def to_bag(df, index=False, format="tuple"):
     """Create Dask Bag from a Dask DataFrame
 
     Parameters
@@ -514,6 +527,8 @@ def to_bag(df, index=False):
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
         they're just the ``value``.  Default is False.
+    format : {"tuple", "dict"},optional
+            Whether to return a bag of tuples or dictionaries.
 
     Examples
     --------
@@ -523,9 +538,9 @@ def to_bag(df, index=False):
 
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
-    name = "to_bag-" + tokenize(df, index)
+    name = "to_bag-" + tokenize(df, index, format)
     dsk = dict(
-        ((name, i), (_df_to_bag, block, index))
+        ((name, i), (_df_to_bag, block, index, format))
         for (i, block) in enumerate(df.__dask_keys__())
     )
     dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
@@ -542,7 +557,6 @@ def to_records(df):
     Examples
     --------
     >>> df.to_records()  # doctest: +SKIP
-    dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('ind', '<f8'), ('x', 'O'), ('y', '<i8')]), chunksize=(nan,), chunktype=numpy.ndarray>  # noqa: E501
 
     See Also
     --------
@@ -584,6 +598,7 @@ def from_delayed(
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
+
     for df in dfs:
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
@@ -593,8 +608,11 @@ def from_delayed(
     else:
         meta = make_meta(meta)
 
+    if not dfs:
+        dfs = [delayed(make_meta)(meta)]
+
     name = prefix + "-" + tokenize(*dfs)
-    dsk = merge(df.dask for df in dfs)
+    dsk = {}
     if verify_meta:
         for (i, df) in enumerate(dfs):
             dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
@@ -609,7 +627,9 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = new_dd_object(dsk, name, meta, divs)
+    df = new_dd_object(
+        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+    )
 
     if divisions == "sorted":
         from ..shuffle import compute_and_set_divisions

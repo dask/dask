@@ -1,11 +1,9 @@
-from distutils.version import LooseVersion
-
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_130
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -180,8 +178,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
     # DataFrame
-    prolling = df.drop("a", 1).rolling(window, center=center)
-    drolling = ddf.drop("a", 1).rolling(window, center=center)
+    prolling = df.drop("a", axis=1).rolling(window, center=center)
+    drolling = ddf.drop("a", axis=1).rolling(window, center=center)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -247,15 +245,11 @@ def test_rolling_repr():
     assert res == "Rolling [window=4,center=False,axis=0]"
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
+    assert res == "Rolling [window=4s,center=False,win_type=freq,axis=0]"
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
 def test_time_rolling_constructor():
     result = dts.rolling("4s")
     assert result.window == "4s"
@@ -263,12 +257,8 @@ def test_time_rolling_constructor():
     assert result.win_type is None
 
     assert result._win_type == "freq"
-    assert result._window == 4000000000  # ns
-    assert result._min_periods == 1
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize(
     "method,args,check_less_precise", rolling_method_args_check_less_precise
 )
@@ -305,13 +295,11 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
-    prolling = ts.drop("a", 1).rolling(window)
-    drolling = dts.drop("a", 1).rolling(window)
+    prolling = ts.drop("a", axis=1).rolling(window)
+    drolling = dts.drop("a", axis=1).rolling(window)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -320,8 +308,6 @@ def test_time_rolling_cov(window):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize(
     "window,N",
     [("1s", 10), ("2s", 10), ("10s", 10), ("10h", 10), ("10s", 100), ("10h", 100)],
@@ -340,8 +326,6 @@ def test_time_rolling_large_window_fixed_chunks(window, N):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
-@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize("window", ["2s", "5s", "20s", "10h"])
 def test_time_rolling_large_window_variable_chunks(window):
     df = pd.DataFrame(
@@ -359,7 +343,6 @@ def test_time_rolling_large_window_variable_chunks(window):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
-# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
 def test_time_rolling(before, after):
     window = before
@@ -401,10 +384,10 @@ def test_rolling_agg_aggregate():
     )
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
-    if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
+    numba_version = parse_version(numba.__version__)
+    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
         # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
         pytest.xfail("Known incompatibility between pandas and numba")
 
@@ -418,11 +401,3 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
-
-
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas>1.0.0")
-def test_rolling_apply_numba_raises():
-    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
-        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)

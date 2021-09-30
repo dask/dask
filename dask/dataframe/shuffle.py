@@ -17,13 +17,18 @@ from ..sizeof import sizeof
 from ..utils import M, digit
 from . import methods
 from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from .utils import group_split_dispatch, hash_object_dispatch
+from .dispatch import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 
 
 def _calculate_divisions(
-    df, partition_col, repartition, npartitions, upsample=1.0, partition_size=128e6
+    df,
+    partition_col,
+    repartition,
+    npartitions,
+    upsample=1.0,
+    partition_size=128e6,
 ):
     """
     Utility function to calculate divisions for calls to `map_partitions`
@@ -70,13 +75,14 @@ def sort_values(
     by,
     npartitions=None,
     ascending=True,
+    na_position="last",
     upsample=1.0,
     partition_size=128e6,
     **kwargs,
 ):
-    """ See DataFrame.sort_values for docstring """
-    if not ascending:
-        raise NotImplementedError("The ascending= keyword is not supported")
+    """See DataFrame.sort_values for docstring"""
+    if na_position not in ("first", "last"):
+        raise ValueError("na_position must be either 'first' or 'last'")
     if not isinstance(by, str):
         # support ["a"] as input
         if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
@@ -102,16 +108,34 @@ def sort_values(
     )
 
     if (
-        mins == sorted(mins)
-        and maxes == sorted(maxes)
-        and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+        all(not pd.isna(x) for x in divisions)
+        and mins == sorted(mins, reverse=not ascending)
+        and maxes == sorted(maxes, reverse=not ascending)
+        and all(
+            mx < mn
+            for mx, mn in zip(
+                maxes[:-1] if ascending else maxes[1:],
+                mins[1:] if ascending else mins[:-1],
+            )
+        )
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(M.sort_values, by)
+        return df.map_partitions(
+            M.sort_values, by, ascending=ascending, na_position=na_position
+        )
 
-    df = rearrange_by_divisions(df, by, divisions)
-    df = df.map_partitions(M.sort_values, by)
+    df = rearrange_by_divisions(
+        df,
+        by,
+        divisions,
+        ascending=ascending,
+        na_position=na_position,
+        duplicates=False,
+    )
+    df = df.map_partitions(
+        M.sort_values, by, ascending=ascending, na_position=na_position
+    )
     return df
 
 
@@ -127,7 +151,7 @@ def set_index(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.set_index for docstring """
+    """See _Frame.set_index for docstring"""
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -373,13 +397,29 @@ def shuffle(
     return df3
 
 
-def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
-    """ Shuffle dataframe so that column separates along divisions """
+def rearrange_by_divisions(
+    df,
+    column,
+    divisions,
+    max_branch=None,
+    shuffle=None,
+    ascending=True,
+    na_position="last",
+    duplicates=True,
+):
+    """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
+    # duplicates need to be removed sometimes to properly sort null dataframes
+    if not duplicates:
+        divisions = divisions.drop_duplicates()
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
-        set_partitions_pre, divisions=divisions, meta=meta
+        set_partitions_pre,
+        divisions=divisions,
+        ascending=ascending,
+        na_position=na_position,
+        meta=meta,
     )
     df2 = df.assign(_partitions=partitions)
 
@@ -405,6 +445,14 @@ def rearrange_by_column(
     ignore_index=False,
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
+
+    # if the requested output partitions < input partitions
+    # we repartition first as shuffling overhead is
+    # proportionate to the number of input partitions
+
+    if npartitions is not None and npartitions < df.npartitions:
+        df = df.repartition(npartitions=npartitions)
+
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
@@ -489,9 +537,9 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     }
 
     dependencies = []
-    layer = {}
     if compute:
         graph = HighLevelGraph.merge(df.dask, dsk1, dsk2)
+        graph = HighLevelGraph.from_collections(name, graph, dependencies=[df])
         keys = [p, sorted(dsk2)]
         pp, values = compute_as_if_collection(DataFrame, graph, keys)
         dsk1 = {p: pp}
@@ -513,7 +561,7 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
-    return DataFrame(graph, name, df._meta, divisions)
+    return new_dd_object(graph, name, df._meta, divisions)
 
 
 def _noop(x, cleanup_token):
@@ -730,24 +778,32 @@ def cleanup_partd_files(p, keys):
 
 
 def collect(p, part, meta, barrier_token):
-    """ Collect partitions from partd, yield dataframes """
+    """Collect partitions from partd, yield dataframes"""
     with ensure_cleanup_on_exception(p):
         res = p.get(part)
         return res if len(res) > 0 else meta
 
 
-def set_partitions_pre(s, divisions):
+def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     try:
-        partitions = divisions.searchsorted(s, side="right") - 1
+        if ascending:
+            partitions = divisions.searchsorted(s, side="right") - 1
+        else:
+            partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     except TypeError:
-        # When `searchsorted` fails with `TypeError`, it may be
-        # caused by nulls in `s`. Try again with the null-values
-        # explicitly mapped to the first partition.
+        # `searchsorted` fails if `s` contains nulls and strings
         partitions = np.empty(len(s), dtype="int32")
-        partitions[s.isna()] = 0
         not_null = s.notna()
-        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
-    partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
+        if ascending:
+            partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
+        else:
+            partitions[not_null] = (
+                len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
+            )
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
+        len(divisions) - 2 if ascending else 0
+    )
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
@@ -876,7 +932,7 @@ def get_overlap(df, index):
 
 
 def fix_overlap(ddf, overlap):
-    """ Ensures that the upper bound on each partition of ddf (except the last) is exclusive """
+    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive"""
     name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}
