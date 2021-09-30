@@ -26,8 +26,11 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     if: |
-      needs.check.outputs.test-upstream == 'true'
-      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      always()
+      && (
+          needs.check.outputs.test-upstream == 'true'
+          || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      )
 
     env:
       COVERAGE: "true"
@@ -67,7 +70,7 @@ jobs:
     needs: build
     if: |
       always()
-      && github.event_name == 'schedule'
+      && github.event_name != 'pull_request'
       && github.repository == 'dask/dask'
       && needs.check.outputs.test-upstream == 'true'
       && needs.build.result == 'failure'
