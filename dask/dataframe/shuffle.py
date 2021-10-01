@@ -11,6 +11,7 @@ import tlz as toolz
 
 from .. import base, config
 from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
+from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
 from ..layers import ShuffleLayer, SimpleShuffleLayer
 from ..sizeof import sizeof
@@ -462,6 +463,15 @@ def rearrange_by_column(
         if ignore_index:
             df2._meta = df2._meta.reset_index(drop=True)
         return df2
+    elif shuffle == "service":
+        df2 = rearrange_by_column_service(
+            df,
+            col,
+            npartitions,
+        )
+        if ignore_index:
+            df2._meta = df2._meta.reset_index(drop=True)
+        return df2
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
@@ -718,6 +728,56 @@ def rearrange_by_column_tasks(
         df2.divisions = (None,) * (npartitions_orig + 1)
 
     return df2
+
+
+def rearrange_by_column_service(
+    df,
+    column,
+    npartitions=None,
+):
+    from .shuffle_service import ShuffleService, transfer, unpack
+
+    npartitions = npartitions or df.npartitions
+    token = tokenize(df, column, npartitions)
+
+    service = delayed(ShuffleService)(
+        column,
+        npartitions,
+        df._meta,  # TODO sure hope this is accurate... can we for check first?
+        sizeof(df._meta_nonempty) / len(df._meta_nonempty),
+        # ^ TODO just calculate this from dtype sizes?
+        dask_key_name="shuffle-service-" + token,
+    )
+
+    transferred = df.map_partitions(
+        transfer,
+        service,
+        meta=df,
+        enforce_metadata=False,
+        transform_divisions=False,
+    )
+
+    barrier_key = "shuffle-barrier-" + token
+    # TODO blockwise this part? Probably not possible
+    barrier_dsk = {
+        barrier_key: (ShuffleService.barrier, service.key, transferred.__dask_keys__())
+    }
+    barrier = Delayed(
+        barrier_key,
+        HighLevelGraph.from_collections(
+            barrier_key, barrier_dsk, dependencies=[transferred]
+        ),
+    )
+
+    # TODO blockwise this part
+    name = "shuffle-unpack-" + token
+    dsk = {(name, i): (unpack, service.key, i, barrier_key) for i in range(npartitions)}
+    return DataFrame(
+        HighLevelGraph.from_collections(name, dsk, [barrier]),
+        name,
+        df._meta,
+        [None] * (npartitions + 1),
+    )
 
 
 ########################################################

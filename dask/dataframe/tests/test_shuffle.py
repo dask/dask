@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from distributed.utils_test import gen_cluster
+
 import dask
 import dask.dataframe as dd
 from dask import delayed
@@ -27,7 +29,9 @@ from dask.dataframe.shuffle import (
     remove_nans,
     shuffle,
 )
+from dask.dataframe.shuffle_service import ShuffleService
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.distributed import Nanny
 from dask.optimization import cull
 
 dsk = {
@@ -1251,6 +1255,73 @@ def test_sort_values(nelem, nparts, by, ascending):
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
+def test_sort_values(npartitions):
+    df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+    assert_eq(ddf.sort_values("a"), df.sort_values("a"))
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
+async def test_shuffle_service(c, s, a, b):
+    handlers = set(a.handlers)
+
+    df = pd.DataFrame(
+        {
+            "name": list("aabababbacbdsbsfbdbc") * 5,
+            "x": range(100),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=40)
+    shuffled = shuffle(ddf, "name", shuffle="service")
+    res = await c.compute(shuffled)
+
+    assert len(res) == len(df)
+    assert shuffled.npartitions == ddf.npartitions
+    assert set(map(tuple, res.values.tolist())) == set(map(tuple, df.values.tolist()))
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
+async def test_shuffle_service_large(c, s, a, b):
+    handlers = set(a.handlers)
+
+    ddf = dask.datasets.timeseries(
+        start="2000-01-01",
+        end="2001-01-01",
+        dtypes={"x": int, "y": float},
+    )
+
+    shuffled = shuffle(ddf, "x", shuffle="service")
+    len_1, len_2 = c.compute([ddf.size, shuffled.size])
+
+    len_1 = await len_1
+    len_2 = await len_2
+
+    assert len_1 == len_2
+    assert shuffled.npartitions == ddf.npartitions
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
+
+
 def test_sort_values_with_nulls(data, by, ascending, na_position):
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
