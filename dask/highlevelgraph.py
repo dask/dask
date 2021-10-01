@@ -373,13 +373,13 @@ class Layer(collections.abc.Mapping):
 
         # Find aliases not in `client_keys` and substitute all matching keys
         # with its Future
-        values = {
+        future_aliases = {
             k: v
             for k, v in dsk.items()
             if isinstance(v, Future) and k not in client_keys
         }
-        if values:
-            dsk = subs_multiple(dsk, values)
+        if future_aliases:
+            dsk = subs_multiple(dsk, future_aliases)
 
         # Remove `Future` objects from graph and note any future dependencies
         dsk2 = {}
@@ -403,6 +403,13 @@ class Layer(collections.abc.Mapping):
         # Calculate dependencies without re-calculating already known dependencies
         # - Start with known dependencies
         dependencies = known_key_dependencies.copy()
+        # - Remove aliases for any tasks that depend on both an alias and a future.
+        #   These can only be found in the known_key_dependencies cache, since
+        #   any dependencies computed in this method would have already had the
+        #   aliases removed.
+        if future_aliases:
+            alias_keys = set(future_aliases)
+            dependencies = {k: v - alias_keys for k, v in dependencies.items()}
         # - Add in deps for any missing keys
         missing_keys = dsk.keys() - dependencies.keys()
         dependencies.update(
