@@ -3692,7 +3692,6 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
             str(tmpdir),
             engine=engine,
             gather_statistics=True,
-            metadata_task_size=metadata_task_size,
         )
         ddf2b = dd.read_parquet(
             str(tmpdir),
