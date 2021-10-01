@@ -1063,7 +1063,7 @@ class FastParquetEngine(Engine):
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
-                pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=fs.sep)
+                pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
             except (OSError, ValueError):
                 # append for create
                 append = False
