@@ -447,7 +447,25 @@ def test_map_overlap_multiarray_variadic():
     assert all(x.compute() == size_per_slice)
 
 
-@pytest.mark.parametrize("drop_axis", ((0,), (1,), (2,), (0, 1), (1, 2), (2, 0), 1))
+@pytest.mark.parametrize(
+    "drop_axis",
+    (
+        (0,),
+        (1,),
+        (2,),
+        (0, 1),
+        (1, 2),
+        (2, 0),
+        1,
+        (-3,),
+        (-2,),
+        (-1,),
+        (-3, -2),
+        (-2, -1),
+        (-1, -3),
+        -2,
+    ),
+)
 def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
     x = da.random.standard_normal((5, 10, 8), chunks=(2, 5, 4))
 
@@ -461,6 +479,7 @@ def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
     depth = (1, 3, 2)
     # to match expected result, dropped axes must have depth 0
     _drop_axis = (drop_axis,) if np.isscalar(drop_axis) else drop_axis
+    _drop_axis = [d % x.ndim for d in _drop_axis]
     depth = tuple(0 if i in _drop_axis else d for i, d in enumerate(depth))
 
     y = da.map_overlap(

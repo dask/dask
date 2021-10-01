@@ -703,6 +703,11 @@ def map_overlap(
         if drop_axis is not None:
             if isinstance(drop_axis, Number):
                 drop_axis = [drop_axis]
+
+            # convert negative drop_axis to equivalent positive value
+            ndim_out = max([a.ndim for a in args if isinstance(a, Array)])
+            drop_axis = [d % ndim_out for d in drop_axis]
+
             kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
             # note that keys are relabeled to match values in range(x.ndim)
             depth = {n: depth[ax] for n, ax in enumerate(kept_axes)}
