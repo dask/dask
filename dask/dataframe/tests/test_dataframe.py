@@ -4464,6 +4464,14 @@ def test_setitem_with_bool_dataframe_as_key():
     assert_eq(df, ddf)
 
 
+def test_setitem_with_bool_series_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df["A"] > 2] = 5
+    ddf[ddf["A"] > 2] = 5
+    assert_eq(df, ddf)
+
+
 def test_setitem_with_numeric_column_name_raises_not_implemented():
     df = pd.DataFrame({0: [1, 4], 1: [3, 2]})
     ddf = dd.from_pandas(df.copy(), 2)
