@@ -496,12 +496,6 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-@pytest.mark.filterwarnings(
-    "ignore:0 should be:DeprecationWarning"
-)  # fixed in new pandas.
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -724,9 +718,6 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -2249,8 +2240,13 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pandas",
+        pytest.param("cudf", marks=pytest.mark.gpu),
+    ],
+)
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":

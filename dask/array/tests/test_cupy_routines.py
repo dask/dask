@@ -169,3 +169,60 @@ def test_tril_triu_non_square_arrays():
     dA = da.from_array(A, chunks=(5, 5), asarray=False)
     assert_eq(da.triu(dA), np.triu(A))
     assert_eq(da.tril(dA), np.tril(A))
+
+
+@pytest.mark.parametrize("return_index", [False, True])
+@pytest.mark.parametrize("return_inverse", [False, True])
+@pytest.mark.parametrize("return_counts", [False, True])
+def test_unique_kwargs(return_index, return_inverse, return_counts):
+    kwargs = dict(
+        return_index=return_index,
+        return_inverse=return_inverse,
+        return_counts=return_counts,
+    )
+
+    a = cupy.array([1, 2, 4, 4, 5, 2])
+    d = da.from_array(a, chunks=(3,))
+
+    def _test_unique_kwargs():
+        r_a = np.unique(a, **kwargs)
+        r_d = da.unique(d, **kwargs)
+
+        if not any([return_index, return_inverse, return_counts]):
+            assert isinstance(r_a, cupy.ndarray)
+            assert isinstance(r_d, da.Array)
+
+            r_a = (r_a,)
+            r_d = (r_d,)
+
+        assert len(r_a) == len(r_d)
+
+        if return_inverse:
+            i = 1 + int(return_index)
+            assert (d.size,) == r_d[i].shape
+
+        for e_r_a, e_r_d in zip(r_a, r_d):
+            assert_eq(e_r_d, e_r_a)
+
+    # `return_index`, `return_inverse` and `return_counts` are currently
+    # unsupported on CuPy-backed Dask arrays.
+    if any(kwargs.values()):
+        with pytest.raises(ValueError):
+            _test_unique_kwargs()
+
+
+@pytest.mark.parametrize("seed", [23, 796])
+@pytest.mark.parametrize("low, high", [[0, 10]])
+@pytest.mark.parametrize(
+    "shape, chunks",
+    [[(10,), (5,)], [(10,), (3,)], [(4, 5), (3, 2)], [(20, 20), (4, 5)]],
+)
+def test_unique_rand(seed, low, high, shape, chunks):
+    cupy.random.seed(seed)
+
+    a = cupy.random.randint(low, high, size=shape)
+    d = da.from_array(a, chunks=chunks)
+
+    r_a = np.unique(a)
+    r_d = da.unique(d)
+    assert_eq(r_d, r_a)

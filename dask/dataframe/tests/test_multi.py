@@ -847,19 +847,18 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
-@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
     "engine",
     [
-        "cudf",
         pytest.param(
             "pandas",
             marks=pytest.mark.xfail(
                 reason="Pandas does not support leftsemi or leftanti"
             ),
         ),
+        pytest.param("cudf", marks=pytest.mark.gpu),
     ],
 )
 def test_merge_tasks_semi_anti_cudf(engine, how, parts):
@@ -1672,7 +1671,6 @@ def test_concat3():
         )
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(
         np.random.randn(10, 5), columns=list("ABCDE"), index=list("abcdefghij")
@@ -1720,7 +1718,6 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")
@@ -1827,7 +1824,6 @@ def test_concat5():
         (False, False, False),
     ],
 )
-@pytest.mark.filterwarnings("ignore")
 def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
@@ -1980,7 +1976,6 @@ def test_append():
     check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2152,8 +2147,9 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer

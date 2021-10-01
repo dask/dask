@@ -36,6 +36,7 @@ from ..utils import (
     IndexCallable,
     M,
     OperatorMethodMixin,
+    _deprecated,
     apply,
     derived_from,
     funcname,
@@ -404,12 +405,23 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta, self.divisions = state
 
-    def copy(self):
+    def copy(self, deep=False):
         """Make a copy of the dataframe
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
+
+        Parameters
+        ----------
+        deep : boolean, default False
+            The deep value must be `False` and it is declared as a parameter just for
+            compatibility with third-party libraries like cuDF
         """
+        if deep is not False:
+            raise ValueError(
+                "The `deep` value must be False. This is strictly a shallow copy "
+                "of the underlying computational graph."
+            )
         return new_dd_object(self.dask, self._name, self._meta, self.divisions)
 
     def __array__(self, dtype=None, **kwargs):
@@ -2452,24 +2464,52 @@ Dask Name: {name}, {task} tasks"""
         percentiles_method="default",
         include=None,
         exclude=None,
+        datetime_is_numeric=False,
     ):
 
+        if PANDAS_GT_110:
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
+        elif datetime_is_numeric:
+            raise NotImplementedError(
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+            )
+        else:
+            datetime_is_numeric_kwarg = {}
+
         if self._meta.ndim == 1:
-            return self._describe_1d(self, split_every, percentiles, percentiles_method)
+
+            meta = self._meta_nonempty.describe(
+                percentiles=percentiles,
+                include=include,
+                exclude=exclude,
+                **datetime_is_numeric_kwarg,
+            )
+            output = self._describe_1d(
+                self, split_every, percentiles, percentiles_method, datetime_is_numeric
+            )
+            output._meta = meta
+            return output
         elif (include is None) and (exclude is None):
-            data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
+            _include = [np.number, np.timedelta64]
+            if datetime_is_numeric:
+                _include.append(np.datetime64)
+            data = self._meta.select_dtypes(include=_include)
 
             # when some numerics/timedeltas are found, by default keep them
             if len(data.columns) == 0:
                 chosen_columns = self._meta.columns
             else:
-                # check if there are timedelta or boolean columns
-                bools_and_timedeltas = self._meta.select_dtypes(
-                    include=[np.timedelta64, "bool"]
-                )
-                if len(bools_and_timedeltas.columns) == 0:
+                # check if there are timedelta, boolean, or datetime columns
+                _include = [np.timedelta64, bool]
+                if datetime_is_numeric:
+                    _include.append(np.datetime64)
+                bools_and_times = self._meta.select_dtypes(include=_include)
+                if len(bools_and_times.columns) == 0:
                     return self._describe_numeric(
-                        self, split_every, percentiles, percentiles_method
+                        self,
+                        split_every,
+                        percentiles,
+                        percentiles_method,
                     )
                 else:
                     chosen_columns = data.columns
@@ -2483,7 +2523,11 @@ Dask Name: {name}, {task} tasks"""
 
         stats = [
             self._describe_1d(
-                self[col_idx], split_every, percentiles, percentiles_method
+                self[col_idx],
+                split_every,
+                percentiles,
+                percentiles_method,
+                datetime_is_numeric,
             )
             for col_idx in chosen_columns
         ]
@@ -2492,14 +2536,23 @@ Dask Name: {name}, {task} tasks"""
         name = "describe--" + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
+        meta = self._meta_nonempty.describe(
+            include=include, exclude=exclude, **datetime_is_numeric_kwarg
+        )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_1d(
-        self, data, split_every=False, percentiles=None, percentiles_method="default"
+        self,
+        data,
+        split_every=False,
+        percentiles=None,
+        percentiles_method="default",
+        datetime_is_numeric=False,
     ):
         if is_bool_dtype(data._meta):
-            return self._describe_nonnumeric_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(
+                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
+            )
         elif is_numeric_dtype(data._meta):
             return self._describe_numeric(
                 data,
@@ -2509,14 +2562,24 @@ Dask Name: {name}, {task} tasks"""
             )
         elif is_timedelta64_dtype(data._meta):
             return self._describe_numeric(
-                data.dropna().astype("i8"),
+                data.dropna(),
                 split_every=split_every,
                 percentiles=percentiles,
                 percentiles_method=percentiles_method,
                 is_timedelta_column=True,
             )
+        elif is_datetime64_any_dtype(data._meta) and datetime_is_numeric:
+            return self._describe_numeric(
+                data.dropna(),
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+                is_datetime_column=True,
+            )
         else:
-            return self._describe_nonnumeric_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(
+                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
+            )
 
     def _describe_numeric(
         self,
@@ -2525,9 +2588,14 @@ Dask Name: {name}, {task} tasks"""
         percentiles=None,
         percentiles_method="default",
         is_timedelta_column=False,
+        is_datetime_column=False,
     ):
+        from .numeric import to_numeric
 
-        num = data._get_numeric_data()
+        if is_timedelta_column or is_datetime_column:
+            num = to_numeric(data)
+        else:
+            num = data._get_numeric_data()
 
         if data.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
@@ -2561,13 +2629,18 @@ Dask Name: {name}, {task} tasks"""
                 stats_names,
                 colname,
                 is_timedelta_column,
+                is_datetime_column,
             )
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = num._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
-    def _describe_nonnumeric_1d(self, data, split_every=False):
+    def _describe_nonnumeric_1d(
+        self, data, split_every=False, datetime_is_numeric=False
+    ):
+        from .numeric import to_numeric
+
         vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
@@ -2581,9 +2654,9 @@ Dask Name: {name}, {task} tasks"""
             vcounts._head(1, npartitions=1, compute=False, safe=False),
         ]
 
-        if is_datetime64_any_dtype(data._meta):
-            min_ts = data.dropna().astype("i8").min(split_every=split_every)
-            max_ts = data.dropna().astype("i8").max(split_every=split_every)
+        if is_datetime64_any_dtype(data._meta) and not datetime_is_numeric:
+            min_ts = to_numeric(data.dropna()).min(split_every=split_every)
+            max_ts = to_numeric(data.dropna()).max(split_every=split_every)
             stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
@@ -2594,7 +2667,17 @@ Dask Name: {name}, {task} tasks"""
             (name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = data._meta_nonempty.describe()
+
+        if PANDAS_GT_110:
+            datetime_is_numeric_kwarg = {"datetime_is_numeric": datetime_is_numeric}
+        elif datetime_is_numeric:
+            raise NotImplementedError(
+                "datetime_is_numeric=True is only supported for pandas >= 1.1.0"
+            )
+        else:
+            datetime_is_numeric_kwarg = {}
+
+        meta = data._meta_nonempty.describe(**datetime_is_numeric_kwarg)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(
@@ -2887,7 +2970,6 @@ Dask Name: {name}, {task} tasks"""
             date,
             include_right,
             True,
-            "loc",
         )
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
@@ -2921,7 +3003,6 @@ Dask Name: {name}, {task} tasks"""
             None,
             True,
             False,
-            "loc",
         )
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
@@ -3064,6 +3145,10 @@ class Series(_Frame):
         return pd.Series(array, index=index, name=self.name)
 
     @property
+    def axes(self):
+        return [self.index]
+
+    @property
     def name(self):
         return self._meta.name
 
@@ -3198,6 +3283,12 @@ Dask Name: {name}, {task} tasks""".format(
             and not is_dict_like(index)
             and not isinstance(index, dd.Series)
         ):
+
+            if inplace:
+                warnings.warn(
+                    "'inplace' argument for dask series will be removed in future versions",
+                    PendingDeprecationWarning,
+                )
             res = self if inplace else self.copy()
             res.name = index
         else:
@@ -3259,10 +3350,7 @@ Dask Name: {name}, {task} tasks""".format(
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
-        raise NotImplementedError(
-            "Series getitem is only supported for other series objects "
-            "with matching partition structure"
-        )
+        return self.loc[key]
 
     @derived_from(pd.DataFrame)
     def _get_numeric_data(self, how="any", subset=None):
@@ -3281,6 +3369,17 @@ Dask Name: {name}, {task} tasks""".format(
             s = self.get_partition(i).compute()
             for row in s:
                 yield row
+
+    @_deprecated(
+        message=(
+            "Using the ``in`` operator to test for membership in Series is "
+            "deprecated. To test for membership in the index use "
+            "``(s.index == key).any()``. Similarly to test for membership in "
+            "the values use ``(s == key).any()``"
+        )
+    )
+    def __contains__(self, key):
+        return (self == key).any().compute()
 
     @classmethod
     def _validate_axis(cls, axis=0):
@@ -3790,7 +3889,11 @@ class Index(Series):
 
     @derived_from(pd.Index)
     def to_series(self):
-        return self.map_partitions(M.to_series, meta=self._meta.to_series())
+        return self.map_partitions(
+            M.to_series,
+            meta=self._meta.to_series(),
+            transform_divisions=False,
+        )
 
     @derived_from(pd.Index, ua_args=["index"])
     def to_frame(self, index=True, name=None):
@@ -3891,6 +3994,10 @@ class DataFrame(_Frame):
                 index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
+
+    @property
+    def axes(self):
+        return [self.index, self.columns]
 
     @property
     def columns(self):
@@ -4008,7 +4115,11 @@ class DataFrame(_Frame):
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
-        elif is_dataframe_like(key) or isinstance(key, DataFrame):
+        elif (
+            is_dataframe_like(key)
+            or is_series_like(key)
+            or isinstance(key, (DataFrame, Series))
+        ):
             df = self.where(~key, value)
         elif not isinstance(key, str):
             raise NotImplementedError(f"Item assignment with {type(key)} not supported")
@@ -4098,7 +4209,9 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def sort_values(self, by, npartitions=None, ascending=True, **kwargs):
+    def sort_values(
+        self, by, npartitions=None, ascending=True, na_position="last", **kwargs
+    ):
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -4111,8 +4224,11 @@ class DataFrame(_Frame):
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
         ascending: bool, optional
-            Non ascending sort is not supported by Dask.
+            Sort ascending vs. descending.
             Defaults to True.
+        na_position: {'last', 'first'}, optional
+            Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
+            Defaults to 'last'.
 
         Examples
         --------
@@ -4125,6 +4241,7 @@ class DataFrame(_Frame):
             by,
             ascending=ascending,
             npartitions=npartitions,
+            na_position=na_position,
             **kwargs,
         )
 
@@ -4343,8 +4460,10 @@ class DataFrame(_Frame):
 
         This is like the sequential version except that this will also happen
         in many threads.  This may conflict with ``numexpr`` which will use
-        multiple threads itself.  We recommend that you set numexpr to use a
-        single thread
+        multiple threads itself.  We recommend that you set ``numexpr`` to use a
+        single thread:
+
+        .. code-block:: python
 
             import numexpr
             numexpr.set_num_threads(1)
@@ -6009,8 +6128,8 @@ def quantile(df, q, method="default"):
         }
     else:
 
+        from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
-        from dask.dataframe.dispatch import _percentile
 
         # Add 0 and 100 during calculation for more robust behavior (hopefully)
         calc_qs = np.pad(qs, 1, mode="constant")

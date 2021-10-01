@@ -122,7 +122,6 @@ def test_head_tail():
     )
 
 
-@pytest.mark.filterwarnings("ignore:Insufficient:UserWarning")
 def test_head_npartitions():
     assert_eq(d.head(5, npartitions=2), full.head(5))
     assert_eq(d.head(5, npartitions=2, compute=False), full.head(5))
@@ -170,6 +169,20 @@ def test_Index():
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
         pytest.raises(AttributeError, lambda: ddf.index.index)
+
+
+def test_axes():
+    pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert len(df.axes) == len(pdf.axes)
+    assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
+
+
+def test_series_axes():
+    ps = pd.Series(["abcde"])
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert len(ds.axes) == len(ps.axes)
+    assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
 
 
 def test_Scalar():
@@ -319,9 +332,6 @@ def test_rename_series_method():
     assert ds.name == "x"  # no mutation
     assert_eq(ds.rename(), s.rename())
 
-    ds.rename("z", inplace=True)
-    s.rename("z", inplace=True)
-    assert ds.name == "z"
     assert_eq(ds, s)
 
 
@@ -401,10 +411,6 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-# TODO(pandas) deal with this describe warning instead of ignoring
-@pytest.mark.filterwarnings(
-    "ignore:Treating datetime data as categorical|casting:FutureWarning"
-)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -455,20 +461,86 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    # Act
-    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    if PANDAS_GT_110:
+        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
+    else:
+        datetime_is_numeric_kwarg = {}
 
-    # Assert
-    assert_eq(desc_ddf, desc_df)
+    # Act
+    actual = ddf.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+    expected = df.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+
+    if "e" in expected and datetime_is_numeric_kwarg:
+        expected.at["mean", "e"] = np.nan
+        expected.dropna(how="all", inplace=True)
+
+    assert_eq(actual, expected)
 
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            assert_eq(
-                df[col].describe(include=include, exclude=exclude),
-                ddf[col].describe(include=include, exclude=exclude),
+            expected = df[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
+            if col == "e" and datetime_is_numeric_kwarg:
+                expected.drop("mean", inplace=True)
+            actual = ddf[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            )
+            assert_eq(expected, actual)
+
+
+def test_describe_without_datetime_is_numeric():
+    data = {
+        "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        "c": [None, 0, 1, 2, 3, 4] * 2,
+        "d": [None, 0, 1] * 4,
+        "e": [
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 07:56:23.858694"),
+            pd.Timestamp("2017-05-09 05:59:58.938999"),
+            None,
+            None,
+        ]
+        * 2,
+    }
+    # Arrange
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, 2)
+
+    # Assert
+    assert_eq(ddf.describe(), df.describe())
+
+    # Check series
+    for col in ["a", "c"]:
+        assert_eq(df[col].describe(), ddf[col].describe())
+
+    if PANDAS_GT_110:
+        with pytest.warns(
+            FutureWarning,
+            match=(
+                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+            ),
+        ):
+            ddf.e.describe()
+    else:
+        assert_eq(df.e.describe(), ddf.e.describe())
+        with pytest.raises(
+            NotImplementedError,
+            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
+        ):
+            ddf.e.describe(datetime_is_numeric=True)
 
 
 def test_describe_empty():
@@ -3173,6 +3245,25 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
+def test_contains_series_raises_deprecated_warning_preserves_behavior():
+    s = pd.Series(["a", "b", "c", "d"])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
+    ):
+        output = "a" in ds
+    assert output
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
+    ):
+        output = 0 in ds
+    assert not output
+
+
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3343,9 +3434,7 @@ def test_info():
     pandas_format._put_lines = put_lines
 
     test_frames = [
-        pd.DataFrame(
-            {"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=pd.Int64Index(range(4))
-        ),  # No RangeIndex in dask
+        pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=[0, 1, 2, 3]),
         pd.DataFrame(),
     ]
 
@@ -3415,8 +3504,8 @@ def test_categorize_info():
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": pd.Series(list("aabc")), "z": pd.Series(list("aabc"))},
-        index=pd.Int64Index(range(4)),
-    )  # No RangeIndex in dask
+        index=[0, 1, 2, 3],
+    )
     ddf = dd.from_pandas(df, npartitions=4).categorize(["y"])
 
     # Verbose=False
@@ -3542,19 +3631,36 @@ def test_idxmaxmin(idx, skipna):
     df.d.iloc[78] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
+    # https://github.com/pandas-dev/pandas/issues/43587
+    check_dtype = not all(
+        (_compat.PANDAS_GT_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
+    )
+
     with warnings.catch_warnings(record=True):
         assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
         assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
-        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna, split_every=2))
+        assert_eq(
+            df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna), check_dtype=check_dtype
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
         assert (
             ddf.idxmax(skipna=skipna)._name
             != ddf.idxmax(skipna=skipna, split_every=2)._name
         )
 
-        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
-        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna, split_every=2))
+        assert_eq(
+            df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna), check_dtype=check_dtype
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
         assert (
             ddf.idxmin(skipna=skipna)._name
             != ddf.idxmin(skipna=skipna, split_every=2)._name
@@ -3650,6 +3756,13 @@ def test_getitem_with_bool_dataframe_as_key():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
     assert_eq(df[df > 3], ddf[ddf > 3])
+
+
+def test_getitem_with_non_series():
+    s = pd.Series(list(range(10)), index=list("abcdefghij"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
 
 def test_ipython_completion():
@@ -3856,12 +3969,20 @@ def test_copy():
 
     a = dd.from_pandas(df, npartitions=2)
     b = a.copy()
+    c = a.copy(deep=False)
 
     a["y"] = a.x * 2
 
     assert_eq(b, df)
+    assert_eq(c, df)
 
-    df["y"] = df.x * 2
+    deep_err = (
+        "The `deep` value must be False. This is strictly a shallow copy "
+        "of the underlying computational graph."
+    )
+    for deep in [True, None, ""]:
+        with pytest.raises(ValueError, match=deep_err):
+            a.copy(deep=deep)
 
 
 def test_del():
@@ -4357,6 +4478,14 @@ def test_setitem_with_bool_dataframe_as_key():
     ddf = dd.from_pandas(df.copy(), 2)
     df[df > 2] = 5
     ddf[ddf > 2] = 5
+    assert_eq(df, ddf)
+
+
+def test_setitem_with_bool_series_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df["A"] > 2] = 5
+    ddf[ddf["A"] > 2] = 5
     assert_eq(df, ddf)
 
 

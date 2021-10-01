@@ -1,5 +1,4 @@
 import json
-import re
 import warnings
 from collections import defaultdict
 from datetime import datetime
@@ -27,6 +26,7 @@ from .utils import (
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
+    _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
 
@@ -316,7 +316,7 @@ class ArrowDatasetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
-        metadata_task_size=None,
+        metadata_task_size=0,
         **kwargs,
     ):
 
@@ -324,15 +324,15 @@ class ArrowDatasetEngine(Engine):
         dataset_info = cls._collect_dataset_info(
             paths,
             fs,
-            categories=categories,
-            index=index,
-            gather_statistics=gather_statistics,
-            filters=filters,
-            split_row_groups=split_row_groups,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
-            ignore_metadata_file=ignore_metadata_file,
-            metadata_task_size=metadata_task_size,
+            categories,
+            index,
+            gather_statistics,
+            filters,
+            split_row_groups,
+            chunksize,
+            aggregate_files,
+            ignore_metadata_file,
+            metadata_task_size,
             **kwargs.get("dataset", {}),
         )
 
@@ -497,7 +497,8 @@ class ArrowDatasetEngine(Engine):
                 # No dataset to append to
                 return fmd, i_offset, False
             try:
-                fmd = pq.read_metadata(fs.sep.join([path, "_metadata"]))
+                with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
+                    fmd = pq.read_metadata(fil)
             except (IOError, FileNotFoundError):
                 # No _metadata file present - No appending allowed (for now)
                 if not ignore_divisions:
@@ -747,15 +748,15 @@ class ArrowDatasetEngine(Engine):
         cls,
         paths,
         fs,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        chunksize=None,
-        aggregate_files=None,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
+        chunksize,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
         **dataset_kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -776,7 +777,7 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwarg" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        partitioning_method = _dataset_kwargs.pop(
+        partitioning = _dataset_kwargs.pop(
             "partitioning",
             {"obj": pa_ds.HivePartitioning},
         )
@@ -800,9 +801,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=partitioning_method["obj"].discover(
-                        *partitioning_method.get("args", []),
-                        **partitioning_method.get("kwargs", {}),
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 has_metadata_file = True
@@ -819,9 +820,9 @@ class ArrowDatasetEngine(Engine):
                     ds = pa_ds.parquet_dataset(
                         meta_path,
                         filesystem=fs,
-                        partitioning=partitioning_method["obj"].discover(
-                            *partitioning_method.get("args", []),
-                            **partitioning_method.get("kwargs", {}),
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
                         ),
                     )
                     has_metadata_file = True
@@ -839,9 +840,9 @@ class ArrowDatasetEngine(Engine):
                 paths,
                 filesystem=fs,
                 format="parquet",
-                partitioning=partitioning_method["obj"].discover(
-                    *partitioning_method.get("args", []),
-                    **partitioning_method.get("kwargs", {}),
+                partitioning=partitioning["obj"].discover(
+                    *partitioning.get("args", []),
+                    **partitioning.get("kwargs", {}),
                 ),
             )
 
@@ -870,11 +871,6 @@ class ArrowDatasetEngine(Engine):
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
-        #
-        # TODO: We should be able to avoid this pass over the file
-        # fragments if we are not converting hive-partitioned columns
-        # to "category" data-types.
-        #
         partition_obj = []  # See `partition_info` description below
         hive_categories = defaultdict(list)
         file_frag = None
@@ -886,13 +882,14 @@ class ArrowDatasetEngine(Engine):
                 if v not in hive_categories[k]:
                     hive_categories[k].append(v)
 
+        physical_schema = ds.schema
         if file_frag is not None:
             # Check/correct order of `categories` using last file_frag
             #
             # Note that `_get_partition_keys` does NOT preserve the
             # partition-hierarchy order of the keys. Therefore, we
-            # use custom regex logic to determine the "correct"
-            # ordering of the `categories` output.
+            # use custom logic to determine the "correct" oredering
+            # of the `categories` output.
             #
             # Example (why we need to "reorder" `categories`):
             #
@@ -907,14 +904,16 @@ class ArrowDatasetEngine(Engine):
             #        dict_keys(['c', 'b'])
             #
             cat_keys = [
-                o.split("=")[0]
-                # Assume arrow always uses a normalized "/" sep
-                for o in re.findall("[^/]*=", file_frag.path)
+                part.split("=")[0]
+                for part in file_frag.path.split(fs.sep)
+                if "=" in part
             ]
             if set(hive_categories) == set(cat_keys):
                 hive_categories = {
                     k: hive_categories[k] for k in cat_keys if k in hive_categories
                 }
+
+            physical_schema = file_frag.physical_schema
 
         partition_names = list(hive_categories)
         for name in partition_names:
@@ -935,11 +934,12 @@ class ArrowDatasetEngine(Engine):
         #          pyarrow.dataset-based logic.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
-        #    - "partitioning_method" : (dict) The `partitioning` options
+        #    - "partitioning" : (dict) The `partitioning` options
         #          used for file discovory by pyarrow.
         #
         return {
             "ds": ds,
+            "physical_schema": physical_schema,
             "has_metadata_file": has_metadata_file,
             "schema": ds.schema,
             "fs": fs,
@@ -954,7 +954,7 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
             "partition_names": partition_names,
-            "partitioning_method": partitioning_method,
+            "partitioning": partitioning,
             "metadata_task_size": metadata_task_size,
         }
 
@@ -994,7 +994,7 @@ class ArrowDatasetEngine(Engine):
         else:
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
-            column_names = schema.names
+            column_names = dataset_info.get("physical_schema", schema).names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
@@ -1087,7 +1087,7 @@ class ArrowDatasetEngine(Engine):
         that should be passed to the ``read_partition`` call for
         every output partition).
 
-        This method is overridden in `ArrowDatasetEngine`.
+        This method is overridden in `ArrowLegacyEngine`.
         """
 
         # Collect necessary dataset information from dataset_info
@@ -1101,38 +1101,17 @@ class ArrowDatasetEngine(Engine):
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
         partition_names = dataset_info["partition_names"]
-        partitioning_method = dataset_info["partitioning_method"]
+        partitioning = dataset_info["partitioning"]
         partitions = dataset_info["partitions"]
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
-        metadata_task_size = dataset_info["metadata_task_size"]
 
-        # Check metadata_task_size setting
-        if metadata_task_size is None:
-            # Use 128 files per task by deault
-            metadata_task_size = 128
-
-        # Add common kwargs
-        common_kwargs = {
-            "partitioning": partitioning_method,
-            "partitions": partitions,
-            "categories": categories,
-            "filters": filters,
-            "schema": schema,
-        }
-
-        # Check if this is a very simple case where we can just return
-        # the path names
-        if not gather_statistics and not (split_row_groups or filters):
-            return (
-                [
-                    {"piece": (full_path, None, None)}
-                    for full_path in sorted(ds.files, key=natural_sort_key)
-                ],
-                [],
-                common_kwargs,
-            )
+        # Ensure metadata_task_size is set
+        # (Using config file or defaults)
+        metadata_task_size = _set_metadata_task_size(
+            dataset_info["metadata_task_size"], fs
+        )
 
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
@@ -1170,6 +1149,27 @@ class ArrowDatasetEngine(Engine):
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
 
+        # Add common kwargs
+        common_kwargs = {
+            "partitioning": partitioning,
+            "partitions": partitions,
+            "categories": categories,
+            "filters": filters,
+            "schema": schema,
+        }
+
+        # Check if this is a very simple case where we can just return
+        # the path names
+        if gather_statistics is False and not split_row_groups:
+            return (
+                [
+                    {"piece": (full_path, None, None)}
+                    for full_path in sorted(ds.files, key=natural_sort_key)
+                ],
+                [],
+                common_kwargs,
+            )
+
         # Get/transate filters
         ds_filters = None
         if filters is not None:
@@ -1180,7 +1180,7 @@ class ArrowDatasetEngine(Engine):
             "fs": fs,
             "split_row_groups": split_row_groups,
             "gather_statistics": gather_statistics,
-            "partitioning_method": partitioning_method,
+            "partitioning": partitioning,
             "filters": filters,
             "ds_filters": ds_filters,
             "schema": schema,
@@ -1191,7 +1191,11 @@ class ArrowDatasetEngine(Engine):
         }
 
         # Main parts/stats-construction
-        if has_metadata_file or metadata_task_size == 0:
+        if (
+            has_metadata_file
+            or metadata_task_size == 0
+            or metadata_task_size > len(ds.files)
+        ):
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
 
@@ -1279,15 +1283,15 @@ class ArrowDatasetEngine(Engine):
                 ], None
 
             # Need more information - convert the path to a fragment
-            partitioning_method = dataset_info_kwargs["partitioning_method"]
+            partitioning = dataset_info_kwargs["partitioning"]
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=fs,
                     format="parquet",
-                    partitioning=partitioning_method["obj"].discover(
-                        *partitioning_method.get("args", []),
-                        **partitioning_method.get("kwargs", {}),
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 ).get_fragments()
             )
@@ -1665,15 +1669,15 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         cls,
         paths,
         fs,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        chunksize=None,
-        aggregate_files=None,
-        ignore_metadata_file=False,
-        metadata_task_size=None,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
+        chunksize,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
         **dataset_kwargs,
     ):
         """pyarrow-legacy version of _collect_dataset_info
@@ -1686,7 +1690,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if ignore_metadata_file:
             raise ValueError("ignore_metadata_file not supported in ArrowLegacyEngine")
 
-        if metadata_task_size is not None:
+        if metadata_task_size:
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
         (
