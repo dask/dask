@@ -1,4 +1,5 @@
 import math
+import os
 import warnings
 from distutils.version import LooseVersion
 
@@ -583,10 +584,11 @@ def to_parquet(
             # Ref: https://github.com/dask/dask/issues/7466
             # Check that we are not writing to the same location we are reading from
             graph = df.__dask_graph__()
-            for k, v in graph.layers.items():
-                if k.startswith("read-parquet-"):
-                    for part in v.parts:
-                        if os.path.dirname(part["piece"][0]) == path:
+            for layer_name, layer in graph.layers.items():
+                if layer_name.startswith("read-parquet-"):
+                    for k, v in layer.items():
+                        # check the arguments of the callable to extract the path
+                        if os.path.dirname(v[1]["piece"][0]) == path:
                             raise ValueError(
                                 "Cannot read and write to same parquet file within the same task graph. Refer #7466"
                             )
