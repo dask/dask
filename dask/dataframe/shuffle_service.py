@@ -703,7 +703,9 @@ class ShuffleService:
         result:
             The actual output partition
         """
-        assert not self.shards
+        assert (
+            not self.shards
+        ), f"{len(self.shards)} shards to send remaining during `get`"
         with self.lock_final_gather:
             if not self.done_receiving:
                 # Flush data and clean up the receive handlers, now that we know all sends are done.
@@ -730,8 +732,12 @@ class ShuffleService:
                     )
                 self.files.clear()
                 self.file_locks.clear()
-                assert not self.file_amount_written
-                assert self.file_buffers_bytes == 0
+                assert (
+                    not self.file_amount_written
+                ), f"{len(self.file_amount_written)} keys in `file_amount_written` after closing all files"
+                assert (
+                    self.file_buffers_bytes == 0
+                ), f"{format_bytes(self.file_buffers_bytes)} in `file_buffers_bytes` after flush"
 
         # Since all sends are complete, at this point all result parts for all partitions should be on disk.
 
