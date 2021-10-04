@@ -24,7 +24,7 @@ jobs:
       - name: Find and Replace Release
         uses: jacobtomlinson/gha-find-replace@0.1.4
         with:
-          include: '\continuous_integration\/gpuci\/axis\.yaml'
+          include: 'continuous_integration\/gpuci\/axis\.yaml'
           find: "RAPIDS_VER:\n- .*"
           replace: 'RAPIDS_VER:\n- "${{ steps.latest_version.outputs.version }}"'
 
