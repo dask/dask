@@ -8,7 +8,7 @@ on:
 jobs:
   check-version:
     runs-on: ubuntu-latest
-    if: github.repository == 'charlesbluca/dask'
+    if: github.repository == 'dask/dask'
 
     steps:
       - uses: actions/checkout@v2
