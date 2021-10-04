@@ -415,7 +415,6 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    sep=fs.sep,
                     **kwargs,
                 )
                 if gather_statistics is None:
@@ -447,7 +446,6 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    sep=fs.sep,
                     **kwargs,
                 )
             else:
@@ -778,7 +776,6 @@ class FastParquetEngine(Engine):
             pf = ParquetFile(
                 pf_or_files,
                 open_with=fs.open,
-                sep=fs.sep,
                 root=root_path,
             )
             # Update hive-partitioning to match global cats/scheme
@@ -948,7 +945,6 @@ class FastParquetEngine(Engine):
                 parquet_file = ParquetFile(
                     [p[0] for p in pieces],
                     open_with=fs.open,
-                    sep=fs.sep,
                     root=root_path or False,
                     **kwargs.get("file", {}),
                 )
@@ -959,7 +955,6 @@ class FastParquetEngine(Engine):
                         else ParquetFile(
                             piece[0],
                             open_with=fs.open,
-                            sep=fs.sep,
                             root=root_path or False,
                             **kwargs.get("file", {}),
                         )
@@ -1069,7 +1064,7 @@ class FastParquetEngine(Engine):
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
-                pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=fs.sep)
+                pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
             except (IOError, ValueError):
                 # append for create
                 append = False
