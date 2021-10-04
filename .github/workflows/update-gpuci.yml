@@ -6,13 +6,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-version:
+  update-gpuci:
     runs-on: ubuntu-latest
     if: github.repository == 'charlesbluca/dask'
 
     steps:
       - uses: actions/checkout@v2
-
       - name: Get latest cuDF nightly version
         id: latest_version
         uses: jacobtomlinson/gha-anaconda-package-version@0.1.3
@@ -20,12 +19,10 @@ jobs:
           org: "rapidsai-nightly"
           package: "cudf"
           version_system: "CalVer"
-
-      - name: Strip git tags from versions
+      - name: Strip git tags from version
         run: echo "RAPIDS_VER=${FULL_RAPIDS_VER::-10}" >> $GITHUB_ENV
         env:
           FULL_RAPIDS_VER: ${{ steps.latest_version.outputs.version }}
-
       - name: Find and Replace Release
         uses: jacobtomlinson/gha-find-replace@0.1.4
         with:
@@ -34,13 +31,12 @@ jobs:
           replace: |
             RAPIDS_VER:
             - "${{ env.RAPIDS_VER }}"
-
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "Update gpuCI `RAPIDS_VER` to `${{ env.RAPIDS_VER }}`"
-          title: "Update gpuCI `RAPIDS_VER` to ${{ env.RAPIDS_VER }}"
+          title: "Update gpuCI `RAPIDS_VER` to `${{ env.RAPIDS_VER }}`"
           reviewers: "charlesbluca"
           # labels: ""
           author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
