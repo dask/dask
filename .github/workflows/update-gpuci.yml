@@ -22,7 +22,7 @@ jobs:
           version_system: "CalVer"
 
       - name: Strip git tags from versions
-        run: echo "RAPIDS_VER=${FULL_RAPIDS_VER::-10} >> $GITHUB_ENV"
+        run: echo "RAPIDS_VER=${FULL_RAPIDS_VER::-10}" >> $GITHUB_ENV
         env:
           FULL_RAPIDS_VER: ${{ steps.latest_version.outputs.version }}
 
