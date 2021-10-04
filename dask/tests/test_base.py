@@ -5,7 +5,6 @@ import sys
 import time
 from collections import OrderedDict
 from operator import add, mul
-from unittest import mock
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -138,21 +137,16 @@ def test_tokenize_numpy_array_on_object_dtype():
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
 
-    with mock.patch("dask.base.hash_buffer_hex") as mock_hash_buffer_hex:
-        # Emulate failure of ``dask.base.hash_buffer_hex``, in order to trigger
-        # fallback to non-deterministic behavior.
-        mock_hash_buffer_hex.side_effect = UnicodeDecodeError
+    # Trigger non-deterministic hashing for object dtype
+    class NoPickle:
+        pass
 
-        with dask.config.set({"tokenize.ensure-deterministic": False}):
-            # As a fallback from a failed buffer hashing, the resulting hash
-            # is a non-deterministic UUID4.
-            assert tokenize(a) != tokenize(a)
+    x = np.array(["a", None, NoPickle], dtype=object)
+    assert tokenize(x) != tokenize(x)
 
-        with dask.config.set({"tokenize.ensure-deterministic": True}):
-            with pytest.raises(RuntimeError) as excinfo:
-                tokenize(a)
-
-        assert "cannot be deterministically hashed" in str(excinfo.value)
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            tokenize(x)
 
 
 @pytest.mark.skipif("not np")
@@ -244,36 +238,19 @@ def test_normalize_base():
 
 def test_tokenize_object():
     o = object()
-
-    with dask.config.set({"tokenize.ensure-deterministic": False}):
-        # Subsequent, non-deterministic tokenization returns different tokens.
-        assert normalize_token(o) != normalize_token(o)
+    # Defaults to non-deterministic tokenization
+    assert normalize_token(o) != normalize_token(o)
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
             normalize_token(o)
 
-        assert "cannot be deterministically hashed" in str(excinfo.value)
 
-    # Assert that objects which have a corresponding `__dask_tokenize__`
-    # method are unaffected by the config, and get normalized as per that
-    # method.
-    # Subsequent, deterministic tokenization returns the same tokens.
-    o2 = mock.MagicMock()
-    o2.__dask_tokenize__ = mock.Mock(return_value="abc")
+def test_tokenize_callable():
+    def my_func(a, b, c=1):
+        return a + b + c
 
-    for ensure in [True, False]:
-        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
-            assert normalize_token(o2) == normalize_token(o2) == "abc"
-
-    # Assert that handling callables is unaffected by the config as it's
-    # logically distinct.
-    # As above, subsequent, deterministic tokenization returns the same tokens.
-    c = lambda: None
-
-    for ensure in [True, False]:
-        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
-            assert normalize_token(c) == normalize_token(c)
+    assert tokenize(my_func) == tokenize(my_func)  # Consistent token
 
 
 @pytest.mark.skipif("not pd")
@@ -385,6 +362,10 @@ def test_tokenize_method():
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
 
+    for ensure in [True, False]:
+        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
+            assert tokenize(a) == tokenize(a)
+
     # dispatch takes precedence
     before = tokenize(a)
     normalize_token.register(Foo, lambda self: self.x + 1)
@@ -493,14 +474,11 @@ def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
 
-    with dask.config.set({"tokenize.ensure-deterministic": False}):
-        assert len(tokenize(cycle)) == 32
+    assert len(tokenize(cycle)) == 32
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
             tokenize(cycle)
-
-    assert "cannot be deterministically hashed" in str(excinfo.value)
 
 
 def test_tokenize_datetime_date():
