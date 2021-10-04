@@ -839,7 +839,14 @@ def normalize_seq(seq):
         try:
             return list(map(normalize_token, seq))
         except RecursionError:
-            return str(uuid.uuid4())
+            if not config.get("tokenize.ensure-deterministic"):
+                return uuid.uuid4().hex
+
+            raise RuntimeError(
+                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+                "for more information"
+            )
 
     return type(seq).__name__, func(seq)
 
@@ -859,7 +866,18 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
-    return normalize_function(o) if callable(o) else uuid.uuid4().hex
+
+    if callable(o):
+        return normalize_function(o)
+
+    if not config.get("tokenize.ensure-deterministic"):
+        return uuid.uuid4().hex
+
+    raise RuntimeError(
+        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
+    )
 
 
 function_cache = {}
@@ -1032,7 +1050,15 @@ def register_numpy():
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
-                    data = uuid.uuid4().hex
+                    if not config.get("tokenize.ensure-deterministic"):
+                        data = uuid.uuid4().hex
+                    else:
+                        raise RuntimeError(
+                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            "be deterministically hashed. Please, see "
+                            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
+                            "for more information"
+                        )
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
