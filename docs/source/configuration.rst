@@ -25,46 +25,26 @@ Access Configuration
 .. autosummary::
    dask.config.get
 
-Configuration is usually read by using the ``dask.config`` module, either with
-the ``config`` dictionary or the ``get`` function:
+Dask's configuration system is usually accessed using the ``dask.config.get`` function.
+You can use ``.`` for nested access, for example:
 
 .. code-block:: python
 
    >>> import dask
    >>> import dask.distributed  # populate config with distributed defaults
-   >>> dask.config.config
-   {
-       "array": {
-           "chunk-size": "128 MiB",
-       }
-       "distributed": {
-           "logging": {
-               "distributed": "info",
-               "bokeh": "critical",
-               "tornado": "critical"
-            },
-            "admin": {
-                "log-format": "%(name)s - %(levelname)s - %(message)s"
-            }
-       }
-   }
 
-   >>> dask.config.get("distributed.logging")
-   {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical'
-   }
+   >>> dask.config.get("distributed.client") # use `.` for nested access
+   {'heartbeat': '5s', 'scheduler-info-interval': '2s'}
 
-   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
-   'critical'
+   >>> dask.config.get("distributed.scheduler.unknown-task-duration")
+   '500ms'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
 
 Note that the ``get`` function treats underscores and hyphens identically.
-For example, ``dask.config.get('num_workers')`` is equivalent to
-``dask.config.get('num-workers')``.
+For example, ``dask.config.get("temporary-directory")`` is equivalent to
+``dask.config.get("temporary_directory")``.
 
 Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
 :ref:`api.utilities`.
@@ -75,25 +55,20 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-You can specify configuration values in YAML files like the following:
+You can specify configuration values in YAML files. For example:
 
 .. code-block:: yaml
 
    array:
-      chunk-size: 128 MiB
-
+     chunk-size: 128 MiB
+     
    distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
+      worker:
+         memory:
+            spill: 0.85  # default: 0.7
+            target: 0.75  # default: 0.6
+            terminate: 0.98  # default: 0.95
 
-     scheduler:
-       work-stealing: True
-       allowed-failures: 5
-
-       admin:
-         log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
@@ -231,11 +206,15 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   array:
+      chunk-size: 128 MiB
+ 
    distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
+      workers:
+         memory:
+            spill: 0.85 
+            target: 0.75  
+            terminate: 0.98  
    </textarea>
 
 **Environment variable**
@@ -243,9 +222,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
-   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
-   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
-   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   export DASK_ARRAY__CHUNK_SIZE="128 MiB"
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__SPILL=0.85
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TARGET=0.75
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TERMINATE=0.98
    </textarea>
 
 **Inline with dot notation**
@@ -253,9 +233,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
-   >>> dask.config.set({"distributed.logging.distributed": "info"})
-   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
-   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   >>> dask.config.set({"array.chunk-size": "128 MiB"})
+   >>> dask.config.set({"distributed.workers.memory.spill": 0.85})
+   >>> dask.config.set({"distributed.workers.memory.target": 0.75})
+   >>> dask.config.set({"distributed.workers.memory.terminate": 0.98})
    </textarea>
 
 Updating Configuration

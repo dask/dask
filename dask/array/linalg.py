@@ -1,4 +1,5 @@
 import operator
+from functools import partial
 from numbers import Number
 
 import numpy as np
@@ -12,7 +13,7 @@ from ..utils import apply, derived_from
 from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array, ones_like_safe, svd_flip
+from .utils import array_safe, meta_from_array, solve_triangular_safe, svd_flip
 
 
 def _cumsum_blocks(it):
@@ -43,7 +44,7 @@ def _wrapped_qr(a):
     """
     # workaround may be removed when numpy stops rejecting edge cases
     if a.shape[0] == 0:
-        return np.zeros((0, 0)), np.zeros((0, a.shape[1]))
+        return np.zeros_like(a, shape=(0, 0)), np.zeros_like(a, shape=(0, a.shape[1]))
     else:
         return np.linalg.qr(a)
 
@@ -790,7 +791,7 @@ def svd_compressed(
 
     Examples
     --------
-    >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
+    >>> u, s, v = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
     -------
@@ -935,7 +936,7 @@ def svd(a, coerce_signs=True):
         m, n = a.shape
         k = min(a.shape)
         mu, ms, mv = np.linalg.svd(
-            ones_like_safe(a._meta, shape=(1, 1), dtype=a._meta.dtype)
+            np.ones_like(a._meta, shape=(1, 1), dtype=a._meta.dtype)
         )
         u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
         u = from_delayed(u, shape=(m, k), meta=mu)
@@ -964,9 +965,7 @@ def svd(a, coerce_signs=True):
 
 
 def _solve_triangular_lower(a, b):
-    import scipy.linalg
-
-    return scipy.linalg.solve_triangular(a, b, lower=True)
+    return solve_triangular_safe(a, b, lower=True)
 
 
 def lu(a):
@@ -985,7 +984,6 @@ def lu(a):
     l:  Array, lower triangular matrix with unit diagonal.
     u:  Array, upper triangular matrix
     """
-
     import scipy.linalg
 
     if a.ndim != 2:
@@ -1126,8 +1124,6 @@ def solve_triangular(a, b, lower=False):
         Solution to the system `a x = b`. Shape of return matches `b`.
     """
 
-    import scipy.linalg
-
     if a.ndim != 2:
         raise ValueError("a must be 2 dimensional")
     if b.ndim <= 2:
@@ -1188,14 +1184,18 @@ def solve_triangular(a, b, lower=False):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (
-                    scipy.linalg.solve_triangular,
+                    solve_triangular_safe,
                     (a.name, i, i),
                     target,
                 )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
+
+    a_meta = meta_from_array(a)
+    b_meta = meta_from_array(b)
     res = _solve_triangular_lower(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype), np.array([0, 1], dtype=b.dtype)
+        array_safe([[1, 0], [1, 2]], dtype=a.dtype, like=a_meta),
+        array_safe([0, 1], dtype=b.dtype, like=b_meta),
     )
     meta = meta_from_array(a, b.ndim, dtype=res.dtype)
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
@@ -1251,9 +1251,7 @@ def inv(a):
 
 
 def _cholesky_lower(a):
-    import scipy.linalg
-
-    return scipy.linalg.cholesky(a, lower=True)
+    return np.linalg.cholesky(a)
 
 
 def cholesky(a, lower=False):
@@ -1287,7 +1285,6 @@ def _cholesky(a):
     Private function to perform Cholesky decomposition, which returns both
     lower and upper triangulars.
     """
-    import scipy.linalg
 
     if a.ndim != 2:
         raise ValueError("Dimension must be 2 to perform cholesky decomposition")
@@ -1321,7 +1318,10 @@ def _cholesky(a):
     for i in range(vdim):
         for j in range(hdim):
             if i < j:
-                dsk[name, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
+                dsk[name, i, j] = (
+                    partial(np.zeros_like, shape=(a.chunks[0][i], a.chunks[1][j])),
+                    meta_from_array(a),
+                )
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:
                 target = (a.name, i, j)
@@ -1351,7 +1351,8 @@ def _cholesky(a):
 
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    a_meta = meta_from_array(a)
+    cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=a.dtype, like=a_meta))
     meta = meta_from_array(a, dtype=cho.dtype)
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)

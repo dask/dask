@@ -96,8 +96,8 @@ def register_chunk_type(type):
 
     >>> da.register_chunk_type(FlaggedArray)
     >>> x = da.ones(5) - FlaggedArray(np.ones(5), True)
-    >>> x   # doctest: +SKIP
-    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,), chunktype=builtins.FlaggedArray>
+    >>> x
+    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,), chunktype=dask.FlaggedArray>
     >>> x.compute()
     Flag: True, Array: array([0., 0., 0., 0., 0.])
     """
@@ -134,7 +134,7 @@ except ImportError:
 
 
 def is_valid_chunk_type(type):
-    """ Check if given type is a valid chunk and downcast array type"""
+    """Check if given type is a valid chunk and downcast array type"""
     try:
         return type in _HANDLED_CHUNK_TYPES or issubclass(
             type, tuple(_HANDLED_CHUNK_TYPES)
@@ -144,5 +144,5 @@ def is_valid_chunk_type(type):
 
 
 def is_valid_array_chunk(array):
-    """ Check if given array is of a valid type to operate with"""
+    """Check if given array is of a valid type to operate with"""
     return array is None or isinstance(array, tuple(_HANDLED_CHUNK_TYPES))

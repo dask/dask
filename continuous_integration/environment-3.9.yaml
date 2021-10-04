@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.9
+  - packaging
   - numpy
   - pandas
   # test dependencies
@@ -14,8 +15,7 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  # Not available for Python 3.9 on conda-forge yet
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
   - zarr
@@ -46,8 +46,7 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  # Not available for Python 3.9 on conda-forge yet
-  # - numba
+  - numba
   - partd
   - psutil
   - requests
@@ -56,13 +55,13 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
-  # Depends on numba
-  # - sparse
+  - sparse
   - cachey
   - python-graphviz
   - pandas-datareader
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed

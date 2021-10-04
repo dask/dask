@@ -326,8 +326,8 @@ def subs(task, key, val):
     Examples
     --------
 
-    >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
-    (inc, 1)
+    >>> subs((inc, 'x'), 'x', 1)  # doctest: +ELLIPSIS
+    (<function inc at ...>, 1)
     """
     type_task = type(task)
     if not (type_task is tuple and task and callable(task[0])):  # istask(task):
@@ -427,7 +427,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
 
 
 def toposort(dsk, dependencies=None):
-    """ Return a list of keys of dask sorted in topological order."""
+    """Return a list of keys of dask sorted in topological order."""
     return _toposort(dsk, dependencies=dependencies)
 
 
@@ -497,7 +497,7 @@ def quote(x):
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
 
-    >>> quote((add, 1, 2))  # doctest: +SKIP
+    >>> quote((add, 1, 2))
     (literal<type=tuple>,)
     """
     if istask(x) or type(x) is list or type(x) is dict:

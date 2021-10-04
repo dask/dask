@@ -136,15 +136,15 @@ def to_graphviz(
     verbose=False,
     **kwargs,
 ):
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-    if graph_attr is None:
-        graph_attr = {}
-
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
+    node_attr["fontname"] = "helvetica"
+
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
@@ -273,7 +273,12 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
 
 def graphviz_to_file(g, filename, format):
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
-    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+
+    if (
+        format is None
+        and filename is not None
+        and any(filename.lower().endswith(fmt) for fmt in fmts)
+    ):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 
@@ -292,7 +297,7 @@ def graphviz_to_file(g, filename, format):
 
     display_cls = _get_display_cls(format)
 
-    if not filename:
+    if filename is None:
         return display_cls(data=data)
 
     full_filename = ".".join([filename, format])

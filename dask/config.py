@@ -549,6 +549,15 @@ deprecations = {
     "fuse_subgraphs": "optimization.fuse.subgraphs",
     "fuse_rename_keys": "optimization.fuse.rename-keys",
     "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+    # See https://github.com/dask/distributed/pull/4916
+    "ucx.cuda_copy": "distributed.ucx.cuda_copy",
+    "ucx.tcp": "distributed.ucx.tcp",
+    "ucx.nvlink": "distributed.ucx.nvlink",
+    "ucx.infiniband": "distributed.ucx.infiniband",
+    "ucx.rdmacm": "distributed.ucx.rdmacm",
+    "ucx.net-devices": "distributed.ucx.net-devices",
+    "ucx.reuse-endpoints": "distributed.ucx.reuse-endpoints",
+    "rmm.pool-size": "distributed.rmm.pool-size",
 }
 
 
@@ -623,7 +632,7 @@ def deserialize(data):
     Parameters
     ----------
     data: str
-        String serialied by :func:`dask.config.serialize`
+        String serialized by :func:`dask.config.serialize`
 
     Returns
     -------

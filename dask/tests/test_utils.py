@@ -13,6 +13,7 @@ from dask.utils import (
     Dispatch,
     M,
     SerializableLock,
+    _deprecated,
     asciitable,
     derived_from,
     ensure_dict,
@@ -21,12 +22,14 @@ from dask.utils import (
     funcname,
     getargspec,
     has_keyword,
+    ignoring,
     is_arraylike,
     itemgetter,
     iter_chunks,
     memory_repr,
     methodcaller,
     ndeepmap,
+    noop_context,
     parse_bytes,
     parse_timedelta,
     partial_by_order,
@@ -35,6 +38,7 @@ from dask.utils import (
     stringify,
     stringify_collection_keys,
     takes_multiple_arguments,
+    typename,
 )
 from dask.utils_test import inc
 
@@ -100,7 +104,7 @@ def test_dispatch():
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
 
     def f(a):
-        """ My Docstring """
+        """My Docstring"""
         return a
 
     foo.register(object, f)
@@ -155,6 +159,38 @@ def test_dispatch_lazy():
     assert foo.dispatch(decimal.Decimal) == foo_dec
     assert foo(decimal.Decimal(1)) == decimal.Decimal(2)
     assert foo(1) == 1
+
+
+def test_dispatch_lazy_walks_mro():
+    """Check that subclasses of classes with lazily registered handlers still
+    use their parent class's handler by default"""
+    import decimal
+
+    class Lazy(decimal.Decimal):
+        pass
+
+    class Eager(Lazy):
+        pass
+
+    foo = Dispatch()
+
+    @foo.register(Eager)
+    def eager_handler(x):
+        return "eager"
+
+    def lazy_handler(a):
+        return "lazy"
+
+    @foo.register_lazy("decimal")
+    def register_decimal():
+        foo.register(decimal.Decimal, lazy_handler)
+
+    assert foo.dispatch(Lazy) == lazy_handler
+    assert foo(Lazy(1)) == "lazy"
+    assert foo.dispatch(decimal.Decimal) == lazy_handler
+    assert foo(decimal.Decimal(1)) == "lazy"
+    assert foo.dispatch(Eager) == eager_handler
+    assert foo(Eager(1)) == "eager"
 
 
 def test_random_state_data():
@@ -659,3 +695,73 @@ def test_stringify_collection_keys():
 )
 def test_format_bytes(n, expect):
     assert format_bytes(int(n)) == expect
+
+
+def test_deprecated():
+    @_deprecated()
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    msg = str(record[0].message)
+    assert "foo is deprecated" in msg
+    assert "removed in a future release" in msg
+
+
+def test_deprecated_version():
+    @_deprecated(version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated in version 1.2.3"):
+        assert foo() == "bar"
+
+
+def test_deprecated_category():
+    @_deprecated(category=DeprecationWarning)
+    def foo():
+        return "bar"
+
+    with pytest.warns(DeprecationWarning):
+        assert foo() == "bar"
+
+
+def test_deprecated_message():
+    @_deprecated(message="woohoo")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    assert str(record[0].message) == "woohoo"
+
+
+def test_ignoring_deprecated():
+    with pytest.warns(FutureWarning, match="contextlib.suppress"):
+        with ignoring(ValueError):
+            pass
+
+
+def test_noop_context_deprecated():
+    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
+        with noop_context():
+            pass
+
+
+def test_typename():
+    assert typename(HighLevelGraph) == "dask.highlevelgraph.HighLevelGraph"
+    assert typename(HighLevelGraph, short=True) == "dask.HighLevelGraph"
+
+
+class MyType:
+    pass
+
+
+def test_typename_on_instances():
+    instance = MyType()
+    assert typename(instance) == typename(MyType)

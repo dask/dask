@@ -33,6 +33,24 @@ properties:
           Compression algorithm used for on disk-shuffling. Partd, the library used
           for compression supports ZLib, BZ2, SNAPPY, and BLOSC
 
+      parquet:
+        type: object
+        properties:
+
+          metadata-task-size-local:
+            type: integer
+            description: |
+              The number of files to handle within each metadata-processing
+              task when reading a parquet dataset from a LOCAL file system.
+              Specifying 0 will result in serial execution on the client.
+
+          metadata-task-size-remote:
+            type: integer
+            description: |
+              The number of files to handle within each metadata-processing
+              task when reading a parquet dataset from a REMOTE file system.
+              Specifying 0 will result in serial execution on the client.
+
   array:
     type: object
     properties:
@@ -68,8 +86,13 @@ properties:
         properties:
 
           active:
-            type: boolean
-            description: Turn task fusion on/off
+            type: [boolean, 'null']
+            description: |
+              Turn task fusion on/off. This option refers to the fusion of a
+              fully-materialized task graph (not a high-Level graph). By default
+              (None), the active task-fusion option will be treated as ``False``
+              for Dask-Dataframe collections, and as ``True`` for all other graphs
+              (including Dask-Array collections).
 
           ave-width:
             type: number

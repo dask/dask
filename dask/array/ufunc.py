@@ -14,7 +14,6 @@ from ..utils import (
     is_series_like,
 )
 from .core import Array, apply_infer_dtype, asarray, blockwise, elemwise
-from .utils import IS_NEP18_ACTIVE, empty_like_safe
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -22,7 +21,7 @@ def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
 
 
 def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
-    """ Wrap up numpy function into dask.array """
+    """Wrap up numpy function into dask.array"""
 
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, "_elemwise")]
@@ -32,7 +31,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
                 or is_series_like(dsk[0])
                 or is_index_like(dsk[0])
             )
-            if array_wrap and (is_dataframe or not IS_NEP18_ACTIVE):
+            if array_wrap and is_dataframe:
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc, *args, **kwargs)
             else:
                 return dsk[0]._elemwise(numpy_ufunc, *args, **kwargs)
@@ -319,7 +318,7 @@ def frexp(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = empty_like_safe(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
@@ -344,7 +343,7 @@ def modf(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = empty_like_safe(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])

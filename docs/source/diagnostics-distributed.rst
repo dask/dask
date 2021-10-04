@@ -21,7 +21,7 @@ Dashboard
             allowfullscreen>
     </iframe>
 
-If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
+If `Bokeh <https://docs.bokeh.org>`_ is installed
 then the dashboard will start up automatically whenever the scheduler is created.
 For local use this happens when you create a client with no arguments:
 
@@ -33,7 +33,8 @@ For local use this happens when you create a client with no arguments:
 It is typically served at ``http://localhost:8787/status`` ,
 but may be served elsewhere if this port is taken.
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or can be queried from ``client.scheduler_info()['services']``.
+or can be queried from ``client.dashboard_link``
+(or for older versions of distributed, ``client.scheduler_info()['services']``).
 
 There are numerous pages with information about task runtimes, communication,
 statistical profiling, load balancing, memory use, and much more.

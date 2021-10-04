@@ -181,7 +181,6 @@ messy situations in everyday problems.
    changelog.rst
    configuration.rst
    configuration-reference.rst
-   educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst
@@ -191,7 +190,6 @@ messy situations in everyday problems.
    remote-data-services.rst
    gpu.rst
    cite.rst
-   funding.rst
    logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com

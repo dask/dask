@@ -9,7 +9,9 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
+from dask.layers import DataFrameIOLayer
 from dask.utils import dependency_depth, tmpdir, tmpfile
 
 
@@ -123,6 +125,16 @@ def test_to_hdf_multiple_nodes():
         out = dd.read_hdf(fn, "/data*")
         assert_eq(df16, out)
 
+    # Test getitem optimization
+    with tmpfile("h5") as fn:
+        a.to_hdf(fn, "/data*")
+        out = dd.read_hdf(fn, "/data*")[["x"]]
+        dsk = optimize_dataframe_getitem(out.dask, keys=out.__dask_keys__())
+        read = [key for key in dsk.layers if key.startswith("read-hdf")][0]
+        subgraph = dsk.layers[read]
+        assert isinstance(subgraph, DataFrameIOLayer)
+        assert subgraph.columns == ["x"]
+
 
 def test_to_hdf_multiple_files():
     pytest.importorskip("tables")
@@ -186,6 +198,16 @@ def test_to_hdf_multiple_files():
         b.to_hdf(fn, "/data")
         out = dd.read_hdf(fn, "/data")
         assert_eq(df16, out)
+
+    # saving to multiple files where first file is longer
+    # https://github.com/dask/dask/issues/8023
+    with tmpdir() as dn:
+        fn1 = os.path.join(dn, "data_1.h5")
+        fn2 = os.path.join(dn, "data_2.h5")
+        b.to_hdf(fn1, "/data")
+        a.to_hdf(fn2, "/data")
+        out = dd.read_hdf([fn1, fn2], "/data")
+        assert_eq(pd.concat([df16, df]), out)
 
     # saving to multiple files with custom name_function
     with tmpdir() as dn:

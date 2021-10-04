@@ -3,8 +3,9 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import tm
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.optimize import optimize_dataframe_getitem
 
 
 def test_make_timeseries():
@@ -12,8 +13,8 @@ def test_make_timeseries():
         "2000", "2015", {"A": float, "B": int, "C": str}, freq="2D", partition_freq="6M"
     )
 
-    assert df.divisions[0] == pd.Timestamp("2000-01-31", freq="6M")
-    assert df.divisions[-1] == pd.Timestamp("2014-07-31", freq="6M")
+    assert df.divisions[0] == pd.Timestamp("2000-01-31")
+    assert df.divisions[-1] == pd.Timestamp("2014-07-31")
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
@@ -79,6 +80,26 @@ def test_make_timeseries_no_args():
     assert len(set(df.dtypes)) > 1
 
 
+def test_make_timeseries_blockwise():
+    df = dd.demo.make_timeseries()
+    df = df[["x", "y"]]
+    keys = [(df._name, i) for i in range(df.npartitions)]
+
+    # Check that `optimize_dataframe_getitem` changes the
+    # `columns` attribute of the "make-timeseries" layer
+    graph = optimize_dataframe_getitem(df.__dask_graph__(), keys)
+    key = [k for k in graph.layers.keys() if k.startswith("make-timeseries-")][0]
+    assert set(graph.layers[key].columns) == {"x", "y"}
+
+    # Check that `optimize_blockwise` fuses both
+    # `Blockwise` layers together into a singe `Blockwise` layer
+    graph = optimize_blockwise(df.__dask_graph__(), keys)
+    layers = graph.layers
+    name = list(layers.keys())[0]
+    assert len(layers) == 1
+    assert isinstance(layers[name], Blockwise)
+
+
 def test_no_overlaps():
     df = dd.demo.make_timeseries(
         "2000", "2001", {"A": float}, freq="3H", partition_freq="3M"
@@ -92,12 +113,10 @@ def test_no_overlaps():
 
 
 @pytest.mark.network
-def test_daily_stock():
-    pytest.importorskip("pandas_datareader", minversion="0.8.0")
-    df = dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
-    assert isinstance(df, dd.DataFrame)
-    assert 10 < df.npartitions < 31
-    assert_eq(df, df)
+def test_daily_stock_deprecated():
+    pytest.importorskip("pandas_datareader", minversion="0.10.0")
+    with pytest.warns(FutureWarning, match="deprecated"):
+        dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
 
 
 def test_make_timeseries_keywords():
@@ -136,3 +155,13 @@ def test_make_timeseries_fancy_keywords():
 
     assert 100 < aa <= 10000000
     assert 1 < bb <= 100
+
+
+def test_make_timeseries_getitem_compute():
+    # See https://github.com/dask/dask/issues/7692
+
+    df = dd.demo.make_timeseries()
+    df2 = df[df.y > 0]
+    df3 = df2.compute()
+    assert df3["y"].min() > 0
+    assert list(df.columns) == list(df3.columns)
