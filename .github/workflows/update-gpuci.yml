@@ -15,14 +15,14 @@ jobs:
 
       - name: Get latest cuDF nightly version
         id: latest_version
-        uses: jacobtomlinson/gha-anaconda-package-version@0.1.1
+        uses: jacobtomlinson/gha-anaconda-package-version@0.1.3
         with:
           org: "rapidsai-nightly"
           package: "cudf"
           version_system: "CalVer"
 
       - name: Find and Replace Release
-        uses: jacobtomlinson/gha-find-replace@0.1.1
+        uses: jacobtomlinson/gha-find-replace@0.1.4
         with:
           include: '\continuous_integration\/gpuci\/axis\.yaml'
           find: "RAPIDS_VER:\n- .*"
