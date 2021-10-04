@@ -1,0 +1,43 @@
+name: Check for new versions of cuDF on Conda Forge
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    if: github.repository == 'charlesbluca/dask'
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Get latest Dask version
+        id: latest_version
+        uses: jacobtomlinson/gha-anaconda-package-version@0.1.1
+        with:
+          org: "rapidsai-nightly"
+          package: "cudf"
+
+      - name: Find and Replace Release
+        uses: jacobtomlinson/gha-find-replace@0.1.1
+        with:
+          include: '\continuous_integration\/gpuci\/axis\.yaml'
+          find: "RAPIDS_VER:\n- .*"
+          replace: 'RAPIDS_VER:\n- "${{ steps.latest_version.outputs.version }}"'
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update gpuCI `RAPIDS_VER` to ${{ steps.latest_version.outputs.version }}"
+          title: "Update gpuCI `RAPIDS_VER` to ${{ steps.latest_version.outputs.version }}"
+          reviewers: "charlesbluca"
+          # labels: ""
+          author: github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>
+          branch: "upgrade-gpuci-rapids"
+          body: |
+            A new cuDF nightly version has been detected.
+
+            Updated `axis.yaml` to use `${{ steps.latest_version.outputs.version }}`.
