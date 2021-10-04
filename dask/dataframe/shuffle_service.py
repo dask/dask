@@ -555,7 +555,7 @@ class ShuffleService:
                         # remove the first file added; hopefully this is a good heuristic
                         old_key = next(iter(self.files))
                         old_file_lock = self.file_locks[old_key]
-                        old_amount_written = self.file_amount_written[old_key]
+                        old_amount_written = self.file_amount_written.pop(old_key)
                         old_file = self.files.pop(old_key)
                 else:
                     self.file_cache_hits += 1
