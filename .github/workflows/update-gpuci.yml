@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-version:
+  update-gpuci:
     runs-on: ubuntu-latest
     if: github.repository == 'dask/dask'
 
