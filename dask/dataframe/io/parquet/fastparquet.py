@@ -672,7 +672,7 @@ class FastParquetEngine(Engine):
             "categories": categories_dict or categories,
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
-            "root_path": base_path,
+            "base_path": base_path,
         }
 
         # Check if this is a very simple case where we can just
@@ -703,7 +703,7 @@ class FastParquetEngine(Engine):
             "chunksize": chunksize,
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
-            "root_path": "" if base_path is None else base_path,
+            "base_path": "" if base_path is None else base_path,
             "has_metadata_file": has_metadata_file,
         }
 
@@ -765,7 +765,7 @@ class FastParquetEngine(Engine):
         dtypes = dataset_info_kwargs["dtypes"]
         chunksize = dataset_info_kwargs["chunksize"]
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
-        root_path = dataset_info_kwargs.get("root_path", None)
+        base_path = dataset_info_kwargs.get("base_path", None)
         root_cats = dataset_info_kwargs.get("root_cats", None)
         root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
         has_metadata_file = dataset_info_kwargs["has_metadata_file"]
@@ -776,7 +776,7 @@ class FastParquetEngine(Engine):
             pf = ParquetFile(
                 pf_or_files,
                 open_with=fs.open,
-                root=root_path,
+                root=base_path,
             )
             # Update hive-partitioning to match global cats/scheme
             pf.cats = root_cats or {}
@@ -792,7 +792,7 @@ class FastParquetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
-            root_path,
+            base_path,
         ) = cls._organize_row_groups(
             pf,
             split_row_groups,
@@ -800,7 +800,7 @@ class FastParquetEngine(Engine):
             stat_col_indices,
             filters,
             dtypes,
-            root_path,
+            base_path,
             has_metadata_file,
             chunksize,
             aggregation_depth,
@@ -819,7 +819,7 @@ class FastParquetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "pf": pf,
-                "base_path": root_path,
+                "base_path": base_path,
                 "partitions": pf.info.get("partitions", None),
             },
         )
@@ -907,12 +907,12 @@ class FastParquetEngine(Engine):
         categories=(),
         root_cats=None,
         root_file_scheme=None,
-        root_path=None,
+        base_path=None,
         **kwargs,
     ):
 
         null_index_name = False
-        root_path = False if not root_cats else root_path
+        base_path = False if not root_cats else base_path
         if isinstance(index, list):
             if index == [None]:
                 # Handling a None-labeled index...
@@ -945,7 +945,7 @@ class FastParquetEngine(Engine):
                 parquet_file = ParquetFile(
                     [p[0] for p in pieces],
                     open_with=fs.open,
-                    root=root_path or False,
+                    root=base_path or False,
                     **kwargs.get("file", {}),
                 )
                 for piece in pieces:
@@ -955,7 +955,7 @@ class FastParquetEngine(Engine):
                         else ParquetFile(
                             piece[0],
                             open_with=fs.open,
-                            root=root_path or False,
+                            root=base_path or False,
                             **kwargs.get("file", {}),
                         )
                     )
