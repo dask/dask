@@ -140,12 +140,12 @@ def test_tokenize_numpy_array_on_object_dtype():
         # fallback to non-deterministic behavior.
         mock_hash_buffer_hex.side_effect = UnicodeDecodeError
 
-        with dask.config.set({"tokenize.allow-random": True}):
+        with dask.config.set({"tokenize.ensure-deterministic": False}):
             # As a fallback from a failed buffer hashing, the resulting hash
             # is a non-deterministic UUID4.
             assert tokenize(a) != tokenize(a)
 
-        with dask.config.set({"tokenize.allow-random": False}):
+        with dask.config.set({"tokenize.ensure-deterministic": True}):
             with pytest.raises(RuntimeError) as excinfo:
                 tokenize(a)
 
@@ -242,11 +242,11 @@ def test_normalize_base():
 def test_tokenize_object():
     o = object()
 
-    with dask.config.set({"tokenize.allow-random": True}):
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
         # Subsequent, non-deterministic tokenization returns different tokens.
         assert normalize_token(o) != normalize_token(o)
 
-    with dask.config.set({"tokenize.allow-random": False}):
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError) as excinfo:
             normalize_token(o)
 
@@ -259,8 +259,8 @@ def test_tokenize_object():
     o2 = mock.MagicMock()
     o2.__dask_tokenize__ = mock.Mock(return_value="abc")
 
-    for allow_random in [True, False]:
-        with dask.config.set({"tokenize.allow-random": allow_random}):
+    for ensure in [True, False]:
+        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
             assert normalize_token(o2) == normalize_token(o2) == "abc"
 
     # Assert that handling callables is unaffected by the config as it's
@@ -268,8 +268,8 @@ def test_tokenize_object():
     # As above, subsequent, deterministic tokenization returns the same tokens.
     c = lambda: None
 
-    for allow_random in [True, False]:
-        with dask.config.set({"tokenize.allow-random": allow_random}):
+    for ensure in [True, False]:
+        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
             assert normalize_token(c) == normalize_token(c)
 
 
@@ -491,10 +491,10 @@ def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
 
-    with dask.config.set({"tokenize.allow-random": True}):
+    with dask.config.set({"tokenize.ensure-deterministic": False}):
         assert len(tokenize(cycle)) == 32
 
-    with dask.config.set({"tokenize.allow-random": False}):
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError) as excinfo:
             tokenize(cycle)
 

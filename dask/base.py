@@ -822,7 +822,7 @@ def normalize_seq(seq):
         try:
             return list(map(normalize_token, seq))
         except RecursionError:
-            if config.get("tokenize.allow-random", True):
+            if not config.get("tokenize.ensure-deterministic"):
                 return uuid.uuid4().hex
 
             raise RuntimeError(
@@ -853,7 +853,7 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
 
-    if config.get("tokenize.allow-random", True):
+    if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
 
     raise RuntimeError(
@@ -1034,7 +1034,7 @@ def register_numpy():
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
-                    if config.get("tokenize.allow-random", True):
+                    if not config.get("tokenize.ensure-deterministic"):
                         data = uuid.uuid4().hex
                     else:
                         raise RuntimeError(
