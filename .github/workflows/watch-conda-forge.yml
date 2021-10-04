@@ -19,6 +19,7 @@ jobs:
         with:
           org: "rapidsai-nightly"
           package: "cudf"
+          version_system: "CalVer"
 
       - name: Find and Replace Release
         uses: jacobtomlinson/gha-find-replace@0.1.1
