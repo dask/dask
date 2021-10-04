@@ -10,6 +10,17 @@ properties:
       When the value is "null" (default), dask will create a directory from
       where dask was launched: `cwd/dask-worker-space`
 
+  tokenize:
+    type: object
+    properties:
+      ensure-deterministic:
+        type:
+        - boolean
+        description: |
+          If ``true``, tokenize will error instead of falling back to uuids
+          when a deterministic token cannot be generated. Defaults to
+          ``false``.
+
   dataframe:
     type: object
     properties:
