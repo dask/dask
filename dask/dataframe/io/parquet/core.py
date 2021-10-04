@@ -726,17 +726,12 @@ def to_parquet(
     else:
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[df])
 
     if compute:
-        if write_metadata_file:
-            return compute_as_if_collection(
-                DataFrame, graph, (final_name, 0), **compute_kwargs
-            )
-        else:
-            return compute_as_if_collection(
-                DataFrame, graph, part_tasks, **compute_kwargs
-            )
+        return compute_as_if_collection(
+            Scalar, graph, [(final_name, 0)], **compute_kwargs
+        )
     else:
         return Scalar(graph, final_name, "")
 
