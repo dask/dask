@@ -1,4 +1,4 @@
-name: Check for new versions of cuDF on Conda Forge
+name: Check for gpuCI updates
 
 on:
   schedule:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Get latest Dask version
+      - name: Get latest cuDF nightly version
         id: latest_version
         uses: jacobtomlinson/gha-anaconda-package-version@0.1.1
         with:
