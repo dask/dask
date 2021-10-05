@@ -3681,7 +3681,7 @@ def test_extra_file(tmpdir, engine):
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
-    out = dd.read_parquet(tmpdir)
+    out = dd.read_parquet(tmpdir, engine=engine)
     assert_eq(out, df)
 
 
