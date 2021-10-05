@@ -1415,6 +1415,11 @@ def test_quantile_trivial_partitions():
     expected = df.quantile(0.5)
     assert_eq(ddf.quantile(0.5), expected)
 
+    df = pd.DataFrame({"A": [np.nan, np.nan, np.nan, np.nan]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.quantile(0.5)
+    assert_eq(ddf.quantile(0.5), expected)
+
 
 def test_index():
     assert_eq(d.index, full.index)
