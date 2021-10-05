@@ -504,7 +504,7 @@ on both single and multiple machines. Think of it as the "advanced scheduler".
          <Client: 'tcp://127.0.0.1:41703' processes=4 threads=12, memory=31.08 GiB>
 
       There are a variety of ways to set up a remote cluster. Refer to
-      :doc:`how to deploy dask clusters <setup>` for more
+      :doc:`how to deploy dask clusters <how-to/deploy-dask-clusters>` for more
       information.
 
 Once you create a client, any computation will run on the cluster that it points to.

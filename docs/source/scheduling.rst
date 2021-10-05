@@ -136,7 +136,7 @@ Dask Distributed (local)
    # or
    client = Client(processes=False)
 
-The Dask distributed scheduler can either be :doc:`setup on a cluster <setup>`
+The Dask distributed scheduler can either be :doc:`setup on a cluster <how-to/deploy-dask-clusters>`
 or run locally on a personal machine.  Despite having the name "distributed",
 it is often pragmatic on local machines for a few reasons:
 
@@ -148,7 +148,7 @@ it is often pragmatic on local machines for a few reasons:
     multiple processes
 
 You can read more about using the Dask distributed scheduler on a single machine in
-:doc:`these docs <setup/single-distributed>`.
+:doc:`these docs <how-to/deploy-dask/single-distributed>`.
 
 
 Dask Distributed (Cluster)
@@ -156,7 +156,7 @@ Dask Distributed (Cluster)
 
 You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
-We recommend referring to :doc:`how to deploy Dash clusters <setup>` for more information.
+We recommend referring to :doc:`how to deploy Dash clusters <how-to/deploy-dask-clusters>` for more information.
 
 .. _scheduling-configuration:
 

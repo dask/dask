@@ -1,5 +1,5 @@
-Managing environments
-~~~~~~~~~~~~~~~~~~~~~
+Manage environments
+===================
 
 It is critical that each of your dask workers uses the same set of
 python packages and modules when executing your code, so that Dask

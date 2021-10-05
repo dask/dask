@@ -60,7 +60,7 @@ You can specify configuration values in YAML files. For example:
 .. code-block:: yaml
 
    array:
-     chunk-size: 128 MiB
+      chunk-size: 128 MiB
 
    distributed:
       worker:

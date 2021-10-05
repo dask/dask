@@ -359,6 +359,20 @@ redirect_files = [
     ("cite.html", "faq.html#how-do-I-cite-dask"),
     ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
     ("debugging.html", "how-to/debug"),
+    ("setup.html", "how-to/deploy-dask-clusters"),
+    ("setup/cli.html", "how-to/deploy-dask/cli.html"),
+    ("setup/cloud.html", "how-to/deploy-dask/cloud.html"),
+    ("setup/docker.html", "how-to/deploy-dask/docker.html"),
+    ("setup/hpc.html", "how-to/deploy-dask/hpc.html"),
+    ("setup/kubernetes.html", "how-to/deploy-dask/kubernetes.html"),
+    ("setup/python-advanced.html", "how-to/deploy-dask/python-advanced.html"),
+    ("setup/single-distributed.html", "how-to/deploy-dask/single-distributed.html"),
+    ("setup/single-machine.html", "how-to/deploy-dask/single-machine.html"),
+    ("setup/ssh.html", "how-to/deploy-dask/ssh.html"),
+    ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("setup/custom-startup.html", "how-to/customize-initialization.html"),
+    ("setup/environment.html", "how-to/manage-environments.html"),
+    ("setup/prometheus.html", "how-to/setup-prometheus.html"),
 ]
 
 

@@ -134,7 +134,7 @@ messy situations in everyday problems.
    10-minutes-to-dask.rst
    presentations.rst
    best-practices.rst
-   how-to.rst
+   how-to/index.rst
    faq.rst
 
 .. toctree::
