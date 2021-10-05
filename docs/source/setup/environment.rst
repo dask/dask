@@ -86,12 +86,40 @@ Send Source
 Particularly during development, you may want to send files directly to workers
 that are already running.
 
-You should use ``client.upload_file`` in these cases.
+For single (or multiple) Python files, use ``client.upload_file``.
 For more detail, see the `API docs`_ and a
 StackOverflow question
 `"Can I use functions imported from .py files in Dask/Distributed?"`__
-This function supports both standalone file and setuptools's ``.egg`` files
-for larger modules.
+This function supports standalone files, as well as ``.zip`` archives and setuptools's ``.egg`` files
+for collections of Python files. For example, if you have a functions defined in a couple files
+``dask_funcs.py`` and ``utils.py``, you might do this in IPython or a Jupyter notebook::
+
+   !zip files.zip dask_funcs.py utils.py
+   client.upload_file("files.zip")
+
+   def test_import():
+       import dask_funcs
+       import utils
+       return "ok"
+   client.run(test_import)
+
+For an entire module, use ``client.pip_install`` with the ``local_packages`` argument (`docs <pipinstall_docs>`_).
+With this, you upload a source distribution or wheel of the local module to the cluster,
+then ``pip install`` it. Unlike ``client.upload_file``, this also installs all the dependencies
+specified in the ``setup.py`` file of your module.
+
+For example, if you're developing a package called ``mymod``, you might do this in IPython or a Jupyter notebook::
+
+   !python setup.py sdist
+   # or with poetry: !poetry build
+   # or with flit:   !flit build
+
+   client.pip_install(local_packages="dist/mymod-0.1.0.tar.gz")
+   def test_import():
+       import mymod
+       return ok
+   client.run(test_import)
 
 __ http://stackoverflow.com/questions/39295200/can-i-use-functions-imported-from-py-files-in-dask-distributed
-.. _API docs: https://distributed.readthedocs.io/en/latest/api.html#distributed.executor.Executor.upload_file
+.. _API docs: https://distributed.readthedocs.io/en/latest/api.html#distributed.Client.upload_file
+.. _pipinstall_docs: https://distributed.readthedocs.io/en/latest/api.html#distributed.Client.pip_install
