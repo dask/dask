@@ -1466,6 +1466,19 @@ def test_quantile_tiny_partitions():
     assert r == 2
 
 
+def test_quantile_trivial_partitions():
+    """See https://github.com/dask/dask/issues/2792"""
+    df = pd.DataFrame({"A": []})
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.quantile(0.5)
+    assert_eq(ddf.quantile(0.5), expected)
+
+    df = pd.DataFrame({"A": [np.nan, np.nan, np.nan, np.nan]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.quantile(0.5)
+    assert_eq(ddf.quantile(0.5), expected)
+
+
 def test_index():
     assert_eq(d.index, full.index)
 
