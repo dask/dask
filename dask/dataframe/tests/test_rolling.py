@@ -423,3 +423,13 @@ def test_groupby_rolling():
     actual = ddf.groupby("group1").column1.rolling("15D").mean()
 
     assert_eq(expected, actual, check_divisions=False)
+
+
+def test_groupby_rolling_with_integer_window_raises():
+    df = pd.DataFrame(
+        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
+        ddf.groupby("C").rolling(2).sum()
