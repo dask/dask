@@ -91,7 +91,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |  distributed  | >=2.0    |               Distributed computing in Python                |
 +---------------+----------+--------------------------------------------------------------+
-|  fastparquet  |          |         Storing and reading data from parquet files          |
+|  fastparquet  | >= 0.3.3 |         Storing and reading data from parquet files          |
 +---------------+----------+--------------------------------------------------------------+
 |     gcsfs     | >=0.4.0  |        File-system interface to Google Cloud Storage         |
 +---------------+----------+--------------------------------------------------------------+

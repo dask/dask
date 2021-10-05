@@ -2,18 +2,17 @@ import copy
 import pickle
 import threading
 import warnings
-from collections import OrderedDict, defaultdict
+from collections import defaultdict
 from contextlib import ExitStack
 
 import numpy as np
 import pandas as pd
-import tlz as toolz
-from packaging.version import parse as parse_version
 
 try:
     import fastparquet
     from fastparquet import ParquetFile
-    from fastparquet.util import ex_from_sep, get_file_scheme, groupby_types, val_to_num
+    from fastparquet.api import paths_to_cats
+    from fastparquet.util import get_file_scheme
     from fastparquet.writer import make_part_file, partition_on_columns
 except ImportError:
     pass
@@ -42,73 +41,6 @@ from .utils import (
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()
-
-
-def _paths_to_cats(paths, file_scheme):
-    """
-    Extract categorical fields and labels from hive- or drill-style paths.
-    FixMe: This has been pasted from https://github.com/dask/fastparquet/pull/471
-    Use fastparquet.api.paths_to_cats from fastparquet>0.3.2 instead.
-
-    Parameters
-    ----------
-    paths (Iterable[str]): file paths relative to root
-    file_scheme (str):
-
-    Returns
-    -------
-    cats (OrderedDict[str, List[Any]]): a dict of field names and their values
-    """
-    if file_scheme in ["simple", "flat", "other"]:
-        cats = {}
-        return cats
-
-    cats = OrderedDict()
-    raw_cats = OrderedDict()
-    s = ex_from_sep("/")
-    paths = toolz.unique(paths)
-    if file_scheme == "hive":
-        partitions = toolz.unique((k, v) for path in paths for k, v in s.findall(path))
-        for key, val in partitions:
-            cats.setdefault(key, set()).add(val_to_num(val))
-            raw_cats.setdefault(key, set()).add(val)
-    else:
-        i_val = toolz.unique(
-            (i, val) for path in paths for i, val in enumerate(path.split("/")[:-1])
-        )
-        for i, val in i_val:
-            key = "dir%i" % i
-            cats.setdefault(key, set()).add(val_to_num(val))
-            raw_cats.setdefault(key, set()).add(val)
-
-    for key, v in cats.items():
-        # Check that no partition names map to the same value after transformation by val_to_num
-        raw = raw_cats[key]
-        if len(v) != len(raw):
-            conflicts_by_value = OrderedDict()
-            for raw_val in raw_cats[key]:
-                conflicts_by_value.setdefault(val_to_num(raw_val), set()).add(raw_val)
-            conflicts = [
-                c for k in conflicts_by_value.values() if len(k) > 1 for c in k
-            ]
-            raise ValueError("Partition names map to the same value: %s" % conflicts)
-        vals_by_type = groupby_types(v)
-
-        # Check that all partition names map to the same type after transformation by val_to_num
-        if len(vals_by_type) > 1:
-            examples = [x[0] for x in vals_by_type.values()]
-            warnings.warn(
-                "Partition names coerce to values of different types, e.g. %s"
-                % examples
-            )
-
-    cats = OrderedDict([(key, list(v)) for key, v in cats.items()])
-    return cats
-
-
-paths_to_cats = (
-    _paths_to_cats  # FixMe: use fastparquet.api.paths_to_cats for fastparquet>0.3.2
-)
 
 
 class FastParquetEngine(Engine):
@@ -1257,22 +1189,9 @@ class FastParquetEngine(Engine):
             rgs = []
         elif partition_on:
             mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
-            if parse_version(fastparquet.__version__) >= parse_version("0.1.4"):
-                rgs = partition_on_columns(
-                    df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
-                )
-            else:
-                rgs = partition_on_columns(
-                    df,
-                    partition_on,
-                    path,
-                    filename,
-                    fmd,
-                    fs.sep,
-                    compression,
-                    fs.open,
-                    mkdirs,
-                )
+            rgs = partition_on_columns(
+                df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
+            )
         else:
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
                 fmd.num_rows = len(df)

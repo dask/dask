@@ -1402,9 +1402,6 @@ def test_filters(tmpdir, write_engine, read_engine):
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
-    if write_engine == "fastparquet" or read_engine == "fastparquet":
-        pytest.importorskip("fastparquet", minversion="0.3.1")
-
     # Recent versions of pyarrow support full row-wise filtering
     # (fastparquet and older pyarrow versions do not)
     pyarrow_row_filtering = read_engine == "pyarrow-dataset"
@@ -1543,7 +1540,6 @@ def test_pyarrow_filter_divisions(tmpdir):
 
 
 def test_divisions_read_with_filters(tmpdir):
-    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     size = 100
@@ -1568,7 +1564,6 @@ def test_divisions_read_with_filters(tmpdir):
 
 
 def test_divisions_are_known_read_with_filters(tmpdir):
-    pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
     # generate dataframe
     df = pd.DataFrame(
@@ -1694,8 +1689,6 @@ def test_parquet_select_cats(tmpdir, engine):
 
 
 def test_columns_name(tmpdir, engine):
-    if engine == "fastparquet" and fastparquet_version <= parse_version("0.3.1"):
-        pytest.skip("Fastparquet does not write column_indexes up to 0.3.1")
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(["a", "b"], name="idx"))
     df.columns.name = "cols"
@@ -2119,9 +2112,6 @@ def test_select_partitioned_column(tmpdir, engine):
 
 
 def test_with_tz(tmpdir, engine):
-    if engine == "fastparquet" and fastparquet_version < parse_version("0.3.0"):
-        pytest.skip("fastparquet<0.3.0 did not support this")
-
     with warnings.catch_warnings():
         if engine == "fastparquet":
             # fastparquet-442
