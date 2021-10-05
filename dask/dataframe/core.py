@@ -4115,7 +4115,11 @@ class DataFrame(_Frame):
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
-        elif is_dataframe_like(key) or isinstance(key, DataFrame):
+        elif (
+            is_dataframe_like(key)
+            or is_series_like(key)
+            or isinstance(key, (DataFrame, Series))
+        ):
             df = self.where(~key, value)
         elif not isinstance(key, str):
             raise NotImplementedError(f"Item assignment with {type(key)} not supported")
@@ -4205,7 +4209,9 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def sort_values(self, by, npartitions=None, ascending=True, **kwargs):
+    def sort_values(
+        self, by, npartitions=None, ascending=True, na_position="last", **kwargs
+    ):
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -4218,8 +4224,11 @@ class DataFrame(_Frame):
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
         ascending: bool, optional
-            Non ascending sort is not supported by Dask.
+            Sort ascending vs. descending.
             Defaults to True.
+        na_position: {'last', 'first'}, optional
+            Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
+            Defaults to 'last'.
 
         Examples
         --------
@@ -4232,6 +4241,7 @@ class DataFrame(_Frame):
             by,
             ascending=ascending,
             npartitions=npartitions,
+            na_position=na_position,
             **kwargs,
         )
 
@@ -6133,7 +6143,15 @@ def quantile(df, q, method="default"):
         name2 = "quantiles-2-" + token
         merge_dsk = {
             (name2, 0): finalize_tsk(
-                (merge_percentiles, qs, [calc_qs] * df.npartitions, sorted(val_dsk))
+                (
+                    merge_percentiles,
+                    qs,
+                    [calc_qs] * df.npartitions,
+                    sorted(val_dsk),
+                    "lower",
+                    None,
+                    False,
+                )
             )
         }
     dsk = merge(val_dsk, merge_dsk)

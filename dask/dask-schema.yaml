@@ -10,6 +10,17 @@ properties:
       When the value is "null" (default), dask will create a directory from
       where dask was launched: `cwd/dask-worker-space`
 
+  tokenize:
+    type: object
+    properties:
+      ensure-deterministic:
+        type:
+        - boolean
+        description: |
+          If ``true``, tokenize will error instead of falling back to uuids
+          when a deterministic token cannot be generated. Defaults to
+          ``false``.
+
   dataframe:
     type: object
     properties:
@@ -21,6 +32,24 @@ properties:
         description: |
           Compression algorithm used for on disk-shuffling. Partd, the library used
           for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+
+      parquet:
+        type: object
+        properties:
+
+          metadata-task-size-local:
+            type: integer
+            description: |
+              The number of files to handle within each metadata-processing
+              task when reading a parquet dataset from a LOCAL file system.
+              Specifying 0 will result in serial execution on the client.
+
+          metadata-task-size-remote:
+            type: integer
+            description: |
+              The number of files to handle within each metadata-processing
+              task when reading a parquet dataset from a REMOTE file system.
+              Specifying 0 will result in serial execution on the client.
 
   array:
     type: object

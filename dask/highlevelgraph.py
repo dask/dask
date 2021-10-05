@@ -373,17 +373,25 @@ class Layer(collections.abc.Mapping):
 
         # Find aliases not in `client_keys` and substitute all matching keys
         # with its Future
-        values = {
+        future_aliases = {
             k: v
             for k, v in dsk.items()
             if isinstance(v, Future) and k not in client_keys
         }
-        if values:
-            dsk = subs_multiple(dsk, values)
+        if future_aliases:
+            dsk = subs_multiple(dsk, future_aliases)
 
-        # Unpack remote data and record its dependencies
-        dsk = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
-        unpacked_futures = set.union(*[v[1] for v in dsk.values()]) if dsk else set()
+        # Remove `Future` objects from graph and note any future dependencies
+        dsk2 = {}
+        fut_deps = {}
+        for k, v in dsk.items():
+            dsk2[k], futs = unpack_remotedata(v, byte_keys=True)
+            if futs:
+                fut_deps[k] = futs
+        dsk = dsk2
+
+        # Check that any collected futures are valid
+        unpacked_futures = set.union(*fut_deps.values()) if fut_deps else set()
         for future in unpacked_futures:
             if future.client is not client:
                 raise ValueError(
@@ -391,21 +399,26 @@ class Layer(collections.abc.Mapping):
                 )
             if stringify(future.key) not in client.futures:
                 raise CancelledError(stringify(future.key))
-        unpacked_futures_deps = {}
-        for k, v in dsk.items():
-            if len(v[1]):
-                unpacked_futures_deps[k] = {f.key for f in v[1]}
-        dsk = {k: v[0] for k, v in dsk.items()}
 
         # Calculate dependencies without re-calculating already known dependencies
-        missing_keys = dsk.keys() - known_key_dependencies.keys()
-        dependencies = {
-            k: keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False)
+        # - Start with known dependencies
+        dependencies = known_key_dependencies.copy()
+        # - Remove aliases for any tasks that depend on both an alias and a future.
+        #   These can only be found in the known_key_dependencies cache, since
+        #   any dependencies computed in this method would have already had the
+        #   aliases removed.
+        if future_aliases:
+            alias_keys = set(future_aliases)
+            dependencies = {k: v - alias_keys for k, v in dependencies.items()}
+        # - Add in deps for any missing keys
+        missing_keys = dsk.keys() - dependencies.keys()
+        dependencies.update(
+            (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
-        }
-        for k, v in unpacked_futures_deps.items():
-            dependencies[k] = set(dependencies.get(k, ())) | v
-        dependencies.update(known_key_dependencies)
+        )
+        # - Add in deps for any tasks that depend on futures
+        for k, futures in fut_deps.items():
+            dependencies[k].update(f.key for f in futures)
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -1122,7 +1135,6 @@ class HighLevelGraph(Mapping):
 
             # Unpack the annotations
             unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
-
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
     def __repr__(self) -> str:

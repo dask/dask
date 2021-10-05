@@ -128,15 +128,25 @@ def test_tokenize_numpy_scalar_string_rep():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
-    assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
-        np.array(["a", "aa", "aaa"], dtype=object)
-    )
+    a = np.array(["a", "aa", "aaa"], dtype=object)
+    assert tokenize(a) == tokenize(a)
     assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
         np.array(["a", None, "aaa"], dtype=object)
     )
     assert tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
+
+    # Trigger non-deterministic hashing for object dtype
+    class NoPickle:
+        pass
+
+    x = np.array(["a", None, NoPickle], dtype=object)
+    assert tokenize(x) != tokenize(x)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            tokenize(x)
 
 
 @pytest.mark.skipif("not np")
@@ -224,6 +234,23 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 def test_normalize_base():
     for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25)]:
         assert normalize_token(i) is i
+
+
+def test_tokenize_object():
+    o = object()
+    # Defaults to non-deterministic tokenization
+    assert normalize_token(o) != normalize_token(o)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            normalize_token(o)
+
+
+def test_tokenize_callable():
+    def my_func(a, b, c=1):
+        return a + b + c
+
+    assert tokenize(my_func) == tokenize(my_func)  # Consistent token
 
 
 @pytest.mark.skipif("not pd")
@@ -335,6 +362,10 @@ def test_tokenize_method():
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
 
+    for ensure in [True, False]:
+        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
+            assert tokenize(a) == tokenize(a)
+
     # dispatch takes precedence
     before = tokenize(a)
     normalize_token.register(Foo, lambda self: self.x + 1)
@@ -439,11 +470,15 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
 
-def test_tokenize_object_with_recursion_error_returns_uuid():
+def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
 
     assert len(tokenize(cycle)) == 32
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            tokenize(cycle)
 
 
 def test_tokenize_datetime_date():

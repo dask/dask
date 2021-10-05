@@ -3077,6 +3077,43 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
             dd.read_parquet(path, engine=engine)
 
 
+@PYARROW_MARK
+@pytest.mark.parametrize(
+    "write_cols",
+    [["col"], ["part", "col"]],
+)
+def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
+    # See: https://github.com/dask/dask/issues/8087
+
+    # Manually construct directory-partitioned dataset
+    path1 = tmpdir.mkdir("part=a")
+    path2 = tmpdir.mkdir("part=b")
+    path1 = os.path.join(path1, "data.parquet")
+    path2 = os.path.join(path2, "data.parquet")
+
+    # Write partitions without parquet metadata.
+    # Note that we always use pyarrow to do this
+    # (regardless of the `engine`)
+    _df1 = pd.DataFrame({"part": "a", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "col": range(5)})
+    t1 = pa.Table.from_pandas(
+        _df1[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t1, path1)
+    t2 = pa.Table.from_pandas(
+        _df2[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t2, path2)
+
+    # Check results
+    expect = pd.concat([_df1, _df2], ignore_index=True)
+    result = dd.read_parquet(str(tmpdir), engine=engine)
+    result["part"] = result["part"].astype("object")
+    assert_eq(result[list(expect.columns)], expect, check_index=False)
+
+
 @fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
@@ -3212,31 +3249,29 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize("read_from_paths", [True, False])
-@pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_read_from_paths(
-    tmpdir, read_from_paths, test_filter_partitioned
-):
+def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
 
-    if test_filter_partitioned:
-        ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
-    else:
-        ddf.to_parquet(fn, engine="pyarrow")
-    read_df = dd.read_parquet(
+    with pytest.warns(FutureWarning):
+        read_df_1 = dd.read_parquet(
+            fn,
+            engine="pyarrow",
+            filters=[("b", "==", "a")],
+            read_from_paths=False,
+        )
+
+    read_df_2 = dd.read_parquet(
         fn,
         engine="pyarrow",
-        filters=[("b", "==", "a")] if test_filter_partitioned else None,
-        read_from_paths=read_from_paths,
+        filters=[("b", "==", "a")],
     )
 
-    if test_filter_partitioned:
-        assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
-    else:
-        assert_eq(ddf, read_df)
+    assert_eq(read_df_1, read_df_2)
+    assert_eq(ddf[ddf["b"] == "a"].compute(), read_df_2.compute())
 
 
 @PYARROW_MARK
@@ -3648,3 +3683,51 @@ def test_extra_file(tmpdir, engine):
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir)
     assert_eq(out, df)
+
+
+@pytest.mark.parametrize("write_metadata_file", [True, False])
+@pytest.mark.parametrize("metadata_task_size", [2, 0])
+def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_size):
+
+    # Write simple dataset
+    tmpdir = str(tmpdir)
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
+        path=str(tmpdir), engine=engine, write_metadata_file=write_metadata_file
+    )
+
+    # Read back
+    if engine == "pyarrow-dataset" or not metadata_task_size:
+        ddf2a = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+        )
+        ddf2b = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+            metadata_task_size=metadata_task_size,
+        )
+        assert_eq(ddf2a, ddf2b)
+
+        with dask.config.set(
+            {"dataframe.parquet.metadata-task-size-local": metadata_task_size}
+        ):
+            ddf2c = dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+            )
+        assert_eq(ddf2b, ddf2c)
+
+    else:
+        # Check that other engines raise a ValueError
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+                metadata_task_size=metadata_task_size,
+            )

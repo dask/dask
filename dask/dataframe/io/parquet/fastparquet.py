@@ -751,8 +751,14 @@ class FastParquetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
+        metadata_task_size=None,
         **kwargs,
     ):
+
+        # Check if metadata_task_size is set
+        if metadata_task_size:
+            raise ValueError("metadata_task_size not supported in FastParquetEngine")
+
         # Define the parquet-file (pf) object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will

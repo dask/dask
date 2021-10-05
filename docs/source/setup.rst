@@ -50,7 +50,6 @@ how to set up Dask on a variety of local and distributed hardware.
 - Single Machine:
     - :doc:`Default Scheduler <setup/single-machine>`: The no-setup default.
       Uses local threads or processes for larger-than-memory processing
-
     - :doc:`dask.distributed <setup/single-distributed>`: The sophistication of
       the newer system on a single machine.  This provides more advanced
       features while still requiring almost no setup.
@@ -68,6 +67,9 @@ how to set up Dask on a variety of local and distributed hardware.
     - `YARN / Hadoop <https://yarn.dask.org/en/latest/>`_: Deploy
       Dask on YARN clusters, such as are found in traditional Hadoop
       installations.
+    - `Dask Gateway <https://gateway.dask.org/>`_ provides a secure,
+      multi-tenant server for managing Dask clusters and allows users to launch
+      and use Dask clusters in a shared cluster environment.
     - :doc:`Python API (advanced) <setup/python-advanced>`: Create
       ``Scheduler`` and ``Worker`` objects from Python as part of a distributed
       Tornado TCP application.  This page is useful for those building custom
@@ -77,6 +79,11 @@ how to set up Dask on a variety of local and distributed hardware.
     - :doc:`Cloud <setup/cloud>` for current recommendations on how to
       deploy Dask and Jupyter on common cloud providers like Amazon, Google, or
       Microsoft Azure.
+- Hosted / managed Dask clusters (listed in alphabetical order):
+    - `Coiled <https://coiled.io/>`_ handles the creation and management of
+      Dask clusters on cloud computing environments (AWS, Azure, and GCP).
+    - `Saturn Cloud <https://saturncloud.io/>`_ lets users create
+      Dask clusters in a hosted platform or within their own AWS accounts.
 
 .. toctree::
    :maxdepth: 1
