@@ -211,7 +211,7 @@ def merge_percentiles(
     if not L:
         if raise_on_nan:
             raise ValueError("No non-trivial arrays found")
-        return np.full((len(qs[0]) - 2,), np.nan)
+        return np.full(len(qs[0]) - 2, np.nan)
     qs, vals, Ns = L
 
     # TODO: Perform this check above in percentile once dtype checking is easy
