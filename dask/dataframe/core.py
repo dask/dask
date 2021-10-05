@@ -6143,7 +6143,15 @@ def quantile(df, q, method="default"):
         name2 = "quantiles-2-" + token
         merge_dsk = {
             (name2, 0): finalize_tsk(
-                (merge_percentiles, qs, [calc_qs] * df.npartitions, sorted(val_dsk))
+                (
+                    merge_percentiles,
+                    qs,
+                    [calc_qs] * df.npartitions,
+                    sorted(val_dsk),
+                    "lower",
+                    None,
+                    False,
+                )
             )
         }
     dsk = merge(val_dsk, merge_dsk)
