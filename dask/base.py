@@ -1202,9 +1202,9 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     % ", ".join(sorted(named_schedulers))
                 )
         elif isinstance(scheduler, Executor):
-            num_workers = getattr(
-                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
-            )
+            num_workers = getattr(scheduler, "_max_workers", None)
+            if num_workers is None:
+                num_workers = config.get("num_workers", CPU_COUNT)
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
             raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
