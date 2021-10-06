@@ -1,5 +1,7 @@
 import pytest
 
+import dask
+
 # The doctests in these files fail due to either:
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
@@ -63,4 +65,5 @@ pytest.register_assert_rewrite(
 
 @pytest.fixture(params=["disk", "tasks"])
 def shuffle_method(request):
-    return request.param
+    with dask.config.set(shuffle=request.param):
+        yield request.param
