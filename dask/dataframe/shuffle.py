@@ -428,7 +428,7 @@ def rearrange_by_divisions(
         df2,
         "_partitions",
         max_branch=max_branch,
-        npartitions=len(divisions) - 1,
+        npartitions=max(len(divisions) - 1, 1),
         shuffle=shuffle,
     )
     del df3["_partitions"]
@@ -801,9 +801,11 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
                 len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
             )
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
-        len(divisions) - 2 if ascending else 0
+        max(len(divisions) - 2, 0) if ascending else 0
     )
-    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
+    partitions[s.isna().values] = (
+        max(len(divisions) - 2, 0) if na_position == "last" else 0
+    )
     return partitions
 
 

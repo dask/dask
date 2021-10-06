@@ -1241,6 +1241,7 @@ def test_sort_values(nelem, nparts, by, ascending):
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
     "data",
     [
@@ -1251,9 +1252,9 @@ def test_sort_values(nelem, nparts, by, ascending):
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
-def test_sort_values_with_nulls(data, by, ascending, na_position):
+def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
     df = pd.DataFrame(data)
-    ddf = dd.from_pandas(df, npartitions=5)
+    ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
