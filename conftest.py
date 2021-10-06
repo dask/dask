@@ -59,3 +59,8 @@ def pytest_runtest_setup(item):
 pytest.register_assert_rewrite(
     "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
 )
+
+
+@pytest.fixture(params=["disk", "tasks"])
+def shuffle_method(request):
+    return request.param

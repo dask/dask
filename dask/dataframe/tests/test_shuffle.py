@@ -48,9 +48,8 @@ if dd._compat.PANDAS_GT_110:
 shuffle_func = shuffle  # conflicts with keyword argument
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_shuffle(shuffle):
-    s = shuffle_func(d, d.b, shuffle=shuffle)
+def test_shuffle(shuffle_method):
+    s = shuffle_func(d, d.b, shuffle=shuffle_method)
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == d.npartitions
 
@@ -67,10 +66,10 @@ def test_default_partitions():
     assert shuffle(d, d.b).npartitions == d.npartitions
 
 
-def test_shuffle_npartitions_task():
+def test_shuffle_npartitions(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
-    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=17, max_branch=4)
+    s = shuffle(ddf, ddf.x, shuffle=shuffle_method, npartitions=17, max_branch=4)
     sc = s.compute()
     assert s.npartitions == 17
     assert set(s.dask).issuperset(set(ddf.dask))
@@ -80,10 +79,10 @@ def test_shuffle_npartitions_task():
     assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
 
 
-def test_shuffle_npartitions_lt_input_partitions_task():
+def test_shuffle_npartitions_lt_input_partitions(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=20)
-    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=5, max_branch=2)
+    s = shuffle(ddf, ddf.x, shuffle=shuffle_method, npartitions=5, max_branch=2)
     sc = s.compute()
     assert s.npartitions == 5
     assert set(s.dask).issuperset(set(ddf.dask))
@@ -93,38 +92,36 @@ def test_shuffle_npartitions_lt_input_partitions_task():
     assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
 
 
-@pytest.mark.parametrize("method", ["disk", "tasks"])
-def test_index_with_non_series(method):
+def test_index_with_non_series(shuffle_method):
     from dask.dataframe.tests.test_multi import list_eq
 
-    list_eq(shuffle(d, d.b, shuffle=method), shuffle(d, "b", shuffle=method))
+    list_eq(
+        shuffle(d, d.b, shuffle=shuffle_method), shuffle(d, "b", shuffle=shuffle_method)
+    )
 
 
-@pytest.mark.parametrize("method", ["disk", "tasks"])
-def test_index_with_dataframe(method):
-    res1 = shuffle(d, d[["b"]], shuffle=method).compute()
-    res2 = shuffle(d, ["b"], shuffle=method).compute()
-    res3 = shuffle(d, "b", shuffle=method).compute()
+def test_index_with_dataframe(shuffle_method):
+    res1 = shuffle(d, d[["b"]], shuffle=shuffle_method).compute()
+    res2 = shuffle(d, ["b"], shuffle=shuffle_method).compute()
+    res3 = shuffle(d, "b", shuffle=shuffle_method).compute()
 
     assert sorted(res1.values.tolist()) == sorted(res2.values.tolist())
     assert sorted(res1.values.tolist()) == sorted(res3.values.tolist())
 
 
-@pytest.mark.parametrize("method", ["disk", "tasks"])
-def test_shuffle_from_one_partition_to_one_other(method):
+def test_shuffle_from_one_partition_to_one_other(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3]})
     a = dd.from_pandas(df, 1)
 
     for i in [1, 2]:
-        b = shuffle(a, "x", npartitions=i, shuffle=method)
+        b = shuffle(a, "x", npartitions=i, shuffle=shuffle_method)
         assert len(a.compute(scheduler="sync")) == len(b.compute(scheduler="sync"))
 
 
-@pytest.mark.parametrize("method", ["disk", "tasks"])
-def test_shuffle_empty_partitions(method):
+def test_shuffle_empty_partitions(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3] * 10})
     ddf = dd.from_pandas(df, npartitions=3)
-    s = shuffle(ddf, ddf.x, npartitions=6, shuffle=method)
+    s = shuffle(ddf, ddf.x, npartitions=6, shuffle=shuffle_method)
     parts = compute_as_if_collection(dd.DataFrame, s.dask, s.__dask_keys__())
     for p in parts:
         assert s.columns == p.columns
@@ -202,15 +199,14 @@ def test_set_index_tasks(npartitions):
     assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle="tasks"))
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_self_index(shuffle):
+def test_set_index_self_index(shuffle_method):
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
         index=np.random.random(100),
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    b = a.set_index(a.index, shuffle=shuffle)
+    b = a.set_index(a.index, shuffle=shuffle_method)
     assert a is b
 
     assert_eq(b, df.set_index(df.index))
@@ -239,8 +235,7 @@ def test_set_index_names(shuffle):
     )
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_tasks_2(shuffle):
+def test_set_index_tasks_2(shuffle_method):
     df = dd.demo.make_timeseries(
         "2000",
         "2004",
@@ -250,42 +245,41 @@ def test_set_index_tasks_2(shuffle):
         seed=1,
     )
 
-    df2 = df.set_index("name", shuffle=shuffle)
+    df2 = df.set_index("name", shuffle=shuffle_method)
     df2.value.sum().compute(scheduler="sync")
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_tasks_3(shuffle):
+def test_set_index_tasks_3(shuffle_method):
     df = pd.DataFrame(np.random.random((10, 2)), columns=["x", "y"])
     ddf = dd.from_pandas(df, npartitions=5)
 
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle, max_branch=2, npartitions=ddf.npartitions
+        "x", shuffle=shuffle_method, max_branch=2, npartitions=ddf.npartitions
     )
     df2 = df.set_index("x")
     assert_eq(df2, ddf2)
     assert ddf2.npartitions == ddf.npartitions
 
 
-@pytest.mark.parametrize("shuffle", ["tasks", "disk"])
-def test_shuffle_sort(shuffle):
+def test_shuffle_sort(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3, 2, 1], "y": [9, 8, 7, 1, 5]})
     ddf = dd.from_pandas(df, npartitions=3)
 
     df2 = df.set_index("x").sort_index()
-    ddf2 = ddf.set_index("x", shuffle=shuffle)
+    ddf2 = ddf.set_index("x", shuffle=shuffle_method)
 
     assert_eq(ddf2.loc[2:3], df2.loc[2:3])
 
 
-@pytest.mark.parametrize("shuffle", ["tasks", "disk"])
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
-def test_rearrange(shuffle, scheduler):
+def test_rearrange(shuffle_method, scheduler):
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(_partitions=ddf.x % 4)
 
-    result = rearrange_by_column(ddf2, "_partitions", max_branch=32, shuffle=shuffle)
+    result = rearrange_by_column(
+        ddf2, "_partitions", max_branch=32, shuffle=shuffle_method
+    )
     assert result.npartitions == ddf.npartitions
     assert set(ddf.dask).issubset(result.dask)
 
@@ -458,12 +452,11 @@ def _set_index(i, df, idx):
     return df.set_index(idx).divisions
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_reduces_partitions_small(shuffle):
+def test_set_index_reduces_partitions_small(shuffle_method):
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=50)
 
-    ddf2 = ddf.set_index("x", shuffle=shuffle, npartitions="auto")
+    ddf2 = ddf.set_index("x", shuffle=shuffle_method, npartitions="auto")
     assert ddf2.npartitions < 10
 
 
@@ -471,8 +464,7 @@ def make_part(n):
     return pd.DataFrame({"x": np.random.random(n), "y": np.random.random(n)})
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_reduces_partitions_large(shuffle):
+def test_set_index_reduces_partitions_large(shuffle_method):
     nbytes = 1e6
     nparts = 50
     n = int(nbytes / (nparts * 8))
@@ -483,13 +475,12 @@ def test_set_index_reduces_partitions_large(shuffle):
         [None] * (nparts + 1),
     )
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle, npartitions="auto", partition_size=nbytes
+        "x", shuffle=shuffle_method, npartitions="auto", partition_size=nbytes
     )
     assert 1 < ddf2.npartitions < 20
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_doesnt_increase_partitions(shuffle):
+def test_set_index_doesnt_increase_partitions(shuffle_method):
     nparts = 2
     nbytes = 1e6
     n = int(nbytes / (nparts * 8))
@@ -500,17 +491,16 @@ def test_set_index_doesnt_increase_partitions(shuffle):
         [None] * (nparts + 1),
     )
     ddf2 = ddf.set_index(
-        "x", shuffle=shuffle, npartitions="auto", partition_size=nbytes
+        "x", shuffle=shuffle_method, npartitions="auto", partition_size=nbytes
     )
     assert ddf2.npartitions <= ddf.npartitions
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_set_index_detects_sorted_data(shuffle):
+def test_set_index_detects_sorted_data(shuffle_method):
     df = pd.DataFrame({"x": range(100), "y": range(100)})
     ddf = dd.from_pandas(df, npartitions=10, name="x", sort=False)
 
-    ddf2 = ddf.set_index("x", shuffle=shuffle)
+    ddf2 = ddf.set_index("x", shuffle=shuffle_method)
     assert len(ddf2.dask) < ddf.npartitions * 4
 
 
@@ -1155,6 +1145,7 @@ def test_shuffle_hlg_layer():
     ddf = dd.from_pandas(
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
     )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
     ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
     keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
 
@@ -1199,6 +1190,7 @@ def test_shuffle_hlg_layer_serialize(npartitions):
     ddf = dd.from_pandas(
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
     )
+    # Disk-based shuffle doesn't use HLG layers at the moment, so we only test tasks
     ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
 
     # Ensure shuffle layers can be serialized and don't result in

@@ -48,6 +48,11 @@ def isodd(x):
     return x % 2 == 1
 
 
+@pytest.fixture(params=["disk", "tasks"])
+def shuffle(request):
+    return request.param
+
+
 def test_Bag():
     assert b.name == "x"
     assert b.npartitions == 3
@@ -1270,9 +1275,9 @@ def test_accumulate():
     assert b.accumulate(add).compute() == [1, 3, 6]
 
 
-def test_groupby_tasks():
+def test_groupby_tasks(shuffle):
     b = db.from_sequence(range(160), npartitions=4)
-    out = b.groupby(lambda x: x % 10, max_branch=4, shuffle="tasks")
+    out = b.groupby(lambda x: x % 10, max_branch=4, shuffle=shuffle)
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1291,7 +1296,7 @@ def test_groupby_tasks():
                 assert not set(pluck(0, a)) & set(pluck(0, b))
 
     b = db.from_sequence(range(10000), npartitions=345)
-    out = b.groupby(lambda x: x % 2834, max_branch=24, shuffle="tasks")
+    out = b.groupby(lambda x: x % 2834, max_branch=24, shuffle=shuffle)
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
