@@ -111,6 +111,7 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+@_deprecated()
 def homogeneous_deepmap(func, seq):
     if not seq:
         return seq
@@ -173,10 +174,10 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with suppress(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
@@ -543,28 +544,26 @@ class Dispatch:
 
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
-        # Fast path with direct lookup on cls
         lk = self._lookup
-        try:
-            impl = lk[cls]
-        except KeyError:
-            pass
-        else:
-            return impl
-        # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition(".")
-        try:
-            register = self._lazy.pop(toplevel)
-        except KeyError:
-            pass
-        else:
-            register()
-            return self.dispatch(cls)  # recurse
-        # Walk the MRO and cache the lookup result
-        for cls2 in inspect.getmro(cls)[1:]:
-            if cls2 in lk:
-                lk[cls] = lk[cls2]
-                return lk[cls2]
+        for cls2 in cls.__mro__:
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
+            # Is a lazy registration function present?
+            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                register = self._lazy.pop(toplevel)
+            except KeyError:
+                pass
+            else:
+                register()
+                return self.dispatch(cls)  # recurse
         raise TypeError("No dispatch for {0}".format(cls))
 
     def __call__(self, arg, *args, **kwargs):
@@ -686,8 +685,10 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
+def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     """Helper function for derived_from to ease testing"""
+    ua_args = ua_args or []
+
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -726,7 +727,7 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
+def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -747,6 +748,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
     """
+    ua_args = ua_args or []
 
     def wrapper(method):
         try:
@@ -808,7 +810,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ):
+def typename(typ, short=False):
     """
     Return the name of a type
 
@@ -820,11 +822,22 @@ def typename(typ):
     >>> from dask.core import literal
     >>> typename(literal)
     'dask.core.literal'
+    >>> typename(literal, short=True)
+    'dask.literal'
     """
-    if not typ.__module__ or typ.__module__ == "builtins":
-        return typ.__name__
-    else:
-        return typ.__module__ + "." + typ.__name__
+    if not isinstance(typ, type):
+        return typename(type(typ))
+    try:
+        if not typ.__module__ or typ.__module__ == "builtins":
+            return typ.__name__
+        else:
+            if short:
+                module, *_ = typ.__module__.split(".")
+            else:
+                module = typ.__module__
+            return module + "." + typ.__name__
+    except AttributeError:
+        return str(typ)
 
 
 def ensure_bytes(s):

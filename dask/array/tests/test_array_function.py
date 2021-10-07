@@ -2,15 +2,12 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
+from dask.array.numpy_compat import _numpy_120
+from dask.array.utils import assert_eq
 
 from .test_dispatch import EncapsulateNDArray, WrappedArray
 
-missing_arrfunc_cond = not IS_NEP18_ACTIVE
-missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
-
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -49,7 +46,6 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -68,7 +64,6 @@ def test_stack_functions_require_sequence_of_arrays(func):
         func(y)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("func", [np.fft.fft, np.fft.fft2])
 def test_array_function_fft(func):
     x = np.random.random((100, 100))
@@ -81,7 +76,6 @@ def test_array_function_fft(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -100,7 +94,6 @@ def test_array_notimpl_function_dask(func):
         func(y)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func", [lambda x: np.real(x), lambda x: np.imag(x), lambda x: np.transpose(x)]
 )
@@ -114,7 +107,6 @@ def test_array_function_sparse(func):
     assert_eq(func(x), func(y))
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
     x = np.random.random((2, 3, 4))
@@ -130,7 +122,6 @@ def test_array_function_sparse_tensordot():
     )
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("chunks", [(100, 100), (500, 100)])
 def test_array_function_cupy_svd(chunks):
     cupy = pytest.importorskip("cupy")
@@ -146,7 +137,6 @@ def test_array_function_cupy_svd(chunks):
     assert_eq(v, v_base)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -191,16 +181,12 @@ def test_non_existent_func():
     # Regression test for __array_function__ becoming default in numpy 1.17
     # dask has no sort function, so ensure that this still calls np.sort
     x = da.from_array(np.array([1, 2, 4, 3]), chunks=(2,))
-    if IS_NEP18_ACTIVE:
-        with pytest.warns(
-            FutureWarning, match="The `numpy.sort` function is not implemented by Dask"
-        ):
-            assert list(np.sort(x)) == [1, 2, 3, 4]
-    else:
+    with pytest.warns(
+        FutureWarning, match="The `numpy.sort` function is not implemented by Dask"
+    ):
         assert list(np.sort(x)) == [1, 2, 3, 4]
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -234,3 +220,26 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
         == type(func(arr_downcast, arr_upcast))
         == type(arr_upcast)
     )
+
+
+@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray, da.tri])
+def test_like_raises(func):
+    if _numpy_120:
+        assert_eq(func(1, like=func((1))), func(1))
+    else:
+        with pytest.raises(
+            RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
+        ):
+            func(1, like=func((1)))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
+def test_like_with_numpy_func(func):
+    assert_eq(func(1, like=da.array((1))), func(1))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
+def test_like_with_numpy_func_and_dtype(func):
+    assert_eq(func(1, dtype=float, like=da.array((1))), func(1, dtype=float))

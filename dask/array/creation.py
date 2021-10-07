@@ -24,8 +24,9 @@ from .core import (
     normalize_chunks,
     stack,
 )
+from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
-from .utils import AxisError, meta_from_array, zeros_like_safe
+from .utils import AxisError, meta_from_array
 from .wrap import empty, full, ones, zeros
 
 
@@ -608,7 +609,7 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
+                dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -683,7 +684,10 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
+def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
+    if not _numpy_120 and like is not None:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
@@ -855,9 +859,6 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     """
     Helper function to find the linear ramp for a chunk.
     """
-
-    from .utils import empty_like_safe
-
     num1 = num + 1
 
     shape = list(start.shape)
@@ -866,7 +867,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = empty_like_safe(start, shape, dtype=dtype)
+    result = np.empty_like(start, shape=shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)

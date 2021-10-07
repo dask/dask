@@ -26,8 +26,11 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     if: |
-      needs.check.outputs.test-upstream == 'true'
-      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      always()
+      && (
+          needs.check.outputs.test-upstream == 'true'
+          || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      )
 
     env:
       COVERAGE: "true"
@@ -55,8 +58,71 @@ jobs:
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
+        id: run_tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
         uses: codecov/codecov-action@v1
+
+  report:
+    name: report
+    needs: build
+    if: |
+      always()
+      && github.event_name != 'pull_request'
+      && github.repository == 'dask/dask'
+      && needs.build.result == 'failure'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v2
+      - name: Report failures
+        uses: actions/github-script@v3
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = "⚠️ Upstream CI failed ⚠️"
+            const workflow_url = `https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            const issue_body = `[Workflow Run URL](${workflow_url})`
+            // Run GraphQL query against GitHub API to find the most recent open issue used for reporting failures
+            const query = `query($owner:String!, $name:String!, $creator:String!, $label:String!){
+              repository(owner: $owner, name: $name) {
+                issues(first: 1, states: OPEN, filterBy: {createdBy: $creator, labels: [$label]}, orderBy: {field: CREATED_AT, direction: DESC}) {
+                  edges {
+                    node {
+                      body
+                      id
+                      number
+                    }
+                  }
+                }
+              }
+            }`;
+            const variables = {
+                owner: context.repo.owner,
+                name: context.repo.repo,
+                label: 'upstream',
+                creator: "github-actions[bot]"
+            }
+            const result = await github.graphql(query, variables)
+            // If no issue is open, create a new issue,
+            // else update the body of the existing issue.
+            if (result.repository.issues.edges.length === 0) {
+                github.issues.create({
+                    owner: variables.owner,
+                    repo: variables.name,
+                    body: issue_body,
+                    title: title,
+                    label: [variables.label]
+                })
+            } else {
+                github.issues.update({
+                    owner: variables.owner,
+                    repo: variables.name,
+                    issue_number: result.repository.issues.edges[0].node.number,
+                    body: issue_body
+                })
+            }

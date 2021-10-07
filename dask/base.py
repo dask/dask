@@ -5,6 +5,7 @@ import pickle
 import threading
 import uuid
 from collections import OrderedDict
+from concurrent.futures import Executor
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from functools import partial
@@ -23,6 +24,7 @@ from .core import flatten
 from .core import get as simple_get
 from .core import literal, quote
 from .hashing import hash_buffer_hex
+from .system import CPU_COUNT
 from .utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
@@ -309,7 +311,7 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
 
     Allows for applying the same optimizations and default scheduler."""
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
-    dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+    dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
     return schedule(dsk2, keys, **kwargs)
 
 
@@ -571,15 +573,15 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several dask graphs at once.
+    Visualize several low level dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    dsk : dict(s) or collection(s)
-        The dask graph(s) to visualize.
+    args : dict(s) or collection(s)
+        The low level dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -591,8 +593,10 @@ def visualize(*args, **kwargs):
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
     color : {None, 'order'}, optional
-        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        Options to color nodes.
         colormap
+        - None, the default, no colors.
+        - 'order', colors the nodes' border based on the order they appear in the graph
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -835,7 +839,14 @@ def normalize_seq(seq):
         try:
             return list(map(normalize_token, seq))
         except RecursionError:
-            return str(uuid.uuid4())
+            if not config.get("tokenize.ensure-deterministic"):
+                return uuid.uuid4().hex
+
+            raise RuntimeError(
+                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+                "for more information"
+            )
 
     return type(seq).__name__, func(seq)
 
@@ -855,7 +866,18 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
-    return normalize_function(o) if callable(o) else uuid.uuid4().hex
+
+    if callable(o):
+        return normalize_function(o)
+
+    if not config.get("tokenize.ensure-deterministic"):
+        return uuid.uuid4().hex
+
+    raise RuntimeError(
+        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
+    )
 
 
 function_cache = {}
@@ -1028,7 +1050,15 @@ def register_numpy():
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
-                    data = uuid.uuid4().hex
+                    if not config.get("tokenize.ensure-deterministic"):
+                        data = uuid.uuid4().hex
+                    else:
+                        raise RuntimeError(
+                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            "be deterministically hashed. Please, see "
+                            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
+                            "for more information"
+                        )
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
@@ -1158,17 +1188,26 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
             return scheduler.get
-        elif scheduler.lower() in named_schedulers:
-            return named_schedulers[scheduler.lower()]
-        elif scheduler.lower() in ("dask.distributed", "distributed"):
-            from distributed.worker import get_client
+        elif isinstance(scheduler, str):
+            scheduler = scheduler.lower()
+            if scheduler in named_schedulers:
+                return named_schedulers[scheduler]
+            elif scheduler in ("dask.distributed", "distributed"):
+                from distributed.worker import get_client
 
-            return get_client().get
-        else:
-            raise ValueError(
-                "Expected one of [distributed, %s]"
-                % ", ".join(sorted(named_schedulers))
+                return get_client().get
+            else:
+                raise ValueError(
+                    "Expected one of [distributed, %s]"
+                    % ", ".join(sorted(named_schedulers))
+                )
+        elif isinstance(scheduler, Executor):
+            num_workers = getattr(
+                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
             )
+            return partial(local.get_async, scheduler.submit, num_workers)
+        else:
+            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 

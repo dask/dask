@@ -107,7 +107,7 @@ paths_to_cats = (
 )
 
 
-def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
+def _determine_pf_parts(fs, paths, gather_statistics, ignore_metadata_file, **kwargs):
     """Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
@@ -118,21 +118,30 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     parts = []
     if len(paths) > 1:
         paths, base, fns = _sort_and_analyze_paths(paths, fs)
+
+        # Check if _metadata is in paths, and
+        # remove it if ignore_metadata_file=True
+        _metadata_exists = "_metadata" in fns
+        if _metadata_exists and ignore_metadata_file:
+            fns.remove("_metadata")
+            paths = [fs.sep.join([base, fn]) for fn in fns]
+            _metadata_exists = False
+
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
-            if "_metadata" not in fns:
-                paths_use = paths
+            if _metadata_exists:
+                paths_use = fs.sep.join([base, "_metadata"])
             else:
-                paths_use = base + fs.sep + "_metadata"
+                paths_use = paths
             pf = ParquetFile(
                 paths_use, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
             )
         else:
-            if "_metadata" in fns:
+            if _metadata_exists:
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
-                    base + fs.sep + "_metadata",
+                    fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
                     sep=fs.sep,
                     **kwargs.get("file", {}),
@@ -146,13 +155,28 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
                 pf.cats = paths_to_cats(fns, scheme)
                 parts = paths.copy()
     elif fs.isdir(paths[0]):
-        # This is a directory, check for _metadata, then _common_metadata
-        paths = fs.glob(paths[0] + fs.sep + "*")
-        paths, base, fns = _sort_and_analyze_paths(paths, fs)
-        if "_metadata" in fns:
+        # This is a directory.
+        # Check if _metadata and/or _common_metadata files exists
+        base = paths[0]
+        _metadata_exists = _common_metadata_exists = True
+        if not ignore_metadata_file:
+            _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
+            _common_metadata_exists = fs.isfile(fs.sep.join([base, "_common_metadata"]))
+
+        # Find all files if we are not using a _metadata file
+        if ignore_metadata_file or not _metadata_exists:
+            # For now, we need to discover every file under paths[0]
+            paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
+            _common_metadata_exists = "_common_metadata" in fns
+            if "_metadata" in fns:
+                fns.remove("_metadata")
+                paths = [fs.sep.join([base, fn]) for fn in fns]
+            _metadata_exists = False
+
+        if _metadata_exists:
             # Using _metadata file (best-case scenario)
             pf = ParquetFile(
-                base + fs.sep + "_metadata",
+                fs.sep.join([base, "_metadata"]),
                 open_with=fs.open,
                 sep=fs.sep,
                 **kwargs.get("file", {}),
@@ -166,9 +190,9 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
         else:
             # Use _common_metadata file if it is available.
             # Otherwise, just use 0th file
-            if "_common_metadata" in fns:
+            if _common_metadata_exists:
                 pf = ParquetFile(
-                    base + fs.sep + "_common_metadata",
+                    fs.sep.join([base, "_common_metadata"]),
                     open_with=fs.open,
                     **kwargs.get("file", {}),
                 )
@@ -724,14 +748,25 @@ class FastParquetEngine(Engine):
         split_row_groups=True,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
+        metadata_task_size=None,
         **kwargs,
     ):
+
+        # Check if metadata_task_size is set
+        if metadata_task_size:
+            raise ValueError("metadata_task_size not supported in FastParquetEngine")
+
         # Define the parquet-file (pf) object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
         parts, pf, gather_statistics, base_path = _determine_pf_parts(
-            fs, paths, gather_statistics, **kwargs
+            fs,
+            paths,
+            gather_statistics,
+            ignore_metadata_file,
+            **kwargs,
         )
 
         # Process metadata to define `meta` and `index_cols`
