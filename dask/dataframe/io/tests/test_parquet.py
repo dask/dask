@@ -3719,3 +3719,32 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
                 gather_statistics=True,
                 metadata_task_size=metadata_task_size,
             )
+
+
+def test_extra_file(tmpdir, engine):
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmpdir, engine=engine)
+    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
+    os.remove(os.path.join(tmpdir, "_metadata"))
+    out = dd.read_parquet(tmpdir, engine=engine)
+    assert_eq(out, df)
+
+    if engine != "pyarrow-legacy":
+        # For "fastparquet" and "pyarrow-dataset", we can pass the
+        # expected file extension, or avoid checking file extensions
+        # by passing False. Check here that this works:
+
+        # Should Work
+        out = dd.read_parquet(
+            tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
+        )
+        assert_eq(out, df)
+
+        # Should Fail
+        with pytest.raises((OSError, pa.lib.ArrowInvalid)):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": False}
+            ).compute()
