@@ -1202,6 +1202,8 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     % ", ".join(sorted(named_schedulers))
                 )
         elif isinstance(scheduler, Executor):
+            # Get `num_workers` from `Executor`'s `_max_workers` attribute.
+            # If undefined, fallback to `config` or worst case CPU_COUNT.
             num_workers = getattr(scheduler, "_max_workers", None)
             if num_workers is None:
                 num_workers = config.get("num_workers", CPU_COUNT)
