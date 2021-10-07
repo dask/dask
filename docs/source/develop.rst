@@ -310,21 +310,21 @@ How to build the Dask documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To build the documentation locally, make a fork of the main
-`Dask repository <https://github.com/dask/dask>`_, clone the fork,
-and install the necessary requirements using ``pip`` or ``conda``::
-
+`Dask repository <https://github.com/dask/dask>`_, clone the fork::
 
   git clone https://github.com/<your-github-username>/dask.git
   cd dask/docs
 
-``pip``::
+Install the packages in ``requirements-docs.txt``.
+
+Optionally create and activate a ``conda`` environment first::
+
+  conda create -n daskdocs -c conda-forge python=3.8
+  conda activate daskdocs
+
+Install the dependencies with ``pip``::
 
   python -m pip install -r requirements-docs.txt
-
-``conda``::
-
-  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
-  conda activate daskdocs
 
 Then build the documentation with ``make``::
 
