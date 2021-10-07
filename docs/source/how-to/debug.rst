@@ -1,5 +1,5 @@
-Debugging
-=========
+Debug
+=====
 
 Debugging parallel programs is hard.  Normal debugging tools like logging and
 using ``pdb`` to interact with tracebacks stop working normally when exceptions
@@ -21,7 +21,7 @@ looking at the traceback and investigating where in their code the exception
 occurred.
 
 Normally when a computation executes in a separate thread or a different
-machine, these approaches break down.  To address this, Dask provides a few 
+machine, these approaches break down.  To address this, Dask provides a few
 mechanisms to recreate the normal Python debugging experience.
 
 Inspect Exceptions and Tracebacks
@@ -146,8 +146,8 @@ slow due to inter-worker communication or scheduler overhead, or one of several
 other issues.  Getting feedback about what's going on can help to identify
 both failures and general performance bottlenecks.
 
-For the single-machine scheduler, see :doc:`diagnostics
-<understanding-performance>` documentation.  The rest of the section will
+For the single-machine scheduler, see :doc:`local diagnostic
+<../diagnostics-local>` documentation.  The rest of the section will
 assume that you are using the `distributed scheduler
 <https://distributed.dask.org/en/latest/>`_ where these issues arise more
 commonly.
@@ -179,7 +179,7 @@ launching Dask on your own, they will probably dump to the screen unless you
 <https://en.wikipedia.org/wiki/Redirection_(computing)#Redirecting_to_and_from_the_standard_file_handles>`_
 .
 
-You can control the logging verbosity in the :doc:`configuration`, for example,
+You can control the logging verbosity in the :doc:`../configuration`, for example,
 the ``~/.config/dask/*.yaml`` files.
 Defaults currently look like the following:
 

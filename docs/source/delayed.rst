@@ -5,7 +5,6 @@ Delayed
    :maxdepth: 1
    :hidden:
 
-   delayed-api.rst
    delayed-collections.rst
    delayed-best-practices.rst
 

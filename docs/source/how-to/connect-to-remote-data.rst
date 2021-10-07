@@ -1,5 +1,5 @@
-Remote Data
-===========
+Connect to remote data
+======================
 
 Dask can read data from a variety of data stores including local file systems,
 network file systems, cloud object stores, and Hadoop.  Typically this is done
