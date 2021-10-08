@@ -3484,7 +3484,7 @@ def test_groupby_multilevel_info():
 
     g = ddf.groupby(["A", "B"]).sum()
     # slight difference between memory repr (single additional space)
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3496,7 +3496,7 @@ def test_groupby_multilevel_info():
 
     # multilevel
     g = ddf.groupby(["A", "B"]).agg(["count", "sum"])
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3533,7 +3533,8 @@ def test_categorize_info():
         " 0   x       4 non-null      int64\n"
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)"
+        "dtypes: category(1), object(1), int64(1)\n"
+        "memory usage: 496.0 bytes\n"
     )
     assert buf.getvalue() == expected
 
