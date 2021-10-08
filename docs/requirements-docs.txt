@@ -1,6 +1,7 @@
 numpydoc
 sphinx>=4.0.0
 dask-sphinx-theme>=2.0.0
+git+https://github.com/choldgraf/pydata-sphinx-theme@perf
 sphinx-click
 sphinx-tabs
 toolz
