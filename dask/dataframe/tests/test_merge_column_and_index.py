@@ -199,8 +199,9 @@ def test_merge_known_to_double_bcast_right(
 
     # Assertions
     assert_eq(result, expected)
-    # TODO: disk shuffle has no divisions. Why?
-    # assert_eq(result.divisions, ddf_left.divisions)
+    # Hash join used in disk-shuffling doesn't preserve divisions.
+    if shuffle_method == "task":
+        assert_eq(result.divisions, ddf_left.divisions)
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
@@ -213,13 +214,14 @@ def test_merge_known_to_double_bcast_left(
 
     # Perform merge
     result = ddf_left_double.merge(
-        ddf_right, on=on, how=how, shuffle=shuffle_method, broadcast=broadcast
+        ddf_right, on=on, how=how, broadcast=broadcast, shuffle=shuffle_method
     )
 
     # Assertions
     assert_eq(result, expected)
-    # TODO: disk shuffle has no divisions. Why?
-    # assert_eq(result.divisions, ddf_right.divisions)
+    # Hash join used in disk-shuffling doesn't preserve divisions.
+    if shuffle_method == "task":
+        assert_eq(result.divisions, ddf_right.divisions)
 
     # Check that culling works
     result.head(1)
