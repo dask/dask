@@ -256,6 +256,17 @@ def test_hash_join(how, shuffle):
     )
 
 
+def test_hash_join_no_service():
+    A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
+    a = dd.repartition(A, [0, 4, 5])
+
+    B = pd.DataFrame({"y": [1, 3, 4, 4, 5, 6], "z": [6, 5, 4, 3, 2, 1]})
+    b = dd.repartition(B, [0, 2, 5])
+
+    with pytest.raises(NotImplementedError, match="shuffle='service'"):
+        hash_join(a, "y", b, "y", shuffle="service")
+
+
 def test_sequential_joins():
     # Pandas version of multiple inner joins
     df1 = pd.DataFrame(

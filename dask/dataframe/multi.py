@@ -329,6 +329,9 @@ def hash_join(
 
     >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
+    if shuffle == "service":
+        raise NotImplementedError("merge does not support `shuffle='service'` yet")
+
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
