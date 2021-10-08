@@ -69,7 +69,7 @@ Local Processes
 
 .. code-block:: python
 
-   import dask.multiprocessing
+   import dask
    dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
