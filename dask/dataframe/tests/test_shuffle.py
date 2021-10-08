@@ -1255,10 +1255,14 @@ def test_sort_values(nelem, nparts, by, ascending):
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
-def test_sort_values(npartitions):
-    df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
-    ddf = dd.from_pandas(df, npartitions=npartitions)
-    assert_eq(ddf.sort_values("a"), df.sort_values("a"))
+def test_sort_values_with_nulls(data, by, ascending, na_position):
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
+    expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
+    dd.assert_eq(got, expect, check_index=False)
 
 
 @pytest.mark.slow
@@ -1320,13 +1324,3 @@ async def test_shuffle_service_large(c, s, a, b):
     assert not hasattr(b, "shuffler")
     assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
     assert not ShuffleService._instances
-
-
-def test_sort_values_with_nulls(data, by, ascending, na_position):
-    df = pd.DataFrame(data)
-    ddf = dd.from_pandas(df, npartitions=5)
-
-    with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
-    expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
-    dd.assert_eq(got, expect, check_index=False)
