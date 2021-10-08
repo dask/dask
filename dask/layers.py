@@ -343,22 +343,94 @@ def fractional_slice(task, axes):
 
 
 class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
+    """DataFrame-Layer Base Class
 
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
+    The purpose of this class is to define
+    DataFrame specific attributes that should be
+    available on all DataFrame-based HLG Layers.
+    """
+
+    def required_input_columns(self, output_columns, layer_dependency=None):
+        """Return the required column dependencies
+        to produce the desired ``output_columns``.
+        A return value of ``None`` (the default)
+        should be interpretted as: "All available
+        columns are required."
+        """
+        return None
+
+
+class DataFrameBlockwise(Blockwise, DataFrameLayer):
+    """DataFrame-Based Blockwise Layer
+
+    The entire purpose of this class is to attach
+    DataFrameLayer attributes to the Blockwise class.
+    """
+
+    def __init__(self, *args, **kwargs):
+        self._column_dependencies = kwargs.pop("column_dependencies", None)
+        super().__init__(*args, **kwargs)
+
+    def required_input_columns(self, output_columns, layer_dependency=None):
+        """Blockwise column-dependency logic.
+
+        Uses the _column_dependencies attribute to return a
+        set containing all columns required to produce
+        `output_columns`.
         """
 
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
+        # Blockwise layers may depend on more than one layer.
+        # We need to track column dependencies seperately if
+        # there happend to be seperate
+        if isinstance(self._column_dependencies, dict):
+            _column_dependencies = self._column_dependencies.get(layer_dependency, None)
+        else:
+            _column_dependencies = self._column_dependencies
+
+        if isinstance(_column_dependencies, dict):
+            if _column_dependencies:
+                # Use the `_column_dependencies` dictionary
+                # to construct a set of required input columns.
+                # If an output-column name is not a key in
+                # `_column_dependencies`, we assume that the column
+                # is being "passed through" with the same name.
+                if "__known__" in _column_dependencies:
+                    return set(_column_dependencies["__known__"])
+                if output_columns is None:
+                    return None
+                assigned_columns = set(_column_dependencies.get("__assigned__", set()))
+                required_columns = set(_column_dependencies.get("__const__", set()))
+                for col in output_columns or []:
+                    required_columns |= set(
+                        _column_dependencies.get(
+                            col,
+                            {col} if col not in assigned_columns else set(),
+                        )
+                    )
+                return required_columns
+            else:
+                # No dependencies between columns, so we are
+                # just passing columns through
+                return None if output_columns is None else set(output_columns)
+        elif output_columns is None:
+            return None
+        elif _column_dependencies is False:
+            # No dependencies between columns, so we are
+            # just passing columns through
+            return set(output_columns)
+        elif _column_dependencies is None:
+            # No column-dependency information available.
+            # Return None to imply that we need all available
+            # input columns
+            return None
+        else:
+            raise ValueError(
+                f"{type(_column_dependencies)} is not a supported "
+                f"type for _column_dependencies attribute."
+            )
+
+    def __repr__(self):
+        return "DataFrameBlockwise<{} -> {}>".format(self.indices, self.output)
 
 
 class SimpleShuffleLayer(DataFrameLayer):
@@ -431,6 +503,27 @@ class SimpleShuffleLayer(DataFrameLayer):
             self.annotations["priority"] = {}
         self.annotations["priority"]["__expanded_annotations__"] = None
         self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
+
+    def replace_dependencies(self, new_dependencies: dict):
+        return type(self)(
+            self.name,
+            self.column,
+            self.npartitions,
+            self.npartitions_input,
+            self.ignore_index,
+            new_dependencies.get(self.name_input, self.name_input),
+            self.meta_input,
+            parts_out=self.parts_out,
+            annotations=self.annotations,
+        )
+
+    def required_input_columns(self, output_columns, layer_dependency=None):
+        if output_columns is None:
+            return None
+        required_columns = (
+            {self.column} if isinstance(self.column, str) else set(self.column)
+        )
+        return required_columns | set(output_columns)
 
     def get_split_keys(self):
         # Return SimpleShuffleLayer "split" keys
@@ -695,6 +788,22 @@ class ShuffleLayer(SimpleShuffleLayer):
             meta_input,
             parts_out=parts_out or range(len(inputs)),
             annotations=annotations,
+        )
+
+    def replace_dependencies(self, new_dependencies: dict):
+        return type(self)(
+            self.name,
+            self.column,
+            self.inputs,
+            self.stage,
+            self.npartitions,
+            self.npartitions_input,
+            self.nsplits,
+            self.ignore_index,
+            new_dependencies.get(self.name_input, self.name_input),
+            self.meta_input,
+            parts_out=self.parts_out,
+            annotations=self.annotations,
         )
 
     def get_split_keys(self):
@@ -1147,7 +1256,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
+class DataFrameIOLayer(DataFrameBlockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
@@ -1213,7 +1322,14 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this layer.
+        Given a list of required output columns, this method
+        returns a tuple with the projected layer, and any column
+        dependencies for this layer.  A value of ``None`` for
+        ``output_columns`` means that the current layer (and
+        any dependent layers) cannot be projected.
+        """
+
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1230,9 +1346,11 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
+            # Return: `projected_layer`, `dep_columns`
             return layer, None
         else:
             # Default behavior
+            # Return: `projected_layer`, `dep_columns`
             return self, None
 
     def __repr__(self):

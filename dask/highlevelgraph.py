@@ -323,6 +323,10 @@ class Layer(collections.abc.Mapping):
 
         return MaterializedLayer(dsk_new), bound
 
+    def replace_dependencies(self, new_dependencies: Mapping):
+        """Return a replacement Layer with modified dependencies"""
+        raise NotImplementedError
+
     def __dask_distributed_pack__(
         self,
         all_hlg_keys: Iterable[Hashable],

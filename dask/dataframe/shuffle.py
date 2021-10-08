@@ -283,7 +283,10 @@ def set_partition(
 
     if np.isscalar(index):
         partitions = df[index].map_partitions(
-            set_partitions_pre, divisions=divisions, meta=meta
+            set_partitions_pre,
+            divisions=divisions,
+            meta=meta,
+            column_dependencies=False,
         )
         df2 = df.assign(_partitions=partitions)
     else:
@@ -308,6 +311,7 @@ def set_partition(
             index_name=index,
             drop=drop,
             column_dtype=df.columns.dtype,
+            column_dependencies={df3._name: {"__const__": {"_partitions", index}}},
         )
     else:
         df4 = df3.map_partitions(
@@ -319,7 +323,7 @@ def set_partition(
 
     df4.divisions = methods.tolist(divisions)
 
-    return df4.map_partitions(M.sort_index)
+    return df4.map_partitions(M.sort_index, column_dependencies=False)
 
 
 def shuffle(
