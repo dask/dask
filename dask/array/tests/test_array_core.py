@@ -286,7 +286,9 @@ def test_keys():
     # Test mutating names clears key cache
     dx.dask = {("y", i, j): () for i in range(5) for j in range(6)}
     dx._name = "y"
-    assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    new_keys = [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    assert dx.__dask_keys__() == new_keys
+    assert np.array_equal(dx._key_array, np.array(new_keys, dtype="object"))
     d = Array({}, "x", (), shape=(), dtype="f8")
     assert d.__dask_keys__() == [("x",)]
 
