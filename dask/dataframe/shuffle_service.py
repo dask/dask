@@ -60,6 +60,13 @@ class ShuffleReceiver:
 
     def __init__(self, dask_worker: Worker, rows_per_collect: int):
         self.worker = dask_worker
+        if "shuffle_receive" in self.worker.handlers or hasattr(
+            self.worker, "shuffler"
+        ):
+            raise NotImplementedError(
+                f"A ShuffleReceiver is already installed on the worker {dask_worker.address}. "
+                "Multiple simultaneous shuffles (which are required for `merge`) are not supported yet."
+            )
         self.worker.handlers["shuffle_receive"] = self.receive
         self.worker.shuffler = self
         self.lock = threading.Lock()
@@ -279,6 +286,11 @@ class ShuffleService:
         if self._started:
             return
         else:
+            if "shuffle_finish_send" in self.worker.handlers:
+                raise NotImplementedError(
+                    f"A ShuffleService is already installed on the worker {self.worker.address}. "
+                    "Multiple simultaneous shuffles (which are required for `merge`) are not supported yet."
+                )
             self.worker.handlers["shuffle_finish_send"] = self.finish_send
 
             self.q: asyncio.Queue[dict] = asyncio.Queue()

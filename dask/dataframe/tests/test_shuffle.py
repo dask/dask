@@ -1302,6 +1302,48 @@ async def test_shuffle_service(c, s, a, b):
     timeout=10000,
     Worker=Nanny,  # dask/distributed#4959
 )
+async def test_shuffle_service_fail_concurrent_shuffle(c, s, a, b):
+    handlers = set(a.handlers)
+
+    df1 = dask.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-05",
+    )
+    df2 = dask.datasets.timeseries(
+        start="2000-01-05",
+        end="2000-01-10",
+    )
+
+    # Implement the merge ourselves, since `hash_join` already has client-side logic
+    # to block `shuffle="service"`
+    divisions = [
+        "Alice",
+        "Frank",
+        "Patricia",
+        "Ursula",
+        "Zelda",
+    ]
+    shuffled1 = df1.set_index("name", shuffle="service", divisions=divisions)
+    shuffled2 = df2.set_index("name", shuffle="service", divisions=divisions)
+
+    merged = shuffled1.map_partitions(lambda p1, p2: p1.merge(p2, on="name"), shuffled2)
+
+    with pytest.raises(NotImplementedError):
+        await c.compute(merged.size)
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
 async def test_shuffle_service_large(c, s, a, b):
     handlers = set(a.handlers)
 
