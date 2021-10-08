@@ -1155,7 +1155,7 @@ class Array(DaskMethodsMixin):
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-
+        self.blockview = BlockView(self)
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
 
         for plugin in config.get("array_plugins", ()):
@@ -5282,6 +5282,53 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return new_dd_object(dsk, name, meta, divisions)
     else:
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+class BlockView:
+    """
+    An array-like interface to the chunks of a chunked array.
+    """
+
+    def __init__(self, array):
+        self._array = array
+
+    def __getitem__(self, index):
+        from .slicing import normalize_index
+
+        if not isinstance(index, tuple):
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self.array.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
+
+        name = "blocks-" + tokenize(self.array, index)
+
+        new_keys = np.array(self.array.__dask_keys__(), dtype=object)[index]
+
+        chunks = tuple(
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self.array.chunks, index)
+        )
+
+        keys = product(*(range(len(c)) for c in chunks))
+
+        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self.array])
+        return Array(graph, name, chunks, meta=self.array)
+
+    @property
+    def array(self):
+        return self._array
+
+    @property
+    def shape(self):
+        return tuple(map(len, self.array.chunks))
+
+    def ravel(self):
+        return [self[idx] for idx in np.ndindex(self.shape)]
 
 
 from .blockwise import blockwise
