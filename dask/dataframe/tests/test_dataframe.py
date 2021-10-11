@@ -1497,7 +1497,7 @@ def test_assign():
         d="string",
         e=ddf.a.sum(),
         f=ddf.a + ddf.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     res_unknown = ddf_unknown.assign(
@@ -1505,7 +1505,7 @@ def test_assign():
         d="string",
         e=ddf_unknown.a.sum(),
         f=ddf_unknown.a + ddf_unknown.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     sol = df.assign(
@@ -1513,7 +1513,7 @@ def test_assign():
         d="string",
         e=df.a.sum(),
         f=df.a + df.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     assert_eq(res, sol)
@@ -1539,6 +1539,14 @@ def test_assign():
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
         ddf.assign(foo=ddf_unknown.a)
+
+    df = pd.DataFrame({"A": [1, 2]})
+    df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    ddf = dd.from_pandas(pd.DataFrame({"A": [1, 2]}), npartitions=2)
+    ddf.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    assert_eq(df, ddf)
 
 
 def test_assign_callable():
