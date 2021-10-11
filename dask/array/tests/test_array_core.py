@@ -286,7 +286,9 @@ def test_keys():
     # Test mutating names clears key cache
     dx.dask = {("y", i, j): () for i in range(5) for j in range(6)}
     dx._name = "y"
-    assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    new_keys = [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    assert dx.__dask_keys__() == new_keys
+    assert np.array_equal(dx._key_array, np.array(new_keys, dtype="object"))
     d = Array({}, "x", (), shape=(), dtype="f8")
     assert d.__dask_keys__() == [("x",)]
 
@@ -4875,6 +4877,20 @@ def test_rechunk_auto():
     y = x.rechunk()
 
     assert y.npartitions == 1
+
+
+def test_chunk_assignment_invalidates_cached_properties():
+    x = da.ones((4,), chunks=(1,))
+    y = x.copy()
+    # change chunks directly, which should change all of the tested properties
+    y._chunks = ((2, 2), (0, 0, 0, 0))
+    assert not x.ndim == y.ndim
+    assert not x.shape == y.shape
+    assert not x.size == y.size
+    assert not x.numblocks == y.numblocks
+    assert not x.npartitions == y.npartitions
+    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert not np.array_equal(x._key_array, y._key_array)
 
 
 def test_map_blocks_series():
