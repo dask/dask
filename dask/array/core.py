@@ -1155,7 +1155,6 @@ class Array(DaskMethodsMixin):
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-        self.blockview = BlockView(self)
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
 
         for plugin in config.get("array_plugins", ()):
@@ -1917,6 +1916,10 @@ class Array(DaskMethodsMixin):
         A Dask array
         """
         return self.blocks
+
+    @property
+    def blockview(self):
+        return BlockView(self)
 
     @derived_from(np.ndarray)
     def dot(self, other):
