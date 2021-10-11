@@ -4456,6 +4456,7 @@ def test_blockview():
     assert_eq(x.blockview[[0, 1, 2]], x[:6])
     assert_eq(x.blockview[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
     assert_eq(x.blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(x.blockview.size, np.prod(x.blockview.shape))
     assert_eq(
         x.blockview.ravel(), [x.blockview[idx] for idx in np.ndindex(x.blockview.shape)]
     )
@@ -4465,6 +4466,7 @@ def test_blockview():
     assert_eq(x.blockview[0, :3], x[:4, :15])
     assert_eq(x.blockview[:, :3], x[:, :15])
     assert_eq(x.blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(x.blockview.size, np.prod(x.blockview.shape))
     assert_eq(
         x.blockview.ravel(), [x.blockview[idx] for idx in np.ndindex(x.blockview.shape)]
     )
@@ -4472,6 +4474,7 @@ def test_blockview():
     x = da.ones((40, 40, 40), chunks=(10, 10, 10))
     assert_eq(x.blockview[0, :, 0], np.ones((10, 40, 10)))
     assert_eq(x.blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(x.blockview.size, np.prod(x.blockview.shape))
     assert_eq(
         x.blockview.ravel(), [x.blockview[idx] for idx in np.ndindex(x.blockview.shape)]
     )

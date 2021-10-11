@@ -5301,7 +5301,7 @@ class BlockView:
             raise ValueError("Can only slice with a single list")
         if any(ind is None for ind in index):
             raise ValueError("Slicing with np.newaxis or None is not supported")
-        index = normalize_index(index, self.array.numblocks)
+        index = normalize_index(index, self._array.numblocks)
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
 
         name = "blocks-" + tokenize(self.array, index)
@@ -5309,23 +5309,23 @@ class BlockView:
         new_keys = np.array(self.array.__dask_keys__(), dtype=object)[index]
 
         chunks = tuple(
-            tuple(np.array(c)[i].tolist()) for c, i in zip(self.array.chunks, index)
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
         )
 
         keys = product(*(range(len(c)) for c in chunks))
 
         layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
 
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self.array])
-        return Array(graph, name, chunks, meta=self.array)
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
+        return Array(graph, name, chunks, meta=self._array)
 
     @property
-    def array(self):
-        return self._array
+    def size(self):
+        return np.prod(self.shape)
 
     @property
     def shape(self):
-        return tuple(map(len, self.array.chunks))
+        return tuple(map(len, self._array.chunks))
 
     def ravel(self):
         return [self[idx] for idx in np.ndindex(self.shape)]
