@@ -16,6 +16,6 @@ jobs:
           stale-issue-label: 'needs attention'
           stale-pr-label: 'needs attention'
           exempt-issue-labels: 'good intro to dask,good first issue,Good First Issue,good second issue,feature request'
-          exempt-pr-labels: 'awaiting-approval,work-in-progress'
+          #exempt-pr-labels: 'awaiting-approval,work-in-progress'
           exempt-draft-pr: true
           start-date: '2020-04-18T00:00:00Z' # ignore before this date, ISO 8601 or RFC 2822
