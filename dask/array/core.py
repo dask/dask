@@ -1257,6 +1257,10 @@ class Array(DaskMethodsMixin):
             self.__dict__.pop(key, None)
 
     @cached_property
+    def _key_array(self):
+        return np.array(self.__dask_keys__(), dtype=object)
+
+    @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
 
@@ -1340,7 +1344,7 @@ class Array(DaskMethodsMixin):
 
         # When the chunks changes the cached properties that was
         # dependent on it needs to be deleted:
-        for key in ["numblocks", "npartitions", "shape", "ndim", "size"]:
+        for key in ["numblocks", "npartitions", "shape", "ndim", "size", "_key_array"]:
             self._reset_cache(key)
 
     @property
@@ -1473,6 +1477,7 @@ class Array(DaskMethodsMixin):
         self.__name = val
         # Clear the key cache when the name is reset
         self._cached_keys = None
+        self._reset_cache("_key_array")
 
     @property
     def name(self):
@@ -1828,7 +1833,7 @@ class Array(DaskMethodsMixin):
 
         name = "blocks-" + tokenize(self, index)
 
-        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
+        new_keys = self._key_array[index]
 
         chunks = tuple(
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)

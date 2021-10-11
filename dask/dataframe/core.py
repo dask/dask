@@ -222,11 +222,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
     def __bool__(self):
         raise TypeError(
-            "Trying to convert {} to a boolean value. Because Dask objects are "
+            f"Trying to convert {self} to a boolean value. Because Dask objects are "
             "lazily evaluated, they cannot be converted to a boolean value or used "
             "in boolean conditions like if statements. Try calling .compute() to "
             "force computation prior to converting to a boolean value or using in "
-            "a conditional statement.".format(self)
+            "a conditional statement."
         )
 
     @property
@@ -1085,17 +1085,18 @@ Dask Name: {name}, {task} tasks"""
         if npartitions <= -1:
             npartitions = self.npartitions
         if npartitions > self.npartitions:
-            msg = "only {} partitions, head received {}"
-            raise ValueError(msg.format(self.npartitions, npartitions))
+            raise ValueError(
+                f"only {self.npartitions} partitions, head received {npartitions}"
+            )
 
-        name = "head-%d-%d-%s" % (npartitions, n, self._name)
+        name = f"head-{npartitions}-{n}-{self._name}"
         if safe:
             head = safe_head
         else:
             head = M.head
 
         if npartitions > 1:
-            name_p = "head-partial-%d-%s" % (n, self._name)
+            name_p = f"head-partial-{n}-{self._name}"
 
             dsk = {}
             for i in range(npartitions):
@@ -3054,9 +3055,8 @@ Dask Name: {name}, {task} tasks"""
 
             if len(lengths) != self.npartitions:
                 raise ValueError(
-                    "The number of items in 'lengths' does not match "
-                    "the number of partitions. "
-                    "{} != {}".format(len(lengths), self.npartitions)
+                    "The number of items in 'lengths' does not match the number of "
+                    f"partitions. {len(lengths)} != {self.npartitions}"
                 )
 
             if self.ndim == 1:
@@ -3221,9 +3221,7 @@ class Series(_Frame):
     def __repr__(self):
         """have to overwrite footer"""
         if self.name is not None:
-            footer = "Name: {name}, dtype: {dtype}".format(
-                name=self.name, dtype=self.dtype
-            )
+            footer = f"Name: {self.name}, dtype: {self.dtype}"
         else:
             footer = f"dtype: {self.dtype}"
 
@@ -3811,8 +3809,9 @@ class Index(Series):
 
     @property
     def index(self):
-        msg = "'{0}' object has no attribute 'index'"
-        raise AttributeError(msg.format(self.__class__.__name__))
+        raise AttributeError(
+            f"{self.__class__.__name__!r} object has no attribute 'index'"
+        )
 
     def __array_wrap__(self, array, context=None):
         return pd.Index(array, name=self.name)
@@ -4406,6 +4405,7 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
+        data = self.copy()
         for k, v in kwargs.items():
             if not (
                 isinstance(v, Scalar)
@@ -4419,25 +4419,28 @@ class DataFrame(_Frame):
                     f"Column assignment doesn't support type {typename(type(v))}"
                 )
             if callable(v):
-                kwargs[k] = v(self)
-
+                kwargs[k] = v(data)
             if isinstance(v, Array):
                 from .io import from_dask_array
 
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
-                if v.npartitions != self.npartitions:
+                if v.npartitions != data.npartitions:
                     raise ValueError(
                         "Number of partitions do not match "
-                        f"({v.npartitions} != {self.npartitions})"
+                        f"({v.npartitions} != {data.npartitions})"
                     )
-                kwargs[k] = from_dask_array(v, index=self.index, meta=self._meta)
+                kwargs[k] = from_dask_array(v, index=data.index, meta=data._meta)
 
-        pairs = list(sum(kwargs.items(), ()))
+            pairs = [k, kwargs[k]]
 
-        # Figure out columns of the output
-        df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
-        return elemwise(methods.assign, self, *pairs, meta=df2)
+            # Figure out columns of the output
+            df2 = data._meta_nonempty.assign(
+                **_extract_meta({k: kwargs[k]}, nonempty=True)
+            )
+            data = elemwise(methods.assign, data, *pairs, meta=df2)
+
+        return data
 
     @derived_from(pd.DataFrame, ua_args=["index"])
     def rename(self, index=None, columns=None):
@@ -6883,12 +6886,10 @@ def _count_aggregate(x):
 def safe_head(df, n):
     r = M.head(df, n)
     if len(r) != n:
-        msg = (
-            "Insufficient elements for `head`. {0} elements "
-            "requested, only {1} elements available. Try passing larger "
-            "`npartitions` to `head`."
+        warnings.warn(
+            f"Insufficient elements for `head`. {n} elements requested, only {len(r)} "
+            "elements available. Try passing larger `npartitions` to `head`."
         )
-        warnings.warn(msg.format(n, len(r)))
     return r
 
 
