@@ -116,7 +116,7 @@ jobs:
                     repo: variables.name,
                     body: issue_body,
                     title: title,
-                    label: [variables.label]
+                    labels: [variables.label]
                 })
             } else {
                 github.issues.update({
