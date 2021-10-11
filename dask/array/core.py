@@ -5311,7 +5311,7 @@ class BlockView:
 
         name = "blocks-" + tokenize(self.array, index)
 
-        new_keys = np.array(self.array.__dask_keys__(), dtype=object)[index]
+        new_keys = self._array._key_array[index]
 
         chunks = tuple(
             tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
