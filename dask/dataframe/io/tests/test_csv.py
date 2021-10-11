@@ -848,7 +848,7 @@ def test_read_csv_raises_on_no_files():
     try:
         dd.read_csv(fn)
         assert False
-    except (OSError, IOError) as e:
+    except OSError as e:
         assert fn in str(e)
 
 
@@ -1537,7 +1537,7 @@ def test_to_csv_header_empty_dataframe(header, expected):
         ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=header)
         assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
         filename = os.path.join(dn, "fooe0.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected
         os.remove(filename)
@@ -1571,13 +1571,13 @@ def test_to_csv_header(
             header_first_partition_only=header_first_partition_only,
         )
         filename = os.path.join(dn, "fooa0.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected_first
         os.remove(filename)
 
         filename = os.path.join(dn, "fooa1.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected_next
         os.remove(filename)

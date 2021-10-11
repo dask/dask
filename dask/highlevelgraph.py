@@ -34,7 +34,7 @@ def compute_layer_dependencies(layers):
                 return k
         raise RuntimeError(f"{repr(key)} not found")
 
-    all_keys = set(key for layer in layers.values() for key in layer)
+    all_keys = {key for layer in layers.values() for key in layer}
     ret = {k: set() for k in layers}
     for k, v in layers.items():
         for key in keys_in_tasks(all_keys - v.keys(), v.values()):

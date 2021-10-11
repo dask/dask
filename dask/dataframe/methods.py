@@ -212,7 +212,7 @@ def describe_numeric_aggregate(
     else:
         part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
-    q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
+    q.index = [f"{l * 100:g}%" for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])

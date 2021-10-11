@@ -162,7 +162,7 @@ def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+    assert getattr not in {v[0] for v in o.__dask_graph__().values()}
 
 
 def test_np_dtype_of_delayed():
@@ -239,8 +239,8 @@ def test_literates():
     assert delayed(lit).compute() == (1, 2, 3)
     lit = [a, b, 3]
     assert delayed(lit).compute() == [1, 2, 3]
-    lit = set((a, b, 3))
-    assert delayed(lit).compute() == set((1, 2, 3))
+    lit = {a, b, 3}
+    assert delayed(lit).compute() == {1, 2, 3}
     lit = {a: "a", b: "b", 3: "c"}
     assert delayed(lit).compute() == {1: "a", 2: "b", 3: "c"}
     assert delayed(lit)[a].compute() == "a"

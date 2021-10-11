@@ -278,7 +278,7 @@ def test_numblocks_suppoorts_singleton_block_dims():
 
 
 def test_keys():
-    dsk = dict((("x", i, j), ()) for i in range(5) for j in range(6))
+    dsk = {("x", i, j): () for i in range(5) for j in range(6)}
     dx = Array(dsk, "x", chunks=(10, 10), shape=(50, 60), dtype="f8")
     assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
     # Cache works
@@ -316,7 +316,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__02():
 
 
 def test_stack():
-    a, b, c = [
+    a, b, c = (
         Array(
             getem(name, chunks=(2, 3), shape=(4, 6)),
             name,
@@ -325,7 +325,7 @@ def test_stack():
             shape=(4, 6),
         )
         for name in "ABC"
-    ]
+    )
 
     s = stack([a, b, c], axis=0)
 
@@ -469,7 +469,7 @@ def test_stack_unknown_chunksizes():
 
 
 def test_concatenate():
-    a, b, c = [
+    a, b, c = (
         Array(
             getem(name, chunks=(2, 3), shape=(4, 6)),
             name,
@@ -478,7 +478,7 @@ def test_concatenate():
             shape=(4, 6),
         )
         for name in "ABC"
-    ]
+    )
 
     x = concatenate([a, b, c], axis=0)
 
@@ -1928,8 +1928,8 @@ def test_store_locks():
     v = store([a, b], [at, bt], compute=False, lock=lock)
     assert isinstance(v, Delayed)
     dsk = v.dask
-    locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
-    assert locks == set([lock])
+    locks = {vv for v in dsk.values() for vv in v if isinstance(vv, _Lock)}
+    assert locks == {lock}
 
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
@@ -2361,7 +2361,7 @@ def test_from_array_with_lock():
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
 
     assert hasattr(tasks[0][4], "acquire")
-    assert len(set(task[4] for task in tasks)) == 1
+    assert len({task[4] for task in tasks}) == 1
 
     assert_eq(d, x)
 
@@ -3385,7 +3385,7 @@ def test_from_array_names():
     d = da.from_array(x, chunks=2)
 
     names = countby(key_split, d.dask)
-    assert set(names.values()) == set([5])
+    assert set(names.values()) == {5}
 
 
 @pytest.mark.parametrize(

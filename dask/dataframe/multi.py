@@ -1013,13 +1013,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     filter_warning = True
     uniform = False
 
-    dsk = dict(
-        (
-            (name, i),
-            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
-        )
+    dsk = {
+        (name, i): (methods.concat, part, axis, join, uniform, filter_warning, kwargs)
         for i, part in enumerate(parts2)
-    )
+    }
     for df in dfs2:
         dsk.update(df.dask)
 
@@ -1043,7 +1040,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     )
     empty = strip_unknown_categories(meta)
 
-    name = "concat-{0}".format(tokenize(*dfs))
+    name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
     for df in dfs:
@@ -1260,12 +1257,12 @@ def concat(
                     dfs, join=join, ignore_order=ignore_order, **kwargs
                 )
             else:
-                divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+                divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
                 return stack_partitions(
                     dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
                 )
         else:
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+            divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
             return stack_partitions(
                 dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
             )

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # dask documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 08:58:22 2015.

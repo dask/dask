@@ -150,7 +150,7 @@ def get(
     optimize_graph=True,
     pool=None,
     chunksize=None,
-    **kwargs
+    **kwargs,
 ):
     """Multiprocessed get function appropriate for Bags
 
@@ -227,7 +227,7 @@ def get(
             pack_exception=pack_exception,
             raise_exception=reraise,
             chunksize=chunksize,
-            **kwargs
+            **kwargs,
         )
     finally:
         if cleanup:

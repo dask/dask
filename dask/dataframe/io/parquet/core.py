@@ -951,8 +951,8 @@ def get_engine(engine):
 
     else:
         raise ValueError(
-            'Unsupported engine: "{0}".'.format(engine)
-            + '  Valid choices include "pyarrow" and "fastparquet".'
+            f'Unsupported engine: "{engine}".'
+            '  Valid choices include "pyarrow" and "fastparquet".'
         )
 
 
@@ -1130,7 +1130,7 @@ def process_statistics(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+                raise ValueError(f"Specified index is invalid.\nindex: {index}")
         elif index is not False and len(out) > 1:
             if any(o["name"] == NONE_LABEL for o in out):
                 # Use sorted column matching NONE_LABEL as the index
@@ -1140,9 +1140,7 @@ def process_statistics(
                     index = [o["name"]]
                     index_in_columns = True
                 elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
+                    raise ValueError(f"Specified index is invalid.\nindex: {index}")
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
@@ -1289,10 +1287,8 @@ def aggregate_row_groups(
         next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
 
         if (same_path or multi_path_allowed) and (
-            (
-                _check_row_group_criteria(stat, next_stat)
-                or _check_chunksize_criteria(stat, next_stat)
-            )
+            _check_row_group_criteria(stat, next_stat)
+            or _check_chunksize_criteria(stat, next_stat)
         ):
 
             # Update part list
