@@ -264,7 +264,8 @@ def _tensordot(a, b, axes):
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
 
-    if len(axes[0]) != 1:
+    # TODO: fix the condition
+    if True:
         ind = [slice(None, None)] * x.ndim
         for a in sorted(axes[0]):
             ind.insert(a, None)
@@ -289,7 +290,8 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-    if len(left_axes) == 1:
+    # TODO: fix the condition
+    if False:
         concatenate = True
     else:
         concatenate = False
