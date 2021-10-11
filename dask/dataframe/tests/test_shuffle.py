@@ -654,7 +654,7 @@ def test_set_index_interpolate(engine):
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 4])
+    assert set(d1.divisions) == {1, 2, 4}
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
@@ -710,7 +710,7 @@ def test_set_index_interpolate_large_uint(engine):
 
     d1 = d.set_index("x", npartitions=1)
     assert d1.npartitions == 1
-    assert set(d1.divisions) == set([612509347682975743, 616762138058293247])
+    assert set(d1.divisions) == {612509347682975743, 616762138058293247}
 
 
 def test_set_index_timezone():
@@ -1061,7 +1061,7 @@ def test_disk_shuffle_with_unknown_compression(compression):
         with pytest.raises(
             ImportError,
             match=(
-                "Not able to import and load {0} as compression algorithm."
+                "Not able to import and load {} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
                     compression
                 )

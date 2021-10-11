@@ -356,7 +356,7 @@ def _cov_finalizer(df, cols, std=False):
         x = col_idx_mapping[i]
         y = col_idx_mapping[j]
         idx = x + num_cols * y
-        mul_col = "%s%s" % (i, j)
+        mul_col = f"{i}{j}"
         ni = df["%s-count" % i]
         nj = df["%s-count" % j]
 
@@ -365,8 +365,8 @@ def _cov_finalizer(df, cols, std=False):
         div[div < 0] = 0
         val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
         if std:
-            ii = "%s%s" % (i, i)
-            jj = "%s%s" % (j, j)
+            ii = f"{i}{i}"
+            jj = f"{j}{j}"
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
             val = val / np.sqrt(std_val_i * std_val_j)
@@ -389,7 +389,7 @@ def _mul_cols(df, cols):
     """
     _df = df.__class__()
     for i, j in it.combinations_with_replacement(cols, 2):
-        col = "%s%s" % (i, j)
+        col = f"{i}{j}"
         _df[col] = df[i] * df[j]
 
     # Fix index in a groupby().apply() context
@@ -436,7 +436,7 @@ def _cov_chunk(df, *index):
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
-    n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
+    n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
 
 
@@ -562,7 +562,7 @@ def _nunique_series_chunk(df, *index, **_ignored_):
 #
 ###############################################################
 def _make_agg_id(func, column):
-    return "{!s}-{!s}-{}".format(func, column, tokenize(func, column))
+    return f"{func!s}-{column!s}-{tokenize(func, column)}"
 
 
 def _normalize_spec(spec, non_group_columns):
@@ -638,7 +638,7 @@ def _normalize_spec(spec, non_group_columns):
                 )
 
     else:
-        raise ValueError("unsupported agg spec of type {}".format(type(spec)))
+        raise ValueError(f"unsupported agg spec of type {type(spec)}")
 
     compounds = (list, tuple, dict)
     use_flat_columns = not any(
@@ -684,7 +684,7 @@ def _build_agg_args(spec):
 
     for funcs in by_name.values():
         if len(funcs) != 1:
-            raise ValueError("conflicting aggregation functions: {}".format(funcs))
+            raise ValueError(f"conflicting aggregation functions: {funcs}")
 
     chunks = {}
     aggs = {}
@@ -743,7 +743,7 @@ def _build_agg_args_single(result_column, func, input_column):
         return _build_agg_args_custom(result_column, func, input_column)
 
     else:
-        raise ValueError("unknown aggregate {}".format(func))
+        raise ValueError(f"unknown aggregate {func}")
 
 
 def _build_agg_args_simple(result_column, func, input_column, impl_pair):
@@ -911,7 +911,7 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
         if isinstance(r, tuple):
             for idx, s in enumerate(r):
-                result["{}-{}".format(result_column, idx)] = s
+                result[f"{result_column}-{idx}"] = s
 
         else:
             result[result_column] = r
@@ -1576,7 +1576,7 @@ class _GroupBy:
                 ]
 
         else:
-            raise ValueError("aggregate on unknown object {}".format(self.obj))
+            raise ValueError(f"aggregate on unknown object {self.obj}")
 
         chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
 
@@ -1655,9 +1655,7 @@ class _GroupBy:
         meta = kwargs.get("meta", no_default)
 
         if meta is no_default:
-            with raise_on_meta_error(
-                "groupby.apply({0})".format(funcname(func)), udf=True
-            ):
+            with raise_on_meta_error(f"groupby.apply({funcname(func)})", udf=True):
                 meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
                 meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
 
@@ -1744,9 +1742,7 @@ class _GroupBy:
         meta = kwargs.get("meta", no_default)
 
         if meta is no_default:
-            with raise_on_meta_error(
-                "groupby.transform({0})".format(funcname(func)), udf=True
-            ):
+            with raise_on_meta_error(f"groupby.transform({funcname(func)})", udf=True):
                 meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
                 meta = self._meta_nonempty.transform(func, *meta_args, **meta_kwargs)
 

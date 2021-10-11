@@ -45,7 +45,7 @@ class GetFunctionTestMixin:
             pass
         else:
             msg = "Expected `{}` with badkey to raise KeyError.\n"
-            msg += "Obtained '{}' instead.".format(result)
+            msg += f"Obtained '{result}' instead."
             assert False, msg.format(self.get.__name__)
 
     def test_nested_badkey(self):
@@ -57,7 +57,7 @@ class GetFunctionTestMixin:
             pass
         else:
             msg = "Expected `{}` with badkey to raise KeyError.\n"
-            msg += "Obtained '{}' instead.".format(result)
+            msg += f"Obtained '{result}' instead."
             assert False, msg.format(self.get.__name__)
 
     def test_data_not_in_dict_is_ok(self):
@@ -94,7 +94,7 @@ class GetFunctionTestMixin:
 
     def test_get_works_with_unhashables_in_values(self):
         f = lambda x, y: x + len(y)
-        d = {"x": 1, "y": (f, "x", set([1]))}
+        d = {"x": 1, "y": (f, "x", {1})}
 
         assert self.get(d, "y") == 2
 

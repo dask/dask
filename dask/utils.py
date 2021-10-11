@@ -372,71 +372,67 @@ def is_integer(i):
     return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
-ONE_ARITY_BUILTINS = set(
-    [
-        abs,
-        all,
-        any,
-        ascii,
-        bool,
-        bytearray,
-        bytes,
-        callable,
-        chr,
-        classmethod,
-        complex,
-        dict,
-        dir,
-        enumerate,
-        eval,
-        float,
-        format,
-        frozenset,
-        hash,
-        hex,
-        id,
-        int,
-        iter,
-        len,
-        list,
-        max,
-        min,
-        next,
-        oct,
-        open,
-        ord,
-        range,
-        repr,
-        reversed,
-        round,
-        set,
-        slice,
-        sorted,
-        staticmethod,
-        str,
-        sum,
-        tuple,
-        type,
-        vars,
-        zip,
-        memoryview,
-    ]
-)
-MULTI_ARITY_BUILTINS = set(
-    [
-        compile,
-        delattr,
-        divmod,
-        filter,
-        getattr,
-        hasattr,
-        isinstance,
-        issubclass,
-        map,
-        pow,
-        setattr,
-    ]
-)
+ONE_ARITY_BUILTINS = {
+    abs,
+    all,
+    any,
+    ascii,
+    bool,
+    bytearray,
+    bytes,
+    callable,
+    chr,
+    classmethod,
+    complex,
+    dict,
+    dir,
+    enumerate,
+    eval,
+    float,
+    format,
+    frozenset,
+    hash,
+    hex,
+    id,
+    int,
+    iter,
+    len,
+    list,
+    max,
+    min,
+    next,
+    oct,
+    open,
+    ord,
+    range,
+    repr,
+    reversed,
+    round,
+    set,
+    slice,
+    sorted,
+    staticmethod,
+    str,
+    sum,
+    tuple,
+    type,
+    vars,
+    zip,
+    memoryview,
+}
+MULTI_ARITY_BUILTINS = {
+    compile,
+    delattr,
+    divmod,
+    filter,
+    getattr,
+    hasattr,
+    isinstance,
+    issubclass,
+    map,
+    pow,
+    setattr,
+}
 
 
 def getargspec(func):
@@ -564,7 +560,7 @@ class Dispatch:
             else:
                 register()
                 return self.dispatch(cls)  # recurse
-        raise TypeError("No dispatch for {0}".format(cls))
+        raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
         """
@@ -638,13 +634,13 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s.\n\n" % (
+        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s.\n\n" % (cls.__name__, name)
+        l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -767,7 +763,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method.__name__)
+                msg = f"Base package doesn't support '{method.__name__}'."
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -919,7 +915,7 @@ def dependency_depth(dsk):
 def memory_repr(num):
     for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
-            return "%3.1f %s" % (num, x)
+            return f"{num:3.1f} {x}"
         num /= 1024.0
 
 
@@ -979,7 +975,7 @@ class methodcaller:
         return (methodcaller, (self.method,))
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.method)
+        return f"<{self.__class__.__name__}: {self.method}>"
 
     __repr__ = __str__
 
@@ -1084,7 +1080,7 @@ class SerializableLock:
         self.__init__(token)
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.token)
+        return f"<{self.__class__.__name__}: {self.token}>"
 
     __repr__ = __str__
 
@@ -1144,7 +1140,7 @@ class OperatorMethodMixin:
         elif name == "inv":
             name = "invert"
 
-        meth = "__{0}__".format(name)
+        meth = f"__{name}__"
 
         if name in ("abs", "invert", "neg", "pos"):
             setattr(cls, meth, cls._get_unary_operator(op))
@@ -1154,7 +1150,7 @@ class OperatorMethodMixin:
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
-            rmeth = "__r{0}__".format(name)
+            rmeth = f"__r{name}__"
             setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
@@ -1460,7 +1456,7 @@ def format_time_ago(n: datetime) -> str:
         if dur > 0:
             if dur == 1:  # De-pluralize
                 unit = unit[:-1]
-            return "%s %s ago" % (dur, unit)
+            return f"{dur} {unit} ago"
     return "Just now"
 
 

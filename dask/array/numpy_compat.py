@@ -124,8 +124,7 @@ class _Recurser:
             return
         for i, xi in enumerate(x):
             # yield from ...
-            for v in self.walk(xi, index + (i,)):
-                yield v
+            yield from self.walk(xi, index + (i,))
 
 
 # Implementation taken directly from numpy:

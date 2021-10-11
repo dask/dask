@@ -135,7 +135,7 @@ class ArrayOverlapLayer(Layer):
         self._cached_keys = None
 
     def __repr__(self):
-        return "ArrayOverlapLayer<name='{}'".format(self.name)
+        return f"ArrayOverlapLayer<name='{self.name}'"
 
     @property
     def _dict(self):

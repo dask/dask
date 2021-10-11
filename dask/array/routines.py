@@ -209,7 +209,7 @@ def flip(m, axis=None):
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
-            "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
+            f"`axis` of {str(axis)} invalid for {str(m.ndim)}-D array"
         ) from e
     sl = tuple(sl)
 
@@ -238,9 +238,7 @@ def rot90(m, k=1, axes=(0, 1)):
         raise ValueError("Axes must be different.")
 
     if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
-        raise ValueError(
-            "Axes={} out of range for array of ndim={}.".format(axes, m.ndim)
-        )
+        raise ValueError(f"Axes={axes} out of range for array of ndim={m.ndim}.")
 
     k %= 4
 

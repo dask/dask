@@ -437,12 +437,12 @@ def test_map_overlap_multiarray_variadic():
     ]
 
     def func(*args):
-        return np.array([sum([x.size for x in args])])
+        return np.array([sum(x.size for x in args)])
 
     x = da.map_overlap(func, *xs, chunks=(1,), depth=1, trim=False, drop_axis=[1, 2])
 
     # Each func call should get 4 rows from each array padded by 1 in each dimension
-    size_per_slice = sum([np.pad(x[:4], 1, mode="constant").size for x in xs])
+    size_per_slice = sum(np.pad(x[:4], 1, mode="constant").size for x in xs)
     assert x.shape == (3,)
     assert all(x.compute() == size_per_slice)
 

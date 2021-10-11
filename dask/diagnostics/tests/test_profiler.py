@@ -188,7 +188,7 @@ def test_unquote():
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
 
-    keys = set(["a", "b", "c", "d", "e"])
+    keys = {"a", "b", "c", "d", "e"}
     assert pprint_task((add, "a", 1), keys) == "add(_, *)"
     assert pprint_task((add, (add, "a", 1)), keys) == "add(add(_, *))"
     res = "sum([*, _, add(_, *)])"

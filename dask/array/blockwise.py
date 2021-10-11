@@ -21,7 +21,7 @@ def blockwise(
     align_arrays=True,
     concatenate=None,
     meta=None,
-    **kwargs
+    **kwargs,
 ):
     """Tensor operation: Generalized inner and outer products
 
@@ -229,7 +229,7 @@ def blockwise(
 
     # Finish up the name
     if not out:
-        out = "%s-%s" % (
+        out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
             base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
         )
@@ -243,7 +243,7 @@ def blockwise(
         dependencies=dependencies,
         new_axes=new_axes,
         concatenate=concatenate,
-        **kwargs2
+        **kwargs2,
     )
     graph = HighLevelGraph.from_collections(
         out, graph, dependencies=arrays + dependencies
@@ -260,11 +260,8 @@ def blockwise(
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):
                         raise ValueError(
-                            "Dimension {0} has {1} blocks, "
-                            "adjust_chunks specified with "
-                            "{2} blocks".format(
-                                i, len(chunks[i]), len(adjust_chunks[ind])
-                            )
+                            f"Dimension {i} has {len(chunks[i])} blocks, adjust_chunks "
+                            f"specified with {len(adjust_chunks[ind])} blocks"
                         )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:

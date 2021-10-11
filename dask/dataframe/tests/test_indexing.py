@@ -347,7 +347,7 @@ def test_loc_timestamp_str():
     assert_eq(
         df.loc["2011-01-02 10:00"].to_frame().T,
         ddf.loc["2011-01-02 10:00"],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     # series
@@ -355,24 +355,24 @@ def test_loc_timestamp_str():
     assert_eq(
         df.A.loc["2011-01-02":"2011-01-10"],
         ddf.A.loc["2011-01-02":"2011-01-10"],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     df = pd.DataFrame(

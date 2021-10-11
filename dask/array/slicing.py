@@ -162,7 +162,7 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
         isinstance(index, slice) and index == slice(None, None, None) for index in index
     ):
         suffixes = product(*[range(len(bd)) for bd in blockdims])
-        dsk = dict(((out_name,) + s, (in_name,) + s) for s in suffixes)
+        dsk = {(out_name,) + s: (in_name,) + s for s in suffixes}
         return dsk, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
@@ -184,7 +184,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index, itemsize):
     Strips out Nones then hands off to slice_wrap_lists
     """
     # Strip Nones from index
-    index2 = tuple([ind for ind in index if ind is not None])
+    index2 = tuple(ind for ind in index if ind is not None)
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
@@ -299,7 +299,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
             raise ValueError(
-                "Arrays chunk sizes are unknown: %s%s" % (shape, unknown_chunk_message)
+                f"Arrays chunk sizes are unknown: {shape}{unknown_chunk_message}"
             )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)

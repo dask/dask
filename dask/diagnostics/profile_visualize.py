@@ -90,13 +90,13 @@ def pprint_task(task, keys, label_size=60):
         if kwargs:
             if label_size2 > 5:
                 kwargs = ", " + ", ".join(
-                    "{0}={1}".format(k, pprint(v)) for k, v in sorted(kwargs.items())
+                    f"{k}={pprint(v)}" for k, v in sorted(kwargs.items())
                 )
             else:
                 kwargs = ", ..."
         else:
             kwargs = ""
-        return "{0}({1}{2}{3}".format(head, args, kwargs, tail)
+        return f"{head}({args}{kwargs}{tail}"
     elif isinstance(task, list):
         if not task:
             return "[]"
@@ -106,7 +106,7 @@ def pprint_task(task, keys, label_size=60):
         else:
             label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
             args = ", ".join(pprint_task(t, keys, label_size2) for t in task)
-            return "[{0}]".format(args)
+            return f"[{args}]"
     else:
         try:
             if task in keys:
@@ -248,15 +248,15 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = groupby(itemgetter(4), results)
-        timings = dict(
-            (k, [i.end_time - i.start_time for i in v]) for (k, v) in id_group.items()
-        )
-        id_lk = dict(
-            (t[0], n)
+        timings = {
+            k: [i.end_time - i.start_time for i in v] for (k, v) in id_group.items()
+        }
+        id_lk = {
+            t[0]: n
             for (n, t) in enumerate(
                 sorted(timings.items(), key=itemgetter(1), reverse=True)
             )
-        )
+        }
 
         left = min(starts)
         right = max(ends)
@@ -264,7 +264,7 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         p = bp.figure(
             y_range=[str(i) for i in range(len(id_lk))],
             x_range=[0, right - left],
-            **defaults
+            **defaults,
         )
 
         data = {}
@@ -359,7 +359,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         p = bp.figure(
             y_range=fix_bounds(0, max(cpu), 100),
             x_range=fix_bounds(0, right - left, 1),
-            **defaults
+            **defaults,
         )
     else:
         t = mem = cpu = []
@@ -374,7 +374,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
             "legend_label"
             if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "% CPU"
-        }
+        },
     )
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {
@@ -392,7 +392,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
             "legend_label"
             if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "Memory"
-        }
+        },
     )
     p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
@@ -477,7 +477,7 @@ def plot_cache(
 
     else:
         p = bp.figure(y_range=[0, 10], x_range=[0, 10], **defaults)
-    p.yaxis.axis_label = "Cache Size ({0})".format(metric_name)
+    p.yaxis.axis_label = f"Cache Size ({metric_name})"
     p.xaxis.axis_label = "Time (s)"
 
     hover = p.select(HoverTool)

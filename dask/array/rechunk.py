@@ -141,7 +141,7 @@ def _old_to_new(old_chunks, new_chunks):
     sums2 = [sum(n) for n in new_known]
 
     if not sums == sums2:
-        raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
+        raise ValueError(f"Cannot change dimensions from {sums!r} to {sums2!r}")
     if not n_missing == n_missing2:
         raise ValueError(
             "Chunks must be unchanging along unknown dimensions.\n\n"
@@ -263,7 +263,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         raise ValueError("Provided chunks are not consistent with shape")
 
     if balance:
-        chunks = tuple([_balance_chunksizes(chunk) for chunk in chunks])
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
 
     new_shapes = tuple(map(sum, chunks))
 

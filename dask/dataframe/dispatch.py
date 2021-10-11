@@ -31,7 +31,7 @@ def concat(
     uniform=False,
     filter_warning=True,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     """Concatenate, handling some edge cases:
 
@@ -65,7 +65,7 @@ def concat(
             uniform=uniform,
             filter_warning=filter_warning,
             ignore_index=ignore_index,
-            **kwargs
+            **kwargs,
         )
 
 

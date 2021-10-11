@@ -283,9 +283,9 @@ def boundaries(x, depth=None, kind=None):
     constant
     """
     if not isinstance(kind, dict):
-        kind = dict((i, kind) for i in range(x.ndim))
+        kind = {i: kind for i in range(x.ndim)}
     if not isinstance(depth, dict):
-        depth = dict((i, depth) for i in range(x.ndim))
+        depth = {i: depth for i in range(x.ndim)}
 
     for i in range(x.ndim):
         d = depth.get(i, 0)
@@ -425,10 +425,9 @@ def overlap(x, depth, boundary):
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
-    trim = dict(
-        (k, v * 2 if boundary2.get(k, "none") != "none" else 0)
-        for k, v in depth2.items()
-    )
+    trim = {
+        k: v * 2 if boundary2.get(k, "none") != "none" else 0 for k, v in depth2.items()
+    }
     x4 = chunk.trim(x3, trim)
     return x4
 
@@ -705,7 +704,7 @@ def map_overlap(
                 drop_axis = [drop_axis]
 
             # convert negative drop_axis to equivalent positive value
-            ndim_out = max([a.ndim for a in args if isinstance(a, Array)])
+            ndim_out = max(a.ndim for a in args if isinstance(a, Array))
             drop_axis = [d % ndim_out for d in drop_axis]
 
             kept_axes = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)

@@ -66,7 +66,7 @@ class ArrowORCEngine:
             ex = set(columns) - set(schema)
             if ex:
                 raise ValueError(
-                    "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
+                    f"Requested columns ({ex}) not in schema ({set(schema)})"
                 )
 
         # Check if we can aggregate adjacent parts together

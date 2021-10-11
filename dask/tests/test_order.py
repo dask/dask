@@ -21,14 +21,14 @@ def f(*args):
 
 def test_ordering_keeps_groups_together(abcde):
     a, b, c, d, e = abcde
-    d = dict(((a, i), (f,)) for i in range(4))
+    d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 1)), (b, 1): (f, (a, 2), (a, 3))})
     o = order(d)
 
     assert abs(o[(a, 0)] - o[(a, 1)]) == 1
     assert abs(o[(a, 2)] - o[(a, 3)]) == 1
 
-    d = dict(((a, i), (f,)) for i in range(4))
+    d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 2)), (b, 1): (f, (a, 1), (a, 3))})
     o = order(d)
 
@@ -222,7 +222,7 @@ def test_prefer_deep(abcde):
 
 
 def test_stacklimit(abcde):
-    dsk = dict(("x%s" % (i + 1), (inc, "x%s" % i)) for i in range(10000))
+    dsk = {"x%s" % (i + 1): (inc, "x%s" % i) for i in range(10000)}
     dependencies, dependents = get_deps(dsk)
     ndependencies(dependencies, dependents)
 
@@ -302,7 +302,7 @@ def test_run_smaller_sections(abcde):
     Prefer to run acb first because then we can get that out of the way
     """
     a, b, c, d, e = abcde
-    aa, bb, cc, dd = [x * 2 for x in [a, b, c, d]]
+    aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
 
     expected = [a, c, b, e, d, cc, bb, aa, dd]
 
@@ -347,9 +347,9 @@ def test_local_parents_of_reduction(abcde):
     Prefer to finish a1 stack before proceeding to b2
     """
     a, b, c, d, e = abcde
-    a1, a2, a3 = [a + i for i in "123"]
-    b1, b2, b3 = [b + i for i in "123"]
-    c1, c2, c3 = [c + i for i in "123"]
+    a1, a2, a3 = (a + i for i in "123")
+    b1, b2, b3 = (b + i for i in "123")
+    c1, c2, c3 = (c + i for i in "123")
 
     expected = [a3, a2, a1, b3, b2, b1, c3, c2, c1]
 
@@ -390,8 +390,8 @@ def test_nearest_neighbor(abcde):
     This is difficult because all groups are connected.
     """
     a, b, c, _, _ = abcde
-    a1, a2, a3, a4, a5, a6, a7, a8, a9 = [a + i for i in "123456789"]
-    b1, b2, b3, b4 = [b + i for i in "1234"]
+    a1, a2, a3, a4, a5, a6, a7, a8, a9 = (a + i for i in "123456789")
+    b1, b2, b3, b4 = (b + i for i in "1234")
 
     dsk = {
         b1: (f,),
@@ -874,8 +874,8 @@ def test_array_store_final_order(tmpdir):
     connected_stores = [k for k in stores if k[-1] == first_store[-1]]
     disconnected_stores = [k for k in stores if k[-1] != first_store[-1]]
 
-    connected_max = max([v for k, v in o.items() if k in connected_stores])
-    disconnected_min = min([v for k, v in o.items() if k in disconnected_stores])
+    connected_max = max(v for k, v in o.items() if k in connected_stores)
+    disconnected_min = min(v for k, v in o.items() if k in disconnected_stores)
     assert connected_max < disconnected_min
 
 

@@ -9,6 +9,7 @@ dependencies:
   - numpy=1.19
   - pandas=1.2
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures

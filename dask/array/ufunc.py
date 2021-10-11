@@ -69,7 +69,7 @@ class da_frompyfunc:
     def __getattr__(self, a):
         if not a.startswith("_"):
             return getattr(self._ufunc, a)
-        raise AttributeError("%r object has no attribute %r" % (type(self).__name__, a))
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {a!r}")
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -110,9 +110,7 @@ class ufunc:
     def __getattr__(self, key):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)
-        raise AttributeError(
-            "%r object has no attribute %r" % (type(self).__name__, key)
-        )
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {key!r}")
 
     def __dir__(self):
         return list(self._forward_attrs.union(dir(type(self)), self.__dict__))
@@ -180,7 +178,7 @@ class ufunc:
             B_inds,
             dtype=dtype,
             token=self.__name__ + ".outer",
-            **kwargs
+            **kwargs,
         )
 
 

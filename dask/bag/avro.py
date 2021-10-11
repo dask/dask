@@ -122,7 +122,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
             token = fs_tokenize(
                 fs_token, delimiter, path, fs.ukey(path), compression, offset
             )
-            keys = ["read-avro-%s-%s" % (o, token) for o in offset]
+            keys = [f"read-avro-{o}-{token}" for o in offset]
             values = [
                 dread(f, o, l, head, dask_key_name=key)
                 for o, key, l in zip(offset, keys, length)
@@ -178,7 +178,7 @@ def to_avro(
     sync_interval=16000,
     metadata=None,
     compute=True,
-    **kwargs
+    **kwargs,
 ):
     """Write bag to set of avro files
 
@@ -256,7 +256,7 @@ def to_avro(
         "wb",
         name_function=name_function,
         num=b.npartitions,
-        **storage_options
+        **storage_options,
     )
     name = "to-avro-" + uuid.uuid4().hex
     dsk = {

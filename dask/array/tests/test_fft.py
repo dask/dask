@@ -121,7 +121,7 @@ def test_wrap_ffts(modname, funcname, dtype):
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
-        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+        pytest.skip(f"`{modname}` missing function `{funcname}`.")
 
     darrc = darr.astype(dtype)
     darr2c = darr2.astype(dtype)
@@ -156,7 +156,7 @@ def test_wrap_fftns(modname, funcname, dtype):
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
-        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+        pytest.skip(f"`{modname}` missing function `{funcname}`.")
 
     darrc = darr.astype(dtype).rechunk(darr.shape)
     darr2c = darr2.astype(dtype).rechunk(darr2.shape)

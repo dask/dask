@@ -101,10 +101,7 @@ def _write_partitioned(
         if not isinstance(keys, tuple):
             keys = (keys,)
         subdir = fs.sep.join(
-            [
-                "{colname}={value}".format(colname=name, value=val)
-                for name, val in zip(partition_cols, keys)
-            ]
+            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
         subtable = pa.Table.from_pandas(
             subgroup,
@@ -279,14 +276,12 @@ def _need_fragments(filters, partition_keys):
     # columns that were not already filtered by "partition".
 
     partition_cols = (
-        set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+        {v[0] for v in flatten(partition_keys, container=list) if len(v)}
         if partition_keys
         else set()
     )
     filtered_cols = (
-        set([v[0] for v in flatten(filters, container=list) if len(v)])
-        if filters
-        else set()
+        {v[0] for v in flatten(filters, container=list) if len(v)} if filters else set()
     )
 
     return bool(filtered_cols - partition_cols)
@@ -499,7 +494,7 @@ class ArrowDatasetEngine(Engine):
             try:
                 with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
                     fmd = pq.read_metadata(fil)
-            except (IOError, FileNotFoundError):
+            except OSError:
                 # No _metadata file present - No appending allowed (for now)
                 if not ignore_divisions:
                     # TODO: Be more flexible about existing metadata.
@@ -1201,7 +1196,7 @@ class ArrowDatasetEngine(Engine):
 
             # Start with sorted (by path) list of file-based fragments
             file_frags = sorted(
-                [frag for frag in ds.get_fragments(ds_filters)],
+                (frag for frag in ds.get_fragments(ds_filters)),
                 key=lambda x: natural_sort_key(x.path),
             )
             parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
@@ -2303,7 +2298,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     )
                 fmd = dataset.metadata
                 i_offset = len(dataset.pieces)
-            except (IOError, ValueError, IndexError):
+            except (OSError, ValueError, IndexError):
                 # Original dataset does not exist - cannot append
                 append = False
         return fmd, i_offset, append

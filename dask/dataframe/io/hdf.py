@@ -43,7 +43,7 @@ def to_hdf(
     compute=True,
     lock=None,
     dask_kwargs={},
-    **kwargs
+    **kwargs,
 ):
     """Store Dask Dataframe to Hierarchical Data Format (HDF) files
 
@@ -388,16 +388,14 @@ def read_hdf(
     if not isinstance(pattern, str) and len(paths) == 0:
         raise ValueError("No files provided")
     if not paths or len(paths) == 0:
-        raise IOError("File(s) not found: {0}".format(pattern))
+        raise OSError(f"File(s) not found: {pattern}")
     for path in paths:
         try:
             exists = os.path.exists(path)
         except (ValueError, TypeError):
             exists = False
         if not exists:
-            raise IOError(
-                "File not found or insufficient permissions: {0}".format(path)
-            )
+            raise OSError(f"File not found or insufficient permissions: {path}")
     if (start != 0 or stop is not None) and len(paths) > 1:
         raise NotImplementedError(read_hdf_error_msg)
     if chunksize <= 0:

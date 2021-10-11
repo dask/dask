@@ -191,7 +191,7 @@ class RewriteRule:
         return term
 
     def __str__(self):
-        return "RewriteRule({0}, {1}, {2})".format(self.lhs, self.rhs, self.vars)
+        return f"RewriteRule({self.lhs}, {self.rhs}, {self.vars})"
 
     def __repr__(self):
         return str(self)

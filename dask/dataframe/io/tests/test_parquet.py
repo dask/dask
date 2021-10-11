@@ -311,11 +311,11 @@ def test_read_list(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
     files = sorted(
-        [
+        (
             os.path.join(tmpdir, f)
             for f in os.listdir(tmpdir)
             if not f.endswith("_metadata")
-        ],
+        ),
         key=natural_sort_key,
     )
 
@@ -2440,7 +2440,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["B"]
-    assert next(iter((subgraph.dsk.values())))[0].columns == ["B"]
+    assert next(iter(subgraph.dsk.values()))[0].columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
@@ -2454,7 +2454,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
     dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
 
-    subgraph = next(iter((dsk.layers.values())))
+    subgraph = next(iter(dsk.layers.values()))
     assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == []
 
@@ -2489,7 +2489,7 @@ def test_blockwise_parquet_annotations(tmpdir):
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
-    layer = next(iter((layers.values())))
+    layer = next(iter(layers.values()))
     assert isinstance(layer, DataFrameIOLayer)
     assert layer.annotations == {"foo": "bar"}
 
