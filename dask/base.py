@@ -1090,7 +1090,7 @@ def register_scipy():
     def normalize_sparse_matrix(x, attrs):
         return (
             type(x).__name__,
-            normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
+            normalize_seq(normalize_token(getattr(x, key)) for key in attrs),
         )
 
     for cls, attrs in [

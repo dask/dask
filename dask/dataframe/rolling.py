@@ -104,7 +104,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = _emulate(func, df, *args, **kwargs)
     meta = make_meta(meta, index=df._meta.index, parent_meta=df._meta)
 
-    name = "{0}-{1}".format(func_name, token)
+    name = f"{func_name}-{token}"
     name_a = "overlap-prepend-" + tokenize(df, before)
     name_b = "overlap-append-" + tokenize(df, after)
     df_name = df._name
@@ -431,7 +431,7 @@ class Rolling:
         rolling_kwargs["win_type"] = self._win_type
         return "Rolling [{}]".format(
             ",".join(
-                "{}={}".format(k, v)
+                f"{k}={v}"
                 for k, v in sorted(rolling_kwargs.items(), key=order)
                 if v is not None
             )
