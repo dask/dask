@@ -3472,7 +3472,7 @@ def test_info():
     # buf=None
     assert ddf.info(buf=None) is None
 
-
+@pytest.mark.skipif(pd.__version__ < "1.2.0", reason="Need newer version of Pandas")
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
