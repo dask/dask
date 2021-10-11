@@ -107,6 +107,11 @@ def sort_values(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
+    if len(divisions) == 2:
+        return df.repartition(npartitions=1).map_partitions(
+            M.sort_values, by, ascending=ascending, na_position=na_position
+        )
+
     if (
         all(not pd.isna(x) for x in divisions)
         and mins == sorted(mins, reverse=not ascending)
@@ -428,7 +433,7 @@ def rearrange_by_divisions(
         df2,
         "_partitions",
         max_branch=max_branch,
-        npartitions=max(len(divisions) - 1, 1),
+        npartitions=len(divisions) - 1,
         shuffle=shuffle,
     )
     del df3["_partitions"]
@@ -801,11 +806,9 @@ def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
                 len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
             )
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
-        max(len(divisions) - 2, 0) if ascending else 0
+        len(divisions) - 2 if ascending else 0
     )
-    partitions[s.isna().values] = (
-        max(len(divisions) - 2, 0) if na_position == "last" else 0
-    )
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 
