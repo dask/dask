@@ -912,54 +912,54 @@ def normalize_index(idx, shape):
         else:
             none_shape.append(None)
 
-    for i, d in zip(idx, none_shape):
+    for axis, (i, d) in enumerate(zip(idx, none_shape)):
         if d is not None:
-            check_index(i, d)
+            check_index(axis, i, d)
     idx = tuple(map(sanitize_index, idx))
     idx = tuple(map(normalize_slice, idx, none_shape))
     idx = posify_index(none_shape, idx)
     return idx
 
 
-def check_index(ind, dimension):
+def check_index(axis, ind, dimension):
     """Check validity of index for a given dimension
 
     Examples
     --------
-    >>> check_index(3, 5)
-    >>> check_index(5, 5)
+    >>> check_index(0, 3, 5)
+    >>> check_index(0, 5, 5)
     Traceback (most recent call last):
     ...
-    IndexError: Index is not smaller than dimension 5 >= 5
+    IndexError: Index 5 is out of bounds for axis 0 with size 5
 
-    >>> check_index(6, 5)
+    >>> check_index(1, 6, 5)
     Traceback (most recent call last):
     ...
-    IndexError: Index is not smaller than dimension 6 >= 5
+    IndexError: Index 6 is out of bounds for axis 1 with size 5
 
-    >>> check_index(-1, 5)
-    >>> check_index(-6, 5)
+    >>> check_index(1, -1, 5)
+    >>> check_index(1, -6, 5)
     Traceback (most recent call last):
     ...
-    IndexError: Negative index is not greater than negative dimension -6 <= -5
+    IndexError: Index -6 is out of bounds for axis 1 with size 5
 
-    >>> check_index([1, 2], 5)
-    >>> check_index([6, 3], 5)
+    >>> check_index(0, [1, 2], 5)
+    >>> check_index(0, [6, 3], 5)
     Traceback (most recent call last):
     ...
-    IndexError: Index out of bounds 5
+    IndexError: Index is out of bounds for axis 0 with size 5
 
-    >>> check_index(slice(0, 3), 5)
+    >>> check_index(1, slice(0, 3), 5)
 
-    >>> check_index([True], 1)
-    >>> check_index([True, True], 3)
+    >>> check_index(0, [True], 1)
+    >>> check_index(0, [True, True], 3)
     Traceback (most recent call last):
     ...
-    IndexError: Boolean array length 2 doesn't equal dimension 3
-    >>> check_index([True, True, True], 1)
+    IndexError: Boolean array with size 2 is not long enough for axis 0 with size 3
+    >>> check_index(0, [True, True, True], 1)
     Traceback (most recent call last):
     ...
-    IndexError: Boolean array length 3 doesn't equal dimension 1
+    IndexError: Boolean array with size 3 is not long enough for axis 0 with size 1
     """
     if isinstance(ind, list):
         ind = np.asanyarray(ind)
@@ -973,24 +973,22 @@ def check_index(ind, dimension):
         if ind.dtype == bool:
             if ind.size != dimension:
                 raise IndexError(
-                    "Boolean array length %s doesn't equal dimension %s"
-                    % (ind.size, dimension)
+                    f"Boolean array with size {ind.size} is not long enough"
+                    f"for axis {axis} with size {dimension}"
                 )
         elif (ind >= dimension).any() or (ind < -dimension).any():
-            raise IndexError("Index out of bounds %s" % dimension)
+            raise IndexError(
+                f"Index is out of bounds for axis {axis} with size {dimension}"
+            )
     elif isinstance(ind, slice):
         return
     elif ind is None:
         return
 
-    elif ind >= dimension:
+    elif ind >= dimension or ind < -dimension:
         raise IndexError(
-            "Index is not smaller than dimension %d >= %d" % (ind, dimension)
+            f"Index {ind} is out of bounds for axis {axis} with size {dimension}"
         )
-
-    elif ind < -dimension:
-        msg = "Negative index is not greater than negative dimension %d <= -%d"
-        raise IndexError(msg % (ind, dimension))
 
 
 def slice_with_int_dask_array(x, index):
