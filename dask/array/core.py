@@ -5309,7 +5309,7 @@ class BlockView:
         index = normalize_index(index, self._array.numblocks)
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
 
-        name = "blocks-" + tokenize(self.array, index)
+        name = "blocks-" + tokenize(self._array, index)
 
         new_keys = self._array._key_array[index]
 
