@@ -43,11 +43,16 @@ extensions = [
     "sphinx_click.ext",
     "dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
+    "sphinx_remove_toctrees",
 ]
 
 numpydoc_show_class_members = False
 
 sphinx_tabs_disable_tab_closing = True
+
+# Remove individual API pages from sphinx toctree to prevent long build times.
+# See https://github.com/dask/dask/issues/8227.
+remove_toctrees_from = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -107,10 +112,7 @@ html_theme = "dask_sphinx_theme"
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
 # documentation.
-html_theme_options = {
-    "logo_only": True,
-    "remove_toctrees_from": ["array-api.rst", "bag-api.rst", "dataframe-api.rst"],
-}
+html_theme_options = {"logo_only": True}
 
 # Add any paths that contain custom themes here, relative to this directory.
 # html_theme_path = []
