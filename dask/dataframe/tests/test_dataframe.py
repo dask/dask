@@ -3472,7 +3472,7 @@ def test_info():
     # buf=None
     assert ddf.info(buf=None) is None
 
-@pytest.mark.skipif(pd.__version__ < "1.2.0", reason="Need newer version of Pandas")
+
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
@@ -3508,6 +3508,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
+@pytest.mark.skipif(pd.__version__ < "1.2.0", reason="Need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
