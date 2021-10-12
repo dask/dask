@@ -128,9 +128,7 @@ def make_meta_object(x, index=None):
         return _empty_series(x[0], x[1], index=index)
     elif isinstance(x, (list, tuple)):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
-            raise ValueError(
-                "Expected iterable of tuples of (name, dtype), got {0}".format(x)
-            )
+            raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(
             {c: _empty_series(c, d, index=index) for (c, d) in x},
             columns=[c for c, d in x],
@@ -150,7 +148,7 @@ def make_meta_object(x, index=None):
     if is_scalar(x):
         return _nonempty_scalar(x)
 
-    raise TypeError("Don't know how to create metadata from {0}".format(x))
+    raise TypeError(f"Don't know how to create metadata from {x}")
 
 
 @meta_nonempty.register(object)
@@ -165,7 +163,7 @@ def meta_nonempty_object(x):
     else:
         raise TypeError(
             "Expected Pandas-like Index, Series, DataFrame, or scalar, "
-            "got {0}".format(typename(type(x)))
+            f"got {typename(type(x))}"
         )
 
 
@@ -243,9 +241,7 @@ def _nonempty_index(idx):
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
 
-    raise TypeError(
-        "Don't know how to handle index of type {0}".format(typename(type(idx)))
-    )
+    raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
 
 @meta_nonempty.register(pd.Series)
@@ -375,7 +371,7 @@ def concat_pandas(
     uniform=False,
     filter_warning=True,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     ignore_order = kwargs.pop("ignore_order", False)
 
@@ -453,7 +449,7 @@ def concat_pandas(
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
                     join=join,
-                    **kwargs
+                    **kwargs,
                 ).any()
 
         if cat_mask.any():
@@ -462,7 +458,7 @@ def concat_pandas(
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                **kwargs
+                **kwargs,
             )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):

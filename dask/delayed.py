@@ -452,11 +452,11 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             except AttributeError:
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
-            name = "%s-%s" % (prefix, token)
+            name = f"{prefix}-{token}"
         return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
-            name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
+            name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph, nout)
@@ -529,7 +529,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return Delayed(key, dsk, self._length)
 
     def __repr__(self):
-        return "Delayed({0})".format(repr(self.key))
+        return f"Delayed({repr(self.key)})"
 
     def __hash__(self):
         return hash(self.key)
@@ -607,7 +607,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     pure = kwargs.pop("pure", pure)
 
     if dask_key_name is None:
-        name = "%s-%s" % (
+        name = "{}-{}".format(
             funcname(func),
             tokenize(func_token, *args, pure=pure, **kwargs),
         )
