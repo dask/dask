@@ -1096,8 +1096,6 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     # Make sure DataFrame.shuffle API returns the same result
     # whether the ``on`` argument is a list of column names,
     # or a separate DataFrame with equivalent values...
-    if isinstance(on, pd.Series) and shuffle_method == "disk":
-        pytest.xfail("Bug in shuffling on pd.Series")
     df_in = dask.datasets.timeseries(
         "2000",
         "2001",
