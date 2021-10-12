@@ -178,7 +178,7 @@ def test_partitioning_index_categorical_on_values():
 @pytest.mark.parametrize(
     "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
 )
-def test_set_index_tasks(npartitions):
+def test_set_index_general(npartitions, shuffle_method):
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
         index=np.random.random(100),
@@ -186,17 +186,19 @@ def test_set_index_tasks(npartitions):
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    assert_eq(df.set_index("x"), ddf.set_index("x", shuffle="tasks"))
+    assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
 
-    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle="tasks"))
+    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
 
-    assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle="tasks"))
+    assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
 
-    assert_eq(df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle="tasks"))
+    assert_eq(
+        df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
+    )
 
-    assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle="tasks"))
+    assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
 
-    assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle="tasks"))
+    assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -212,8 +214,10 @@ def test_set_index_self_index(shuffle_method):
     assert_eq(b, df.set_index(df.index))
 
 
-@pytest.mark.parametrize("shuffle", ["tasks"])
-def test_set_index_names(shuffle):
+def test_set_index_names(shuffle_method):
+    if shuffle_method == "disk":
+        pytest.xfail("dsk names in disk shuffle are not deterministic")
+
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
         index=np.random.random(100),
@@ -221,21 +225,21 @@ def test_set_index_names(shuffle):
 
     ddf = dd.from_pandas(df, npartitions=4)
 
-    assert set(ddf.set_index("x", shuffle=shuffle).dask) == set(
-        ddf.set_index("x", shuffle=shuffle).dask
+    assert set(ddf.set_index("x", shuffle=shuffle_method).dask) == set(
+        ddf.set_index("x", shuffle=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", shuffle=shuffle).dask) != set(
-        ddf.set_index("y", shuffle=shuffle).dask
+    assert set(ddf.set_index("x", shuffle=shuffle_method).dask) != set(
+        ddf.set_index("y", shuffle=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", max_branch=4, shuffle=shuffle).dask) != set(
-        ddf.set_index("x", max_branch=3, shuffle=shuffle).dask
+    assert set(ddf.set_index("x", max_branch=4, shuffle=shuffle_method).dask) != set(
+        ddf.set_index("x", max_branch=3, shuffle=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", drop=True, shuffle=shuffle).dask) != set(
-        ddf.set_index("x", drop=False, shuffle=shuffle).dask
+    assert set(ddf.set_index("x", drop=True, shuffle=shuffle_method).dask) != set(
+        ddf.set_index("x", drop=False, shuffle=shuffle_method).dask
     )
 
 
-def test_set_index_tasks_2(shuffle_method):
+def test_set_index_2(shuffle_method):
     df = dd.demo.make_timeseries(
         "2000",
         "2004",
@@ -249,7 +253,7 @@ def test_set_index_tasks_2(shuffle_method):
     df2.value.sum().compute(scheduler="sync")
 
 
-def test_set_index_tasks_3(shuffle_method):
+def test_set_index_3(shuffle_method):
     df = pd.DataFrame(np.random.random((10, 2)), columns=["x", "y"])
     ddf = dd.from_pandas(df, npartitions=5)
 
@@ -1088,10 +1092,12 @@ def test_disk_shuffle_check_actual_compression():
     "on", ["id", "name", ["id", "name"], pd.Series(["id", "name"])]
 )
 @pytest.mark.parametrize("max_branch", [None, 4])
-def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
+def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     # Make sure DataFrame.shuffle API returns the same result
     # whether the ``on`` argument is a list of column names,
     # or a separate DataFrame with equivalent values...
+    if isinstance(on, pd.Series) and shuffle_method == "disk":
+        pytest.xfail("Bug in shuffling on pd.Series")
     df_in = dask.datasets.timeseries(
         "2000",
         "2001",
@@ -1105,13 +1111,14 @@ def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
     else:
         ext_on = df_in[on].copy()
     df_out_1 = df_in.shuffle(
-        on, shuffle="tasks", ignore_index=ignore_index, max_branch=max_branch
+        on, shuffle=shuffle_method, ignore_index=ignore_index, max_branch=max_branch
     )
-    df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
+    df_out_2 = df_in.shuffle(ext_on, shuffle=shuffle_method, ignore_index=ignore_index)
 
     assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
 
-    if ignore_index:
+    # disk shuffling doesn't support ignore_index
+    if ignore_index and shuffle_method == "tasks":
         assert df_out_1.index.dtype != df_in.index.dtype
     else:
         assert df_out_1.index.dtype == df_in.index.dtype
