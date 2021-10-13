@@ -4231,6 +4231,10 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
+        if self.npartitions == 1:
+            return self.map_partitions(
+                M.sort_values, by, ascending=ascending, na_position=na_position
+            )
         return sort_values(
             self,
             by,
