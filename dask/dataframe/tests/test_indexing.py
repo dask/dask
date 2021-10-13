@@ -131,6 +131,39 @@ def test_loc_with_series_different_partition():
     )
 
 
+def test_loc_with_non_boolean_series():
+    df = pd.Series(
+        np.random.randn(20),
+        index=list("abcdefghijklmnopqrst"),
+    )
+    ddf = dd.from_pandas(df, 3)
+
+    s = pd.Series(list("bdmnat"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    msg = (
+        "Cannot index with non-boolean dask Series. Try passing computed values instead"
+    )
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    assert_eq(ddf.loc[s], df.loc[s])
+
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds.values]
+
+    assert_eq(ddf.loc[s.values], df.loc[s])
+
+    ddf = ddf.clear_divisions()
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    with pytest.raises(
+        KeyError, match="Cannot index with list against unknown division"
+    ):
+        ddf.loc[s]
+
+
 def test_loc2d():
     # index indexer is always regarded as slice for duplicated values
     assert_eq(d.loc[5, "a"], full.loc[5:5, "a"])
