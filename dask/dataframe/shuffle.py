@@ -107,6 +107,11 @@ def sort_values(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
+    if len(divisions) == 2:
+        return df.repartition(npartitions=1).map_partitions(
+            M.sort_values, by, ascending=ascending, na_position=na_position
+        )
+
     if (
         all(not pd.isna(x) for x in divisions)
         and mins == sorted(mins, reverse=not ascending)
