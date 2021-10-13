@@ -16,7 +16,7 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -3508,7 +3508,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skipif(pd.__version__ < "1.2.0", reason="Need newer version of Pandas")
+@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
