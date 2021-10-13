@@ -101,7 +101,13 @@ class _LocIndexer(_IndexerBase):
     def _loc(self, iindexer, cindexer):
         """Helper function for the .loc accessor"""
         if isinstance(iindexer, Series):
-            return self._loc_series(iindexer, cindexer)
+            if iindexer.dtype == bool:
+                return self._loc_series(iindexer, cindexer)
+            else:
+                raise KeyError(
+                    "Cannot index with non-boolean Series. Try passing computed "
+                    "values instead (e.g. ``ddf.loc[series.values().compute()]``)"
+                )
         elif isinstance(iindexer, Array):
             return self._loc_array(iindexer, cindexer)
         elif callable(iindexer):
