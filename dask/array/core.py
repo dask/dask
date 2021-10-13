@@ -4402,11 +4402,15 @@ def elemwise(op, *args, **kwargs):
 
     name = kwargs.get("name", None) or "%s-%s" % (funcname(op), tokenize(op, dt, *args))
 
-    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip("_"))
+    where = kwargs.get("where", True)
+
+    blockwise_kwargs = dict(dtype=dt, name=name, where=where, token=funcname(op).strip("_"))
+
     if need_enforce_dtype:
         blockwise_kwargs["enforce_dtype"] = dt
         blockwise_kwargs["enforce_dtype_function"] = op
         op = _enforce_dtype
+
     result = blockwise(
         op,
         expr_inds,
