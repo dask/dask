@@ -1031,8 +1031,8 @@ class FastParquetEngine(Engine):
                 return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
 
         else:
-            # `piece` is NOT a tuple
-            raise ValueError(f"Expected tuple, got {type(piece)}")
+            # `sample` is NOT a tuple
+            raise ValueError(f"Expected tuple, got {type(sample)}")
 
     @classmethod
     def initialize_write(
