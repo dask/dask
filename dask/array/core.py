@@ -957,7 +957,7 @@ def store(
     -------
 
     If return_stored=True
-        tuple[Array]
+        tuple of Arrays
     If return_stored=False and compute=True
         None
     If return_stored=False and compute=False
@@ -1005,71 +1005,83 @@ def store(
         )
 
     # Optimize all sources together
-    sources_dsk = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
-    sources_dsk = Array.__dask_optimize__(
-        sources_dsk, list(core.flatten([e.__dask_keys__() for e in sources]))
+    sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
+    sources_layer = Array.__dask_optimize__(
+        sources_hlg, list(core.flatten([e.__dask_keys__() for e in sources]))
     )
+    sources_name = "store-sources-" + tokenize(sources)
+    layers = {sources_name: sources_layer}
+    dependencies = {sources_name: set()}
 
     # Optimize all targets together
-    targets2 = []
     targets_keys = []
-    targets_dsk = []
-    for e in targets:
-        if isinstance(e, Delayed):
-            targets2.append(e.key)
-            targets_keys.extend(e.__dask_keys__())
-            targets_dsk.append(e.__dask_graph__())
-        elif is_dask_collection(e):
+    targets_dsks = []
+    for t in targets:
+        if isinstance(t, Delayed):
+            targets_keys.append(t.key)
+            targets_dsks.append(t.__dask_graph__())
+        elif is_dask_collection(t):
             raise TypeError("Targets must be either Delayed objects or array-likes")
-        else:
-            targets2.append(e)
 
-    targets_dsk = HighLevelGraph.merge(*targets_dsk)
-    targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
+    if targets_dsks:
+        targets_hlg = HighLevelGraph.merge(*targets_dsks)
+        targets_layer = Delayed.__dask_optimize__(targets_hlg, targets_keys)
+        targets_name = "store-targets-" + tokenize(targets_keys)
+        layers[targets_name] = targets_layer
+        dependencies[targets_name] = set()
 
     load_stored = return_stored and not compute
-    names = ["store-map-" + tokenize(s, r) for s, r in zip(sources, regions)]
 
-    store_dsk = {}
-    for s, t, n, r in zip(sources, targets2, names, regions):
-        store_dsk.update(
-            insert_to_ooc(
-                keys=s.__dask_keys__(),
-                chunks=s.chunks,
-                out=t,
-                name=n,
-                lock=lock,
-                region=r,
-                return_stored=return_stored,
-                load_stored=load_stored,
-            )
+    map_names = [
+        "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
+        for s, t, r in zip(sources, targets, regions)
+    ]
+    map_keys = []
+
+    for s, t, n, r in zip(sources, targets, map_names, regions):
+        map_layer = insert_to_ooc(
+            keys=s.__dask_keys__(),
+            chunks=s.chunks,
+            out=t.key if isinstance(t, Delayed) else t,
+            name=n,
+            lock=lock,
+            region=r,
+            return_stored=return_stored,
+            load_stored=load_stored,
         )
-
-    store_keys = list(store_dsk.keys())
-    store_dsk.update(targets_dsk)
-    store_dsk.update(sources_dsk)
+        layers[n] = map_layer
+        if isinstance(t, Delayed):
+            dependencies[n] = {sources_name, targets_name}
+        else:
+            dependencies[n] = {sources_name}
+        map_keys += map_layer.keys()
 
     if return_stored:
+        store_dsk = HighLevelGraph(layers, dependencies)
         load_store_dsk = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
+            store_dlyds = [Delayed(k, store_dsk) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
-            load_store_dsk = retrieve_from_ooc(store_keys, store_dsk, store_dsk_2)
-            names = ["load-" + n for n in names]
+            load_store_dsk = retrieve_from_ooc(map_keys, store_dsk, store_dsk_2)
+            map_names = ["load-" + n for n in map_names]
 
         return tuple(
-            Array(load_store_dsk, n, s.chunks, meta=s) for s, n in zip(sources, names)
+            Array(load_store_dsk, n, s.chunks, meta=s)
+            for s, n in zip(sources, map_names)
         )
 
     elif compute:
-        compute_as_if_collection(Array, store_dsk, store_keys, **kwargs)
+        store_dsk = HighLevelGraph(layers, dependencies)
+        compute_as_if_collection(Array, store_dsk, map_keys, **kwargs)
         return None
 
     else:
-        name = "store-" + tokenize(names)
-        store_dsk[name] = store_keys
-        return Delayed(name, HighLevelGraph({name: store_dsk}, {name: set()}))
+        key = "store-" + tokenize(map_names)
+        layers[key] = {key: map_keys}
+        dependencies[key] = set(map_names)
+        store_dsk = HighLevelGraph(layers, dependencies)
+        return Delayed(key, store_dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):

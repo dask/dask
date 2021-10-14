@@ -2009,6 +2009,18 @@ def test_store_multiprocessing_lock():
     assert st is None
 
 
+@pytest.mark.parametrize("return_stored", [False, True])
+@pytest.mark.parametrize("delayed_target", [False, True])
+def test_store_deterministic_keys(return_stored, delayed_target):
+    a = da.ones((10, 10), chunks=(2, 2))
+    at = np.zeros(shape=(10, 10))
+    if delayed_target:
+        at = delayed(at)
+    st1 = a.store(at, return_stored=return_stored, compute=False)
+    st2 = a.store(at, return_stored=return_stored, compute=False)
+    assert st1.dask.keys() == st2.dask.keys()
+
+
 def test_to_hdf5():
     h5py = pytest.importorskip("h5py")
     x = da.ones((4, 4), chunks=(2, 2))
