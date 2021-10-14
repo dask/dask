@@ -1764,7 +1764,7 @@ def test_store_regions():
     v = store([a, b], [at, bt], regions=region, compute=False)
     assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt[region] == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    assert v.compute() is None
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -1775,7 +1775,7 @@ def test_store_regions():
     v = store([a, b], [at, bt], regions=[region, region], compute=False)
     assert isinstance(v, Delayed)
     assert (at == 0).all() and (bt[region] == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    assert v.compute() is None
     assert (at[region] == 2).all() and (bt[region] == 3).all()
     assert not (bt == 3).all() and not (bt == 0).all()
     assert not (at == 2).all() and not (at == 0).all()
@@ -1852,8 +1852,13 @@ def test_store_compute_false():
 
     v = store([a, b], [at, bt], compute=False)
     assert isinstance(v, Delayed)
+
+    # You need a well-formed HighLevelgraph for e.g. dask.graph_manipulation.bind
+    for layer in v.__dask_layers__():
+        assert layer in v.dask.layers
+
     assert (at == 0).all() and (bt == 0).all()
-    assert all([ev is None for ev in v.compute()])
+    assert v.compute() is None
     assert (at == 2).all() and (bt == 3).all()
 
     at = np.zeros(shape=(4, 4))
