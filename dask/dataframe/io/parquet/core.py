@@ -105,8 +105,8 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     ignore_metadata_file=False,
+    metadata_task_size=None,
     split_row_groups=None,
-    read_from_paths=None,
     chunksize=None,
     aggregate_files=None,
     **kwargs,
@@ -179,6 +179,17 @@ def read_parquet(
         every file will be parsed (which is very slow on some systems).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
+        If ``True``, or if the global ``_metadata`` file is missing, the parquet
+        metadata may be gathered and processed in parallel. Parallel metadata
+        processing is currently supported for ``ArrowDatasetEngine`` only.
+    metadata_task_size : int, default configurable
+        If parquet metadata is processed in parallel (see ``ignore_metadata_file``
+        description above), this argument can be used to specify the number of
+        dataset files to be processed by each task in the Dask graph.  If this
+        argument is set to ``0``, parallel metadata processing will be disabled.
+        The default values for local and remote filesystems can be specified
+        with the "metadata-task-size-local" and "metadata-task-size-remote"
+        config fields, respectively (see "dataframe.parquet").
     split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
@@ -187,15 +198,6 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool, default None
-        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
-        Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph.  If this option
-        is True, ``read_partition`` will need to regenerate the appropriate
-        fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to ``read_partition``.
-        By default (None), ``ArrowDatasetEngine`` will set this option to
-        ``False`` when there are filters.
     chunksize : int or str, default None
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
@@ -252,6 +254,12 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
+    if "read_from_paths" in kwargs:
+        warnings.warn(
+            "`read_from_paths` is no longer supported and will be ignored.",
+            FutureWarning,
+        )
+
     if isinstance(columns, str):
         df = read_parquet(
             path,
@@ -264,9 +272,9 @@ def read_parquet(
             gather_statistics=gather_statistics,
             ignore_metadata_file=ignore_metadata_file,
             split_row_groups=split_row_groups,
-            read_from_paths=read_from_paths,
             chunksize=chunksize,
             aggregate_files=aggregate_files,
+            metadata_task_size=metadata_task_size,
         )
         return df[columns]
 
@@ -284,8 +292,8 @@ def read_parquet(
         engine,
         gather_statistics,
         ignore_metadata_file,
+        metadata_task_size,
         split_row_groups,
-        read_from_paths,
         chunksize,
         aggregate_files,
     )
@@ -323,10 +331,10 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        read_from_paths=read_from_paths,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
+        metadata_task_size=metadata_task_size,
         **kwargs,
     )
 
@@ -718,17 +726,12 @@ def to_parquet(
     else:
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[df])
 
     if compute:
-        if write_metadata_file:
-            return compute_as_if_collection(
-                DataFrame, graph, (final_name, 0), **compute_kwargs
-            )
-        else:
-            return compute_as_if_collection(
-                DataFrame, graph, part_tasks, **compute_kwargs
-            )
+        return compute_as_if_collection(
+            Scalar, graph, [(final_name, 0)], **compute_kwargs
+        )
     else:
         return Scalar(graph, final_name, "")
 
@@ -948,8 +951,8 @@ def get_engine(engine):
 
     else:
         raise ValueError(
-            'Unsupported engine: "{0}".'.format(engine)
-            + '  Valid choices include "pyarrow" and "fastparquet".'
+            f'Unsupported engine: "{engine}".'
+            '  Valid choices include "pyarrow" and "fastparquet".'
         )
 
 
@@ -1127,7 +1130,7 @@ def process_statistics(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+                raise ValueError(f"Specified index is invalid.\nindex: {index}")
         elif index is not False and len(out) > 1:
             if any(o["name"] == NONE_LABEL for o in out):
                 # Use sorted column matching NONE_LABEL as the index
@@ -1137,9 +1140,7 @@ def process_statistics(
                     index = [o["name"]]
                     index_in_columns = True
                 elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
+                    raise ValueError(f"Specified index is invalid.\nindex: {index}")
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
@@ -1286,10 +1287,8 @@ def aggregate_row_groups(
         next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
 
         if (same_path or multi_path_allowed) and (
-            (
-                _check_row_group_criteria(stat, next_stat)
-                or _check_chunksize_criteria(stat, next_stat)
-            )
+            _check_row_group_criteria(stat, next_stat)
+            or _check_chunksize_criteria(stat, next_stat)
         ):
 
             # Update part list

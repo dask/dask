@@ -9,6 +9,7 @@ dependencies:
   - numpy
   - pandas
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures

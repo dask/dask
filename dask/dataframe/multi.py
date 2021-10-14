@@ -393,35 +393,54 @@ def single_partition_join(left, right, **kwargs):
     # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
+
+    use_left = kwargs.get("right_index") or right._contains_index_name(
+        kwargs.get("right_on")
+    )
+    use_right = kwargs.get("left_index") or left._contains_index_name(
+        kwargs.get("left_on")
+    )
+
+    if len(meta) == 0:
+        if use_left:
+            meta.index = meta.index.astype(left.index.dtype)
+        elif use_right:
+            meta.index = meta.index.astype(right.index.dtype)
+        else:
+            meta.index = meta.index.astype("int64")
+
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
     name = "merge-" + tokenize(left, right, **kwargs)
-    if left.npartitions == 1 and kwargs["how"] in allowed_right:
+
+    if right.npartitions == 1 and kwargs["how"] in allowed_left:
+        right_key = first(right.__dask_keys__())
+        dsk = {
+            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
+            for i, left_key in enumerate(left.__dask_keys__())
+        }
+        if use_left:
+            divisions = left.divisions
+        elif use_right and len(right.divisions) == len(left.divisions):
+            divisions = right.divisions
+        else:
+            divisions = [None for _ in left.divisions]
+
+    elif left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
         dsk = {
             (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
             for i, right_key in enumerate(right.__dask_keys__())
         }
 
-        if kwargs.get("right_index") or right._contains_index_name(
-            kwargs.get("right_on")
-        ):
+        if use_right:
             divisions = right.divisions
+        elif use_left and len(left.divisions) == len(right.divisions):
+            divisions = left.divisions
         else:
             divisions = [None for _ in right.divisions]
 
-    elif right.npartitions == 1 and kwargs["how"] in allowed_left:
-        right_key = first(right.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, left_key in enumerate(left.__dask_keys__())
-        }
-
-        if kwargs.get("left_index") or left._contains_index_name(kwargs.get("left_on")):
-            divisions = left.divisions
-        else:
-            divisions = [None for _ in left.divisions]
     else:
         raise NotImplementedError(
             "single_partition_join has no fallback for invalid calls"
@@ -519,14 +538,14 @@ def merge(
     if not is_dask_collection(left):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
-            left_on = False
+            left_on = None
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
     if not is_dask_collection(right):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
-            right_on = False
+            right_on = None
             right_index = True
         right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
@@ -1000,13 +1019,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     filter_warning = True
     uniform = False
 
-    dsk = dict(
-        (
-            (name, i),
-            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
-        )
+    dsk = {
+        (name, i): (methods.concat, part, axis, join, uniform, filter_warning, kwargs)
         for i, part in enumerate(parts2)
-    )
+    }
     for df in dfs2:
         dsk.update(df.dask)
 
@@ -1030,7 +1046,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     )
     empty = strip_unknown_categories(meta)
 
-    name = "concat-{0}".format(tokenize(*dfs))
+    name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
     for df in dfs:
@@ -1247,12 +1263,12 @@ def concat(
                     dfs, join=join, ignore_order=ignore_order, **kwargs
                 )
             else:
-                divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+                divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
                 return stack_partitions(
                     dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
                 )
         else:
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+            divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
             return stack_partitions(
                 dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
             )

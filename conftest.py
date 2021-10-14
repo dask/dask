@@ -31,6 +31,11 @@ try:
 except ImportError:
     collect_ignore.append("dask/array/stats.py")
 
+try:
+    import pyarrow  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/dataframe/io/orc/arrow.py")
+
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")

@@ -867,19 +867,18 @@ def test_merge_how_raises():
         dd.merge(left, right, how="cross")
 
 
-@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
     "engine",
     [
-        "cudf",
         pytest.param(
             "pandas",
             marks=pytest.mark.xfail(
                 reason="Pandas does not support leftsemi or leftanti"
             ),
         ),
+        pytest.param("cudf", marks=pytest.mark.gpu),
     ],
 )
 def test_merge_tasks_semi_anti_cudf(engine, how, parts):
@@ -1217,6 +1216,20 @@ def test_join_by_index_patterns(how, shuffle):
             """
 
 
+def test_join_gives_proper_divisions():
+    # https://github.com/dask/dask/issues/8113
+    df = pd.DataFrame({"a": ["a", "b", "c"]}, index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    right_df = pd.DataFrame({"b": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
+
+    expected = df.join(right_df, how="inner", on="a")
+    actual = ddf.join(right_df, how="inner", on="a")
+    assert actual.divisions == ddf.divisions
+
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 @pytest.mark.parametrize("shuffle", ["disk", "tasks"])
 def test_merge_by_multiple_columns(how, shuffle):
@@ -1454,14 +1467,14 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    assert actual.known_divisions
+    assert not actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    assert actual.known_divisions
+    assert not actual.known_divisions
     assert_eq(actual, expected)
 
 
@@ -1692,7 +1705,6 @@ def test_concat3():
         )
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(
         np.random.randn(10, 5), columns=list("ABCDE"), index=list("abcdefghij")
@@ -1740,7 +1752,6 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")
@@ -1847,7 +1858,6 @@ def test_concat5():
         (False, False, False),
     ],
 )
-@pytest.mark.filterwarnings("ignore")
 def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
@@ -2000,7 +2010,6 @@ def test_append():
     check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2172,8 +2181,9 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer

@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from functools import partial
 from hashlib import md5
-from numbers import Number
+from numbers import Integral, Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
 
@@ -839,7 +839,14 @@ def normalize_seq(seq):
         try:
             return list(map(normalize_token, seq))
         except RecursionError:
-            return str(uuid.uuid4())
+            if not config.get("tokenize.ensure-deterministic"):
+                return uuid.uuid4().hex
+
+            raise RuntimeError(
+                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+                "for more information"
+            )
 
     return type(seq).__name__, func(seq)
 
@@ -859,7 +866,18 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
-    return normalize_function(o) if callable(o) else uuid.uuid4().hex
+
+    if callable(o):
+        return normalize_function(o)
+
+    if not config.get("tokenize.ensure-deterministic"):
+        return uuid.uuid4().hex
+
+    raise RuntimeError(
+        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
+    )
 
 
 function_cache = {}
@@ -1032,7 +1050,15 @@ def register_numpy():
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
-                    data = uuid.uuid4().hex
+                    if not config.get("tokenize.ensure-deterministic"):
+                        data = uuid.uuid4().hex
+                    else:
+                        raise RuntimeError(
+                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            "be deterministically hashed. Please, see "
+                            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
+                            "for more information"
+                        )
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
@@ -1064,7 +1090,7 @@ def register_scipy():
     def normalize_sparse_matrix(x, attrs):
         return (
             type(x).__name__,
-            normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
+            normalize_seq(normalize_token(getattr(x, key)) for key in attrs),
         )
 
     for cls, attrs in [
@@ -1176,9 +1202,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     % ", ".join(sorted(named_schedulers))
                 )
         elif isinstance(scheduler, Executor):
-            num_workers = getattr(
-                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
-            )
+            # Get `num_workers` from `Executor`'s `_max_workers` attribute.
+            # If undefined, fallback to `config` or worst case CPU_COUNT.
+            num_workers = getattr(scheduler, "_max_workers", None)
+            if num_workers is None:
+                num_workers = config.get("num_workers", CPU_COUNT)
+            assert isinstance(num_workers, Integral) and num_workers > 0
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
             raise ValueError("Unexpected scheduler: %s" % repr(scheduler))

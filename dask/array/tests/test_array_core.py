@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from io import StringIO
-from operator import add, getitem, sub
+from operator import add, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
@@ -51,6 +51,7 @@ from dask.delayed import Delayed, delayed
 from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
+from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 
@@ -277,7 +278,7 @@ def test_numblocks_suppoorts_singleton_block_dims():
 
 
 def test_keys():
-    dsk = dict((("x", i, j), ()) for i in range(5) for j in range(6))
+    dsk = {("x", i, j): () for i in range(5) for j in range(6)}
     dx = Array(dsk, "x", chunks=(10, 10), shape=(50, 60), dtype="f8")
     assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
     # Cache works
@@ -285,7 +286,9 @@ def test_keys():
     # Test mutating names clears key cache
     dx.dask = {("y", i, j): () for i in range(5) for j in range(6)}
     dx._name = "y"
-    assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    new_keys = [[(dx.name, i, j) for j in range(6)] for i in range(5)]
+    assert dx.__dask_keys__() == new_keys
+    assert np.array_equal(dx._key_array, np.array(new_keys, dtype="object"))
     d = Array({}, "x", (), shape=(), dtype="f8")
     assert d.__dask_keys__() == [("x",)]
 
@@ -315,7 +318,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__02():
 
 
 def test_stack():
-    a, b, c = [
+    a, b, c = (
         Array(
             getem(name, chunks=(2, 3), shape=(4, 6)),
             name,
@@ -324,7 +327,7 @@ def test_stack():
             shape=(4, 6),
         )
         for name in "ABC"
-    ]
+    )
 
     s = stack([a, b, c], axis=0)
 
@@ -468,7 +471,7 @@ def test_stack_unknown_chunksizes():
 
 
 def test_concatenate():
-    a, b, c = [
+    a, b, c = (
         Array(
             getem(name, chunks=(2, 3), shape=(4, 6)),
             name,
@@ -477,7 +480,7 @@ def test_concatenate():
             shape=(4, 6),
         )
         for name in "ABC"
-    ]
+    )
 
     x = concatenate([a, b, c], axis=0)
 
@@ -1927,8 +1930,8 @@ def test_store_locks():
     v = store([a, b], [at, bt], compute=False, lock=lock)
     assert isinstance(v, Delayed)
     dsk = v.dask
-    locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
-    assert locks == set([lock])
+    locks = {vv for v in dsk.values() for vv in v if isinstance(vv, _Lock)}
+    assert locks == {lock}
 
     # Ensure same lock applies over multiple stores
     at = NonthreadSafeStore()
@@ -2360,7 +2363,7 @@ def test_from_array_with_lock():
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
 
     assert hasattr(tasks[0][4], "acquire")
-    assert len(set(task[4] for task in tasks)) == 1
+    assert len({task[4] for task in tasks}) == 1
 
     assert_eq(d, x)
 
@@ -3124,6 +3127,30 @@ def test_map_blocks_with_changed_dimension():
     assert_eq(e, x.sum(axis=1)[:, None, None])
 
 
+def test_map_blocks_with_negative_drop_axis():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(7, 4))
+
+    for drop_axis in [0, -2]:
+        # test with equivalent positive and negative drop_axis
+        e = d.map_blocks(
+            lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype
+        )
+        assert e.chunks == ((4, 4),)
+        assert_eq(e, x.sum(axis=0))
+
+
+def test_map_blocks_with_invalid_drop_axis():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(x, chunks=(7, 4))
+
+    for drop_axis in [x.ndim, -x.ndim - 1]:
+        with pytest.raises(ValueError):
+            d.map_blocks(
+                lambda b: b.sum(axis=0), chunks=(4,), drop_axis=drop_axis, dtype=d.dtype
+            )
+
+
 def test_map_blocks_with_changed_dimension_and_broadcast_chunks():
     # https://github.com/dask/dask/issues/4299
     a = da.from_array([1, 2, 3], 3)
@@ -3360,7 +3387,7 @@ def test_from_array_names():
     d = da.from_array(x, chunks=2)
 
     names = countby(key_split, d.dask)
-    assert set(names.values()) == set([5])
+    assert set(names.values()) == {5}
 
 
 @pytest.mark.parametrize(
@@ -3953,9 +3980,10 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
-    # RHS has extra leading size 1 dimensions compared to LHS
-    x = np.arange(12).reshape((3, 4))
-    dx = da.from_array(x, chunks=(2, 3))
+    # RHS doesn't have chunks set
+    dx = da.unique(da.random.random([10]))
+    with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
+        dx[0] = 0
 
 
 def test_zero_slice_dtypes():
@@ -4800,6 +4828,20 @@ def test_rechunk_auto():
     y = x.rechunk()
 
     assert y.npartitions == 1
+
+
+def test_chunk_assignment_invalidates_cached_properties():
+    x = da.ones((4,), chunks=(1,))
+    y = x.copy()
+    # change chunks directly, which should change all of the tested properties
+    y._chunks = ((2, 2), (0, 0, 0, 0))
+    assert not x.ndim == y.ndim
+    assert not x.shape == y.shape
+    assert not x.size == y.size
+    assert not x.numblocks == y.numblocks
+    assert not x.npartitions == y.npartitions
+    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert not np.array_equal(x._key_array, y._key_array)
 
 
 def test_map_blocks_series():
