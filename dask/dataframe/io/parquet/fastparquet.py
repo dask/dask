@@ -709,8 +709,10 @@ class FastParquetEngine(Engine):
             or metadata_task_size == 0
             or metadata_task_size > len(paths)
         ):
-            # Use original `ParquetFile` object to construct plan,
-            # since it is based on a global _metadata file
+            # Construct the output-partitioning plan on the
+            # client process (in serial).  This means we have
+            # a global _metadata file, or that `metadata_task_size`
+            # is zero or larger than the number of files.
             pf_or_paths = pf if has_metadata_file else paths
             parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
 
@@ -1062,7 +1064,7 @@ class FastParquetEngine(Engine):
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
-            except (IOError, ValueError):
+            except (OSError, ValueError):
                 # append for create
                 append = False
         if append:
