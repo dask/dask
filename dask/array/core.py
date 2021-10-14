@@ -4354,7 +4354,8 @@ def elemwise(op, *args, **kwargs):
     if not set(["name", "dtype", "where"]).issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(
-            msg % (op.__name__, str(sorted(set(kwargs) - set(["name", "dtype", "where"]))))
+            msg
+            % (op.__name__, str(sorted(set(kwargs) - set(["name", "dtype", "where"]))))
         )
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
@@ -4404,7 +4405,9 @@ def elemwise(op, *args, **kwargs):
 
     where = kwargs.get("where", True)
 
-    blockwise_kwargs = dict(dtype=dt, name=name, where=where, token=funcname(op).strip("_"))
+    blockwise_kwargs = dict(
+        dtype=dt, name=name, where=where, token=funcname(op).strip("_")
+    )
 
     if need_enforce_dtype:
         blockwise_kwargs["enforce_dtype"] = dt
