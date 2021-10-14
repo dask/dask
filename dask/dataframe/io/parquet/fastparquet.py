@@ -388,27 +388,24 @@ class FastParquetEngine(Engine):
             # This is a directory.
             # Check if _metadata and/or _common_metadata files exists
             base = paths[0]
-            _metadata_exists = _common_metadata_exists = True
+            _metadata_exists = True
             if not ignore_metadata_file:
                 _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
-                _common_metadata_exists = fs.isfile(
-                    fs.sep.join([base, "_common_metadata"])
-                )
 
             # Find all files if we are not using a _metadata file
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
                 paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
-                _metadata_exists = "_metadata" in fns
-                _common_metadata_exists = "_common_metadata" in fns
-                if _metadata_exists or _common_metadata_exists:
-                    if _common_metadata_exists:
-                        fns.remove("_common_metadata")
-                        _common_metadata_exists = False
-                    if _metadata_exists:
-                        fns.remove("_metadata")
-                        _metadata_exists = False
+                _update_paths = False
+                for fn in ["_metadata", "_common_metadata"]:
+                    try:
+                        fns.remove(fn)
+                        _update_paths = True
+                    except ValueError:
+                        pass
+                if _update_paths:
                     paths = [fs.sep.join([base, fn]) for fn in fns]
+                _metadata_exists = False
 
             if _metadata_exists:
                 # Using _metadata file (best-case scenario)
