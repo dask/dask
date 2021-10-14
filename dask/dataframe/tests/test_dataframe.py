@@ -137,14 +137,27 @@ def test_head_npartitions_warn():
     with pytest.warns(UserWarning, match=match):
         d.head(5)
 
-    with pytest.warns(None):
+    match = "Insufficient elements"
+    with pytest.warns(UserWarning, match=match):
         d.head(100)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7, npartitions=2)
+
+    # No warn if all partitions are inspected
+    for n in [3, -1]:
+        with pytest.warns(None) as rec:
+            d.head(10, npartitions=n)
+    assert not rec
+
+    # With default args, this means that a 1 partition dataframe won't warn
+    d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
+    with pytest.warns(None) as rec:
+        d2.head()
+    assert not rec
 
 
 def test_index_head():
