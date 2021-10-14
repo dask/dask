@@ -344,6 +344,14 @@ def test_gufunc_vectorize_whitespace():
 
     assert_eq(x, np.full((8, 3), 10, dtype=int))
 
+    a = da.random.random((6, 5, 5))
+
+    @da.as_gufunc(signature="(n, n)->(n, n)", output_dtypes=float, vectorize=True)
+    def gufoo(x):
+        return np.linalg.inv(x)
+
+    gufoo(a)  # Previously this would raise an error
+
 
 def test_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
