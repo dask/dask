@@ -978,6 +978,7 @@ def store(
 
     >>> store([x, y, z], [dset1, dset2, dset3])  # doctest: +SKIP
     """
+
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]
@@ -1027,7 +1028,7 @@ def store(
     targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
 
     load_stored = return_stored and not compute
-    names = ["store-" + tokenize(s, r) for s, r in zip(sources, regions)]
+    names = ["store-map-" + tokenize(s, r) for s, r in zip(sources, regions)]
 
     store_dsk = {}
     for s, t, n, r in zip(sources, targets2, names, regions):
@@ -1066,14 +1067,9 @@ def store(
         return None
 
     else:
-        # Collecting the individual chunks is not trivial, as it could lead to poor
-        # memory management on a distributed cluster if we were to do it in a single
-        # step. Perform recursive aggregation to work around the problem.
-        from ..graph_manipulation import checkpoint
-
-        return checkpoint(
-            Array(store_dsk, n, s.chunks, s.dtype) for n, s in zip(names, sources)
-        )
+        name = "store-" + tokenize(names)
+        store_dsk[name] = store_keys
+        return Delayed(name, HighLevelGraph({name: store_dsk}, {name: set()}))
 
 
 def blockdims_from_blockshape(shape, chunks):
