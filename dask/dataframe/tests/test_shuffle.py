@@ -1222,7 +1222,7 @@ def test_set_index_nan_partition():
 
 
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
@@ -1240,7 +1240,7 @@ def test_sort_values(nelem, nparts, by, ascending):
 
 @pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
     "data",
