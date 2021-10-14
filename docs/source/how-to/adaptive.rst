@@ -1,5 +1,5 @@
-Adaptive Deployments
-====================
+Setup adaptive deployments
+==========================
 
 Motivation
 ----------
@@ -61,11 +61,11 @@ Dependence on a Resource Manager
 
 The Dask scheduler does not know how to launch workers on its own. Instead, it
 relies on an external resource scheduler like Kubernetes above, or
-Yarn, SGE, SLURM, Mesos, or some other in-house system (see :doc:`setup
-documentation <../setup>` for options).  In order to use adaptive deployments, you
+Yarn, SGE, SLURM, Mesos, or some other in-house system (see :doc:`how to deploy Dask
+clusters <../how-to/deploy-dask-clusters>` for options).  In order to use adaptive deployments, you
 must provide some mechanism for the scheduler to launch new workers.  Typically,
-this is done by using one of the solutions listed in the :doc:`setup
-documentation <../setup>`, or by subclassing from the Cluster superclass and
+this is done by using one of the solutions listed in the :doc:`how to deploy Dask
+clusters <../how-to/deploy-dask-clusters>`, or by subclassing from the Cluster superclass and
 implementing that API.
 
 .. autosummary::

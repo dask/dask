@@ -1,5 +1,8 @@
 temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /local
 
+tokenize:
+  ensure-deterministic: false  # If true, tokenize will error instead of falling back to uuids
+
 dataframe:
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
   parquet:

@@ -101,7 +101,7 @@ def s3_base():
             proc.kill()
             if sys.platform == "win32":
                 # belt & braces
-                subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
+                subprocess.call(f"TASKKILL /F /PID {proc.pid} /T")
 
 
 @pytest.fixture
@@ -264,21 +264,21 @@ def test_read_bytes_sample_delimiter(s3, s3so):
         "s3://" + test_bucket_name + "/test/accounts.*",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=2,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
 
@@ -297,18 +297,18 @@ def test_read_bytes_blocksize_none(s3, s3so):
 
 def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2015/yellow_tripdata_2015-01.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2015/yellow_tripdata_2015-01.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 1
 
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2014/*.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2014/*.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 12
 
@@ -334,13 +334,13 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     _, values2 = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"foo",
-        **s3so
+        **s3so,
     )
     assert [a.key for a in concat(values)] != [b.key for b in concat(values2)]
 
@@ -357,7 +357,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=d,
-        **s3so
+        **s3so,
     )
     results = compute(*concat(values))
     res = [r for r in results if r]
@@ -382,14 +382,14 @@ def test_compression(s3, fmt, blocksize, s3so):
                     "s3://compress/test/accounts.*",
                     compression=fmt,
                     blocksize=blocksize,
-                    **s3so
+                    **s3so,
                 )
             return
         sample, values = read_bytes(
             "s3://compress/test/accounts.*",
             compression=fmt,
             blocksize=blocksize,
-            **s3so
+            **s3so,
         )
         assert sample.startswith(files[sorted(files)[0]][:10])
         assert sample.endswith(b"\n")

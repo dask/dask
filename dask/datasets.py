@@ -10,7 +10,7 @@ def timeseries(
     partition_freq="1d",
     dtypes={"name": str, "id": int, "x": float, "y": float},
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -60,7 +60,7 @@ def timeseries(
         partition_freq=partition_freq,
         seed=seed,
         dtypes=dtypes,
-        **kwargs
+        **kwargs,
     )
 
 
