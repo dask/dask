@@ -1079,7 +1079,11 @@ Dask Name: {name}, {task} tasks"""
         compute : bool, optional
             Whether to compute the result, default is True.
         """
-        return self._head(n=n, npartitions=npartitions, compute=compute, safe=True)
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        # No need to warn if we're already looking at all partitions
+        safe = npartitions != self.npartitions
+        return self._head(n=n, npartitions=npartitions, compute=compute, safe=safe)
 
     def _head(self, n, npartitions, compute, safe):
         if npartitions <= -1:
