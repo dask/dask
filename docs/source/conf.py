@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # dask documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 08:58:22 2015.
@@ -358,8 +357,8 @@ redirect_files = [
     ("institutional-faq.html", "faq.html"),
     ("cite.html", "faq.html#how-do-I-cite-dask"),
     ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
-    ("debugging.html", "how-to/debug"),
-    ("setup.html", "how-to/deploy-dask-clusters"),
+    ("debugging.html", "how-to/debug.html"),
+    ("setup.html", "how-to/deploy-dask-clusters.html"),
     ("setup/cli.html", "how-to/deploy-dask/cli.html"),
     ("setup/cloud.html", "how-to/deploy-dask/cloud.html"),
     ("setup/docker.html", "how-to/deploy-dask/docker.html"),

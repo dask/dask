@@ -14,13 +14,13 @@ from .utils import meta_from_array
 # See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
-_ARGUMENT = r"\({}\)".format(_CORE_DIMENSION_LIST)
+_ARGUMENT = fr"\({_CORE_DIMENSION_LIST}\)"
 _INPUT_ARGUMENTS = "(?:{0:}(?:,{0:})*,?)?".format(_ARGUMENT)
 _OUTPUT_ARGUMENTS = "{0:}(?:,{0:})*".format(
     _ARGUMENT
 )  # Use `'{0:}(?:,{0:})*,?'` if gufunc-
 # signature should be allowed for length 1 tuple returns
-_SIGNATURE = "^{0:}->{1:}$".format(_INPUT_ARGUMENTS, _OUTPUT_ARGUMENTS)
+_SIGNATURE = f"^{_INPUT_ARGUMENTS}->{_OUTPUT_ARGUMENTS}$"
 
 
 def _parse_gufunc_signature(signature):
@@ -41,7 +41,7 @@ def _parse_gufunc_signature(signature):
     """
     signature = re.sub(r"\s+", "", signature)
     if not re.match(_SIGNATURE, signature):
-        raise ValueError("Not a valid gufunc signature: {}".format(signature))
+        raise ValueError(f"Not a valid gufunc signature: {signature}")
     in_txt, out_txt = signature.split("->")
     ins = [
         tuple(re.findall(_DIMENSION_NAME, arg)) for arg in re.findall(_ARGUMENT, in_txt)
@@ -426,9 +426,7 @@ def apply_gufunc(
     for dim, sizes in dimsizess.items():
         #### Check that the arrays have same length for same dimensions or dimension `1`
         if set(sizes) | {1} != {1, max(sizes)}:
-            raise ValueError(
-                "Dimension `'{}'` with different lengths in arrays".format(dim)
-            )
+            raise ValueError(f"Dimension `'{dim}'` with different lengths in arrays")
         if not allow_rechunk:
             chunksizes = chunksizess[dim]
             #### Check if core dimensions consist of only one chunk
@@ -446,7 +444,7 @@ significantly.".format(
             )
             if len(relevant_chunksizes) > 1:
                 raise ValueError(
-                    "Dimension `'{}'` with different chunksize present".format(dim)
+                    f"Dimension `'{dim}'` with different chunksize present"
                 )
 
     ## Apply function - use blockwise here

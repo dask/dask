@@ -11,6 +11,7 @@ dependencies:
   - fsspec=0.6.0
   - toolz=0.8.2
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures

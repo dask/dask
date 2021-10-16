@@ -158,13 +158,13 @@ def test_read_text(hdfs):
 
     with ProcessPoolExecutor(2, ctx) as pool:
         with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
-            f.write("Alice 100\nBob 200\nCharlie 300".encode())
+            f.write(b"Alice 100\nBob 200\nCharlie 300")
 
         with hdfs.open("%s/text.2.txt" % basedir, "wb") as f:
-            f.write("Dan 400\nEdith 500\nFrank 600".encode())
+            f.write(b"Dan 400\nEdith 500\nFrank 600")
 
         with hdfs.open("%s/other.txt" % basedir, "wb") as f:
-            f.write("a b\nc d".encode())
+            f.write(b"a b\nc d")
 
         b = db.read_text("hdfs://%s/text.*.txt" % basedir)
         with dask.config.set(pool=pool):
