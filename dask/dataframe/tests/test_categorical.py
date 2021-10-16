@@ -133,6 +133,8 @@ def test_unknown_categoricals():
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
     assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
+    # TODO: look at `ddf.groupby(ddf.w).obj.y`
+    # See `def nunique` in dataframe/groupby.py
     assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
     assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 
@@ -159,6 +161,7 @@ def test_categorize():
         meta,
         [None] * 4,
     ).rename(columns={"y": "y_"})
+
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
@@ -415,12 +418,16 @@ class TestCategoricalAccessor:
         # GH 1705
 
         def make_empty():
-            return pd.DataFrame({"A": pd.Categorical([np.nan, np.nan])})
+            return pd.DataFrame(
+                {"A": pd.Categorical(pd.Index([np.nan, np.nan], dtype="object"))}
+            )
 
         def make_full():
             return pd.DataFrame({"A": pd.Categorical(["a", "a"])})
 
-        a = dd.from_delayed([dask.delayed(make_empty)(), dask.delayed(make_full)()])
+        a = dd.from_delayed(
+            [dask.delayed(make_empty)(), dask.delayed(make_full)()], meta=make_full()
+        )
         # Used to raise an IndexError
         a.A.cat.categories
 

@@ -9,7 +9,6 @@ from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     PANDAS_GT_120,
-    UNKNOWN_CATEGORIES,
     check_matching_columns,
     check_meta,
     is_dataframe_like,
@@ -97,11 +96,9 @@ def test_make_meta():
 
     # Categoricals
     meta = make_meta({"a": "category"}, parent_meta=df)
-    assert len(meta.a.cat.categories) == 1
-    assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
+    assert len(meta.a.cat.categories) == 0
     meta = make_meta(("a", "category"), parent_meta=df)
-    assert len(meta.cat.categories) == 1
-    assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+    assert len(meta.cat.categories) == 0
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
@@ -143,8 +140,7 @@ def test_meta_nonempty():
             "G": pd.date_range("2016-01-01", periods=3, tz="America/New_York"),
             "H": pd.Timedelta("1 hours"),
             "I": np.void(b" "),
-            "J": pd.Categorical([UNKNOWN_CATEGORIES] * 3),
-            "K": pd.Categorical([None, None, None]),
+            "J": pd.Categorical([None, None, None]),
         },
         columns=list("DCBAHGFEIJK"),
     )
@@ -162,8 +158,7 @@ def test_meta_nonempty():
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
     assert df3["H"][0] == pd.Timedelta("1")
     assert df3["I"][0] == "foo"
-    assert df3["J"][0] == UNKNOWN_CATEGORIES
-    assert len(df3["K"].cat.categories) == 0
+    assert len(df3["J"].cat.categories) == 0
 
     s = meta_nonempty(df2["A"])
     assert s.dtype == df2["A"].dtype
@@ -246,7 +241,7 @@ def test_meta_nonempty_index():
     assert res.ordered == idx.ordered
     assert res.name == idx.name
 
-    idx = pd.CategoricalIndex([], [UNKNOWN_CATEGORIES], ordered=True, name="foo")
+    idx = pd.CategoricalIndex([], [], ordered=True, name="foo")
     res = meta_nonempty(idx)
     assert type(res) is pd.CategoricalIndex
     assert res.ordered == idx.ordered

@@ -227,7 +227,11 @@ def _nonempty_index(idx):
             )
     elif typ is pd.CategoricalIndex:
         if len(idx.categories) == 0:
-            data = pd.Categorical(_nonempty_index(idx.categories), ordered=idx.ordered)
+            data = pd.Categorical(
+                _nonempty_index(idx.categories),
+                categories=idx.categories,
+                ordered=idx.ordered,
+            )
         else:
             data = pd.Categorical.from_codes(
                 [-1, 0], categories=idx.categories, ordered=idx.ordered

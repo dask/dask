@@ -20,7 +20,6 @@ except ImportError:
 
 from ....utils import natural_sort_key
 from ...methods import concat
-from ...utils import UNKNOWN_CATEGORIES
 from ..utils import _meta_from_dtypes
 
 #########################
@@ -302,7 +301,7 @@ class FastParquetEngine(Engine):
         for cat in categories:
             if cat in meta:
                 meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
+                    pd.Categorical([], categories=pd.Index([], dtype="object")),
                     index=meta.index,
                 )
 

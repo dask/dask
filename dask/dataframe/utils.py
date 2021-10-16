@@ -197,7 +197,9 @@ def raise_on_meta_error(funcname=None, udf=False):
         raise ValueError(msg) from e
 
 
-UNKNOWN_CATEGORIES = "__UNKNOWN_CATEGORIES__"
+def empty_categories(df_column):
+    """Returns `pd.CategoricalDtype` with empty categories"""
+    return pd.CategoricalDtype(pd.Index([], dtype=df_column.dtype.categories.dtype))
 
 
 def has_known_categories(x):
@@ -209,39 +211,10 @@ def has_known_categories(x):
     """
     x = getattr(x, "_meta", x)
     if is_series_like(x):
-        return UNKNOWN_CATEGORIES not in x.cat.categories
+        return not x.cat.categories.empty
     elif is_index_like(x) and hasattr(x, "categories"):
-        return UNKNOWN_CATEGORIES not in x.categories
+        return not x.categories.empty
     raise TypeError("Expected Series or CategoricalIndex")
-
-
-def strip_unknown_categories(x, just_drop_unknown=False):
-    """Replace any unknown categoricals with empty categoricals.
-
-    Useful for preventing ``UNKNOWN_CATEGORIES`` from leaking into results.
-    """
-    if isinstance(x, (pd.Series, pd.DataFrame)):
-        x = x.copy()
-        if isinstance(x, pd.DataFrame):
-            cat_mask = x.dtypes == "category"
-            if cat_mask.any():
-                cats = cat_mask[cat_mask].index
-                for c in cats:
-                    if not has_known_categories(x[c]):
-                        if just_drop_unknown:
-                            x[c].cat.remove_categories(UNKNOWN_CATEGORIES, inplace=True)
-                        else:
-                            x[c] = x[c].cat.set_categories([])
-        elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype) and not has_known_categories(x):
-                x = x.cat.set_categories([])
-        if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
-            x.index
-        ):
-            x.index = x.index.set_categories([])
-    elif isinstance(x, pd.CategoricalIndex) and not has_known_categories(x):
-        x = x.set_categories([])
-    return x
 
 
 def clear_known_categories(x, cols=None, index=True):
@@ -266,21 +239,29 @@ def clear_known_categories(x, cols=None, index=True):
             elif not mask.loc[cols].all():
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
-                x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
+                x[c] = x[c].cat.set_categories(
+                    pd.Index([], dtype=x[c].dtype.categories.dtype)
+                )
         elif isinstance(x, pd.Series):
             if is_categorical_dtype(x.dtype):
-                x = x.cat.set_categories([UNKNOWN_CATEGORIES])
+                x = x.cat.set_categories(pd.Index([], dtype=x.dtype.categories.dtype))
         if index and isinstance(x.index, pd.CategoricalIndex):
-            x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
+            x.index = x.index.set_categories(
+                pd.Index([], dtype=x.index.dtype.categories.dtype)
+            )
     elif isinstance(x, pd.CategoricalIndex):
-        x = x.set_categories([UNKNOWN_CATEGORIES])
+        x = x.set_categories(pd.Index([], dtype=x.dtype.categories.dtype))
     return x
 
 
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
+        if type(dtype) == pd.CategoricalDtype:
+            categories_dtype = dtype.categories.dtype
+        else:
+            categories_dtype = np.object_
         return pd.Series(
-            pd.Categorical([UNKNOWN_CATEGORIES]), name=name, index=index
+            pd.Categorical(pd.Index([], dtype=categories_dtype)), name=name, index=index
         ).iloc[:0]
     return pd.Series([], dtype=dtype, name=name, index=index)
 
@@ -360,7 +341,9 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
         if isinstance(a, str) and a == "-" or isinstance(b, str) and b == "-":
             return False
         if is_categorical_dtype(a) and is_categorical_dtype(b):
-            if UNKNOWN_CATEGORIES in a.categories or UNKNOWN_CATEGORIES in b.categories:
+            if (
+                a.categories.empty or b.categories.empty
+            ):  # Assume either of them has "unknown categories"
                 return True
             return a == b
         return (a.kind in eq_types and b.kind in eq_types) or is_dtype_equal(a, b)
