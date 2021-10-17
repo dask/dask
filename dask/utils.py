@@ -165,6 +165,33 @@ def import_required(mod_name, error_msg):
 
 @contextmanager
 def tmpfile(extension="", dir=None):
+    """
+    Function to create and return a unique temporary file with the given extension, if provided.
+
+    Parameters
+    ----------
+    extension : str
+        The extension of the temporary file to be created
+    dir : str
+        The name of the directory to create the file, if is not None, the file will be created in that directory,
+        otherwise a default directory is used.
+
+    Returns
+    -------
+    out : str
+        The name of the temporary file
+
+    See Also
+    --------
+    NamedTemporaryFile : Built-in alternative for creating temporary files
+    tmp_path : pytest fixture for creating a temporary directory unique to the test invocation
+
+    Notes
+    -----
+    This function is meant to be used for testing purposes. Should be preferred over
+    pytest fixture tmp_path when multiple files are needed inside a test invocation.
+    As opposed to the built-in NamedTemporaryFile can be used in Windows NT or later
+    """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
@@ -183,6 +210,25 @@ def tmpfile(extension="", dir=None):
 
 @contextmanager
 def tmpdir(dir=None):
+    """
+    Function to create and return a unique temporary directory.
+
+    Parameters
+    ----------
+    dir : str
+        The name of the directory to create the file, if is not None, the file will be created in that directory,
+        otherwise a default directory is used.
+
+    Returns
+    -------
+    out : str
+        The name of the temporary directory
+
+    Notes
+    -----
+    This function is meant to be used for testing purposes. Should be preferred over
+    pytest fixture tmp_path when multiple directories are needed inside a test invocation.
+    """
     dirname = tempfile.mkdtemp(dir=dir)
 
     try:
