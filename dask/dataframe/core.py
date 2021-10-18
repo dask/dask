@@ -5034,6 +5034,7 @@ class DataFrame(_Frame):
         # Group and execute the required computations
         computations = {}
         if verbose:
+            memory_usage = True
             computations.update({"index": self.index, "count": self.count()})
         if memory_usage:
             computations.update(
