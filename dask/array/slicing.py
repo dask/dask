@@ -973,7 +973,7 @@ def check_index(axis, ind, dimension):
         if ind.dtype == bool:
             if ind.size != dimension:
                 raise IndexError(
-                    f"Boolean array with size {ind.size} is not long enough"
+                    f"Boolean array with size {ind.size} is not long enough "
                     f"for axis {axis} with size {dimension}"
                 )
         elif (ind >= dimension).any() or (ind < -dimension).any():
