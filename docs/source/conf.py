@@ -359,19 +359,19 @@ redirect_files = [
     ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
     ("debugging.html", "how-to/debug.html"),
     ("setup.html", "how-to/deploy-dask-clusters.html"),
-    ("setup/cli.html", "../how-to/deploy-dask/cli.html"),
-    ("setup/cloud.html", "../how-to/deploy-dask/cloud.html"),
-    ("setup/docker.html", "../how-to/deploy-dask/docker.html"),
-    ("setup/hpc.html", "../how-to/deploy-dask/hpc.html"),
-    ("setup/kubernetes.html", "../how-to/deploy-dask/kubernetes.html"),
-    ("setup/python-advanced.html", "../how-to/deploy-dask/python-advanced.html"),
-    ("setup/single-distributed.html", "../how-to/deploy-dask/single-distributed.html"),
-    ("setup/single-machine.html", "../how-to/deploy-dask/single-machine.html"),
-    ("setup/ssh.html", "../how-to/deploy-dask/ssh.html"),
-    ("setup/adaptive.html", "../how-to/adaptive.html"),
-    ("setup/custom-startup.html", "../how-to/customize-initialization.html"),
-    ("setup/environment.html", "../how-to/manage-environments.html"),
-    ("setup/prometheus.html", "../how-to/setup-prometheus.html"),
+    ("setup/cli.html", "how-to/deploy-dask/cli.html"),
+    ("setup/cloud.html", "how-to/deploy-dask/cloud.html"),
+    ("setup/docker.html", "how-to/deploy-dask/docker.html"),
+    ("setup/hpc.html", "how-to/deploy-dask/hpc.html"),
+    ("setup/kubernetes.html", "how-to/deploy-dask/kubernetes.html"),
+    ("setup/python-advanced.html", "how-to/deploy-dask/python-advanced.html"),
+    ("setup/single-distributed.html", "how-to/deploy-dask/single-distributed.html"),
+    ("setup/single-machine.html", "how-to/deploy-dask/single-machine.html"),
+    ("setup/ssh.html", "how-to/deploy-dask/ssh.html"),
+    ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("setup/custom-startup.html", "how-to/customize-initialization.html"),
+    ("setup/environment.html", "how-to/manage-environments.html"),
+    ("setup/prometheus.html", "how-to/setup-prometheus.html"),
 ]
 
 
@@ -400,6 +400,8 @@ import numpy as np
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
         for html_src_path, new in redirect_files:
+            # add ../ to old nested paths
+            new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
             target_path = app.outdir + "/" + html_src_path
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
