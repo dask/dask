@@ -261,36 +261,19 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_,
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_, and
-`isort <https://pycqa.github.io/isort/>`_ to ensure a consistent code
-format throughout the project. ``black``, ``flake8``, and ``isort`` can
-be installed with ``pip``::
+Dask uses several code linters (flake8, black, isort, pyupgrade), which are enforced by
+CI. Developers should run them locally before they submit a PR, through the single
+command ``pre-commit run --all-files``. This makes sure that linter versions and options
+are aligned for all developers.
 
-   python -m pip install black flake8 isort
-
-and then run from the root of the Dask repository::
-
-   black dask
-   flake8 dask
-   isort dask
-
-to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` and ``isort`` as you edit files.
-
-Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black``, ``flake8``, and ``isort`` when you make a git
-commit. This can be done by installing ``pre-commit``::
-
-   python -m pip install pre-commit
-
-and then running::
+Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
+run automatically when you make a git commit. This can be done by running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black``, ``flake8``, and ``isort``
-will be run each time you commit changes. You can skip these checks with
-``git commit --no-verify`` or with the short version ``git commit -n``.
+from the root of the Dask repository. Now the code linters will be run each time you
+commit changes. You can skip these checks with ``git commit --no-verify`` or with the
+short version ``git commit -n``.
 
 
 Contributing to Documentation

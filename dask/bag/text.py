@@ -102,7 +102,7 @@ def read_text(
             errors=errors,
             compression=compression,
             newline=newline,
-            **(storage_options or {})
+            **(storage_options or {}),
         )
         if files_per_partition is None:
             blocks = [
@@ -135,7 +135,7 @@ def read_text(
             sample=False,
             compression=compression,
             include_path=include_path,
-            **(storage_options or {})
+            **(storage_options or {}),
         )
         raw_blocks = o[1]
         blocks = [

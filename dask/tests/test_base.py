@@ -192,7 +192,7 @@ def test_tokenize_numpy_memmap():
         b = tokenize(mm[1, :])
         c = tokenize(mm[0:3, :])
         d = tokenize(mm[:, 0])
-        assert len(set([a, b, c, d])) == 4
+        assert len({a, b, c, d}) == 4
         assert tokenize(mm) == tokenize(mm2)
         assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
 
@@ -283,7 +283,7 @@ def test_tokenize_pandas_invalid_unicode():
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_mixed_unicode_bytes():
     df = pd.DataFrame(
-        {"ö".encode("utf8"): [1, 2, 3], "ö": ["ö", "ö".encode("utf8"), None]},
+        {"ö".encode(): [1, 2, 3], "ö": ["ö", "ö".encode(), None]},
         index=[1, 2, 3],
     )
     tokenize(df)
@@ -928,7 +928,7 @@ def test_compute_array_dataframe():
 
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode("utf8")])
+    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode()])
     dd.from_pandas(df, npartitions=4)
 
 

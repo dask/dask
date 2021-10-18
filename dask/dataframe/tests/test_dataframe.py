@@ -16,7 +16,7 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -137,14 +137,27 @@ def test_head_npartitions_warn():
     with pytest.warns(UserWarning, match=match):
         d.head(5)
 
-    with pytest.warns(None):
+    match = "Insufficient elements"
+    with pytest.warns(UserWarning, match=match):
         d.head(100)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7, npartitions=2)
+
+    # No warn if all partitions are inspected
+    for n in [3, -1]:
+        with pytest.warns(None) as rec:
+            d.head(10, npartitions=n)
+    assert not rec
+
+    # With default args, this means that a 1 partition dataframe won't warn
+    d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
+    with pytest.warns(None) as rec:
+        d2.head()
+    assert not rec
 
 
 def test_index_head():
@@ -611,7 +624,7 @@ def test_describe_for_possibly_unsorted_q():
 
 
 def test_cumulative():
-    index = ["row{:03d}".format(i) for i in range(100)]
+    index = [f"row{i:03d}" for i in range(100)]
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
     df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
@@ -796,17 +809,17 @@ def test_squeeze():
 
     with pytest.raises(NotImplementedError) as info:
         ddf.squeeze(axis=0)
-    msg = "{0} does not support squeeze along axis 0".format(type(ddf))
+    msg = f"{type(ddf)} does not support squeeze along axis 0"
     assert msg in str(info.value)
 
     with pytest.raises(ValueError) as info:
         ddf.squeeze(axis=2)
-    msg = "No axis {0} for object type {1}".format(2, type(ddf))
+    msg = f"No axis {2} for object type {type(ddf)}"
     assert msg in str(info.value)
 
     with pytest.raises(ValueError) as info:
         ddf.squeeze(axis="test")
-    msg = "No axis test for object type {0}".format(type(ddf))
+    msg = f"No axis test for object type {type(ddf)}"
     assert msg in str(info.value)
 
 
@@ -1497,7 +1510,7 @@ def test_assign():
         d="string",
         e=ddf.a.sum(),
         f=ddf.a + ddf.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     res_unknown = ddf_unknown.assign(
@@ -1505,7 +1518,7 @@ def test_assign():
         d="string",
         e=ddf_unknown.a.sum(),
         f=ddf_unknown.a + ddf_unknown.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     sol = df.assign(
@@ -1513,7 +1526,7 @@ def test_assign():
         d="string",
         e=df.a.sum(),
         f=df.a + df.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     assert_eq(res, sol)
@@ -1539,6 +1552,14 @@ def test_assign():
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
         ddf.assign(foo=ddf_unknown.a)
+
+    df = pd.DataFrame({"A": [1, 2]})
+    df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    ddf = dd.from_pandas(pd.DataFrame({"A": [1, 2]}), npartitions=2)
+    ddf.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    assert_eq(df, ddf)
 
 
 def test_assign_callable():
@@ -1573,7 +1594,7 @@ def test_map():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-    lk = dict((v, v + 1) for v in df.a.values)
+    lk = {v: v + 1 for v in df.a.values}
     assert_eq(ddf.a.map(lk), df.a.map(lk))
     assert_eq(ddf.b.map(lk), df.b.map(lk))
     lk = pd.Series(lk)
@@ -1848,7 +1869,7 @@ def test_random_partitions():
         np.testing.assert_array_equal(a.index, sorted(a.index))
 
     parts = d.random_split([0.4, 0.5, 0.1], 42)
-    names = set([p._name for p in parts])
+    names = {p._name for p in parts}
     names.update([a._name, b._name])
     assert len(names) == 5
 
@@ -3484,7 +3505,7 @@ def test_groupby_multilevel_info():
 
     g = ddf.groupby(["A", "B"]).sum()
     # slight difference between memory repr (single additional space)
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3496,7 +3517,7 @@ def test_groupby_multilevel_info():
 
     # multilevel
     g = ddf.groupby(["A", "B"]).agg(["count", "sum"])
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3508,6 +3529,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
+@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3533,7 +3555,8 @@ def test_categorize_info():
         " 0   x       4 non-null      int64\n"
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)"
+        "dtypes: category(1), object(1), int64(1)\n"
+        "memory usage: 496.0 bytes\n"
     )
     assert buf.getvalue() == expected
 
@@ -4165,8 +4188,8 @@ def test_slice_on_filtered_boundary(drop):
     x = np.arange(10)
     x[[5, 6]] -= 2
     df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
-    pdf = df.set_index("A").query("B != {}".format(drop))
-    ddf = dd.from_pandas(df, 1).set_index("A").query("B != {}".format(drop))
+    pdf = df.set_index("A").query(f"B != {drop}")
+    ddf = dd.from_pandas(df, 1).set_index("A").query(f"B != {drop}")
 
     result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
     expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)

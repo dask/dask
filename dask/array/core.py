@@ -405,15 +405,15 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
             else ""
         )
         msg = (
-            "`dtype` inference failed in `{0}`.\n\n"
-            "{1}"
+            f"`dtype` inference failed in `{funcname}`.\n\n"
+            f"{suggest}"
             "Original error is below:\n"
             "------------------------\n"
-            "{2}\n\n"
+            f"{e!r}\n\n"
             "Traceback:\n"
             "---------\n"
-            "{3}"
-        ).format(funcname, suggest, repr(e), tb)
+            f"{tb}"
+        )
     else:
         msg = None
     if msg is not None:
@@ -665,7 +665,7 @@ def map_blocks(
         warnings.warn("The token= keyword to map_blocks has been moved to name=")
         name = token
 
-    name = "%s-%s" % (name or funcname(func), tokenize(func, *args, **kwargs))
+    name = f"{name or funcname(func)}-{tokenize(func, *args, **kwargs)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -722,8 +722,7 @@ def map_blocks(
     if chunks is not None:
         if len(chunks) != len(out_ind):
             raise ValueError(
-                "Provided chunks have {0} dims, expected {1} "
-                "dims.".format(len(chunks), len(out_ind))
+                f"Provided chunks have {len(chunks)} dims; expected {len(out_ind)} dims"
             )
         adjust_chunks = dict(zip(out_ind, chunks))
     else:
@@ -1135,7 +1134,7 @@ class Array(DaskMethodsMixin):
     __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
-        self = super(Array, cls).__new__(cls)
+        self = super().__new__(cls)
         assert isinstance(dask, Mapping)
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
@@ -1258,6 +1257,10 @@ class Array(DaskMethodsMixin):
             self.__dict__.pop(key, None)
 
     @cached_property
+    def _key_array(self):
+        return np.array(self.__dask_keys__(), dtype=object)
+
+    @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
 
@@ -1310,7 +1313,7 @@ class Array(DaskMethodsMixin):
         # `map_blocks` assigns numpy dtypes
         # cast chunk dimensions back to python int before returning
         x._chunks = tuple(
-            [tuple([int(chunk) for chunk in chunks]) for chunks in compute(tuple(c))[0]]
+            tuple(int(chunk) for chunk in chunks) for chunks in compute(tuple(c))[0]
         )
         return x
 
@@ -1341,7 +1344,7 @@ class Array(DaskMethodsMixin):
 
         # When the chunks changes the cached properties that was
         # dependent on it needs to be deleted:
-        for key in ["numblocks", "npartitions", "shape", "ndim", "size"]:
+        for key in ["numblocks", "npartitions", "shape", "ndim", "size", "_key_array"]:
             self._reset_cache(key)
 
     @property
@@ -1412,13 +1415,15 @@ class Array(DaskMethodsMixin):
         """
         chunksize = str(self.chunksize)
         name = self.name.rsplit("-", 1)[0]
-        return "dask.array<%s, shape=%s, dtype=%s, chunksize=%s, chunktype=%s.%s>" % (
-            name,
-            self.shape,
-            self.dtype,
-            chunksize,
-            type(self._meta).__module__.split(".")[0],
-            type(self._meta).__name__,
+        return (
+            "dask.array<{}, shape={}, dtype={}, chunksize={}, chunktype={}.{}>".format(
+                name,
+                self.shape,
+                self.dtype,
+                chunksize,
+                type(self._meta).__module__.split(".")[0],
+                type(self._meta).__name__,
+            )
         )
 
     def _repr_html_(self):
@@ -1472,6 +1477,7 @@ class Array(DaskMethodsMixin):
         self.__name = val
         # Clear the key cache when the name is reset
         self._cached_keys = None
+        self._reset_cache("_key_array")
 
     @property
     def name(self):
@@ -1634,8 +1640,8 @@ class Array(DaskMethodsMixin):
     def __bool__(self):
         if self.size > 1:
             raise ValueError(
-                "The truth value of a {0} is ambiguous. "
-                "Use a.any() or a.all().".format(self.__class__.__name__)
+                f"The truth value of a {self.__class__.__name__} is ambiguous. "
+                "Use a.any() or a.all()."
             )
         else:
             return bool(self.compute())
@@ -1827,7 +1833,7 @@ class Array(DaskMethodsMixin):
 
         name = "blocks-" + tokenize(self, index)
 
-        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
+        new_keys = self._key_array[index]
 
         chunks = tuple(
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
@@ -2016,8 +2022,7 @@ class Array(DaskMethodsMixin):
         extra = set(kwargs) - {"casting", "copy"}
         if extra:
             raise TypeError(
-                "astype does not take the following keyword "
-                "arguments: {0!s}".format(list(extra))
+                f"astype does not take the following keyword arguments: {list(extra)}"
             )
         casting = kwargs.get("casting", "unsafe")
         dtype = np.dtype(dtype)
@@ -2025,9 +2030,8 @@ class Array(DaskMethodsMixin):
             return self
         elif not np.can_cast(self.dtype, dtype, casting=casting):
             raise TypeError(
-                "Cannot cast array from {0!r} to {1!r}"
-                " according to the rule "
-                "{2!r}".format(self.dtype, dtype, casting)
+                f"Cannot cast array from {self.dtype!r} to {dtype!r} "
+                f"according to the rule {casting!r}"
             )
         return self.map_blocks(chunk.astype, dtype=dtype, astype_dtype=dtype, **kwargs)
 
@@ -3508,7 +3512,7 @@ def common_blockdim(blockdims):
     """
     if not any(blockdims):
         return ()
-    non_trivial_dims = set([d for d in blockdims if len(d) > 1])
+    non_trivial_dims = {d for d in blockdims if len(d) > 1}
     if len(non_trivial_dims) == 1:
         return first(non_trivial_dims)
     if len(non_trivial_dims) == 0:
@@ -3769,7 +3773,7 @@ def block(arrays, allow_unknown_chunksizes=False):
             return x[(None,) * diff + (Ellipsis,)]
 
     def format_index(index):
-        return "arrays" + "".join("[{}]".format(i) for i in index)
+        return "arrays" + "".join(f"[{i}]" for i in index)
 
     rec = _Recurser(recurse_if=lambda x: type(x) is list)
 
@@ -3898,7 +3902,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     # Find output array shape
     ndim = len(seq[0].shape)
     shape = tuple(
-        sum((a.shape[i] for a in seq)) if i == axis else seq[0].shape[i]
+        sum(a.shape[i] for a in seq) if i == axis else seq[0].shape[i]
         for i in range(ndim)
     )
 
@@ -3951,7 +3955,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     chunks = (
         seq2[0].chunks[:axis]
-        + (sum([bd[axis] for bd in bds], ()),)
+        + (sum((bd[axis] for bd in bds), ()),)
         + seq2[0].chunks[axis + 1 :]
     )
 
@@ -4330,7 +4334,7 @@ def broadcast_shapes(*shapes):
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
                 "operands could not be broadcast together with "
-                "shapes {0}".format(" ".join(map(str, shapes)))
+                "shapes {}".format(" ".join(map(str, shapes)))
             )
         out.append(dim)
     return tuple(reversed(out))
@@ -4400,7 +4404,7 @@ def elemwise(op, *args, **kwargs):
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
         )
 
-    name = kwargs.get("name", None) or "%s-%s" % (funcname(op), tokenize(op, dt, *args))
+    name = kwargs.get("name", None) or f"{funcname(op)}-{tokenize(op, dt, *args)}"
 
     where = kwargs.get("where", True)
 
@@ -4541,7 +4545,7 @@ def broadcast_to(x, shape, chunks=None, meta=None):
     if ndim_new < 0 or any(
         new != old for new, old in zip(shape[ndim_new:], x.shape) if old != 1
     ):
-        raise ValueError("cannot broadcast shape %s to shape %s" % (x.shape, shape))
+        raise ValueError(f"cannot broadcast shape {x.shape} to shape {shape}")
 
     if chunks is None:
         chunks = tuple((s,) for s in shape[:ndim_new]) + tuple(
@@ -4650,7 +4654,7 @@ def chunks_from_arrays(arrays):
             return (1,)
 
     while isinstance(arrays, (list, tuple)):
-        result.append(tuple([shape(deepfirst(a))[dim] for a in arrays]))
+        result.append(tuple(shape(deepfirst(a))[dim] for a in arrays))
         arrays = arrays[0]
         dim += 1
     return tuple(result)
@@ -4756,9 +4760,8 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     if not allow_unknown_chunksizes and not all(x.shape == seq[0].shape for x in seq):
         idx = first(i for i in enumerate(seq) if i[1].shape != seq[0].shape)
         raise ValueError(
-            "Stacked arrays must have the same shape. "
-            "The first array had shape {0}, while array "
-            "{1} has shape {2}.".format(seq[0].shape, idx[0] + 1, idx[1].shape)
+            "Stacked arrays must have the same shape. The first array had shape "
+            f"{seq[0].shape}, while array {idx[0] + 1} has shape {idx[1].shape}."
         )
 
     meta = np.stack([meta_from_array(a) for a in seq], axis=axis)
@@ -4789,7 +4792,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     uc_args = list(concat((x, ind) for x in seq2))
     _, seq2 = unify_chunks(*uc_args)
 
-    assert len(set(a.chunks for a in seq2)) == 1  # same chunks
+    assert len({a.chunks for a in seq2}) == 1  # same chunks
     chunks = seq2[0].chunks[:axis] + ((1,) * n,) + seq2[0].chunks[axis:]
 
     names = [a.name for a in seq2]
@@ -4937,7 +4940,7 @@ def to_hdf5(filename, *args, **kwargs):
                 dp,
                 shape=x.shape,
                 dtype=x.dtype,
-                chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
+                chunks=tuple(c[0] for c in x.chunks) if chunks is True else chunks,
                 **kwargs,
             )
             for dp, x in data.items()
@@ -5074,7 +5077,7 @@ def _vindex_array(x, dict_indexes):
 
     if points:
         per_block = groupby(1, points)
-        per_block = dict((k, v) for k, v in per_block.items() if v)
+        per_block = {k: v for k, v in per_block.items() if v}
 
         other_blocks = list(
             product(

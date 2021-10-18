@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # dask documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 08:58:22 2015.
@@ -43,11 +42,16 @@ extensions = [
     "sphinx_click.ext",
     "dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
+    "sphinx_remove_toctrees",
 ]
 
 numpydoc_show_class_members = False
 
 sphinx_tabs_disable_tab_closing = True
+
+# Remove individual API pages from sphinx toctree to prevent long build times.
+# See https://github.com/dask/dask/issues/8227.
+remove_toctrees_from = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -358,8 +362,8 @@ redirect_files = [
     ("institutional-faq.html", "faq.html"),
     ("cite.html", "faq.html#how-do-I-cite-dask"),
     ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
-    ("debugging.html", "how-to/debug"),
-    ("setup.html", "how-to/deploy-dask-clusters"),
+    ("debugging.html", "how-to/debug.html"),
+    ("setup.html", "how-to/deploy-dask-clusters.html"),
     ("setup/cli.html", "how-to/deploy-dask/cli.html"),
     ("setup/cloud.html", "how-to/deploy-dask/cloud.html"),
     ("setup/docker.html", "how-to/deploy-dask/docker.html"),
@@ -401,6 +405,8 @@ import numpy as np
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
         for html_src_path, new in redirect_files:
+            # add ../ to old nested paths
+            new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
             target_path = app.outdir + "/" + html_src_path
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
