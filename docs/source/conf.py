@@ -405,6 +405,8 @@ import numpy as np
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
         for html_src_path, new in redirect_files:
+            # add ../ to old nested paths
+            new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
             target_path = app.outdir + "/" + html_src_path
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
