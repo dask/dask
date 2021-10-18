@@ -291,6 +291,10 @@ def apply_gufunc(
     ## Signature
     if not isinstance(signature, str):
         raise TypeError("`signature` has to be of type string")
+    # NumPy versions before https://github.com/numpy/numpy/pull/19627
+    # would not ignore whitespace characters in `signature` like they
+    # are supposed to. We remove the whitespace here as a workaround.
+    signature = re.sub(r"\s+", "", signature)
     input_coredimss, output_coredimss = _parse_gufunc_signature(signature)
 
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
@@ -305,10 +309,6 @@ def apply_gufunc(
         if output_dtypes is None:
             ## Infer `output_dtypes`
             if vectorize:
-                # NumPy versions before https://github.com/numpy/numpy/pull/19627
-                # would not ignore whitespace characters in `signature` like they
-                # are supposed to. We remove the whitespace here as a workaround.
-                signature = re.sub(r"\s+", "", signature)
                 tempfunc = np.vectorize(func, signature=signature)
             else:
                 tempfunc = func
