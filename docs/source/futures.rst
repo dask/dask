@@ -884,7 +884,6 @@ API
    Client.scatter
    Client.shutdown
    Client.scheduler_info
-   Client.shutdown
    Client.start_ipython_workers
    Client.start_ipython_scheduler
    Client.submit
