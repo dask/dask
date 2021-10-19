@@ -4355,11 +4355,15 @@ def elemwise(op, *args, **kwargs):
     blockwise
     """
     out = kwargs.pop("out", None)
-    if not {"name", "dtype", "where"}.issuperset(kwargs):
+
+    valid_kwargs = {"name", "dtype"}
+
+    if type(op) is np.ufunc:
+        valid_kwargs |= {"where"}
+
+    if not valid_kwargs.issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
-        raise TypeError(
-            msg % (op.__name__, str(sorted(set(kwargs) - {"name", "dtype", "where"})))
-        )
+        raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - valid_kwargs))))
 
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
@@ -4406,11 +4410,10 @@ def elemwise(op, *args, **kwargs):
 
     name = kwargs.get("name", None) or f"{funcname(op)}-{tokenize(op, dt, *args)}"
 
-    where = kwargs.get("where", True)
+    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip("_"))
 
-    blockwise_kwargs = dict(
-        dtype=dt, name=name, where=where, token=funcname(op).strip("_")
-    )
+    if "where" in kwargs:
+        blockwise_kwargs["where"] = kwargs.get("where")
 
     if need_enforce_dtype:
         blockwise_kwargs["enforce_dtype"] = dt
