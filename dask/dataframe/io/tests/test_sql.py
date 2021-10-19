@@ -122,7 +122,7 @@ def test_empty_other_schema():
     pg_user = "user"
     pg_pass = "pass"
     pg_db = "db"
-    db_url = "postgresql://%s:%s@%s:%s/%s" % (pg_user, pg_pass, pg_host, pg_port, pg_db)
+    db_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
 
     # Create an empty table in a different schema.
     table_name = "empty_table"

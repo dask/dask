@@ -322,12 +322,19 @@ def test_blockwise_array_creation(c, io, fuse):
     ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+@pytest.mark.parametrize("from_futures", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
-    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if from_futures:
+        parts = [df.iloc[:5], df.iloc[5:10], df.iloc[10:15]]
+        futs = c.scatter(parts)
+        ddf0 = dd.from_delayed(futs, meta=parts[0])
+    else:
+        ddf0 = dd.from_pandas(df, npartitions=3)
 
     if io.startswith("parquet"):
         if io == "parquet-pyarrow":
@@ -631,3 +638,20 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+@gen_cluster(client=True)
+async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
+    fut = c.submit(inc, 1)
+
+    hlg = HighLevelGraph(
+        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
+        {"l1": set()},
+    )
+    # fill hlg.key_dependencies cache. This excludes known futures, so only
+    # includes a subset of all dependencies. Previously if the cache was present
+    # the future dependencies would be missing when packed.
+    hlg.get_all_dependencies()
+    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
+    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
+    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}

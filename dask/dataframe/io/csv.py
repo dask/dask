@@ -225,8 +225,7 @@ def coerce_dtypes(df, dtypes):
     if bad_dtypes:
         if errors:
             ex = "\n".join(
-                "- %s\n  %r" % (c, e)
-                for c, e in sorted(errors, key=lambda x: str(x[0]))
+                f"- {c}\n  {e!r}" for c, e in sorted(errors, key=lambda x: str(x[0]))
             )
             exceptions = (
                 "The following columns also raised exceptions on "
@@ -245,7 +244,7 @@ def coerce_dtypes(df, dtypes):
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
         dtype_kw = "dtype={%s}" % ",\n       ".join(
-            "%r: '%s'" % (k, v) for (k, v, _) in bad_dtypes
+            f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes
         )
 
         dtype_msg = (
@@ -476,12 +475,11 @@ def read_pandas(
     if "index" in kwargs or "index_col" in kwargs:
         raise ValueError(
             "Keywords 'index' and 'index_col' not supported. "
-            "Use dd.{0}(...).set_index('my-index') "
-            "instead".format(reader_name)
+            f"Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
-            raise ValueError("{0} not supported for dd.{1}".format(kw, reader_name))
+            raise ValueError(f"{kw} not supported for dd.{reader_name}")
     if kwargs.get("nrows", None):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
@@ -502,9 +500,7 @@ def read_pandas(
         # find the firstrow that is not skipped, for use as header
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
     if isinstance(kwargs.get("header"), list):
-        raise TypeError(
-            "List of header rows not supported for dd.{0}".format(reader_name)
-        )
+        raise TypeError(f"List of header rows not supported for dd.{reader_name}")
     if isinstance(kwargs.get("converters"), dict) and include_path_column:
         path_converter = kwargs.get("converters").get(include_path_column, None)
     else:

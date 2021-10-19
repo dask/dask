@@ -389,27 +389,24 @@ class FastParquetEngine(Engine):
             # This is a directory.
             # Check if _metadata and/or _common_metadata files exists
             base = paths[0]
-            _metadata_exists = _common_metadata_exists = True
+            _metadata_exists = True
             if not ignore_metadata_file:
                 _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
-                _common_metadata_exists = fs.isfile(
-                    fs.sep.join([base, "_common_metadata"])
-                )
 
             # Find all files if we are not using a _metadata file
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
                 paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
-                _metadata_exists = "_metadata" in fns
-                _common_metadata_exists = "_common_metadata" in fns
-                if _metadata_exists or _common_metadata_exists:
-                    if _common_metadata_exists:
-                        fns.remove("_common_metadata")
-                        _common_metadata_exists = False
-                    if _metadata_exists:
-                        fns.remove("_metadata")
-                        _metadata_exists = False
+                _update_paths = False
+                for fn in ["_metadata", "_common_metadata"]:
+                    try:
+                        fns.remove(fn)
+                        _update_paths = True
+                    except ValueError:
+                        pass
+                if _update_paths:
                     paths = [fs.sep.join([base, fn]) for fn in fns]
+                _metadata_exists = False
 
             if require_extension:
                 paths = [path for path in paths if path.endswith(require_extension)]
@@ -717,8 +714,10 @@ class FastParquetEngine(Engine):
             or metadata_task_size == 0
             or metadata_task_size > len(paths)
         ):
-            # Use original `ParquetFile` object to construct plan,
-            # since it is based on a global _metadata file
+            # Construct the output-partitioning plan on the
+            # client process (in serial).  This means we have
+            # a global _metadata file, or that `metadata_task_size`
+            # is zero or larger than the number of files.
             pf_or_paths = pf if has_metadata_file else paths
             parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
 
@@ -1036,8 +1035,8 @@ class FastParquetEngine(Engine):
                 return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
 
         else:
-            # `piece` is NOT a tuple
-            raise ValueError(f"Expected tuple, got {type(piece)}")
+            # `sample` is NOT a tuple
+            raise ValueError(f"Expected tuple, got {type(sample)}")
 
     @classmethod
     def initialize_write(
@@ -1070,7 +1069,7 @@ class FastParquetEngine(Engine):
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
-            except (IOError, ValueError):
+            except (OSError, ValueError):
                 # append for create
                 append = False
         if append:

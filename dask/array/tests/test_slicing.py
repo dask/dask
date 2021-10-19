@@ -359,14 +359,14 @@ def test_take_sorted():
         "y", "x", [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], itemsize=8, axis=1
     )
     expected = merge(
-        dict(
-            (("y", i, 0), (getitem, ("x", i, 0), (slice(None, None, None), [1, 3, 5])))
+        {
+            ("y", i, 0): (getitem, ("x", i, 0), (slice(None, None, None), [1, 3, 5]))
             for i in range(4)
-        ),
-        dict(
-            (("y", i, 1), (getitem, ("x", i, 1), (slice(None, None, None), [17])))
+        },
+        {
+            ("y", i, 1): (getitem, ("x", i, 1), (slice(None, None, None), [17]))
             for i in range(4)
-        ),
+        },
     )
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20), (3, 1))

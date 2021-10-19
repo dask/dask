@@ -107,6 +107,11 @@ def sort_values(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
+    if len(divisions) == 2:
+        return df.repartition(npartitions=1).map_partitions(
+            M.sort_values, by, ascending=ascending, na_position=na_position
+        )
+
     if (
         all(not pd.isna(x) for x in divisions)
         and mins == sorted(mins, reverse=not ascending)
@@ -495,7 +500,7 @@ class maybe_buffered_partd:
             )
         except AttributeError as e:
             raise ImportError(
-                "Not able to import and load {0} as compression algorithm."
+                "Not able to import and load {} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
                     self.compression
                 )

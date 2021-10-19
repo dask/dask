@@ -75,7 +75,7 @@ class Profiler(Callback):
         self._results[key] += (end, id)
 
     def _finish(self, dsk, state, failed):
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
+        results = {k: v for k, v in self._results.items() if len(v) == 5}
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 

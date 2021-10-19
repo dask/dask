@@ -13,6 +13,7 @@ dependencies:
   # optional dependencies pulled in by pip install dask[array]
   - numpy=1.18
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
