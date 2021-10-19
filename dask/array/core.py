@@ -3277,7 +3277,9 @@ def from_zarr(
     storage_options = storage_options or {}
     if isinstance(url, zarr.Array):
         z = url
-    elif isinstance(url, str):
+    elif isinstance(url, (str, os.PathLike)):
+        if isinstance(url, os.PathLike):
+            url = os.fspath(url)
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
