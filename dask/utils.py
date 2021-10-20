@@ -222,7 +222,7 @@ def tmpdir(dir=None):
     Returns
     -------
     out : str
-        The name of the temporary directory
+        Path to the temporary directory
 
     Notes
     -----
