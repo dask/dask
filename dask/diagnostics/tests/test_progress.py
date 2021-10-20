@@ -68,6 +68,7 @@ def test_format_time():
 
 def test_register(capsys):
     try:
+        assert not Callback.active
         p = ProgressBar()
         p.register()
 
