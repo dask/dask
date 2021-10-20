@@ -165,6 +165,31 @@ def import_required(mod_name, error_msg):
 
 @contextmanager
 def tmpfile(extension="", dir=None):
+    """
+    Function to create and return a unique temporary file with the given extension, if provided.
+
+    Parameters
+    ----------
+    extension : str
+        The extension of the temporary file to be created
+    dir : str
+        If ``dir`` is not None, the file will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary file
+
+    See Also
+    --------
+    NamedTemporaryFile : Built-in alternative for creating temporary files
+    tmp_path : pytest fixture for creating a temporary directory unique to the test invocation
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
+    """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
@@ -183,6 +208,24 @@ def tmpfile(extension="", dir=None):
 
 @contextmanager
 def tmpdir(dir=None):
+    """
+    Function to create and return a unique temporary directory.
+
+    Parameters
+    ----------
+    dir : str
+        If ``dir`` is not None, the directory will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary directory
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary directories multiple times.
+    """
     dirname = tempfile.mkdtemp(dir=dir)
 
     try:
