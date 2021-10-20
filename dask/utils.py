@@ -226,8 +226,7 @@ def tmpdir(dir=None):
 
     Notes
     -----
-    This function is meant to be used for testing purposes. Should be preferred over
-    pytest fixture tmp_path when multiple directories are needed inside a test invocation.
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
     dirname = tempfile.mkdtemp(dir=dir)
 
