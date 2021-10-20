@@ -216,8 +216,8 @@ def tmpdir(dir=None):
     Parameters
     ----------
     dir : str
-        The name of the directory to create the file, if is not None, the file will be created in that directory,
-        otherwise a default directory is used.
+        If ``dir`` is not None, the directory will be created in that directory; otherwise,
+        Python's default temporary directory is used.
 
     Returns
     -------
