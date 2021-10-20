@@ -869,6 +869,18 @@ def test_elemwise_on_scalars():
     assert (x.sum() * y).dtype == np.int32
     assert_eq((x.sum() * y).astype(np.int64), result)
 
+    mask = [True, False, True, False, True, False, True, False, False, False]
+    o_da = o_np = np.arange(20, 30, dtype=np.uint64)
+    assert np.array_equal(
+        da.invert(x, out=o_da, where=mask), np.invert(x, out=o_np, where=mask)
+    )
+    o_da = o_np = np.arange(20, 30, dtype=np.uint64)
+    assert np.array_equal(
+        da.invert(x, out=o_da, where=False), np.invert(x, out=o_np, where=False)
+    )
+    o_da = o_np = np.arange(20, 30, dtype=np.uint64)
+    assert np.array_equal(da.invert(x, out=o_da), np.invert(x, out=o_np))
+
 
 def test_elemwise_with_ndarrays():
     x = np.arange(3)
