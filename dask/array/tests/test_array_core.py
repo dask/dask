@@ -922,19 +922,15 @@ def test_elemwise_where():
 
     o_da = da.arange(20, 30, dtype=np.uint64)
     o_np = np.arange(20, 30, dtype=np.uint64)
-    assert np.array_equal(
-        da.invert(x, out=o_da, where=mask), np.invert(x, out=o_np, where=mask)
-    )
+    assert_eq(da.invert(x, out=o_da, where=mask), np.invert(x, out=o_np, where=mask))
 
     o_da = da.arange(20, 30, dtype=np.uint64)
     o_np = np.arange(20, 30, dtype=np.uint64)
-    assert np.array_equal(
-        da.invert(x, out=o_da, where=False), np.invert(x, out=o_np, where=False)
-    )
+    assert_eq(da.invert(x, out=o_da, where=False), np.invert(x, out=o_np, where=False))
 
     o_da = da.arange(20, 30, dtype=np.uint64)
     o_np = np.arange(20, 30, dtype=np.uint64)
-    assert np.array_equal(da.invert(x, out=o_da), np.invert(x, out=o_np))
+    assert_eq(da.invert(x, out=o_da), np.invert(x, out=o_np))
 
 
 def test_operators():
