@@ -188,9 +188,7 @@ def tmpfile(extension="", dir=None):
 
     Notes
     -----
-    This function is meant to be used for testing purposes. Should be preferred over
-    pytest fixture tmp_path when multiple files are needed inside a test invocation.
-    As opposed to the built-in NamedTemporaryFile can be used in Windows NT or later
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
@@ -226,7 +224,7 @@ def tmpdir(dir=None):
 
     Notes
     -----
-    This context manager is particularly useful on Windows for opening temporary files multiple times.
+    This context manager is particularly useful on Windows for opening temporary directories multiple times.
     """
     dirname = tempfile.mkdtemp(dir=dir)
 
