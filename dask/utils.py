@@ -173,8 +173,8 @@ def tmpfile(extension="", dir=None):
     extension : str
         The extension of the temporary file to be created
     dir : str
-        The name of the directory to create the file, if is not None, the file will be created in that directory,
-        otherwise a default directory is used.
+        If ``dir`` is not None, the file will be created in that directory; otherwise,
+        Python's default temporary directory is used.
 
     Returns
     -------
