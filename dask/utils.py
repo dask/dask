@@ -179,7 +179,7 @@ def tmpfile(extension="", dir=None):
     Returns
     -------
     out : str
-        The name of the temporary file
+        Path to the temporary file
 
     See Also
     --------
