@@ -12,6 +12,7 @@ properties:
 
   tokenize:
     type: object
+    additionalProperties: false
     properties:
       ensure-deterministic:
         type:
@@ -23,6 +24,7 @@ properties:
 
   dataframe:
     type: object
+    additionalProperties: false
     properties:
 
       shuffle-compression:
@@ -53,7 +55,19 @@ properties:
 
   array:
     type: object
+    additionalProperties: false
     properties:
+
+      chunk-size:
+        type: [string, integer]
+        description: |
+          The maximum size (in bytes) of a chunk in an array.
+
+      rechunk-threshold:
+        type: integer
+        description: |
+          The graph growth factor under which we don't bother
+          introducing an intermediate step
 
       svg:
         type: object
@@ -78,6 +92,7 @@ properties:
 
   optimization:
     type: object
+    additionalProperties: false
     properties:
 
       fuse:
