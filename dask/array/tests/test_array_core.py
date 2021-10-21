@@ -939,6 +939,16 @@ def test_elemwise_where():
     np.invert(x, out=o_np)
     assert_eq(o_da, o_np)
 
+    xd_multi = da.random.randint(10, size=(10, 10), dtype=np.int8)
+    x_multi = xd_multi.compute()
+    mask_multi = [mask for _ in range(10)]
+
+    o_np = np.random.randint(50, 60, size=(10, 10), dtype=np.int8)
+    o_da = da.array(o_np)
+    np.invert(x_multi, out=o_np, where=mask_multi)
+    da.invert(xd_multi, out=o_da, where=mask_multi)
+    assert_eq(o_da, o_np)
+
 
 def test_operators():
     x = np.arange(10)
