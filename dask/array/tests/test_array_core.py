@@ -917,22 +917,22 @@ def test_elemwise_dtype():
 
 
 def test_elemwise_where():
-    x = np.arange(10, dtype=np.uint16)
+    x = np.arange(10, dtype=np.uint64)
     mask = [True, False, True, False, True, False, True, False, False, False]
 
-    o_da = da.arange(20, 30, dtype=np.uint16)
+    o_da = da.arange(20, 30, dtype=np.uint64)
     o_np = o_da.compute()
     da.invert(x, out=o_da, where=mask)
     np.invert(x, out=o_np, where=mask)
     assert_eq(o_da, o_np)
 
-    o_da = da.arange(20, 30, dtype=np.uint16)
+    o_da = da.arange(30, 40, dtype=np.uint64)
     o_np = o_da.compute()
     da.invert(x, out=o_da, where=False)
     np.invert(x, out=o_np, where=False)
     assert_eq(o_da, o_np)
 
-    o_da = da.arange(20, 30, dtype=np.uint16)
+    o_da = da.arange(40, 50, dtype=np.uint64)
     o_np = o_da.compute()
     da.invert(x, out=o_da)
     np.invert(x, out=o_np)
