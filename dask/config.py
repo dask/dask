@@ -13,9 +13,9 @@ import yaml
 try:
     from jsonschema import Draft6Validator, ValidationError
 
-    VALIDATE_CONFIG = True
+    _VALIDATE_CONFIG = True
 except ImportError:
-    VALIDATE_CONFIG = False
+    _VALIDATE_CONFIG = False
 
 no_default = "__no_default__"
 
@@ -33,6 +33,7 @@ if "DASK_CONFIG" in os.environ:
 else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
+_SCHEMA_FILE = os.path.join(os.path.dirname(__file__), "dask-schema.yaml")
 
 global_config = config = {}
 
@@ -46,13 +47,13 @@ defaults = []
 validators = []
 
 
-def schema_validate(new):
+def validate(new):
     """Warn if config doesn't match schema
 
     Submodules should append to the validators list to implement
     checking.
     """
-    if not VALIDATE_CONFIG:
+    if not _VALIDATE_CONFIG:
         pass
 
     for validator in validators:
@@ -91,7 +92,7 @@ def canonical_name(k, config):
     return k
 
 
-def update(old, new, priority="new", validate=VALIDATE_CONFIG):
+def update(old, new, priority="new"):
     """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -120,7 +121,6 @@ def update(old, new, priority="new", validate=VALIDATE_CONFIG):
     --------
     dask.config.merge
     """
-    schema_validate(new)
     for k, v in new.items():
         k = canonical_name(k, old)
 
@@ -131,10 +131,11 @@ def update(old, new, priority="new", validate=VALIDATE_CONFIG):
         else:
             if priority == "new" or k not in old:
                 old[k] = v
+    validate(old)
     return old
 
 
-def merge(*dicts, validate=VALIDATE_CONFIG):
+def merge(*dicts):
     """Update a sequence of nested dictionaries
 
     This prefers the values in the latter dictionaries to those in the former
@@ -385,7 +386,7 @@ class set:
 
         path = path + (key,)
 
-        schema_validate({key: value})
+        validate({key: value})
 
         if len(keys) == 1:
             if record:
@@ -531,7 +532,7 @@ def rename(aliases, config=config):
     set(new, config=config)
 
 
-def update_defaults(new, config=config, defaults=defaults):
+def update_defaults(new, config=config, defaults=defaults, schema=None):
     """Add a new set of defaults to the configuration
 
     It does two things:
@@ -541,6 +542,10 @@ def update_defaults(new, config=config, defaults=defaults):
         prioritizing older values over newer ones
     """
     defaults.append(new)
+
+    if schema:
+        _initialize_schema(schema)
+
     update(config, new, priority="old")
 
 
@@ -684,12 +689,11 @@ def _initialize():
     update_defaults(_defaults)
 
 
-def _initialize_schema():
-    if VALIDATE_CONFIG:
-        fn = os.path.join(os.path.dirname(__file__), "dask-schema.yaml")
-        ensure_file(source=fn)
+def _initialize_schema(schema_file=_SCHEMA_FILE):
+    if _VALIDATE_CONFIG:
+        ensure_file(source=schema_file)
 
-        with open(fn) as f:
+        with open(schema_file) as f:
             schema = yaml.safe_load(f)
 
         validators.append(Draft6Validator(schema))
