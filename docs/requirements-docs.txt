@@ -2,6 +2,7 @@ numpydoc
 sphinx>=4.0.0
 dask-sphinx-theme>=2.0.0
 sphinx-click
+sphinx-remove-toctrees
 sphinx-tabs
 toolz
 cloudpickle

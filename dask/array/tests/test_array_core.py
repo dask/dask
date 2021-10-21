@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import pathlib
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -4271,6 +4272,17 @@ def test_zarr_roundtrip():
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d)
         a2 = da.from_zarr(d)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
+def test_zarr_roundtrip_with_path_like():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        path = pathlib.Path(d)
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(path)
+        a2 = da.from_zarr(path)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 

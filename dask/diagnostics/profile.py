@@ -51,6 +51,7 @@ class Profiler(Callback):
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 
@@ -140,6 +141,8 @@ class ResourceProfiler(Callback):
     Note that when used as a context manager data will be collected throughout
     the duration of the enclosed block. In contrast, when registered globally
     data will only be collected while a dask scheduler is active.
+
+    >>> prof.unregister()
     """
 
     def __init__(self, dt=1):
@@ -322,6 +325,7 @@ class CacheProfiler(Callback):
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 

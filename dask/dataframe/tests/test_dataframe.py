@@ -16,7 +16,7 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -137,14 +137,27 @@ def test_head_npartitions_warn():
     with pytest.warns(UserWarning, match=match):
         d.head(5)
 
-    with pytest.warns(None):
+    match = "Insufficient elements"
+    with pytest.warns(UserWarning, match=match):
         d.head(100)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7, npartitions=2)
+
+    # No warn if all partitions are inspected
+    for n in [3, -1]:
+        with pytest.warns(None) as rec:
+            d.head(10, npartitions=n)
+    assert not rec
+
+    # With default args, this means that a 1 partition dataframe won't warn
+    d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
+    with pytest.warns(None) as rec:
+        d2.head()
+    assert not rec
 
 
 def test_index_head():
@@ -3492,7 +3505,7 @@ def test_groupby_multilevel_info():
 
     g = ddf.groupby(["A", "B"]).sum()
     # slight difference between memory repr (single additional space)
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3504,7 +3517,7 @@ def test_groupby_multilevel_info():
 
     # multilevel
     g = ddf.groupby(["A", "B"]).agg(["count", "sum"])
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3516,6 +3529,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
+@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3541,7 +3555,8 @@ def test_categorize_info():
         " 0   x       4 non-null      int64\n"
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)"
+        "dtypes: category(1), object(1), int64(1)\n"
+        "memory usage: 496.0 bytes\n"
     )
     assert buf.getvalue() == expected
 
