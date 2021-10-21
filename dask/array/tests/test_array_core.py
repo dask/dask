@@ -921,19 +921,19 @@ def test_elemwise_where():
     mask = [True, False, True, False, True, False, True, False, False, False]
 
     o_da = da.arange(20, 30, dtype=np.int64)
-    o_np = o_da.compute()
+    o_np = np.arange(20, 30, dtype=np.int64)
     da.invert(x, out=o_da, where=mask)
     np.invert(x, out=o_np, where=mask)
     assert_eq(o_da, o_np)
 
     o_da = da.arange(30, 40, dtype=np.int64)
-    o_np = o_da.compute()
+    o_np = np.arange(30, 40, dtype=np.int64)
     da.invert(x, out=o_da, where=False)
     np.invert(x, out=o_np, where=False)
     assert_eq(o_da, o_np)
 
     o_da = da.arange(40, 50, dtype=np.int64)
-    o_np = o_da.compute()
+    o_np = np.arange(40, 50, dtype=np.int64)
     da.invert(x, out=o_da)
     np.invert(x, out=o_np)
     assert_eq(o_da, o_np)
