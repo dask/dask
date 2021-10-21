@@ -6,7 +6,7 @@ set -xe
 # make things harder for contributors that don't have a C++ compiler
 # python -m pip install --no-deps cityhash
 
-mamba install -y -c arrow-nightlies "pyarrow>5.0"
+pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --prefer-binary--upgrade --pre pyarrow
 
 if [[ ${UPSTREAM_DEV} ]]; then
     # mamba install -y -c arrow-nightlies "pyarrow>3.0"
