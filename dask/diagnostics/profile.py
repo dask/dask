@@ -307,8 +307,8 @@ class CacheProfiler(Callback):
     example, the ``nbytes`` function found in ``cachey`` can be used to measure
     the number of bytes in the cache.
 
-    >>> from cachey import nbytes
-    >>> with CacheProfiler(metric=nbytes) as prof:
+    >>> from cachey import nbytes                   # doctest: +SKIP
+    >>> with CacheProfiler(metric=nbytes) as prof:  # doctest: +SKIP
     ...     get(dsk, 'z')
     22
 
