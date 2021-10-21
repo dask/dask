@@ -1853,6 +1853,11 @@ def test_store_compute_false():
 
     v = store([a, b], [at, bt], compute=False)
     assert isinstance(v, Delayed)
+
+    # You need a well-formed HighLevelgraph for e.g. dask.graph_manipulation.bind
+    for layer in v.__dask_layers__():
+        assert layer in v.dask.layers
+
     assert (at == 0).all() and (bt == 0).all()
     assert all([ev is None for ev in v.compute()])
     assert (at == 2).all() and (bt == 3).all()
@@ -2003,6 +2008,18 @@ def test_store_multiprocessing_lock():
     at = np.zeros(shape=(10, 10))
     st = a.store(at, scheduler="processes", num_workers=10)
     assert st is None
+
+
+@pytest.mark.parametrize("return_stored", [False, True])
+@pytest.mark.parametrize("delayed_target", [False, True])
+def test_store_deterministic_keys(return_stored, delayed_target):
+    a = da.ones((10, 10), chunks=(2, 2))
+    at = np.zeros(shape=(10, 10))
+    if delayed_target:
+        at = delayed(at)
+    st1 = a.store(at, return_stored=return_stored, compute=False)
+    st2 = a.store(at, return_stored=return_stored, compute=False)
+    assert st1.dask.keys() == st2.dask.keys()
 
 
 def test_to_hdf5():
