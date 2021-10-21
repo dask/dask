@@ -4410,7 +4410,7 @@ def elemwise(op, *args, **kwargs):
 
     name = kwargs.get("name", None) or f"{funcname(op)}-{tokenize(op, dt, *args)}"
 
-    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip("_"))
+    blockwise_kwargs = dict(dtype=dt, name=name, out=out, token=funcname(op).strip("_"))
 
     if "where" in kwargs:
         blockwise_kwargs["where"] = kwargs.get("where")
