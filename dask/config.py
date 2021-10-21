@@ -386,8 +386,6 @@ class set:
 
         path = path + (key,)
 
-        validate({key: value})
-
         if len(keys) == 1:
             if record:
                 if key in d:
@@ -395,6 +393,7 @@ class set:
                 else:
                     self._record.append(("insert", path, None))
             d[key] = value
+            validate(d)
         else:
             if key not in d:
                 if record:
