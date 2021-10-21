@@ -37,7 +37,6 @@ dependencies:
   - aiohttp
   - bokeh
   - httpretty
-  - chest
   - s3fs
   - cloudpickle
   - crick

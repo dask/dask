@@ -18,11 +18,6 @@ from pandas.api.types import (
 from pandas.util import cache_readonly
 from tlz import first, merge, partition_all, remove, unique
 
-try:
-    from chest import Chest as Cache
-except ImportError:
-    Cache = dict
-
 from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg

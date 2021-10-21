@@ -134,9 +134,6 @@ else:
         return q.get()
 
 
-DEBUG = False
-
-
 def start_state_from_dask(dsk, cache=None, sortkey=None):
     """Start state from a dask
 
@@ -274,13 +271,6 @@ def finish_task(
             s = state["waiting_data"][dep]
             s.remove(key)
             if not s and dep not in results:
-                if DEBUG:
-                    from chest.core import nbytes
-
-                    print(
-                        "Key: %s\tDep: %s\t NBytes: %.2f\t Release"
-                        % (key, dep, sum(map(nbytes, state["cache"].values()) / 1e6))
-                    )
                 release_data(dep, state, delete=delete)
         elif delete and dep not in results:
             release_data(dep, state, delete=delete)
