@@ -868,9 +868,8 @@ def test_array_store_final_order(tmpdir):
     o = order(d.dask)
 
     # Find the lowest store. Dask starts here.
-    stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-")]
+    stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
     first_store = min(stores, key=lambda k: o[k])
-    first_store
     connected_stores = [k for k in stores if k[-1] == first_store[-1]]
     disconnected_stores = [k for k in stores if k[-1] != first_store[-1]]
 
