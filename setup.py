@@ -22,7 +22,7 @@ extras_require = {
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
-extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist", "cachey"]
+extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
 
 install_requires = [
     "cloudpickle >= 1.1.1",
