@@ -54,7 +54,7 @@ def test_groupby_internal_repr_xfail():
     assert isinstance(dp.obj, dd.Series)
 
 
-def test_groupby_internal_repr(shuffle_method):
+def test_groupby_internal_repr():
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
@@ -92,7 +92,7 @@ def test_groupby_internal_repr(shuffle_method):
     assert_eq(dp.obj, gp.obj)
 
 
-def test_groupby_error(shuffle_method):
+def test_groupby_error():
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
     ddf = dd.from_pandas(pdf, 3)
 
@@ -115,7 +115,7 @@ def test_groupby_error(shuffle_method):
     assert msg in str(err.value)
 
 
-def test_full_groupby(shuffle_method):
+def test_full_groupby():
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -136,7 +136,7 @@ def test_full_groupby(shuffle_method):
         assert_eq(df.groupby("a").apply(func), ddf.groupby("a").apply(func))
 
 
-def test_full_groupby_apply_multiarg(shuffle_method):
+def test_full_groupby_apply_multiarg():
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -219,7 +219,7 @@ def test_full_groupby_apply_multiarg(shuffle_method):
     ],
 )
 @pytest.mark.parametrize("reverse", [True, False])
-def test_full_groupby_multilevel(grouper, reverse, shuffle_method):
+def test_full_groupby_multilevel(grouper, reverse):
     index = [0, 1, 3, 5, 6, 8, 9, 9, 9]
     if reverse:
         index = index[::-1]
@@ -245,7 +245,7 @@ def test_full_groupby_multilevel(grouper, reverse, shuffle_method):
         )
 
 
-def test_groupby_dir(shuffle_method):
+def test_groupby_dir():
     df = pd.DataFrame({"a": range(10), "b c d e": range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
     g = ddf.groupby("a")
@@ -254,7 +254,7 @@ def test_groupby_dir(shuffle_method):
 
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads"])
-def test_groupby_on_index(scheduler, shuffle_method):
+def test_groupby_on_index(scheduler):
     pdf = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -310,7 +310,7 @@ def test_groupby_on_index(scheduler, shuffle_method):
         lambda df: df.groupby(["a", "b", "c"]),
     ],
 )
-def test_groupby_multilevel_getitem(grouper, agg_func, shuffle_method):
+def test_groupby_multilevel_getitem(grouper, agg_func):
     # nunique is not implemented for DataFrameGroupBy
     if agg_func == "nunique":
         return
@@ -353,7 +353,7 @@ def test_groupby_multilevel_getitem(grouper, agg_func, shuffle_method):
         assert_eq(a, b)
 
 
-def test_groupby_multilevel_agg(shuffle_method):
+def test_groupby_multilevel_agg():
     df = pd.DataFrame(
         {
             "a": [1, 2, 3, 1, 2, 3],
@@ -377,7 +377,7 @@ def test_groupby_multilevel_agg(shuffle_method):
     assert_eq(res, sol)
 
 
-def test_groupby_get_group(shuffle_method):
+def test_groupby_get_group():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
@@ -398,7 +398,7 @@ def test_groupby_get_group(shuffle_method):
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
-def test_dataframe_groupby_nunique(shuffle_method):
+def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
     ps = pd.DataFrame(dict(strings=strings, data=data))
@@ -407,7 +407,7 @@ def test_dataframe_groupby_nunique(shuffle_method):
     assert_eq(s.groupby("strings")["data"].nunique(), expected)
 
 
-def test_dataframe_groupby_nunique_across_group_same_value(shuffle_method):
+def test_dataframe_groupby_nunique_across_group_same_value():
     strings = list("aaabbccccdddeee")
     data = list(map(int, "123111223323412"))
     ps = pd.DataFrame(dict(strings=strings, data=data))
@@ -416,7 +416,7 @@ def test_dataframe_groupby_nunique_across_group_same_value(shuffle_method):
     assert_eq(s.groupby("strings")["data"].nunique(), expected)
 
 
-def test_series_groupby_propagates_names(shuffle_method):
+def test_series_groupby_propagates_names():
     df = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     ddf = dd.from_pandas(df, 2)
     func = lambda df: df["y"].sum()
@@ -426,7 +426,7 @@ def test_series_groupby_propagates_names(shuffle_method):
     assert_eq(result, expected)
 
 
-def test_series_groupby(shuffle_method):
+def test_series_groupby():
     s = pd.Series([1, 2, 2, 1, 1])
     pd_group = s.groupby(s)
 
@@ -470,7 +470,7 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
-def test_groupby_index_array(shuffle_method):
+def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -496,7 +496,7 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-def test_split_apply_combine_on_series(empty, shuffle_method):
+def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
         # There's a bug in pandas where df.groupby(...).var(ddof=0) results in
@@ -718,7 +718,7 @@ def test_split_apply_combine_on_series(empty, shuffle_method):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-def test_groupby_reduction_split(keyword, shuffle_method):
+def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
     )
@@ -804,7 +804,7 @@ def test_groupby_reduction_split(keyword, shuffle_method):
         lambda grp: grp.transform(lambda x: x.sum()),
     ],
 )
-def test_apply_or_transform_shuffle(grouped, func, shuffle_method):
+def test_apply_or_transform_shuffle(grouped, func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 4] * 5,
@@ -840,7 +840,7 @@ def test_apply_or_transform_shuffle(grouped, func, shuffle_method):
         lambda grouped: grouped.transform(lambda x: x.sum()),
     ],
 )
-def test_apply_or_transform_shuffle_multilevel(grouper, func, shuffle_method):
+def test_apply_or_transform_shuffle_multilevel(grouper, func):
     pdf = pd.DataFrame(
         {
             "AB": [1, 2, 3, 4] * 5,
@@ -868,7 +868,7 @@ def test_apply_or_transform_shuffle_multilevel(grouper, func, shuffle_method):
         )
 
 
-def test_numeric_column_names(shuffle_method):
+def test_numeric_column_names():
     # df.groupby(0)[df.columns] fails if all columns are numbers (pandas bug)
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
@@ -902,7 +902,7 @@ def test_groupby_apply_tasks():
             assert not any("partd" in k[0] for k in b.dask)
 
 
-def test_groupby_multiprocessing(shuffle_method):
+def test_groupby_multiprocessing():
     df = pd.DataFrame({"A": [1, 2, 3, 4, 5], "B": ["1", "1", "a", "a", "a"]})
     ddf = dd.from_pandas(df, npartitions=3)
     with dask.config.set(scheduler="processes"):
@@ -912,7 +912,7 @@ def test_groupby_multiprocessing(shuffle_method):
         )
 
 
-def test_groupby_normalize_index(shuffle_method):
+def test_groupby_normalize_index():
     full = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
@@ -928,7 +928,7 @@ def test_groupby_normalize_index(shuffle_method):
     assert d.groupby([d["a"], "b"]).index == ["a", "b"]
 
 
-def test_aggregate__single_element_groups(agg_func, shuffle_method):
+def test_aggregate__single_element_groups(agg_func):
     spec = agg_func
 
     # nunique/cov is not supported in specs
@@ -977,7 +977,7 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
-def test_aggregate__dask(shuffle_method):
+def test_aggregate__dask():
     dask_holder = collections.namedtuple("dask_holder", ["dask"])
     get_agg_dask = lambda obj: dask_holder(
         {k: v for (k, v) in obj.dask.items() if k[0].startswith("aggregate")}
@@ -1055,7 +1055,7 @@ def test_aggregate__dask(shuffle_method):
         lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
-def test_dataframe_aggregations_multilevel(grouper, agg_func, shuffle_method):
+def test_dataframe_aggregations_multilevel(grouper, agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -1110,7 +1110,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func, shuffle_method):
         lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
-def test_series_aggregations_multilevel(grouper, agg_func, shuffle_method):
+def test_series_aggregations_multilevel(grouper, agg_func):
     """
     similar to ``test_dataframe_aggregations_multilevel``, but series do not
     support all groupby args.
@@ -1166,7 +1166,7 @@ def test_series_aggregations_multilevel(grouper, agg_func, shuffle_method):
         lambda df, grouper: df.groupby(grouper(df))["c"],
     ],
 )
-def test_groupby_meta_content(group_and_slice, grouper, shuffle_method):
+def test_groupby_meta_content(group_and_slice, grouper):
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 10,
@@ -1254,7 +1254,7 @@ def test_groupy_series_wrong_grouper():
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
 @pytest.mark.parametrize("split_every", [2, 5])
 @pytest.mark.parametrize("split_out", [None, 1, 5, 20])
-def test_hash_groupby_aggregate(npartitions, split_every, split_out, shuffle_method):
+def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     df = pd.DataFrame({"x": np.arange(100) % 10, "y": np.ones(100)})
     ddf = dd.from_pandas(df, npartitions)
 
@@ -1271,7 +1271,7 @@ def test_hash_groupby_aggregate(npartitions, split_every, split_out, shuffle_met
     assert_eq(result, df.groupby("x").y.var())
 
 
-def test_split_out_multi_column_groupby(shuffle_method):
+def test_split_out_multi_column_groupby():
     df = pd.DataFrame(
         {"x": np.arange(100) % 10, "y": np.ones(100), "z": [1, 2, 3, 4, 5] * 20}
     )
@@ -1312,7 +1312,7 @@ def test_groupby_not_supported():
         ddf.groupby("A", squeeze=True)
 
 
-def test_groupby_numeric_column(shuffle_method):
+def test_groupby_numeric_column():
     df = pd.DataFrame({"A": ["foo", "foo", "bar"], 0: [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
 
@@ -1322,7 +1322,7 @@ def test_groupby_numeric_column(shuffle_method):
 @pytest.mark.parametrize("sel", ["c", "d", ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
-def test_cumulative(func, key, sel, shuffle_method):
+def test_cumulative(func, key, sel):
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
@@ -1340,7 +1340,7 @@ def test_cumulative(func, key, sel, shuffle_method):
 
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
-def test_cumulative_axis1(func, shuffle_method):
+def test_cumulative_axis1(func):
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 2,
@@ -1355,7 +1355,7 @@ def test_cumulative_axis1(func, shuffle_method):
     )
 
 
-def test_groupby_unaligned_index(shuffle_method):
+def test_groupby_unaligned_index():
     df = pd.DataFrame(
         {
             "a": np.random.randint(0, 10, 50),
@@ -1398,7 +1398,7 @@ def test_groupby_unaligned_index(shuffle_method):
         assert_eq(res, sol)
 
 
-def test_groupby_string_label(shuffle_method):
+def test_groupby_string_label():
     df = pd.DataFrame({"foo": [1, 1, 4], "B": [2, 3, 4], "C": [5, 6, 7]})
     ddf = dd.from_pandas(pd.DataFrame(df), npartitions=1)
     ddf_group = ddf.groupby("foo")
@@ -1411,7 +1411,7 @@ def test_groupby_string_label(shuffle_method):
     tm.assert_frame_equal(result, expected)
 
 
-def test_groupby_dataframe_cum_caching(shuffle_method):
+def test_groupby_dataframe_cum_caching():
     """Test caching behavior of cumulative operations on grouped dataframes.
 
     Relates to #3756.
@@ -1439,7 +1439,7 @@ def test_groupby_dataframe_cum_caching(shuffle_method):
         assert res1_a.equals(res1_b)
 
 
-def test_groupby_series_cum_caching(shuffle_method):
+def test_groupby_series_cum_caching():
     """Test caching behavior of cumulative operations on grouped Series
 
     Relates to #3755
@@ -1464,7 +1464,7 @@ def test_groupby_series_cum_caching(shuffle_method):
         assert res1_a.equals(res1_b)
 
 
-def test_groupby_slice_agg_reduces(shuffle_method):
+def test_groupby_slice_agg_reduces():
     d = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 3, 4, 5]})
     a = dd.from_pandas(d, npartitions=2)
     result = a.groupby("a")["b"].agg(["min", "max"])
@@ -1472,7 +1472,7 @@ def test_groupby_slice_agg_reduces(shuffle_method):
     assert_eq(result, expected)
 
 
-def test_groupby_agg_grouper_single(shuffle_method):
+def test_groupby_agg_grouper_single():
     # https://github.com/dask/dask/issues/2255
     d = pd.DataFrame({"a": [1, 2, 3, 4]})
     a = dd.from_pandas(d, npartitions=2)
@@ -1483,7 +1483,7 @@ def test_groupby_agg_grouper_single(shuffle_method):
 
 
 @pytest.mark.parametrize("slice_", ["a", ["a"], ["a", "b"], ["b"]])
-def test_groupby_agg_grouper_multiple(slice_, shuffle_method):
+def test_groupby_agg_grouper_multiple(slice_):
     # https://github.com/dask/dask/issues/2255
     d = pd.DataFrame({"a": [1, 2, 3, 4], "b": [1, 2, 3, 4]})
     a = dd.from_pandas(d, npartitions=2)
@@ -1512,7 +1512,7 @@ def test_groupby_agg_grouper_multiple(slice_, shuffle_method):
         "prod",
     ],
 )
-def test_groupby_column_and_index_agg_funcs(agg_func, shuffle_method):
+def test_groupby_column_and_index_agg_funcs(agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -1590,7 +1590,7 @@ def test_groupby_column_and_index_agg_funcs(agg_func, shuffle_method):
 @pytest.mark.parametrize(
     "apply_func", [np.min, np.mean, lambda s: np.max(s) - np.mean(s)]
 )
-def test_groupby_column_and_index_apply(group_args, apply_func, shuffle_method):
+def test_groupby_column_and_index_apply(group_args, apply_func):
     df = pd.DataFrame(
         {"idx": [1, 1, 1, 2, 2, 2], "a": [1, 2, 1, 2, 1, 2], "b": np.arange(6)}
     ).set_index("idx")
@@ -1646,9 +1646,7 @@ custom_sum = dd.Aggregation("sum", lambda s: s.sum(), lambda s0: s0.sum())
         ({"b": ["mean", "sum"]}, {"b": [custom_mean, custom_sum]}, False),
     ],
 )
-def test_dataframe_groupby_agg_custom_sum(
-    pandas_spec, dask_spec, check_dtype, shuffle_method
-):
+def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     df = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     ddf = dd.from_pandas(df, npartitions=2)
 
@@ -1666,7 +1664,7 @@ def test_dataframe_groupby_agg_custom_sum(
         (["mean", "sum"], [custom_mean, custom_sum]),
     ],
 )
-def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec, shuffle_method):
+def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
     a = dd.from_pandas(d, npartitions=2)
 
@@ -1687,7 +1685,7 @@ def test_groupby_agg_custom__name_clash_with_internal_same_column():
         a.groupby("g").aggregate({"b": [agg_func, "sum"]})
 
 
-def test_groupby_agg_custom__name_clash_with_internal_different_column(shuffle_method):
+def test_groupby_agg_custom__name_clash_with_internal_different_column():
     """custom aggregation functions can share the name of a builtin function"""
     d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3, "c": [4, 5, 6] * 3})
     a = dd.from_pandas(d, npartitions=2)
@@ -1708,7 +1706,7 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column(shuffle_m
     assert_eq(result, expected, check_dtype=False)
 
 
-def test_groupby_agg_custom__mode(shuffle_method):
+def test_groupby_agg_custom__mode():
     # mode function passing intermediates as pure python objects around. to protect
     # results from pandas in apply use return results as single-item lists
     def agg_mode(s):
@@ -1748,7 +1746,7 @@ def test_groupby_agg_custom__mode(shuffle_method):
 
 
 @pytest.mark.parametrize("func", ["var", list])
-def test_groupby_select_column_agg(func, shuffle_method):
+def test_groupby_select_column_agg(func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 1, 2, 3, 1, 2, 4],
@@ -1772,14 +1770,14 @@ def test_groupby_select_column_agg(func, shuffle_method):
         lambda x: x.groupby("x").z.std(),
     ],
 )
-def test_std_object_dtype(func, shuffle_method):
+def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
     assert_eq(func(df), func(ddf))
 
 
-def test_std_columns_int(shuffle_method):
+def test_std_columns_int():
     # Make sure std() works when index_by is a df with integer column names
     # Non regression test for issue #3560
 
@@ -1789,13 +1787,13 @@ def test_std_columns_int(shuffle_method):
     ddf.groupby(by).std()
 
 
-def test_timeseries(shuffle_method):
+def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
 
 
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
-def test_with_min_count(min_count, shuffle_method):
+def test_with_min_count(min_count):
     dfs = [
         pd.DataFrame(
             {
@@ -1827,7 +1825,7 @@ def test_with_min_count(min_count, shuffle_method):
         )
 
 
-def test_groupby_group_keys(shuffle_method):
+def test_groupby_group_keys():
     df = pd.DataFrame({"a": [1, 2, 2, 3], "b": [2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2).set_index("a")
     pdf = df.set_index("a")
@@ -1844,7 +1842,7 @@ def test_groupby_group_keys(shuffle_method):
     "columns",
     [["a", "b", "c"], np.array([1.0, 2.0, 3.0]), ["1", "2", "3"], ["", "a", "b"]],
 )
-def test_groupby_cov(columns, shuffle_method):
+def test_groupby_cov(columns):
     rows = 20
     cols = 3
     data = np.random.randn(rows, cols)
@@ -1867,7 +1865,7 @@ def test_groupby_cov(columns, shuffle_method):
         assert_eq(expected, result)
 
 
-def test_df_groupby_idxmin(shuffle_method):
+def test_df_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
@@ -1884,7 +1882,7 @@ def test_df_groupby_idxmin(shuffle_method):
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-def test_df_groupby_idxmin_skipna(skipna, shuffle_method):
+def test_df_groupby_idxmin_skipna(skipna):
     pdf = pd.DataFrame(
         {
             "idx": list(range(4)),
@@ -1901,7 +1899,7 @@ def test_df_groupby_idxmin_skipna(skipna, shuffle_method):
     assert_eq(result_pd, result_dd)
 
 
-def test_df_groupby_idxmax(shuffle_method):
+def test_df_groupby_idxmax():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
@@ -1918,7 +1916,7 @@ def test_df_groupby_idxmax(shuffle_method):
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-def test_df_groupby_idxmax_skipna(skipna, shuffle_method):
+def test_df_groupby_idxmax_skipna(skipna):
     pdf = pd.DataFrame(
         {
             "idx": list(range(4)),
@@ -1935,7 +1933,7 @@ def test_df_groupby_idxmax_skipna(skipna, shuffle_method):
     assert_eq(result_pd, result_dd)
 
 
-def test_series_groupby_idxmin(shuffle_method):
+def test_series_groupby_idxmin():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
@@ -1954,7 +1952,7 @@ def test_series_groupby_idxmin(shuffle_method):
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-def test_series_groupby_idxmin_skipna(skipna, shuffle_method):
+def test_series_groupby_idxmin_skipna(skipna):
     pdf = pd.DataFrame(
         {
             "idx": list(range(4)),
@@ -1971,7 +1969,7 @@ def test_series_groupby_idxmin_skipna(skipna, shuffle_method):
     assert_eq(result_pd, result_dd)
 
 
-def test_series_groupby_idxmax(shuffle_method):
+def test_series_groupby_idxmax():
     pdf = pd.DataFrame(
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
@@ -1990,7 +1988,7 @@ def test_series_groupby_idxmax(shuffle_method):
 
 
 @pytest.mark.parametrize("skipna", [True, False])
-def test_series_groupby_idxmax_skipna(skipna, shuffle_method):
+def test_series_groupby_idxmax_skipna(skipna):
     pdf = pd.DataFrame(
         {
             "idx": list(range(4)),
@@ -2007,7 +2005,7 @@ def test_series_groupby_idxmax_skipna(skipna, shuffle_method):
     assert_eq(result_pd, result_dd)
 
 
-def test_groupby_unique(shuffle_method):
+def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {"foo": rng.randint(3, size=100), "bar": rng.randint(10, size=100)}
@@ -2021,7 +2019,7 @@ def test_groupby_unique(shuffle_method):
     assert_eq(dd_gb.explode(), pd_gb.explode())
 
 
-def test_groupby_value_counts(shuffle_method):
+def test_groupby_value_counts():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
         {"foo": rng.randint(3, size=100), "bar": rng.randint(4, size=100)}
@@ -2036,7 +2034,7 @@ def test_groupby_value_counts(shuffle_method):
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
-def test_groupby_transform_funcs(transformation, shuffle_method):
+def test_groupby_transform_funcs(transformation):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 4] * 5,
@@ -2063,7 +2061,7 @@ def test_groupby_transform_funcs(transformation, shuffle_method):
 
 @pytest.mark.parametrize("npartitions", list(range(1, 10)))
 @pytest.mark.parametrize("indexed", [True, False])
-def test_groupby_transform_ufunc_partitioning(npartitions, indexed, shuffle_method):
+def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
     pdf = pd.DataFrame({"group": [1, 2, 3, 4, 5] * 20, "value": np.random.randn(100)})
 
     if indexed:
@@ -2107,7 +2105,7 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed, shuffle_meth
         ),
     ],
 )
-def test_groupby_aggregate_categoricals(grouping, agg, shuffle_method):
+def test_groupby_aggregate_categoricals(grouping, agg):
     pdf = pd.DataFrame(
         {
             "category_1": pd.Categorical(list("AABBCC")),
@@ -2129,7 +2127,7 @@ def test_groupby_aggregate_categoricals(grouping, agg, shuffle_method):
     reason="dropna kwarg not supported in pandas < 1.1.0.",
 )
 @pytest.mark.parametrize("dropna", [False, True])
-def test_groupby_dropna_pandas(dropna, shuffle_method):
+def test_groupby_dropna_pandas(dropna):
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
     )
@@ -2143,7 +2141,7 @@ def test_groupby_dropna_pandas(dropna, shuffle_method):
 @pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
-def test_groupby_dropna_cudf(dropna, by, shuffle_method):
+def test_groupby_dropna_cudf(dropna, by):
 
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
@@ -2180,7 +2178,7 @@ def test_groupby_dropna_cudf(dropna, by, shuffle_method):
     not dask.dataframe.utils.PANDAS_GT_110,
     reason="Should work starting from pandas 1.1.0",
 )
-def test_groupby_dropna_with_agg(shuffle_method):
+def test_groupby_dropna_with_agg():
     # https://github.com/dask/dask/issues/6986
     df = pd.DataFrame(
         {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
@@ -2192,7 +2190,7 @@ def test_groupby_dropna_with_agg(shuffle_method):
     assert_eq(expected, actual)
 
 
-def test_groupby_observed_with_agg(shuffle_method):
+def test_groupby_observed_with_agg():
     df = pd.DataFrame(
         {
             "cat_1": pd.Categorical(list("AB"), categories=list("ABCDE")),
@@ -2207,7 +2205,7 @@ def test_groupby_observed_with_agg(shuffle_method):
     assert_eq(expected, actual)
 
 
-def test_rounding_negative_var(shuffle_method):
+def test_rounding_negative_var():
     x = [-0.00179999999 for _ in range(10)]
     ids = [1 for _ in range(5)] + [2 for _ in range(5)]
 
@@ -2219,7 +2217,7 @@ def test_rounding_negative_var(shuffle_method):
 
 @pytest.mark.parametrize("split_out", [2, 3])
 @pytest.mark.parametrize("column", [["b", "c"], ["b", "d"], ["b", "e"]])
-def test_groupby_split_out_multiindex(split_out, column, shuffle_method):
+def test_groupby_split_out_multiindex(split_out, column):
     df = pd.DataFrame(
         {
             "a": np.arange(8),
@@ -2249,7 +2247,7 @@ def test_groupby_split_out_multiindex(split_out, column, shuffle_method):
         pytest.param("cudf", marks=pytest.mark.gpu),
     ],
 )
-def test_groupby_large_ints_exception(backend, shuffle_method):
+def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":
         dask_cudf = pytest.importorskip("dask_cudf")
@@ -2272,7 +2270,7 @@ def test_groupby_large_ints_exception(backend, shuffle_method):
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
 @pytest.mark.parametrize("agg", ["count", "mean", "std"])
 @pytest.mark.parametrize("sort", [True, False])
-def test_groupby_sort_argument(by, agg, sort, shuffle_method):
+def test_groupby_sort_argument(by, agg, sort):
 
     df = pd.DataFrame(
         {
@@ -2311,7 +2309,7 @@ def test_groupby_sort_argument(by, agg, sort, shuffle_method):
 
 @pytest.mark.parametrize("agg", [M.sum, M.prod, M.max, M.min])
 @pytest.mark.parametrize("sort", [True, False])
-def test_groupby_sort_argument_agg(agg, sort, shuffle_method):
+def test_groupby_sort_argument_agg(agg, sort):
     df = pd.DataFrame({"x": [4, 2, 1, 2, 3, 1], "y": [1, 2, 3, 4, 5, 6]})
     ddf = dd.from_pandas(df, npartitions=3)
 
@@ -2347,7 +2345,7 @@ def test_groupby_sort_true_split_out():
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
 @pytest.mark.parametrize("observed", [True, False])
 def test_groupby_aggregate_categorical_observed(
-    known_cats, ordered_cats, agg_func, groupby, observed, shuffle_method
+    known_cats, ordered_cats, agg_func, groupby, observed
 ):
     if agg_func in ["cov", "corr", "nunique"]:
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
@@ -2386,7 +2384,7 @@ def test_groupby_aggregate_categorical_observed(
     )
 
 
-def test_empty_partitions_with_value_counts(shuffle_method):
+def test_empty_partitions_with_value_counts():
     # https://github.com/dask/dask/issues/7065
     df = pd.DataFrame(
         data=[
@@ -2409,7 +2407,7 @@ def test_empty_partitions_with_value_counts(shuffle_method):
     assert_eq(expected, actual)
 
 
-def test_groupby_with_pd_grouper(shuffle_method):
+def test_groupby_with_pd_grouper():
     ddf = dd.from_pandas(
         pd.DataFrame(
             {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
@@ -2423,7 +2421,7 @@ def test_groupby_with_pd_grouper(shuffle_method):
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
-def test_groupby_empty_partitions_with_rows_operation(operation, shuffle_method):
+def test_groupby_empty_partitions_with_rows_operation(operation):
 
     df = pd.DataFrame(
         data=[
@@ -2448,7 +2446,7 @@ def test_groupby_empty_partitions_with_rows_operation(operation, shuffle_method)
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
-def test_groupby_with_row_operations(operation, shuffle_method):
+def test_groupby_with_row_operations(operation):
     df = pd.DataFrame(
         data=[
             ["a0", "b1"],
@@ -2472,7 +2470,7 @@ def test_groupby_with_row_operations(operation, shuffle_method):
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
-def test_groupby_multi_index_with_row_operations(operation, shuffle_method):
+def test_groupby_multi_index_with_row_operations(operation):
     df = pd.DataFrame(
         data=[
             ["a0", "b1"],
