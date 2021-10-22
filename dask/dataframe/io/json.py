@@ -22,7 +22,7 @@ def to_json(
     errors="strict",
     compression=None,
     compute_kwargs=None,
-    **kwargs
+    **kwargs,
 ):
     """Write dataframe into JSON text files
 
@@ -76,7 +76,7 @@ def to_json(
         name_function=kwargs.pop("name_function", None),
         num=df.npartitions,
         compression=compression,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
     parts = [
         delayed(write_json_partition)(d, outfile, kwargs)
@@ -109,7 +109,7 @@ def read_json(
     compression="infer",
     meta=None,
     engine=pd.read_json,
-    **kwargs
+    **kwargs,
 ):
     """Create a dataframe from a set of JSON files
 
@@ -193,7 +193,7 @@ def read_json(
             blocksize=blocksize,
             sample=sample,
             compression=compression,
-            **storage_options
+            **storage_options,
         )
         chunks = list(flatten(chunks))
         if meta is None:
@@ -211,7 +211,7 @@ def read_json(
             encoding=encoding,
             errors=errors,
             compression=compression,
-            **storage_options
+            **storage_options,
         )
         parts = [
             delayed(read_json_file)(f, orient, lines, engine, kwargs) for f in files

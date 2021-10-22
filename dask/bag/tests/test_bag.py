@@ -164,10 +164,10 @@ def test_filter():
     c = b.filter(iseven)
     expected = merge(
         dsk,
-        dict(
-            ((c.name, i), (reify, (filter, iseven, (b.name, i))))
+        {
+            (c.name, i): (reify, (filter, iseven, (b.name, i)))
             for i in range(b.npartitions)
-        ),
+        },
     )
     assert c.dask == expected
     assert c.name == b.filter(iseven).name
@@ -636,8 +636,8 @@ def test_from_url():
 
 def test_read_text():
     with filetexts({"a1.log": "A\nB", "a2.log": "C\nD"}) as fns:
-        assert set(line.strip() for line in db.read_text(fns)) == set("ABCD")
-        assert set(line.strip() for line in db.read_text("a*.log")) == set("ABCD")
+        assert {line.strip() for line in db.read_text(fns)} == set("ABCD")
+        assert {line.strip() for line in db.read_text("a*.log")} == set("ABCD")
 
     pytest.raises(ValueError, lambda: db.read_text("non-existent-*-path"))
 
@@ -999,7 +999,7 @@ def test_to_textfiles_endlines():
     with tmpfile() as fn:
         for last_endline in False, True:
             b.to_textfiles([fn], last_endline=last_endline)
-            with open(fn, "r") as f:
+            with open(fn) as f:
                 result = f.readlines()
             assert result == ["a\n", "b\n", "c\n" if last_endline else "c"]
 
@@ -1078,7 +1078,7 @@ def test_bag_class_extend():
 
 
 def test_gh715():
-    bin_data = "\u20ac".encode("utf-8")
+    bin_data = "\u20ac".encode()
     with tmpfile() as fn:
         with open(fn, "wb") as f:
             f.write(bin_data)
@@ -1257,7 +1257,7 @@ def test_repartition_input_errors():
 
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
-    dsk = dict((("test", i), p) for (i, p) in enumerate(parts))
+    dsk = {("test", i): p for (i, p) in enumerate(parts)}
     b = db.Bag(dsk, "test", len(parts))
     r = b.accumulate(add)
     assert r.name == b.accumulate(add).name

@@ -11,7 +11,8 @@ PANDAS_GT_120 = PANDAS_VERSION >= parse_version("1.2.0")
 PANDAS_GT_121 = PANDAS_VERSION >= parse_version("1.2.1")
 PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
-
+PANDAS_GT_133 = PANDAS_VERSION >= parse_version("1.3.3")
+PANDAS_GT_140 = PANDAS_VERSION.release == (1, 4, 0)  # include pre-release
 
 import pandas.testing as tm
 
@@ -20,10 +21,10 @@ def assert_categorical_equal(left, right, *args, **kwargs):
     tm.assert_extension_array_equal(left, right, *args, **kwargs)
     assert pd.api.types.is_categorical_dtype(
         left.dtype
-    ), "{} is not categorical dtype".format(left)
+    ), f"{left} is not categorical dtype"
     assert pd.api.types.is_categorical_dtype(
         right.dtype
-    ), "{} is not categorical dtype".format(right)
+    ), f"{right} is not categorical dtype"
 
 
 def assert_numpy_array_equal(left, right):
@@ -72,7 +73,7 @@ def makeMixedDataFrame():
         {
             "A": [0.0, 1, 2, 3, 4],
             "B": [0.0, 1, 0, 1, 0],
-            "C": ["foo{}".format(i) for i in range(5)],
+            "C": [f"foo{i}" for i in range(5)],
             "D": pd.date_range("2009-01-01", periods=5),
         }
     )

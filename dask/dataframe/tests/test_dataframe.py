@@ -1,4 +1,5 @@
 import warnings
+import weakref
 import xml.etree.ElementTree
 from itertools import product
 from operator import add
@@ -11,10 +12,11 @@ from pandas.io.formats import format as pandas_format
 import dask
 import dask.array as da
 import dask.dataframe as dd
+import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -27,7 +29,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
-from dask.utils import M, put_lines
+from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -120,7 +122,6 @@ def test_head_tail():
     )
 
 
-@pytest.mark.filterwarnings("ignore:Insufficient:UserWarning")
 def test_head_npartitions():
     assert_eq(d.head(5, npartitions=2), full.head(5))
     assert_eq(d.head(5, npartitions=2, compute=False), full.head(5))
@@ -136,14 +137,27 @@ def test_head_npartitions_warn():
     with pytest.warns(UserWarning, match=match):
         d.head(5)
 
-    with pytest.warns(None):
+    match = "Insufficient elements"
+    with pytest.warns(UserWarning, match=match):
         d.head(100)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7)
 
-    with pytest.warns(None):
+    with pytest.warns(UserWarning, match=match):
         d.head(7, npartitions=2)
+
+    # No warn if all partitions are inspected
+    for n in [3, -1]:
+        with pytest.warns(None) as rec:
+            d.head(10, npartitions=n)
+    assert not rec
+
+    # With default args, this means that a 1 partition dataframe won't warn
+    d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
+    with pytest.warns(None) as rec:
+        d2.head()
+    assert not rec
 
 
 def test_index_head():
@@ -168,6 +182,20 @@ def test_Index():
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
         pytest.raises(AttributeError, lambda: ddf.index.index)
+
+
+def test_axes():
+    pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert len(df.axes) == len(pdf.axes)
+    assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
+
+
+def test_series_axes():
+    ps = pd.Series(["abcde"])
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert len(ds.axes) == len(ps.axes)
+    assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
 
 
 def test_Scalar():
@@ -317,9 +345,6 @@ def test_rename_series_method():
     assert ds.name == "x"  # no mutation
     assert_eq(ds.rename(), s.rename())
 
-    ds.rename("z", inplace=True)
-    s.rename("z", inplace=True)
-    assert ds.name == "z"
     assert_eq(ds, s)
 
 
@@ -399,10 +424,6 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-# TODO(pandas) deal with this describe warning instead of ignoring
-@pytest.mark.filterwarnings(
-    "ignore:Treating datetime data as categorical|casting:FutureWarning"
-)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -453,20 +474,86 @@ def test_describe(include, exclude, percentiles, subset):
 
     ddf = dd.from_pandas(df, 2)
 
-    # Act
-    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    if PANDAS_GT_110:
+        datetime_is_numeric_kwarg = {"datetime_is_numeric": True}
+    else:
+        datetime_is_numeric_kwarg = {}
 
-    # Assert
-    assert_eq(desc_ddf, desc_df)
+    # Act
+    actual = ddf.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+    expected = df.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        **datetime_is_numeric_kwarg,
+    )
+
+    if "e" in expected and datetime_is_numeric_kwarg:
+        expected.at["mean", "e"] = np.nan
+        expected.dropna(how="all", inplace=True)
+
+    assert_eq(actual, expected)
 
     # Check series
     if subset is None:
         for col in ["a", "c", "e", "g"]:
-            assert_eq(
-                df[col].describe(include=include, exclude=exclude),
-                ddf[col].describe(include=include, exclude=exclude),
+            expected = df[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
             )
+            if col == "e" and datetime_is_numeric_kwarg:
+                expected.drop("mean", inplace=True)
+            actual = ddf[col].describe(
+                include=include, exclude=exclude, **datetime_is_numeric_kwarg
+            )
+            assert_eq(expected, actual)
+
+
+def test_describe_without_datetime_is_numeric():
+    data = {
+        "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        "c": [None, 0, 1, 2, 3, 4] * 2,
+        "d": [None, 0, 1] * 4,
+        "e": [
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 07:56:23.858694"),
+            pd.Timestamp("2017-05-09 05:59:58.938999"),
+            None,
+            None,
+        ]
+        * 2,
+    }
+    # Arrange
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, 2)
+
+    # Assert
+    assert_eq(ddf.describe(), df.describe())
+
+    # Check series
+    for col in ["a", "c"]:
+        assert_eq(df[col].describe(), ddf[col].describe())
+
+    if PANDAS_GT_110:
+        with pytest.warns(
+            FutureWarning,
+            match=(
+                "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+            ),
+        ):
+            ddf.e.describe()
+    else:
+        assert_eq(df.e.describe(), ddf.e.describe())
+        with pytest.raises(
+            NotImplementedError,
+            match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
+        ):
+            ddf.e.describe(datetime_is_numeric=True)
 
 
 def test_describe_empty():
@@ -537,7 +624,7 @@ def test_describe_for_possibly_unsorted_q():
 
 
 def test_cumulative():
-    index = ["row{:03d}".format(i) for i in range(100)]
+    index = [f"row{i:03d}" for i in range(100)]
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
     df_out = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"), index=index)
 
@@ -722,17 +809,17 @@ def test_squeeze():
 
     with pytest.raises(NotImplementedError) as info:
         ddf.squeeze(axis=0)
-    msg = "{0} does not support squeeze along axis 0".format(type(ddf))
+    msg = f"{type(ddf)} does not support squeeze along axis 0"
     assert msg in str(info.value)
 
     with pytest.raises(ValueError) as info:
         ddf.squeeze(axis=2)
-    msg = "No axis {0} for object type {1}".format(2, type(ddf))
+    msg = f"No axis {2} for object type {type(ddf)}"
     assert msg in str(info.value)
 
     with pytest.raises(ValueError) as info:
         ddf.squeeze(axis="test")
-    msg = "No axis test for object type {0}".format(type(ddf))
+    msg = f"No axis test for object type {type(ddf)}"
     assert msg in str(info.value)
 
 
@@ -1392,6 +1479,19 @@ def test_quantile_tiny_partitions():
     assert r == 2
 
 
+def test_quantile_trivial_partitions():
+    """See https://github.com/dask/dask/issues/2792"""
+    df = pd.DataFrame({"A": []})
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.quantile(0.5)
+    assert_eq(ddf.quantile(0.5), expected)
+
+    df = pd.DataFrame({"A": [np.nan, np.nan, np.nan, np.nan]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.quantile(0.5)
+    assert_eq(ddf.quantile(0.5), expected)
+
+
 def test_index():
     assert_eq(d.index, full.index)
 
@@ -1410,7 +1510,7 @@ def test_assign():
         d="string",
         e=ddf.a.sum(),
         f=ddf.a + ddf.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     res_unknown = ddf_unknown.assign(
@@ -1418,7 +1518,7 @@ def test_assign():
         d="string",
         e=ddf_unknown.a.sum(),
         f=ddf_unknown.a + ddf_unknown.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     sol = df.assign(
@@ -1426,7 +1526,7 @@ def test_assign():
         d="string",
         e=df.a.sum(),
         f=df.a + df.b,
-        g=lambda x: x.a + x.b,
+        g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
     assert_eq(res, sol)
@@ -1452,6 +1552,14 @@ def test_assign():
     # Fails when assigning unknown divisions to known divisions
     with pytest.raises(ValueError):
         ddf.assign(foo=ddf_unknown.a)
+
+    df = pd.DataFrame({"A": [1, 2]})
+    df.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    ddf = dd.from_pandas(pd.DataFrame({"A": [1, 2]}), npartitions=2)
+    ddf.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
+
+    assert_eq(df, ddf)
 
 
 def test_assign_callable():
@@ -1486,7 +1594,7 @@ def test_map():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
-    lk = dict((v, v + 1) for v in df.a.values)
+    lk = {v: v + 1 for v in df.a.values}
     assert_eq(ddf.a.map(lk), df.a.map(lk))
     assert_eq(ddf.b.map(lk), df.b.map(lk))
     lk = pd.Series(lk)
@@ -1761,7 +1869,7 @@ def test_random_partitions():
         np.testing.assert_array_equal(a.index, sorted(a.index))
 
     parts = d.random_split([0.4, 0.5, 0.1], 42)
-    names = set([p._name for p in parts])
+    names = {p._name for p in parts}
     names.update([a._name, b._name])
     assert len(names) == 5
 
@@ -3171,6 +3279,25 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
+def test_contains_series_raises_deprecated_warning_preserves_behavior():
+    s = pd.Series(["a", "b", "c", "d"])
+    ds = dd.from_pandas(s, npartitions=2)
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
+    ):
+        output = "a" in ds
+    assert output
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
+    ):
+        output = 0 in ds
+    assert not output
+
+
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3341,9 +3468,7 @@ def test_info():
     pandas_format._put_lines = put_lines
 
     test_frames = [
-        pd.DataFrame(
-            {"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=pd.Int64Index(range(4))
-        ),  # No RangeIndex in dask
+        pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}, index=[0, 1, 2, 3]),
         pd.DataFrame(),
     ]
 
@@ -3380,7 +3505,7 @@ def test_groupby_multilevel_info():
 
     g = ddf.groupby(["A", "B"]).sum()
     # slight difference between memory repr (single additional space)
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3392,7 +3517,7 @@ def test_groupby_multilevel_info():
 
     # multilevel
     g = ddf.groupby(["A", "B"]).agg(["count", "sum"])
-    _assert_info(g.compute(), g, memory_usage=False)
+    _assert_info(g.compute(), g, memory_usage=True)
 
     buf = StringIO()
     g.info(buf, verbose=False)
@@ -3404,6 +3529,7 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
+@pytest.mark.skipif(not PANDAS_GT_120, reason="need newer version of Pandas")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3413,8 +3539,8 @@ def test_categorize_info():
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": pd.Series(list("aabc")), "z": pd.Series(list("aabc"))},
-        index=pd.Int64Index(range(4)),
-    )  # No RangeIndex in dask
+        index=[0, 1, 2, 3],
+    )
     ddf = dd.from_pandas(df, npartitions=4).categorize(["y"])
 
     # Verbose=False
@@ -3429,7 +3555,8 @@ def test_categorize_info():
         " 0   x       4 non-null      int64\n"
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
-        "dtypes: category(1), object(1), int64(1)"
+        "dtypes: category(1), object(1), int64(1)\n"
+        "memory usage: 496.0 bytes\n"
     )
     assert buf.getvalue() == expected
 
@@ -3540,19 +3667,36 @@ def test_idxmaxmin(idx, skipna):
     df.d.iloc[78] = np.nan
     ddf = dd.from_pandas(df, npartitions=3)
 
+    # https://github.com/pandas-dev/pandas/issues/43587
+    check_dtype = not all(
+        (_compat.PANDAS_GT_133, skipna is False, isinstance(idx, pd.DatetimeIndex))
+    )
+
     with warnings.catch_warnings(record=True):
         assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
         assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
 
-        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna))
-        assert_eq(df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna, split_every=2))
+        assert_eq(
+            df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna), check_dtype=check_dtype
+        )
+        assert_eq(
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
         assert (
             ddf.idxmax(skipna=skipna)._name
             != ddf.idxmax(skipna=skipna, split_every=2)._name
         )
 
-        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna))
-        assert_eq(df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna, split_every=2))
+        assert_eq(
+            df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna), check_dtype=check_dtype
+        )
+        assert_eq(
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna, split_every=2),
+            check_dtype=check_dtype,
+        )
         assert (
             ddf.idxmin(skipna=skipna)._name
             != ddf.idxmin(skipna=skipna, split_every=2)._name
@@ -3648,6 +3792,13 @@ def test_getitem_with_bool_dataframe_as_key():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
     assert_eq(df[df > 3], ddf[ddf > 3])
+
+
+def test_getitem_with_non_series():
+    s = pd.Series(list(range(10)), index=list("abcdefghij"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    assert_eq(s[["a", "b"]], ds[["a", "b"]])
 
 
 def test_ipython_completion():
@@ -3854,12 +4005,20 @@ def test_copy():
 
     a = dd.from_pandas(df, npartitions=2)
     b = a.copy()
+    c = a.copy(deep=False)
 
     a["y"] = a.x * 2
 
     assert_eq(b, df)
+    assert_eq(c, df)
 
-    df["y"] = df.x * 2
+    deep_err = (
+        "The `deep` value must be False. This is strictly a shallow copy "
+        "of the underlying computational graph."
+    )
+    for deep in [True, None, ""]:
+        with pytest.raises(ValueError, match=deep_err):
+            a.copy(deep=deep)
 
 
 def test_del():
@@ -3993,6 +4152,14 @@ def test_to_datetime():
         dd.to_datetime(ds.index, infer_datetime_format=True),
         check_divisions=False,
     )
+    assert_eq(
+        pd.to_datetime(s, utc=True),
+        dd.to_datetime(ds, utc=True),
+    )
+
+    for arg in ("2021-08-03", 2021):
+        with pytest.raises(NotImplementedError, match="non-index-able arguments"):
+            dd.to_datetime(arg)
 
 
 def test_to_timedelta():
@@ -4021,8 +4188,8 @@ def test_slice_on_filtered_boundary(drop):
     x = np.arange(10)
     x[[5, 6]] -= 2
     df = pd.DataFrame({"A": x, "B": np.arange(len(x))})
-    pdf = df.set_index("A").query("B != {}".format(drop))
-    ddf = dd.from_pandas(df, 1).set_index("A").query("B != {}".format(drop))
+    pdf = df.set_index("A").query(f"B != {drop}")
+    ddf = dd.from_pandas(df, 1).set_index("A").query(f"B != {drop}")
 
     result = dd.concat([ddf, ddf.rename(columns={"B": "C"})], axis=1)
     expected = pd.concat([pdf, pdf.rename(columns={"B": "C"})], axis=1)
@@ -4350,6 +4517,14 @@ def test_setitem_with_bool_dataframe_as_key():
     assert_eq(df, ddf)
 
 
+def test_setitem_with_bool_series_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df["A"] > 2] = 5
+    ddf[ddf["A"] > 2] = 5
+    assert_eq(df, ddf)
+
+
 def test_setitem_with_numeric_column_name_raises_not_implemented():
     df = pd.DataFrame({0: [1, 4], 1: [3, 2]})
     ddf = dd.from_pandas(df.copy(), 2)
@@ -4633,6 +4808,7 @@ def test_dask_layers():
 
 
 def test_repr_html_dataframe_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
@@ -4696,3 +4872,34 @@ def test_dot_nan():
 
     assert_eq(s1.dot(s2), dask_s1.dot(dask_s2))
     assert_eq(s2.dot(df), dask_s2.dot(dask_df))
+
+
+def test_use_of_weakref_proxy():
+    """Testing wrapping frames in proxy wrappers"""
+    df = pd.DataFrame({"data": [1, 2, 3]})
+    df_pxy = weakref.proxy(df)
+    ser = pd.Series({"data": [1, 2, 3]})
+    ser_pxy = weakref.proxy(ser)
+
+    assert is_dataframe_like(df_pxy)
+    assert is_series_like(ser_pxy)
+
+    assert dask.dataframe.groupby._cov_chunk(df_pxy, "data")
+    assert isinstance(
+        dask.dataframe.groupby._groupby_apply_funcs(df_pxy, "data", funcs=[]),
+        pd.DataFrame,
+    )
+
+    # Test wrapping each Dask dataframe chunk in a proxy
+    l = []
+
+    def f(x):
+        l.append(x)  # Keep `x` alive
+        return weakref.proxy(x)
+
+    d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
+    a = dd.from_pandas(d, npartitions=1)
+    a = a.map_partitions(f, meta=a._meta)
+    pxy = weakref.proxy(a)
+    res = pxy["b"].groupby(pxy["g"]).sum()
+    isinstance(res.compute(), pd.Series)

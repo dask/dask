@@ -51,6 +51,7 @@ class Profiler(Callback):
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 
@@ -75,7 +76,7 @@ class Profiler(Callback):
         self._results[key] += (end, id)
 
     def _finish(self, dsk, state, failed):
-        results = dict((k, v) for k, v in self._results.items() if len(v) == 5)
+        results = {k: v for k, v in self._results.items() if len(v) == 5}
         self.results += list(starmap(TaskData, results.values()))
         self._results.clear()
 
@@ -140,6 +141,8 @@ class ResourceProfiler(Callback):
     Note that when used as a context manager data will be collected throughout
     the duration of the enclosed block. In contrast, when registered globally
     data will only be collected while a dask scheduler is active.
+
+    >>> prof.unregister()
     """
 
     def __init__(self, dt=1):
@@ -304,8 +307,8 @@ class CacheProfiler(Callback):
     example, the ``nbytes`` function found in ``cachey`` can be used to measure
     the number of bytes in the cache.
 
-    >>> from cachey import nbytes
-    >>> with CacheProfiler(metric=nbytes) as prof:
+    >>> from cachey import nbytes                   # doctest: +SKIP
+    >>> with CacheProfiler(metric=nbytes) as prof:  # doctest: +SKIP
     ...     get(dsk, 'z')
     22
 
@@ -322,6 +325,7 @@ class CacheProfiler(Callback):
     manually.
 
     >>> prof.clear()
+    >>> prof.unregister()
 
     """
 

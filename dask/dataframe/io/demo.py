@@ -122,7 +122,7 @@ def make_timeseries(
     freq="10s",
     partition_freq="1M",
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 

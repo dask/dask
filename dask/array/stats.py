@@ -144,8 +144,8 @@ def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
         if lambda_ not in scipy.stats.stats._power_div_lambda_names:
             names = repr(list(scipy.stats.stats._power_div_lambda_names.keys()))[1:-1]
             raise ValueError(
-                "invalid string for lambda_: {0!r}.  Valid strings "
-                "are {1}".format(lambda_, names)
+                f"invalid string for lambda_: {lambda_!r}. "
+                f"Valid strings are {names}"
             )
         lambda_ = scipy.stats.stats._power_div_lambda_names[lambda_]
     elif lambda_ is None:

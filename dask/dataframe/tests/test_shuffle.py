@@ -592,13 +592,26 @@ def test_set_index_sorts():
     assert ddf.set_index("timestamp").index.compute().is_monotonic is True
 
 
-def test_set_index():
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
+def test_set_index(engine):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        dask_cudf = pytest.importorskip("dask_cudf")
+
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 2, 6]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 5, 8]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [9, 1, 8]}, index=[9, 9, 9]),
     }
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
+
+    if engine == "cudf":
+        d = dask_cudf.from_dask_dataframe(d)
+
     full = d.compute()
 
     d2 = d.set_index("b", npartitions=3)
@@ -620,8 +633,9 @@ def test_set_index():
     assert_eq(d5, full.set_index(["b"]))
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
@@ -640,13 +654,7 @@ def test_set_index_interpolate(engine):
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    if engine == "cudf":
-        # cuDF has to use "linear" interpolation as "nearest" interpolation
-        # is not supported by CuPy. The result for d1.divisions is different
-        # in this case.
-        assert set(d1.divisions) == set([1, 2, 3, 4])
-    else:
-        assert set(d1.divisions) == set([1, 2, 4])
+    assert set(d1.divisions) == {1, 2, 4}
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
@@ -654,8 +662,9 @@ def test_set_index_interpolate(engine):
     assert d2.divisions[3] == 2.0
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate_int(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
@@ -677,8 +686,9 @@ def test_set_index_interpolate_int(engine):
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_set_index_interpolate_large_uint(engine):
     if engine == "cudf":
         # NOTE: engine == "cudf" requires cudf/dask_cudf,
@@ -700,7 +710,7 @@ def test_set_index_interpolate_large_uint(engine):
 
     d1 = d.set_index("x", npartitions=1)
     assert d1.npartitions == 1
-    assert set(d1.divisions) == set([612509347682975743, 616762138058293247])
+    assert set(d1.divisions) == {612509347682975743, 616762138058293247}
 
 
 def test_set_index_timezone():
@@ -1051,7 +1061,7 @@ def test_disk_shuffle_with_unknown_compression(compression):
         with pytest.raises(
             ImportError,
             match=(
-                "Not able to import and load {0} as compression algorithm."
+                "Not able to import and load {} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
                     compression
                 )
@@ -1073,7 +1083,8 @@ def test_disk_shuffle_check_actual_compression():
             filename = (
                 p1.partd.partd.filename("x") if compression else p1.partd.filename("x")
             )
-            return open(filename, "rb").read()
+            with open(filename, "rb") as f:
+                return f.read()
 
     # get compressed and uncompressed raw data
     uncompressed_data = generate_raw_partd_file(compression=None)
@@ -1210,11 +1221,42 @@ def test_set_index_nan_partition():
     assert_eq(a, a)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_sort_values(nelem, nparts, by, ascending):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
+    dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("na_position", ["first", "last"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("by", ["a", "b"])
+@pytest.mark.parametrize("nparts", [1, 5])
 @pytest.mark.parametrize(
-    "npartitions",
-    [10, 1],
+    "data",
+    [
+        {
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
+            "b": [None] * 100 + list(range(100, 150)),
+        },
+        {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
+    ],
 )
-def test_sort_values(npartitions):
-    df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
-    ddf = dd.from_pandas(df, npartitions=npartitions)
-    assert_eq(ddf.sort_values("a"), df.sort_values("a"))
+def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
+    expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
+    dd.assert_eq(got, expect, check_index=False)

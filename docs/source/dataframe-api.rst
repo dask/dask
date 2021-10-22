@@ -113,7 +113,9 @@ Dataframe
     DataFrame.sem
     DataFrame.set_index
     DataFrame.shape
+    DataFrame.shuffle
     DataFrame.size
+    DataFrame.sort_values
     DataFrame.squeeze
     DataFrame.std
     DataFrame.sub

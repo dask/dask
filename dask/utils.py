@@ -111,6 +111,7 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+@_deprecated()
 def homogeneous_deepmap(func, seq):
     if not seq:
         return seq
@@ -164,6 +165,31 @@ def import_required(mod_name, error_msg):
 
 @contextmanager
 def tmpfile(extension="", dir=None):
+    """
+    Function to create and return a unique temporary file with the given extension, if provided.
+
+    Parameters
+    ----------
+    extension : str
+        The extension of the temporary file to be created
+    dir : str
+        If ``dir`` is not None, the file will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary file
+
+    See Also
+    --------
+    NamedTemporaryFile : Built-in alternative for creating temporary files
+    tmp_path : pytest fixture for creating a temporary directory unique to the test invocation
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
+    """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
@@ -173,15 +199,33 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with suppress(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
 @contextmanager
 def tmpdir(dir=None):
+    """
+    Function to create and return a unique temporary directory.
+
+    Parameters
+    ----------
+    dir : str
+        If ``dir`` is not None, the directory will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary directory
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary directories multiple times.
+    """
     dirname = tempfile.mkdtemp(dir=dir)
 
     try:
@@ -371,71 +415,67 @@ def is_integer(i):
     return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
-ONE_ARITY_BUILTINS = set(
-    [
-        abs,
-        all,
-        any,
-        ascii,
-        bool,
-        bytearray,
-        bytes,
-        callable,
-        chr,
-        classmethod,
-        complex,
-        dict,
-        dir,
-        enumerate,
-        eval,
-        float,
-        format,
-        frozenset,
-        hash,
-        hex,
-        id,
-        int,
-        iter,
-        len,
-        list,
-        max,
-        min,
-        next,
-        oct,
-        open,
-        ord,
-        range,
-        repr,
-        reversed,
-        round,
-        set,
-        slice,
-        sorted,
-        staticmethod,
-        str,
-        sum,
-        tuple,
-        type,
-        vars,
-        zip,
-        memoryview,
-    ]
-)
-MULTI_ARITY_BUILTINS = set(
-    [
-        compile,
-        delattr,
-        divmod,
-        filter,
-        getattr,
-        hasattr,
-        isinstance,
-        issubclass,
-        map,
-        pow,
-        setattr,
-    ]
-)
+ONE_ARITY_BUILTINS = {
+    abs,
+    all,
+    any,
+    ascii,
+    bool,
+    bytearray,
+    bytes,
+    callable,
+    chr,
+    classmethod,
+    complex,
+    dict,
+    dir,
+    enumerate,
+    eval,
+    float,
+    format,
+    frozenset,
+    hash,
+    hex,
+    id,
+    int,
+    iter,
+    len,
+    list,
+    max,
+    min,
+    next,
+    oct,
+    open,
+    ord,
+    range,
+    repr,
+    reversed,
+    round,
+    set,
+    slice,
+    sorted,
+    staticmethod,
+    str,
+    sum,
+    tuple,
+    type,
+    vars,
+    zip,
+    memoryview,
+}
+MULTI_ARITY_BUILTINS = {
+    compile,
+    delattr,
+    divmod,
+    filter,
+    getattr,
+    hasattr,
+    isinstance,
+    issubclass,
+    map,
+    pow,
+    setattr,
+}
 
 
 def getargspec(func):
@@ -543,29 +583,27 @@ class Dispatch:
 
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
-        # Fast path with direct lookup on cls
         lk = self._lookup
-        try:
-            impl = lk[cls]
-        except KeyError:
-            pass
-        else:
-            return impl
-        # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition(".")
-        try:
-            register = self._lazy.pop(toplevel)
-        except KeyError:
-            pass
-        else:
-            register()
-            return self.dispatch(cls)  # recurse
-        # Walk the MRO and cache the lookup result
-        for cls2 in inspect.getmro(cls)[1:]:
-            if cls2 in lk:
-                lk[cls] = lk[cls2]
-                return lk[cls2]
-        raise TypeError("No dispatch for {0}".format(cls))
+        for cls2 in cls.__mro__:
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
+            # Is a lazy registration function present?
+            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                register = self._lazy.pop(toplevel)
+            except KeyError:
+                pass
+            else:
+                register()
+                return self.dispatch(cls)  # recurse
+        raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
         """
@@ -639,13 +677,13 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s.\n\n" % (
+        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s.\n\n" % (cls.__name__, name)
+        l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -768,7 +806,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method.__name__)
+                msg = f"Base package doesn't support '{method.__name__}'."
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -811,7 +849,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ):
+def typename(typ, short=False):
     """
     Return the name of a type
 
@@ -823,11 +861,22 @@ def typename(typ):
     >>> from dask.core import literal
     >>> typename(literal)
     'dask.core.literal'
+    >>> typename(literal, short=True)
+    'dask.literal'
     """
-    if not typ.__module__ or typ.__module__ == "builtins":
-        return typ.__name__
-    else:
-        return typ.__module__ + "." + typ.__name__
+    if not isinstance(typ, type):
+        return typename(type(typ))
+    try:
+        if not typ.__module__ or typ.__module__ == "builtins":
+            return typ.__name__
+        else:
+            if short:
+                module, *_ = typ.__module__.split(".")
+            else:
+                module = typ.__module__
+            return module + "." + typ.__name__
+    except AttributeError:
+        return str(typ)
 
 
 def ensure_bytes(s):
@@ -909,7 +958,7 @@ def dependency_depth(dsk):
 def memory_repr(num):
     for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
-            return "%3.1f %s" % (num, x)
+            return f"{num:3.1f} {x}"
         num /= 1024.0
 
 
@@ -969,7 +1018,7 @@ class methodcaller:
         return (methodcaller, (self.method,))
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.method)
+        return f"<{self.__class__.__name__}: {self.method}>"
 
     __repr__ = __str__
 
@@ -1074,7 +1123,7 @@ class SerializableLock:
         self.__init__(token)
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.token)
+        return f"<{self.__class__.__name__}: {self.token}>"
 
     __repr__ = __str__
 
@@ -1134,7 +1183,7 @@ class OperatorMethodMixin:
         elif name == "inv":
             name = "invert"
 
-        meth = "__{0}__".format(name)
+        meth = f"__{name}__"
 
         if name in ("abs", "invert", "neg", "pos"):
             setattr(cls, meth, cls._get_unary_operator(op))
@@ -1144,7 +1193,7 @@ class OperatorMethodMixin:
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
-            rmeth = "__r{0}__".format(name)
+            rmeth = f"__r{name}__"
             setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
@@ -1450,7 +1499,7 @@ def format_time_ago(n: datetime) -> str:
         if dur > 0:
             if dur == 1:  # De-pluralize
                 unit = unit[:-1]
-            return "%s %s ago" % (dur, unit)
+            return f"{dur} {unit} ago"
     return "Just now"
 
 

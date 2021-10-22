@@ -13,21 +13,29 @@ extras_require = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2021.07.2"],
-    "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
+    "distributed": ["distributed == 2021.10.0"],
+    "diagnostics": [
+        "bokeh >= 1.0.0, != 2.0.0",
+        "jinja2",
+    ],
     "delayed": [],  # keeping for backwards compatibility
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
-extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
+extras_require["test"] = [
+    "pytest",
+    "pytest-rerunfailures",
+    "pytest-xdist",
+    "pre-commit",
+]
 
 install_requires = [
-    "packaging >= 20.0",
-    "pyyaml",
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",
-    "toolz >= 0.8.2",
+    "packaging >= 20.0",
     "partd >= 0.3.10",
+    "pyyaml",
+    "toolz >= 0.8.2",
 ]
 
 packages = [

@@ -51,7 +51,7 @@ def setup(app):
 def dask_config_to_html(key, value, schema, prefix=""):
     if isinstance(value, dict):
         return sum(
-            [
+            (
                 dask_config_to_html(
                     k,
                     v,
@@ -59,7 +59,7 @@ def dask_config_to_html(key, value, schema, prefix=""):
                     prefix=prefix + key + ".",
                 )
                 for k, v in value.items()
-            ],
+            ),
             [],
         )
 

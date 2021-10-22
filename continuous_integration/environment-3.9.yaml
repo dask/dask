@@ -9,6 +9,7 @@ dependencies:
   - numpy
   - pandas
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
@@ -37,7 +38,6 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - chest
   - s3fs
   - cloudpickle
   - crick
@@ -61,6 +61,7 @@ dependencies:
   - pandas-datareader
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed

@@ -11,6 +11,7 @@ from ... import array as da
 from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
@@ -44,7 +45,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
             raise ValueError("For a struct dtype, columns must be a list.")
         elif not all(i in x.dtype.names for i in columns):
             extra = sorted(set(columns).difference(x.dtype.names))
-            raise ValueError("dtype {0} doesn't have fields {1}".format(x.dtype, extra))
+            raise ValueError(f"dtype {x.dtype} doesn't have fields {extra}")
         fields = x.dtype.fields
         dtypes = [fields[n][0] if n in fields else "f8" for n in columns]
     elif x.ndim == 1:
@@ -66,9 +67,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
             columns = list(range(x.shape[1])) if x.ndim == 2 else [0]
         elif len(columns) != x.shape[1]:
             raise ValueError(
-                "Number of column names must match width of the "
-                "array. Got {0} names for {1} "
-                "columns".format(len(columns), x.shape[1])
+                "Number of column names must match width of the array. "
+                f"Got {len(columns)} names for {x.shape[1]} columns"
             )
         dtypes = [x.dtype] * len(columns)
 
@@ -295,20 +295,17 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
         )
     new_name = "from_bcolz-" + token
 
-    dsk = dict(
-        (
-            (new_name, i),
-            (
-                dataframe_from_ctable,
-                x,
-                (slice(i * chunksize, (i + 1) * chunksize),),
-                columns,
-                categories,
-                lock,
-            ),
+    dsk = {
+        (new_name, i): (
+            dataframe_from_ctable,
+            x,
+            (slice(i * chunksize, (i + 1) * chunksize),),
+            columns,
+            categories,
+            lock,
         )
         for i in range(0, int(ceil(len(x) / chunksize)))
-    )
+    }
 
     meta = dataframe_from_ctable(x, slice(0, 0), columns, categories, lock)
     result = DataFrame(dsk, new_name, meta, divisions)
@@ -499,14 +496,26 @@ def _link(token, result):
     return None
 
 
-def _df_to_bag(df, index=False):
+def _df_to_bag(df, index=False, format="tuple"):
     if isinstance(df, pd.DataFrame):
-        return list(map(tuple, df.itertuples(index)))
+        if format == "tuple":
+            return list(map(tuple, df.itertuples(index)))
+        elif format == "dict":
+            if index:
+                return [
+                    {**{"index": idx}, **values}
+                    for values, idx in zip(df.to_dict("records"), df.index)
+                ]
+            else:
+                return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
-        return list(df.iteritems()) if index else list(df)
+        if format == "tuple":
+            return list(df.iteritems()) if index else list(df)
+        elif format == "dict":
+            return df.to_frame().to_dict(orient="records")
 
 
-def to_bag(df, index=False):
+def to_bag(df, index=False, format="tuple"):
     """Create Dask Bag from a Dask DataFrame
 
     Parameters
@@ -514,6 +523,8 @@ def to_bag(df, index=False):
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
         they're just the ``value``.  Default is False.
+    format : {"tuple", "dict"},optional
+            Whether to return a bag of tuples or dictionaries.
 
     Examples
     --------
@@ -523,11 +534,11 @@ def to_bag(df, index=False):
 
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
-    name = "to_bag-" + tokenize(df, index)
-    dsk = dict(
-        ((name, i), (_df_to_bag, block, index))
+    name = "to_bag-" + tokenize(df, index, format)
+    dsk = {
+        (name, i): (_df_to_bag, block, index, format)
         for (i, block) in enumerate(df.__dask_keys__())
-    )
+    }
     dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
     return Bag(dsk, name, df.npartitions)
 
@@ -597,7 +608,7 @@ def from_delayed(
         dfs = [delayed(make_meta)(meta)]
 
     name = prefix + "-" + tokenize(*dfs)
-    dsk = merge(df.dask for df in dfs)
+    dsk = {}
     if verify_meta:
         for (i, df) in enumerate(dfs):
             dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
@@ -612,7 +623,9 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = new_dd_object(dsk, name, meta, divs)
+    df = new_dd_object(
+        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+    )
 
     if divisions == "sorted":
         from ..shuffle import compute_and_set_divisions

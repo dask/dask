@@ -10,6 +10,7 @@ dependencies:
   - numpy
   - pandas
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
@@ -37,7 +38,6 @@ dependencies:
   - aiohttp
   - bokeh
   - httpretty
-  - chest
   - cloudpickle
   - crick
   - cytoolz
@@ -58,4 +58,5 @@ dependencies:
   - python-graphviz
   - python-xxhash
   - mmh3
+  - jinja2
   - pip

@@ -67,12 +67,10 @@ def preorder_traversal(task):
 
     for item in task:
         if istask(item):
-            for i in preorder_traversal(item):
-                yield i
+            yield from preorder_traversal(item)
         elif isinstance(item, list):
             yield list
-            for i in preorder_traversal(item):
-                yield i
+            yield from preorder_traversal(item)
         else:
             yield item
 
@@ -143,7 +141,7 @@ def get(dsk, out, cache=None):
     """
     for k in flatten(out) if isinstance(out, list) else [out]:
         if k not in dsk:
-            raise KeyError("{0} is not a key in the graph".format(k))
+            raise KeyError(f"{k} is not a key in the graph")
     if cache is None:
         cache = {}
     for key in toposort(dsk):
@@ -296,8 +294,7 @@ def flatten(seq, container=list):
     else:
         for item in seq:
             if isinstance(item, container):
-                for item2 in flatten(item, container=container):
-                    yield item2
+                yield from flatten(item, container=container)
             else:
                 yield item
 
@@ -379,7 +376,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     seen = set()
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
     for key in keys:
         if key in completed:
