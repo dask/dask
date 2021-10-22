@@ -39,6 +39,13 @@ def agg_func(request):
     return request.param
 
 
+# Wrapper fixture for shuffle_method to auto-apply it to all the tests in this module,
+# as we don't want to auto-apply the fixture repo-wide.
+@pytest.fixture(autouse=True)
+def auto_shuffle_method(shuffle_method):
+    yield
+
+
 @pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
 def test_groupby_internal_repr_xfail():
     pdf = pd.DataFrame({"x": [0, 1, 2, 3, 4, 6, 7, 8, 9, 10], "y": list("abcbabbcda")})
@@ -881,25 +888,27 @@ def test_numeric_column_names():
     )
 
 
-def test_groupby_apply_tasks():
+def test_groupby_apply_tasks(shuffle_method):
+    if shuffle_method == "disk":
+        pytest.skip("Tasks-only shuffle test")
+
     df = _compat.makeTimeDataFrame()
     df["A"] = df.A // 0.1
     df["B"] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with dask.config.set(shuffle="tasks"):
-        for ind in [lambda x: "A", lambda x: x.A]:
-            a = df.groupby(ind(df)).apply(len)
-            with pytest.warns(UserWarning):
-                b = ddf.groupby(ind(ddf)).apply(len)
-            assert_eq(a, b.compute())
-            assert not any("partd" in k[0] for k in b.dask)
+    for ind in [lambda x: "A", lambda x: x.A]:
+        a = df.groupby(ind(df)).apply(len)
+        with pytest.warns(UserWarning):
+            b = ddf.groupby(ind(ddf)).apply(len)
+        assert_eq(a, b.compute())
+        assert not any("partd" in k[0] for k in b.dask)
 
-            a = df.groupby(ind(df)).B.apply(len)
-            with pytest.warns(UserWarning):
-                b = ddf.groupby(ind(ddf)).B.apply(len)
-            assert_eq(a, b.compute())
-            assert not any("partd" in k[0] for k in b.dask)
+        a = df.groupby(ind(df)).B.apply(len)
+        with pytest.warns(UserWarning):
+            b = ddf.groupby(ind(ddf)).B.apply(len)
+        assert_eq(a, b.compute())
+        assert not any("partd" in k[0] for k in b.dask)
 
 
 def test_groupby_multiprocessing():
