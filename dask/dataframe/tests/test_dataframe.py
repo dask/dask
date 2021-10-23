@@ -570,7 +570,11 @@ def test_describe_empty():
     )
 
     with pytest.raises((ValueError, RuntimeWarning)):
-        ddf_len0.describe(percentiles_method="dask").compute()
+        with warnings.catch_warnings():
+            # ensure that the warning is turned into an error since this is
+            # the easiest way to assert for exception-or-warning
+            warnings.simplefilter("error")
+            ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method="dask").compute()
