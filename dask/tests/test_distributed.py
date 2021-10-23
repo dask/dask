@@ -502,6 +502,48 @@ async def test_blockwise_concatenate(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_map_blocks_block_info(c, s, a, b):
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def func(x, y, block_info):
+        with open("blockinfo.txt", "a") as f:
+            print(block_info, file=f, flush=True)
+        return np.array([[block_info]], dtype=object)
+
+    a = da.ones((4,), chunks=2)
+    b = da.ones((3, 2), chunks=(1, 2))
+    out = da.map_blocks(func, a, b, dtype=object, chunks=((1, 1, 1), (1, 1)))
+    print(out)
+    # optimize_graph=False ensures that the _BlockInfoDep is serialized to the
+    # scheduler, rather than materialised on the client.
+    blocks = await c.compute(out, optimize_graph=False)
+    assert blocks.shape == (3, 2)
+    assert blocks[2, 1] == {
+        0: {
+            "shape": (4,),
+            "num-chunks": (2,),
+            "array-location": [(2, 4)],
+            "chunk-location": (1,),
+        },
+        1: {
+            "shape": (3, 2),
+            "num-chunks": (3, 1),
+            "array-location": [(2, 3), (0, 2)],
+            "chunk-location": (2, 0),
+        },
+        None: {
+            "shape": (3, 2),
+            "num-chunks": (3, 2),
+            "array-location": [(2, 3), (1, 2)],
+            "chunk-location": (2, 1),
+            "chunk-shape": (1, 1),
+            "dtype": object,
+        },
+    }
+
+
+@gen_cluster(client=True)
 async def test_map_partitions_partition_info(c, s, a, b):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")

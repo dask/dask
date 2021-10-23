@@ -4,6 +4,7 @@ import warnings
 import tlz as toolz
 
 from .. import base, utils
+from ..blockwise import BlockwiseDep
 from ..blockwise import blockwise as core_blockwise
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -49,6 +50,18 @@ def blockwise(
         Dictionary mapping index to function to be applied to chunk sizes
     new_axes : dict, keyword only
         New indexes and their dimension lengths
+    align_arrays : bool, keyword only
+        If ``True`` (the default), the input arrays will be rechunked if
+        necessary to be aligned along shared dimensions. If ``False``, the
+        input chunks will not be altered. If the inputs do not have
+        consistent chunking along a particular dimension, ``adjust_chunks``
+        should be specified to determine the output chunks for that
+        dimension.
+
+        When this is ``False``, some arguments may be instances of
+        :class:`dask.blockwise.BlockwiseDep` instead of arrays. See the
+        examples for details.
+
 
     Examples
     --------
@@ -123,15 +136,6 @@ def blockwise(
 
     >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': 5}, dtype=a.dtype)
 
-    New dimensions can also be multi-chunk by specifying a tuple of chunk
-    sizes.  This has limited utility as is (because the chunks are all the
-    same), but the resulting graph can be modified to achieve more useful
-    results (see ``da.map_blocks``).
-
-    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)
-    >>> z.chunks
-    ((1, 1, 1), (5, 5))
-
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
     that modifies the dimension size in that index.
@@ -150,6 +154,25 @@ def blockwise(
     >>> z.compute()
     array([[1235, 1236],
            [1237, 1238]])
+
+    You can use BlockwiseDep to provide extra information to the function on
+    a per-block basis, without needing an array. Note that if a dimension is
+    not associated with any array, it must be listed with ``new_axes``, but in
+    this case it may make sense to have multiple chunks along this axis.
+
+    >>> from dask.blockwise import BlockwiseDepDict
+    >>> dep = BlockwiseDepDict({(0,): 2, (1,): 3})
+    >>> z = da.blockwise(
+    ...     lambda x: np.ones(x, float) * x,
+    ...     "i",
+    ...     dep,
+    ...     "i",
+    ...     new_axes={"i": (2, 3)},
+    ...     align_arrays=False,
+    ...     dtype=float,
+    ... )
+    >>> z.compute()
+    array([2., 2., 3., 3., 3.])
     """
     out = name
     new_axes = new_axes or {}
@@ -160,9 +183,15 @@ def blockwise(
             "Repeated elements not allowed in output index",
             [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
         )
+    arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
     new = (
         set(out_ind)
-        - {a for arg in args[1::2] if arg is not None for a in arg}
+        - {
+            a
+            for (arg, ind) in arginds
+            if not isinstance(arg, BlockwiseDep)
+            for a in ind
+        }
         - set(new_axes or ())
     )
     if new:
@@ -173,16 +202,16 @@ def blockwise(
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
         chunkss = {}
         # For each dimension, use the input chunking that has the most blocks;
         # this will ensure that broadcasting works as expected, and in
         # particular the number of blocks should be correct if the inputs are
         # consistent.
         for arg, ind in arginds:
-            for c, i in zip(arg.chunks, ind):
-                if i not in chunkss or len(c) > len(chunkss[i]):
-                    chunkss[i] = c
+            if not isinstance(arg, BlockwiseDep):
+                for c, i in zip(arg.chunks, ind):
+                    if i not in chunkss or len(c) > len(chunkss[i]):
+                        chunkss[i] = c
         arrays = args[::2]
 
     for k, v in new_axes.items():
@@ -214,9 +243,10 @@ def blockwise(
                     "Index string %s does not match array dimension %d"
                     % (ind, arg.ndim)
                 )
-            numblocks[arg.name] = arg.numblocks
-            arrays.append(arg)
-            arg = arg.name
+            if not isinstance(arg, BlockwiseDep):
+                numblocks[arg.name] = arg.numblocks
+                arrays.append(arg)
+                arg = arg.name
         argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments

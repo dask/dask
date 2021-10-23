@@ -17,6 +17,9 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
+from typing import Dict
+from typing import Mapping as TypingMapping
+from typing import Optional, Tuple
 
 import numpy as np
 from fsspec import get_mapper
@@ -32,7 +35,7 @@ from ..base import (
     persist,
     tokenize,
 )
-from ..blockwise import broadcast_dimensions
+from ..blockwise import BlockwiseDepDict, broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
@@ -445,15 +448,72 @@ def normalize_arg(x):
         return x
 
 
-def _pass_extra_kwargs(func, keys, *args, **kwargs):
+class _BlockInfoInput:
+    def __init__(
+        self,
+        idx_remap: Tuple[int, ...],
+        shape: Tuple[int, ...],
+        starts: Tuple[Tuple[int, ...], ...],
+    ) -> None:
+        self.idx_remap = idx_remap
+        self.shape = shape
+        self.starts = starts
+        self.num_chunks = tuple(len(s) - 1 for s in self.starts)
+
+    def __call__(self, idx: Tuple[int, ...]) -> dict:
+        location = tuple((idx[c] if c >= 0 else 0) for c in self.idx_remap)
+        return {
+            "shape": self.shape,
+            "num-chunks": self.num_chunks,
+            "array-location": [(s[i], s[i + 1]) for s, i in zip(self.starts, location)],
+            "chunk-location": location,
+        }
+
+
+class _BlockInfoOutput:
+    def __init__(self, shape: Tuple[int, ...], starts: Tuple[int, ...], dtype) -> None:
+        self.shape = shape
+        self.starts = starts
+        self.dtype = dtype
+        self.num_chunks = tuple(len(s) - 1 for s in self.starts)
+
+    def __call__(self, idx: Tuple[int, ...]) -> dict:
+        return {
+            "shape": self.shape,
+            "num-chunks": self.num_chunks,
+            "array-location": [(s[i], s[i + 1]) for s, i in zip(self.starts, idx)],
+            "chunk-location": idx,
+            "chunk-shape": tuple(s[i + 1] - s[i] for s, i in zip(self.starts, idx)),
+            "dtype": self.dtype,
+        }
+
+
+class _BlockInfo:
+    """Generate ``block_info`` parameters for :func:`map_blocks` on the fly."""
+
+    def __init__(
+        self, output: _BlockInfoOutput, inputs: TypingMapping[int, _BlockInfoInput]
+    ):
+        self.output = output
+        self.inputs = inputs
+
+    def __call__(self, idx: Tuple[int, ...]) -> Dict[Optional[str], dict]:
+        info = {key: array_info(idx) for key, array_info in self.inputs.items()}
+        info[None] = self.output(idx)
+        return info
+
+
+def _pass_block_info(func, block_info, block_id, *args, **kwargs):
     """Helper for :func:`dask.array.map_blocks` to pass `block_info` or `block_id`.
 
-    For each element of `keys`, a corresponding element of args is changed
-    to a keyword argument with that key, before all arguments re passed on
-    to `func`.
+    `block_id` must always be passed. If `block_info` is not needed it may be
+    ``None``.
     """
-    kwargs.update(zip(keys, args))
-    return func(*args[len(keys) :], **kwargs)
+    if has_keyword(func, "block_id"):
+        kwargs.update(block_id=block_id)
+    if has_keyword(func, "block_info"):
+        kwargs.update(block_info=block_info(block_id))
+    return func(*args, **kwargs)
 
 
 def map_blocks(
@@ -744,39 +804,19 @@ def map_blocks(
         **kwargs,
     )
 
-    extra_argpairs = []
-    extra_names = []
-    # If func has block_id as an argument, construct an array of block IDs and
-    # prepare to inject it.
-    if has_keyword(func, "block_id"):
-        block_id_name = "block-id-" + out.name
-        block_id_dsk = {
-            (block_id_name,) + block_id: block_id
-            for block_id in product(*(range(len(c)) for c in out.chunks))
-        }
-        block_id_array = Array(
-            block_id_dsk,
-            block_id_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
-        )
-        extra_argpairs.append((block_id_array, out_ind))
-        extra_names.append("block_id")
+    block_info = None
 
     # If func has block_info as an argument, construct an array of block info
     # objects and prepare to inject it.
     if has_keyword(func, "block_info"):
-        starts = {}
-        num_chunks = {}
-        shapes = {}
-
+        block_info_inputs = {}
+        out_ind_map = {ind: i for i, ind in enumerate(out_ind)}
         for i, (arg, in_ind) in enumerate(argpairs):
             if in_ind is not None:
-                shapes[i] = arg.shape
                 if drop_axis:
                     # We concatenate along dropped axes, so we need to treat them
                     # as if there is only a single chunk.
-                    starts[i] = [
+                    starts = [
                         (
                             cached_cumsum(arg.chunks[j], initial_zero=True)
                             if ind in out_ind
@@ -784,78 +824,43 @@ def map_blocks(
                         )
                         for j, ind in enumerate(in_ind)
                     ]
-                    num_chunks[i] = tuple(len(s) - 1 for s in starts[i])
                 else:
-                    starts[i] = [
-                        cached_cumsum(c, initial_zero=True) for c in arg.chunks
-                    ]
-                    num_chunks[i] = arg.numblocks
-        out_starts = [cached_cumsum(c, initial_zero=True) for c in out.chunks]
-
-        block_info_name = "block-info-" + out.name
-        block_info_dsk = {}
-        for block_id in product(*(range(len(c)) for c in out.chunks)):
-            # Get position of chunk, indexed by axis labels
-            location = {out_ind[i]: loc for i, loc in enumerate(block_id)}
-            info = {}
-            for i, shape in shapes.items():
-                # Compute chunk key in the array, taking broadcasting into
-                # account. We don't directly know which dimensions are
-                # broadcast, but any dimension with only one chunk can be
-                # treated as broadcast.
-                arr_k = tuple(
-                    location.get(ind, 0) if num_chunks[i][j] > 1 else 0
-                    for j, ind in enumerate(argpairs[i][1])
-                )
-                info[i] = {
-                    "shape": shape,
-                    "num-chunks": num_chunks[i],
-                    "array-location": [
-                        (starts[i][ij][j], starts[i][ij][j + 1])
-                        for ij, j in enumerate(arr_k)
-                    ],
-                    "chunk-location": arr_k,
-                }
-
-            info[None] = {
-                "shape": out.shape,
-                "num-chunks": out.numblocks,
-                "array-location": [
-                    (out_starts[ij][j], out_starts[ij][j + 1])
-                    for ij, j in enumerate(block_id)
-                ],
-                "chunk-location": block_id,
-                "chunk-shape": tuple(
-                    out.chunks[ij][j] for ij, j in enumerate(block_id)
-                ),
-                "dtype": dtype,
-            }
-            block_info_dsk[(block_info_name,) + block_id] = info
-
-        block_info = Array(
-            block_info_dsk,
-            block_info_name,
-            chunks=tuple((1,) * len(c) for c in out.chunks),
-            dtype=np.object_,
+                    starts = [cached_cumsum(c, initial_zero=True) for c in arg.chunks]
+                # Compute index mapping from input to output indices, taking
+                # broadcasting into account. We don't directly know which
+                # dimensions are broadcast, but any dimension with only one
+                # chunk can be treated as broadcast.
+                idx_remap = [
+                    out_ind_map.get(ind, -1) if len(s) > 2 else -1
+                    for s, ind in zip(starts, in_ind)
+                ]
+                block_info_inputs[i] = _BlockInfoInput(idx_remap, arg.shape, starts)
+        block_info_output = _BlockInfoOutput(
+            out.shape,
+            [cached_cumsum(c, initial_zero=True) for c in out.chunks],
+            out.dtype,
         )
-        extra_argpairs.append((block_info, out_ind))
-        extra_names.append("block_info")
+        block_info = _BlockInfo(block_info_output, block_info_inputs)
 
-    if extra_argpairs:
+    if has_keyword(func, "block_info") or has_keyword(func, "block_id"):
         # Rewrite the Blockwise layer. It would be nice to find a way to
         # avoid doing it twice, but it's currently needed to determine
         # out.chunks from the first pass. Since it constructs a Blockwise
         # rather than an expanded graph, it shouldn't be too expensive.
+        # We don't need to provide any keys to BlockwiseDepDict, because the
+        # default for missing keys is to provide the block ID.
         out = blockwise(
-            _pass_extra_kwargs,
+            _pass_block_info,
             out_ind,
             func,
             None,
-            tuple(extra_names),
+            block_info,
             None,
-            *concat(extra_argpairs),
+            BlockwiseDepDict({}, numblocks=out.numblocks),
+            out_ind,
             *concat(argpairs),
             name=out.name,
+            new_axes=new_axes,
             dtype=out.dtype,
             concatenate=True,
             align_arrays=False,
