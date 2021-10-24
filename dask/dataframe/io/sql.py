@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from sqlalchemy.sql.schema import Column
 
 import dask
 from dask.delayed import tokenize
@@ -17,7 +16,6 @@ def read_sql_query(
     divisions=None,
     npartitions=None,
     limits=None,
-    columns=None,
     bytes_per_chunk="256 MiB",
     head_rows=5,
     meta=None,
@@ -25,47 +23,44 @@ def read_sql_query(
     **kwargs,
 ):
     """
-    Create dataframe from an SQL table.
+    Read SQL query into a DataFrame.
 
-    If neither divisions or npartitions is given, the memory footprint of the
+    If neither ``divisions`` or ``npartitions`` is given, the memory footprint of the
     first few rows will be determined, and partitions of size ~256MB will
     be used.
 
     Parameters
     ----------
-    sql : sqlalchemy expression
-        Select columns from here.
+    sql : SQLAlchemy Selectable
+        SQL query to be executed. TextClause is not supported
     con : str
         Full sqlalchemy URI for the database connection
     index_col : str
         Column which becomes the index, and defines the partitioning. Should
         be a indexed column in the SQL server, and any orderable type. If the
         type is number or time, then partition boundaries can be inferred from
-        npartitions or bytes_per_chunk; otherwide must supply explicit
-        ``divisions=``.
+        ``npartitions`` or ``bytes_per_chunk``; otherwise must supply explicit
+        ``divisions``.
     divisions: sequence
         Values of the index column to split the table by. If given, this will
-        override npartitions and bytes_per_chunk. The divisions are the value
+        override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
         boundaries of the index column used to define the partitions. For
         example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
         a string column lexographically into 12 partitions, with the implicit
         assumption that each partition contains similar numbers of records.
     npartitions : int
-        Number of partitions, if divisions is not given. Will split the values
-        of the index column linearly between limits, if given, or the column
+        Number of partitions, if ``divisions`` is not given. Will split the values
+        of the index column linearly between ``limits``, if given, or the column
         max/min. The index column must be numeric or time for this to work
     limits: 2-tuple or None
-        Manually give upper and lower range of values for use with npartitions;
+        Manually give upper and lower range of values for use with ``npartitions``;
         if None, first fetches max/min from the DB. Upper limit, if
         given, is inclusive.
-    columns : list of (str or sqlalchemy column) or None
-        Which columns to select; if None, gets all; can include sqlalchemy
-        columns.
     bytes_per_chunk : str or int
-        If both divisions and npartitions is None, this is the target size of
+        If both ``divisions`` and ``npartitions`` is None, this is the target size of
         each partition, in bytes
     head_rows : int
-        How many rows to load for inferring the data-types, unless passing meta
+        How many rows to load for inferring the data-types, and memory per row
     meta : empty DataFrame or None
         If provided, do not attempt to infer dtypes, but use these, coercing
         all chunks on load
@@ -78,13 +73,11 @@ def read_sql_query(
     -------
     dask.dataframe
 
-    Examples
+    See Also
     --------
-    >>> df = dd.read_sql_table('accounts', 'sqlite:///path/to/bank.db',
-    ...                  npartitions=10, index_col='id')  # doctest: +SKIP
+    read_sql_table : Read SQL database table into a DataFrame.
     """
     import sqlalchemy as sa
-    from sqlalchemy.sql import elements
 
     if not isinstance(con, str):
         raise TypeError(
@@ -94,64 +87,43 @@ def read_sql_query(
         )
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
-    if not isinstance(index_col, (str, sa.Column)):
+    if not isinstance(index_col, (str, sa.Column, sa.sql.elements.ColumnClause)):
         raise ValueError(
             "'index_col' must be of type str or sa.Column, not " + str(type(index_col))
         )
+    if not head_rows > 0:
+        if meta is None:
+            raise ValueError("Must provide 'meta' if 'head_rows' is 0")
+        if divisions is None and npartitions is None:
+            raise ValueError(
+                "Must provide 'divisions' or 'npartitions' if 'head_rows' is 0"
+            )
+    if divisions and npartitions:
+        raise TypeError("Must supply either 'divisions' or 'npartitions', not both")
 
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(con, **engine_kwargs)
-    m = sa.MetaData()
 
-    if divisions and npartitions:
-        raise TypeError("Must supply either divisions or npartitions, not both")
-
-    columns = (
-        [
-            (
-                sa.Column(c, sql.selected_columns[c].type)
-                if isinstance(c, str)
-                else sa.Column(c.name, c.type)
-            )
-            for c in columns
-        ]
-        if columns
-        else [sa.Column(c.name, c.type) for c in sql.selected_columns]
-    )
     index = (
-        sa.Column(index_col, sql.selected_columns[index_col].type)
+        sa.Column(index_col)
         if isinstance(index_col, str)
         else sa.Column(index_col.name, index_col.type)
     )
 
     kwargs["index_col"] = index.name
 
-    if index.name not in [c.name for c in columns]:
-        columns.append(index)
-
     if head_rows > 0:
         # derive metadata from first few rows
-        q = sa.sql.select(columns).limit(head_rows).select_from(sql.subquery())
-        # q = sql.limit(head_rows)
+        q = sql.limit(head_rows)
         head = pd.read_sql(q, engine, **kwargs)
 
         if len(head) == 0:
-            # # no results at all
-            # name = sql.name
-            # schema = sql.schema
-            # head = pd.read_sql_table(name, uri, schema=schema, index_col=index_col)
+            # no results at all
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
         if meta is None:
             meta = head.iloc[:0]
-    elif meta is None:
-        raise ValueError("Must provide meta if head_rows is 0")
-    else:
-        if divisions is None and npartitions is None:
-            raise ValueError(
-                "Must provide divisions or npartitions when using explicit meta."
-            )
 
     if divisions is None:
         if limits is None:
@@ -199,11 +171,7 @@ def read_sql_query(
     lowers, uppers = divisions[:-1], divisions[1:]
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
-        q = (
-            sa.sql.select(columns)
-            .where(sa.sql.and_(index >= lower, cond))
-            .select_from(sql.subquery())
-        )
+        q = sql.where(sa.sql.and_(index >= lower, cond))
         parts.append(
             delayed(_read_sql_chunk)(
                 q, con, meta, engine_kwargs=engine_kwargs, **kwargs
@@ -216,40 +184,79 @@ def read_sql_query(
 
 
 def read_sql_table(
-    table,
+    table_name,
     con,
     index_col,
+    columns=None,
     schema=None,
+    divisions=None,
+    npartitions=None,
+    limits=None,
+    bytes_per_chunk="256 MiB",
+    head_rows=5,
+    meta=None,
+    engine_kwargs=None,
     **kwargs,
 ):
     """
-    Create dataframe from an SQL table.
+    Read SQL database table into a DataFrame.
 
-    If neither divisions or npartitions is given, the memory footprint of the
+    If neither ``divisions`` or ``npartitions`` is given, the memory footprint of the
     first few rows will be determined, and partitions of size ~256MB will
     be used.
 
     Parameters
     ----------
-    table : str or sqlalchemy expression
-        Select columns from here.
+    table_name : str
+        Name of SQL table in database.
     con : str
         Full sqlalchemy URI for the database connection
     index_col : str
         Column which becomes the index, and defines the partitioning. Should
         be a indexed column in the SQL server, and any orderable type. If the
         type is number or time, then partition boundaries can be inferred from
-        npartitions or bytes_per_chunk; otherwide must supply explicit
-        ``divisions=``.
+        ``npartitions`` or ``bytes_per_chunk``; otherwise must supply explicit
+        ``divisions``.
+    columns : sequence of str or SqlAlchemy column or None
+        Which columns to select; if None, gets all. Note can be a mix of str and SqlAlchemy columns
     schema : str or None
-        If using a table name, pass this to sqlalchemy to select which DB
-        schema to use within the URI connection
+        Pass this to sqlalchemy to select which DB schema to use within the
+        URI connection
+    divisions: sequence
+        Values of the index column to split the table by. If given, this will
+        override ``npartitions`` and ``bytes_per_chunk``. The divisions are the value
+        boundaries of the index column used to define the partitions. For
+        example, ``divisions=list('acegikmoqsuwz')`` could be used to partition
+        a string column lexographically into 12 partitions, with the implicit
+        assumption that each partition contains similar numbers of records.
+    npartitions : int
+        Number of partitions, if ``divisions`` is not given. Will split the values
+        of the index column linearly between ``limits``, if given, or the column
+        max/min. The index column must be numeric or time for this to work
+    limits: 2-tuple or None
+        Manually give upper and lower range of values for use with ``npartitions``;
+        if None, first fetches max/min from the DB. Upper limit, if
+        given, is inclusive.
+    bytes_per_chunk : str or int
+        If both ``divisions`` and ``npartitions`` is None, this is the target size of
+        each partition, in bytes
+    head_rows : int
+        How many rows to load for inferring the data-types, and memory per row
+    meta : empty DataFrame or None
+        If provided, do not attempt to infer dtypes, but use these, coercing
+        all chunks on load
+    engine_kwargs : dict or None
+        Specific db engine parameters for sqlalchemy
     kwargs : dict
-        Additional parameters to pass to `dd.read_sql_query()`
+        Additional parameters to pass to `pd.read_sql()`
 
     Returns
     -------
     dask.dataframe
+
+    See Also
+    --------
+    read_sql_query : Read SQL query into a DataFrame.
 
     Examples
     --------
@@ -266,21 +273,92 @@ def read_sql_table(
             + "Note: Dask does not support SQLAlchemy connectables here"
         )
 
-    engine_kwargs = {} if "engine_kwargs" not in kwargs else kwargs["engine_kwargs"]
+    engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(con, **engine_kwargs)
     m = sa.MetaData()
-    if isinstance(table, str):
-        table = sa.Table(table, m, autoload=True, autoload_with=engine, schema=schema)
+    if isinstance(table_name, str):
+        table_name = sa.Table(
+            table_name, m, autoload=True, autoload_with=engine, schema=schema
+        )
     else:
-        raise TypeError("'table' must be of type str, not " + str(type(table)))
+        raise TypeError("'table' must be of type str, not " + str(type(table_name)))
     engine.dispose()
 
+    columns = (
+        [
+            (
+                sa.Column(c, table_name.columns[c].type)
+                if isinstance(c, str)
+                else sa.Column(c.name, c.type)
+            )
+            for c in columns
+        ]
+        if columns
+        else [sa.Column(c.name, c.type) for c in table_name.columns]
+    )
+    index = (
+        sa.Column(index_col, table_name.columns[index_col].type)
+        if isinstance(index_col, str)
+        else sa.Column(index_col.name, index_col.type)
+    )
+
+    if index.name not in [c.name for c in columns]:
+        columns.append(index)
+
+    query = sql.select(columns).select_from(table_name)
+
     return read_sql_query(
-        sql=sql.select(table),
+        sql=query,
         con=con,
-        index_col=index_col,
+        index_col=index,
+        divisions=divisions,
+        npartitions=npartitions,
+        limits=limits,
+        bytes_per_chunk=bytes_per_chunk,
+        head_rows=head_rows,
+        meta=meta,
+        engine_kwargs=engine_kwargs,
         **kwargs,
     )
+
+
+def read_sql(sql, con, index_col, **kwargs):
+    """
+    Read SQL query or database table into a DataFrame.
+
+    This function is a convenience wrapper around ``read_sql_table`` and
+    ``read_sql_query``. It will delegate to the specific function depending
+    on the provided input. A SQL query will be routed to ``read_sql_query``,
+    while a database table name will be routed to ``read_sql_table``.
+    Note that the delegated function might have more specific notes about
+    their functionality not listed here.
+
+    Parameters
+    ----------
+    sql : str or SQLAlchemy Selectable
+        Name of SQL table in database or SQL query to be executed. TextClause is not supported
+    con : str
+        Full sqlalchemy URI for the database connection
+    index_col : str
+        Column which becomes the index, and defines the partitioning. Should
+        be a indexed column in the SQL server, and any orderable type. If the
+        type is number or time, then partition boundaries can be inferred from
+        ``npartitions`` or ``bytes_per_chunk``; otherwise must supply explicit
+        ``divisions``.
+
+    Returns
+    -------
+    dask.dataframe
+
+    See Also
+    --------
+    read_sql_table : Read SQL database table into a DataFrame.
+    read_sql_query : Read SQL query into a DataFrame.
+    """
+    if isinstance(sql, str):
+        return read_sql_table(sql, con, index_col, **kwargs)
+    else:
+        return read_sql_query(sql, con, index_col, **kwargs)
 
 
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):

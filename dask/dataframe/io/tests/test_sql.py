@@ -4,7 +4,7 @@ from contextlib import contextmanager
 import pytest
 
 # import dask
-from dask.dataframe.io.sql import read_sql_query, read_sql_table
+from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
 
@@ -328,7 +328,7 @@ def test_no_meta_no_head_rows(db):
         read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
 
 
-def test_range(db):
+def test_limits(db):
     data = read_sql_table("test", db, npartitions=2, index_col="number", limits=[1, 4])
     assert data.index.min().compute() == 1
     assert data.index.max().compute() == 4
@@ -350,62 +350,6 @@ def test_datetimes():
         assert data.divisions[0] == df.b.min()
         df2 = df.set_index("b")
         assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
-
-
-# def test_with_func(db):
-#     from sqlalchemy import sql
-
-#     index = sql.func.abs(sql.column("negish")).label("abs")
-
-#     # function for the index, get all columns
-#     data = read_sql_table("test", db, npartitions=2, index_col=index)
-#     assert data.divisions[0] == 0
-#     part = data.get_partition(0).compute()
-#     assert (part.index == 0).all()
-
-#     # now an arith op for one column too; it's name will be 'age'
-#     data = read_sql_table(
-#         "test",
-#         db,
-#         npartitions=2,
-#         index_col=index,
-#         columns=[index, -(sql.column("age"))],
-#     )
-#     assert (data.age.compute() < 0).all()
-
-#     # a column that would have no name, give it a label
-#     index = (-(sql.column("negish"))).label("index")
-#     data = read_sql_table(
-#         "test", db, npartitions=2, index_col=index, columns=["negish", "age"]
-#     )
-#     d = data.compute()
-#     assert (-d.index == d["negish"]).all()
-
-
-def test_no_nameless_index(db):
-    from sqlalchemy import sql
-
-    index = -(sql.column("negish"))
-    with pytest.raises(ValueError):
-        read_sql_table(
-            "test", db, npartitions=2, index_col=index, columns=["negish", "age", index]
-        )
-
-    index = sql.func.abs(sql.column("negish"))
-
-    # function for the index, get all columns
-    with pytest.raises(ValueError):
-        read_sql_table("test", db, npartitions=2, index_col=index)
-
-
-def test_select_from_select(db):
-    from sqlalchemy import sql
-
-    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
-        sql.table("test")
-    )
-    out = read_sql_query(s1, db, npartitions=2, index_col="number")
-    assert_eq(out, df[["name"]])
 
 
 def test_extra_connection_engine_keywords(capsys, db):
@@ -431,11 +375,84 @@ def test_extra_connection_engine_keywords(capsys, db):
     assert_eq(data, df)
 
 
+def test_query(db):
+    import sqlalchemy as sa
+    from sqlalchemy import sql
+
+    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql_query(s1, db, npartitions=2, index_col="number")
+    assert_eq(out, df[["name"]])
+
+    s2 = (
+        sql.select(
+            [
+                sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
+                sql.column("name"),
+            ]
+        )
+        .where(sql.column("number") >= 5)
+        .select_from(sql.table("test"))
+    )
+
+    out = read_sql_query(s2, db, npartitions=2, index_col="number")
+    assert_eq(out, df.loc[5:, ["name"]])
+
+
+def test_query_index_from_query(db):
+    from sqlalchemy import sql
+
+    number = sql.column("number")
+    name = sql.column("name")
+    s1 = sql.select([number, name, sql.func.length(name).label("lenname")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql_query(s1, db, npartitions=2, index_col="lenname")
+
+    lenname_df = df.copy()
+    lenname_df["lenname"] = lenname_df["name"].str.len()
+    lenname_df = lenname_df.reset_index().set_index("lenname")
+    assert_eq(out, lenname_df.loc[:, ["number", "name"]])
+
+
+def test_query_with_meta(db):
+    from sqlalchemy import sql
+
+    data = {
+        "name": pd.Series([], name="name", dtype="str"),
+        "age": pd.Series([], name="age", dtype="int"),
+    }
+    index = pd.Index([], name="number", dtype="int")
+    meta = pd.DataFrame(data, index=index)
+
+    s1 = sql.select(
+        [sql.column("number"), sql.column("name"), sql.column("age")]
+    ).select_from(sql.table("test"))
+    out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
+    assert_eq(out, df[["name", "age"]])
+
+
 def test_no_character_index_without_divisions(db):
 
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
+
+
+def test_read_sql(db):
+    from sqlalchemy import sql
+
+    s = sql.select([sql.column("number"), sql.column("name")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql(s, db, npartitions=2, index_col="number")
+    assert_eq(out, df[["name"]])
+
+    data = read_sql_table("test", db, npartitions=2, index_col="number").compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
 
 
 @contextmanager

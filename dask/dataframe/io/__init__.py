@@ -12,7 +12,7 @@ from .io import (
     to_records,
 )
 from .json import read_json, to_json
-from .sql import read_sql_table, to_sql
+from .sql import read_sql, read_sql_query, read_sql_table, to_sql
 
 try:
     from .parquet import read_parquet, to_parquet

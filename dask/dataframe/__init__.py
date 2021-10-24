@@ -23,6 +23,8 @@ try:
         read_fwf,
         read_hdf,
         read_json,
+        read_sql,
+        read_sql_query,
         read_sql_table,
         read_table,
         to_bag,
