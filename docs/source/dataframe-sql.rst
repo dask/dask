@@ -75,14 +75,14 @@ You may find the dask API easier to use than writing SQL (if you
 are already used to Pandas), and the diagnostic feedback more useful.
 These points can debatably be in Dask's favour.
 
-Loading from SQL with read_sql_table
-------------------------------------
+Loading from SQL with read_sql_table or read_sql_query
+------------------------------------------------------
 
 Dask allows you to build dataframes from SQL tables and queries using the
-function :func:`dask.dataframe.read_sql_table`, based on the `Pandas version`_,
-sharing most arguments, and using SQLAlchemy for the actual handling of the
-queries. You may need to install additional driver packages for your chosen
-database server.
+function :func:`dask.dataframe.read_sql_table` and :func:`dask.dataframe.read_sql_query`,
+based on the `Pandas version`_, sharing most arguments, and using SQLAlchemy
+for the actual handling of the queries. You may need to install additional
+driver packages for your chosen database server.
 
 .. _Pandas version: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_sql_table.html
 
@@ -92,7 +92,7 @@ on a cluster, the following are the main differences versus Pandas to watch out 
 - Dask does not support arbitrary text queries, only whole tables and SQLAlchemy
   `sql expressions`_
 
-- the engine argument must be a `URI string`_, not an SQLAlchemy engine/connection
+- the con argument must be a `URI string`_, not an SQLAlchemy engine/connection
 
 - partitioning information is *required*, which can be as simple as providing
   an index column argument, or can be more explicit (see below)
@@ -187,13 +187,13 @@ the point of execution.
             number, name, sql.func.length(name).label("lenname")
         ]
         ).select_from(sql.table("test"))
-    data = read_sql_table(
-        "test", db, npartitions=2, index_col=number
+    data = read_sql_query(
+        s1, db, npartitions=2, index_col=number
     )
 
 Here we have also demonstrated the use of the function ``length`` to
 perform an operation server-side. Note that it is necessary to *label* such
-operations, but you can use them for the index column (by name or expression),
+operations, but you can use them for the index column,
 so long as it is also
 in the set of selected columns. If using for the index/partitioning, the
 column should still be indexed in the database, for performance.

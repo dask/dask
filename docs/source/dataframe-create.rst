@@ -27,6 +27,8 @@ File Formats:
     read_orc
     read_json
     read_sql_table
+    read_sql_query
+    read_sql
     read_table
     read_fwf
     from_bcolz
