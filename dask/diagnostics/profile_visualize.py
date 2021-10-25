@@ -1,4 +1,5 @@
 import random
+import warnings
 from bisect import bisect_left
 from itertools import cycle
 from operator import add, itemgetter
@@ -145,7 +146,9 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwargs):
+def visualize(
+    profilers, filename="profile.html", show=True, save=None, mode=None, **kwargs
+):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
@@ -154,12 +157,12 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     ----------
     profilers : profiler or list
         Profiler or list of profilers.
-    file_path : string, optional
+    filename : string, optional
         Name of the plot output file.
     show : boolean, optional
         If True (default), the plot is opened in a browser.
     save : boolean, optional
-        If True (default), the plot is saved to disk.
+        If True (default when not in notebook), the plot is saved to disk.
     mode : str, optional
         Mode passed to bokeh.output_file()
     **kwargs
@@ -173,9 +176,18 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.io import state
 
-    if not state.curstate().notebook:
-        file_path = file_path or "profile.html"
-        bp.output_file(file_path, mode=mode)
+    if "file_path" in kwargs:
+        warnings.warn(
+            "The file_path keyword argument is deprecated "
+            "and will be removed in a future release. "
+            "Please use filename instead.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        filename = kwargs.pop("file_path")
+
+    if save is None:
+        save = not state.curstate().notebook
 
     if not isinstance(profilers, list):
         profilers = [profilers]
@@ -200,7 +212,8 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
         p = bp.gridplot([[f] for f in figs])
     if show:
         bp.show(p)
-    if file_path and save:
+    if save:
+        bp.output_file(filename, mode=mode)
         bp.save(p)
     return p
 
