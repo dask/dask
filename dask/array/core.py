@@ -1878,8 +1878,8 @@ class Array(DaskMethodsMixin):
         >>> x.blocks[::2].compute()
         array([0, 1, 4, 5])
         >>> x.blocks[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> x.blocks.ravel()
+        array([6, 7, 0, 1])
+        >>> x.blocks.ravel() # doctest: +NORMALIZE_WHITESPACE
         [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
@@ -5330,7 +5330,7 @@ class BlockView:
     Examples
     --------
     >>> import dask.array as da
-    >>> from dask.array import BlockView
+    >>> from dask.array.core import BlockView
     >>> x = da.arange(8, chunks=2)
     >>> bv = BlockView(x)
     >>> bv.shape # aliases x.numblocks
@@ -5344,8 +5344,8 @@ class BlockView:
     >>> bv[::2].compute()
     array([0, 1, 4, 5])
     >>> bv[[-1, 0]].compute()
-    array([8, 9, 0, 1])
-    >>> bv.ravel()
+    array([6, 7, 0, 1])
+    >>> bv.ravel()  # doctest: +NORMALIZE_WHITESPACE
     [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
      dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
      dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
