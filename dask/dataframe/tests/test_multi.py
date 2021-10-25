@@ -582,6 +582,58 @@ def test_merge_asof_unsorted_raises():
         result.compute()
 
 
+def test_merge_asof_with_empty():
+    good_df = pd.DataFrame({"index_col": list(range(10)), "good_val": list(range(10))})
+    good_dd = dd.from_pandas(good_df, npartitions=2)
+    empty_df = (
+        good_df[good_df.index_col < 0].copy().rename(columns={"good_val": "empty_val"})
+    )
+    empty_dd = dd.from_pandas(empty_df, npartitions=2)
+
+    # left good, right empty
+    result_dd = dd.merge_asof(
+        good_dd.set_index("index_col"),
+        empty_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        good_df.set_index("index_col"),
+        empty_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+    # left empty, right good
+    result_dd = dd.merge_asof(
+        empty_dd.set_index("index_col"),
+        good_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        empty_df.set_index("index_col"),
+        good_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+    # left/right both empty
+    result_dd = dd.merge_asof(
+        empty_dd.set_index("index_col"),
+        empty_dd.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    result_df = pd.merge_asof(
+        empty_df.set_index("index_col"),
+        empty_df.set_index("index_col"),
+        left_index=True,
+        right_index=True,
+    )
+    assert_eq(result_dd, result_df, check_index=False)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
@@ -800,13 +852,13 @@ def test_merge(how, shuffle):
 @pytest.mark.parametrize(
     "engine",
     [
-        "cudf",
         pytest.param(
             "pandas",
             marks=pytest.mark.xfail(
                 reason="Pandas does not support leftsemi or leftanti"
             ),
         ),
+        pytest.param("cudf", marks=pytest.mark.gpu),
     ],
 )
 def test_merge_tasks_semi_anti_cudf(engine, how, parts):
@@ -1144,6 +1196,20 @@ def test_join_by_index_patterns(how, shuffle):
             """
 
 
+def test_join_gives_proper_divisions():
+    # https://github.com/dask/dask/issues/8113
+    df = pd.DataFrame({"a": ["a", "b", "c"]}, index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    right_df = pd.DataFrame({"b": [1.0, 2.0, 3.0]}, index=["a", "b", "c"])
+
+    expected = df.join(right_df, how="inner", on="a")
+    actual = ddf.join(right_df, how="inner", on="a")
+    assert actual.divisions == ddf.divisions
+
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
 @pytest.mark.parametrize("shuffle", ["disk", "tasks"])
 def test_merge_by_multiple_columns(how, shuffle):
@@ -1381,14 +1447,14 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
-    assert actual.known_divisions
+    assert not actual.known_divisions
     assert_eq(actual, expected)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
-    assert actual.known_divisions
+    assert not actual.known_divisions
     assert_eq(actual, expected)
 
 
@@ -1619,7 +1685,6 @@ def test_concat3():
         )
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat4_interleave_partitions():
     pdf1 = pd.DataFrame(
         np.random.randn(10, 5), columns=list("ABCDE"), index=list("abcdefghij")
@@ -1667,7 +1732,6 @@ def test_concat4_interleave_partitions():
     assert msg in str(err.value)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_concat5():
     pdf1 = pd.DataFrame(
         np.random.randn(7, 5), columns=list("ABCDE"), index=list("abcdefg")
@@ -1774,7 +1838,6 @@ def test_concat5():
         (False, False, False),
     ],
 )
-@pytest.mark.filterwarnings("ignore")
 def test_concat_categorical(known, cat_index, divisions):
     frames = [
         pd.DataFrame(
@@ -1927,7 +1990,6 @@ def test_append():
     check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.filterwarnings("ignore")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2099,7 +2161,9 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
-@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+@pytest.mark.parametrize(
+    "engine", ["pandas", pytest.param("cudf", marks=pytest.mark.gpu)]
+)
 def test_groupby_concat_cudf(engine):
 
     # NOTE: Issue #5643 Reproducer
@@ -2192,12 +2256,8 @@ def test_categorical_join():
     assert actual_dask.join_col.dtype == "category"
 
     actual = actual_dask.compute()
-    if dd._compat.PANDAS_GT_100:
-        assert actual.join_col.dtype == "category"
-        assert assert_eq(expected, actual)
-    else:
-        assert actual.join_col.dtype == "object"
-        assert (expected.values == actual.values).all()
+    assert actual.join_col.dtype == "category"
+    assert assert_eq(expected, actual)
 
 
 def test_categorical_merge_with_columns_missing_from_left():
@@ -2248,9 +2308,8 @@ def test_categorical_merge_retains_category_dtype():
     actual_dask = df1.merge(df2, on="A")
     assert actual_dask.A.dtype == "category"
 
-    if dd._compat.PANDAS_GT_100:
-        actual = actual_dask.compute()
-        assert actual.A.dtype == "category"
+    actual = actual_dask.compute()
+    assert actual.A.dtype == "category"
 
 
 def test_categorical_merge_does_not_raise_setting_with_copy_warning():

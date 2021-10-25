@@ -9,8 +9,6 @@ from operator import add
 
 from tornado import gen
 
-from distributed import futures_of
-from distributed.client import wait
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import loop  # noqa F401
@@ -20,6 +18,7 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.delayed import Delayed
+from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir
 
@@ -30,6 +29,10 @@ if "should_check_state" in get_named_args(gen_cluster):
 
 def test_can_import_client():
     from dask.distributed import Client  # noqa: F401
+
+
+def test_can_import_nested_things():
+    from dask.distributed.protocol import dumps  # noqa: F401
 
 
 @gen_cluster(client=True)
@@ -319,12 +322,19 @@ def test_blockwise_array_creation(c, io, fuse):
     ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+@pytest.mark.parametrize("from_futures", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
-    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if from_futures:
+        parts = [df.iloc[:5], df.iloc[5:10], df.iloc[10:15]]
+        futs = c.scatter(parts)
+        ddf0 = dd.from_delayed(futs, meta=parts[0])
+    else:
+        ddf0 = dd.from_pandas(df, npartitions=3)
 
     if io.startswith("parquet"):
         if io == "parquet-pyarrow":
@@ -528,11 +538,17 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
+
+    # Test marked as "flaky" since the scheduling behavior
+    # is not deterministic. Note that the test is still
+    # very likely to fail every time if the "split" tasks
+    # are not prioritized correctly
 
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
@@ -589,19 +605,24 @@ def test_map_partitions_df_input():
         return d
 
     def main():
-        delayed_df = dd.from_pandas(
-            pd.DataFrame({"a": range(5)}), npartitions=2
-        ).to_delayed()
-        dl = delayed_df[0].persist()
-        wait(dl)
+        item_df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=1)
+        ddf = item_df.to_delayed()[0].persist()
+        merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
-        df = dd.from_pandas(pd.DataFrame({"a": range(5)}), npartitions=2)
-        df = df.map_partitions(f, dl, meta=df._meta)
-        df = df.persist(optimize_graph=False)
-        df.compute()
+        # Notice, we include a shuffle in order to trigger a complex culling
+        merged_df = merged_df.shuffle(on="b")
+
+        merged_df.map_partitions(
+            f, ddf, meta=merged_df, enforce_metadata=False
+        ).compute()
 
     with distributed.LocalCluster(
-        scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False
+        scheduler_port=0,
+        dashboard_address=":0",
+        asynchronous=False,
+        n_workers=1,
+        nthreads=1,
+        processes=False,
     ) as cluster:
         with distributed.Client(cluster, asynchronous=False):
             main()
@@ -617,3 +638,20 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+@gen_cluster(client=True)
+async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
+    fut = c.submit(inc, 1)
+
+    hlg = HighLevelGraph(
+        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
+        {"l1": set()},
+    )
+    # fill hlg.key_dependencies cache. This excludes known futures, so only
+    # includes a subset of all dependencies. Previously if the cache was present
+    # the future dependencies would be missing when packed.
+    hlg.get_all_dependencies()
+    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
+    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
+    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}

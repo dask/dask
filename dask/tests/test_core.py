@@ -84,7 +84,7 @@ def test_GetFunctionTestMixin_class():
 def test_get_dependencies_nested():
     dsk = {"x": 1, "y": 2, "z": (add, (inc, [["x"]]), "y")}
 
-    assert get_dependencies(dsk, "z") == set(["x", "y"])
+    assert get_dependencies(dsk, "z") == {"x", "y"}
     assert sorted(get_dependencies(dsk, "z", as_list=True)) == ["x", "y"]
 
 
@@ -96,13 +96,13 @@ def test_get_dependencies_empty():
 
 def test_get_dependencies_list():
     dsk = {"x": 1, "y": 2, "z": ["x", [(inc, "y")]]}
-    assert get_dependencies(dsk, "z") == set(["x", "y"])
+    assert get_dependencies(dsk, "z") == {"x", "y"}
     assert sorted(get_dependencies(dsk, "z", as_list=True)) == ["x", "y"]
 
 
 def test_get_dependencies_task():
     dsk = {"x": 1, "y": 2, "z": ["x", [(inc, "y")]]}
-    assert get_dependencies(dsk, task=(inc, "x")) == set(["x"])
+    assert get_dependencies(dsk, task=(inc, "x")) == {"x"}
     assert get_dependencies(dsk, task=(inc, "x"), as_list=True) == ["x"]
 
 
@@ -140,14 +140,6 @@ def test_get_dependencies_task_none():
 
 
 def test_get_deps():
-    """
-    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> dependencies
-    {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents  # doctest: +SKIP
-    {'a': {'b'}, 'b': {'c'}, 'c': set()}
-    """
     dsk = {
         "a": [1, 2, 3],
         "b": "a",

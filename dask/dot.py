@@ -30,13 +30,13 @@ def task_label(task):
         func = task[1]
     if hasattr(func, "funcs"):
         if len(func.funcs) > 1:
-            return "{0}(...)".format(funcname(func.funcs[0]))
+            return f"{funcname(func.funcs[0])}(...)"
         else:
             head = funcname(func.funcs[0])
     else:
         head = funcname(func)
     if any(has_sub_tasks(i) for i in task[1:]):
-        return "{0}(...)".format(head)
+        return f"{head}(...)"
     else:
         return head
 
@@ -94,7 +94,7 @@ def label(x, cache=None):
             for h in m.groups():
                 if cache is not None:
                     n = cache.get(h, len(cache))
-                    label = "#{0}".format(n)
+                    label = f"#{n}"
                     # cache will be overwritten destructively
                     cache[h] = n
                 else:
@@ -136,15 +136,15 @@ def to_graphviz(
     verbose=False,
     **kwargs,
 ):
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-    if graph_attr is None:
-        graph_attr = {}
-
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
+    node_attr["fontname"] = "helvetica"
+
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr

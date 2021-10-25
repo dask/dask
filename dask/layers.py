@@ -135,7 +135,7 @@ class ArrayOverlapLayer(Layer):
         self._cached_keys = None
 
     def __repr__(self):
-        return "ArrayOverlapLayer<name='{}'".format(self.name)
+        return f"ArrayOverlapLayer<name='{self.name}'"
 
     @property
     def _dict(self):
@@ -298,14 +298,14 @@ def reshapelist(shape, seq):
 def fractional_slice(task, axes):
     """
 
-    >>> fractional_slice(('x', 5.1), {0: 2})  # doctest: +SKIP
-    (getitem, ('x', 6), (slice(0, 2),))
+    >>> fractional_slice(('x', 5.1), {0: 2})
+    (<built-in function getitem>, ('x', 5), (slice(-2, None, None),))
 
-    >>> fractional_slice(('x', 3, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, ('x', 3, 5), (slice(None, None, None), slice(-3, None)))
+    >>> fractional_slice(('x', 3, 5.1), {0: 2, 1: 3})
+    (<built-in function getitem>, ('x', 3, 5), (slice(None, None, None), slice(-3, None, None)))
 
-    >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
-    (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
+    >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})
+    (<built-in function getitem>, ('x', 3, 5), (slice(0, 2, None), slice(-3, None, None)))
     """
     rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
 

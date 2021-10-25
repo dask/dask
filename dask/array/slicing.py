@@ -4,7 +4,7 @@ import math
 import warnings
 from itertools import product
 from numbers import Integral, Number
-from operator import add, getitem, itemgetter
+from operator import add, itemgetter
 
 import numpy as np
 from tlz import accumulate, concat, memoize, merge, pluck
@@ -13,6 +13,7 @@ from .. import config, core, utils
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import is_arraylike
+from .chunk import getitem
 
 colon = slice(None, None, None)
 
@@ -134,12 +135,15 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
 
     Examples
     --------
+    >>> from pprint import pprint
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
-    ...                              (slice(10, 35),))  #  doctest: +SKIP
-    >>> dsk  # doctest: +SKIP
-    {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
-     ('y', 1): (getitem, ('x', 1), (slice(0, 15),))}
-    >>> blockdims  # doctest: +SKIP
+    ...                              (slice(10, 35),), 8)
+    >>> pprint(dsk)  # doctest: +ELLIPSIS
+    {('y', 0): (<function getitem at ...>,
+                ('x', 0),
+                (slice(10, 20, 1),)),
+     ('y', 1): (<function getitem at ...>, ('x', 1), (slice(0, 15, 1),))}
+    >>> blockdims
     ((10, 15),)
 
     See Also
@@ -158,7 +162,7 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
         isinstance(index, slice) and index == slice(None, None, None) for index in index
     ):
         suffixes = product(*[range(len(bd)) for bd in blockdims])
-        dsk = dict(((out_name,) + s, (in_name,) + s) for s in suffixes)
+        dsk = {(out_name,) + s: (in_name,) + s for s in suffixes}
         return dsk, blockdims
 
     # Add in missing colons at the end as needed.  x[5] -> x[5, :, :]
@@ -180,7 +184,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index, itemsize):
     Strips out Nones then hands off to slice_wrap_lists
     """
     # Strip Nones from index
-    index2 = tuple([ind for ind in index if ind is not None])
+    index2 = tuple(ind for ind in index if ind is not None)
     where_none = [i for i, ind in enumerate(index) if ind is None]
     where_none_orig = list(where_none)
     for i, x in enumerate(where_none):
@@ -295,7 +299,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
     for dim, ind in zip(shape, index):
         if np.isnan(dim) and ind != slice(None, None, None):
             raise ValueError(
-                "Arrays chunk sizes are unknown: %s%s" % (shape, unknown_chunk_message)
+                f"Arrays chunk sizes are unknown: {shape}{unknown_chunk_message}"
             )
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
@@ -585,23 +589,25 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     Mimics ``np.take``
 
+    >>> from pprint import pprint
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], 8, axis=0)
     >>> chunks
     ((2, 1, 1),)
-    >>> dsk  # doctest: +SKIP
-    {('y', 0): (getitem, (np.concatenate, [(getitem, ('x', 0), ([1, 3, 5],)),
-                                           (getitem, ('x', 2), ([7],))],
-                                          0),
-                         (2, 0, 4, 1))}
+    >>> pprint(dsk)   # doctest: +ELLIPSIS
+    {('y', 0): (<function getitem at ...>, ('x', 0), (array([5, 1]),)),
+     ('y', 1): (<function getitem at ...>, ('x', 2), (array([7]),)),
+     ('y', 2): (<function getitem at ...>, ('x', 0), (array([3]),))}
 
     When list is sorted we retain original block structure
 
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], 8, axis=0)
     >>> chunks
     ((3, 1),)
-    >>> dsk  # doctest: +SKIP
-    {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
-     ('y', 2): (getitem, ('x', 2), ([7],))}
+    >>> pprint(dsk)     # doctest: +ELLIPSIS
+    {('y', 0): (<function getitem at ...>,
+                ('x', 0),
+                (array([1, 3, 5]),)),
+     ('y', 1): (<function getitem at ...>, ('x', 2), (array([7]),))}
 
     When any indexed blocks would otherwise grow larger than
     dask.config.array.chunk-size, we might split them,
@@ -1406,9 +1412,7 @@ def parse_assignment_indices(indices, shape):
                 f"boolean index: {index!r}"
             )
 
-        if (
-            isinstance(index, np.ndarray) or is_dask_collection(index)
-        ) and not index.ndim:
+        if (is_arraylike(index) or is_dask_collection(index)) and not index.ndim:
             raise NotImplementedError(
                 "dask does not yet implement assignment to a scalar "
                 f"numpy or dask array index: {index!r}"

@@ -1,6 +1,275 @@
 Changelog
 =========
 
+2021.10.0
+---------
+
+Released on October 22, 2021
+
+- ``da.store`` to create well-formed ``HighLevelGraph`` (:pr:`8261`) `Guido Imperiale`_
+- CI: force nightly ``pyarrow`` in the upstream build (:pr:`8281`) `Joris Van den Bossche`_
+- Remove ``chest`` (:pr:`8279`) `James Bourbeau`_
+- Skip doctests if optional dependencies are not installed (:pr:`8258`) `Genevieve Buckley`_
+- Update ``tmpdir`` and ``tmpfile`` context manager docstrings (:pr:`8270`) `Daniel Mesejo-León`_
+- Unregister callbacks in doctests (:pr:`8276`) `James Bourbeau`_
+- Fix typo in docs (:pr:`8277`) `JoranDox`_
+- Stale label GitHub action (:pr:`8244`) `Genevieve Buckley`_
+- Client-shutdown method appears twice (:pr:`8273`) `German Shiklov`_
+- Add pre-commit to test requirements (:pr:`8257`) `Genevieve Buckley`_
+- Refactor ``read_metadata`` in ``fastparquet`` engine (:pr:`8092`) `Richard (Rick) Zamora`_
+- Support ``Path`` objects in ``from_zarr`` (:pr:`8266`) `Samuel Gaist`_
+- Make nested redirects work (:pr:`8272`) `Julia Signell`_
+- Set ``memory_usage`` to ``True`` if ``verbose`` is ``True`` in info (:pr:`8222`) `Kinshuk Dua`_
+- Remove individual API doc pages from sphinx toctree (:pr:`8238`) `James Bourbeau`_
+- Ignore whitespace in gufunc ``signature`` (:pr:`8267`) `James Bourbeau`_
+- Add workflow to update gpuCI (:pr:`8215`) `Charles Blackmon-Luca`_
+- ``DataFrame.head`` shouldn't warn when there's one partition (:pr:`8091`) `Pankaj Patil`_
+- Ignore arrow doctests if ``pyarrow`` not installed (:pr:`8256`) `Genevieve Buckley`_
+- Fix ``debugging.html`` redirect (:pr:`8251`) `James Bourbeau`_
+- Fix null sorting for single partition dataframes (:pr:`8225`) `Charles Blackmon-Luca`_
+- Fix ``setup.html`` redirect (:pr:`8249`) `Florian Jetter`_
+- Run ``pyupgrade`` in CI (:pr:`8246`) `Guido Imperiale`_
+- Fix label typo in upstream CI build (:pr:`8237`) `James Bourbeau`_
+- Add support for "dependent" columns in DataFrame.assign (:pr:`8086`) `Suriya Senthilkumar`_
+- add NumPy array of Dask keys to ``Array`` (:pr:`7922`) `Davis Bennett`_
+- Remove unnecessary ``dask.multiprocessing`` import in docs (:pr:`8240`) `Ray Bell`_
+- Adjust retrieving ``_max_workers`` from ``Executor`` (:pr:`8228`) `John A Kirkham`_
+- Update function signatures in ``delayed`` best practices docs (:pr:`8231`) `Vũ Trung Đức`_
+- Docs reoganization (:pr:`7984`) `Julia Signell`_
+- Fix ``df.quantile`` on all missing data (:pr:`8129`) `Julia Signell`_
+- Add ``tokenize.ensure-deterministic`` config option (:pr:`7413`) `Hristo Georgiev`_
+- Use ``inclusive`` rather than ``closed`` with ``pandas>=1.4.0`` and ``pd.date_range`` (:pr:`8213`) `Julia Signell`_
+- Add ``dask-gateway``, Coiled, and Saturn-Cloud to list of Dask setup tools (:pr:`7814`) `Kristopher Overholt`_
+- Ensure existing futures get passed as deps when serializing ``HighLevelGraph`` layers (:pr:`8199`) `Jim Crist-Harif`_
+- Make sure that the divisions of the single partition merge is left (:pr:`8162`) `Julia Signell`_
+- Refactor ``read_metadata`` in ``pyarrow`` parquet engines (:pr:`8072`) `Richard (Rick) Zamora`_
+- Support negative ``drop_axis`` in ``map_blocks`` and ``map_overlap`` (:pr:`8192`) `Gregory R. Lee`_
+- Fix upstream tests (:pr:`8205`) `Julia Signell`_
+- Add support for scalar item assignment by Series (:pr:`8195`) `Charles Blackmon-Luca`_
+- Add some basic examples to doc strings on ``dask.bag`` ``all``, ``any``, ``count`` methods (:pr:`7630`) `Nathan Danielsen`_
+- Don't have upstream report depend on commit message (:pr:`8202`) `James Bourbeau`_
+- Ensure upstream CI cron job runs (:pr:`8200`) `James Bourbeau`_
+- Use ``pytest.param`` to properly label param-specific GPU tests (:pr:`8197`) `Charles Blackmon-Luca`_
+- Add ``test_set_index`` to tests ran on gpuCI (:pr:`8198`) `Charles Blackmon-Luca`_
+- Suppress ``tmpfile`` OSError (:pr:`8191`) `James Bourbeau`_
+- Use ``s.isna`` instead of ``pd.isna(s)`` in ``set_partitions_pre`` (fix cudf CI) (:pr:`8193`) `Charles Blackmon-Luca`_
+- Open an issue for ``test-upstream`` failures (:pr:`8067`) `Wallace Reis`_
+- Fix ``to_parquet`` bug in call to ``pyarrow.parquet.read_metadata`` (:pr:`8186`) `Richard (Rick) Zamora`_
+- Add handling for null values in ``sort_values`` (:pr:`8167`) `Charles Blackmon-Luca`_
+- Bump ``RAPIDS_VER`` for gpuCI (:pr:`8184`) `Charles Blackmon-Luca`_
+- Dispatch walks MRO for lazily registered handlers (:pr:`8185`) `Jim Crist-Harif`_
+- Configure SSHCluster instructions (:pr:`8181`) `Ray Bell`_
+- Preserve ``HighLevelGraphs`` in ``DataFrame.from_delayed`` (:pr:`8174`) `Gabe Joseph`_
+- Deprecate ``inplace`` argument for Dask series renaming (:pr:`8136`) `Marcel Coetzee`_
+- Fix rolling for compatibility with ``pandas > 1.3.0`` (:pr:`8150`) `Julia Signell`_
+- Raise error when ``setitem`` on unknown chunks (:pr:`8166`) `Julia Signell`_
+- Include divisions when doing ``Index.to_series`` (:pr:`8165`) `Julia Signell`_
+
+
+2021.09.1
+---------
+
+Released on September 21, 2021
+
+- Fix ``groupby`` for future pandas (:pr:`8151`) `Julia Signell`_
+- Remove warning filters in tests that are no longer needed (:pr:`8155`) `Julia Signell`_
+- Add link to diagnostic visualize function in local diagnostic docs (:pr:`8157`) `David Hoese`_
+- Add ``datetime_is_numeric`` to ``dataframe.describe`` (:pr:`7719`) `Julia Signell`_
+- Remove references to ``pd.Int64Index`` in anticipation of deprecation (:pr:`8144`) `Julia Signell`_
+- Use ``loc`` if needed for series ``__get_item__`` (:pr:`7953`) `Julia Signell`_
+- Specifically ignore warnings on mean for empty slices (:pr:`8125`) `Julia Signell`_
+- Skip ``groupby`` ``nunique`` test for pandas >= 1.3.3 (:pr:`8142`) `Julia Signell`_
+- Implement ``ascending`` arg for ``sort_values`` (:pr:`8130`) `Charles Blackmon-Luca`_
+- Replace ``operator.getitem``  (:pr:`8015`) `Naty Clementi`_
+- Deprecate ``zero_broadcast_dimensions`` and ``homogeneous_deepmap`` (:pr:`8134`) `SnkSynthesis`_
+- Add error if ``drop_index`` is negative (:pr:`8064`) `neel iyer`_
+- Allow ``scheduler`` to be an ``Executor`` (:pr:`8112`) `John A Kirkham`_
+- Handle ``asarray``/``asanyarray`` cases where ``like`` is a ``dask.Array`` (:pr:`8128`) `Peter Andreas Entschev`_
+- Fix ``index_col`` duplication if ``index_col`` is type ``str`` (:pr:`7661`) `McToel`_
+- Add ``dtype`` and ``order`` to ``asarray`` and ``asanyarray`` definitions (:pr:`8106`) `Julia Signell`_
+- Deprecate ``dask.dataframe.Series.__contains__`` (:pr:`7914`) `Julia Signell`_
+- Fix edge case with ``like``-arrays in ``_wrapped_qr`` (:pr:`8122`) `Peter Andreas Entschev`_
+- Deprecate ``boundary_slice`` kwarg: ``kind`` for pandas compat (:pr:`8037`) `Julia Signell`_
+
+
+2021.09.0
+---------
+
+Released on September 3, 2021
+
+- Fewer open files (:pr:`7303`) `Julia Signell`_
+- Add ``FileNotFound`` to expected http errors (:pr:`8109`) `Martin Durant`_
+- Add ``DataFrame.sort_values`` to API docs (:pr:`8107`) `Benjamin Zaitlen`_
+- Change to ``dask.order``: be more eager at times (:pr:`7929`) `Erik Welch`_
+- Add pytest color to CI (:pr:`8090`) `James Bourbeau`_
+- FIX: ``make_people`` works with ``processes`` scheduler (:pr:`8103`) `Dahn`_
+- Adds ``deep`` param to Dataframe copy method and restrict it to ``False`` (:pr:`8068`) `João Paulo Lacerda`_
+- Fix typo in configuration docs (:pr:`8104`) `Robert Hales`_
+- Update formatting in ``DataFrame.query`` docstring (:pr:`8100`) `James Bourbeau`_
+- Un-xfail ``sparse`` tests for 0.13.0 release (:pr:`8102`) `James Bourbeau`_
+- Add axes property to DataFrame and Series (:pr:`8069`) `Jordan Jensen`_
+- Add CuPy support in ``da.unique`` (values only) (:pr:`8021`) `Peter Andreas Entschev`_
+- Unit tests for ``sparse.zeros_like`` (xfailed) (:pr:`8093`) `Guido Imperiale`_
+- Add explicit ``like`` kwarg support to array creation functions (:pr:`8054`) `Peter Andreas Entschev`_
+- Separate Array and DataFrame mindeps builds (:pr:`8079`) `James Bourbeau`_
+- Fork out ``percentile_dispatch`` to ``dask.array`` (:pr:`8083`) `GALI PREM SAGAR`_
+- Ensure ``filepath`` exists in ``to_parquet`` (:pr:`8057`) `James Bourbeau`_
+- Update scheduler plugin usage in ``test_scheduler_highlevel_graph_unpack_import`` (:pr:`8080`) `James Bourbeau`_
+- Add ``DataFrame.shuffle`` to API docs (:pr:`8076`) `Martin Fleischmann`_
+- Order requirements alphabetically (:pr:`8073`) `John A Kirkham`_
+
+
+2021.08.1
+---------
+
+Released on August 20, 2021
+
+- Add ``ignore_metadata_file`` option to ``read_parquet`` (``pyarrow-dataset`` and ``fastparquet`` support only) (:pr:`8034`) `Richard (Rick) Zamora`_
+- Add reference to ``pytest-xdist`` in dev docs (:pr:`8066`) `Julia Signell`_
+- Include ``tz`` in meta from ``to_datetime`` (:pr:`8000`) `Julia Signell`_
+- CI Infra Docs (:pr:`7985`) `Benjamin Zaitlen`_
+- Include invalid DataFrame key in ``assert_eq`` check (:pr:`8061`) `James Bourbeau`_
+- Use ``__class__`` when creating DataFrames (:pr:`8053`) `Mads R. B. Kristensen`_
+- Use development version of ``distributed`` in gpuCI build (:pr:`7976`) `James Bourbeau`_
+- Ignore whitespace when gufunc ``signature`` (:pr:`8049`) `James Bourbeau`_
+- Move pandas import and percentile dispatch refactor (:pr:`8055`) `GALI PREM SAGAR`_
+- Add colors to represent high level layer types (:pr:`7974`) `Freyam Mehta`_
+- Upstream instance fix (:pr:`8060`) `Jacob Tomlinson`_
+- Add ``dask.widgets`` and migrate HTML reprs to ``jinja2`` (:pr:`8019`) `Jacob Tomlinson`_
+- Remove ``wrap_func_like_safe``, not required with NumPy >= 1.17 (:pr:`8052`) `Peter Andreas Entschev`_
+- Fix threaded scheduler memory backpressure regression (:pr:`8040`) `David Hoese`_
+- Add percentile dispatch (:pr:`8029`) `GALI PREM SAGAR`_
+- Use a publicly documented attribute ``obj`` in ``groupby`` rather than private ``_selected_obj`` (:pr:`8038`) `GALI PREM SAGAR`_
+- Specify module to ``import rechunk`` from (:pr:`8039`) `Illviljan`_
+- Use ``dict`` to store data for {nan,}arg{min,max} in certain cases (:pr:`8014`) `Peter Andreas Entschev`_
+- Fix ``blocksize`` description formatting in ``read_pandas`` (:pr:`8047`) `Louis Maddox`_
+- Fix "point" -> "pointers" typo in docs (:pr:`8043`) `David Chudzicki`_
+
+
+2021.08.0
+---------
+
+Released on August 13, 2021
+
+- Fix ``to_orc`` delayed compute behavior (:pr:`8035`) `Richard (Rick) Zamora`_
+- Don't convert to low-level task graph in ``compute_as_if_collection`` (:pr:`7969`) `James Bourbeau`_
+- Fix multifile read for hdf (:pr:`8033`) `Julia Signell`_
+- Resolve warning in ``distributed`` tests (:pr:`8025`) `James Bourbeau`_
+- Update ``to_orc`` collection name (:pr:`8024`) `James Bourbeau`_
+- Resolve ``skipfooter`` problem (:pr:`7855`) `Ross`_
+- Raise ``NotImplementedError`` for non-indexable arg passed to ``to_datetime`` (:pr:`7989`) `Doug Davis`_
+- Ensure we error on warnings from ``distributed`` (:pr:`8002`) `James Bourbeau`_
+- Added ``dict`` format in ``to_bag`` accessories of DataFrame (:pr:`7932`) `gurunath`_
+- Delayed docs indirect dependencies (:pr:`8016`) `aa1371`_
+- Add tooltips to graphviz high-level graphs (:pr:`7973`) `Freyam Mehta`_
+- Close 2021 User Survey (:pr:`8007`) `Julia Signell`_
+- Reorganize CuPy tests into multiple files (:pr:`8013`) `Peter Andreas Entschev`_
+- Refactor and Expand Dask-Dataframe ORC API (:pr:`7756`) `Richard (Rick) Zamora`_
+- Don't enforce columns if ``enforce=False`` (:pr:`7916`) `Julia Signell`_
+- Fix ``map_overlap`` trimming behavior when ``drop_axis`` is not ``None`` (:pr:`7894`) `Gregory R. Lee`_
+- Mark gpuCI CuPy test as flaky (:pr:`7994`) `Peter Andreas Entschev`_
+- Avoid using ``Delayed`` in ``to_csv`` and ``to_parquet`` (:pr:`7968`) `Matthew Rocklin`_
+- Removed redundant ``check_dtypes`` (:pr:`7952`) `gurunath`_
+- Use ``pytest.warns`` instead of raises for checking parquet engine deprecation (:pr:`7993`) `Joris Van den Bossche`_
+- Bump ``RAPIDS_VER`` in gpuCI to 21.10 (:pr:`7991`) `Charles Blackmon-Luca`_
+- Add back ``pyarrow-legacy`` test coverage for ``pyarrow>=5`` (:pr:`7988`) `Richard (Rick) Zamora`_
+- Allow ``pyarrow>=5`` in ``to_parquet`` and ``read_parquet`` (:pr:`7967`) `Richard (Rick) Zamora`_
+- Skip CuPy tests requiring NEP-35 when NumPy < 1.20 is available (:pr:`7982`) `Peter Andreas Entschev`_
+- Add ``tail`` and ``head`` to ``SeriesGroupby`` (:pr:`7935`) `Daniel Mesejo-León`_
+- Update Zoom link for monthly meeting (:pr:`7979`) `James Bourbeau`_
+- Add gpuCI build script (:pr:`7966`) `Charles Blackmon-Luca`_
+- Deprecate ``daily_stock`` utility (:pr:`7949`) `James Bourbeau`_
+- Add ``distributed.nanny`` to configuration reference docs (:pr:`7955`) `James Bourbeau`_
+- Require NumPy 1.18+ & Pandas 1.0+ (:pr:`7939`) `John A Kirkham`_
+
+
+2021.07.2
+---------
+
+Released on July 30, 2021
+
+.. note::
+
+  This is the last release with support for NumPy 1.17 and pandas 0.25.
+  Beginning with the next release, NumPy 1.18 and pandas 1.0 will be the minimum
+  supported versions.
+
+- Add ``dask.array`` SVG to the HTML Repr (:pr:`7886`) `Freyam Mehta`_
+- Avoid use of ``Delayed`` in ``to_parquet`` (:pr:`7958`) `Matthew Rocklin`_
+- Temporarily pin ``pyarrow<5`` in CI (:pr:`7960`) `James Bourbeau`_
+- Add deprecation warning for top-level ``ucx`` and ``rmm`` config values (:pr:`7956`) `James Bourbeau`_
+- Remove skips from doctests (4 of 6) (:pr:`7865`) `Zhengnan Zhao`_
+- Remove skips from doctests (5 of 6) (:pr:`7864`) `Zhengnan Zhao`_
+- Adds missing prepend/append functionality to ``da.diff`` (:pr:`7946`) `Peter Andreas Entschev`_
+- Change graphviz font family to sans (:pr:`7931`) `Freyam Mehta`_
+- Fix read-csv name - when path is different, use different name for task (:pr:`7942`) `Julia Signell`_
+- Update configuration reference for ``ucx`` and ``rmm`` changes (:pr:`7943`) `James Bourbeau`_
+- Add meta support to ``__setitem__`` (:pr:`7940`) `Peter Andreas Entschev`_
+- NEP-35 support for ``slice_with_int_dask_array`` (:pr:`7927`) `Peter Andreas Entschev`_
+- Unpin fastparquet in CI (:pr:`7928`) `James Bourbeau`_
+- Remove skips from doctests (3 of 6) (:pr:`7872`) `Zhengnan Zhao`_
+
+
+2021.07.1
+---------
+
+Released on July 23, 2021
+
+- Make array ``assert_eq`` check dtype (:pr:`7903`) `Julia Signell`_
+- Remove skips from doctests (6 of 6) (:pr:`7863`) `Zhengnan Zhao`_
+- Remove experimental feature warning from actors docs (:pr:`7925`) `Matthew Rocklin`_
+- Remove skips from doctests (2 of 6) (:pr:`7873`) `Zhengnan Zhao`_
+- Separate out Array and Bag API (:pr:`7917`) `Julia Signell`_
+- Implement lazy ``Array.__iter__`` (:pr:`7905`) `Julia Signell`_
+- Clean up places where we inadvertently iterate over arrays (:pr:`7913`) `Julia Signell`_
+- Add ``numeric_only`` kwarg to DataFrame reductions (:pr:`7831`) `Julia Signell`_
+- Add pytest marker for GPU tests (:pr:`7876`) `Charles Blackmon-Luca`_
+- Add support for ``histogram2d`` in ``dask.array`` (:pr:`7827`) `Doug Davis`_
+- Remove skips from doctests (1 of 6) (:pr:`7874`) `Zhengnan Zhao`_
+- Add node size scaling to the Graphviz output for the high level graphs (:pr:`7869`) `Freyam Mehta`_
+- Update old Bokeh links (:pr:`7915`) `Bryan Van de Ven`_
+- Temporarily pin ``fastparquet`` in CI (:pr:`7907`) `James Bourbeau`_
+- Add ``dask.array`` import to progress bar docs (:pr:`7910`) `Fabian Gebhart`_
+- Use separate files for each DataFrame API function and method (:pr:`7890`) `Julia Signell`_
+- Fix ``pyarrow-dataset`` ordering bug (:pr:`7902`) `Richard (Rick) Zamora`_
+- Generalize unique aggregate (:pr:`7892`) `GALI PREM SAGAR`_
+- Raise ``NotImplementedError`` when using ``pd.Grouper`` (:pr:`7857`) `Ruben van de Geer`_
+- Add ``aggregate_files`` argument to enable multi-file partitions in ``read_parquet`` (:pr:`7557`) `Richard (Rick) Zamora`_
+- Un-``xfail`` ``test_daily_stock`` (:pr:`7895`) `James Bourbeau`_
+- Update access configuration docs (:pr:`7837`) `Naty Clementi`_
+- Use packaging for version comparisons (:pr:`7820`) `Elliott Sales de Andrade`_
+- Handle infinite loops in ``merge_asof`` (:pr:`7842`) `gerrymanoim`_
+
+
+2021.07.0
+---------
+
+Released on July 9, 2021
+
+- Include ``fastparquet`` in upstream CI build (:pr:`7884`) `James Bourbeau`_
+- Blockwise: handle non-string constant dependencies  (:pr:`7849`) `Mads R. B. Kristensen`_
+- ``fastparquet`` now supports new time types, including ns precision (:pr:`7880`) `Martin Durant`_
+- Avoid ``ParquetDataset`` API when appending in ``ArrowDatasetEngine`` (:pr:`7544`) `Richard (Rick) Zamora`_
+- Add retry logic to ``test_shuffle_priority`` (:pr:`7879`) `Richard (Rick) Zamora`_
+- Use strict channel priority in CI (:pr:`7878`) `James Bourbeau`_
+- Support nested ``dask.distributed`` imports (:pr:`7866`) `Matthew Rocklin`_
+- Should check module name only, not the entire directory filepath (:pr:`7856`) `Genevieve Buckley`_
+- Updates due to https://github.com/dask/fastparquet/pull/623 (:pr:`7875`) `Martin Durant`_
+- ``da.eye`` fix for ``chunks=-1`` (:pr:`7854`) `Naty Clementi`_
+- Temporarily xfail ``test_daily_stock`` (:pr:`7858`) `James Bourbeau`_
+- Set priority annotations in ``SimpleShuffleLayer`` (:pr:`7846`) `Richard (Rick) Zamora`_
+- Blockwise: stringify constant key inputs (:pr:`7838`) `Mads R. B. Kristensen`_
+- Allow mixing dask and numpy arrays in ``@guvectorize`` (:pr:`6863`) `Julia Signell`_
+- Don't sample dict result of a shuffle group when calculating its size (:pr:`7834`) `Florian Jetter`_
+- Fix scipy tests (:pr:`7841`) `Julia Signell`_
+- Deterministically tokenize ``datetime.date`` (:pr:`7836`) `James Bourbeau`_
+- Add ``sample_rows`` to ``read_csv``-like (:pr:`7825`) `Martin Durant`_
+- Fix typo in ``config.deserialize`` docstring (:pr:`7830`) `Geoffrey Lentner`_
+- Remove warning filter in ``test_dataframe_picklable`` (:pr:`7822`) `James Bourbeau`_
+- Improvements to ``histogramdd`` (for handling inputs that are sequences-of-arrays). (:pr:`7634`) `Doug Davis`_
+- Make ``PY_VERSION`` private (:pr:`7824`) `James Bourbeau`_
+
+
 2021.06.2
 ---------
 
@@ -4324,3 +4593,28 @@ Other
 .. _`Kristopher Overholt`: https://github.com/koverholt
 .. _`tsuga`: https://github.com/tsuga
 .. _`Gabriel Miretti`: https://github.com/gmiretti
+.. _`Geoffrey Lentner`: https://github.com/glentner
+.. _`Charles Blackmon-Luca`: https://github.com/charlesbluca
+.. _`Bryan Van de Ven`: https://github.com/bryevdv
+.. _`Fabian Gebhart`: https://github.com/fgebhart
+.. _`Ross`: https://github.com/rhjmoore
+.. _`gurunath`: https://github.com/rajagurunath
+.. _`aa1371`: https://github.com/aa1371
+.. _`Gregory R. Lee`: https://github.com/grlee77
+.. _`Louis Maddox`: https://github.com/lmmx
+.. _`Dahn`: https://github.com/DahnJ
+.. _`Jordan Jensen`: https://github.com/dotNomad
+.. _`Martin Fleischmann`: https://github.com/martinfleis
+.. _`Robert Hales`: https://github.com/robalar
+.. _`João Paulo Lacerda`: https://github.com/jopasdev
+.. _`SnkSynthesis`: https://github.com/SnkSynthesis
+.. _`JoranDox`: https://github.com/JoranDox
+.. _`Kinshuk Dua`: https://github.com/kinshukdua
+.. _`Suriya Senthilkumar`: https://github.com/suriya-it19
+.. _`Vũ Trung Đức`: https://github.com/vutrungduc7593
+.. _`Nathan Danielsen`: https://github.com/ndanielsen
+.. _`Wallace Reis`: https://github.com/wreis
+.. _`German Shiklov`: https://github.com/Jeremaiha-xmetix
+.. _`Pankaj Patil`: https://github.com/Patil2099
+.. _`Samuel Gaist`: https://github.com/sgaist
+.. _`Marcel Coetzee`: https://github.com/marcelned

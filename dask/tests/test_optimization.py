@@ -264,7 +264,7 @@ def test_inline_functions():
     x, y, i, d = "xyid"
     dsk = {"out": (add, i, d), i: (inc, x), d: (double, y), x: 1, y: 1}
 
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     expected = {"out": (add, (inc, x), d), d: (double, y), x: 1, y: 1}
     assert result == expected
 
@@ -272,7 +272,7 @@ def test_inline_functions():
 def test_inline_ignores_curries_and_partials():
     dsk = {"x": 1, "y": 2, "a": (partial(add, 1), "x"), "b": (inc, "a")}
 
-    result = inline_functions(dsk, [], fast_functions=set([add]))
+    result = inline_functions(dsk, [], fast_functions={add})
     assert result["b"] == (inc, dsk["a"])
     assert "a" not in result
 
@@ -296,7 +296,7 @@ def test_inline_functions_non_hashable():
 
 def test_inline_doesnt_shrink_fast_functions_at_top():
     dsk = {"x": (inc, "y"), "y": 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     assert result == dsk
 
 
@@ -304,7 +304,7 @@ def test_inline_traverses_lists():
     x, y, i, d = "xyid"
     dsk = {"out": (sum, [i, d]), i: (inc, x), d: (double, y), x: 1, y: 1}
     expected = {"out": (sum, [(inc, x), d]), d: (double, y), x: 1, y: 1}
-    result = inline_functions(dsk, [], fast_functions=set([inc]))
+    result = inline_functions(dsk, [], fast_functions={inc})
     assert result == expected
 
 
@@ -317,13 +317,13 @@ def test_inline_functions_protects_output_keys():
 def test_functions_of():
     a = lambda x: x
     b = lambda x: x
-    assert functions_of((a, 1)) == set([a])
-    assert functions_of((a, (b, 1))) == set([a, b])
-    assert functions_of((a, [(b, 1)])) == set([a, b])
-    assert functions_of((a, [[[(b, 1)]]])) == set([a, b])
+    assert functions_of((a, 1)) == {a}
+    assert functions_of((a, (b, 1))) == {a, b}
+    assert functions_of((a, [(b, 1)])) == {a, b}
+    assert functions_of((a, [[[(b, 1)]]])) == {a, b}
     assert functions_of(1) == set()
     assert functions_of(a) == set()
-    assert functions_of((a,)) == set([a])
+    assert functions_of((a,)) == {a}
 
 
 def test_inline_cull_dependencies():

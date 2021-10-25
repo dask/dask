@@ -21,14 +21,14 @@ def f(*args):
 
 def test_ordering_keeps_groups_together(abcde):
     a, b, c, d, e = abcde
-    d = dict(((a, i), (f,)) for i in range(4))
+    d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 1)), (b, 1): (f, (a, 2), (a, 3))})
     o = order(d)
 
     assert abs(o[(a, 0)] - o[(a, 1)]) == 1
     assert abs(o[(a, 2)] - o[(a, 3)]) == 1
 
-    d = dict(((a, i), (f,)) for i in range(4))
+    d = {(a, i): (f,) for i in range(4)}
     d.update({(b, 0): (f, (a, 0), (a, 2)), (b, 1): (f, (a, 1), (a, 3))})
     o = order(d)
 
@@ -103,8 +103,8 @@ def test_base_of_reduce_preferred(abcde):
 
     o = order(dsk)
 
-    assert o[(b, 0)] <= 4
-    assert o[(b, 1)] <= 6
+    assert o[(b, 0)] <= 1
+    assert o[(b, 1)] <= 3
 
 
 @pytest.mark.xfail(reason="Can't please 'em all")
@@ -222,7 +222,7 @@ def test_prefer_deep(abcde):
 
 
 def test_stacklimit(abcde):
-    dsk = dict(("x%s" % (i + 1), (inc, "x%s" % i)) for i in range(10000))
+    dsk = {"x%s" % (i + 1): (inc, "x%s" % i) for i in range(10000)}
     dependencies, dependents = get_deps(dsk)
     ndependencies(dependencies, dependents)
 
@@ -302,7 +302,7 @@ def test_run_smaller_sections(abcde):
     Prefer to run acb first because then we can get that out of the way
     """
     a, b, c, d, e = abcde
-    aa, bb, cc, dd = [x * 2 for x in [a, b, c, d]]
+    aa, bb, cc, dd = (x * 2 for x in [a, b, c, d])
 
     expected = [a, c, b, e, d, cc, bb, aa, dd]
 
@@ -347,11 +347,11 @@ def test_local_parents_of_reduction(abcde):
     Prefer to finish a1 stack before proceeding to b2
     """
     a, b, c, d, e = abcde
-    a1, a2, a3 = [a + i for i in "123"]
-    b1, b2, b3 = [b + i for i in "123"]
-    c1, c2, c3 = [c + i for i in "123"]
+    a1, a2, a3 = (a + i for i in "123")
+    b1, b2, b3 = (b + i for i in "123")
+    c1, c2, c3 = (c + i for i in "123")
 
-    expected = [a3, b3, c3, a2, a1, b2, b1, c2, c1]
+    expected = [a3, a2, a1, b3, b2, b1, c3, c2, c1]
 
     log = []
 
@@ -390,8 +390,8 @@ def test_nearest_neighbor(abcde):
     This is difficult because all groups are connected.
     """
     a, b, c, _, _ = abcde
-    a1, a2, a3, a4, a5, a6, a7, a8, a9 = [a + i for i in "123456789"]
-    b1, b2, b3, b4 = [b + i for i in "1234"]
+    a1, a2, a3, a4, a5, a6, a7, a8, a9 = (a + i for i in "123456789")
+    b1, b2, b3, b4 = (b + i for i in "1234")
 
     dsk = {
         b1: (f,),
@@ -751,7 +751,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 6, i, 1)] - o[(x, 6, i, 0)]
             assert val > 0  # ideally, val == 2
             total += val
-    assert total <= 32  # ideally, this should be 2 * 16 = 32
+    assert total <= 110  # ideally, this should be 2 * 16 = 32
 
     # Add one to the end of the nine bundles
     dsk2 = dict(dsk)
@@ -765,7 +765,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 7, i, 0)] - o[(x, 6, i, 1)]
             assert val > 0  # ideally, val == 3
             total += val
-    assert total <= 165  # ideally, this should be 3 * 16 == 48
+    assert total <= 138  # ideally, this should be 3 * 16 == 48
 
     # Remove one from each of the nine bundles
     dsk3 = dict(dsk)
@@ -779,7 +779,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 6, i, 0)] - o[(x, 5, i, 1)]
             assert val > 0  # ideally, val == 2
             total += val
-    assert total <= 119  # ideally, this should be 2 * 16 == 32
+    assert total <= 98  # ideally, this should be 2 * 16 == 32
 
     # Remove another one from each of the nine bundles
     dsk4 = dict(dsk3)
@@ -868,12 +868,115 @@ def test_array_store_final_order(tmpdir):
     o = order(d.dask)
 
     # Find the lowest store. Dask starts here.
-    stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-")]
+    stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-map-")]
     first_store = min(stores, key=lambda k: o[k])
-    first_store
     connected_stores = [k for k in stores if k[-1] == first_store[-1]]
     disconnected_stores = [k for k in stores if k[-1] != first_store[-1]]
 
-    connected_max = max([v for k, v in o.items() if k in connected_stores])
-    disconnected_min = min([v for k, v in o.items() if k in disconnected_stores])
+    connected_max = max(v for k, v in o.items() if k in connected_stores)
+    disconnected_min = min(v for k, v in o.items() if k in disconnected_stores)
     assert connected_max < disconnected_min
+
+
+def test_eager_to_compute_dependent_to_free_parent():
+    r"""https://github.com/dask/dask/pull/7929
+
+    This graph begins with many motifs like the following:
+
+    |      |
+    c1    c2
+      \ /
+       b
+       |
+       a
+
+    We want to compute c2 and c3 pretty close together, because if we choose to
+    compute c1, then we should also compute c2 so we can release b.  Being
+    greedy here allows us to release memory sooner and be more globally optimal.
+    """
+    dsk = {
+        "a00": (f, "a06", "a08"),
+        "a01": (f, "a28", "a26"),
+        "a02": (f, "a24", "a21"),
+        "a03": (f, "a22", "a25"),
+        "a04": (f, "a29", "a20"),
+        "a05": (f, "a23", "a27"),
+        "a06": (f, "a04", "a02"),
+        "a07": (f, "a00", "a01"),
+        "a08": (f, "a05", "a03"),
+        "a09": (f, "a43"),
+        "a10": (f, "a36"),
+        "a11": (f, "a33"),
+        "a12": (f, "a47"),
+        "a13": (f, "a44"),
+        "a14": (f, "a42"),
+        "a15": (f, "a37"),
+        "a16": (f, "a48"),
+        "a17": (f, "a49"),
+        "a18": (f, "a35"),
+        "a19": (f, "a46"),
+        "a20": (f, "a55"),
+        "a21": (f, "a53"),
+        "a22": (f, "a60"),
+        "a23": (f, "a54"),
+        "a24": (f, "a59"),
+        "a25": (f, "a56"),
+        "a26": (f, "a61"),
+        "a27": (f, "a52"),
+        "a28": (f, "a57"),
+        "a29": (f, "a58"),
+        "a30": (f, "a19"),
+        "a31": (f, "a07"),
+        "a32": (f, "a30", "a31"),
+        "a33": (f, "a58"),
+        "a34": (f, "a11", "a09"),
+        "a35": (f, "a60"),
+        "a36": (f, "a52"),
+        "a37": (f, "a61"),
+        "a38": (f, "a14", "a10"),
+        "a39": (f, "a38", "a40"),
+        "a40": (f, "a18", "a17"),
+        "a41": (f, "a34", "a50"),
+        "a42": (f, "a54"),
+        "a43": (f, "a55"),
+        "a44": (f, "a53"),
+        "a45": (f, "a16", "a15"),
+        "a46": (f, "a51", "a45"),
+        "a47": (f, "a59"),
+        "a48": (f, "a57"),
+        "a49": (f, "a56"),
+        "a50": (f, "a12", "a13"),
+        "a51": (f, "a41", "a39"),
+        "a52": (f, "a62"),
+        "a53": (f, "a68"),
+        "a54": (f, "a70"),
+        "a55": (f, "a67"),
+        "a56": (f, "a71"),
+        "a57": (f, "a64"),
+        "a58": (f, "a65"),
+        "a59": (f, "a63"),
+        "a60": (f, "a69"),
+        "a61": (f, "a66"),
+        "a62": (f, f),
+        "a63": (f, f),
+        "a64": (f, f),
+        "a65": (f, f),
+        "a66": (f, f),
+        "a67": (f, f),
+        "a68": (f, f),
+        "a69": (f, f),
+        "a70": (f, f),
+        "a71": (f, f),
+    }
+    dependencies, dependents = get_deps(dsk)
+    o = order(dsk)
+    parents = {deps.pop() for key, deps in dependents.items() if not dependencies[key]}
+
+    def cost(deps):
+        a, b = deps
+        return abs(o[a] - o[b])
+
+    cost_of_pairs = {key: cost(dependents[key]) for key in parents}
+    # Allow one to be bad, b/c this is hard!
+    costs = sorted(cost_of_pairs.values())
+    assert sum(costs[:-1]) <= 25 or sum(costs) <= 31

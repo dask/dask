@@ -86,7 +86,7 @@ class CSVFunctionWrapper:
     def __call__(self, part):
 
         # Part will be a 3-element tuple
-        block, path, is_first = part
+        block, path, is_first, is_last = part
 
         # Construct `path_info`
         if path is not None:
@@ -105,6 +105,8 @@ class CSVFunctionWrapper:
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
+        if not is_last:
+            rest_kwargs.pop("skipfooter", None)
 
         # Deal with column projection
         columns = self.full_columns
@@ -160,7 +162,7 @@ def pandas_read_text(
     kwargs : dict
         A dictionary of keyword arguments to be passed to ``reader``
     dtypes : dict
-        DTypes to assign to columns
+        dtypes to assign to columns
     path : tuple
         A tuple containing path column name, path to file, and an ordered list of paths.
 
@@ -179,8 +181,6 @@ def pandas_read_text(
 
     if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
-    elif columns:
-        df.columns = columns
     if path:
         colname, path, paths = path
         code = paths.index(path)
@@ -225,8 +225,7 @@ def coerce_dtypes(df, dtypes):
     if bad_dtypes:
         if errors:
             ex = "\n".join(
-                "- %s\n  %r" % (c, e)
-                for c, e in sorted(errors, key=lambda x: str(x[0]))
+                f"- {c}\n  {e!r}" for c, e in sorted(errors, key=lambda x: str(x[0]))
             )
             exceptions = (
                 "The following columns also raised exceptions on "
@@ -245,7 +244,7 @@ def coerce_dtypes(df, dtypes):
         bad_dtypes = sorted(bad_dtypes, key=lambda x: str(x[0]))
         table = asciitable(["Column", "Found", "Expected"], bad_dtypes)
         dtype_kw = "dtype={%s}" % ",\n       ".join(
-            "%r: '%s'" % (k, v) for (k, v, _) in bad_dtypes
+            f"{k!r}: '{v}'" for (k, v, _) in bad_dtypes
         )
 
         dtype_msg = (
@@ -292,6 +291,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
     blocksize=None,
+    urlpath=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -347,6 +347,7 @@ def text_blocks_to_pandas(
     blocks = tuple(flatten(block_lists))
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
+    is_last = tuple(block_mask_last(block_lists))
 
     if path:
         colname, path_converter = path
@@ -369,17 +370,11 @@ def text_blocks_to_pandas(
     parts = []
     colname, paths = path or (None, None)
     for i in range(len(blocks)):
-        parts.append(
-            [
-                blocks[i],
-                paths[i] if paths else None,
-                is_first[i],
-            ]
-        )
+        parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
     # Create Blockwise layer
     label = "read-csv-"
-    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
     layer = DataFrameIOLayer(
         name,
         columns,
@@ -415,6 +410,21 @@ def block_mask(block_lists):
             continue
         yield True
         yield from (False for _ in block[1:])
+
+
+def block_mask_last(block_lists):
+    """
+    Yields a flat iterable of booleans to mark the last element of the
+    nested input ``block_lists`` in a flattened output.
+
+    >>> list(block_mask_last([[1, 2], [3, 4], [5]]))
+    [False, True, False, True, True]
+    """
+    for block in block_lists:
+        if not block:
+            continue
+        yield from (False for _ in block[:-1])
+        yield True
 
 
 def auto_blocksize(total_memory, cpu_count):
@@ -465,12 +475,11 @@ def read_pandas(
     if "index" in kwargs or "index_col" in kwargs:
         raise ValueError(
             "Keywords 'index' and 'index_col' not supported. "
-            "Use dd.{0}(...).set_index('my-index') "
-            "instead".format(reader_name)
+            f"Use dd.{reader_name}(...).set_index('my-index') instead"
         )
     for kw in ["iterator", "chunksize"]:
         if kw in kwargs:
-            raise ValueError("{0} not supported for dd.{1}".format(kw, reader_name))
+            raise ValueError(f"{kw} not supported for dd.{reader_name}")
     if kwargs.get("nrows", None):
         raise ValueError(
             "The 'nrows' keyword is not supported by "
@@ -491,9 +500,7 @@ def read_pandas(
         # find the firstrow that is not skipped, for use as header
         firstrow = min(set(range(len(skiprows) + 1)) - set(skiprows))
     if isinstance(kwargs.get("header"), list):
-        raise TypeError(
-            "List of header rows not supported for dd.{0}".format(reader_name)
-        )
+        raise TypeError(f"List of header rows not supported for dd.{reader_name}")
     if isinstance(kwargs.get("converters"), dict) and include_path_column:
         path_converter = kwargs.get("converters").get(include_path_column, None)
     else:
@@ -577,8 +584,10 @@ def read_pandas(
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
+    head_kwargs = kwargs.copy()
+    head_kwargs.pop("skipfooter", None)
     try:
-        head = reader(BytesIO(b_sample), nrows=sample_rows, **kwargs)
+        head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:
         if "EOF" in str(e):
             raise ValueError(
@@ -616,6 +625,7 @@ def read_pandas(
         specified_dtypes=specified_dtypes,
         path=path,
         blocksize=blocksize,
+        urlpath=urlpath,
     )
 
 
@@ -653,7 +663,7 @@ urlpath : string or list
 blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is computed
     based on available physical memory and the number of cores, up to a maximum
-    of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
+    of 64MB. Can be a number like ``64000000`` or a string like ``"64MB"``. If
     ``None``, a single block is used for each file.
 sample : int, optional
     Number of bytes to use when determining dtypes
@@ -921,7 +931,9 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        delayed(values).compute(**compute_kwargs)
+        import dask
+
+        dask.compute(*values, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values

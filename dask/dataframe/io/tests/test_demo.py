@@ -6,7 +6,6 @@ import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.dataframe.utils import assert_eq
 
 
 def test_make_timeseries():
@@ -113,23 +112,11 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.xfail(reason="https://github.com/pydata/pandas-datareader/issues/867")
 @pytest.mark.network
-def test_daily_stock():
-    pytest.importorskip("pandas_datareader", minversion="0.8.0")
-    df = dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
-    assert isinstance(df, dd.DataFrame)
-    assert 10 < df.npartitions < 31
-    assert_eq(df, df)
-
-    # Check `optimize_blockwise`
-    df = df[["open", "close"]]
-    keys = [(df._name, i) for i in range(df.npartitions)]
-    graph = optimize_blockwise(df.__dask_graph__(), keys)
-    layers = graph.layers
-    name = list(layers.keys())[0]
-    assert len(layers) == 1
-    assert isinstance(layers[name], Blockwise)
+def test_daily_stock_deprecated():
+    pytest.importorskip("pandas_datareader", minversion="0.10.0")
+    with pytest.warns(FutureWarning, match="deprecated"):
+        dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
 
 
 def test_make_timeseries_keywords():

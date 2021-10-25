@@ -2,7 +2,6 @@ import itertools
 import random
 import sys
 from array import array
-from distutils.version import LooseVersion
 
 from .utils import Dispatch
 
@@ -216,10 +215,3 @@ def register_pyarrow():
     @sizeof.register(pa.ChunkedArray)
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
-
-    # Handle pa.Column for pyarrow < 0.15
-    if pa.__version__ < LooseVersion("0.15.0"):
-
-        @sizeof.register(pa.Column)
-        def sizeof_pyarrow_column(col):
-            return int(_get_col_size(col)) + 1000

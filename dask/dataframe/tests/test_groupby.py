@@ -1,5 +1,6 @@
 import collections
 import warnings
+from operator import methodcaller
 
 import numpy as np
 import pandas as pd
@@ -8,7 +9,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_100, tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -495,12 +496,6 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-@pytest.mark.filterwarnings(
-    "ignore:0 should be:DeprecationWarning"
-)  # fixed in new pandas.
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -524,6 +519,8 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddkey).a.size(), pdf.groupby(pdkey).a.size())
         assert_eq(ddf.groupby(ddkey).a.first(), pdf.groupby(pdkey).a.first())
         assert_eq(ddf.groupby(ddkey).a.last(), pdf.groupby(pdkey).a.last())
+        assert_eq(ddf.groupby(ddkey).a.tail(), pdf.groupby(pdkey).a.tail())
+        assert_eq(ddf.groupby(ddkey).a.head(), pdf.groupby(pdkey).a.head())
         for ddof in ddofs:
             assert_eq(ddf.groupby(ddkey).a.var(ddof), pdf.groupby(pdkey).a.var(ddof))
             assert_eq(ddf.groupby(ddkey).a.std(ddof), pdf.groupby(pdkey).a.std(ddof))
@@ -598,6 +595,8 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.b > i).a.size(), pdf.groupby(pdf.b > i).a.size())
         assert_eq(ddf.groupby(ddf.b > i).a.first(), pdf.groupby(pdf.b > i).a.first())
         assert_eq(ddf.groupby(ddf.b > i).a.last(), pdf.groupby(pdf.b > i).a.last())
+        assert_eq(ddf.groupby(ddf.b > i).a.tail(), pdf.groupby(pdf.b > i).a.tail())
+        assert_eq(ddf.groupby(ddf.b > i).a.head(), pdf.groupby(pdf.b > i).a.head())
         assert_eq(ddf.groupby(ddf.b > i).a.prod(), pdf.groupby(pdf.b > i).a.prod())
 
         assert_eq(ddf.groupby(ddf.a > i).b.sum(), pdf.groupby(pdf.a > i).b.sum())
@@ -611,6 +610,8 @@ def test_split_apply_combine_on_series(empty):
         assert_eq(ddf.groupby(ddf.b > i).b.size(), pdf.groupby(pdf.b > i).b.size())
         assert_eq(ddf.groupby(ddf.b > i).b.first(), pdf.groupby(pdf.b > i).b.first())
         assert_eq(ddf.groupby(ddf.b > i).b.last(), pdf.groupby(pdf.b > i).b.last())
+        assert_eq(ddf.groupby(ddf.b > i).b.tail(), pdf.groupby(pdf.b > i).b.tail())
+        assert_eq(ddf.groupby(ddf.b > i).b.head(), pdf.groupby(pdf.b > i).b.head())
         assert_eq(ddf.groupby(ddf.b > i).b.prod(), pdf.groupby(pdf.b > i).b.prod())
 
         assert_eq(ddf.groupby(ddf.b > i).sum(), pdf.groupby(pdf.b > i).sum())
@@ -694,6 +695,8 @@ def test_split_apply_combine_on_series(empty):
     assert_dask_graph(ddf.groupby("b").a.cov(), "series-groupby-cov")
     assert_dask_graph(ddf.groupby("b").a.first(), "series-groupby-first")
     assert_dask_graph(ddf.groupby("b").a.last(), "series-groupby-last")
+    assert_dask_graph(ddf.groupby("b").a.tail(), "series-groupby-tail")
+    assert_dask_graph(ddf.groupby("b").a.head(), "series-groupby-head")
     assert_dask_graph(ddf.groupby("b").a.prod(), "series-groupby-prod")
     # mean consists from sum and count operations
     assert_dask_graph(ddf.groupby("b").a.mean(), "series-groupby-sum")
@@ -715,9 +718,6 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -926,106 +926,6 @@ def test_groupby_normalize_index():
 
     assert d.groupby([d["a"], d["b"]]).index == ["a", "b"]
     assert d.groupby([d["a"], "b"]).index == ["a", "b"]
-
-
-@pytest.mark.parametrize(
-    "spec",
-    [
-        {"b": {"c": "mean"}, "c": {"a": "max", "b": "min"}},
-        {"b": "mean", "c": ["min", "max"]},
-        {"b": np.sum, "c": ["min", np.max, np.std, np.var]},
-        [
-            "sum",
-            "mean",
-            "min",
-            "max",
-            "count",
-            "size",
-            "std",
-            "var",
-            "first",
-            "last",
-            "prod",
-        ],
-        "var",
-        {"b": "mean", "c": "first", "d": "last", "a": ["first", "last"]},
-        {"b": {"c": "mean"}, "c": {"a": "first", "b": "last"}},
-    ],
-)
-@pytest.mark.parametrize("split_every", [False, None])
-@pytest.mark.parametrize(
-    "grouper",
-    [
-        lambda df: "a",
-        lambda df: ["a", "d"],
-        lambda df: [df["a"], df["d"]],
-        lambda df: df["a"],
-        lambda df: df["a"] > 2,
-    ],
-)
-def test_aggregate__examples(spec, split_every, grouper):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-    ddf = dd.from_pandas(pdf, npartitions=10)
-
-    # Warning from pandas deprecation .agg(dict[dict])
-    # it's from pandas, so no reason to assert the deprecation warning,
-    # but we should still test it for now
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(None):
-            assert_eq(
-                pdf.groupby(grouper(pdf)).agg(spec),
-                ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-            )
-
-
-@pytest.mark.parametrize(
-    "spec",
-    [
-        {"b": "sum", "c": "min", "d": "max"},
-        ["sum"],
-        ["sum", "mean", "min", "max", "count", "size", "std", "var", "first", "last"],
-        "sum",
-        "size",
-    ],
-)
-@pytest.mark.parametrize("split_every", [False, None])
-@pytest.mark.parametrize(
-    "grouper",
-    [lambda df: [df["a"], df["d"]], lambda df: df["a"], lambda df: df["a"] > 2],
-)
-def test_series_aggregate__examples(spec, split_every, grouper):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-    ps = pdf["c"]
-
-    ddf = dd.from_pandas(pdf, npartitions=10)
-    ds = ddf["c"]
-    # Warning from pandas deprecation .agg(dict[dict])
-    # it's from pandas, so no reason to assert the deprecation warning,
-    # but we should still test it for now
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(None):
-            assert_eq(
-                ps.groupby(grouper(pdf)).agg(spec),
-                ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-            )
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -1435,7 +1335,7 @@ def test_cumulative(func, key, sel):
     df.iloc[[-18, -12, -6], -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=10)
 
-    g, dg = [d.groupby(key)[sel] for d in (df, ddf)]
+    g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
 
@@ -1859,13 +1759,10 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: x.std(),
+        lambda x: x.std(numeric_only=True),
         lambda x: x.groupby("x").std(),
         lambda x: x.groupby("x").var(),
         lambda x: x.groupby("x").mean(),
@@ -2202,16 +2099,9 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
             lambda grp: grp.agg("mean"),
         ),
         (lambda df: df.groupby(["category_1", "category_2"]), lambda grp: grp.mean()),
-        pytest.param(
+        (
             lambda df: df.groupby(["category_1", "category_2"]),
             lambda grp: grp.agg("mean"),
-            marks=pytest.mark.xfail(
-                not dask.dataframe.utils.PANDAS_GT_100,
-                reason=(
-                    "Should work starting from pandas 1.0.0: "
-                    "https://github.com/dask/dask/pull/5423"
-                ),
-            ),
         ),
     ],
 )
@@ -2248,6 +2138,7 @@ def test_groupby_dropna_pandas(dropna):
     assert_eq(dask_result, pd_result)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
 def test_groupby_dropna_cudf(dropna, by):
@@ -2349,7 +2240,13 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pandas",
+        pytest.param("cudf", marks=pytest.mark.gpu),
+    ],
+)
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":
@@ -2441,7 +2338,7 @@ def test_groupby_sort_true_split_out():
 
 
 @pytest.mark.skipif(
-    not dd._compat.PANDAS_GT_100, reason="observed only supported for newer pandas"
+    not PANDAS_GT_110, reason="observed only supported for newer pandas"
 )
 @pytest.mark.parametrize("known_cats", [True, False])
 @pytest.mark.parametrize("ordered_cats", [True, False])
@@ -2507,4 +2404,90 @@ def test_empty_partitions_with_value_counts():
     expected = df.groupby("A")["B"].value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
+    assert_eq(expected, actual)
+
+
+def test_groupby_with_pd_grouper():
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
+        ),
+        npartitions=3,
+    )
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(pd.Grouper(key="key1"))
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(["key1", pd.Grouper(key="key2")])
+
+
+@pytest.mark.parametrize("operation", ["head", "tail"])
+def test_groupby_empty_partitions_with_rows_operation(operation):
+
+    df = pd.DataFrame(
+        data=[
+            ["a1", "b1"],
+            ["a1", None],
+            ["a1", "b1"],
+            [None, None],
+            [None, None],
+            [None, None],
+            ["a3", "b3"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+        ],
+        columns=["A", "B"],
+    )
+
+    caller = methodcaller(operation, 1)
+    expected = caller(df.groupby("A")["B"])
+    ddf = dd.from_pandas(df, npartitions=3)
+    actual = caller(ddf.groupby("A")["B"])
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("operation", ["head", "tail"])
+def test_groupby_with_row_operations(operation):
+    df = pd.DataFrame(
+        data=[
+            ["a0", "b1"],
+            ["a0", "b2"],
+            ["a1", "b1"],
+            ["a3", "b3"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+            ["a1", "b1"],
+            ["a1", "b1"],
+            ["a1", "b1"],
+        ],
+        columns=["A", "B"],
+    )
+
+    caller = methodcaller(operation)
+    expected = caller(df.groupby("A")["B"])
+    ddf = dd.from_pandas(df, npartitions=3)
+    actual = caller(ddf.groupby("A")["B"])
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("operation", ["head", "tail"])
+def test_groupby_multi_index_with_row_operations(operation):
+    df = pd.DataFrame(
+        data=[
+            ["a0", "b1"],
+            ["a0", "b2"],
+            ["a1", "b1"],
+            ["a3", "b3"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+            ["a1", "b1"],
+            ["a1", "b1"],
+            ["a1", "b1"],
+        ],
+        columns=["A", "B"],
+    )
+
+    caller = methodcaller(operation)
+    expected = caller(df.groupby(["A", df["A"].eq("a1")])["B"])
+    ddf = dd.from_pandas(df, npartitions=3)
+    actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
     assert_eq(expected, actual)
