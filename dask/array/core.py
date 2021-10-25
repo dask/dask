@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, List, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 import numpy as np
 from fsspec import get_mapper
@@ -5356,11 +5356,11 @@ class BlockView:
     An instance of ``da.array.Blockview``
     """
 
-    def __init__(self, array: Array) -> "BlockView":
+    def __init__(self, array: Array) -> BlockView:
         self._array = array
 
     def __getitem__(
-        self, index: Union[int, Sequence[int], slice, Sequence[slice]]
+        self, index: int | Sequence[int] | slice | Sequence[slice]
     ) -> Array:
         from .slicing import normalize_index
 
@@ -5402,13 +5402,13 @@ class BlockView:
         return np.prod(self.shape)
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """
         The number of blocks per axis. Alias of ``dask.array.numblocks``.
         """
         return self._array.numblocks
 
-    def ravel(self) -> List[Array]:
+    def ravel(self) -> list[Array]:
         """
         Return a flattened list of all the blocks in the array in C order.
         """
