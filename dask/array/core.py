@@ -1921,8 +1921,8 @@ class Array(DaskMethodsMixin):
         >>> x.partitions[::2].compute()
         array([0, 1, 4, 5])
         >>> x.partitions[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> x.partitions.ravel()
+        array([6, 7, 0, 1])
+        >>> x.partitions.ravel() # doctest: +NORMALIZE_WHITESPACE
         [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
