@@ -592,11 +592,21 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color : {None, 'order'}, optional
+    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases',
+             'memorypressure'}, optional
         Options to color nodes.
         colormap
         - None, the default, no colors.
-        - 'order', colors the nodes' border based on the order they appear in the graph
+        - 'order', colors the nodes' border based on the order they appear in the graph.
+        - 'ages', how long the data of a node is held.
+        - 'freed', the number of dependencies released after running a node.
+        - 'memoryincreases', how many more outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run later.
+        - 'memorydecreases', how many fewer outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run sooner.
+        - 'memorypressure', the number of data held when:
+            - the node is run (circle)
+            - the data is released (rectangle)
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -655,13 +665,15 @@ def visualize(*args, **kwargs):
     if color in {
         "order",
         "order-age",
-        "order-increases",
-        "order-decreases",
-        "order-pressure",
+        "order-freed",
+        "order-memoryincreases",
+        "order-memorydecreases",
+        "order-memorypressure",
         "age",
-        "increases",
-        "decreases",
-        "pressure",
+        "freed",
+        "memoryincreases",
+        "memorydecreases",
+        "memorypressure",
     }:
         import matplotlib.pyplot as plt
 
@@ -685,17 +697,21 @@ def visualize(*args, **kwargs):
             info = diagnostics(dsk, o)[0]
             if color.endswith("age"):
                 values = {key: val.age for key, val in info.items()}
-            elif color.endswith("pressure"):
-                values = {key: val.runpressure for key, val in info.items()}
-                data_values = {key: val.releasepressure for key, val in info.items()}
-            elif color.endswith("increases"):
+            elif color.endswith("freed"):
+                values = {key: val.num_dependencies_freed for key, val in info.items()}
+            elif color.endswith("memorypressure"):
+                values = {key: val.num_data_when_run for key, val in info.items()}
+                data_values = {
+                    key: val.num_data_when_released for key, val in info.items()
+                }
+            elif color.endswith("memoryincreases"):
                 values = {
-                    key: max(0, val.releasepressure - val.runpressure)
+                    key: max(0, val.num_data_when_released - val.num_data_when_run)
                     for key, val in info.items()
                 }
-            else:  # decreases
+            else:  # memorydecreases
                 values = {
-                    key: max(0, val.runpressure - val.releasepressure)
+                    key: max(0, val.num_data_when_run - val.num_data_when_released)
                     for key, val in info.items()
                 }
 
