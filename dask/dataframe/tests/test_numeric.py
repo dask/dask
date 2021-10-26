@@ -48,3 +48,10 @@ def test_to_numeric_on_dask_dataframe_dataframe_raises_error():
     arg = from_pandas(df, npartitions=2)
     with pytest.raises(TypeError, match="arg must be a list, tuple, dask."):
         to_numeric(arg)
+
+
+def test_to_numeric_raises():
+    with pytest.raises(ValueError, match="invalid error value"):
+        to_numeric('10', errors="invalid")
+    with pytest.raises(KeyError, match="``meta`` is not allowed"):
+        to_numeric('10', meta=pd.Series([], dtype="float64"))

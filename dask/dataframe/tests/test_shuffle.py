@@ -26,6 +26,7 @@ from dask.dataframe.shuffle import (
     rearrange_by_divisions,
     remove_nans,
     shuffle,
+    _noop
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
@@ -346,7 +347,7 @@ def test_rearrange_by_column_with_narrow_divisions():
     list_eq(df, a)
 
 
-def test_maybe_buffered_partd():
+def test_maybe_buffered_partd(tmp_path):
     import partd
 
     f = maybe_buffered_partd()
@@ -356,6 +357,18 @@ def test_maybe_buffered_partd():
     assert not f2.buffer
     p2 = f2()
     assert isinstance(p2.partd, partd.File)
+
+    f3 = maybe_buffered_partd(tempdir=tmp_path)
+    p3 = f3()
+    assert isinstance(p3.partd, partd.Buffer)
+    contents = list(tmp_path.iterdir())
+    assert len(contents) == 1
+    assert contents[0].suffix == '.partd'
+    assert contents[0].parent == tmp_path
+    f4 = pickle.loads(pickle.dumps(f3))
+    assert not f4.buffer
+    assert f4.tempdir == tmp_path
+
 
 
 def test_set_index_with_explicit_divisions():
@@ -1260,3 +1273,26 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
+
+
+def test_shuffle_values_raises():
+    df = pd.DataFrame({'a': [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(
+            ValueError, match="na_position must be either 'first' or 'last'"
+    ):
+        ddf.sort_values(by='a', na_position='invalid')
+
+
+def test_shuffle_by_as_list():
+    df = pd.DataFrame({'a': [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=['a'], npartitions='auto', ascending=True)
+    expect = pd.DataFrame({'a': [1, 2, 3]})
+    dd.assert_eq(got, expect, check_index=False)
+
+
+def test_noop():
+    assert _noop(1, None) == 1
+    assert _noop('test', None) == 'test'
