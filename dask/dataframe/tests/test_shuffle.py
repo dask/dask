@@ -20,13 +20,13 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
+    _noop,
     maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
     remove_nans,
     shuffle,
-    _noop
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
@@ -363,12 +363,11 @@ def test_maybe_buffered_partd(tmp_path):
     assert isinstance(p3.partd, partd.Buffer)
     contents = list(tmp_path.iterdir())
     assert len(contents) == 1
-    assert contents[0].suffix == '.partd'
+    assert contents[0].suffix == ".partd"
     assert contents[0].parent == tmp_path
     f4 = pickle.loads(pickle.dumps(f3))
     assert not f4.buffer
     assert f4.tempdir == tmp_path
-
 
 
 def test_set_index_with_explicit_divisions():
@@ -1276,23 +1275,23 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
 
 
 def test_shuffle_values_raises():
-    df = pd.DataFrame({'a': [1, 3, 2]})
+    df = pd.DataFrame({"a": [1, 3, 2]})
     ddf = dd.from_pandas(df, npartitions=3)
     with pytest.raises(
-            ValueError, match="na_position must be either 'first' or 'last'"
+        ValueError, match="na_position must be either 'first' or 'last'"
     ):
-        ddf.sort_values(by='a', na_position='invalid')
+        ddf.sort_values(by="a", na_position="invalid")
 
 
 def test_shuffle_by_as_list():
-    df = pd.DataFrame({'a': [1, 3, 2]})
+    df = pd.DataFrame({"a": [1, 3, 2]})
     ddf = dd.from_pandas(df, npartitions=3)
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=['a'], npartitions='auto', ascending=True)
-    expect = pd.DataFrame({'a': [1, 2, 3]})
+        got = ddf.sort_values(by=["a"], npartitions="auto", ascending=True)
+    expect = pd.DataFrame({"a": [1, 2, 3]})
     dd.assert_eq(got, expect, check_index=False)
 
 
 def test_noop():
     assert _noop(1, None) == 1
-    assert _noop('test', None) == 'test'
+    assert _noop("test", None) == "test"

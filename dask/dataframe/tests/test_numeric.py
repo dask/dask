@@ -52,6 +52,6 @@ def test_to_numeric_on_dask_dataframe_dataframe_raises_error():
 
 def test_to_numeric_raises():
     with pytest.raises(ValueError, match="invalid error value"):
-        to_numeric('10', errors="invalid")
+        to_numeric("10", errors="invalid")
     with pytest.raises(KeyError, match="``meta`` is not allowed"):
-        to_numeric('10', meta=pd.Series([], dtype="float64"))
+        to_numeric("10", meta=pd.Series([], dtype="float64"))
