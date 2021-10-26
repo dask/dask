@@ -17,7 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, List, Sequence, Tuple, Union
+from typing import Any, Sequence
 
 import numpy as np
 from fsspec import get_mapper
@@ -1878,8 +1878,8 @@ class Array(DaskMethodsMixin):
         >>> x.blocks[::2].compute()
         array([0, 1, 4, 5])
         >>> x.blocks[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> x.blocks.ravel()
+        array([6, 7, 0, 1])
+        >>> x.blocks.ravel() # doctest: +NORMALIZE_WHITESPACE
         [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
@@ -1921,8 +1921,8 @@ class Array(DaskMethodsMixin):
         >>> x.partitions[::2].compute()
         array([0, 1, 4, 5])
         >>> x.partitions[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> x.partitions.ravel()
+        array([6, 7, 0, 1])
+        >>> x.partitions.ravel() # doctest: +NORMALIZE_WHITESPACE
         [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
          dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
@@ -5330,7 +5330,7 @@ class BlockView:
     Examples
     --------
     >>> import dask.array as da
-    >>> from dask.array import BlockView
+    >>> from dask.array.core import BlockView
     >>> x = da.arange(8, chunks=2)
     >>> bv = BlockView(x)
     >>> bv.shape # aliases x.numblocks
@@ -5344,8 +5344,8 @@ class BlockView:
     >>> bv[::2].compute()
     array([0, 1, 4, 5])
     >>> bv[[-1, 0]].compute()
-    array([8, 9, 0, 1])
-    >>> bv.ravel()
+    array([6, 7, 0, 1])
+    >>> bv.ravel()  # doctest: +NORMALIZE_WHITESPACE
     [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
      dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
      dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
@@ -5356,11 +5356,11 @@ class BlockView:
     An instance of ``da.array.Blockview``
     """
 
-    def __init__(self, array: Array) -> "BlockView":
+    def __init__(self, array: Array) -> BlockView:
         self._array = array
 
     def __getitem__(
-        self, index: Union[int, Sequence[int], slice, Sequence[slice]]
+        self, index: int | Sequence[int] | slice | Sequence[slice]
     ) -> Array:
         from .slicing import normalize_index
 
@@ -5402,13 +5402,13 @@ class BlockView:
         return np.prod(self.shape)
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """
         The number of blocks per axis. Alias of ``dask.array.numblocks``.
         """
         return self._array.numblocks
 
-    def ravel(self) -> List[Array]:
+    def ravel(self) -> list[Array]:
         """
         Return a flattened list of all the blocks in the array in C order.
         """
