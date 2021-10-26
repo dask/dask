@@ -1050,7 +1050,7 @@ def apply_filters(parts, statistics, filters):
                     out_statistics.append(stats)
                 else:
                     if (
-                        (operator == "==" or operator == "=")
+                        operator in ("==", "=")
                         and min <= value <= max
                         or operator == "<"
                         and min < value
