@@ -1445,6 +1445,7 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ).compute()
     assert len(ddf2) > 0
     assert len(ddf3) > 0
+    assert_eq(ddf2, ddf3)
 
 
 def test_filtering_pyarrow_dataset(tmpdir, engine):
