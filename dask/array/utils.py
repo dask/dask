@@ -528,7 +528,7 @@ def __getattr__(name):
     # Can't use the @_deprecated decorator as it would not work on `except AxisError`
     if name == "AxisError":
         warnings.warn(
-            "AxisError was deprecated after version 2021.10 and will be removed in a "
+            "AxisError was deprecated after version 2021.10.0 and will be removed in a "
             "future release. Please use numpy.AxisError instead.",
             category=FutureWarning,
             stacklevel=2,
