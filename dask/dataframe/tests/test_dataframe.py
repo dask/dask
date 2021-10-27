@@ -907,6 +907,11 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
+    layer = [
+        layer for k, layer in result.dask.layers.items() if k.startswith("lambda-")
+    ][0]
+    assert not layer.is_materialized(), layer
+    result.dask.validate()
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
@@ -936,7 +941,11 @@ def test_map_partitions_partition_info():
         assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
         return df
 
-    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    df = d.map_partitions(f, meta=d)
+    layer = [layer for k, layer in df.dask.layers.items() if k.startswith("f-")][0]
+    assert not layer.is_materialized()
+    df.dask.validate()
+    result = df.compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
 
