@@ -5,7 +5,7 @@ pytestmark = pytest.mark.gpu
 
 import dask.array as da
 from dask.array.numpy_compat import _numpy_120
-from dask.array.utils import AxisError, assert_eq
+from dask.array.utils import assert_eq
 
 cupy = pytest.importorskip("cupy")
 
@@ -41,10 +41,10 @@ def test_diagonal():
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=0, axis2=0)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis1=-4)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis2=-4)
 
     v = cupy.arange(4 * 5 * 6).reshape((4, 5, 6))

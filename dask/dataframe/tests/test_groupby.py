@@ -1,6 +1,6 @@
 import collections
+import operator
 import warnings
-from operator import methodcaller
 
 import numpy as np
 import pandas as pd
@@ -2438,7 +2438,7 @@ def test_groupby_empty_partitions_with_rows_operation(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation, 1)
+    caller = operator.methodcaller(operation, 1)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2462,7 +2462,7 @@ def test_groupby_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2486,7 +2486,7 @@ def test_groupby_multi_index_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby(["A", df["A"].eq("a1")])["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])

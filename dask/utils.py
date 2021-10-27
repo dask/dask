@@ -1,5 +1,6 @@
 import functools
 import inspect
+import operator
 import os
 import re
 import shutil
@@ -902,8 +903,6 @@ def ensure_unicode(s):
 
     >>> ensure_unicode('123')
     '123'
-    >>> ensure_unicode('123')
-    '123'
     >>> ensure_unicode(b'123')
     '123'
     """
@@ -911,8 +910,7 @@ def ensure_unicode(s):
         return s
     if hasattr(s, "decode"):
         return s.decode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
 
 
 def digit(n, k, base):
@@ -997,22 +995,23 @@ class methodcaller:
     Return a callable object that calls the given method on its operand.
 
     Unlike the builtin `operator.methodcaller`, instances of this class are
-    serializable
+    cached and arguments are passed at call time instead of build time.
     """
 
     __slots__ = ("method",)
     func = property(lambda self: self.method)  # For `funcname` to work
 
     def __new__(cls, method):
-        if method in _method_cache:
+        try:
             return _method_cache[method]
-        self = object.__new__(cls)
-        self.method = method
-        _method_cache[method] = self
-        return self
+        except KeyError:
+            self = object.__new__(cls)
+            self.method = method
+            _method_cache[method] = self
+            return self
 
-    def __call__(self, obj, *args, **kwargs):
-        return getattr(obj, self.method)(*args, **kwargs)
+    def __call__(self, __obj, *args, **kwargs):
+        return getattr(__obj, self.method)(*args, **kwargs)
 
     def __reduce__(self):
         return (methodcaller, (self.method,))
@@ -1023,27 +1022,9 @@ class methodcaller:
     __repr__ = __str__
 
 
-class itemgetter:
-    """
-    Return a callable object that gets an item from the operand
-
-    Unlike the builtin `operator.itemgetter`, instances of this class are
-    serializable
-    """
-
-    __slots__ = ("index",)
-
-    def __init__(self, index):
-        self.index = index
-
-    def __call__(self, x):
-        return x[self.index]
-
-    def __reduce__(self):
-        return (itemgetter, (self.index,))
-
-    def __eq__(self, other):
-        return type(self) is type(other) and self.index == other.index
+@_deprecated(version="2021.11", use_instead="operator.itemgetter")
+def itemgetter(index):
+    return operator.itemgetter(index)
 
 
 class MethodCache:

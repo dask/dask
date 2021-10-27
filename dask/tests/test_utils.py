@@ -469,11 +469,10 @@ def test_ensure_dict():
 
 def test_itemgetter():
     data = [1, 2, 3]
-    g = itemgetter(1)
+    with pytest.warns(FutureWarning):
+        g = itemgetter(1)
+    assert isinstance(g, operator.itemgetter)
     assert g(data) == 2
-    g2 = pickle.loads(pickle.dumps(g))
-    assert g2(data) == 2
-    assert g2.index == 1
 
 
 def test_partial_by_order():
