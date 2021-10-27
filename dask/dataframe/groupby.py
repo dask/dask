@@ -8,7 +8,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import M, derived_from, funcname
+from ..utils import M, derived_from, funcname, itemgetter
 from .core import (
     DataFrame,
     Series,
@@ -765,7 +765,7 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
                 dict(column=intermediate, func=agg_impl),
             )
         ],
-        finalizer=(result_column, operator.itemgetter(intermediate), dict()),
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 
@@ -845,7 +845,7 @@ def _build_agg_args_list(result_column, func, input_column):
                 ),
             )
         ],
-        finalizer=(result_column, operator.itemgetter(intermediate), dict()),
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import functools
 import inspect
-import operator
 import os
 import re
 import shutil
@@ -1030,9 +1029,22 @@ class methodcaller:
     __repr__ = __str__
 
 
-@_deprecated(after_version="2021.10", use_instead="operator.itemgetter")
-def itemgetter(index):
-    return operator.itemgetter(index)
+class itemgetter:
+    """Variant of operator.itemgetter that supports equality tests"""
+
+    __slots__ = ("index",)
+
+    def __init__(self, index):
+        self.index = index
+
+    def __call__(self, x):
+        return x[self.index]
+
+    def __reduce__(self):
+        return (itemgetter, (self.index,))
+
+    def __eq__(self, other):
+        return type(self) is type(other) and self.index == other.index
 
 
 class MethodCache:
