@@ -752,6 +752,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        require_extension=(".parq", ".parquet"),
         **dataset_kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -804,6 +805,11 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
+            elif require_extension:
+                # Need to materialize all paths if we are missing the _metadata file
+                paths = [
+                    path for path in fs.find(paths) if path.endswith(require_extension)
+                ]
 
         elif len(paths) > 1:
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -827,7 +833,13 @@ class ArrowDatasetEngine(Engine):
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
                 fns.remove("_metadata")
-                valid_paths = fns
+                valid_paths = (
+                    [fn for fn in fns if fn.endswith(require_extension)]
+                    if require_extension
+                    else fns
+                )
+            elif require_extension:
+                paths = [path for path in paths if path.endswith(require_extension)]
 
         # Final "catch-all" pyarrow.dataset call
         if ds is None:
