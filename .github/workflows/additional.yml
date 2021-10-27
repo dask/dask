@@ -101,7 +101,7 @@ jobs:
 
       - name: Run tests
         shell: bash -l {0}
-        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' --ignore-glob "dask/ml.py" dask
 
   imports:
     runs-on: "ubuntu-latest"
