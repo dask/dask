@@ -719,6 +719,15 @@ def test_deprecated_version():
         assert foo() == "bar"
 
 
+def test_deprecated_after_version():
+    @_deprecated(after_version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated after version 1.2.3"):
+        assert foo() == "bar"
+
+
 def test_deprecated_category():
     @_deprecated(category=DeprecationWarning)
     def foo():

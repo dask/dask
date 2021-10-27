@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import inspect
 import operator
@@ -9,7 +11,7 @@ import tempfile
 import uuid
 import warnings
 from _thread import RLock
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -17,7 +19,7 @@ from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
+from typing import TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
@@ -40,19 +42,23 @@ def apply(func, args, kwargs=None):
 
 def _deprecated(
     *,
-    version: str = None,
-    message: str = None,
-    use_instead: str = None,
-    category: Type[Warning] = FutureWarning,
+    version: str | None = None,
+    after_version: str | None = None,
+    message: str | None = None,
+    use_instead: str | None = None,
+    category: type[Warning] = FutureWarning,
 ):
     """Decorator to mark a function as deprecated
 
     Parameters
     ----------
     version : str, optional
-        Version of Dask in which the function was deprecated.
-        If specified, the version will be included in the default
-        warning message.
+        Version of Dask in which the function was deprecated. If specified, the version
+        will be included in the default warning message. This should no longer be used
+        after the introduction of automated versioning system.
+    after_version : str, optional
+        Version of Dask after which the function was deprecated. If specified, the
+        version will be included in the default warning message.
     message : str, optional
         Custom warning message to raise.
     use_instead : str, optional
@@ -66,7 +72,7 @@ def _deprecated(
     --------
 
     >>> from dask.utils import _deprecated
-    >>> @_deprecated(version="X.Y.Z", use_instead="bar")
+    >>> @_deprecated(after_version="X.Y.Z", use_instead="bar")
     ... def foo():
     ...     return "baz"
     """
@@ -74,7 +80,9 @@ def _deprecated(
     def decorator(func):
         if message is None:
             msg = f"{func.__name__} "
-            if version is not None:
+            if after_version is not None:
+                msg += f"was deprecated after version {after_version} "
+            elif version is not None:
                 msg += f"was deprecated in version {version} "
             else:
                 msg += "is deprecated "
@@ -1001,7 +1009,7 @@ class methodcaller:
     __slots__ = ("method",)
     func = property(lambda self: self.method)  # For `funcname` to work
 
-    def __new__(cls, method):
+    def __new__(cls, method: str):
         try:
             return _method_cache[method]
         except KeyError:
@@ -1022,7 +1030,7 @@ class methodcaller:
     __repr__ = __str__
 
 
-@_deprecated(version="2021.11", use_instead="operator.itemgetter")
+@_deprecated(after_version="2021.10", use_instead="operator.itemgetter")
 def itemgetter(index):
     return operator.itemgetter(index)
 
@@ -1123,7 +1131,7 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
+def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     """Convert a generic Mapping into a dict.
     Optimize use case of :class:`~dask.highlevelgraph.HighLevelGraph`.
 
@@ -1685,7 +1693,7 @@ def key_split(s):
         return "Other"
 
 
-def stringify(obj, exclusive: Optional[Iterable] = None):
+def stringify(obj, exclusive: Iterable | None = None):
     """Convert an object to a string
 
     If ``exclusive`` is specified, search through `obj` and convert
