@@ -475,6 +475,10 @@ def test_itemgetter():
     assert g2(data) == 2
     assert g2.index == 1
 
+    assert itemgetter(1) == itemgetter(1)
+    assert itemgetter(1) != itemgetter(2)
+    assert itemgetter(1) != 123
+
 
 def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
@@ -717,6 +721,15 @@ def test_deprecated_version():
         return "bar"
 
     with pytest.warns(FutureWarning, match="deprecated in version 1.2.3"):
+        assert foo() == "bar"
+
+
+def test_deprecated_after_version():
+    @_deprecated(after_version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated after version 1.2.3"):
         assert foo() == "bar"
 
 
