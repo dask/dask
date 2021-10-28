@@ -10,7 +10,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.utils import AxisError, assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_array():
@@ -2170,10 +2170,10 @@ def test_insert():
     with pytest.raises(NotImplementedError):
         da.insert(a, [4, 2], -1, axis=0)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.insert(a, [3], -1, axis=2)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.insert(a, [3], -1, axis=-3)
 
 
@@ -2215,9 +2215,9 @@ def test_append():
     )
 
     # check AxisError
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.append(a, ((0,) * 10,) * 10, axis=2)
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.append(a, ((0,) * 10,) * 10, axis=-3)
 
     # check ValueError if dimensions don't align
@@ -2254,10 +2254,10 @@ def test_delete():
 
     assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.delete(a, [3], axis=2)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.delete(a, [3], axis=-3)
 
 
