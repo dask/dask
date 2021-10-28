@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import pathlib
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -23,6 +24,7 @@ import dask
 import dask.array as da
 from dask.array.core import (
     Array,
+    BlockView,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -1894,6 +1896,11 @@ def test_store_compute_false():
 
     v = store([a, b], [at, bt], compute=False)
     assert isinstance(v, Delayed)
+
+    # You need a well-formed HighLevelgraph for e.g. dask.graph_manipulation.bind
+    for layer in v.__dask_layers__():
+        assert layer in v.dask.layers
+
     assert (at == 0).all() and (bt == 0).all()
     assert all([ev is None for ev in v.compute()])
     assert (at == 2).all() and (bt == 3).all()
@@ -2044,6 +2051,18 @@ def test_store_multiprocessing_lock():
     at = np.zeros(shape=(10, 10))
     st = a.store(at, scheduler="processes", num_workers=10)
     assert st is None
+
+
+@pytest.mark.parametrize("return_stored", [False, True])
+@pytest.mark.parametrize("delayed_target", [False, True])
+def test_store_deterministic_keys(return_stored, delayed_target):
+    a = da.ones((10, 10), chunks=(2, 2))
+    at = np.zeros(shape=(10, 10))
+    if delayed_target:
+        at = delayed(at)
+    st1 = a.store(at, return_stored=return_stored, compute=False)
+    st2 = a.store(at, return_stored=return_stored, compute=False)
+    assert st1.dask.keys() == st2.dask.keys()
 
 
 def test_to_hdf5():
@@ -4317,6 +4336,17 @@ def test_zarr_roundtrip():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_roundtrip_with_path_like():
+    pytest.importorskip("zarr")
+    with tmpdir() as d:
+        path = pathlib.Path(d)
+        a = da.zeros((3, 3), chunks=(1, 1))
+        a.to_zarr(path)
+        a2 = da.from_zarr(path)
+        assert_eq(a, a2)
+        assert a2.chunks == a.chunks
+
+
 @pytest.mark.parametrize("compute", [False, True])
 def test_zarr_return_stored(compute):
     pytest.importorskip("zarr")
@@ -4487,6 +4517,58 @@ def test_tiledb_multiattr():
         # smoke-test computation directly on the TileDB view
         d = da.from_tiledb(uri, attribute="attr2")
         assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
+
+
+def test_blockview():
+    x = da.arange(10, chunks=2)
+    blockview = BlockView(x)
+    assert x.blocks == blockview
+    assert isinstance(blockview[0], da.Array)
+
+    assert_eq(blockview[0], x[:2])
+    assert_eq(blockview[-1], x[-2:])
+    assert_eq(blockview[:3], x[:6])
+    assert_eq(blockview[[0, 1, 2]], x[:6])
+    assert_eq(blockview[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    blockview = BlockView(x)
+    assert_eq(blockview[0], x[:4])
+    assert_eq(blockview[0, :3], x[:4, :15])
+    assert_eq(blockview[:, :3], x[:, :15])
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    blockview = BlockView(x)
+    assert_eq(blockview[0, :, 0], np.ones((10, 40, 10)))
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        blockview[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        blockview[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError) as info:
+        blockview[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        blockview[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        blockview[100, 100]
 
 
 def test_blocks_indexer():

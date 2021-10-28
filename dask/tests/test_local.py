@@ -97,11 +97,7 @@ class TestGetAsync(GetFunctionTestMixin):
 
 
 def test_cache_options():
-    try:
-        from chest import Chest
-    except ImportError:
-        return
-    cache = Chest()
+    cache = {}
 
     def inc2(x):
         assert "y" in cache

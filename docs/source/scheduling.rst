@@ -156,7 +156,7 @@ Dask Distributed (Cluster)
 
 You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
-We recommend referring to :doc:`how to deploy Dash clusters <how-to/deploy-dask-clusters>` for more information.
+We recommend referring to :doc:`how to deploy Dask clusters <how-to/deploy-dask-clusters>` for more information.
 
 .. _scheduling-configuration:
 

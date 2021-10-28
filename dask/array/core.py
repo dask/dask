@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import contextlib
 import math
 import operator
@@ -9,12 +11,13 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
+from typing import Any, Sequence
 
 import numpy as np
 from fsspec import get_mapper
@@ -910,12 +913,12 @@ def broadcast_chunks(*chunkss):
 
 
 def store(
-    sources,
+    sources: Array | Collection[Array],
     targets,
-    lock=True,
-    regions=None,
-    compute=True,
-    return_stored=False,
+    lock: bool | Lock = True,
+    regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
+    compute: bool = True,
+    return_stored: bool = False,
     **kwargs,
 ):
     """Store dask arrays in array-like objects, overwrite data in target
@@ -931,23 +934,35 @@ def store(
     Parameters
     ----------
 
-    sources: Array or iterable of Arrays
-    targets: array-like or Delayed or iterable of array-likes and/or Delayeds
+    sources: Array or collection of Arrays
+    targets: array-like or Delayed or collection of array-likes and/or Delayeds
         These should support setitem syntax ``target[10:20] = ...``
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular :class:`threading.Lock` object to be shared among all writes.
-    regions: tuple of slices or list of tuples of slices
+    regions: tuple of slices or collection of tuples of slices
         Each ``region`` tuple in ``regions`` should be such that
         ``target[region].shape = source.shape``
         for the corresponding source and target in sources and targets,
         respectively. If this is a tuple, the contents will be assumed to be
         slices, so do not provide a tuple of tuples.
     compute: boolean, optional
-        If true compute immediately, return :class:`dask.delayed.Delayed` otherwise
+        If true compute immediately; return :class:`dask.delayed.Delayed` otherwise.
     return_stored: boolean, optional
         Optionally return the stored result (default False).
+    kwargs:
+        Parameters passed to compute/persist (only used if compute=True)
+
+    Returns
+    -------
+
+    If return_stored=True
+        tuple of Arrays
+    If return_stored=False and compute=True
+        None
+    If return_stored=False and compute=False
+        Delayed
 
     Examples
     --------
@@ -991,65 +1006,83 @@ def store(
         )
 
     # Optimize all sources together
-    sources_dsk = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
-    sources_dsk = Array.__dask_optimize__(
-        sources_dsk, list(core.flatten([e.__dask_keys__() for e in sources]))
+    sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
+    sources_layer = Array.__dask_optimize__(
+        sources_hlg, list(core.flatten([e.__dask_keys__() for e in sources]))
     )
-    sources2 = [Array(sources_dsk, e.name, e.chunks, meta=e) for e in sources]
+    sources_name = "store-sources-" + tokenize(sources)
+    layers = {sources_name: sources_layer}
+    dependencies = {sources_name: set()}
 
     # Optimize all targets together
-    targets2 = []
     targets_keys = []
-    targets_dsk = []
-    for e in targets:
-        if isinstance(e, Delayed):
-            targets2.append(e.key)
-            targets_keys.extend(e.__dask_keys__())
-            targets_dsk.append(e.__dask_graph__())
-        elif is_dask_collection(e):
+    targets_dsks = []
+    for t in targets:
+        if isinstance(t, Delayed):
+            targets_keys.append(t.key)
+            targets_dsks.append(t.__dask_graph__())
+        elif is_dask_collection(t):
             raise TypeError("Targets must be either Delayed objects or array-likes")
-        else:
-            targets2.append(e)
 
-    targets_dsk = HighLevelGraph.merge(*targets_dsk)
-    targets_dsk = Delayed.__dask_optimize__(targets_dsk, targets_keys)
+    if targets_dsks:
+        targets_hlg = HighLevelGraph.merge(*targets_dsks)
+        targets_layer = Delayed.__dask_optimize__(targets_hlg, targets_keys)
+        targets_name = "store-targets-" + tokenize(targets_keys)
+        layers[targets_name] = targets_layer
+        dependencies[targets_name] = set()
 
     load_stored = return_stored and not compute
-    toks = [str(uuid.uuid1()) for _ in range(len(sources))]
-    store_dsk = HighLevelGraph.merge(
-        *[
-            insert_to_ooc(s, t, lock, r, return_stored, load_stored, tok)
-            for s, t, r, tok in zip(sources2, targets2, regions, toks)
-        ]
-    )
-    store_keys = list(store_dsk.keys())
 
-    store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
-    store_dsk = HighLevelGraph.from_collections(id(store_dsk), dict(store_dsk))
+    map_names = [
+        "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
+        for s, t, r in zip(sources, targets, regions)
+    ]
+    map_keys = []
+
+    for s, t, n, r in zip(sources, targets, map_names, regions):
+        map_layer = insert_to_ooc(
+            keys=s.__dask_keys__(),
+            chunks=s.chunks,
+            out=t.key if isinstance(t, Delayed) else t,
+            name=n,
+            lock=lock,
+            region=r,
+            return_stored=return_stored,
+            load_stored=load_stored,
+        )
+        layers[n] = map_layer
+        if isinstance(t, Delayed):
+            dependencies[n] = {sources_name, targets_name}
+        else:
+            dependencies[n] = {sources_name}
+        map_keys += map_layer.keys()
 
     if return_stored:
+        store_dsk = HighLevelGraph(layers, dependencies)
         load_store_dsk = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsk) for k in store_keys]
+            store_dlyds = [Delayed(k, store_dsk) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
+            load_store_dsk = retrieve_from_ooc(map_keys, store_dsk, store_dsk_2)
+            map_names = ["load-" + n for n in map_names]
 
-            load_store_dsk = retrieve_from_ooc(store_keys, store_dsk, store_dsk_2)
-
-        result = tuple(
-            Array(load_store_dsk, "load-store-%s" % t, s.chunks, meta=s)
-            for s, t in zip(sources, toks)
+        return tuple(
+            Array(load_store_dsk, n, s.chunks, meta=s)
+            for s, n in zip(sources, map_names)
         )
 
-        return result
+    elif compute:
+        store_dsk = HighLevelGraph(layers, dependencies)
+        compute_as_if_collection(Array, store_dsk, map_keys, **kwargs)
+        return None
+
     else:
-        if compute:
-            compute_as_if_collection(Array, store_dsk, store_keys, **kwargs)
-            return None
-        else:
-            name = "store-" + str(uuid.uuid1())
-            dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
-            return Delayed(name, dsk)
+        key = "store-" + tokenize(map_names)
+        layers[key] = {key: map_keys}
+        dependencies[key] = set(map_names)
+        store_dsk = HighLevelGraph(layers, dependencies)
+        return Delayed(key, store_dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1154,7 +1187,6 @@ class Array(DaskMethodsMixin):
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
 
         for plugin in config.get("array_plugins", ()):
@@ -1819,66 +1851,45 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
-    def _blocks(self, index):
-        from .slicing import normalize_index
-
-        if not isinstance(index, tuple):
-            index = (index,)
-        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
-            raise ValueError("Can only slice with a single list")
-        if any(ind is None for ind in index):
-            raise ValueError("Slicing with np.newaxis or None is not supported")
-        index = normalize_index(index, self.numblocks)
-        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
-
-        name = "blocks-" + tokenize(self, index)
-
-        new_keys = self._key_array[index]
-
-        chunks = tuple(
-            tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
-        )
-
-        keys = product(*(range(len(c)) for c in chunks))
-
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
-
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-        return Array(graph, name, chunks, meta=self)
-
     @property
     def blocks(self):
-        """Slice an array by blocks
+        """An array-like interface to the blocks of an array.
 
-        This allows blockwise slicing of a Dask array.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
-        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
-        dask array with every other block in the first row of blocks.
+        This returns a ``Blockview`` object that provides an array-like interface
+        to the blocks of a dask array.  Numpy-style indexing of a ``Blockview`` object
+        returns a selection of blocks as a new dask array.
 
-        You can index blocks in any way that could index a numpy array of shape
+        You can index ``array.blocks`` like a numpy array of shape
         equal to the number of blocks in each dimension, (available as
-        array.numblocks).  The dimension of the output array will be the same
-        as the dimension of this array, even if integer indices are passed.
-        This does not support slicing with ``np.newaxis`` or multiple lists.
+        array.blocks.size).  The dimensionality of the output array matches
+        the dimension of this array, even if integer indices are passed.
+        Slicing with ``np.newaxis`` or multiple lists is not supported.
 
         Examples
         --------
         >>> import dask.array as da
-        >>> x = da.arange(10, chunks=2)
+        >>> x = da.arange(8, chunks=2)
+        >>> x.blocks.shape # aliases x.numblocks
+        (4,)
         >>> x.blocks[0].compute()
         array([0, 1])
         >>> x.blocks[:3].compute()
         array([0, 1, 2, 3, 4, 5])
         >>> x.blocks[::2].compute()
-        array([0, 1, 4, 5, 8, 9])
+        array([0, 1, 4, 5])
         >>> x.blocks[[-1, 0]].compute()
-        array([8, 9, 0, 1])
+        array([6, 7, 0, 1])
+        >>> x.blocks.ravel() # doctest: +NORMALIZE_WHITESPACE
+        [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
 
         Returns
         -------
-        A Dask array
+        An instance of ``dask.array.Blockview``
         """
-        return IndexCallable(self._blocks)
+        return BlockView(self)
 
     @property
     def partitions(self):
@@ -1887,35 +1898,39 @@ class Array(DaskMethodsMixin):
         This alias allows you to write agnostic code that works with both
         dask arrays and dask dataframes.
 
-        This allows blockwise slicing of a Dask array.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
-        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
-        dask array with every other block in the first row of blocks.
+        This returns a ``Blockview`` object that provides an array-like interface
+        to the blocks of a dask array.  Numpy-style indexing of a ``Blockview`` object
+        returns a selection of blocks as a new dask array.
 
-        You can index blocks in any way that could index a numpy array of shape
+        You can index ``array.blocks`` like a numpy array of shape
         equal to the number of blocks in each dimension, (available as
-        array.numblocks).  The dimension of the output array will be the same
-        as the dimension of this array, even if integer indices are passed.
-        This does not support slicing with ``np.newaxis`` or multiple lists.
+        array.blocks.size).  The dimensionality of the output array matches
+        the dimension of this array, even if integer indices are passed.
+        Slicing with ``np.newaxis`` or multiple lists is not supported.
 
         Examples
         --------
         >>> import dask.array as da
-        >>> x = da.arange(10, chunks=2)
+        >>> x = da.arange(8, chunks=2)
+        >>> x.partitions.shape # aliases x.numblocks
+        (4,)
         >>> x.partitions[0].compute()
         array([0, 1])
         >>> x.partitions[:3].compute()
         array([0, 1, 2, 3, 4, 5])
         >>> x.partitions[::2].compute()
-        array([0, 1, 4, 5, 8, 9])
+        array([0, 1, 4, 5])
         >>> x.partitions[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> all(x.partitions[:].compute() == x.blocks[:].compute())
-        True
+        array([6, 7, 0, 1])
+        >>> x.partitions.ravel() # doctest: +NORMALIZE_WHITESPACE
+        [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
 
         Returns
         -------
-        A Dask array
+        An instance of ``da.array.Blockview``
         """
         return self.blocks
 
@@ -2878,7 +2893,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         limit = parse_bytes(limit)
 
     if dtype is None:
-        raise TypeError("DType must be known for auto-chunking")
+        raise TypeError("dtype must be known for auto-chunking")
 
     if dtype.hasobject:
         raise NotImplementedError(
@@ -3277,7 +3292,9 @@ def from_zarr(
     storage_options = storage_options or {}
     if isinstance(url, zarr.Array):
         z = url
-    elif isinstance(url, str):
+    elif isinstance(url, (str, os.PathLike)):
+        if isinstance(url, os.PathLike):
+            url = os.fspath(url)
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -4038,17 +4055,29 @@ def load_chunk(out, index, lock):
 
 
 def insert_to_ooc(
-    arr, out, lock=True, region=None, return_stored=False, load_stored=False, tok=None
-):
+    keys: list,
+    chunks: tuple[tuple[int, ...], ...],
+    out,
+    name: str,
+    *,
+    lock: Lock | bool = True,
+    region: slice | None = None,
+    return_stored: bool = False,
+    load_stored: bool = False,
+) -> dict:
     """
     Creates a Dask graph for storing chunks from ``arr`` in ``out``.
 
     Parameters
     ----------
-    arr: da.Array
-        A dask array
+    keys: list
+        Dask keys of the input array
+    chunks: tuple
+        Dask chunks of the input array
     out: array-like
-        Where to store results too.
+        Where to store results to
+    name: str
+        First element of dask keys
     lock: Lock-like or bool, optional
         Whether to lock or with what (default is ``True``,
         which means a :class:`threading.Lock` instance).
@@ -4062,51 +4091,53 @@ def insert_to_ooc(
         Whether to handling loading from ``out`` at the same time.
         Ignored if ``return_stored`` is not ``True``.
         (default is ``False``, meaning defer to ``return_stored``).
-    tok: str, optional
-        Token to use when naming keys
+
+    Returns
+    -------
+    dask graph of store operation
 
     Examples
     --------
     >>> import dask.array as da
     >>> d = da.ones((5, 6), chunks=(2, 3))
     >>> a = np.empty(d.shape)
-    >>> insert_to_ooc(d, a)  # doctest: +SKIP
+    >>> insert_to_ooc(d.__dask_keys__(), d.chunks, a, "store-123")  # doctest: +SKIP
     """
 
     if lock is True:
         lock = Lock()
 
-    slices = slices_from_chunks(arr.chunks)
+    slices = slices_from_chunks(chunks)
     if region:
         slices = [fuse_slice(region, slc) for slc in slices]
 
-    name = "store-%s" % (tok or str(uuid.uuid1()))
-    func = store_chunk
-    args = ()
     if return_stored and load_stored:
-        name = "load-%s" % name
         func = load_store_chunk
-        args = args + (load_stored,)
+        args = (load_stored,)
+    else:
+        func = store_chunk
+        args = ()
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
-        for t, slc in zip(core.flatten(arr.__dask_keys__()), slices)
+        for t, slc in zip(core.flatten(keys), slices)
     }
-
     return dsk
 
 
-def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
+def retrieve_from_ooc(
+    keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
+) -> dict:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
     Parameters
     ----------
-    keys: Sequence
+    keys: Collection
         A sequence containing Dask graph keys to load
     dsk_pre: Mapping
         A Dask graph corresponding to a Dask Array before computation
-    dsk_post: Mapping, optional
+    dsk_post: Mapping
         A Dask graph corresponding to a Dask Array after computation
 
     Examples
@@ -4114,13 +4145,9 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     >>> import dask.array as da
     >>> d = da.ones((5, 6), chunks=(2, 3))
     >>> a = np.empty(d.shape)
-    >>> g = insert_to_ooc(d, a)
-    >>> retrieve_from_ooc(g.keys(), g)  # doctest: +SKIP
+    >>> g = insert_to_ooc(d.__dask_keys__(), d.chunks, a, "store-123")
+    >>> retrieve_from_ooc(g.keys(), g, {k: k for k in g.keys()})  # doctest: +SKIP
     """
-
-    if not dsk_post:
-        dsk_post = {k: k for k in keys}
-
     load_dsk = {
         ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
         for k in keys
@@ -5295,6 +5322,107 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return new_dd_object(dsk, name, meta, divisions)
     else:
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+class BlockView:
+    """An array-like interface to the blocks of an array.
+
+    ``BlockView`` provides an array-like interface
+    to the blocks of a dask array.  Numpy-style indexing of a
+     ``BlockView`` returns a selection of blocks as a new dask array.
+
+    You can index ``BlockView`` like a numpy array of shape
+    equal to the number of blocks in each dimension, (available as
+    array.blocks.size).  The dimensionality of the output array matches
+    the dimension of this array, even if integer indices are passed.
+    Slicing with ``np.newaxis`` or multiple lists is not supported.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> from dask.array.core import BlockView
+    >>> x = da.arange(8, chunks=2)
+    >>> bv = BlockView(x)
+    >>> bv.shape # aliases x.numblocks
+    (4,)
+    >>> bv.size
+    4
+    >>> bv[0].compute()
+    array([0, 1])
+    >>> bv[:3].compute()
+    array([0, 1, 2, 3, 4, 5])
+    >>> bv[::2].compute()
+    array([0, 1, 4, 5])
+    >>> bv[[-1, 0]].compute()
+    array([6, 7, 0, 1])
+    >>> bv.ravel()  # doctest: +NORMALIZE_WHITESPACE
+    [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
+
+    Returns
+    -------
+    An instance of ``da.array.Blockview``
+    """
+
+    def __init__(self, array: Array) -> BlockView:
+        self._array = array
+
+    def __getitem__(
+        self, index: int | Sequence[int] | slice | Sequence[slice]
+    ) -> Array:
+        from .slicing import normalize_index
+
+        if not isinstance(index, tuple):
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self._array.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
+
+        name = "blocks-" + tokenize(self._array, index)
+
+        new_keys = self._array._key_array[index]
+
+        chunks = tuple(
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
+        )
+
+        keys = product(*(range(len(c)) for c in chunks))
+
+        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
+        return Array(graph, name, chunks, meta=self._array)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, BlockView):
+            return self._array is other._array
+        else:
+            return NotImplemented
+
+    @property
+    def size(self) -> int:
+        """
+        The total number of blocks in the array.
+        """
+        return np.prod(self.shape)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """
+        The number of blocks per axis. Alias of ``dask.array.numblocks``.
+        """
+        return self._array.numblocks
+
+    def ravel(self) -> list[Array]:
+        """
+        Return a flattened list of all the blocks in the array in C order.
+        """
+        return [self[idx] for idx in np.ndindex(self.shape)]
 
 
 from .blockwise import blockwise

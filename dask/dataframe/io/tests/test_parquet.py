@@ -1386,6 +1386,11 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert e.npartitions == 2
     assert ((e.x < 2) | (e.x > 7)).all().compute()
 
+    f = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "=", "c")])
+    assert f.npartitions == 1
+    assert len(f)
+    assert (f.y == "c").all().compute()
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
@@ -1407,10 +1412,15 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         fn, index=False, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, index=False, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     if pyarrow_row_filtering:
         assert_eq(ddf2, ddf[ddf["at"] == "aa"], check_index=False)
+        assert_eq(ddf3, ddf[ddf["at"] == "aa"], check_index=False)
     else:
         assert_eq(ddf2, ddf)
+        assert_eq(ddf3, ddf)
 
     # with >1 partition and no filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
@@ -1421,14 +1431,21 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     if read_engine == "fastparquet":
         ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
         df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "==", "aa")])
+        df3 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "=", "aa")])
         assert len(df2) > 0
+        assert len(df3) > 0
 
     # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
     ddf2 = dd.read_parquet(
         fn, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     assert len(ddf2) > 0
+    assert len(ddf3) > 0
+    assert_eq(ddf2, ddf3)
 
 
 def test_filtering_pyarrow_dataset(tmpdir, engine):
@@ -3686,7 +3703,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     )
 
     # Read back
-    if engine == "pyarrow-dataset" or not metadata_task_size:
+    if engine != "pyarrow-legacy" or not metadata_task_size:
         ddf2a = dd.read_parquet(
             str(tmpdir),
             engine=engine,
@@ -3719,3 +3736,34 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
                 gather_statistics=True,
                 metadata_task_size=metadata_task_size,
             )
+
+
+def test_extra_file(tmpdir, engine):
+    # Check that read_parquet can handle spark output
+    # See: https://github.com/dask/dask/issues/8087
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmpdir, engine=engine)
+    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
+    os.remove(os.path.join(tmpdir, "_metadata"))
+    out = dd.read_parquet(tmpdir, engine=engine)
+    assert_eq(out, df)
+
+    if engine != "pyarrow-legacy":
+        # For "fastparquet" and "pyarrow-dataset", we can pass the
+        # expected file extension, or avoid checking file extensions
+        # by passing False. Check here that this works:
+
+        # Should Work
+        out = dd.read_parquet(
+            tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
+        )
+        assert_eq(out, df)
+
+        # Should Fail
+        with pytest.raises((OSError, pa.lib.ArrowInvalid)):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": False}
+            ).compute()
