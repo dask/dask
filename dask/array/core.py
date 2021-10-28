@@ -2990,6 +2990,59 @@ def _get_chunk_shape(a):
     return s[len(s) * (None,) + (slice(None),)]
 
 
+from ..blockwise import Layer
+
+class ArrayStartLayer(Layer):
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+        annotations= None,
+        collection_annotations= None,
+    ):
+        super().__init__(annotations=annotations, collection_annotations=collection_annotations)
+        self.name = name
+        self.nchunks = 1
+        for ch in chunks:
+            self.nchunks *= len(ch)
+        self.cumdims = [cached_cumsum(bds, initial_zero=True) for bds in chunks]
+        self.chunks = chunks
+        self.shape = shape
+        self.func = func
+
+    def is_materialized(self) -> bool:
+        return False
+
+    def get_output_keys(self):
+        return set(product([self.name], *[range(len(ch)) for ch in self.chunks]))
+
+    def get_dependencies(self, key, all_hlg_keys) -> set:
+        return set()
+
+    def __contains__(self, k):
+        if not isinstance(k, tuple):
+            return False
+        for i, ch in zip(k, self.chunks):
+            if i not in range(len(ch)):
+                return False
+        return True
+
+    def __getitem__(self, k):
+        k = k[1:]
+        starts = [cd[i] for i, cd in zip(k, self.cumdims)]
+        ends = [cd[i + 1] for i, cd in zip(k, self.cumdims)]
+        return self.func, starts, ends
+
+    def __iter__(self):
+        return iter(product([self.name], *[range(len(ch)) for ch in self.chunks]))
+
+    def __len__(self):
+        return self.nchunks
+
+
 def from_array(
     x,
     chunks="auto",
@@ -3184,41 +3237,56 @@ def from_array(
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
-    if is_ndarray and not is_single_block and not lock:
-        # eagerly slice numpy arrays to prevent memory blowup
-        # GH5367, GH5601
-        slices = slices_from_chunks(chunks)
-        keys = product([name], *(range(len(bds)) for bds in chunks))
-        values = [x[slc] for slc in slices]
-        dsk = dict(zip(keys, values))
+    def getter(starts, ends):
+        print(starts, ends)
+        return x.__getitem__(tuple(slice(s, e) for s, e in zip(starts, ends)))
 
-    elif is_ndarray and is_single_block:
-        # No slicing needed
-        dsk = {(name,) + (0,) * x.ndim: x}
-    else:
-        if getitem is None:
-            if fancy:
-                getitem = getter
-            else:
-                getitem = getter_nofancy
-
-        if inline_array:
-            get_from = x
-        else:
-            get_from = original_name
-
-        dsk = getem(
-            get_from,
-            chunks,
-            getitem=getitem,
-            shape=x.shape,
-            out_name=name,
-            lock=lock,
-            asarray=asarray,
-            dtype=x.dtype,
-        )
-        if not inline_array:
-            dsk[original_name] = x
+    dsk = HighLevelGraph(
+        layers={
+            "from-array": ArrayStartLayer(
+                name=name,
+                func=getter,
+                shape=x.shape,
+                chunks=chunks
+            )
+        },
+        dependencies={}
+    )
+    # if is_ndarray and not is_single_block and not lock:
+    #     # eagerly slice numpy arrays to prevent memory blowup
+    #     # GH5367, GH5601
+    #     slices = slices_from_chunks(chunks)
+    #     keys = product([name], *(range(len(bds)) for bds in chunks))
+    #     values = [x[slc] for slc in slices]
+    #     dsk = dict(zip(keys, values))
+    #
+    # elif is_ndarray and is_single_block:
+    #     # No slicing needed
+    #     dsk = {(name,) + (0,) * x.ndim: x}
+    # else:
+    #     if getitem is None:
+    #         if fancy:
+    #             getitem = getter
+    #         else:
+    #             getitem = getter_nofancy
+    #
+    #     if inline_array:
+    #         get_from = x
+    #     else:
+    #         get_from = original_name
+    #
+    #     dsk = getem(
+    #         get_from,
+    #         chunks,
+    #         getitem=getitem,
+    #         shape=x.shape,
+    #         out_name=name,
+    #         lock=lock,
+    #         asarray=asarray,
+    #         dtype=x.dtype,
+    #     )
+    #     if not inline_array:
+    #         dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
