@@ -916,37 +916,45 @@ def test_elemwise_dtype():
             assert da.maximum(x, y).dtype == da.result_type(x, y)
 
 
-def test_elemwise_where():
-    xd = da.arange(10, dtype=np.int8)
-    x = xd.compute()
-    mask = [True, False, True, False, True, False, True, False, False, False]
+@pytest.mark.parametrize(
+    "x_da,x_np,mask,o_da,o_np",
+    [
+        (
+            da.array([11, 2, 3, 4, 5, 12, 34, 56, 78, 90], dtype=np.int8),
+            np.array([11, 2, 3, 4, 5, 12, 34, 56, 78, 90], dtype=np.int8),
+            [True, False, True, True, True, False, True, False, True, True],
+            da.ones((10), dtype=np.int8),
+            np.ones((10), dtype=np.int8),
+        ),
+        (
+            da.array(
+                [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]], dtype=np.int8
+            ),
+            np.array(
+                [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]], dtype=np.int8
+            ),
+            [
+                [True, False, True, True, True],
+                [False, True, False, True, True],
+                [True, False, True, False, False],
+            ],
+            da.ones((3, 5), dtype=np.int8),
+            np.ones((3, 5), dtype=np.int8),
+        ),
+    ],
+)
+def test_elemwise_where(x_da, x_np, mask, o_da, o_np):
 
-    o_da = da.arange(20, 30, dtype=np.int8)
-    o_np = o_da.compute()
-    da.invert(xd, out=o_da, where=mask)
-    np.invert(x, out=o_np, where=mask)
+    da.invert(x_da, out=o_da, where=mask)
+    np.invert(x_np, out=o_np, where=mask)
     assert_eq(o_da, o_np)
 
-    o_da = da.arange(30, 40, dtype=np.int8)
-    o_np = o_da.compute()
-    da.invert(xd, out=o_da, where=False)
-    np.invert(x, out=o_np, where=False)
+    da.invert(x_da, out=o_da, where=False)
+    np.invert(x_np, out=o_np, where=False)
     assert_eq(o_da, o_np)
 
-    o_da = da.arange(40, 50, dtype=np.int8)
-    o_np = o_da.compute()
-    da.invert(xd, out=o_da)
-    np.invert(x, out=o_np)
-    assert_eq(o_da, o_np)
-
-    xd_multi = da.random.randint(10, size=(10, 10), dtype=np.int8)
-    x_multi = xd_multi.compute()
-    mask_multi = [mask for _ in range(10)]
-
-    o_np = np.random.randint(50, 60, size=(10, 10), dtype=np.int8)
-    o_da = da.array(o_np)
-    np.invert(x_multi, out=o_np, where=mask_multi)
-    da.invert(xd_multi, out=o_da, where=mask_multi)
+    da.invert(x_da, out=o_da)
+    np.invert(x_np, out=o_np)
     assert_eq(o_da, o_np)
 
 
