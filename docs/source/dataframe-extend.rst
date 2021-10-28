@@ -8,7 +8,7 @@ There are a few projects that subclass or replicate the functionality of Pandas
 objects:
 
 -  GeoPandas: for Geospatial analytics
--  PyGDF: for data analysis on GPUs
+-  cuDF: for data analysis on GPUs
 -  ...
 
 These projects may also want to produce parallel variants of themselves with
