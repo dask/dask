@@ -25,12 +25,12 @@ def cull(dsk, keys):
     Examples
     --------
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
-    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
-    >>> dsk                                                     # doctest: +SKIP
-    {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies                                            # doctest: +SKIP
-    {'x': set(), 'out': set(['x'])}
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+    >>> dsk, dependencies = cull(d, 'out')
+    >>> dsk                                                     # doctest: +ELLIPSIS
+    {'out': (<function add at ...>, 'x', 10), 'x': 1}
+    >>> dependencies                                            # doctest: +ELLIPSIS
+    {'out': ['x'], 'x': []}
 
     Returns
     -------
@@ -107,11 +107,11 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
     >>> dsk # doctest: +SKIP
     {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
     >>> dsk, dependencies = fuse(d, rename_keys=False)
-    >>> dsk # doctest: +SKIP
-    {'c': (inc, (inc, 1))}
+    >>> dsk # doctest: +ELLIPSIS
+    {'c': (<function inc at ...>, (<function inc at ...>, 1))}
     >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
-    >>> dsk  # doctest: +SKIP
-    {'b': (inc, 1), 'c': (inc, 'b')}
+    >>> dsk  # doctest: +ELLIPSIS
+    {'b': (<function inc at ...>, 1), 'c': (<function inc at ...>, 'b')}
 
     Returns
     -------
@@ -236,15 +236,15 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     Examples
     --------
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
-    >>> inline(d)       # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
+    >>> inline(d)       # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, 'y')}
 
-    >>> inline(d, keys='y') # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
+    >>> inline(d, keys='y') # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 1), 'z': (<function add at ...>, 1, (<function inc at ...>, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
-    {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +ELLIPSIS
+    {'x': 1, 'y': (<function inc at ...>, 'x'), 'z': (<function add at ...>, 'x', (<function inc at ...>, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
         dependencies = {k: set(v) for k, v in dependencies.items()}
@@ -264,7 +264,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
     replaceorder = toposort(
-        dict((k, dsk[k]) for k in keys if k in dsk), dependencies=dependencies
+        {k: dsk[k] for k in keys if k in dsk}, dependencies=dependencies
     )
     keysubs = {}
     for key in replaceorder:

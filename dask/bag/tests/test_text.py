@@ -47,7 +47,7 @@ def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
-    files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
+    files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
     with filetexts(files2, mode="b"):
         b = read_text(
             ".test.accounts.*.json", compression=fmt, blocksize=bs, encoding=encoding
@@ -98,7 +98,7 @@ def test_read_text_unicode_no_collection(tmp_path):
 
 
 def test_files_per_partition():
-    files3 = {"{:02}.txt".format(n): "line from {:02}" for n in range(20)}
+    files3 = {f"{n:02}.txt": "line from {:02}" for n in range(20)}
     with filetexts(files3):
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns

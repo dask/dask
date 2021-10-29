@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -5,9 +7,11 @@ pytest.importorskip("scipy")
 
 import numpy as np
 import scipy.linalg
+from packaging.version import parse as parse_version
 
 import dask.array as da
 from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
+from dask.array.numpy_compat import _np_version
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -976,6 +980,11 @@ def test_svd_incompatible_dimensions(ndim):
         da.linalg.svd(x)
 
 
+@pytest.mark.xfail(  # Remove after NumPy 1.22 release is out
+    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    reason="https://github.com/dask/dask/issues/7189",
+    strict=False,
+)
 @pytest.mark.parametrize(
     "shape, chunks, axis",
     [[(5,), (2,), None], [(5,), (2,), 0], [(5,), (2,), (0,)], [(5, 6), (2, 2), None]],
@@ -993,6 +1002,11 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(  # Remove after NumPy 1.22 release is out
+    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    reason="https://github.com/dask/dask/issues/7189",
+    strict=False,
+)
 @pytest.mark.parametrize(
     "shape, chunks",
     [

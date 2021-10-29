@@ -145,7 +145,9 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     dsk.update(df.dask)
 
     # Compute the categories
-    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0), **kwargs)
+    categories, index = compute_as_if_collection(
+        df.__class__, dsk, (prefix, 0), **kwargs
+    )
 
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)

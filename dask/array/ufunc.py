@@ -14,7 +14,6 @@ from ..utils import (
     is_series_like,
 )
 from .core import Array, apply_infer_dtype, asarray, blockwise, elemwise
-from .utils import IS_NEP18_ACTIVE, empty_like_safe
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
@@ -32,7 +31,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
                 or is_series_like(dsk[0])
                 or is_index_like(dsk[0])
             )
-            if array_wrap and (is_dataframe or not IS_NEP18_ACTIVE):
+            if array_wrap and is_dataframe:
                 return dsk[0]._elemwise(__array_wrap__, numpy_ufunc, *args, **kwargs)
             else:
                 return dsk[0]._elemwise(numpy_ufunc, *args, **kwargs)
@@ -70,7 +69,7 @@ class da_frompyfunc:
     def __getattr__(self, a):
         if not a.startswith("_"):
             return getattr(self._ufunc, a)
-        raise AttributeError("%r object has no attribute %r" % (type(self).__name__, a))
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {a!r}")
 
     def __dir__(self):
         o = set(dir(type(self)))
@@ -111,9 +110,7 @@ class ufunc:
     def __getattr__(self, key):
         if key in self._forward_attrs:
             return getattr(self._ufunc, key)
-        raise AttributeError(
-            "%r object has no attribute %r" % (type(self).__name__, key)
-        )
+        raise AttributeError(f"{type(self).__name__!r} object has no attribute {key!r}")
 
     def __dir__(self):
         return list(self._forward_attrs.union(dir(type(self)), self.__dict__))
@@ -181,7 +178,7 @@ class ufunc:
             B_inds,
             dtype=dtype,
             token=self.__name__ + ".outer",
-            **kwargs
+            **kwargs,
         )
 
 
@@ -319,7 +316,7 @@ def frexp(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = empty_like_safe(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.frexp(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])
@@ -344,7 +341,7 @@ def modf(x):
         for key in core.flatten(tmp.__dask_keys__())
     }
 
-    a = empty_like_safe(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
+    a = np.empty_like(getattr(x, "_meta", x), shape=(1,) * x.ndim, dtype=x.dtype)
     l, r = np.modf(a)
 
     graph = HighLevelGraph.from_collections(left, ldsk, dependencies=[tmp])

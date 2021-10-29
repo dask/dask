@@ -5,10 +5,12 @@ channels:
 dependencies:
   # required dependencies
   - python=3.8
+  - packaging
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
@@ -36,7 +38,6 @@ dependencies:
   - aiohttp
   - bokeh
   - httpretty
-  - chest
   - cloudpickle
   - crick
   - cytoolz
@@ -57,4 +58,5 @@ dependencies:
   - python-graphviz
   - python-xxhash
   - mmh3
+  - jinja2
   - pip

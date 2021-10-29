@@ -389,7 +389,7 @@ def test_array_creation_blockwise_fusion():
     assert len(dsk1) == 5
     dsk2 = optimize_blockwise(dsk1)
     assert len(dsk2) == 1
-    assert_eq(a, np.full(3, 3))
+    assert_eq(a, np.full(3, 3.0))
 
 
 def test_gh3937():

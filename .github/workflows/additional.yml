@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-non-optional", "mindeps-distributed"]
+        environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     env:
       COVERAGE: "true"
@@ -23,7 +23,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
@@ -89,7 +89,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.8"
           environment-file: continuous_integration/environment-latest.yaml
           activate-environment: test-environment
@@ -101,7 +101,7 @@ jobs:
 
       - name: Run tests
         shell: bash -l {0}
-        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' --ignore-glob "dask/ml.py" dask
 
   imports:
     runs-on: "ubuntu-latest"
@@ -119,7 +119,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           activate-environment: test-environment
           auto-activate-base: false

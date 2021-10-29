@@ -3,7 +3,7 @@ import pandas as pd
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
+from ...utils import _deprecated, random_state_data
 from ..core import DataFrame, tokenize
 
 __all__ = ["make_timeseries"]
@@ -122,7 +122,7 @@ def make_timeseries(
     freq="10s",
     partition_freq="1M",
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -265,6 +265,7 @@ def generate_day(
     )
 
 
+@_deprecated(use_instead="dask.datasets.timeseries for generating example DataFrames")
 def daily_stock(
     symbol,
     start,

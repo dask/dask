@@ -1,3 +1,7 @@
+:orphan:
+
+.. this page is referenced from the topbar which comes from the theme
+
 Community
 =========
 
@@ -23,13 +27,14 @@ Conversation happens in the following places:
     Overflow or GitHub. You can also find the community chatting in
     `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
-    10:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
-    Meeting notes are available at
-    https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit
+    10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`_.
+    Meeting notes are available in
+    `this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
 
     .. raw:: html
 
-       <iframe src="https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+       <iframe id="calendariframe" src="https://calendar.google.com/calendar/embed?ctz=local&amp;src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+       <script>document.getElementById("calendariframe").src = document.getElementById("calendariframe").src.replace("ctz=local", "ctz=" + Intl.DateTimeFormat().resolvedOptions().timeZone)</script>
 
     You can subscribe to this calendar to be notified of changes:
 

@@ -24,8 +24,9 @@ from .core import (
     normalize_chunks,
     stack,
 )
+from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
-from .utils import AxisError, meta_from_array, zeros_like_safe
+from .utils import meta_from_array
 from .wrap import empty, full, ones, zeros
 
 
@@ -543,18 +544,12 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
     if not isinstance(chunks, (int, str)):
         raise ValueError("chunks must be an int or string")
-    elif isinstance(chunks, str):
-        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
-        chunks = chunks[0][0]
+
+    vchunks, hchunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+    chunks = vchunks[0]
+
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
-
-    vchunks = [chunks] * (N // chunks)
-    if N % chunks != 0:
-        vchunks.append(N % chunks)
-    hchunks = [chunks] * (M // chunks)
-    if M % chunks != 0:
-        hchunks.append(M % chunks)
 
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
@@ -590,9 +585,7 @@ def diag(v):
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
-        raise TypeError(
-            "v must be a dask array or numpy array, got {0}".format(type(v))
-        )
+        raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
             dsk = {
@@ -614,7 +607,7 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
+                dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -633,7 +626,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             t = ndim + axis
             if t < 0:
                 msg = "{}: axis {} is out of bounds for array of dimension {}"
-                raise AxisError(msg.format(name, axis, ndim))
+                raise np.AxisError(msg.format(name, axis, ndim))
             axis = t
         return axis
 
@@ -664,7 +657,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             chunk_offsets[-1].append(k)
 
     dsk = {}
-    idx_set = set(range(a.ndim)) - set([axis1, axis2])
+    idx_set = set(range(a.ndim)) - {axis1, axis2}
     n1 = len(a.chunks[axis1])
     n2 = len(a.chunks[axis2])
     for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
@@ -689,7 +682,10 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
+def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
+    if not _numpy_120 and like is not None:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
@@ -861,9 +857,6 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     """
     Helper function to find the linear ramp for a chunk.
     """
-
-    from .utils import empty_like_safe
-
     num1 = num + 1
 
     shape = list(start.shape)
@@ -872,7 +865,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = empty_like_safe(start, shape, dtype=dtype)
+    result = np.empty_like(start, shape=shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)
@@ -1142,7 +1135,7 @@ def pad(array, pad_width, mode="constant", **kwargs):
     try:
         unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
     except KeyError as e:
-        raise ValueError("mode '{}' is not supported".format(mode)) from e
+        raise ValueError(f"mode '{mode}' is not supported") from e
     if unsupported_kwargs:
         raise ValueError(
             "unsupported keyword arguments for mode '{}': {}".format(
