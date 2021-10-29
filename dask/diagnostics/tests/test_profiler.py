@@ -350,8 +350,23 @@ def test_saves_file():
         with prof:
             get(dsk, "e")
         # Run just to see that it doesn't error
-        prof.visualize(show=False, file_path=fn)
+        prof.visualize(show=False, filename=fn)
 
+        assert os.path.exists(fn)
+        with open(fn) as f:
+            assert "html" in f.read().lower()
+
+
+@pytest.mark.skipif("not bokeh")
+def test_saves_file_path_deprecated():
+    with tmpfile("html") as fn:
+        with prof:
+            get(dsk, "e")
+        # Run just to see that it warns, but still works.
+        with pytest.warns(FutureWarning) as record:
+            prof.visualize(show=False, file_path=fn)
+
+        assert len(record) == 1
         assert os.path.exists(fn)
         with open(fn) as f:
             assert "html" in f.read().lower()

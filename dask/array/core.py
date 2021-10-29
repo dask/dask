@@ -17,6 +17,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
+from typing import Any, Sequence
 
 import numpy as np
 from fsspec import get_mapper
@@ -1186,7 +1187,6 @@ class Array(DaskMethodsMixin):
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
         if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
-
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
 
         for plugin in config.get("array_plugins", ()):
@@ -1851,66 +1851,45 @@ class Array(DaskMethodsMixin):
         """
         return IndexCallable(self._vindex)
 
-    def _blocks(self, index):
-        from .slicing import normalize_index
-
-        if not isinstance(index, tuple):
-            index = (index,)
-        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
-            raise ValueError("Can only slice with a single list")
-        if any(ind is None for ind in index):
-            raise ValueError("Slicing with np.newaxis or None is not supported")
-        index = normalize_index(index, self.numblocks)
-        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
-
-        name = "blocks-" + tokenize(self, index)
-
-        new_keys = self._key_array[index]
-
-        chunks = tuple(
-            tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
-        )
-
-        keys = product(*(range(len(c)) for c in chunks))
-
-        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
-
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-        return Array(graph, name, chunks, meta=self)
-
     @property
     def blocks(self):
-        """Slice an array by blocks
+        """An array-like interface to the blocks of an array.
 
-        This allows blockwise slicing of a Dask array.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
-        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
-        dask array with every other block in the first row of blocks.
+        This returns a ``Blockview`` object that provides an array-like interface
+        to the blocks of a dask array.  Numpy-style indexing of a ``Blockview`` object
+        returns a selection of blocks as a new dask array.
 
-        You can index blocks in any way that could index a numpy array of shape
+        You can index ``array.blocks`` like a numpy array of shape
         equal to the number of blocks in each dimension, (available as
-        array.numblocks).  The dimension of the output array will be the same
-        as the dimension of this array, even if integer indices are passed.
-        This does not support slicing with ``np.newaxis`` or multiple lists.
+        array.blocks.size).  The dimensionality of the output array matches
+        the dimension of this array, even if integer indices are passed.
+        Slicing with ``np.newaxis`` or multiple lists is not supported.
 
         Examples
         --------
         >>> import dask.array as da
-        >>> x = da.arange(10, chunks=2)
+        >>> x = da.arange(8, chunks=2)
+        >>> x.blocks.shape # aliases x.numblocks
+        (4,)
         >>> x.blocks[0].compute()
         array([0, 1])
         >>> x.blocks[:3].compute()
         array([0, 1, 2, 3, 4, 5])
         >>> x.blocks[::2].compute()
-        array([0, 1, 4, 5, 8, 9])
+        array([0, 1, 4, 5])
         >>> x.blocks[[-1, 0]].compute()
-        array([8, 9, 0, 1])
+        array([6, 7, 0, 1])
+        >>> x.blocks.ravel() # doctest: +NORMALIZE_WHITESPACE
+        [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
 
         Returns
         -------
-        A Dask array
+        An instance of ``dask.array.Blockview``
         """
-        return IndexCallable(self._blocks)
+        return BlockView(self)
 
     @property
     def partitions(self):
@@ -1919,35 +1898,39 @@ class Array(DaskMethodsMixin):
         This alias allows you to write agnostic code that works with both
         dask arrays and dask dataframes.
 
-        This allows blockwise slicing of a Dask array.  You can perform normal
-        Numpy-style slicing but now rather than slice elements of the array you
-        slice along blocks so, for example, ``x.blocks[0, ::2]`` produces a new
-        dask array with every other block in the first row of blocks.
+        This returns a ``Blockview`` object that provides an array-like interface
+        to the blocks of a dask array.  Numpy-style indexing of a ``Blockview`` object
+        returns a selection of blocks as a new dask array.
 
-        You can index blocks in any way that could index a numpy array of shape
+        You can index ``array.blocks`` like a numpy array of shape
         equal to the number of blocks in each dimension, (available as
-        array.numblocks).  The dimension of the output array will be the same
-        as the dimension of this array, even if integer indices are passed.
-        This does not support slicing with ``np.newaxis`` or multiple lists.
+        array.blocks.size).  The dimensionality of the output array matches
+        the dimension of this array, even if integer indices are passed.
+        Slicing with ``np.newaxis`` or multiple lists is not supported.
 
         Examples
         --------
         >>> import dask.array as da
-        >>> x = da.arange(10, chunks=2)
+        >>> x = da.arange(8, chunks=2)
+        >>> x.partitions.shape # aliases x.numblocks
+        (4,)
         >>> x.partitions[0].compute()
         array([0, 1])
         >>> x.partitions[:3].compute()
         array([0, 1, 2, 3, 4, 5])
         >>> x.partitions[::2].compute()
-        array([0, 1, 4, 5, 8, 9])
+        array([0, 1, 4, 5])
         >>> x.partitions[[-1, 0]].compute()
-        array([8, 9, 0, 1])
-        >>> all(x.partitions[:].compute() == x.blocks[:].compute())
-        True
+        array([6, 7, 0, 1])
+        >>> x.partitions.ravel() # doctest: +NORMALIZE_WHITESPACE
+        [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+         dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
 
         Returns
         -------
-        A Dask array
+        An instance of ``da.array.Blockview``
         """
         return self.blocks
 
@@ -5329,6 +5312,107 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return new_dd_object(dsk, name, meta, divisions)
     else:
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+class BlockView:
+    """An array-like interface to the blocks of an array.
+
+    ``BlockView`` provides an array-like interface
+    to the blocks of a dask array.  Numpy-style indexing of a
+     ``BlockView`` returns a selection of blocks as a new dask array.
+
+    You can index ``BlockView`` like a numpy array of shape
+    equal to the number of blocks in each dimension, (available as
+    array.blocks.size).  The dimensionality of the output array matches
+    the dimension of this array, even if integer indices are passed.
+    Slicing with ``np.newaxis`` or multiple lists is not supported.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> from dask.array.core import BlockView
+    >>> x = da.arange(8, chunks=2)
+    >>> bv = BlockView(x)
+    >>> bv.shape # aliases x.numblocks
+    (4,)
+    >>> bv.size
+    4
+    >>> bv[0].compute()
+    array([0, 1])
+    >>> bv[:3].compute()
+    array([0, 1, 2, 3, 4, 5])
+    >>> bv[::2].compute()
+    array([0, 1, 4, 5])
+    >>> bv[[-1, 0]].compute()
+    array([6, 7, 0, 1])
+    >>> bv.ravel()  # doctest: +NORMALIZE_WHITESPACE
+    [dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>,
+     dask.array<blocks, shape=(2,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>]
+
+    Returns
+    -------
+    An instance of ``da.array.Blockview``
+    """
+
+    def __init__(self, array: Array) -> BlockView:
+        self._array = array
+
+    def __getitem__(
+        self, index: int | Sequence[int] | slice | Sequence[slice]
+    ) -> Array:
+        from .slicing import normalize_index
+
+        if not isinstance(index, tuple):
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            raise ValueError("Can only slice with a single list")
+        if any(ind is None for ind in index):
+            raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self._array.numblocks)
+        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
+
+        name = "blocks-" + tokenize(self._array, index)
+
+        new_keys = self._array._key_array[index]
+
+        chunks = tuple(
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
+        )
+
+        keys = product(*(range(len(c)) for c in chunks))
+
+        layer = {(name,) + key: tuple(new_keys[key].tolist()) for key in keys}
+
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[self._array])
+        return Array(graph, name, chunks, meta=self._array)
+
+    def __eq__(self, other: Any) -> bool:
+        if isinstance(other, BlockView):
+            return self._array is other._array
+        else:
+            return NotImplemented
+
+    @property
+    def size(self) -> int:
+        """
+        The total number of blocks in the array.
+        """
+        return np.prod(self.shape)
+
+    @property
+    def shape(self) -> tuple[int, ...]:
+        """
+        The number of blocks per axis. Alias of ``dask.array.numblocks``.
+        """
+        return self._array.numblocks
+
+    def ravel(self) -> list[Array]:
+        """
+        Return a flattened list of all the blocks in the array in C order.
+        """
+        return [self[idx] for idx in np.ndindex(self.shape)]
 
 
 from .blockwise import blockwise
