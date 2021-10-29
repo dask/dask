@@ -16,7 +16,7 @@ from .base import (
 )
 from .base import tokenize as _tokenize
 from .context import globalmethod
-from .core import quote, flatten
+from .core import flatten, quote
 from .highlevelgraph import HighLevelGraph
 from .utils import OperatorMethodMixin, apply, funcname, methodcaller
 
