@@ -716,12 +716,17 @@ def test_dask_layers_to_delayed():
 
 
 def test_annotations_survive_optimization():
-
     with dask.annotate(foo="bar"):
-        d = delayed(add)(1, 2)
+        graph = HighLevelGraph.from_collections(
+            "b",
+            {"a": 1, "b": (inc, "a"), "c": (inc, "b")},
+            [],
+        )
+        d = Delayed("b", graph)
 
     assert type(d.dask) is HighLevelGraph
     assert len(d.dask.layers) == 1
+    assert len(d.dask.layers["b"]) == 3
     assert next(iter(d.dask.layers.values())).annotations == {"foo": "bar"}
 
     # Ensure optimizing a Delayed object returns a HighLevelGraph
@@ -729,4 +734,5 @@ def test_annotations_survive_optimization():
     (d_opt,) = dask.optimize(d)
     assert type(d_opt.dask) is HighLevelGraph
     assert len(d_opt.dask.layers) == 1
+    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
     assert next(iter(d_opt.dask.layers.values())).annotations == {"foo": "bar"}
