@@ -33,7 +33,8 @@ Conversation happens in the following places:
 
     .. raw:: html
 
-       <iframe src="https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+       <iframe id="calendariframe" src="https://calendar.google.com/calendar/embed?ctz=local&amp;src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com" style="border: 0" width="800" height="600" frameborder="0" scrolling="no"></iframe>
+       <script>document.getElementById("calendariframe").src = document.getElementById("calendariframe").src.replace("ctz=local", "ctz=" + Intl.DateTimeFormat().resolvedOptions().timeZone)</script>
 
     You can subscribe to this calendar to be notified of changes:
 
