@@ -939,23 +939,35 @@ def test_elemwise_dtype():
 )
 def test_elemwise_where(x, mask, o):
 
-    x_da = da.array(x, dtype=np.int8)
-    x_np = np.array(x, dtype=np.int8)
+    x_da1 = da.array(x, dtype=np.int8)
+    x_np1 = np.array(x, dtype=np.int8)
 
-    o_da = da.array(o, dtype=np.int8)
-    o_np = np.array(o, dtype=np.int8)
+    o_da1 = da.array(o, dtype=np.int8)
+    o_np1 = np.array(o, dtype=np.int8)
 
-    da.invert(x_da, out=o_da, where=mask)
-    np.invert(x_np, out=o_np, where=mask)
-    assert_eq(o_da, o_np)
+    da.invert(x_da1, out=o_da1, where=mask)
+    np.invert(x_np1, out=o_np1, where=mask)
+    assert_eq(o_da1, o_np1)
 
-    da.invert(x_da, out=o_da, where=False)
-    np.invert(x_np, out=o_np, where=False)
-    assert_eq(o_da, o_np)
+    x_da2 = da.array(x, dtype=np.int8)
+    x_np2 = np.array(x, dtype=np.int8)
 
-    da.invert(x_da, out=o_da)
-    np.invert(x_np, out=o_np)
-    assert_eq(o_da, o_np)
+    o_da2 = da.array(o, dtype=np.int8)
+    o_np2 = np.array(o, dtype=np.int8)
+
+    da.invert(x_da2, out=o_da2, where=False)
+    np.invert(x_np2, out=o_np2, where=False)
+    assert_eq(o_da2, o_np2)
+
+    x_da3 = da.array(x, dtype=np.int8)
+    x_np3 = np.array(x, dtype=np.int8)
+
+    o_da3 = da.array(o, dtype=np.int8)
+    o_np3 = np.array(o, dtype=np.int8)
+
+    da.invert(x_da3, out=o_da3)
+    np.invert(x_np3, out=o_np3)
+    assert_eq(o_da3, o_np3)
 
 
 def test_operators():
