@@ -926,15 +926,6 @@ def test_elemwise_dtype():
             [True, False, True, True, True, False, True, False, True, True],
             [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         ],
-        [
-            [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]],
-            [
-                [True, False, True, True, True],
-                [False, True, False, True, True],
-                [True, False, True, False, False],
-            ],
-            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
-        ],
     ],
 )
 def test_elemwise_where(x, mask, o):
