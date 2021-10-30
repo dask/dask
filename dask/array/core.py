@@ -4480,8 +4480,7 @@ def handle_out(out, result):
             " Received type %s, expected Dask Array" % type(out).__name__
         )
         raise NotImplementedError(msg)
-    else:
-        return result
+    return result
 
 
 def _enforce_dtype(*args, **kwargs):
