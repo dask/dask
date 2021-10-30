@@ -919,33 +919,31 @@ def test_elemwise_dtype():
 
 
 @pytest.mark.parametrize(
-    "x_da,x_np,mask,o_da,o_np",
+    "x,mask,o",
     [
         (
-            da.array([11, 2, 3, 4, 5, 12, 34, 56, 78, 90], dtype=np.int8),
-            np.array([11, 2, 3, 4, 5, 12, 34, 56, 78, 90], dtype=np.int8),
+            [11, 2, 3, 4, 5, 12, 34, 56, 78, 90],
             [True, False, True, True, True, False, True, False, True, True],
-            da.ones((10), dtype=np.int8),
-            np.ones((10), dtype=np.int8),
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         ),
         (
-            da.array(
-                [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]], dtype=np.int8
-            ),
-            np.array(
-                [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]], dtype=np.int8
-            ),
+            [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]],
             [
                 [True, False, True, True, True],
                 [False, True, False, True, True],
                 [True, False, True, False, False],
             ],
-            da.ones((3, 5), dtype=np.int8),
-            np.ones((3, 5), dtype=np.int8),
+            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
         ),
     ],
 )
-def test_elemwise_where(x_da, x_np, mask, o_da, o_np):
+def test_elemwise_where(x, mask, o):
+
+    x_da = da.array(x, dtype=np.int8)
+    x_np = np.array(x, dtype=np.int8)
+
+    o_da = da.array(o, dtype=np.int8)
+    o_np = np.array(o, dtype=np.int8)
 
     da.invert(x_da, out=o_da, where=mask)
     np.invert(x_np, out=o_np, where=mask)
