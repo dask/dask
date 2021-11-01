@@ -205,12 +205,12 @@ def _read_table_from_path(
                 path,
                 row_group=rg,
                 partition_keys=partition_keys,
-                # open_file_func=partial(fs.open, mode="rb"),
                 open_file_func=partial(
                     _open_parquet_file,
                     fs=fs,
                     columns=columns,
                     row_groups=[rg],
+                    engine="pyarrow",
                 ),
             )
             arrow_table = piece_to_arrow_func(piece, columns, partitions, **kwargs)
@@ -227,6 +227,7 @@ def _read_table_from_path(
             fs=fs,
             columns=columns,
             row_groups=row_groups,
+            engine="pyarrow",
         ) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
