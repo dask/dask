@@ -727,7 +727,7 @@ def test_annotations_survive_optimization():
     assert type(d.dask) is HighLevelGraph
     assert len(d.dask.layers) == 1
     assert len(d.dask.layers["b"]) == 3
-    assert next(iter(d.dask.layers.values())).annotations == {"foo": "bar"}
+    assert d.dask.layers["b"].annotations == {"foo": "bar"}
 
     # Ensure optimizing a Delayed object returns a HighLevelGraph
     # and doesn't loose annotations
@@ -735,4 +735,4 @@ def test_annotations_survive_optimization():
     assert type(d_opt.dask) is HighLevelGraph
     assert len(d_opt.dask.layers) == 1
     assert len(d_opt.dask.layers["b"]) == 2  # c is culled
-    assert next(iter(d_opt.dask.layers.values())).annotations == {"foo": "bar"}
+    assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
