@@ -24,6 +24,7 @@ from .utils import (
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
+    _open_parquet_file,
     _parse_pandas_metadata,
     _row_groups_to_parts,
     _set_metadata_task_size,
@@ -204,7 +205,13 @@ def _read_table_from_path(
                 path,
                 row_group=rg,
                 partition_keys=partition_keys,
-                open_file_func=partial(fs.open, mode="rb"),
+                # open_file_func=partial(fs.open, mode="rb"),
+                open_file_func=partial(
+                    _open_parquet_file,
+                    fs=fs,
+                    columns=columns,
+                    row_groups=[rg],
+                ),
             )
             arrow_table = piece_to_arrow_func(piece, columns, partitions, **kwargs)
             tables.append(arrow_table)
@@ -215,7 +222,12 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with fs.open(path, mode="rb") as fil:
+        with _open_parquet_file(
+            path,
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+        ) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,

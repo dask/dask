@@ -3,6 +3,12 @@ import re
 import pandas as pd
 from fsspec.implementations.local import LocalFileSystem
 
+# Check if fsspec.parquet module is available
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
+
 from .... import config
 from ....core import flatten
 from ....utils import natural_sort_key
@@ -688,3 +694,22 @@ def _set_metadata_task_size(metadata_task_size, fs):
         return config.get(config_str, 0)
 
     return metadata_task_size
+
+
+def _open_parquet_file(path, fs=None, columns=None, row_groups=None):
+    # Use fsspec.parquet.open_parquet_file to
+    # ensure optimized caching for remote parquet
+    # files
+
+    if fs is None:
+        raise ValueError("fs input is currently required for _open_parquet_file")
+
+    if fsspec_parquet and not isinstance(fs, LocalFileSystem):
+        return fsspec_parquet.open_parquet_file(
+            path,
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+            engine="pyarrow",
+        )
+    return fs.open(path, mode="rb")
