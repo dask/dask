@@ -108,9 +108,12 @@ def demo_tuples(layers: bool) -> "tuple[Tuple, Tuple, NodeCounter]":
     # Collections have multiple names
     dsk1 = HighLevelGraph(
         {"a": {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}, "b": {"b": (cnt.f, 3)}},
-        {},
+        {"a": set(), "b": set()},
     )
-    dsk2 = HighLevelGraph({"c": {"c": (cnt.f, 4)}, "d": {"d": (cnt.f, 5)}}, {})
+    dsk2 = HighLevelGraph(
+        {"c": {"c": (cnt.f, 4)}, "d": {"d": (cnt.f, 5)}},
+        {"c": set(), "d": set()},
+    )
     if not layers:
         dsk1 = dsk1.to_dict()
         dsk2 = dsk2.to_dict()
