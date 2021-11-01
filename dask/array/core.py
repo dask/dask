@@ -4474,6 +4474,7 @@ def handle_out(out, result):
         out.dask = result.dask
         out._meta = result._meta
         out._name = result.name
+        return out
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
