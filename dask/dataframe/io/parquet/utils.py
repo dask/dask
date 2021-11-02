@@ -696,9 +696,7 @@ def _set_metadata_task_size(metadata_task_size, fs):
     return metadata_task_size
 
 
-def _open_parquet_file(
-    path, mode="rb", fs=None, columns=None, row_groups=None, engine="auto"
-):
+def _open_parquet_file(path, fs=None, **kwargs):
     # Use fsspec.parquet.open_parquet_file to
     # ensure optimized caching for remote parquet
     # files
@@ -706,12 +704,10 @@ def _open_parquet_file(
     if fs is None:
         raise ValueError("fs input is currently required for _open_parquet_file")
 
-    if fsspec_parquet and not isinstance(fs, LocalFileSystem):
+    if fsspec_parquet:  # and not isinstance(fs, LocalFileSystem):
         return fsspec_parquet.open_parquet_file(
             path,
             fs=fs,
-            columns=columns,
-            row_groups=row_groups,
-            engine=engine,
+            **kwargs,
         )
-    return fs.open(path, mode=mode)
+    return fs.open(path, mode="rb")

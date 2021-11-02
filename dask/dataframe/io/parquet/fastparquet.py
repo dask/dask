@@ -21,7 +21,6 @@ except ImportError:
 from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import natural_sort_key
-from ...methods import concat
 from ...utils import UNKNOWN_CATEGORIES
 from ..utils import _meta_from_dtypes
 
@@ -33,6 +32,7 @@ from .utils import (
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
+    _open_parquet_file,
     _parse_pandas_metadata,
     _row_groups_to_parts,
     _set_metadata_task_size,
@@ -1010,33 +1010,83 @@ class FastParquetEngine(Engine):
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
-            if set(columns).issubset(
-                parquet_file.columns + list(parquet_file.cats.keys())
-            ):
-                # Convert ParquetFile to pandas
-                return parquet_file.to_pandas(
-                    columns=columns,
-                    categories=categories,
-                    index=index,
-                )
-            else:
-                # Read necessary row-groups and concatenate
-                dfs = []
-                for row_group in row_groups:
-                    dfs.append(
-                        parquet_file.read_row_group_file(
-                            row_group,
-                            columns,
-                            categories,
-                            index=index,
-                            **kwargs.get("read", {}),
-                        )
-                    )
-                return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            # Convert ParquetFile to pandas
+            return cls.pf_to_pandas(
+                parquet_file,
+                fs=fs,
+                columns=columns,
+                categories=categories,
+                index=index,
+            )
 
         else:
             # `sample` is NOT a tuple
             raise ValueError(f"Expected tuple, got {type(sample)}")
+
+    @classmethod
+    def pf_to_pandas(
+        cls,
+        pf,
+        fs=None,
+        columns=None,
+        categories=None,
+        index=None,
+    ):
+        # Mostly copied from ParquetFile.to_pandas
+
+        rgs = pf.row_groups
+        input_columns = columns
+        if columns is not None:
+            columns = columns[:]
+        else:
+            columns = pf.columns + list(pf.cats)
+        if index:
+            columns += [i for i in index if i not in columns]
+
+        size = sum(rg.num_rows for rg in rgs)
+        df, views = pf.pre_allocate(size, columns, categories, index)
+        start = 0
+
+        fn_rg_map = defaultdict(list)
+        for rg in rgs:
+            fn = pf.row_group_filename(rg)
+            fn_rg_map[fn].append(rg)
+
+        for fn, fn_rgs in fn_rg_map.items():
+
+            with _open_parquet_file(
+                fn,
+                fs=fs,
+                metadata=pf,
+                columns=input_columns,
+                row_groups=fn_rgs,
+            ) as infile:
+
+                for rg in fn_rgs:
+                    thislen = rg.num_rows
+                    parts = {
+                        name: (
+                            v
+                            if name.endswith("-catdef")
+                            else v[start : start + thislen]
+                        )
+                        for (name, v) in views.items()
+                    }
+
+                    pf.read_row_group_file(
+                        rg,
+                        columns,
+                        categories,
+                        index,
+                        assign=parts,
+                        partition_meta=pf.partition_meta,
+                        infile=infile,
+                    )
+                    import pdb
+
+                    pdb.set_trace()
+                    start += thislen
+        return df
 
     @classmethod
     def initialize_write(
