@@ -204,6 +204,17 @@ def test_annotation_pack_unpack():
     assert annotations == {"workers": {"n": ("alice",)}}
 
 
+def test_materializedlayer_cull_preserves_annotations():
+    layer = MaterializedLayer(
+        {"a": 42, "b": 3.14},
+        annotations={"foo": "bar"},
+    )
+
+    culled_layer, _ = layer.cull({"a"}, [])
+    assert len(culled_layer) == 1
+    assert culled_layer.annotations == {"foo": "bar"}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
