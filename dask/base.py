@@ -630,25 +630,11 @@ def visualize(*args, **kwargs):
 
     filename = kwargs.pop("filename", "mydask")
     optimize_graph = kwargs.pop("optimize_graph", False)
+    traverse = kwargs.pop("traverse", True)
 
-    dsks = []
-    args3 = []
-    for arg in args:
-        if isinstance(arg, (list, tuple, set)):
-            for a in arg:
-                if isinstance(a, Mapping):
-                    dsks.append(a)
-                if is_dask_collection(a):
-                    args3.append(a)
-        else:
-            if isinstance(arg, Mapping):
-                dsks.append(arg)
-            if is_dask_collection(arg):
-                args3.append(arg)
+    args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
-    for d in dsks:
-        dsk.update(d)
+    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
