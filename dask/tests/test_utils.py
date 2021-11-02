@@ -2,7 +2,6 @@ import datetime
 import functools
 import operator
 import pickle
-from pathlib import Path
 
 import pytest
 from tlz import curry
@@ -779,18 +778,3 @@ class MyType:
 def test_typename_on_instances():
     instance = MyType()
     assert typename(instance) == typename(MyType)
-
-
-def test_development_guidelines_matches_ci():
-    """When the environment.yaml changes in CI, make sure to change it in the docs as well"""
-    root_dir = Path(__file__).parent.parent.parent
-
-    development_doc_file = root_dir / "docs" / "source" / "develop.rst"
-    ci_file = root_dir / ".github" / "workflows" / "additional.yml"
-    latest_env = "environment-3.9.yaml"
-
-    for filename in [development_doc_file, ci_file]:
-        with open(filename) as f:
-            assert any(
-                latest_env in line for line in f
-            ), f"{latest_env} not found in {filename}"
