@@ -918,6 +918,29 @@ def test_elemwise_dtype():
             assert da.maximum(x, y).dtype == da.result_type(x, y)
 
 
+@pytest.mark.parametrize(
+    "x,o",
+    [
+        [
+            [11, 2, 3, 4, 5, 12, 34, 56, 78, 90],
+            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+        ],
+        [
+            [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]],
+            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+        ],
+    ],
+)
+def test_elemwise_where(x, o):
+
+    x = da.array(x, dtype=np.int8)
+    o = da.array(o, dtype=np.int8)
+
+    o_ = da.invert(x, out=o)
+
+    assert_eq(o_, o)
+
+
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))
