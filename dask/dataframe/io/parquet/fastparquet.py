@@ -864,6 +864,7 @@ class FastParquetEngine(Engine):
                 # Support "file" key for backward compat
                 **kwargs.get("file", {}),
                 **kwargs.get("dataset", {}),
+                **kwargs.get("open_parquet_file", {}),
             },
         )
 
@@ -1017,6 +1018,7 @@ class FastParquetEngine(Engine):
                 columns=columns,
                 categories=categories,
                 index=index,
+                **kwargs,
             )
 
         else:
@@ -1031,6 +1033,7 @@ class FastParquetEngine(Engine):
         columns=None,
         categories=None,
         index=None,
+        **kwargs,
     ):
         # This method was mostly copied from the fastparquet
         # `ParquetFile.to_pandas` definition. We maintain our
@@ -1068,6 +1071,7 @@ class FastParquetEngine(Engine):
                 columns=list(set(columns).intersection(pf.columns)),
                 row_groups=fn_rgs,
                 engine="fastparquet",
+                **kwargs.get("open_parquet_file", {}),
             ) as infile:
 
                 # Loop over desired row-groups in fn

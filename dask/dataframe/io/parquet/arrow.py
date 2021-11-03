@@ -2,7 +2,6 @@ import json
 import warnings
 from collections import defaultdict
 from datetime import datetime
-from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -200,21 +199,23 @@ def _read_table_from_path(
     """
     if partition_keys:
         tables = []
-        for rg in row_groups:
-            piece = pq.ParquetDatasetPiece(
-                path,
-                row_group=rg,
-                partition_keys=partition_keys,
-                open_file_func=partial(
-                    _open_parquet_file,
-                    fs=fs,
-                    columns=columns,
-                    row_groups=[rg],
-                    engine="pyarrow",
-                ),
-            )
-            arrow_table = piece_to_arrow_func(piece, columns, partitions, **kwargs)
-            tables.append(arrow_table)
+        with _open_parquet_file(
+            path,
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+            engine="pyarrow",
+            **kwargs.get("open_parquet_file", {}),
+        ) as fil:
+            for rg in row_groups:
+                piece = pq.ParquetDatasetPiece(
+                    path,
+                    row_group=rg,
+                    partition_keys=partition_keys,
+                    open_file_func=lambda _path, **_kwargs: fil,
+                )
+                arrow_table = piece_to_arrow_func(piece, columns, partitions, **kwargs)
+                tables.append(arrow_table)
 
         if len(row_groups) > 1:
             # NOTE: Not covered by pytest
@@ -228,6 +229,7 @@ def _read_table_from_path(
             columns=columns,
             row_groups=row_groups,
             engine="pyarrow",
+            **kwargs.get("open_parquet_file", {}),
         ) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
@@ -341,7 +343,10 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
-            **kwargs.get("dataset", {}),
+            **{
+                **kwargs.get("dataset", {}),
+                **kwargs.get("open_parquet_file", {}),
+            },
         )
 
         # Stage 2: Generate output `meta`
