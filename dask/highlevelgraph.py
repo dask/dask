@@ -153,7 +153,7 @@ class Layer(collections.abc.Mapping):
                         seen.add(d)
                         work.add(d)
 
-        return MaterializedLayer(out), ret_deps
+        return MaterializedLayer(out, annotations=self.annotations), ret_deps
 
     def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer

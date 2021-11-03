@@ -401,3 +401,35 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
+
+
+def test_groupby_rolling():
+    df = pd.DataFrame(
+        {
+            "column1": range(600),
+            "group1": 5 * ["g" + str(i) for i in range(120)],
+        },
+        index=pd.date_range("20190101", periods=60).repeat(10),
+    )
+
+    ddf = dd.from_pandas(df, npartitions=8)
+
+    expected = df.groupby("group1").rolling("15D").sum()
+    actual = ddf.groupby("group1").rolling("15D").sum()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+    expected = df.groupby("group1").column1.rolling("15D").mean()
+    actual = ddf.groupby("group1").column1.rolling("15D").mean()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+
+def test_groupby_rolling_with_integer_window_raises():
+    df = pd.DataFrame(
+        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
+        ddf.groupby("C").rolling(2).sum()
