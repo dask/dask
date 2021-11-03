@@ -2913,9 +2913,9 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
     path = str(tmpdir)
     pdf.to_parquet(path, partition_cols=["group"], engine="fastparquet")
     ddf_read = dd.read_parquet(path, engine=engine)
-    ddf_read.compute(scheduler="synchronous")
+    # ddf_read.compute(scheduler="synchronous")
 
-    assert len(ddf_read["group"].compute()) == 6
+    assert len(ddf_read["group"].compute(scheduler="synchronous")) == 6
     assert len(ddf_read.compute().group) == 6
 
 

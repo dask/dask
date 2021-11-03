@@ -1035,7 +1035,6 @@ class FastParquetEngine(Engine):
         # Mostly copied from ParquetFile.to_pandas
 
         rgs = pf.row_groups
-        input_columns = columns
         if columns is not None:
             columns = columns[:]
         else:
@@ -1058,8 +1057,9 @@ class FastParquetEngine(Engine):
                 fn,
                 fs=fs,
                 metadata=pf,
-                columns=input_columns,
+                columns=list(set(columns).intersection(pf.columns)),
                 row_groups=fn_rgs,
+                engine="fastparquet",
             ) as infile:
 
                 for rg in fn_rgs:
@@ -1082,9 +1082,6 @@ class FastParquetEngine(Engine):
                         partition_meta=pf.partition_meta,
                         infile=infile,
                     )
-                    import pdb
-
-                    pdb.set_trace()
                     start += thislen
         return df
 
