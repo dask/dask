@@ -480,7 +480,7 @@ class RollingGroupby(Rolling):
         *args,
         groupby_kwargs=None,
         groupby_slice=None,
-        **kwargs
+        **kwargs,
     ):
         groupby = df.groupby(**groupby_kwargs)
         if groupby_slice:
