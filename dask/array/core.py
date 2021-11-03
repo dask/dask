@@ -4464,7 +4464,6 @@ def handle_out(out, result):
             raise NotImplementedError("The out parameter is not fully supported")
         else:
             out = None
-
     if isinstance(out, Array):
         if out.shape != result.shape:
             raise ValueError(
