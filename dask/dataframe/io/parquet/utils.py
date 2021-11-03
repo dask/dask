@@ -708,7 +708,7 @@ def _open_parquet_file(path, fs=None, columns=None, **kwargs):
         return fsspec_parquet.open_parquet_file(
             path,
             fs=fs,
-            columns=None,
+            columns=columns,
             **kwargs,
         )
     return fs.open(path, mode="rb")

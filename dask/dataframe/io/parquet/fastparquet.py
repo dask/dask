@@ -1032,9 +1032,12 @@ class FastParquetEngine(Engine):
         categories=None,
         index=None,
     ):
-        # Mostly copied from ParquetFile.to_pandas
+        # This method was mostly copied from the fastparquet
+        # `ParquetFile.to_pandas` definition. We maintain our
+        # own implmentation in Dask to enable better remote
+        # file-handling control
 
-        rgs = pf.row_groups
+        # Handle selected columns
         if columns is not None:
             columns = columns[:]
         else:
@@ -1042,17 +1045,22 @@ class FastParquetEngine(Engine):
         if index:
             columns += [i for i in index if i not in columns]
 
+        # Extract row-groups and pre-allocate df
+        rgs = pf.row_groups
         size = sum(rg.num_rows for rg in rgs)
         df, views = pf.pre_allocate(size, columns, categories, index)
         start = 0
 
+        # Get a map of file names -> row-groups
         fn_rg_map = defaultdict(list)
         for rg in rgs:
             fn = pf.row_group_filename(rg)
             fn_rg_map[fn].append(rg)
 
+        # Loop over (fn,row-group) pairs in fn_rg_map
         for fn, fn_rgs in fn_rg_map.items():
 
+            # Optimized open of fn
             with _open_parquet_file(
                 fn,
                 fs=fs,
@@ -1062,6 +1070,7 @@ class FastParquetEngine(Engine):
                 engine="fastparquet",
             ) as infile:
 
+                # Loop over desired row-groups in fn
                 for rg in fn_rgs:
                     thislen = rg.num_rows
                     parts = {
@@ -1073,6 +1082,7 @@ class FastParquetEngine(Engine):
                         for (name, v) in views.items()
                     }
 
+                    # Add row-group data to df
                     pf.read_row_group_file(
                         rg,
                         columns,
