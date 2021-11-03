@@ -1372,6 +1372,11 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
+    assert dc.divisions == da.divisions
+    merge_layer = [
+        lyr for key, lyr in dc.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert all("shuffle" not in k[0] for k in dc.dask)
 
     list_eq(da.merge(b, on="x", how="inner"), a.merge(b, on="x", how="inner"))
@@ -1387,6 +1392,10 @@ def test_cheap_single_partition_merge():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     cc = aa.merge(bb, on="x", how="inner")
+    merge_layer = [
+        lyr for key, lyr in cc.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert all("shuffle" not in k[0] for k in cc.dask)
     assert len(cc.dask) == len(aa.dask) * 2 + len(bb.dask)
 
@@ -1403,6 +1412,11 @@ def test_cheap_single_partition_merge_divisions():
     bb = dd.from_pandas(b, npartitions=1, sort=False)
 
     actual = aa.merge(bb, on="x", how="inner")
+    merge_layer = [
+        lyr for key, lyr in actual.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
+
     assert not actual.known_divisions
     assert_divisions(actual)
 
@@ -1422,11 +1436,19 @@ def test_cheap_single_parition_merge_left_right(how):
     actual = aa.merge(bb, left_index=True, right_on="x", how=how)
     expected = a.merge(b, left_index=True, right_on="x", how=how)
 
+    merge_layer = [
+        lyr for key, lyr in actual.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert_eq(actual, expected)
 
     actual = aa.merge(bb, left_on="x", right_index=True, how=how)
     expected = a.merge(b, left_on="x", right_index=True, how=how)
 
+    merge_layer = [
+        lyr for key, lyr in actual.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert_eq(actual, expected)
 
 
@@ -1447,6 +1469,10 @@ def test_cheap_single_partition_merge_on_index():
     # for empty joins.
     expected.index = expected.index.astype("int64")
 
+    merge_layer = [
+        lyr for key, lyr in actual.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 
@@ -1454,6 +1480,10 @@ def test_cheap_single_partition_merge_on_index():
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
     expected.index = expected.index.astype("int64")
 
+    merge_layer = [
+        lyr for key, lyr in actual.dask.layers.items() if key.startswith("merge-")
+    ][0]
+    assert not merge_layer.is_materialized()
     assert not actual.known_divisions
     assert_eq(actual, expected)
 

@@ -61,7 +61,7 @@ from functools import partial, wraps
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
-from tlz import first, merge_sorted, unique
+from tlz import merge_sorted, unique
 
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -412,42 +412,48 @@ def single_partition_join(left, right, **kwargs):
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    name = "merge-" + tokenize(left, right, **kwargs)
-
     if right.npartitions == 1 and kwargs["how"] in allowed_left:
-        right_key = first(right.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, left_key in enumerate(left.__dask_keys__())
-        }
+        joined = left.map_partitions(
+            merge_chunk,
+            right,  # TODO doesn't work yet https://github.com/dask/dask/issues/8338
+            meta=meta,
+            enforce_metadata=False,
+            transform_divisions=False,
+            token="merge",  # NOTE: misleadingly, this is actually the name
+            **kwargs,
+        )
+
         if use_left:
-            divisions = left.divisions
+            joined._divisions = left.divisions
         elif use_right and len(right.divisions) == len(left.divisions):
-            divisions = right.divisions
+            joined._divisions = right.divisions
         else:
-            divisions = [None for _ in left.divisions]
+            joined._divisions = [None for _ in left.divisions]
 
     elif left.npartitions == 1 and kwargs["how"] in allowed_right:
-        left_key = first(left.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, right_key in enumerate(right.__dask_keys__())
-        }
+        joined = right.map_partitions(
+            lambda right, left, **kwargs: merge_chunk(left, right, **kwargs),
+            left,  # TODO doesn't work yet https://github.com/dask/dask/issues/8338
+            meta=meta,
+            enforce_metadata=False,
+            transform_divisions=False,
+            token="merge",  # NOTE: misleadingly, this is actually the name
+            **kwargs,
+        )
 
         if use_right:
-            divisions = right.divisions
+            joined.divisions = right.divisions
         elif use_left and len(left.divisions) == len(right.divisions):
-            divisions = left.divisions
+            joined.divisions = left.divisions
         else:
-            divisions = [None for _ in right.divisions]
+            joined.divisions = [None for _ in right.divisions]
 
     else:
         raise NotImplementedError(
             "single_partition_join has no fallback for invalid calls"
         )
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def warn_dtype_mismatch(left, right, left_on, right_on):
