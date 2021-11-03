@@ -17,18 +17,20 @@ Where to ask for help
 
 Dask conversation happens in the following places:
 
-1.  `Stack Overflow #dask tag`_: for usage questions
-2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+#.  `Dask Discourse forum`_: for usage questions and general discussion
+#.  `Stack Overflow #dask tag`_: for usage questions
+#.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
+#.  `Dask Community Slack`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of Stack Overflow
-and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
-searchable by future users and so is more efficient for everyone's time.
-Gitter chat is generally reserved for community discussion.
+For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
+and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
+searchable by future users, so conversations had there can be useful to many more people
+than just those directly involved.
 
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
-.. _`Gitter chat`: https://gitter.im/dask/dask
+.. _`Dask Community Slack`: https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g
 
 
 Separate Code Repositories
