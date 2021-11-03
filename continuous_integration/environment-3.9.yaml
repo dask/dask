@@ -38,7 +38,9 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs > 2021.8.0
   - cloudpickle
   - crick
   - cytoolz
