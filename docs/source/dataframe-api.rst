@@ -291,6 +291,8 @@ DataFrame Groupby
    DataFrameGroupBy.last
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
+   DataFrameGroupBy.rolling
+
 
 Series Groupby
 **************
@@ -317,6 +319,7 @@ Series Groupby
    SeriesGroupBy.last
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
+   SeriesGroupBy.rolling
 
 Custom Aggregation
 ******************

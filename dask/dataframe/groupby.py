@@ -2,6 +2,7 @@ import collections
 import itertools as it
 import operator
 import warnings
+from numbers import Integral
 
 import numpy as np
 import pandas as pd
@@ -1102,6 +1103,16 @@ class _GroupBy:
         )
 
     @property
+    def _groupby_kwargs(self):
+        return {
+            "by": self.index,
+            "group_keys": self.group_keys,
+            **self.dropna,
+            "sort": self.sort,
+            **self.observed,
+        }
+
+    @property
     def _meta_nonempty(self):
         """
         Return a pd.DataFrameGroupBy / pd.SeriesGroupBy which contains sample data.
@@ -1793,6 +1804,67 @@ class _GroupBy:
         )
 
         return df3
+
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+        """Provides rolling transformations.
+
+        .. note::
+
+            Since MultiIndexes are not well supported in Dask, this method returns a
+            dataframe with the same index as the original data. The groupby column is
+            not added as the first level of the index like pandas does.
+
+            This method works differently from other groupby methods. It does a groupby
+            on each partition (plus some overlap). This means that the output has the
+            same shape and number of partitions as the original.
+
+        Parameters
+        ----------
+        window : str, offset
+           Size of the moving window. This is the number of observations used
+           for calculating the statistic. Data must have a ``DatetimeIndex``
+        min_periods : int, default None
+            Minimum number of observations in window required to have a value
+            (otherwise result is NA).
+        center : boolean, default False
+            Set the labels at the center of the window.
+        win_type : string, default None
+            Provide a window type. The recognized window types are identical
+            to pandas.
+        axis : int, default 0
+
+        Returns
+        -------
+        a Rolling object on which to call a method to compute a statistic
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> result = ddf.groupby("name").x.rolling('1D').max()
+        """
+        from dask.dataframe.rolling import RollingGroupby
+
+        if isinstance(window, Integral):
+            raise ValueError(
+                "Only time indexes are supported for rolling groupbys in dask dataframe. "
+                "``window`` must be a ``freq`` (e.g. '1H')."
+            )
+
+        if min_periods is not None:
+            if not isinstance(min_periods, Integral):
+                raise ValueError("min_periods must be an integer")
+            if min_periods < 0:
+                raise ValueError("min_periods must be >= 0")
+
+        return RollingGroupby(
+            self,
+            window=window,
+            min_periods=min_periods,
+            center=center,
+            win_type=win_type,
+            axis=axis,
+        )
 
 
 class DataFrameGroupBy(_GroupBy):
