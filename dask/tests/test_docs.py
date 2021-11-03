@@ -11,7 +11,7 @@ def test_development_guidelines_matches_ci():
     latest_env = "environment-3.9.yaml"
 
     for filename in [development_doc_file, additional_ci_file, upstream_ci_file]:
-        with open(filename) as f:
+        with open(filename, encoding="utf8") as f:
             assert any(
                 latest_env in line for line in f
             ), f"{latest_env} not found in {filename}"
