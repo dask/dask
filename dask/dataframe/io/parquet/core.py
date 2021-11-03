@@ -531,9 +531,13 @@ def to_parquet(
         pyarrow will throw an error when writing the shared _metadata file.
         Note that this argument is ignored by the "fastparquet" engine.
     name_function : callable, default None
-        Function accepting an integer (partition index) and producing a
-        string to replace the asterisk in the given filename globstring.
-        Should preserve the lexicographic order of partitions.
+        Function to generate the filename for each output partition.
+        The function should accept an integer (partition index) as input and
+        return a string which will be used as the filename for the corresponding
+        partition. Should preserve the lexicographic order of partitions.
+        If not specified, files will created using the convention
+        ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
+        and so on for each partition in the DataFrame.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -542,13 +546,27 @@ def to_parquet(
     >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
 
-    To control the names of each file, use a ``name_function=`` keyword argument.
-    The ``name_function`` function should expect an integer and produce a string.
-    Strings produced by name_function must preserve the order of their
-    respective partition indices.
+    By default, files will be created in the specified output directory using the
+    convention ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ... and so on for
+    each partition in the DataFrame. To customize the names of each file, you can use the
+    ``name_function=`` keyword argument. The function passed to ``name_function`` will be
+    used to generate the filename for each partition and should expect a partition's index
+    integer as input and return a string which will be used as the filename for the corresponding
+    partition. Strings produced by ``name_function`` must preserve the order of their respective
+    partition indices.
+
+    For example:
 
     >>> name_function = lambda x: f"data-{x}.parquet"
     >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
+
+    will result in the following files being created::
+
+        /path/to/output/
+            ├── data-0.parquet
+            ├── data-1.parquet
+            ├── data-2.parquet
+            └── ...
 
     See Also
     --------
