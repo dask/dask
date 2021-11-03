@@ -464,7 +464,7 @@ def to_parquet(
     compute=True,
     compute_kwargs=None,
     schema=None,
-    datafile_name_template="part.*.parquet",
+    name_function=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -530,11 +530,10 @@ def to_parquet(
         output partition. If the partitions produce inconsistent schemas,
         pyarrow will throw an error when writing the shared _metadata file.
         Note that this argument is ignored by the "fastparquet" engine.
-    datafile_name_template : string, default "part.*.parquet"
-        Lets you customize the filename.  `to_parquet` outputs files like
-        `part.0.parquet` and `part.1.parquet` by default.  If you
-        set this option to `*-fun.parquet`, it will output files like
-        `0-fun.parquet` and `1-fun.parquet`.
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -542,6 +541,14 @@ def to_parquet(
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
+
+    To control the names of each file, use a ``name_function=`` keyword argument.
+    The ``name_function`` function should expect an integer and produce a string.
+    Strings produced by name_function must preserve the order of their
+    respective partition indices.
+
+    >>> name_function = lambda x: f"data-{x}.parquet"
+    >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
 
     See Also
     --------
@@ -668,17 +675,20 @@ def to_parquet(
         **kwargs_pass,
     )
 
-    # check datafile_name_template is valid
-    if datafile_name_template.count("*") != 1:
-        raise ValueError(
-            "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
-        )
+    # check name_function is valid
+    if name_function is not None and not callable(name_function):
+        raise ValueError("``name_function`` must be a callable with one argument.")
 
     # Use i_offset and df.npartitions to define file-name list
     filenames = [
-        datafile_name_template.replace("*", "%i") % (i + i_offset)
+        f"part.{i + i_offset}.parquet"
+        if name_function is None
+        else name_function(i + i_offset)
         for i in range(df.npartitions)
     ]
+
+    if name_function is not None and len(set(filenames)) < len(filenames):
+        raise ValueError("``name_function`` must produce unique filenames.")
 
     # Construct IO graph
     dsk = {}

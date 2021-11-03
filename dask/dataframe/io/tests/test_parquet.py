@@ -3775,7 +3775,7 @@ def test_custom_filename(tmpdir, engine):
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
     )
     df = dd.from_pandas(pdf, npartitions=2)
-    df.to_parquet(fn, datafile_name_template="hi-*.parquet", engine=engine)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x}.parquet", engine=engine)
 
     files = os.listdir(fn)
     assert "_common_metadata" in files
@@ -3791,7 +3791,7 @@ def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
     )
     df = dd.from_pandas(pdf, npartitions=2)
-    df.to_parquet(fn, datafile_name_template="hi-*.parquet", engine=engine)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x * 2}.parquet", engine=engine)
 
     pdf = pd.DataFrame(
         {"num1": [33], "num2": [44]},
@@ -3799,13 +3799,13 @@ def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
     df = dd.from_pandas(pdf, npartitions=1)
     if engine == "fastparquet":
         pytest.xfail(
-            "fastparquet errors our with IndexError when datafile_name_template is customized "
+            "fastparquet errors our with IndexError when ``name_function`` is customized "
             "and append is set to True.  We didn't do a detailed investigation for expediency. "
             "See this comment for the conversation: https://github.com/dask/dask/pull/7682#issuecomment-845243623"
         )
     df.to_parquet(
         fn,
-        datafile_name_template="hi-*.parquet",
+        name_function=lambda x: f"hi-{x * 2}.parquet",
         engine=engine,
         append=True,
         ignore_divisions=True,
@@ -3814,18 +3814,13 @@ def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
     assert "_common_metadata" in files
     assert "_metadata" in files
     assert "hi-0.parquet" in files
-    assert "hi-1.parquet" in files
     assert "hi-2.parquet" in files
+    assert "hi-4.parquet" in files
     expected_pdf = pd.DataFrame(
         {"num1": [1, 2, 3, 4, 33], "num2": [7, 8, 9, 10, 44]},
     )
     actual = dd.read_parquet(fn, engine=engine, index=False)
-    pd.testing.assert_frame_equal(
-        expected_pdf.reset_index(drop=True),
-        actual.compute().reset_index(drop=True),
-        check_dtype=False,
-        check_categorical=False,
-    )
+    assert_eq(actual, expected_pdf, check_index=False)
 
 
 def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
@@ -3834,18 +3829,15 @@ def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
     )
     df = dd.from_pandas(pdf, npartitions=2)
-    with pytest.raises(ValueError) as excinfo:
-        df.to_parquet(fn, datafile_name_template="whatever.parquet", engine=engine)
-    assert (
-        "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
-        in str(excinfo.value)
-    )
-    with pytest.raises(ValueError) as excinfo:
-        df.to_parquet(fn, datafile_name_template="*-whatever-*.parquet", engine=engine)
-    assert (
-        "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
-        in str(excinfo.value)
-    )
+    with pytest.raises(
+        ValueError, match="``name_function`` must be a callable with one argument."
+    ):
+        df.to_parquet(fn, name_function="whatever.parquet", engine=engine)
+
+    with pytest.raises(
+        ValueError, match="``name_function`` must produce unique filenames."
+    ):
+        df.to_parquet(fn, name_function=lambda x: "whatever.parquet", engine=engine)
 
 
 def test_custom_filename_with_partition(tmpdir, engine):
@@ -3860,11 +3852,11 @@ def test_custom_filename_with_partition(tmpdir, engine):
     df.to_parquet(
         fn,
         partition_on=["country"],
-        datafile_name_template="*-cool.parquet",
+        name_function=lambda x: f"{x}-cool.parquet",
         write_index=False,
     )
 
-    for root, dirs, files in os.walk(fn):
+    for _, dirs, files in os.walk(fn):
         for dir in dirs:
             assert dir in (
                 "country=canada",
@@ -3880,9 +3872,6 @@ def test_custom_filename_with_partition(tmpdir, engine):
                 "_metadata",
             )
     actual = dd.read_parquet(fn, engine=engine, index=False)
-    pd.testing.assert_frame_equal(
-        df.compute().reset_index(drop=True),
-        actual.compute().reset_index(drop=True),
-        check_dtype=False,
-        check_categorical=False,
+    assert_eq(
+        pdf, actual, check_index=False, check_dtype=False, check_categorical=False
     )
