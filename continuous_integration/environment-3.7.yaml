@@ -5,9 +5,11 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
-  - numpy=1.16
-  - pandas=0.25
+  - packaging
+  - numpy=1.18
+  - pandas=1.0
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
@@ -24,7 +26,7 @@ dependencies:
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
-  - pyarrow=0.14
+  - pyarrow=1.0
   - coverage
   - jsonschema
   # other -- IO
@@ -35,7 +37,6 @@ dependencies:
   - aiohttp
   - bokeh
   - httpretty
-  - chest
   - s3fs
   - cloudpickle
   - crick
@@ -60,6 +61,7 @@ dependencies:
   - pandas-datareader
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed

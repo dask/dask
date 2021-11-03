@@ -77,6 +77,6 @@ def test_object_missing_values():
     ],
 )
 def test_hash_object_dispatch(obj):
-    result = dd.utils.hash_object_dispatch(obj)
+    result = dd.dispatch.hash_object_dispatch(obj)
     expected = pd.util.hash_pandas_object(obj)
     assert_eq(result, expected)

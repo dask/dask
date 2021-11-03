@@ -1,6 +1,6 @@
 try:
     from ..base import compute
-    from . import backends, rolling
+    from . import backends, dispatch, rolling
     from .core import (
         DataFrame,
         Index,
@@ -32,7 +32,6 @@ try:
         to_records,
         to_sql,
     )
-    from .io.orc import read_orc
     from .multi import concat, merge, merge_asof
     from .numeric import to_numeric
     from .optimize import optimize
@@ -41,6 +40,10 @@ try:
 
     try:
         from .io import read_parquet, to_parquet
+    except ImportError:
+        pass
+    try:
+        from .io import read_orc, to_orc
     except ImportError:
         pass
     try:

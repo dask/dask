@@ -1,4 +1,5 @@
 import builtins
+import contextlib
 import operator
 from collections.abc import Iterable
 from functools import partial
@@ -13,31 +14,22 @@ from .. import config
 from ..base import tokenize
 from ..blockwise import lol_tuples
 from ..highlevelgraph import HighLevelGraph
-from ..utils import (
-    Dispatch,
-    deepmap,
-    derived_from,
-    funcname,
-    getargspec,
-    ignoring,
-    is_series_like,
-)
+from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
 from .core import Array, _concatenate2, handle_out, implements
 from .creation import arange, diagonal
-from .numpy_compat import divide as np_divide
-from .numpy_compat import ma_divide
-from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
-from .wrap import ones, zeros
 
-# Generic functions to support chunks of different types
-empty_lookup = Dispatch("empty")
-empty_lookup.register((object, np.ndarray), np.empty)
-empty_lookup.register(np.ma.masked_array, np.ma.empty)
-divide_lookup = Dispatch("divide")
-divide_lookup.register((object, np.ndarray), np_divide)
-divide_lookup.register(np.ma.masked_array, ma_divide)
+# Keep empty_lookup here for backwards compatibility
+from .dispatch import divide_lookup, empty_lookup  # noqa: F401
+from .utils import (
+    asarray_safe,
+    compute_meta,
+    is_arraylike,
+    meta_from_array,
+    validate_axis,
+)
+from .wrap import ones, zeros
 
 
 def divide(a, b, dtype=None):
@@ -224,7 +216,7 @@ def _tree_reduce(
     # Normalize split_every
     split_every = split_every or config.get("split_every", 4)
     if isinstance(split_every, dict):
-        split_every = dict((k, split_every.get(k, 2)) for k in axis)
+        split_every = {k: split_every.get(k, 2) for k in axis}
     elif isinstance(split_every, Integral):
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
@@ -301,7 +293,7 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
+        decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
@@ -335,7 +327,7 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with ignoring(AttributeError):
+        with contextlib.suppress(AttributeError):
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
@@ -550,7 +542,7 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def numel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
 
     if hasattr(x, "mask"):
         return chunk.sum(np.ones_like(x), **kwargs)
@@ -563,7 +555,7 @@ def numel(x, **kwargs):
     if axis is None:
         prod = np.prod(shape, dtype=dtype)
         return (
-            full_like_safe(x, prod, shape=(1,) * len(shape), dtype=dtype)
+            np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
             if keepdims is True
             else prod
         )
@@ -578,11 +570,11 @@ def numel(x, **kwargs):
         )
     else:
         new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return full_like_safe(x, prod, shape=new_shape, dtype=dtype)
+    return np.full_like(x, prod, shape=new_shape, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
     return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
@@ -633,7 +625,8 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
     totals = deepmap(lambda pair: pair["total"], pairs)
     total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
 
-    return divide(total, n, dtype=dtype)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return divide(total, n, dtype=dtype)
 
 
 @derived_from(np)
@@ -931,8 +924,19 @@ def nanstd(
 
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
-    """ Merge intermediate results from ``arg_*`` functions"""
-    axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+    """Merge intermediate results from ``arg_*`` functions"""
+    if isinstance(data, dict):
+        # Array type doesn't support structured arrays (e.g., CuPy),
+        # therefore `data` is stored in a `dict`.
+        assert data["vals"].ndim == data["arg"].ndim
+        axis = (
+            None
+            if len(axis) == data["vals"].ndim or data["vals"].ndim == 1
+            else axis[0]
+        )
+    else:
+        axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+
     vals = data["vals"]
     arg = data["arg"]
     if axis is None:
@@ -971,9 +975,14 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
             fill_value = np.ma.maximum_fill_value(vals)
         vals = np.ma.filled(vals, fill_value)
 
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy)
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
@@ -981,9 +990,15 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
 
 def arg_combine(func, argfunc, data, axis=None, **kwargs):
     arg, vals = _arg_combine(data, axis, argfunc, keepdims=True)
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy).
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
@@ -1023,7 +1038,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
-        raise TypeError("axis must be either `None` or int, got '{0}'".format(axis))
+        raise TypeError(f"axis must be either `None` or int, got '{axis}'")
 
     for ax in axis:
         chunks = x.chunks[ax]
@@ -1037,7 +1052,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
             )
 
     # Map chunk across all blocks
-    name = "arg-reduce-{0}".format(tokenize(axis, x, chunk, combine, split_every))
+    name = f"arg-reduce-{tokenize(axis, x, chunk, combine, split_every)}"
     old = x.name
     keys = list(product(*map(range, x.numblocks)))
     offsets = list(product(*(accumulate(operator.add, bd[:-1], 0) for bd in x.chunks)))
@@ -1047,14 +1062,22 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         offset_info = pluck(axis[0], offsets)
 
     chunks = tuple((1,) * len(c) if i in axis else c for (i, c) in enumerate(x.chunks))
-    dsk = dict(
-        ((name,) + k, (chunk, (old,) + k, axis, off))
+    dsk = {
+        (name,) + k: (chunk, (old,) + k, axis, off)
         for (k, off) in zip(keys, offset_info)
-    )
-    # The dtype of `tmp` doesn't actually matter, just need to provide something
+    }
+
+    dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
+    meta = None
+    if is_arraylike(dtype):
+        # This case occurs on non-NumPy types (e.g., CuPy), where the returned
+        # value is an ndarray rather than a scalar.
+        meta = dtype
+        dtype = meta.dtype
+
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    tmp = Array(graph, name, chunks, dtype=x.dtype)
-    dtype = np.argmin([1]).dtype
+    tmp = Array(graph, name, chunks, dtype=dtype, meta=meta)
+
     result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
 
@@ -1188,7 +1211,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, preop, binop, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, preop, binop, x, dtype)}"
     base_key = (name,)
 
     # Right now, the metadata for batches is incorrect, but this should be okay
@@ -1337,7 +1360,7 @@ def cumreduction(
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, binop, ident, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
     full = slice(None, None, None)
     slc = (full,) * axis + (slice(-1, None),) + (full,) * (x.ndim - axis - 1)
@@ -1577,7 +1600,7 @@ def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
 @derived_from(np)
 def median(a, axis=None, keepdims=False, out=None):
     """
-    This works by automatically chunking the reduced axes to a single chunk
+    This works by automatically chunking the reduced axes to a single chunk if necessary
     and then calling ``numpy.median`` function across the remaining dimensions
     """
     if axis is None:
@@ -1591,7 +1614,9 @@ def median(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.median,
@@ -1624,7 +1649,9 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.nanmedian,

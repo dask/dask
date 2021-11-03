@@ -2,12 +2,12 @@ import sys
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_list_like
+from pandas.api.types import is_list_like, is_scalar
 
 from ..utils import M
 from . import methods
 from .core import DataFrame, Series, apply_concat_apply, map_partitions
-from .utils import has_known_categories, is_scalar
+from .utils import has_known_categories
 
 ###############################################################
 # Dummies
@@ -23,7 +23,7 @@ def get_dummies(
     sparse=False,
     drop_first=False,
     dtype=np.uint8,
-    **kwargs
+    **kwargs,
 ):
     """
     Convert categorical variable into dummy/indicator variables.
@@ -114,7 +114,7 @@ def get_dummies(
             sparse=sparse,
             drop_first=drop_first,
             dtype=dtype,
-            **kwargs
+            **kwargs,
         )
 
     not_cat_msg = (
@@ -160,7 +160,7 @@ def get_dummies(
         sparse=sparse,
         drop_first=drop_first,
         dtype=dtype,
-        **kwargs
+        **kwargs,
     )
 
     return map_partitions(
@@ -174,7 +174,7 @@ def get_dummies(
         drop_first=drop_first,
         meta=meta,
         dtype=dtype,
-        **kwargs
+        **kwargs,
     )
 
 

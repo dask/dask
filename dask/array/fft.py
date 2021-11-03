@@ -32,7 +32,7 @@ fft_preamble = """
 
 
 def _fft_out_chunks(a, s, axes):
-    """ For computing the output chunks of [i]fft*"""
+    """For computing the output chunks of [i]fft*"""
     if s is None:
         return a.chunks
     chunks = list(a.chunks)
@@ -42,7 +42,7 @@ def _fft_out_chunks(a, s, axes):
 
 
 def _rfft_out_chunks(a, s, axes):
-    """ For computing the output chunks of rfft*"""
+    """For computing the output chunks of rfft*"""
     if s is None:
         s = [a.chunks[axis][0] for axis in axes]
     s = list(s)
@@ -54,7 +54,7 @@ def _rfft_out_chunks(a, s, axes):
 
 
 def _irfft_out_chunks(a, s, axes):
-    """ For computing the output chunks of irfft*"""
+    """For computing the output chunks of irfft*"""
     if s is None:
         s = [a.chunks[axis][0] for axis in axes]
         s[-1] = 2 * (s[-1] - 1)

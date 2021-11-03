@@ -73,7 +73,7 @@ exceptions = dict()
 
 
 def remote_exception(exc, tb):
-    """ Metaclass that wraps exception type in RemoteException """
+    """Metaclass that wraps exception type in RemoteException"""
     if type(exc) in exceptions:
         typ = exceptions[type(exc)]
         return typ(exc, tb)
@@ -128,7 +128,7 @@ and on Windows, because they each only support a single context.
 
 
 def get_context():
-    """ Return the current multiprocessing context."""
+    """Return the current multiprocessing context."""
     # fork context does fork()-without-exec(), which can lead to deadlocks,
     # so default to "spawn".
     context_name = config.get("multiprocessing.context", "spawn")
@@ -150,7 +150,7 @@ def get(
     optimize_graph=True,
     pool=None,
     chunksize=None,
-    **kwargs
+    **kwargs,
 ):
     """Multiprocessed get function appropriate for Bags
 
@@ -227,7 +227,7 @@ def get(
             pack_exception=pack_exception,
             raise_exception=reraise,
             chunksize=chunksize,
-            **kwargs
+            **kwargs,
         )
     finally:
         if cleanup:

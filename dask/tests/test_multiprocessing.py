@@ -2,10 +2,8 @@ import multiprocessing
 import pickle
 import sys
 from concurrent.futures import ProcessPoolExecutor
-from distutils.version import LooseVersion
 from operator import add
 
-import cloudpickle
 import pytest
 
 import dask
@@ -25,7 +23,7 @@ def my_small_function_global(a, b):
 
 
 def test_pickle_globals():
-    """ Unrelated globals should not be included in serialized bytes """
+    """Unrelated globals should not be included in serialized bytes"""
     b = _dumps(my_small_function_global)
     assert b"my_small_function_global" in b
     assert b"unrelated_function_global" not in b
@@ -49,13 +47,10 @@ def test_pickle_locals():
 
 
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
-@pytest.mark.skipif(
-    cloudpickle.__version__ < LooseVersion("1.3.0"),
-    reason="requires cloudpickle >= 1.3.0",
-)
 def test_out_of_band_pickling():
     """Test that out-of-band pickling works"""
     np = pytest.importorskip("numpy")
+    pytest.importorskip("cloudpickle", minversion="1.3.0")
 
     a = np.arange(5)
 
@@ -265,7 +260,7 @@ def test_custom_context_ignored_elsewhere():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_get_context_always_default():
-    """ On Python 2/Windows, get_context() always returns same context."""
+    """On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
     with pytest.warns(UserWarning):
         with dask.config.set({"multiprocessing.context": "forkserver"}):

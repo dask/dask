@@ -15,7 +15,7 @@ nrepetitions = 1
 
 
 def trivial(width, height):
-    """ Embarrassingly parallel dask """
+    """Embarrassingly parallel dask"""
     d = {("x", 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update({("x", j, i): (noop, ("x", j - 1, i)) for i in range(width)})
@@ -23,7 +23,7 @@ def trivial(width, height):
 
 
 def crosstalk(width, height, connections):
-    """ Natural looking dask with some inter-connections """
+    """Natural looking dask with some inter-connections"""
     d = {("x", 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update(
@@ -39,7 +39,7 @@ def crosstalk(width, height, connections):
 
 
 def dense(width, height):
-    """ Full barriers between each step """
+    """Full barriers between each step"""
     d = {("x", 0, i): i for i in range(width)}
     for j in range(1, height):
         d.update(

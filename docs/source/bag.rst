@@ -6,7 +6,6 @@ Bag
    :hidden:
 
    bag-creation.rst
-   bag-api.rst
 
 Dask Bag implements operations like ``map``, ``filter``, ``fold``, and
 ``groupby`` on collections of generic Python objects.  It does this in parallel with a
@@ -14,7 +13,7 @@ small memory footprint using Python iterators.  It is similar to a parallel
 version of PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 
 .. _PyToolz: https://toolz.readthedocs.io/en/latest/
-.. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python/pyspark.html
+.. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python
 
 Examples
 --------

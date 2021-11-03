@@ -5,10 +5,10 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from distutils.version import LooseVersion
 from functools import partial
 
 import pytest
+from packaging.version import parse as parse_version
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
@@ -101,7 +101,7 @@ def s3_base():
             proc.kill()
             if sys.platform == "win32":
                 # belt & braces
-                subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
+                subprocess.call(f"TASKKILL /F /PID {proc.pid} /T")
 
 
 @pytest.fixture
@@ -264,21 +264,21 @@ def test_read_bytes_sample_delimiter(s3, s3so):
         "s3://" + test_bucket_name + "/test/accounts.*",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=2,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
 
@@ -297,18 +297,18 @@ def test_read_bytes_blocksize_none(s3, s3so):
 
 def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2015/yellow_tripdata_2015-01.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2015/yellow_tripdata_2015-01.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 1
 
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2014/*.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2014/*.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 12
 
@@ -334,13 +334,13 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     _, values2 = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"foo",
-        **s3so
+        **s3so,
     )
     assert [a.key for a in concat(values)] != [b.key for b in concat(values2)]
 
@@ -357,7 +357,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=d,
-        **s3so
+        **s3so,
     )
     results = compute(*concat(values))
     res = [r for r in results if r]
@@ -382,14 +382,14 @@ def test_compression(s3, fmt, blocksize, s3so):
                     "s3://compress/test/accounts.*",
                     compression=fmt,
                     blocksize=blocksize,
-                    **s3so
+                    **s3so,
                 )
             return
         sample, values = read_bytes(
             "s3://compress/test/accounts.*",
             compression=fmt,
             blocksize=blocksize,
-            **s3so
+            **s3so,
         )
         assert sample.startswith(files[sorted(files)[0]][:10])
         assert sample.endswith(b"\n")
@@ -435,16 +435,15 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
-    if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
+    lib_version = parse_version(lib.__version__)
+    if engine == "pyarrow" and lib_version < parse_version("0.13.1"):
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     if (
         engine == "pyarrow"
-        and LooseVersion(lib.__version__) >= "2.0"
-        and LooseVersion(lib.__version__) < "3.0"
-        and LooseVersion(s3fs.__version__) > "0.5.0"
+        and lib_version.major == 2
+        and parse_version(s3fs.__version__) > parse_version("0.5.0")
     ):
         pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
@@ -477,7 +476,61 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    tm.assert_frame_equal(data, df2.compute())
+    dd.utils.assert_eq(data, df2)
+
+
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+def test_parquet_append(s3, engine, s3so):
+    pytest.importorskip(engine)
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
+
+    url = "s3://%s/test.parquet.append" % test_bucket_name
+
+    data = pd.DataFrame(
+        {
+            "i32": np.arange(1000, dtype=np.int32),
+            "i64": np.arange(1000, dtype=np.int64),
+            "f": np.arange(1000, dtype=np.float64),
+            "bhello": np.random.choice(["hello", "you", "people"], size=1000).astype(
+                "O"
+            ),
+        },
+    )
+    df = dd.from_pandas(data, chunksize=500)
+    df.to_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        write_index=False,
+    )
+    df.to_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        write_index=False,
+        append=True,
+        ignore_divisions=True,
+    )
+
+    files = [f.split("/")[-1] for f in s3.ls(url)]
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "part.0.parquet" in files
+
+    df2 = dd.read_parquet(
+        url,
+        index=False,
+        engine=engine,
+        storage_options=s3so,
+    )
+
+    dd.utils.assert_eq(
+        pd.concat([data, data]),
+        df2,
+        check_index=False,
+    )
 
 
 def test_parquet_wstoragepars(s3, s3so):
@@ -507,7 +560,7 @@ def test_parquet_wstoragepars(s3, s3so):
 
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
-    if pa.__version__ >= LooseVersion("2.0.0"):
+    if parse_version(pa.__version__).major >= 2:
         pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)

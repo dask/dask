@@ -1,13 +1,15 @@
 import re
 
 import pandas as pd
+from fsspec.implementations.local import LocalFileSystem
 
+from .... import config
 from ....core import flatten
 from ....utils import natural_sort_key
 
 
 class Engine:
-    """ The API necessary to provide a new Parquet reader/writer """
+    """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
     def read_metadata(
@@ -18,7 +20,7 @@ class Engine:
         index=None,
         gather_statistics=None,
         filters=None,
-        **kwargs
+        **kwargs,
     ):
         """Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -109,7 +111,7 @@ class Engine:
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -523,6 +525,7 @@ def _aggregate_stats(
             s = {
                 "file_path_0": file_path,
                 "num-rows": df_rgs["num-rows"].sum(),
+                "num-row-groups": df_rgs["num-rows"].count(),
                 "total_byte_size": df_rgs["total_byte_size"].sum(),
                 "columns": [],
             }
@@ -530,6 +533,7 @@ def _aggregate_stats(
             s = {
                 "file_path_0": file_path,
                 "num-rows": file_row_group_stats[0]["num-rows"],
+                "num-row-groups": 1,
                 "total_byte_size": file_row_group_stats[0]["total_byte_size"],
                 "columns": [],
             }
@@ -561,6 +565,7 @@ def _aggregate_stats(
 def _row_groups_to_parts(
     gather_statistics,
     split_row_groups,
+    aggregation_depth,
     file_row_groups,
     file_row_group_stats,
     file_row_group_column_stats,
@@ -576,10 +581,25 @@ def _row_groups_to_parts(
         # Create parts from each file,
         # limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
+        residual = 0
         for filename, row_groups in file_row_groups.items():
             row_group_count = len(row_groups)
-            for i in range(0, row_group_count, split_row_groups):
+            if residual:
+                _rgs = [0] + list(range(residual, row_group_count, split_row_groups))
+            else:
+                _rgs = list(range(residual, row_group_count, split_row_groups))
+
+            for i in _rgs:
+
                 i_end = i + split_row_groups
+                if aggregation_depth is True:
+                    if residual and i == 0:
+                        i_end = residual
+                        residual = 0
+                    _residual = i_end - row_group_count
+                    if _residual > 0:
+                        residual = _residual
+
                 rg_list = row_groups[i:i_end]
 
                 part = make_part_func(
@@ -621,3 +641,50 @@ def _row_groups_to_parts(
                 stats.append(stat)
 
     return parts, stats
+
+
+def _get_aggregation_depth(aggregate_files, partition_names):
+    # Use `aggregate_files` to set `aggregation_depth`
+    #
+    # Note that `partition_names` must be ordered. `True` means that we allow
+    # aggregation of any two files. `False` means that we will never aggregate
+    # files.  If a string is specified, it must be the name of a partition
+    # column, and the "partition depth" of that column will be used for
+    # aggregation.  Note that we always convert the string into the partition
+    # "depth" to simplify the aggregation logic.
+
+    # Summary of output `aggregation_depth` settings:
+    #
+    # True  : Free-for-all aggregation (any two files may be aggregated)
+    # False : No file aggregation allowed
+    # <int> : Allow aggregation within this partition-hierarchy depth
+
+    aggregation_depth = aggregate_files
+    if isinstance(aggregate_files, str):
+        if aggregate_files in partition_names:
+            # aggregate_files corresponds to a partition column. Reset the
+            # value of this variable to reflect the partition "depth" (in the
+            # range of 1 to the total number of partition levels)
+            aggregation_depth = len(partition_names) - partition_names.index(
+                aggregate_files
+            )
+        else:
+            raise ValueError(
+                f"{aggregate_files} is not a recognized directory partition."
+            )
+
+    return aggregation_depth
+
+
+def _set_metadata_task_size(metadata_task_size, fs):
+    # Set metadata_task_size using the config file
+    # if the kwarg value was not specified
+    if metadata_task_size is None:
+        # If a default value is not specified in the config file,
+        # otherwise we use "0"
+        config_str = "dataframe.parquet.metadata-task-size-" + (
+            "local" if isinstance(fs, LocalFileSystem) else "remote"
+        )
+        return config.get(config_str, 0)
+
+    return metadata_task_size

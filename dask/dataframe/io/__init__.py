@@ -18,3 +18,8 @@ try:
     from .parquet import read_parquet, to_parquet
 except ImportError:
     pass
+
+try:
+    from .orc import read_orc, to_orc
+except ImportError:
+    pass

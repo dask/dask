@@ -1,7 +1,8 @@
 import abc
 import collections.abc
+import contextlib
 import copy
-import warnings
+import html
 from typing import (
     AbstractSet,
     Any,
@@ -19,8 +20,9 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import _deprecated, ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
+from .widgets import get_template
 
 
 def compute_layer_dependencies(layers):
@@ -32,7 +34,7 @@ def compute_layer_dependencies(layers):
                 return k
         raise RuntimeError(f"{repr(key)} not found")
 
-    all_keys = set(key for layer in layers.values() for key in layer)
+    all_keys = {key for layer in layers.values() for key in layer}
     ret = {k: set() for k in layers}
     for k, v in layers.items():
         for key in keys_in_tasks(all_keys - v.keys(), v.values()):
@@ -80,22 +82,17 @@ class Layer(collections.abc.Mapping):
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
         """
-        if annotations:
-            self.annotations = annotations
-        else:
-            self.annotations = copy.copy(config.get("annotations", None))
-        if collection_annotations:
-            self.collection_annotations = collection_annotations
-        else:
-            self.collection_annotations = copy.copy(
-                config.get("collection_annotations", None)
-            )
+        self.annotations = annotations or copy.copy(config.get("annotations", None))
+        self.collection_annotations = collection_annotations or copy.copy(
+            config.get("collection_annotations", None)
+        )
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
         """Return whether the layer is materialized or not"""
         return True
 
+    @abc.abstractmethod
     def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
@@ -110,7 +107,7 @@ class Layer(collections.abc.Mapping):
         keys: AbstractSet
             All output keys
         """
-        return self.keys()
+        return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
@@ -122,9 +119,10 @@ class Layer(collections.abc.Mapping):
 
         Examples
         --------
-        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})  # doctest: +SKIP
-        >>> d.cull({'out'})  # doctest: +SKIP
-        {'x': 1, 'out': (add, 'x', 10)}
+        >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
+        >>> _, deps = d.cull({'out'}, d.keys())
+        >>> deps
+        {'out': {'x'}, 'x': set()}
 
         Returns
         -------
@@ -155,7 +153,7 @@ class Layer(collections.abc.Mapping):
                         seen.add(d)
                         work.add(d)
 
-        return MaterializedLayer(out), ret_deps
+        return MaterializedLayer(out, annotations=self.annotations), ret_deps
 
     def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer
@@ -375,17 +373,25 @@ class Layer(collections.abc.Mapping):
 
         # Find aliases not in `client_keys` and substitute all matching keys
         # with its Future
-        values = {
+        future_aliases = {
             k: v
             for k, v in dsk.items()
             if isinstance(v, Future) and k not in client_keys
         }
-        if values:
-            dsk = subs_multiple(dsk, values)
+        if future_aliases:
+            dsk = subs_multiple(dsk, future_aliases)
 
-        # Unpack remote data and record its dependencies
-        dsk = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
-        unpacked_futures = set.union(*[v[1] for v in dsk.values()]) if dsk else set()
+        # Remove `Future` objects from graph and note any future dependencies
+        dsk2 = {}
+        fut_deps = {}
+        for k, v in dsk.items():
+            dsk2[k], futs = unpack_remotedata(v, byte_keys=True)
+            if futs:
+                fut_deps[k] = futs
+        dsk = dsk2
+
+        # Check that any collected futures are valid
+        unpacked_futures = set.union(*fut_deps.values()) if fut_deps else set()
         for future in unpacked_futures:
             if future.client is not client:
                 raise ValueError(
@@ -393,21 +399,26 @@ class Layer(collections.abc.Mapping):
                 )
             if stringify(future.key) not in client.futures:
                 raise CancelledError(stringify(future.key))
-        unpacked_futures_deps = {}
-        for k, v in dsk.items():
-            if len(v[1]):
-                unpacked_futures_deps[k] = {f.key for f in v[1]}
-        dsk = {k: v[0] for k, v in dsk.items()}
 
         # Calculate dependencies without re-calculating already known dependencies
-        missing_keys = dsk.keys() - known_key_dependencies.keys()
-        dependencies = {
-            k: keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False)
+        # - Start with known dependencies
+        dependencies = known_key_dependencies.copy()
+        # - Remove aliases for any tasks that depend on both an alias and a future.
+        #   These can only be found in the known_key_dependencies cache, since
+        #   any dependencies computed in this method would have already had the
+        #   aliases removed.
+        if future_aliases:
+            alias_keys = set(future_aliases)
+            dependencies = {k: v - alias_keys for k, v in dependencies.items()}
+        # - Add in deps for any missing keys
+        missing_keys = dsk.keys() - dependencies.keys()
+        dependencies.update(
+            (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
-        }
-        for k, v in unpacked_futures_deps.items():
-            dependencies[k] = set(dependencies.get(k, ())) | v
-        dependencies.update(known_key_dependencies)
+        )
+        # - Add in deps for any tasks that depend on futures
+        for k, futures in fut_deps.items():
+            dependencies[k].update(f.key for f in futures)
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -469,6 +480,49 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+        if highlevelgraph_key != "":
+            shortname = key_split(highlevelgraph_key)
+        elif hasattr(self, "name"):
+            shortname = key_split(self.name)
+        else:
+            shortname = self.__class__.__name__
+
+        svg_repr = ""
+        if (
+            self.collection_annotations
+            and self.collection_annotations.get("type") == "dask.array.core.Array"
+        ):
+            chunks = self.collection_annotations.get("chunks")
+            if chunks:
+                from .array.svg import svg
+
+                svg_repr = svg(chunks)
+
+        return get_template("highlevelgraph_layer.html.j2").render(
+            materialized=self.is_materialized(),
+            shortname=shortname,
+            layer_index=layer_index,
+            highlevelgraph_key=highlevelgraph_key,
+            info=self.layer_info_dict(),
+            svg_repr=svg_repr,
+        )
+
+    def layer_info_dict(self):
+        info = {
+            "layer_type": type(self).__name__,
+            "is_materialized": self.is_materialized(),
+        }
+        if self.annotations is not None:
+            for key, val in self.annotations.items():
+                info[key] = html.escape(str(val))
+        if self.collection_annotations is not None:
+            for key, val in self.collection_annotations.items():
+                # Hide verbose chunk details from the HTML table
+                if key != "chunks":
+                    info[key] = html.escape(str(val))
+        return info
+
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`
@@ -497,6 +551,9 @@ class MaterializedLayer(Layer):
 
     def is_materialized(self):
         return True
+
+    def get_output_keys(self):
+        return self.keys()
 
 
 class HighLevelGraph(Mapping):
@@ -587,14 +644,14 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def _from_collection(cls, name, layer, collection):
-        """ `from_collections` optimized for a single collection """
+        """`from_collections` optimized for a single collection"""
         if is_dask_collection(collection):
             graph = collection.__dask_graph__()
             if isinstance(graph, HighLevelGraph):
                 layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
                 deps = ensure_dict(graph.dependencies, copy=True)
-                with ignoring(AttributeError):
+                with contextlib.suppress(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
                 key = _get_some_layer_name(collection)
@@ -650,7 +707,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
+                    with contextlib.suppress(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
@@ -711,13 +768,9 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
+    @_deprecated(use_instead="HighLevelGraph.keys")
     def keyset(self) -> AbstractSet:
         # Backwards compatibility for now
-        warnings.warn(
-            "'keyset' method of HighLevelGraph is deprecated now and will be removed "
-            "in a future version. To silence this warning, use '.keys' instead.",
-            FutureWarning,
-        )
         return self.keys()
 
     def get_all_external_keys(self) -> set:
@@ -773,14 +826,9 @@ class HighLevelGraph(Mapping):
         return reverse_dict(self.dependencies)
 
     @property
+    @_deprecated(use_instead="HighLevelGraph.layers")
     def dicts(self):
         # Backwards compatibility for now
-        warnings.warn(
-            "'dicts' property of HighLevelGraph is deprecated now and will be "
-            "removed in a future version. To silence this warning, "
-            "use '.layers' instead.",
-            FutureWarning,
-        )
         return self.layers
 
     def copy(self):
@@ -805,11 +853,49 @@ class HighLevelGraph(Mapping):
                 raise TypeError(g)
         return cls(layers, dependencies)
 
-    def visualize(self, filename="dask.pdf", format=None, **kwargs):
+    def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
+        """
+        Visualize this dask high level graph.
+
+        Requires ``graphviz`` to be installed.
+
+        Parameters
+        ----------
+        filename : str or None, optional
+            The name of the file to write to disk. If the provided `filename`
+            doesn't include an extension, '.png' will be used by default.
+            If `filename` is None, no file will be written, and the graph is
+            rendered in the Jupyter notebook only.
+        format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+            Format in which to write output file. Default is 'svg'.
+        color : {None, 'layer_type'}, optional (default: None)
+            Options to color nodes.
+            - None, no colors.
+            - layer_type, color nodes based on the layer type.
+        **kwargs
+           Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.dask.visualize(filename='dask.svg')  # doctest: +SKIP
+        >>> x.dask.visualize(filename='dask.svg', color='layer_type')  # doctest: +SKIP
+
+        Returns
+        -------
+        result : IPython.diplay.Image, IPython.display.SVG, or None
+            See dask.dot.dot_graph for more information.
+
+        See Also
+        --------
+        dask.dot.dot_graph
+        dask.base.visualize # low level variant
+        """
+
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
-        return graphviz_to_file(g, filename, format)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -1049,8 +1135,21 @@ class HighLevelGraph(Mapping):
 
             # Unpack the annotations
             unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
-
         return {"dsk": dsk, "deps": deps, "annotations": anno}
+
+    def __repr__(self) -> str:
+        representation = f"{type(self).__name__} with {len(self.layers)} layers.\n"
+        representation += f"<{self.__class__.__module__}.{self.__class__.__name__} object at {hex(id(self))}>\n"
+        for i, layerkey in enumerate(self._toposort_layers()):
+            representation += f" {i}. {layerkey}\n"
+        return representation
+
+    def _repr_html_(self):
+        return get_template("highlevelgraph.html.j2").render(
+            type=type(self).__name__,
+            layers=self.layers,
+            toposort=self._toposort_layers(),
+        )
 
 
 def to_graphviz(
@@ -1058,39 +1157,127 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
     **kwargs,
 ):
     from .dot import graphviz, label, name
 
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
+    node_attr["shape"] = "box"
+    node_attr["fontname"] = "helvetica"
+
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
 
+    n_tasks = {}
+    for layer in hg.dependencies:
+        n_tasks[layer] = len(hg.layers[layer])
+
+    min_tasks = min(n_tasks.values())
+    max_tasks = max(n_tasks.values())
+
     cache = {}
 
-    for k in hg.dependencies:
-        k_name = name(k)
-        attrs = data_attributes.get(k, {})
-        attrs.setdefault("label", label(k, cache=cache))
-        attrs.setdefault("shape", "box")
-        g.node(k_name, **attrs)
+    color = kwargs.get("color")
+    if color == "layer_type":
+        layer_colors = {
+            "DataFrameIOLayer": ["#CCC7F9", False],  # purple
+            "ShuffleLayer": ["#F9CCC7", False],  # rose
+            "SimpleShuffleLayer": ["#F9CCC7", False],  # rose
+            "ArrayOverlayLayer": ["#FFD9F2", False],  # pink
+            "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
+            "Blockwise": ["#D9FFE6", False],  # green
+            "BlockwiseLayer": ["#D9FFE6", False],  # green
+            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
+            "MaterializedLayer": ["#DBDEE5", False],  # gray
+        }
 
-    for k, deps in hg.dependencies.items():
-        k_name = name(k)
+    for layer in hg.dependencies:
+        layer_name = name(layer)
+        attrs = data_attributes.get(layer, {})
+
+        node_label = label(layer, cache=cache)
+        node_size = (
+            20
+            if max_tasks == min_tasks
+            else int(20 + ((n_tasks[layer] - min_tasks) / (max_tasks - min_tasks)) * 20)
+        )
+
+        layer_type = str(type(hg.layers[layer]).__name__)
+        node_tooltips = (
+            f"A {layer_type.replace('Layer', '')} Layer with {n_tasks[layer]} Tasks.\n"
+        )
+
+        layer_ca = hg.layers[layer].collection_annotations
+        if layer_ca:
+            if layer_ca.get("type") == "dask.array.core.Array":
+                node_tooltips += (
+                    f"Array Shape: {layer_ca.get('shape')}\n"
+                    f"Data Type: {layer_ca.get('dtype')}\n"
+                    f"Chunk Size: {layer_ca.get('chunksize')}\n"
+                    f"Chunk Type: {layer_ca.get('chunk_type')}\n"
+                )
+
+            if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
+                dftype = {"pandas.core.frame.DataFrame": "pandas"}
+                cols = layer_ca.get("columns")
+
+                node_tooltips += (
+                    f"Number of Partitions: {layer_ca.get('npartitions')}\n"
+                    f"DataFrame Type: {dftype.get(layer_ca.get('dataframe_type'))}\n"
+                    f"{len(cols)} DataFrame Columns: {str(cols) if len(str(cols)) <= 40 else '[...]'}\n"
+                )
+
+        attrs.setdefault("label", str(node_label))
+        attrs.setdefault("fontsize", str(node_size))
+        attrs.setdefault("tooltip", str(node_tooltips))
+
+        if color == "layer_type":
+            node_color = layer_colors.get(layer_type)[0]
+            layer_colors.get(layer_type)[1] = True
+
+            attrs.setdefault("fillcolor", str(node_color))
+            attrs.setdefault("style", "filled")
+
+        g.node(layer_name, **attrs)
+
+    for layer, deps in hg.dependencies.items():
+        layer_name = name(layer)
         for dep in deps:
             dep_name = name(dep)
-            g.edge(dep_name, k_name)
+            g.edge(dep_name, layer_name)
+
+    if color == "layer_type":
+        legend_title = "Key"
+
+        legend_label = (
+            '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">'
+            "<TR><TD><B>Legend: Layer types</B></TD></TR>"
+        )
+
+        for layer_type, color in layer_colors.items():
+            if color[1]:
+                legend_label += f'<TR><TD BGCOLOR="{color[0]}">{layer_type}</TD></TR>'
+
+        legend_label += "</TABLE>>"
+
+        attrs = data_attributes.get(legend_title, {})
+        attrs.setdefault("label", str(legend_label))
+        attrs.setdefault("fontsize", "20")
+        attrs.setdefault("margin", "0")
+
+        g.node(legend_title, **attrs)
+
     return g
 
 

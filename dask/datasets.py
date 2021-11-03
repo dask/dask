@@ -10,7 +10,7 @@ def timeseries(
     partition_freq="1d",
     dtypes={"name": str, "id": int, "x": float, "y": float},
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -60,7 +60,7 @@ def timeseries(
         partition_freq=partition_freq,
         seed=seed,
         dtypes=dtypes,
-        **kwargs
+        **kwargs,
     )
 
 
@@ -75,8 +75,7 @@ def _generate_mimesis(field, schema_description, records_per_partition, seed):
 
     field = Field(seed=seed, **field)
     schema = Schema(schema=lambda: schema_description(field))
-    for i in range(records_per_partition):
-        yield schema.create(iterations=1)[0]
+    return [schema.create(iterations=1)[0] for i in range(records_per_partition)]
 
 
 def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):

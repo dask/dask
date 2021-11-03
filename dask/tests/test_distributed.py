@@ -7,10 +7,6 @@ import os
 from functools import partial
 from operator import add
 
-from tornado import gen
-
-from distributed import futures_of
-from distributed.client import wait
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import loop  # noqa F401
@@ -20,6 +16,7 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.delayed import Delayed
+from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir
 
@@ -32,18 +29,22 @@ def test_can_import_client():
     from dask.distributed import Client  # noqa: F401
 
 
+def test_can_import_nested_things():
+    from dask.distributed.protocol import dumps  # noqa: F401
+
+
 @gen_cluster(client=True)
-def test_persist(c, s, a, b):
+async def test_persist(c, s, a, b):
     x = delayed(inc)(1)
     (x2,) = persist(x)
 
-    yield wait(x2)
+    await wait(x2)
     assert x2.key in a.data or x2.key in b.data
 
     y = delayed(inc)(10)
     y2, one = persist(y, 1)
 
-    yield wait(y2)
+    await wait(y2)
     assert y2.key in a.data or y2.key in b.data
 
 
@@ -130,14 +131,14 @@ def test_futures_to_delayed_array(c):
 
 
 @gen_cluster(client=True)
-def test_local_get_with_distributed_active(c, s, a, b):
+async def test_local_get_with_distributed_active(c, s, a, b):
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
-    yield gen.sleep(0.01)
+    await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 
     x = delayed(inc)(2).persist(scheduler="sync")  # noqa F841
-    yield gen.sleep(0.01)
+    await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 
 
@@ -174,7 +175,7 @@ def test_to_hdf_scheduler_distributed(npartitions, c):
 
 
 @gen_cluster(client=True)
-def test_serializable_groupby_agg(c, s, a, b):
+async def test_serializable_groupby_agg(c, s, a, b):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
@@ -182,7 +183,7 @@ def test_serializable_groupby_agg(c, s, a, b):
 
     result = ddf.groupby("y").agg("count")
 
-    yield c.compute(result)
+    await c.compute(result)
 
 
 def test_futures_in_graph(c):
@@ -316,19 +317,22 @@ def test_blockwise_array_creation(c, io, fuse):
 
 @pytest.mark.parametrize(
     "io",
-    [
-        "parquet-pyarrow",
-        "parquet-fastparquet",
-        "csv",
-    ],
+    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
-def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+@pytest.mark.parametrize("from_futures", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
-    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if from_futures:
+        parts = [df.iloc[:5], df.iloc[5:10], df.iloc[10:15]]
+        futs = c.scatter(parts)
+        ddf0 = dd.from_delayed(futs, meta=parts[0])
+    else:
+        ddf0 = dd.from_pandas(df, npartitions=3)
 
     if io.startswith("parquet"):
         if io == "parquet-pyarrow":
@@ -342,6 +346,11 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+    elif io == "hdf":
+        pytest.importorskip("tables")
+        fn = str(tmpdir.join("h5"))
+        ddf0.to_hdf(fn, "/data*")
+        ddf = dd.read_hdf(fn, "/data*")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
@@ -351,6 +360,25 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
         # dsk should not be a dict unless fuse is explicitly True
         assert isinstance(dsk, dict) == bool(fuse)
         dd.assert_eq(ddf, df, check_index=False)
+
+
+def test_blockwise_fusion_after_compute(c):
+    # See: https://github.com/dask/dask/issues/7720
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Simple sequence of Dask-Dataframe manipulations
+    df = pd.DataFrame({"x": [1, 2, 3] * 5})
+    series = dd.from_pandas(df, npartitions=2)["x"]
+    result = series < 3
+
+    # Trigger an optimization of the `series` graph
+    # (which `result` depends on), then compute `result`.
+    # This is essentially a test of `rewrite_blockwise`.
+    series_len = len(series)
+    assert series_len == 15
+    assert df.x[result.compute()].sum() == 15
 
 
 @gen_cluster(client=True)
@@ -383,6 +411,28 @@ async def test_blockwise_numpy_kwargs(c, s, a, b):
     arr = da.blockwise(fn, "x", da.ones(1000), "x", dtype=np.uint16, dt=np.uint16(42))
     res = await c.compute(arr.sum(), optimize_graph=False)
     assert res == 1000
+
+
+def test_blockwise_different_optimization(c):
+    # Regression test for incorrect results due to SubgraphCallable.__eq__
+    # not correctly handling subgraphs with the same outputs and arity but
+    # different internals (GH-7632). The bug is triggered by distributed
+    # because it uses a function cache.
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    u = da.from_array(np.arange(3))
+    v = da.from_array(np.array([10 + 2j, 7 - 3j, 8 + 1j]))
+    cv = v.conj()
+    x = u * cv
+    (cv,) = dask.optimize(cv)
+    y = u * cv
+    expected = np.array([0 + 0j, 7 + 3j, 16 - 2j])
+    with dask.config.set({"optimization.fuse.active": False}):
+        x_value = x.compute()
+        y_value = y.compute()
+    np.testing.assert_equal(x_value, expected)
+    np.testing.assert_equal(y_value, expected)
 
 
 @gen_cluster(client=True)
@@ -486,6 +536,96 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=5)
+@gen_cluster(client=True)
+async def test_shuffle_priority(c, s, a, b):
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Test marked as "flaky" since the scheduling behavior
+    # is not deterministic. Note that the test is still
+    # very likely to fail every time if the "split" tasks
+    # are not prioritized correctly
+
+    df = pd.DataFrame({"a": range(1000)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+    await c.compute(ddf2)
+
+    # Parse transition log for processing tasks
+    log = [
+        eval(l[0])[0]
+        for l in s.transition_log
+        if l[1] == "processing" and "simple-shuffle-" in l[0]
+    ]
+
+    # Make sure most "split" tasks are processing before
+    # any "combine" tasks begin
+    late_split = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+    )
+    early_combine = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+    )
+    assert late_split < early_combine
+
+
+@gen_cluster(client=True)
+async def test_map_partitions_da_input(c, s, a, b):
+    """Check that map_partitions can handle a dask array input"""
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+    da = pytest.importorskip("dask.array")
+    datasets = pytest.importorskip("dask.datasets")
+
+    def f(d, a):
+        assert isinstance(d, pd.DataFrame)
+        assert isinstance(a, np.ndarray)
+        return d
+
+    df = datasets.timeseries(freq="1d").persist()
+    arr = da.ones((1,), chunks=1).persist()
+    await c.compute(df.map_partitions(f, arr, meta=df._meta))
+
+
+def test_map_partitions_df_input():
+    """
+    Check that map_partitions can handle a delayed
+    partition of a dataframe input
+    """
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    def f(d, a):
+        assert isinstance(d, pd.DataFrame)
+        assert isinstance(a, pd.DataFrame)
+        return d
+
+    def main():
+        item_df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=1)
+        ddf = item_df.to_delayed()[0].persist()
+        merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
+
+        # Notice, we include a shuffle in order to trigger a complex culling
+        merged_df = merged_df.shuffle(on="b")
+
+        merged_df.map_partitions(
+            f, ddf, meta=merged_df, enforce_metadata=False
+        ).compute()
+
+    with distributed.LocalCluster(
+        scheduler_port=0,
+        dashboard_address=":0",
+        asynchronous=False,
+        n_workers=1,
+        nthreads=1,
+        processes=False,
+    ) as cluster:
+        with distributed.Client(cluster, asynchronous=False):
+            main()
+
+
 @gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
@@ -496,3 +636,20 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+@gen_cluster(client=True)
+async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
+    fut = c.submit(inc, 1)
+
+    hlg = HighLevelGraph(
+        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
+        {"l1": set()},
+    )
+    # fill hlg.key_dependencies cache. This excludes known futures, so only
+    # includes a subset of all dependencies. Previously if the cache was present
+    # the future dependencies would be missing when packed.
+    hlg.get_all_dependencies()
+    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
+    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
+    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
