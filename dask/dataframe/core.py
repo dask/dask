@@ -4204,7 +4204,14 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def sort_values(
-        self, by, npartitions=None, ascending=True, na_position="last", **kwargs
+        self,
+        by,
+        npartitions=None,
+        ascending=True,
+        na_position="last",
+        sort_function=None,
+        sort_function_kwargs=None,
+        **kwargs,
     ):
         """Sort the dataset by a single column.
 
@@ -4230,16 +4237,25 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
+        if sort_function is None:
+            sort_function = M.sort_values
+        if sort_function_kwargs is None:
+            sort_function_kwargs = {
+                "by": by,
+                "ascending": ascending,
+                "na_position": na_position,
+            }
+
         if self.npartitions == 1:
-            return self.map_partitions(
-                M.sort_values, by, ascending=ascending, na_position=na_position
-            )
+            return self.map_partitions(sort_function, **sort_function_kwargs)
         return sort_values(
             self,
             by,
             ascending=ascending,
             npartitions=npartitions,
             na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
 
