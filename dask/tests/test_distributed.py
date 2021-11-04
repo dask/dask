@@ -7,8 +7,6 @@ import os
 from functools import partial
 from operator import add
 
-from tornado import gen
-
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import loop  # noqa F401
@@ -36,17 +34,17 @@ def test_can_import_nested_things():
 
 
 @gen_cluster(client=True)
-def test_persist(c, s, a, b):
+async def test_persist(c, s, a, b):
     x = delayed(inc)(1)
     (x2,) = persist(x)
 
-    yield wait(x2)
+    await wait(x2)
     assert x2.key in a.data or x2.key in b.data
 
     y = delayed(inc)(10)
     y2, one = persist(y, 1)
 
-    yield wait(y2)
+    await wait(y2)
     assert y2.key in a.data or y2.key in b.data
 
 
@@ -133,14 +131,14 @@ def test_futures_to_delayed_array(c):
 
 
 @gen_cluster(client=True)
-def test_local_get_with_distributed_active(c, s, a, b):
+async def test_local_get_with_distributed_active(c, s, a, b):
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
-    yield gen.sleep(0.01)
+    await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 
     x = delayed(inc)(2).persist(scheduler="sync")  # noqa F841
-    yield gen.sleep(0.01)
+    await asyncio.sleep(0.01)
     assert not s.tasks  # scheduler hasn't done anything
 
 
@@ -177,7 +175,7 @@ def test_to_hdf_scheduler_distributed(npartitions, c):
 
 
 @gen_cluster(client=True)
-def test_serializable_groupby_agg(c, s, a, b):
+async def test_serializable_groupby_agg(c, s, a, b):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
@@ -185,7 +183,7 @@ def test_serializable_groupby_agg(c, s, a, b):
 
     result = ddf.groupby("y").agg("count")
 
-    yield c.compute(result)
+    await c.compute(result)
 
 
 def test_futures_in_graph(c):

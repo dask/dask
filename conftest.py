@@ -36,6 +36,16 @@ try:
 except ImportError:
     collect_ignore.append("dask/dataframe/io/orc/arrow.py")
 
+try:
+    import tiledb  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/array/tiledb_io.py")
+
+try:
+    import sqlalchemy  # noqa: F401
+except ImportError:
+    collect_ignore.append("dask/dataframe/io/sql.py")
+
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")

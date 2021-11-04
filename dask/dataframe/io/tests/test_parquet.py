@@ -1386,6 +1386,11 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert e.npartitions == 2
     assert ((e.x < 2) | (e.x > 7)).all().compute()
 
+    f = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "=", "c")])
+    assert f.npartitions == 1
+    assert len(f)
+    assert (f.y == "c").all().compute()
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
@@ -1407,10 +1412,15 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         fn, index=False, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, index=False, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     if pyarrow_row_filtering:
         assert_eq(ddf2, ddf[ddf["at"] == "aa"], check_index=False)
+        assert_eq(ddf3, ddf[ddf["at"] == "aa"], check_index=False)
     else:
         assert_eq(ddf2, ddf)
+        assert_eq(ddf3, ddf)
 
     # with >1 partition and no filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
@@ -1421,14 +1431,21 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     if read_engine == "fastparquet":
         ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
         df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "==", "aa")])
+        df3 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "=", "aa")])
         assert len(df2) > 0
+        assert len(df3) > 0
 
     # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
     ddf2 = dd.read_parquet(
         fn, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     assert len(ddf2) > 0
+    assert len(ddf3) > 0
+    assert_eq(ddf2, ddf3)
 
 
 def test_filtering_pyarrow_dataset(tmpdir, engine):
@@ -3719,3 +3736,142 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
                 gather_statistics=True,
                 metadata_task_size=metadata_task_size,
             )
+
+
+def test_extra_file(tmpdir, engine):
+    # Check that read_parquet can handle spark output
+    # See: https://github.com/dask/dask/issues/8087
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmpdir, engine=engine)
+    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
+    os.remove(os.path.join(tmpdir, "_metadata"))
+    out = dd.read_parquet(tmpdir, engine=engine)
+    assert_eq(out, df)
+
+    if engine != "pyarrow-legacy":
+        # For "fastparquet" and "pyarrow-dataset", we can pass the
+        # expected file extension, or avoid checking file extensions
+        # by passing False. Check here that this works:
+
+        # Should Work
+        out = dd.read_parquet(
+            tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
+        )
+        assert_eq(out, df)
+
+        # Should Fail
+        with pytest.raises((OSError, pa.lib.ArrowInvalid)):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": False}
+            ).compute()
+
+
+def test_custom_filename(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x}.parquet", engine=engine)
+
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-1.parquet" in files
+    assert_eq(df, dd.read_parquet(fn, engine=engine))
+
+
+def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x * 2}.parquet", engine=engine)
+
+    pdf = pd.DataFrame(
+        {"num1": [33], "num2": [44]},
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    if engine == "fastparquet":
+        pytest.xfail(
+            "fastparquet errors our with IndexError when ``name_function`` is customized "
+            "and append is set to True.  We didn't do a detailed investigation for expediency. "
+            "See this comment for the conversation: https://github.com/dask/dask/pull/7682#issuecomment-845243623"
+        )
+    df.to_parquet(
+        fn,
+        name_function=lambda x: f"hi-{x * 2}.parquet",
+        engine=engine,
+        append=True,
+        ignore_divisions=True,
+    )
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-2.parquet" in files
+    assert "hi-4.parquet" in files
+    expected_pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4, 33], "num2": [7, 8, 9, 10, 44]},
+    )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(actual, expected_pdf, check_index=False)
+
+
+def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    with pytest.raises(
+        ValueError, match="``name_function`` must be a callable with one argument."
+    ):
+        df.to_parquet(fn, name_function="whatever.parquet", engine=engine)
+
+    with pytest.raises(
+        ValueError, match="``name_function`` must produce unique filenames."
+    ):
+        df.to_parquet(fn, name_function=lambda x: "whatever.parquet", engine=engine)
+
+
+def test_custom_filename_with_partition(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {
+            "first_name": ["frank", "li", "marcela", "luis"],
+            "country": ["canada", "china", "venezuela", "venezuela"],
+        },
+    )
+    df = dd.from_pandas(pdf, npartitions=4)
+    df.to_parquet(
+        fn,
+        partition_on=["country"],
+        name_function=lambda x: f"{x}-cool.parquet",
+        write_index=False,
+    )
+
+    for _, dirs, files in os.walk(fn):
+        for dir in dirs:
+            assert dir in (
+                "country=canada",
+                "country=china",
+                "country=venezuela",
+            )
+        for file in files:
+            assert file in (
+                "0-cool.parquet",
+                "1-cool.parquet",
+                "2-cool.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(
+        pdf, actual, check_index=False, check_dtype=False, check_categorical=False
+    )

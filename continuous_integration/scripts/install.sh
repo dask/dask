@@ -7,7 +7,7 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    mamba install -y -c arrow-nightlies "pyarrow>3.0"
+    mamba install -y -c arrow-nightlies "pyarrow>5.0"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force numpy pandas

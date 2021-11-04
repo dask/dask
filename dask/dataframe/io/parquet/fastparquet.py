@@ -368,6 +368,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        require_extension=(".parq", ".parquet"),
         **kwargs,
     ):
 
@@ -407,6 +408,8 @@ class FastParquetEngine(Engine):
                     paths = [fs.sep.join([base, fn]) for fn in fns]
                 _metadata_exists = False
 
+            if require_extension:
+                paths = [path for path in paths if path.endswith(require_extension)]
             if _metadata_exists:
                 # Using _metadata file (best-case scenario)
                 pf = ParquetFile(
@@ -435,10 +438,12 @@ class FastParquetEngine(Engine):
             _metadata_exists = "_metadata" in fns
             if _metadata_exists and ignore_metadata_file:
                 fns.remove("_metadata")
-                paths = [fs.sep.join([base, fn]) for fn in fns]
                 _metadata_exists = False
+            if require_extension:
+                fns = [fn for fn in fns if fn.endswith(require_extension)]
+            paths = [fs.sep.join([base, fn]) for fn in fns]
 
-            elif _metadata_exists:
+            if _metadata_exists:
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
@@ -1063,7 +1068,7 @@ class FastParquetEngine(Engine):
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
-                pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=fs.sep)
+                pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
             except (OSError, ValueError):
                 # append for create
                 append = False
