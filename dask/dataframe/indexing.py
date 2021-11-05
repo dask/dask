@@ -11,7 +11,7 @@ from ..highlevelgraph import HighLevelGraph
 from . import methods
 from ._compat import PANDAS_GT_130
 from .core import Series, new_dd_object
-from .utils import is_index_like, meta_nonempty
+from .utils import is_index_like, is_series_like, meta_nonempty
 
 
 class _IndexerBase:
@@ -114,14 +114,21 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_slice(iindexer, cindexer)
             elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
+            elif is_series_like(iindexer) and iindexer.dtype != bool:
+                return self._loc_list(iindexer.values, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
-            if isinstance(iindexer, (list, np.ndarray)):
+            if isinstance(iindexer, (list, np.ndarray)) or (
+                is_series_like(iindexer) and iindexer.dtype != bool
+            ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
-                msg = "Cannot index with list against unknown division"
+                msg = (
+                    "Cannot index with list against unknown division. "
+                    "Try setting divisions using ``ddf.set_index``"
+                )
                 raise KeyError(msg)
             elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
@@ -141,6 +148,11 @@ class _LocIndexer(_IndexerBase):
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
+        if iindexer.dtype != bool:
+            raise KeyError(
+                "Cannot index with non-boolean dask Series. Try passing computed "
+                "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
+            )
         meta = self._make_meta(iindexer, cindexer)
         return self.obj.map_partitions(
             methods.loc, iindexer, cindexer, token="loc-series", meta=meta
