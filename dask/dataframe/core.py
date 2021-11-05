@@ -628,17 +628,21 @@ Dask Name: {name}, {task} tasks"""
             and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
             or regular python objects. DataFrame-like args (both dask and
             pandas) will be repartitioned to align  (if necessary) before
-            applying the function (see ``enforce_alignment`` to control).
-        enforce_metadata : bool
-            Whether to enforce at runtime that the structure of the DataFrame produced by ``func`` actually matches the structure of ``meta``.
+            applying the function (see ``align_dataframes`` to control).
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
             This will rename and reorder columns for each partition,
             and will raise an error if this doesn't work or types don't match.
-        enforce_alignment : bool
-            Whether or not to repartition DataFrame- or Series-like args
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
             (both dask and pandas) so their divisions align before applying
             the function. This requires all inputs to have known divisions.
             Single-partition inputs will be split into multiple partitions.
-            
+
             If False, all inputs must have either the same number of partitions
             or a single partition. Single-partition inputs will be broadcast to
             every partition of multi-partition inputs.
@@ -5807,7 +5811,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
-    enforce_alignment=True,
+    align_dataframes=True,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5821,14 +5825,24 @@ def map_partitions(
         args should be a Dask.dataframe. Arguments and keywords may contain
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
-        before applying the function (see ``enforce_alignment` to control).
-    enforce_metadata : bool
-        Whether or not to enforce the structure of the metadata at runtime.
+        before applying the function (see ``align_dataframes`` to control).
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
-    enforce_alignment : bool
-        Whether or not to repartition DataFrame-like args (both dask and pandas)
-        before applying the function.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
+
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
     $META
     """
     name = kwargs.pop("token", None)
@@ -5847,7 +5861,7 @@ def map_partitions(
 
     from .multi import _maybe_align_partitions
 
-    if enforce_alignment:
+    if align_dataframes:
         args = _maybe_from_pandas(args)
         args = _maybe_align_partitions(args)
 

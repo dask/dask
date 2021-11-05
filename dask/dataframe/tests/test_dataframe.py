@@ -1060,7 +1060,7 @@ def test_metadata_inference_single_partition_aligned_args():
     assert_eq(res, ddf)
 
 
-def test_enforce_alignment():
+def test_align_dataframes():
     df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
 
@@ -1071,7 +1071,7 @@ def test_enforce_alignment():
     expected = merge(df1, df2)
 
     ddf1 = dd.from_pandas(df1, npartitions=2)
-    actual = ddf1.map_partitions(merge, df2, enforce_alignment=False)
+    actual = ddf1.map_partitions(merge, df2, align_dataframes=False)
 
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
