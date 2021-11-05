@@ -3762,11 +3762,38 @@ def test_extra_file(tmpdir, engine):
         )
         assert_eq(out, df)
 
-        # Should Fail
+        # Should Fail (for not capturing the _SUCCESS and crc files)
         with pytest.raises((OSError, pa.lib.ArrowInvalid)):
             dd.read_parquet(
                 tmpdir, engine=engine, dataset={"require_extension": False}
             ).compute()
+
+        # Should Fail (for filtering out all files)
+        # (Related to: https://github.com/dask/dask/issues/8349)
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": ".foo"}
+            ).compute()
+
+
+def test_unsupported_extension_file(tmpdir, engine):
+    # File extension shouldn't matter when we are only
+    # reading a single file.
+    # (See: https://github.com/dask/dask/issues/8349)
+    fn = os.path.join(str(tmpdir), "multi.foo")
+    df0 = pd.DataFrame({"a": range(10)})
+    df0.to_parquet(fn, engine=engine.split("-")[0])
+    assert_eq(df0, dd.read_parquet(fn, engine=engine, index=False))
+
+
+def test_unsupported_extension_dir(tmpdir, engine):
+    # File extensions shouldn't matter when we have
+    # a _metadata file
+    # (Related to: https://github.com/dask/dask/issues/8349)
+    path = str(tmpdir)
+    ddf0 = dd.from_pandas(pd.DataFrame({"a": range(10)}), 1)
+    ddf0.to_parquet(path, engine=engine, name_function=lambda i: f"part.{i}.foo")
+    assert_eq(ddf0, dd.read_parquet(path, engine=engine))
 
 
 def test_custom_filename(tmpdir, engine):
