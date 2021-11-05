@@ -814,7 +814,8 @@ class ArrowDatasetEngine(Engine):
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `required_extension` criteria."
+                        "No files satisfy the `required_extension` criteria "
+                        f"(files must end with {required_extension})."
                     )
 
         elif len(paths) > 1:
