@@ -931,7 +931,7 @@ def test_elemwise_dtype():
         ],
     ],
 )
-def test_elemwise_return(x, o):
+def test_handle_out_return(x, o):
 
     x = da.array(x, dtype=np.int8)
     o = da.array(o, dtype=np.int8)
