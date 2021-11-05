@@ -636,12 +636,18 @@ Dask Name: {name}, {task} tasks"""
             pandas) will be repartitioned to align  (if necessary) before
             applying the function (see ``enforce_alignment`` to control).
         enforce_metadata : bool
-            Whether or not to enforce the structure of the metadata at runtime.
+            Whether to enforce at runtime that the structure of the DataFrame produced by ``func`` actually matches the structure of ``meta``.
             This will rename and reorder columns for each partition,
             and will raise an error if this doesn't work or types don't match.
         enforce_alignment : bool
-            Whether or not to repartition DataFrame-like args (both dask and pandas)
-            before applying the function.
+            Whether or not to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+            
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Examples
