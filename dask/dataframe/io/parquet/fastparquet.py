@@ -426,7 +426,8 @@ class FastParquetEngine(Engine):
                     paths = [path for path in paths if path.endswith(require_extension)]
                     if len0 and paths == []:
                         raise ValueError(
-                            "No files satisfy the `required_extension` criteria."
+                            "No files satisfy the `require_extension` criteria "
+                            f"(files must end with {require_extension})."
                         )
                 pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
                 scheme = get_file_scheme(fns)
