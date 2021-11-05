@@ -573,15 +573,19 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several low level dask graphs at once.
+    Visualize several dask graphs simultaneously.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    args : dict(s) or collection(s)
-        The low level dask graph(s) to visualize.
+    args : object
+        Any number of objects. If it is a dask object, its associated graph
+        will be included in the output of visualize. By default, python builtin
+        collections are also traversed to look for dask objects (for more
+        information see the ``traverse`` keyword). Arguments lacking an
+        associated graph will be ignored.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -589,6 +593,11 @@ def visualize(*args, **kwargs):
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
+    traverse : bool, optional
+        By default, dask traverses builtin python collections looking for dask
+        objects passed to ``visualize``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
