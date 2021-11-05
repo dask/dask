@@ -166,7 +166,6 @@ messy situations in everyday problems.
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
-.. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
