@@ -939,6 +939,7 @@ def test_elemwise_return(x, o):
     o_ = da.invert(x, out=o)
 
     assert_eq(o_, o)
+    assert o_ is o
 
 
 def test_operators():
