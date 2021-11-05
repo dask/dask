@@ -526,7 +526,6 @@ def test_general_reduction_names():
     assert all(tokens)
 
 
-@pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))

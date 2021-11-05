@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # dask documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 08:58:22 2015.
@@ -42,9 +41,17 @@ extensions = [
     "numpydoc",
     "sphinx_click.ext",
     "dask_config_sphinx_ext",
+    "sphinx_tabs.tabs",
+    "sphinx_remove_toctrees",
 ]
 
 numpydoc_show_class_members = False
+
+sphinx_tabs_disable_tab_closing = True
+
+# Remove individual API pages from sphinx toctree to prevent long build times.
+# See https://github.com/dask/dask/issues/8227.
+remove_toctrees_from = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -336,7 +343,6 @@ redirect_files = [
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
-    ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
     ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
@@ -353,6 +359,24 @@ redirect_files = [
     ("use-cases.html", "https://stories.dask.org"),
     ("bag-overview.html", "bag.html"),
     ("distributed.html", "https://distributed.dask.org"),
+    ("institutional-faq.html", "faq.html"),
+    ("cite.html", "faq.html#how-do-I-cite-dask"),
+    ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
+    ("debugging.html", "how-to/debug.html"),
+    ("setup.html", "how-to/deploy-dask-clusters.html"),
+    ("setup/cli.html", "how-to/deploy-dask/cli.html"),
+    ("setup/cloud.html", "how-to/deploy-dask/cloud.html"),
+    ("setup/docker.html", "how-to/deploy-dask/docker.html"),
+    ("setup/hpc.html", "how-to/deploy-dask/hpc.html"),
+    ("setup/kubernetes.html", "how-to/deploy-dask/kubernetes.html"),
+    ("setup/python-advanced.html", "how-to/deploy-dask/python-advanced.html"),
+    ("setup/single-distributed.html", "how-to/deploy-dask/single-distributed.html"),
+    ("setup/single-machine.html", "how-to/deploy-dask/single-machine.html"),
+    ("setup/ssh.html", "how-to/deploy-dask/ssh.html"),
+    ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("setup/custom-startup.html", "how-to/customize-initialization.html"),
+    ("setup/environment.html", "how-to/manage-environments.html"),
+    ("setup/prometheus.html", "how-to/setup-prometheus.html"),
 ]
 
 
@@ -366,8 +390,6 @@ redirect_template = """\
   </head>
 </html>
 """
-
-html_css_files = ["_static/theme_overrides.css"]  # override wide tables in RTD theme
 
 # Rate limiting issue for github: https://github.com/sphinx-doc/sphinx/issues/7388
 linkcheck_ignore = [
@@ -383,6 +405,8 @@ import numpy as np
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
         for html_src_path, new in redirect_files:
+            # add ../ to old nested paths
+            new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
             target_path = app.outdir + "/" + html_src_path
             os.makedirs(os.path.dirname(target_path), exist_ok=True)

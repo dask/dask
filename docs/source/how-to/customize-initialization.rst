@@ -1,5 +1,5 @@
-Custom Initialization
-=====================
+Customize initialization
+========================
 
 Often we want to run custom code when we start up or tear down a scheduler or
 worker.  We might do this manually with functions like ``Client.run`` or

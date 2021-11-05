@@ -264,7 +264,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     # Keys may depend on other keys, so determine replace order with toposort.
     # The values stored in `keysubs` do not include other keys.
     replaceorder = toposort(
-        dict((k, dsk[k]) for k in keys if k in dsk), dependencies=dependencies
+        {k: dsk[k] for k in keys if k in dsk}, dependencies=dependencies
     )
     keysubs = {}
     for key in replaceorder:

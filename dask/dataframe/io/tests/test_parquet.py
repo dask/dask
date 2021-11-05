@@ -311,11 +311,11 @@ def test_read_list(tmpdir, write_engine, read_engine):
     tmpdir = str(tmpdir)
     ddf.to_parquet(tmpdir, engine=write_engine)
     files = sorted(
-        [
+        (
             os.path.join(tmpdir, f)
             for f in os.listdir(tmpdir)
             if not f.endswith("_metadata")
-        ],
+        ),
         key=natural_sort_key,
     )
 
@@ -1386,6 +1386,11 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert e.npartitions == 2
     assert ((e.x < 2) | (e.x > 7)).all().compute()
 
+    f = dd.read_parquet(tmp_path, engine=read_engine, filters=[("y", "=", "c")])
+    assert f.npartitions == 1
+    assert len(f)
+    assert (f.y == "c").all().compute()
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
@@ -1407,10 +1412,15 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         fn, index=False, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, index=False, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     if pyarrow_row_filtering:
         assert_eq(ddf2, ddf[ddf["at"] == "aa"], check_index=False)
+        assert_eq(ddf3, ddf[ddf["at"] == "aa"], check_index=False)
     else:
         assert_eq(ddf2, ddf)
+        assert_eq(ddf3, ddf)
 
     # with >1 partition and no filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
@@ -1421,14 +1431,21 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     if read_engine == "fastparquet":
         ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
         df2 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "==", "aa")])
+        df3 = fastparquet.ParquetFile(fn).to_pandas(filters=[("at", "=", "aa")])
         assert len(df2) > 0
+        assert len(df3) > 0
 
     # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
     ddf2 = dd.read_parquet(
         fn, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
+    ddf3 = dd.read_parquet(
+        fn, engine=read_engine, filters=[("at", "=", "aa")]
+    ).compute()
     assert len(ddf2) > 0
+    assert len(ddf3) > 0
+    assert_eq(ddf2, ddf3)
 
 
 def test_filtering_pyarrow_dataset(tmpdir, engine):
@@ -2440,7 +2457,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["B"]
-    assert next(iter((subgraph.dsk.values())))[0].columns == ["B"]
+    assert next(iter(subgraph.dsk.values()))[0].columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
@@ -2454,7 +2471,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
     dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
 
-    subgraph = next(iter((dsk.layers.values())))
+    subgraph = next(iter(dsk.layers.values()))
     assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == []
 
@@ -2489,7 +2506,7 @@ def test_blockwise_parquet_annotations(tmpdir):
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
-    layer = next(iter((layers.values())))
+    layer = next(iter(layers.values()))
     assert isinstance(layer, DataFrameIOLayer)
     assert layer.annotations == {"foo": "bar"}
 
@@ -3077,6 +3094,43 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
             dd.read_parquet(path, engine=engine)
 
 
+@PYARROW_MARK
+@pytest.mark.parametrize(
+    "write_cols",
+    [["col"], ["part", "col"]],
+)
+def test_partitioned_no_pandas_metadata(tmpdir, engine, write_cols):
+    # See: https://github.com/dask/dask/issues/8087
+
+    # Manually construct directory-partitioned dataset
+    path1 = tmpdir.mkdir("part=a")
+    path2 = tmpdir.mkdir("part=b")
+    path1 = os.path.join(path1, "data.parquet")
+    path2 = os.path.join(path2, "data.parquet")
+
+    # Write partitions without parquet metadata.
+    # Note that we always use pyarrow to do this
+    # (regardless of the `engine`)
+    _df1 = pd.DataFrame({"part": "a", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "col": range(5)})
+    t1 = pa.Table.from_pandas(
+        _df1[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t1, path1)
+    t2 = pa.Table.from_pandas(
+        _df2[write_cols],
+        preserve_index=False,
+    ).replace_schema_metadata(metadata={})
+    pq.write_table(t2, path2)
+
+    # Check results
+    expect = pd.concat([_df1, _df2], ignore_index=True)
+    result = dd.read_parquet(str(tmpdir), engine=engine)
+    result["part"] = result["part"].astype("object")
+    assert_eq(result[list(expect.columns)], expect, check_index=False)
+
+
 @fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
@@ -3212,31 +3266,29 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize("read_from_paths", [True, False])
-@pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_read_from_paths(
-    tmpdir, read_from_paths, test_filter_partitioned
-):
+def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
 
-    if test_filter_partitioned:
-        ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
-    else:
-        ddf.to_parquet(fn, engine="pyarrow")
-    read_df = dd.read_parquet(
+    with pytest.warns(FutureWarning):
+        read_df_1 = dd.read_parquet(
+            fn,
+            engine="pyarrow",
+            filters=[("b", "==", "a")],
+            read_from_paths=False,
+        )
+
+    read_df_2 = dd.read_parquet(
         fn,
         engine="pyarrow",
-        filters=[("b", "==", "a")] if test_filter_partitioned else None,
-        read_from_paths=read_from_paths,
+        filters=[("b", "==", "a")],
     )
 
-    if test_filter_partitioned:
-        assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
-    else:
-        assert_eq(ddf, read_df)
+    assert_eq(read_df_1, read_df_2)
+    assert_eq(ddf[ddf["b"] == "a"].compute(), read_df_2.compute())
 
 
 @PYARROW_MARK
@@ -3636,3 +3688,190 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
                 engine=engine,
                 ignore_metadata_file=True,
             )
+
+
+@pytest.mark.parametrize("write_metadata_file", [True, False])
+@pytest.mark.parametrize("metadata_task_size", [2, 0])
+def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_size):
+
+    # Write simple dataset
+    tmpdir = str(tmpdir)
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
+        path=str(tmpdir), engine=engine, write_metadata_file=write_metadata_file
+    )
+
+    # Read back
+    if engine != "pyarrow-legacy" or not metadata_task_size:
+        ddf2a = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+        )
+        ddf2b = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+            metadata_task_size=metadata_task_size,
+        )
+        assert_eq(ddf2a, ddf2b)
+
+        with dask.config.set(
+            {"dataframe.parquet.metadata-task-size-local": metadata_task_size}
+        ):
+            ddf2c = dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+            )
+        assert_eq(ddf2b, ddf2c)
+
+    else:
+        # Check that other engines raise a ValueError
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+                metadata_task_size=metadata_task_size,
+            )
+
+
+def test_extra_file(tmpdir, engine):
+    # Check that read_parquet can handle spark output
+    # See: https://github.com/dask/dask/issues/8087
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmpdir, engine=engine)
+    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
+    os.remove(os.path.join(tmpdir, "_metadata"))
+    out = dd.read_parquet(tmpdir, engine=engine)
+    assert_eq(out, df)
+
+    if engine != "pyarrow-legacy":
+        # For "fastparquet" and "pyarrow-dataset", we can pass the
+        # expected file extension, or avoid checking file extensions
+        # by passing False. Check here that this works:
+
+        # Should Work
+        out = dd.read_parquet(
+            tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
+        )
+        assert_eq(out, df)
+
+        # Should Fail
+        with pytest.raises((OSError, pa.lib.ArrowInvalid)):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": False}
+            ).compute()
+
+
+def test_custom_filename(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x}.parquet", engine=engine)
+
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-1.parquet" in files
+    assert_eq(df, dd.read_parquet(fn, engine=engine))
+
+
+def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x * 2}.parquet", engine=engine)
+
+    pdf = pd.DataFrame(
+        {"num1": [33], "num2": [44]},
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    if engine == "fastparquet":
+        pytest.xfail(
+            "fastparquet errors our with IndexError when ``name_function`` is customized "
+            "and append is set to True.  We didn't do a detailed investigation for expediency. "
+            "See this comment for the conversation: https://github.com/dask/dask/pull/7682#issuecomment-845243623"
+        )
+    df.to_parquet(
+        fn,
+        name_function=lambda x: f"hi-{x * 2}.parquet",
+        engine=engine,
+        append=True,
+        ignore_divisions=True,
+    )
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-2.parquet" in files
+    assert "hi-4.parquet" in files
+    expected_pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4, 33], "num2": [7, 8, 9, 10, 44]},
+    )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(actual, expected_pdf, check_index=False)
+
+
+def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    with pytest.raises(
+        ValueError, match="``name_function`` must be a callable with one argument."
+    ):
+        df.to_parquet(fn, name_function="whatever.parquet", engine=engine)
+
+    with pytest.raises(
+        ValueError, match="``name_function`` must produce unique filenames."
+    ):
+        df.to_parquet(fn, name_function=lambda x: "whatever.parquet", engine=engine)
+
+
+def test_custom_filename_with_partition(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {
+            "first_name": ["frank", "li", "marcela", "luis"],
+            "country": ["canada", "china", "venezuela", "venezuela"],
+        },
+    )
+    df = dd.from_pandas(pdf, npartitions=4)
+    df.to_parquet(
+        fn,
+        partition_on=["country"],
+        name_function=lambda x: f"{x}-cool.parquet",
+        write_index=False,
+    )
+
+    for _, dirs, files in os.walk(fn):
+        for dir in dirs:
+            assert dir in (
+                "country=canada",
+                "country=china",
+                "country=venezuela",
+            )
+        for file in files:
+            assert file in (
+                "0-cool.parquet",
+                "1-cool.parquet",
+                "2-cool.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(
+        pdf, actual, check_index=False, check_dtype=False, check_categorical=False
+    )

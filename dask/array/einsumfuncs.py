@@ -218,7 +218,7 @@ def einsum(*operands, **kwargs):
     inputs = [tuple(i) for i in inputs.split(",")]
 
     # Set of all indices
-    all_inds = set(a for i in inputs for a in i)
+    all_inds = {a for i in inputs for a in i}
 
     # Which indices are contracted?
     contract_inds = all_inds - set(outputs)
@@ -238,7 +238,7 @@ def einsum(*operands, **kwargs):
         kernel_dtype=einsum_dtype,
         ncontract_inds=ncontract_inds,
         optimize=optimize,
-        **kwargs
+        **kwargs,
     )
 
     # Now reduce over any extra contraction dimensions

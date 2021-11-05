@@ -1,3 +1,5 @@
+:orphan:
+
 Images and Logos
 ================
 

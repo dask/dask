@@ -30,13 +30,13 @@ def task_label(task):
         func = task[1]
     if hasattr(func, "funcs"):
         if len(func.funcs) > 1:
-            return "{0}(...)".format(funcname(func.funcs[0]))
+            return f"{funcname(func.funcs[0])}(...)"
         else:
             head = funcname(func.funcs[0])
     else:
         head = funcname(func)
     if any(has_sub_tasks(i) for i in task[1:]):
-        return "{0}(...)".format(head)
+        return f"{head}(...)"
     else:
         return head
 
@@ -94,7 +94,7 @@ def label(x, cache=None):
             for h in m.groups():
                 if cache is not None:
                     n = cache.get(h, len(cache))
-                    label = "#{0}".format(n)
+                    label = f"#{n}"
                     # cache will be overwritten destructively
                     cache[h] = n
                 else:

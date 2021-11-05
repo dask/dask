@@ -26,7 +26,7 @@ from .core import (
 )
 from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
-from .utils import AxisError, meta_from_array
+from .utils import meta_from_array
 from .wrap import empty, full, ones, zeros
 
 
@@ -585,9 +585,7 @@ def diag(v):
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
-        raise TypeError(
-            "v must be a dask array or numpy array, got {0}".format(type(v))
-        )
+        raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
     if v.ndim != 1:
         if v.chunks[0] == v.chunks[1]:
             dsk = {
@@ -628,7 +626,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             t = ndim + axis
             if t < 0:
                 msg = "{}: axis {} is out of bounds for array of dimension {}"
-                raise AxisError(msg.format(name, axis, ndim))
+                raise np.AxisError(msg.format(name, axis, ndim))
             axis = t
         return axis
 
@@ -659,7 +657,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             chunk_offsets[-1].append(k)
 
     dsk = {}
-    idx_set = set(range(a.ndim)) - set([axis1, axis2])
+    idx_set = set(range(a.ndim)) - {axis1, axis2}
     n1 = len(a.chunks[axis1])
     n2 = len(a.chunks[axis2])
     for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
@@ -1137,7 +1135,7 @@ def pad(array, pad_width, mode="constant", **kwargs):
     try:
         unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
     except KeyError as e:
-        raise ValueError("mode '{}' is not supported".format(mode)) from e
+        raise ValueError(f"mode '{mode}' is not supported") from e
     if unsupported_kwargs:
         raise ValueError(
             "unsupported keyword arguments for mode '{}': {}".format(

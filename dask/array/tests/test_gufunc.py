@@ -333,7 +333,10 @@ def test_gufunc_mixed_inputs_vectorize():
 
 
 def test_gufunc_vectorize_whitespace():
-    # Regression test for https://github.com/dask/dask/issues/7972
+    # Regression test for https://github.com/dask/dask/issues/7972.
+    # NumPy versions before https://github.com/numpy/numpy/pull/19627
+    # would not ignore whitespace characters in `signature` like they
+    # are supposed to. We remove the whitespace in Dask as a workaround.
 
     def foo(x, y):
         return (x + y).sum(axis=1)
@@ -343,6 +346,16 @@ def test_gufunc_vectorize_whitespace():
     x = apply_gufunc(foo, "(m, n),(n)->(m)", a, b, vectorize=True)
 
     assert_eq(x, np.full((8, 3), 10, dtype=int))
+
+    a = da.random.random((6, 5, 5))
+
+    @da.as_gufunc(signature="(n, n)->(n, n)", output_dtypes=float, vectorize=True)
+    def gufoo(x):
+        return np.linalg.inv(x)
+
+    # Previously calling `gufoo` would raise an error due to the whitespace
+    # in its `signature`. Let's make sure it doesn't raise here.
+    gufoo(a)
 
 
 def test_gufunc():

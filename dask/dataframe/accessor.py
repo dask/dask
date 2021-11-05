@@ -51,7 +51,7 @@ class Accessor:
 
     def _property_map(self, attr):
         meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
-        token = "%s-%s" % (self._accessor_name, attr)
+        token = f"{self._accessor_name}-{attr}"
         return self._series.map_partitions(
             self._delegate_property, self._accessor_name, attr, token=token, meta=meta
         )
@@ -63,7 +63,7 @@ class Accessor:
             meta = self._delegate_method(
                 self._series._meta_nonempty, self._accessor_name, attr, args, kwargs
             )
-        token = "%s-%s" % (self._accessor_name, attr)
+        token = f"{self._accessor_name}-{attr}"
         return self._series.map_partitions(
             self._delegate_method,
             self._accessor_name,

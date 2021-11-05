@@ -1,6 +1,6 @@
 import collections
+import operator
 import warnings
-from operator import methodcaller
 
 import numpy as np
 import pandas as pd
@@ -9,7 +9,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_133, tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -470,7 +470,6 @@ def test_series_groupby_errors():
         ss.groupby("x")  # dask should raise the same error
 
 
-@pytest.mark.skipif(PANDAS_GT_133, reason="https://github.com/dask/dask/issues/8137")
 def test_groupby_index_array():
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df, npartitions=2)
@@ -497,12 +496,6 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-@pytest.mark.filterwarnings(
-    "ignore:0 should be:DeprecationWarning"
-)  # fixed in new pandas.
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -725,9 +718,6 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -987,7 +977,7 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
-def test_aggregate__dask():
+def test_aggregate_dask():
     dask_holder = collections.namedtuple("dask_holder", ["dask"])
     get_agg_dask = lambda obj: dask_holder(
         {k: v for (k, v) in obj.dask.items() if k[0].startswith("aggregate")}
@@ -1345,7 +1335,7 @@ def test_cumulative(func, key, sel):
     df.iloc[[-18, -12, -6], -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=10)
 
-    g, dg = [d.groupby(key)[sel] for d in (df, ddf)]
+    g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
 
@@ -2250,8 +2240,13 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pandas",
+        pytest.param("cudf", marks=pytest.mark.gpu),
+    ],
+)
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":
@@ -2443,7 +2438,7 @@ def test_groupby_empty_partitions_with_rows_operation(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation, 1)
+    caller = operator.methodcaller(operation, 1)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2467,7 +2462,7 @@ def test_groupby_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2491,7 +2486,7 @@ def test_groupby_multi_index_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby(["A", df["A"].eq("a1")])["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
