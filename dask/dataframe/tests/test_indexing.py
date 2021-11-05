@@ -84,15 +84,19 @@ def test_loc_with_text_dates():
 def test_loc_with_series():
     assert_eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
 
-    assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
-    assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
+    assert sorted(d.loc[d.a % 2 == 0].dask) == sorted(d.loc[d.a % 2 == 0].dask)
+    assert sorted(d.loc[d.a % 2 == 0].dask) != sorted(d.loc[d.a % 3 == 0].dask)
 
 
 def test_loc_with_array():
     assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
 
-    assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
-    assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+    assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
+        d.loc[(d.a % 2 == 0).values].dask
+    )
+    assert sorted(d.loc[(d.a % 2 == 0).values].dask) != sorted(
+        d.loc[(d.a % 3 == 0).values].dask
+    )
 
 
 def test_loc_with_function():
@@ -129,6 +133,39 @@ def test_loc_with_series_different_partition():
     assert_eq(
         ddf.loc[(ddf.A > 0).repartition(["a", "g", "k", "o", "t"])], df.loc[df.A > 0]
     )
+
+
+def test_loc_with_non_boolean_series():
+    df = pd.Series(
+        np.random.randn(20),
+        index=list("abcdefghijklmnopqrst"),
+    )
+    ddf = dd.from_pandas(df, 3)
+
+    s = pd.Series(list("bdmnat"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    msg = (
+        "Cannot index with non-boolean dask Series. Try passing computed values instead"
+    )
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    assert_eq(ddf.loc[s], df.loc[s])
+
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds.values]
+
+    assert_eq(ddf.loc[s.values], df.loc[s])
+
+    ddf = ddf.clear_divisions()
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    with pytest.raises(
+        KeyError, match="Cannot index with list against unknown division"
+    ):
+        ddf.loc[s]
 
 
 def test_loc2d():
