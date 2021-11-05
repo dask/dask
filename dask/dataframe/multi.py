@@ -415,28 +415,30 @@ def single_partition_join(left, right, **kwargs):
     if right.npartitions == 1 and kwargs["how"] in allowed_left:
         joined = left.map_partitions(
             merge_chunk,
-            right,  # TODO doesn't work yet https://github.com/dask/dask/issues/8338
+            right,
             meta=meta,
             enforce_metadata=False,
             transform_divisions=False,
+            align_dataframes=False,
             token="merge",  # NOTE: misleadingly, this is actually the name
             **kwargs,
         )
 
         if use_left:
-            joined._divisions = left.divisions
+            joined.divisions = left.divisions
         elif use_right and len(right.divisions) == len(left.divisions):
-            joined._divisions = right.divisions
+            joined.divisions = right.divisions
         else:
-            joined._divisions = [None for _ in left.divisions]
+            joined.divisions = [None for _ in left.divisions]
 
     elif left.npartitions == 1 and kwargs["how"] in allowed_right:
         joined = right.map_partitions(
             lambda right, left, **kwargs: merge_chunk(left, right, **kwargs),
-            left,  # TODO doesn't work yet https://github.com/dask/dask/issues/8338
+            left,
             meta=meta,
             enforce_metadata=False,
             transform_divisions=False,
+            align_dataframes=False,
             token="merge",  # NOTE: misleadingly, this is actually the name
             **kwargs,
         )

@@ -1372,7 +1372,6 @@ def test_cheap_inner_merge_with_pandas_object():
     b = pd.DataFrame({"x": [1, 2, 3, 4], "z": list("abda")})
 
     dc = da.merge(b, on="x", how="inner")
-    assert dc.divisions == da.divisions
     merge_layer = [
         lyr for key, lyr in dc.dask.layers.items() if key.startswith("merge-")
     ][0]
