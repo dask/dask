@@ -407,9 +407,6 @@ class FastParquetEngine(Engine):
                 if _update_paths:
                     paths = [fs.sep.join([base, fn]) for fn in fns]
                 _metadata_exists = False
-
-            if require_extension:
-                paths = [path for path in paths if path.endswith(require_extension)]
             if _metadata_exists:
                 # Using _metadata file (best-case scenario)
                 pf = ParquetFile(
@@ -423,6 +420,15 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
+                if require_extension:
+                    # Raise error if all files have been filtered by extension
+                    len0 = len(paths)
+                    paths = [path for path in paths if path.endswith(require_extension)]
+                    if len0 and paths == []:
+                        raise ValueError(
+                            "No files satisfy the `require_extension` criteria "
+                            f"(files must end with {require_extension})."
+                        )
                 pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
@@ -439,8 +445,6 @@ class FastParquetEngine(Engine):
             if _metadata_exists and ignore_metadata_file:
                 fns.remove("_metadata")
                 _metadata_exists = False
-            if require_extension:
-                fns = [fn for fn in fns if fn.endswith(require_extension)]
             paths = [fs.sep.join([base, fn]) for fn in fns]
 
             if _metadata_exists:
