@@ -109,8 +109,6 @@ def sort_values(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
-    breakpoint()
-
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
             sort_function, **sort_function_kwargs
