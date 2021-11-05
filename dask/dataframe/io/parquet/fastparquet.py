@@ -391,7 +391,7 @@ class FastParquetEngine(Engine):
             **user_kwargs.pop("dataset", {}),
         }
         read_kwargs = user_kwargs.pop("read", {})
-        if "open_parquet_file" not in user_kwargs:
+        if "open_parquet_file" in user_kwargs:
             # Allow user to pass "open_parquet_file"
             # outside of the "read" kwargs
             read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
