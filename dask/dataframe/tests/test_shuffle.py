@@ -1260,3 +1260,22 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_sort_values_custom_function(by, nparts):
+    df = pd.DataFrame({"a": [1, 2, 3] * 20, "b": [4, 5, 6, 7] * 15})
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    def f(partition, by_columns, ascending, na_position, **kwargs):
+        return partition.sort_values(
+            by_columns, ascending=ascending, na_position=na_position
+        )
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(
+            by=by[0], sort_function=f, sort_function_kwargs={"by_columns": by}
+        )
+    expect = df.sort_values(by=by)
+    dd.assert_eq(got, expect, check_index=False)

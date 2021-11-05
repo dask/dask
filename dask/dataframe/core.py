@@ -4248,7 +4248,7 @@ class DataFrame(_Frame):
             sort_kwargs.update(sort_function_kwargs)
 
         if self.npartitions == 1:
-            return self.map_partitions(sort_function, **sort_function_kwargs)
+            return self.map_partitions(sort_function, **sort_kwargs)
         return sort_values(
             self,
             by,
