@@ -368,8 +368,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
-        require_extension=(".parq", ".parquet"),
-        **kwargs,
+        kwargs,
     ):
 
         # Define the parquet-file (pf) object to use for metadata,
@@ -382,8 +381,31 @@ class FastParquetEngine(Engine):
         # dataset.  If _metadata is available, set `gather_statistics=True`
         # (if `gather_statistics=None`).
 
+        # Extract "supported" kwargs from `kwargs`.
+        # Split items into `dataset_kwargs` and `read_kwargs`
+        user_kwargs = kwargs.copy()
+        dataset_kwargs = {
+            # The correct key is "dataset", but we
+            # will support "file" for backwards compat
+            **user_kwargs.pop("file", {}),
+            **user_kwargs.pop("dataset", {}),
+        }
+        read_kwargs = user_kwargs.pop("read", {})
+        if "open_parquet_file" not in user_kwargs:
+            # Allow user to pass "open_parquet_file"
+            # outside of the "read" kwargs
+            read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
+        if user_kwargs:
+            # Anything left in `user_kwargs` is not supported
+            raise ValueError(
+                f"{user_kwargs.keys()} not supported by fastparquet engine."
+            )
+
         parts = []
         _metadata_exists = False
+        require_extension = dataset_kwargs.pop(
+            "require_extension", (".parq", ".parquet")
+        )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -415,7 +437,7 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    **kwargs,
+                    **dataset_kwargs,
                 )
                 if gather_statistics is None:
                     gather_statistics = True
@@ -423,7 +445,9 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
-                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
@@ -448,13 +472,15 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    **kwargs,
+                    **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
                 # Will need to pass a list of paths to read_partition
                 scheme = get_file_scheme(fns)
-                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
                 if not gather_statistics:
@@ -495,7 +521,7 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
-            "kwargs": kwargs,
+            "kwargs": {"dataset": dataset_kwargs, "read": read_kwargs},
         }
 
     @classmethod
@@ -618,6 +644,7 @@ class FastParquetEngine(Engine):
         categories_dict = dataset_info["categories_dict"]
         has_metadata_file = dataset_info["has_metadata_file"]
         metadata_task_size = dataset_info["metadata_task_size"]
+        kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
         # (Using config file or defaults)
@@ -675,6 +702,8 @@ class FastParquetEngine(Engine):
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
             "base_path": base_path,
+            "dataset": kwargs.get("dataset", {}),
+            "read": kwargs.get("read", {}),
         }
 
         # Check if this is a very simple case where we can just
@@ -860,12 +889,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
-            **{
-                # Support "file" key for backward compat
-                **kwargs.get("file", {}),
-                **kwargs.get("dataset", {}),
-                **kwargs.get("open_parquet_file", {}),
-            },
+            kwargs,
         )
 
         # Stage 2: Generate output `meta`
@@ -951,7 +975,7 @@ class FastParquetEngine(Engine):
                     [p[0] for p in pieces],
                     open_with=fs.open,
                     root=base_path or False,
-                    **kwargs.get("file", {}),
+                    **kwargs.get("dataset", {}),
                 )
                 for piece in pieces:
                     _pf = (
@@ -961,7 +985,7 @@ class FastParquetEngine(Engine):
                             piece[0],
                             open_with=fs.open,
                             root=base_path or False,
-                            **kwargs.get("file", {}),
+                            **kwargs.get("dataset", {}),
                         )
                     )
                     n_local_row_groups = len(_pf.row_groups)
@@ -1018,7 +1042,7 @@ class FastParquetEngine(Engine):
                 columns=columns,
                 categories=categories,
                 index=index,
-                **kwargs,
+                **kwargs.get("read", {}),
             )
 
         else:
@@ -1033,6 +1057,7 @@ class FastParquetEngine(Engine):
         columns=None,
         categories=None,
         index=None,
+        open_parquet_file=None,
         **kwargs,
     ):
         # This method was mostly copied from the fastparquet
@@ -1071,7 +1096,7 @@ class FastParquetEngine(Engine):
                 columns=list(set(columns).intersection(pf.columns)),
                 row_groups=fn_rgs,
                 engine="fastparquet",
-                **kwargs.get("open_parquet_file", {}),
+                **(open_parquet_file or {}),
             ) as infile:
 
                 # Loop over desired row-groups in fn
@@ -1095,6 +1120,7 @@ class FastParquetEngine(Engine):
                         assign=parts,
                         partition_meta=pf.partition_meta,
                         infile=infile,
+                        **kwargs,
                     )
                     start += thislen
         return df

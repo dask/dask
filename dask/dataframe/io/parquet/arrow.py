@@ -197,6 +197,8 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
+    _read_kwargs = kwargs.get("read", {}).copy()
+    _open_parquet_file_kwargs = _read_kwargs.pop("open_parquet_file", {})
     if partition_keys:
         tables = []
         with _open_parquet_file(
@@ -205,7 +207,7 @@ def _read_table_from_path(
             columns=columns,
             row_groups=row_groups,
             engine="pyarrow",
-            **kwargs.get("open_parquet_file", {}),
+            **_open_parquet_file_kwargs,
         ) as fil:
             for rg in row_groups:
                 piece = pq.ParquetDatasetPiece(
@@ -229,13 +231,14 @@ def _read_table_from_path(
             columns=columns,
             row_groups=row_groups,
             engine="pyarrow",
-            **kwargs.get("open_parquet_file", {}),
+            **_open_parquet_file_kwargs,
         ) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,
                     use_threads=False,
                     use_pandas_metadata=True,
+                    **_read_kwargs,
                 )
             else:
                 return pq.ParquetFile(fil).read_row_groups(
@@ -243,6 +246,7 @@ def _read_table_from_path(
                     columns=columns,
                     use_threads=False,
                     use_pandas_metadata=True,
+                    **_read_kwargs,
                 )
 
 
@@ -302,6 +306,24 @@ def _need_fragments(filters, partition_keys):
     return bool(filtered_cols - partition_cols)
 
 
+def _process_kwargs(kwargs):
+    # Extract "supported" kwargs from `kwargs`.
+    # Split items into `dataset_kwargs` and `read_kwargs`
+    user_kwargs = kwargs.copy()
+    dataset_kwargs = user_kwargs.pop("dataset", {})
+    read_kwargs = user_kwargs.pop("read", {})
+    arrow_to_pandas_kwargs = user_kwargs.pop("arrow_to_pandas", {})
+    if "open_parquet_file" not in user_kwargs:
+        # Allow user to pass "open_parquet_file"
+        # outside of the "read" kwargs
+        read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
+    if user_kwargs:
+        # Anything left in `user_kwargs` is not supported
+        raise ValueError(f"{user_kwargs.keys()} not supported by pyarrow engine.")
+
+    return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -343,10 +365,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
-            **{
-                **kwargs.get("dataset", {}),
-                **kwargs.get("open_parquet_file", {}),
-            },
+            kwargs,
         )
 
         # Stage 2: Generate output `meta`
@@ -770,8 +789,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
-        require_extension=(".parq", ".parquet"),
-        **dataset_kwargs,
+        kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
         Use pyarrow.dataset API to construct a dictionary of all
@@ -783,7 +801,9 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
-        _dataset_kwargs = dataset_kwargs.copy()
+
+        # Extract "supported" key-word arguments from `kwargs`.
+        _dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs = _process_kwargs(kwargs)
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -796,9 +816,10 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Check that we are not silently ignoring any dataset_kwargs
-        if _dataset_kwargs:
-            raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
+        # Set require_extension option
+        require_extension = _dataset_kwargs.pop(
+            "require_extension", (".parq", ".parquet")
+        )
 
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
@@ -819,6 +840,7 @@ class ArrowDatasetEngine(Engine):
                         *partitioning.get("args", []),
                         **partitioning.get("kwargs", {}),
                     ),
+                    **_dataset_kwargs,
                 )
                 has_metadata_file = True
                 if gather_statistics is None:
@@ -843,6 +865,7 @@ class ArrowDatasetEngine(Engine):
                             *partitioning.get("args", []),
                             **partitioning.get("kwargs", {}),
                         ),
+                        **_dataset_kwargs,
                     )
                     has_metadata_file = True
                     if gather_statistics is None:
@@ -869,6 +892,7 @@ class ArrowDatasetEngine(Engine):
                     *partitioning.get("args", []),
                     **partitioning.get("kwargs", {}),
                 ),
+                **_dataset_kwargs,
             )
 
         # At this point, we know if `split_row_groups` should be
@@ -981,6 +1005,11 @@ class ArrowDatasetEngine(Engine):
             "partition_names": partition_names,
             "partitioning": partitioning,
             "metadata_task_size": metadata_task_size,
+            "kwargs": {
+                "dataset": _dataset_kwargs,
+                "read": read_kwargs,
+                "arrow_to_pandas": arrow_to_pandas_kwargs,
+            },
         }
 
     @classmethod
@@ -1131,6 +1160,7 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
+        kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
         # (Using config file or defaults)
@@ -1181,6 +1211,9 @@ class ArrowDatasetEngine(Engine):
             "categories": categories,
             "filters": filters,
             "schema": schema,
+            "dataset": kwargs.get("dataset", {}),
+            "read": kwargs.get("read", {}),
+            "arrow_to_pandas": kwargs.get("arrow_to_pandas", {}),
         }
 
         # Check if this is a very simple case where we can just return
@@ -1516,6 +1549,7 @@ class ArrowDatasetEngine(Engine):
                         *partitioning.get("args", []),
                         **partitioning.get("kwargs", {}),
                     ),
+                    **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())
                 assert len(frags) == 1
@@ -1703,7 +1737,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
-        **dataset_kwargs,
+        kwargs,
     ):
         """pyarrow-legacy version of _collect_dataset_info
         Use the ParquetDataset API to construct a dictionary of all
@@ -1717,6 +1751,9 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 
         if metadata_task_size:
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
+
+        # Extract "supported" key-word arguments from `kwargs`.
+        dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs = _process_kwargs(kwargs)
 
         (
             schema,
@@ -1757,6 +1794,11 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             "partition_keys": partition_info["partition_keys"],
             "partition_names": partition_info["partition_names"],
             "partitions": partition_info["partitions"],
+            "kwargs": {
+                "dataset": dataset_kwargs,
+                "read": read_kwargs,
+                "arrow_to_pandas": arrow_to_pandas_kwargs,
+            },
         }
 
     @classmethod
@@ -2289,7 +2331,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
     ):
         """Read in a pyarrow table.
 
-        This method is overrides the `ArrowLegacyEngine` implementation.
+        This method is overrides the `ArrowDatasetEngine` implementation.
         """
 
         return _read_table_from_path(

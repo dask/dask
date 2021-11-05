@@ -240,9 +240,9 @@ def read_parquet(
         the second level corresponds to the kwargs that will be passed on to
         the underlying ``pyarrow`` or ``fastparquet`` function.
         Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
-        backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a ``pyarrow.Table.to_pandas()``)
+        'file' or 'datset' (for opening a ``fastparquet`` ``ParquetFile``), 'read'
+        (for the backend read function), 'arrow_to_pandas' (for controlling the
+        arguments passed to convert from a ``pyarrow.Table.to_pandas()``)
 
     Examples
     --------
@@ -255,6 +255,7 @@ def read_parquet(
     """
 
     if "read_from_paths" in kwargs:
+        kwargs.pop("read_from_paths")
         warnings.warn(
             "`read_from_paths` is no longer supported and will be ignored.",
             FutureWarning,
@@ -275,6 +276,7 @@ def read_parquet(
             chunksize=chunksize,
             aggregate_files=aggregate_files,
             metadata_task_size=metadata_task_size,
+            **kwargs,
         )
         return df[columns]
 
@@ -296,6 +298,7 @@ def read_parquet(
         split_row_groups,
         chunksize,
         aggregate_files,
+        kwargs,
     )
 
     if isinstance(engine, str):
@@ -395,7 +398,7 @@ def read_parquet(
                 meta,
                 columns,
                 index,
-                kwargs,
+                {},  # kwargs should no longer be passed this way
                 common_kwargs,
             ),
             label=label,
