@@ -194,9 +194,15 @@ def parse_einsum_input(operands):
 
 
 @derived_from(np)
-def einsum(*operands, **kwargs):
-    dtype = kwargs.pop("dtype", None)
-    optimize = kwargs.pop("optimize", False)
+def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
+    """Dask added an additional keyword-only argument ``method``.
+
+    split_every: int >= 2 or dict(axis: int), optional
+        Determines the depth of the recursive aggregation.
+        Deafults to ``None`` which would let dask heuristically 
+        decide a good default.
+    """
+    
     split_every = kwargs.pop("split_every", None)
 
     einsum_dtype = dtype
