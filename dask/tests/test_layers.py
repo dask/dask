@@ -104,21 +104,13 @@ def _pq_pyarrow(tmpdir):
     ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
     if pa_ds:
         # Need to test that layer serialization succeeds
-        # with "pyarrow-dataset" filtering (whether or not
-        # `large_graph_objects=True` is specified)
+        # with "pyarrow-dataset" filtering
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine="pyarrow-dataset",
             filters=filters,
-            large_graph_objects=True,
         )
-        ddf3 = dd.read_parquet(
-            str(tmpdir),
-            engine="pyarrow-dataset",
-            filters=filters,
-            large_graph_objects=False,
-        )
-        return (ddf1, ddf2, ddf3)
+        return (ddf1, ddf2)
     else:
         return ddf1
 
