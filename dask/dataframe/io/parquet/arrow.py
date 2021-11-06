@@ -306,7 +306,7 @@ def _need_fragments(filters, partition_keys):
     return bool(filtered_cols - partition_cols)
 
 
-def _process_kwargs(kwargs):
+def _split_user_kwargs(kwargs):
     # Extract "supported" kwargs from `kwargs`.
     # Split items into `dataset_kwargs` and `read_kwargs`
     user_kwargs = kwargs.copy()
@@ -317,12 +317,8 @@ def _process_kwargs(kwargs):
         # Allow user to pass "open_parquet_file"
         # outside of the "read" kwargs
         read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
-    if user_kwargs:
-        # Anything left in `user_kwargs` is assumed to belong
-        # in the "read" kwargs
-        read_kwargs.update(user_kwargs)
 
-    return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs
+    return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs, user_kwargs
 
 
 #
@@ -804,7 +800,12 @@ class ArrowDatasetEngine(Engine):
         valid_paths = None  # Only used if `paths` is a list containing _metadata
 
         # Extract "supported" key-word arguments from `kwargs`.
-        _dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs = _process_kwargs(kwargs)
+        (
+            _dataset_kwargs,
+            read_kwargs,
+            arrow_to_pandas_kwargs,
+            user_kwargs,
+        ) = _split_user_kwargs(kwargs)
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -1011,6 +1012,7 @@ class ArrowDatasetEngine(Engine):
                 "dataset": _dataset_kwargs,
                 "read": read_kwargs,
                 "arrow_to_pandas": arrow_to_pandas_kwargs,
+                **user_kwargs,
             },
         }
 
@@ -1213,9 +1215,7 @@ class ArrowDatasetEngine(Engine):
             "categories": categories,
             "filters": filters,
             "schema": schema,
-            "dataset": kwargs.get("dataset", {}),
-            "read": kwargs.get("read", {}),
-            "arrow_to_pandas": kwargs.get("arrow_to_pandas", {}),
+            **kwargs,
         }
 
         # Check if this is a very simple case where we can just return
@@ -1755,7 +1755,12 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
         # Extract "supported" key-word arguments from `kwargs`.
-        dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs = _process_kwargs(kwargs)
+        (
+            dataset_kwargs,
+            read_kwargs,
+            arrow_to_pandas_kwargs,
+            user_kwargs,
+        ) = _split_user_kwargs(kwargs)
 
         (
             schema,
@@ -1800,6 +1805,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 "dataset": dataset_kwargs,
                 "read": read_kwargs,
                 "arrow_to_pandas": arrow_to_pandas_kwargs,
+                **user_kwargs,
             },
         }
 
@@ -1828,6 +1834,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             dataset_info["gather_statistics"],
             dataset_info["chunksize"],
             dataset_info["aggregation_depth"],
+            dataset_info["kwargs"],
         )
 
     @classmethod
@@ -2003,6 +2010,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         chunksize,
         aggregation_depth,
+        kwargs,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -2028,7 +2036,11 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             for full_path in metadata:
                 part = {"piece": (full_path, None, partition_keys.get(full_path, None))}
                 parts.append(part)
-            common_kwargs = {"partitions": partition_obj, "categories": categories}
+            common_kwargs = {
+                "partitions": partition_obj,
+                "categories": categories,
+                **kwargs,
+            }
             return parts, stats, common_kwargs
 
         # Use final metadata info to update our options for
@@ -2063,6 +2075,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             fs,
             chunksize,
             aggregation_depth,
+            kwargs,
         )
 
     @classmethod
@@ -2269,6 +2282,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         fs,
         chunksize,
         aggregation_depth,
+        kwargs,
     ):
         """Process row-groups and statistics.
 
@@ -2314,6 +2328,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             "partitions": partition_info["partitions"],
             "categories": categories,
             "filters": filters,
+            **kwargs,
         }
 
         return parts, stats, common_kwargs

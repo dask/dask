@@ -395,10 +395,6 @@ class FastParquetEngine(Engine):
             # Allow user to pass "open_parquet_file"
             # outside of the "read" kwargs
             read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
-        if user_kwargs:
-            # Anything left in `user_kwargs` is assumed to belong
-            # in the "read" kwargs
-            read_kwargs.update(user_kwargs)
 
         parts = []
         _metadata_exists = False
@@ -524,7 +520,11 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
-            "kwargs": {"dataset": dataset_kwargs, "read": read_kwargs},
+            "kwargs": {
+                "dataset": dataset_kwargs,
+                "read": read_kwargs,
+                **user_kwargs,
+            },
         }
 
     @classmethod
@@ -705,8 +705,7 @@ class FastParquetEngine(Engine):
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
             "base_path": base_path,
-            "dataset": kwargs.get("dataset", {}),
-            "read": kwargs.get("read", {}),
+            **kwargs,
         }
 
         # Check if this is a very simple case where we can just
