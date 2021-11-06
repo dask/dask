@@ -4367,21 +4367,27 @@ def broadcast_shapes(*shapes):
     return tuple(reversed(out))
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, out=None, **kwargs):
     """Apply elementwise function across arguments
 
     Respects broadcasting rules
+
+    Parameters
+    ----------
+    out : dask array or None
+        If out is a dask.array then this overwrites the contents of that array with
+        the result
 
     Examples
     --------
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
+    >>> elemwise(sin, x, out=dask_array)  # doctest: +SKIP
 
     See Also
     --------
     blockwise
     """
-    out = kwargs.pop("out", None)
     if not {"name", "dtype"}.issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(
