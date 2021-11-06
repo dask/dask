@@ -244,6 +244,8 @@ def read_parquet(
         (for the backend read function), 'arrow_to_pandas' (for controlling the
         arguments passed to convert from a ``pyarrow.Table.to_pandas()``), and
         'open_parquet_file' (for arguments to `fsspec.parquet.open_parquet_file`).
+        Any elements of kwargs that are not defined under these top-level keys
+        will be interpreted as 'read' arguments.
 
     Examples
     --------

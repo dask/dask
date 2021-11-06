@@ -318,8 +318,9 @@ def _process_kwargs(kwargs):
         # outside of the "read" kwargs
         read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
     if user_kwargs:
-        # Anything left in `user_kwargs` is not supported
-        raise ValueError(f"{user_kwargs.keys()} not supported by pyarrow engine.")
+        # Anything left in `user_kwargs` is assumed to belong
+        # in the "read" kwargs
+        read_kwargs.update(user_kwargs)
 
     return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs
 

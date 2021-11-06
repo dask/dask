@@ -396,10 +396,9 @@ class FastParquetEngine(Engine):
             # outside of the "read" kwargs
             read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
         if user_kwargs:
-            # Anything left in `user_kwargs` is not supported
-            raise ValueError(
-                f"{user_kwargs.keys()} not supported by fastparquet engine."
-            )
+            # Anything left in `user_kwargs` is assumed to belong
+            # in the "read" kwargs
+            read_kwargs.update(user_kwargs)
 
         parts = []
         _metadata_exists = False
