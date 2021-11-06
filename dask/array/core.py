@@ -4936,7 +4936,7 @@ def to_hdf5(filename, *args, chunks=True, **kwargs):
     chunks: tuple or ``True``
         Chunk shape, or ``True`` to pass the chunks from the dask array.
         Deafults to ``True``.
-        
+
     Examples
     --------
 
