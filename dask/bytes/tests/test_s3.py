@@ -21,6 +21,11 @@ from fsspec.core import open_files
 from s3fs import S3FileSystem as DaskS3FileSystem
 from tlz import concat, valmap
 
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
+
 from dask import compute
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
@@ -477,6 +482,29 @@ def test_parquet(s3, engine, s3so, metadata_file):
     assert len(df2.divisions) > 1
 
     dd.utils.assert_eq(data, df2)
+
+    # Check that `open_parquet_file` arguments are
+    # really passed through to fsspec
+    if fsspec_parquet:
+
+        # Passing `open_parquet_file` kwargs will fail
+        # if you try to modify the engine
+        with pytest.raises(TypeError):
+            dd.read_parquet(
+                url,
+                engine=engine,
+                storage_options=s3so,
+                open_parquet_file={"engine": "foo"},
+            ).compute()
+
+        # ...but should work fine if you modify the
+        # maximum block-transfer size (max_block)
+        dd.read_parquet(
+            url,
+            engine=engine,
+            storage_options=s3so,
+            open_parquet_file={"max_block": 8_000},
+        ).compute()
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
