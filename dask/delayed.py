@@ -206,7 +206,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, **kwargs):
+def tokenize(*args, pure=None, **kwargs):
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -218,7 +218,6 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    pure = kwargs.pop("pure", None)
     if pure is None:
         pure = config.get("delayed_pure", False)
 
@@ -578,9 +577,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
-    def __call__(self, *args, **kwargs):
-        pure = kwargs.pop("pure", None)
-        name = kwargs.pop("dask_key_name", None)
+    def __call__(self, *args, pure=None, name=None, **kwargs):
         func = delayed(apply, pure=pure)
         if name is not None:
             return func(self, args, kwargs, dask_key_name=name)
