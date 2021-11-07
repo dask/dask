@@ -720,7 +720,6 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
 
         else:
             values = o
-        maxval = kwargs.pop("maxval", None)
         if maxval is None:
             maxval = max(1, max(values.values()))
         colors = {k: _colorize(cmap(v / maxval, bytes=True)) for k, v in values.items()}
@@ -743,7 +742,7 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
     return dot_graph(dsk, filename=filename, **kwargs)
 
 
-def persist(*args, **kwargs):
+def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):
     """Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
@@ -803,16 +802,11 @@ def persist(*args, **kwargs):
     -------
     New dask collections backed by in-memory data
     """
-    traverse = kwargs.pop("traverse", True)
-    optimize_graph = kwargs.pop("optimize_graph", True)
-
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    schedule = get_scheduler(
-        scheduler=kwargs.pop("scheduler", None), collections=collections
-    )
+    schedule = get_scheduler(scheduler=scheduler, collections=collections)
 
     if inspect.ismethod(schedule):
         try:
