@@ -453,7 +453,7 @@ def unpack_collections(*args, traverse=True):
     return collections, repack
 
 
-def optimize(*args, **kwargs):
+def optimize(*args, traverse=True, **kwargs):
     """Optimize several dask collections at once.
 
     Returns equivalent dask collections that all share the same merged and
@@ -493,7 +493,7 @@ def optimize(*args, **kwargs):
     >>> b2.compute() == b.compute()
     True
     """
-    collections, repack = unpack_collections(*args, **kwargs)
+    collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
