@@ -507,7 +507,9 @@ def optimize(*args, traverse=True, **kwargs):
     return repack(postpersists)
 
 
-def compute(*args, traverse=True, optimize_graph=True, scheduler=None, get=None, **kwargs):
+def compute(
+    *args, traverse=True, optimize_graph=True, scheduler=None, get=None, **kwargs
+):
     """Compute several dask collections at once.
 
     Parameters
