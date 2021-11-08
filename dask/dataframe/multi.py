@@ -432,9 +432,10 @@ def single_partition_join(left, right, **kwargs):
             joined.divisions = [None for _ in left.divisions]
 
     elif left.npartitions == 1 and kwargs["how"] in allowed_right:
-        joined = right.map_partitions(
-            lambda right, left, **kwargs: merge_chunk(left, right, **kwargs),
+        joined = map_partitions(
+            merge_chunk,
             left,
+            right,
             meta=meta,
             enforce_metadata=False,
             transform_divisions=False,
