@@ -1371,6 +1371,15 @@ def test_scheduler_keyword():
         del named_schedulers["foo"]
 
 
+def test_raise_get_keyword():
+    x = delayed(inc)(1)
+
+    with pytest.raises(TypeError) as info:
+        x.compute(get=dask.get)
+
+    assert "scheduler=" in str(info.value)
+
+
 class MyExecutor(Executor):
     _max_workers = None
 
