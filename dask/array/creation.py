@@ -415,9 +415,8 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
 
 
 @derived_from(np)
-def meshgrid(*xi, **kwargs):
-    indexing = kwargs.pop("indexing", "xy")
-    sparse = bool(kwargs.pop("sparse", False))
+def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
+    sparse = bool(sparse)
 
     if "copy" in kwargs:
         raise NotImplementedError("`copy` not supported")

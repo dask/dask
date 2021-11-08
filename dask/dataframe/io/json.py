@@ -22,6 +22,7 @@ def to_json(
     errors="strict",
     compression=None,
     compute_kwargs=None,
+    name_function=None,
     **kwargs,
 ):
     """Write dataframe into JSON text files
@@ -59,6 +60,9 @@ def to_json(
         Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
+     name_function : function or None
+        If opening a set of files for writing, those files do not yet exist,
+        so we need to generate their names by formatting the urlpath for each sequence number
     """
     if lines is None:
         lines = orient == "records"
@@ -73,7 +77,7 @@ def to_json(
         "wt",
         encoding=encoding,
         errors=errors,
-        name_function=kwargs.pop("name_function", None),
+        name_function=name_function,
         num=df.npartitions,
         compression=compression,
         **(storage_options or {}),

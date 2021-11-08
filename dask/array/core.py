@@ -4608,14 +4608,11 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
 
 @derived_from(np)
-def broadcast_arrays(*args, **kwargs):
-    subok = bool(kwargs.pop("subok", False))
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
 
     to_array = asanyarray if subok else asarray
     args = tuple(to_array(e) for e in args)
-
-    if kwargs:
-        raise TypeError("unsupported keyword argument(s) provided")
 
     # Unify uneven chunking
     inds = [list(reversed(range(x.ndim))) for x in args]
