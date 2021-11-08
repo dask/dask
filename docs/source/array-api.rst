@@ -226,8 +226,8 @@ Top level functions
    zeros
    zeros_like
 
-Array Methods
-~~~~~~~~~~~~~
+Array
+~~~~~
 
 .. autosummary::
    :toctree: generated/
@@ -239,7 +239,10 @@ Array Methods
    Array.argmin
    Array.argtopk
    Array.astype
-   Array.choose
+   Array.blocks
+Array.choose
+   Array.chunks
+   Array.chunksize
    Array.clip
    Array.compute
    Array.compute_chunk_sizes
@@ -247,22 +250,35 @@ Array Methods
    Array.copy
    Array.cumprod
    Array.cumsum
+   Array.dask
    Array.dot
+   Array.dtype
    Array.flatten
+   Array.imag
+   Array.itemsize
    Array.map_blocks
    Array.map_overlap
    Array.max
    Array.mean
    Array.min
    Array.moment
+   Array.name
+   Array.nbytes
+   Array.ndim
    Array.nonzero
+   Array.npartitions
+   Array.numblocks
+   Array.partitions
    Array.persist
    Array.prod
    Array.ravel
+   Array.real
    Array.rechunk
    Array.repeat
    Array.reshape
    Array.round
+   Array.shape
+   Array.size
    Array.squeeze
    Array.std
    Array.store
@@ -279,6 +295,7 @@ Array Methods
    Array.transpose
    Array.var
    Array.view
+   Array.vindex
    Array.visualize
 
 
