@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2021.11.1
+---------
+
+Released on November 8, 2021
+
+
+Changelog
+=========
+
 2021.11.0
 ---------
 
