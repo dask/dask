@@ -413,49 +413,36 @@ def single_partition_join(left, right, **kwargs):
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
     if right.npartitions == 1 and kwargs["how"] in allowed_left:
-        joined = left.map_partitions(
-            merge_chunk,
-            right,
-            meta=meta,
-            enforce_metadata=False,
-            transform_divisions=False,
-            align_dataframes=False,
-            token="merge",  # NOTE: misleadingly, this is actually the name
-            **kwargs,
-        )
-
         if use_left:
-            joined.divisions = left.divisions
+            divisions = left.divisions
         elif use_right and len(right.divisions) == len(left.divisions):
-            joined.divisions = right.divisions
+            divisions = right.divisions
         else:
-            joined.divisions = [None for _ in left.divisions]
+            divisions = [None for _ in left.divisions]
 
     elif left.npartitions == 1 and kwargs["how"] in allowed_right:
-        joined = map_partitions(
-            merge_chunk,
-            left,
-            right,
-            meta=meta,
-            enforce_metadata=False,
-            transform_divisions=False,
-            align_dataframes=False,
-            token="merge",  # NOTE: misleadingly, this is actually the name
-            **kwargs,
-        )
-
         if use_right:
-            joined.divisions = right.divisions
+            divisions = right.divisions
         elif use_left and len(left.divisions) == len(right.divisions):
-            joined.divisions = left.divisions
+            divisions = left.divisions
         else:
-            joined.divisions = [None for _ in right.divisions]
-
+            divisions = [None for _ in right.divisions]
     else:
         raise NotImplementedError(
             "single_partition_join has no fallback for invalid calls"
         )
 
+    joined = map_partitions(
+        merge_chunk,
+        left,
+        right,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
+    joined.divisions = divisions
     return joined
 
 
