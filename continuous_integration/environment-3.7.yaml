@@ -44,7 +44,9 @@ dependencies:
   - crick
   - cytoolz
   - distributed
-  - graphviz
+  # Need to pin graphviz for Windows on Python 3.7
+  # https://github.com/xflr6/graphviz/issues/145
+  - graphviz==0.17
   - ipython
   - lz4
   - numba
