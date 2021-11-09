@@ -240,7 +240,7 @@ Array
    Array.argtopk
    Array.astype
    Array.blocks
-Array.choose
+   Array.choose
    Array.chunks
    Array.chunksize
    Array.clip
