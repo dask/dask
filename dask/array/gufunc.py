@@ -628,6 +628,7 @@ class gufunc:
     def __init__(
         self,
         pyfunc,
+        *,
         signature=None,
         vectorize=False,
         axes=None,
