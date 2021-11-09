@@ -349,7 +349,7 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
-        Defaults to "auto" that will automatically determine chunk sizes
+        Defaults to "auto" which will automatically determine chunk sizes.
     dtype : numpy.dtype
         Output dtype. Omit to infer it from start, stop, step
         Defaults to ``None``.

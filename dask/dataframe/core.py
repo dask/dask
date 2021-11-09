@@ -5380,7 +5380,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     out : ``dask.array`` or ``None``
         If out is a dask.DataFrame, dask.Series or dask.Scalar then
         this overwrites the contents of it with the result
-    **kwrags: scalars
+    **kwargs: scalars
 
     Examples
     --------
