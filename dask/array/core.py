@@ -11,7 +11,14 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping
+from collections.abc import (
+    Collection,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+)
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
@@ -3365,7 +3372,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, zarr.DictStore)) and "distributed" in config.get(
+        if isinstance(z.store, (dict, MutableMapping)) and "distributed" in config.get(
             "scheduler", ""
         ):
             raise RuntimeError(
