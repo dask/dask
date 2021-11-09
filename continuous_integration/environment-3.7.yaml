@@ -44,8 +44,6 @@ dependencies:
   - crick
   - cytoolz
   - distributed
-  # Need to pin graphviz for Windows on Python 3.7
-  # https://github.com/xflr6/graphviz/issues/145
   - graphviz
   - ipython
   - lz4
@@ -61,6 +59,8 @@ dependencies:
   - python-snappy
   - sparse
   - cachey
+  # Need to pin graphviz for Windows on Python 3.7
+  # https://github.com/xflr6/graphviz/issues/145
   - python-graphviz=0.17
   - pandas-datareader
   - python-xxhash
