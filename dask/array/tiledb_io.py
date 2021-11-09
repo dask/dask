@@ -132,7 +132,7 @@ def to_tiledb(
 
     tiledb_config = storage_options or dict()
     # encryption key, if any
-    key = tiledb_config.pop("key", key)
+    key = key or tiledb_config.pop("key", None)
 
     if not core._check_regular_chunks(darray.chunks):
         raise ValueError(
