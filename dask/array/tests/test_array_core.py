@@ -918,58 +918,6 @@ def test_elemwise_dtype():
             assert da.maximum(x, y).dtype == da.result_type(x, y)
 
 
-@pytest.mark.parametrize(
-    "x,mask,o",
-    [
-        [
-            [11, 2, 3, 4, 5, 12, 34, 56, 78, 90],
-            [True, False, True, True, True, False, True, False, True, True],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-        ],
-        [
-            [[11, 2, 3, 4, 5], [6, 7, 8, 9, 0], [12, 34, 56, 78, 90]],
-            [
-                [True, False, True, True, True],
-                [False, True, False, True, True],
-                [True, False, True, False, False],
-            ],
-            [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
-        ],
-    ],
-)
-def test_elemwise_where(x, mask, o):
-
-    x_da1 = da.array(x, dtype=np.int8)
-    x_np1 = np.array(x, dtype=np.int8)
-
-    o_da1 = da.array(o, dtype=np.int8)
-    o_np1 = np.array(o, dtype=np.int8)
-
-    da.invert(x_da1, out=o_da1, where=mask)
-    np.invert(x_np1, out=o_np1, where=mask)
-    assert_eq(o_da1, o_np1)
-
-    x_da2 = da.array(x, dtype=np.int8)
-    x_np2 = np.array(x, dtype=np.int8)
-
-    o_da2 = da.array(o, dtype=np.int8)
-    o_np2 = np.array(o, dtype=np.int8)
-
-    da.invert(x_da2, out=o_da2, where=False)
-    np.invert(x_np2, out=o_np2, where=False)
-    assert_eq(o_da2, o_np2)
-
-    x_da3 = da.array(x, dtype=np.int8)
-    x_np3 = np.array(x, dtype=np.int8)
-
-    o_da3 = da.array(o, dtype=np.int8)
-    o_np3 = np.array(o, dtype=np.int8)
-
-    da.invert(x_da3, out=o_da3)
-    np.invert(x_np3, out=o_np3)
-    assert_eq(o_da3, o_np3)
-
-
 def test_operators():
     x = np.arange(10)
     y = np.arange(10).reshape((10, 1))

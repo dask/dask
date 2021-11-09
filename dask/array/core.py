@@ -4367,7 +4367,7 @@ def broadcast_shapes(*shapes):
     return tuple(reversed(out))
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
     """Apply elementwise function across arguments
 
     Respects broadcasting rules
@@ -4381,17 +4381,14 @@ def elemwise(op, *args, **kwargs):
     --------
     blockwise
     """
-    out = kwargs.pop("out", None)
+    if kwargs:
+        raise TypeError(
+            f"{op.__name__} does not take the following keyword arguments "
+            f"{sorted(kwargs)}"
+        )
 
-    valid_kwargs = {"name", "dtype"}
-
-    if type(op) is np.ufunc:
-        valid_kwargs |= {"where"}
-
-    if not valid_kwargs.issuperset(kwargs):
-        msg = "%s does not take the following keyword arguments %s"
-        raise TypeError(msg % (op.__name__, str(sorted(set(kwargs) - valid_kwargs))))
-
+    out = _elemwise_normalize_out(out)
+    where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
     shapes = []
@@ -4401,6 +4398,10 @@ def elemwise(op, *args, **kwargs):
             # Want to exclude Delayed shapes and dd.Scalar
             shape = ()
         shapes.append(shape)
+    if isinstance(where, Array):
+        shapes.append(where.shape)
+    if isinstance(out, Array):
+        shapes.append(out.shape)
 
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(
@@ -4408,10 +4409,8 @@ def elemwise(op, *args, **kwargs):
     )  # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    need_enforce_dtype = False
-    if "dtype" in kwargs:
+    if dtype is not None:
         need_enforce_dtype = True
-        dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
         # scalars and 0d ndarrays (which it considers equivalent) by using
@@ -4428,23 +4427,25 @@ def elemwise(op, *args, **kwargs):
             for a in args
         ]
         try:
-            dt = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
         except Exception:
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
         )
 
-    name = kwargs.get("name", None) or f"{funcname(op)}-{tokenize(op, dt, *args)}"
+    if not name:
+        name = f"{funcname(op)}-{tokenize(op, dtype, *args, where)}"
 
-    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip("_"))
+    blockwise_kwargs = dict(dtype=dtype, name=name, token=funcname(op).strip("_"))
 
-    if "where" in kwargs:
-        blockwise_kwargs["where"] = kwargs.get("where")
-        blockwise_kwargs["out"] = out
+    if where is not True:
+        blockwise_kwargs["elemwise_where_function"] = op
+        op = _elemwise_handle_where
+        args.extend([where, out])
 
     if need_enforce_dtype:
-        blockwise_kwargs["enforce_dtype"] = dt
+        blockwise_kwargs["enforce_dtype"] = dtype
         blockwise_kwargs["enforce_dtype_function"] = op
         op = _enforce_dtype
 
@@ -4461,12 +4462,23 @@ def elemwise(op, *args, **kwargs):
     return handle_out(out, result)
 
 
-def handle_out(out, result):
-    """Handle out parameters
+def _elemwise_normalize_where(where):
+    if where is True:
+        return True
+    elif where is False or where is None:
+        return False
+    return asarray(where)
 
-    If out is a dask.array then this overwrites the contents of that array with
-    the result
-    """
+
+def _elemwise_handle_where(*args, **kwargs):
+    function = kwargs.pop("elemwise_where_function")
+    *args, where, out = args
+    if hasattr(out, "copy"):
+        out = out.copy()
+    return function(*args, where=where, out=out, **kwargs)
+
+
+def _elemwise_normalize_out(out):
     if isinstance(out, tuple):
         if len(out) == 1:
             out = out[0]
@@ -4474,6 +4486,21 @@ def handle_out(out, result):
             raise NotImplementedError("The out parameter is not fully supported")
         else:
             out = None
+    if not (out is None or isinstance(out, Array)):
+        raise NotImplementedError(
+            f"The out parameter is not fully supported."
+            f" Received type {type(out).__name__}, expected Dask Array"
+        )
+    return out
+
+
+def handle_out(out, result):
+    """Handle out parameters
+
+    If out is a dask.array then this overwrites the contents of that array with
+    the result
+    """
+    out = _elemwise_normalize_out(out)
     if isinstance(out, Array):
         if out.shape != result.shape:
             raise ValueError(
@@ -4484,12 +4511,7 @@ def handle_out(out, result):
         out.dask = result.dask
         out._meta = result._meta
         out._name = result.name
-    elif out is not None:
-        msg = (
-            "The out parameter is not fully supported."
-            " Received type %s, expected Dask Array" % type(out).__name__
-        )
-        raise NotImplementedError(msg)
+        return out
     else:
         return result
 
