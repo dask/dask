@@ -60,9 +60,10 @@ def to_json(
         Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
-     name_function : function or None
-        If opening a set of files for writing, those files do not yet exist,
-        so we need to generate their names by formatting the urlpath for each sequence number
+    name_function : callable, default None 
+        Function accepting an integer (partition index) and producing a 
+        string to replace the asterisk in the given filename globstring. 
+        Should preserve the lexicographic order of partitions.
     """
     if lines is None:
         lines = orient == "records"
