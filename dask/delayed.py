@@ -577,10 +577,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
-    def __call__(self, *args, pure=None, name=None, **kwargs):
+    def __call__(self, *args, pure=None, dask_key_name=None, **kwargs):
         func = delayed(apply, pure=pure)
-        if name is not None:
-            return func(self, args, kwargs, dask_key_name=name)
+        if dask_key_name is not None:
+            return func(self, args, kwargs, dask_key_name=dask_key_name)
         return func(self, args, kwargs)
 
     def __bool__(self):
