@@ -1054,9 +1054,11 @@ class FastParquetEngine(Engine):
         division_info=None,
         schema=None,
         object_encoding="utf8",
-        index_cols=[],
+        index_cols=None,
         **kwargs,
     ):
+        if index_cols is None:
+            index_cols = []
         if append and division_info is None:
             ignore_divisions = True
         fs.mkdirs(path, exist_ok=True)
