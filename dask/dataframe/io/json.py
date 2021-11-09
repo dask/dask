@@ -60,9 +60,9 @@ def to_json(
         Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
-    name_function : callable, default None 
-        Function accepting an integer (partition index) and producing a 
-        string to replace the asterisk in the given filename globstring. 
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
         Should preserve the lexicographic order of partitions.
     """
     if lines is None:
