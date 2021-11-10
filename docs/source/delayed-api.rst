@@ -41,8 +41,12 @@ Even with this limitation, many workflows can easily be parallelized.
 .. currentmodule:: dask.delayed
 
 .. autosummary::
+   :toctree: generated/
+
    delayed
    Delayed
 
-.. autofunction:: delayed
-.. autoclass:: Delayed
+.. autofunction:: 
+   :toctree: generated/
+
+   delayed
