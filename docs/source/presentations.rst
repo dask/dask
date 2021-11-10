@@ -37,17 +37,17 @@ Presentations
 
 * PyCon US 2021
 
-  * `Tutorial: Hacking Dask: Diving into Dask's Internals <https://www.youtube.com/watch?v=LQrgDhN-XOo>`__  `materials <https://github.com/jrbourbeau/hacking-dask>`__
+  * `Tutorial: Hacking Dask: Diving into Dask's Internals <https://www.youtube.com/watch?v=LQrgDhN-XOo>`__  (`materials <https://github.com/jrbourbeau/hacking-dask>`__)
   * `Dask-SQL: Empowering Pythonistas for Scalable End-to-End Data Engineering <https://www.youtube.com/watch?v=z7xKikaScxg>`__
 
 
 * BlazingSQL Webinars, May 2021
 
-  * `Intro to distributed computing on GPUs with Dask in Python <https://www.youtube.com/watch?v=py1YPs6s6so>`__ `materials <https://gist.github.com/jacobtomlinson/6f16abb716f50f81a6687bd67efd2f61>`__
+  * `Intro to distributed computing on GPUs with Dask in Python <https://www.youtube.com/watch?v=py1YPs6s6so>`__ (`materials <https://gist.github.com/jacobtomlinson/6f16abb716f50f81a6687bd67efd2f61>`__)
 
 * PyData DC, August 2021
 
-  * `Inside Dask <https://www.youtube.com/watch?v=X95WO41abXo>`__ `materials <https://github.com/jsignell/inside-dask>`__
+  * `Inside Dask <https://www.youtube.com/watch?v=X95WO41abXo>`__ (`materials <https://github.com/jsignell/inside-dask>`__)
 
 * PyCon US 2020
 
