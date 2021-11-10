@@ -18,6 +18,7 @@ Dask APIs generally follow from upstream APIs:
    Bag <bag-api.rst>
    Delayed <delayed-api.rst>
    Futures <futures>
+   Scheduling <scheduling-api.rst>
 
 
 Additionally, Dask has its own functions to start computations, persist data in
