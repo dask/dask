@@ -592,10 +592,9 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases',
-             'memorypressure'}, optional
-        Options to color nodes.
-        colormap
+    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases', 'memorypressure'}, optional
+        Options to color nodes. colormap:
+
         - None, the default, no colors.
         - 'order', colors the nodes' border based on the order they appear in the graph.
         - 'ages', how long the data of a node is held.
@@ -604,9 +603,8 @@ def visualize(*args, **kwargs):
           Large values may indicate nodes that should have run later.
         - 'memorydecreases', how many fewer outputs are held after the lifetime of a node.
           Large values may indicate nodes that should have run sooner.
-        - 'memorypressure', the number of data held when:
-            - the node is run (circle)
-            - the data is released (rectangle)
+        - 'memorypressure', the number of data held when the node is run (circle), or
+          the data is released (rectangle).
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
