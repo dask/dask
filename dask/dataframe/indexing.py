@@ -121,7 +121,7 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_element(iindexer, cindexer)
         else:
             if isinstance(iindexer, (list, np.ndarray)) or (
-                is_series_like(iindexer) and is_bool_dtype(iindexer._meta)
+                is_series_like(iindexer) and not is_bool_dtype(iindexer._meta)
             ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
