@@ -10,7 +10,7 @@ from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from . import methods
 from ._compat import PANDAS_GT_130
-from .core import Series, new_dd_object
+from .core import Series, is_bool_dtype, new_dd_object
 from .utils import is_index_like, is_series_like, meta_nonempty
 
 
@@ -114,18 +114,14 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_slice(iindexer, cindexer)
             elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
-            elif is_series_like(iindexer) and iindexer.dtype not in [
-                bool,
-                pd.BooleanDtype(),
-            ]:
+            elif is_series_like(iindexer) and not is_bool_dtype(iindexer):
                 return self._loc_list(iindexer.values, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
             if isinstance(iindexer, (list, np.ndarray)) or (
-                is_series_like(iindexer)
-                and iindexer.dtype not in [bool, pd.BooleanDtype()]
+                is_series_like(iindexer) and is_bool_dtype(iindexer)
             ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
@@ -152,7 +148,7 @@ class _LocIndexer(_IndexerBase):
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
-        if iindexer.dtype not in [bool, pd.BooleanDtype()]:
+        if not is_bool_dtype(iindexer):
             raise KeyError(
                 "Cannot index with non-boolean dask Series. Try passing computed "
                 "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
