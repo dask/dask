@@ -216,7 +216,7 @@ def _tree_reduce(
     # Normalize split_every
     split_every = split_every or config.get("split_every", 4)
     if isinstance(split_every, dict):
-        split_every = dict((k, split_every.get(k, 2)) for k in axis)
+        split_every = {k: split_every.get(k, 2) for k in axis}
     elif isinstance(split_every, Integral):
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
@@ -293,7 +293,7 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
+        decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
         dummy = dict(i for i in enumerate(p) if i[0] not in decided)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
@@ -1038,7 +1038,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
-        raise TypeError("axis must be either `None` or int, got '{0}'".format(axis))
+        raise TypeError(f"axis must be either `None` or int, got '{axis}'")
 
     for ax in axis:
         chunks = x.chunks[ax]
@@ -1052,7 +1052,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
             )
 
     # Map chunk across all blocks
-    name = "arg-reduce-{0}".format(tokenize(axis, x, chunk, combine, split_every))
+    name = f"arg-reduce-{tokenize(axis, x, chunk, combine, split_every)}"
     old = x.name
     keys = list(product(*map(range, x.numblocks)))
     offsets = list(product(*(accumulate(operator.add, bd[:-1], 0) for bd in x.chunks)))
@@ -1062,10 +1062,10 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         offset_info = pluck(axis[0], offsets)
 
     chunks = tuple((1,) * len(c) if i in axis else c for (i, c) in enumerate(x.chunks))
-    dsk = dict(
-        ((name,) + k, (chunk, (old,) + k, axis, off))
+    dsk = {
+        (name,) + k: (chunk, (old,) + k, axis, off)
         for (k, off) in zip(keys, offset_info)
-    )
+    }
 
     dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
     meta = None
@@ -1211,7 +1211,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, preop, binop, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, preop, binop, x, dtype)}"
     base_key = (name,)
 
     # Right now, the metadata for batches is incorrect, but this should be okay
@@ -1360,7 +1360,7 @@ def cumreduction(
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, binop, ident, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
     full = slice(None, None, None)
     slc = (full,) * axis + (slice(-1, None),) + (full,) * (x.ndim - axis - 1)

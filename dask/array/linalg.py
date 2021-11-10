@@ -145,19 +145,19 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
     # Block qr[0]
     name_q_st1 = "getitem" + token + "-q1"
-    dsk_q_st1 = dict(
-        ((name_q_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 0))
+    dsk_q_st1 = {
+        (name_q_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 0)
         for i in range(numblocks[0])
-    )
+    }
     layers[name_q_st1] = dsk_q_st1
     dependencies[name_q_st1] = {name_qr_st1}
 
     # Block qr[1]
     name_r_st1 = "getitem" + token + "-r1"
-    dsk_r_st1 = dict(
-        ((name_r_st1, i, 0), (operator.getitem, (name_qr_st1, i, 0), 1))
+    dsk_r_st1 = {
+        (name_r_st1, i, 0): (operator.getitem, (name_qr_st1, i, 0), 1)
         for i in range(numblocks[0])
-    )
+    }
     layers[name_r_st1] = dsk_r_st1
     dependencies[name_r_st1] = {name_qr_st1}
 
@@ -197,22 +197,19 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # R_stacked
         name_r_stacked = "stack" + token + "-r1"
-        dsk_r_stacked = dict(
-            (
-                (name_r_stacked, i, 0),
-                (
-                    np.vstack,
-                    (tuple, [(name_r_st1, idx, 0) for idx, _ in sub_block_info]),
-                ),
+        dsk_r_stacked = {
+            (name_r_stacked, i, 0): (
+                np.vstack,
+                (tuple, [(name_r_st1, idx, 0) for idx, _ in sub_block_info]),
             )
             for i, sub_block_info in enumerate(all_blocks)
-        )
+        }
         layers[name_r_stacked] = dsk_r_stacked
         dependencies[name_r_stacked] = {name_r_st1}
 
         # retrieve R_stacked for recursion with tsqr
         vchunks_rstacked = tuple(
-            [sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks]
+            sum(map(lambda x: x[1], sub_block_info)) for sub_block_info in all_blocks
         )
         graph = HighLevelGraph(layers, dependencies)
         # dsk.dependencies[name_r_stacked] = {data.name}
@@ -234,21 +231,18 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # Q_inner: "unstack"
         name_q_st2 = "getitem" + token + "-q2"
-        dsk_q_st2 = dict(
-            (
-                (name_q_st2, j, 0),
-                (
-                    operator.getitem,
-                    (q_inner.name, i, 0),
-                    ((slice(e[0], e[1])), (slice(0, n))),
-                ),
+        dsk_q_st2 = {
+            (name_q_st2, j, 0): (
+                operator.getitem,
+                (q_inner.name, i, 0),
+                ((slice(e[0], e[1])), (slice(0, n))),
             )
             for i, sub_block_info in enumerate(all_blocks)
             for j, e in zip(
                 [x[0] for x in sub_block_info],
                 _cumsum_blocks([x[1] for x in sub_block_info]),
             )
-        )
+        }
         layers[name_q_st2] = dsk_q_st2
         dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
@@ -360,10 +354,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
         # In-core qr[0] unstacking
         name_q_st2 = "getitem" + token + "-q2"
-        dsk_q_st2 = dict(
-            ((name_q_st2, i, 0), (operator.getitem, (name_q_st2_aux, 0, 0), b))
+        dsk_q_st2 = {
+            (name_q_st2, i, 0): (operator.getitem, (name_q_st2_aux, 0, 0), b)
             for i, b in enumerate(block_slices)
-        )
+        }
         layers[name_q_st2] = dsk_q_st2
         if chucks_are_all_known:
             dependencies[name_q_st2] = {name_q_st2_aux}

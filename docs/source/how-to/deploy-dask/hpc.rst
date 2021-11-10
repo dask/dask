@@ -192,7 +192,7 @@ command::
    dask-mpi ... --local-directory /path/to/local/storage
 
 or any of the other Dask Setup utilities, or by specifying the
-following :doc:`configuration value <../configuration>`:
+following :doc:`configuration value <../../configuration>`:
 
 .. code-block:: yaml
 

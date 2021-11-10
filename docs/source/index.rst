@@ -131,73 +131,41 @@ messy situations in everyday problems.
    :caption: Getting Started
 
    install.rst
-   setup.rst
-   Use Cases <https://stories.dask.org>
-   support.rst
-   why.rst
-   institutional-faq.rst
+   10-minutes-to-dask.rst
+   presentations.rst
+   best-practices.rst
+   how-to/index.rst
+   faq.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: User Interface
+   :caption: Fundamentals
 
-   user-interfaces.rst
    array.rst
    bag.rst
    dataframe.rst
    delayed.rst
    futures.rst
-   Machine Learning <https://ml.dask.org>
-   best-practices.rst
-   api.rst
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Scheduling
-
    scheduling.rst
-   Distributed Scheduling <https://distributed.dask.org/>
+   graphs.rst
+   internals.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Diagnostics
+   :caption: Reference
 
-   understanding-performance.rst
-   graphviz.rst
-   diagnostics-local.rst
-   diagnostics-distributed.rst
-   debugging.rst
-   order.rst
-
-.. toctree::
-   :maxdepth: 1
-   :hidden:
-   :caption: Help & reference
-
+   api.rst
    develop.rst
    changelog.rst
    configuration.rst
-   configuration-reference.rst
-   presentations.rst
-   cheatsheet.rst
-   spark.rst
-   caching.rst
-   graphs.rst
-   phases-of-computation.rst
-   remote-data-services.rst
-   gpu.rst
-   cite.rst
-   logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
-.. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel

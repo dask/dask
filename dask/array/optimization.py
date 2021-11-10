@@ -27,7 +27,7 @@ def optimize(
     fast_functions=None,
     inline_functions_fast_functions=(getter_inline,),
     rename_fused_keys=True,
-    **kwargs
+    **kwargs,
 ):
     """Optimize dask for array computation
 

@@ -46,8 +46,8 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-3.8-dev.yaml
+          python-version: "3.9"
+          environment-file: continuous_integration/environment-3.9.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -116,7 +116,7 @@ jobs:
                     repo: variables.name,
                     body: issue_body,
                     title: title,
-                    label: [variables.label]
+                    labels: [variables.label]
                 })
             } else {
                 github.issues.update({

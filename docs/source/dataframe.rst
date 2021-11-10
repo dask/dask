@@ -5,7 +5,6 @@ DataFrame
    :maxdepth: 1
    :hidden:
 
-   dataframe-api.rst
    dataframe-create.rst
    dataframe-best-practices.rst
    dataframe-design.rst
@@ -169,6 +168,6 @@ bound than NumPy, so multi-core speed-ups are not as pronounced for
 Dask DataFrame as they are for Dask Array.  This is changing, and
 the Pandas development team is actively working on releasing the GIL.
 
-When dealing with text data, you may see speedups by switching to the newer
-:doc:`distributed scheduler <setup/single-distributed>` either on a cluster or
+When dealing with text data, you may see speedups by switching to the
+:doc:`distributed scheduler <how-to/deploy-dask/single-distributed>` either on a cluster or
 single machine.

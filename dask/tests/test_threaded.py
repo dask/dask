@@ -149,7 +149,7 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.flaky(reruns=10, reruns_delay=5)
+@pytest.mark.slow
 def test_interrupt():
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
@@ -162,20 +162,17 @@ def test_interrupt():
         def interrupt_main():
             signal.pthread_kill(main_thread, signal.SIGINT)
 
-    def long_task():
-        sleep(5)
-
-    dsk = {("x", i): (long_task,) for i in range(20)}
+    # 7 seconds is is how long the test will take when you factor in teardown.
+    # Don't set it too short or the test will become flaky on non-performing CI
+    dsk = {("x", i): (sleep, 7) for i in range(20)}
     dsk["x"] = (len, list(dsk.keys()))
-    try:
-        interrupter = threading.Timer(0.5, interrupt_main)
-        interrupter.start()
-        start = time()
+
+    # 3 seconds is how long the test will take without teardown
+    interrupter = threading.Timer(3, interrupt_main)
+    interrupter.start()
+
+    start = time()
+    with pytest.raises(KeyboardInterrupt):
         get(dsk, "x")
-    except KeyboardInterrupt:
-        pass
-    except Exception:
-        assert False, "Failed to interrupt"
     stop = time()
-    if stop - start > 4:
-        assert False, "Failed to interrupt"
+    assert stop < start + 6

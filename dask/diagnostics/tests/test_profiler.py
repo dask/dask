@@ -188,7 +188,7 @@ def test_unquote():
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
 
-    keys = set(["a", "b", "c", "d", "e"])
+    keys = {"a", "b", "c", "d", "e"}
     assert pprint_task((add, "a", 1), keys) == "add(_, *)"
     assert pprint_task((add, (add, "a", 1)), keys) == "add(add(_, *))"
     res = "sum([*, _, add(_, *)])"
@@ -350,8 +350,23 @@ def test_saves_file():
         with prof:
             get(dsk, "e")
         # Run just to see that it doesn't error
-        prof.visualize(show=False, file_path=fn)
+        prof.visualize(show=False, filename=fn)
 
+        assert os.path.exists(fn)
+        with open(fn) as f:
+            assert "html" in f.read().lower()
+
+
+@pytest.mark.skipif("not bokeh")
+def test_saves_file_path_deprecated():
+    with tmpfile("html") as fn:
+        with prof:
+            get(dsk, "e")
+        # Run just to see that it warns, but still works.
+        with pytest.warns(FutureWarning) as record:
+            prof.visualize(show=False, file_path=fn)
+
+        assert len(record) == 1
         assert os.path.exists(fn)
         with open(fn) as f:
             assert "html" in f.read().lower()

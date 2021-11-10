@@ -10,7 +10,7 @@ from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from functools import partial
 from hashlib import md5
-from numbers import Number
+from numbers import Integral, Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
 
@@ -592,11 +592,21 @@ def visualize(*args, **kwargs):
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color : {None, 'order'}, optional
+    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases',
+             'memorypressure'}, optional
         Options to color nodes.
         colormap
         - None, the default, no colors.
-        - 'order', colors the nodes' border based on the order they appear in the graph
+        - 'order', colors the nodes' border based on the order they appear in the graph.
+        - 'ages', how long the data of a node is held.
+        - 'freed', the number of dependencies released after running a node.
+        - 'memoryincreases', how many more outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run later.
+        - 'memorydecreases', how many fewer outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run sooner.
+        - 'memorypressure', the number of data held when:
+            - the node is run (circle)
+            - the data is released (rectangle)
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -652,10 +662,22 @@ def visualize(*args, **kwargs):
 
     color = kwargs.get("color")
 
-    if color == "order":
+    if color in {
+        "order",
+        "order-age",
+        "order-freed",
+        "order-memoryincreases",
+        "order-memorydecreases",
+        "order-memorypressure",
+        "age",
+        "freed",
+        "memoryincreases",
+        "memorydecreases",
+        "memorypressure",
+    }:
         import matplotlib.pyplot as plt
 
-        from .order import order
+        from .order import diagnostics, order
 
         o = order(dsk)
         try:
@@ -666,13 +688,57 @@ def visualize(*args, **kwargs):
             import matplotlib.pyplot as plt
 
             cmap = getattr(plt.cm, cmap)
-        mx = max(o.values()) + 1
-        colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
+
+        def label(x):
+            return str(values[x])
+
+        data_values = None
+        if color != "order":
+            info = diagnostics(dsk, o)[0]
+            if color.endswith("age"):
+                values = {key: val.age for key, val in info.items()}
+            elif color.endswith("freed"):
+                values = {key: val.num_dependencies_freed for key, val in info.items()}
+            elif color.endswith("memorypressure"):
+                values = {key: val.num_data_when_run for key, val in info.items()}
+                data_values = {
+                    key: val.num_data_when_released for key, val in info.items()
+                }
+            elif color.endswith("memoryincreases"):
+                values = {
+                    key: max(0, val.num_data_when_released - val.num_data_when_run)
+                    for key, val in info.items()
+                }
+            else:  # memorydecreases
+                values = {
+                    key: max(0, val.num_data_when_run - val.num_data_when_released)
+                    for key, val in info.items()
+                }
+
+            if color.startswith("order-"):
+
+                def label(x):
+                    return str(o[x]) + "-" + str(values[x])
+
+        else:
+            values = o
+        maxval = kwargs.pop("maxval", None)
+        if maxval is None:
+            maxval = max(1, max(values.values()))
+        colors = {k: _colorize(cmap(v / maxval, bytes=True)) for k, v in values.items()}
+        if data_values is None:
+            data_values = values
+            data_colors = colors
+        else:
+            data_colors = {
+                k: _colorize(cmap(v / maxval, bytes=True))
+                for k, v in data_values.items()
+            }
 
         kwargs["function_attributes"] = {
-            k: {"color": v, "label": str(o[k])} for k, v in colors.items()
+            k: {"color": v, "label": label(k)} for k, v in colors.items()
         }
-        kwargs["data_attributes"] = {k: {"color": v} for k, v in colors.items()}
+        kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
@@ -839,7 +905,14 @@ def normalize_seq(seq):
         try:
             return list(map(normalize_token, seq))
         except RecursionError:
-            return str(uuid.uuid4())
+            if not config.get("tokenize.ensure-deterministic"):
+                return uuid.uuid4().hex
+
+            raise RuntimeError(
+                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+                "for more information"
+            )
 
     return type(seq).__name__, func(seq)
 
@@ -859,7 +932,18 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
-    return normalize_function(o) if callable(o) else uuid.uuid4().hex
+
+    if callable(o):
+        return normalize_function(o)
+
+    if not config.get("tokenize.ensure-deterministic"):
+        return uuid.uuid4().hex
+
+    raise RuntimeError(
+        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
+    )
 
 
 function_cache = {}
@@ -1032,7 +1116,15 @@ def register_numpy():
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
-                    data = uuid.uuid4().hex
+                    if not config.get("tokenize.ensure-deterministic"):
+                        data = uuid.uuid4().hex
+                    else:
+                        raise RuntimeError(
+                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            "be deterministically hashed. Please, see "
+                            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
+                            "for more information"
+                        )
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
@@ -1064,7 +1156,7 @@ def register_scipy():
     def normalize_sparse_matrix(x, attrs):
         return (
             type(x).__name__,
-            normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
+            normalize_seq(normalize_token(getattr(x, key)) for key in attrs),
         )
 
     for cls, attrs in [
@@ -1176,9 +1268,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     % ", ".join(sorted(named_schedulers))
                 )
         elif isinstance(scheduler, Executor):
-            num_workers = getattr(
-                scheduler, "_max_workers", config.get("num_workers", CPU_COUNT)
-            )
+            # Get `num_workers` from `Executor`'s `_max_workers` attribute.
+            # If undefined, fallback to `config` or worst case CPU_COUNT.
+            num_workers = getattr(scheduler, "_max_workers", None)
+            if num_workers is None:
+                num_workers = config.get("num_workers", CPU_COUNT)
+            assert isinstance(num_workers, Integral) and num_workers > 0
             return partial(local.get_async, scheduler.submit, num_workers)
         else:
             raise ValueError("Unexpected scheduler: %s" % repr(scheduler))

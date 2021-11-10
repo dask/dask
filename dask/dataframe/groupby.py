@@ -2,6 +2,7 @@ import collections
 import itertools as it
 import operator
 import warnings
+from numbers import Integral
 
 import numpy as np
 import pandas as pd
@@ -356,7 +357,7 @@ def _cov_finalizer(df, cols, std=False):
         x = col_idx_mapping[i]
         y = col_idx_mapping[j]
         idx = x + num_cols * y
-        mul_col = "%s%s" % (i, j)
+        mul_col = f"{i}{j}"
         ni = df["%s-count" % i]
         nj = df["%s-count" % j]
 
@@ -365,8 +366,8 @@ def _cov_finalizer(df, cols, std=False):
         div[div < 0] = 0
         val = (df[mul_col] - df[i] * df[j] / n).values[0] / div.values[0]
         if std:
-            ii = "%s%s" % (i, i)
-            jj = "%s%s" % (j, j)
+            ii = f"{i}{i}"
+            jj = f"{j}{j}"
             std_val_i = (df[ii] - (df[i] ** 2) / ni).values[0] / div.values[0]
             std_val_j = (df[jj] - (df[j] ** 2) / nj).values[0] / div.values[0]
             val = val / np.sqrt(std_val_i * std_val_j)
@@ -389,7 +390,7 @@ def _mul_cols(df, cols):
     """
     _df = df.__class__()
     for i, j in it.combinations_with_replacement(cols, 2):
-        col = "%s%s" % (i, j)
+        col = f"{i}{j}"
         _df[col] = df[i] * df[j]
 
     # Fix index in a groupby().apply() context
@@ -436,7 +437,7 @@ def _cov_chunk(df, *index):
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
 
-    n = g[x.columns].count().rename(columns=lambda c: "{}-count".format(c))
+    n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
     return (x, mul, n, col_mapping)
 
 
@@ -562,7 +563,7 @@ def _nunique_series_chunk(df, *index, **_ignored_):
 #
 ###############################################################
 def _make_agg_id(func, column):
-    return "{!s}-{!s}-{}".format(func, column, tokenize(func, column))
+    return f"{func!s}-{column!s}-{tokenize(func, column)}"
 
 
 def _normalize_spec(spec, non_group_columns):
@@ -638,7 +639,7 @@ def _normalize_spec(spec, non_group_columns):
                 )
 
     else:
-        raise ValueError("unsupported agg spec of type {}".format(type(spec)))
+        raise ValueError(f"unsupported agg spec of type {type(spec)}")
 
     compounds = (list, tuple, dict)
     use_flat_columns = not any(
@@ -684,7 +685,7 @@ def _build_agg_args(spec):
 
     for funcs in by_name.values():
         if len(funcs) != 1:
-            raise ValueError("conflicting aggregation functions: {}".format(funcs))
+            raise ValueError(f"conflicting aggregation functions: {funcs}")
 
     chunks = {}
     aggs = {}
@@ -743,7 +744,7 @@ def _build_agg_args_single(result_column, func, input_column):
         return _build_agg_args_custom(result_column, func, input_column)
 
     else:
-        raise ValueError("unknown aggregate {}".format(func))
+        raise ValueError(f"unknown aggregate {func}")
 
 
 def _build_agg_args_simple(result_column, func, input_column, impl_pair):
@@ -911,7 +912,7 @@ def _groupby_apply_funcs(df, *index, **kwargs):
 
         if isinstance(r, tuple):
             for idx, s in enumerate(r):
-                result["{}-{}".format(result_column, idx)] = s
+                result[f"{result_column}-{idx}"] = s
 
         else:
             result[result_column] = r
@@ -1100,6 +1101,16 @@ class _GroupBy:
         self._meta = self.obj._meta.groupby(
             index_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
+
+    @property
+    def _groupby_kwargs(self):
+        return {
+            "by": self.index,
+            "group_keys": self.group_keys,
+            **self.dropna,
+            "sort": self.sort,
+            **self.observed,
+        }
 
     @property
     def _meta_nonempty(self):
@@ -1576,7 +1587,7 @@ class _GroupBy:
                 ]
 
         else:
-            raise ValueError("aggregate on unknown object {}".format(self.obj))
+            raise ValueError(f"aggregate on unknown object {self.obj}")
 
         chunk_funcs, aggregate_funcs, finalizers = _build_agg_args(spec)
 
@@ -1655,9 +1666,7 @@ class _GroupBy:
         meta = kwargs.get("meta", no_default)
 
         if meta is no_default:
-            with raise_on_meta_error(
-                "groupby.apply({0})".format(funcname(func)), udf=True
-            ):
+            with raise_on_meta_error(f"groupby.apply({funcname(func)})", udf=True):
                 meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
                 meta = self._meta_nonempty.apply(func, *meta_args, **meta_kwargs)
 
@@ -1744,9 +1753,7 @@ class _GroupBy:
         meta = kwargs.get("meta", no_default)
 
         if meta is no_default:
-            with raise_on_meta_error(
-                "groupby.transform({0})".format(funcname(func)), udf=True
-            ):
+            with raise_on_meta_error(f"groupby.transform({funcname(func)})", udf=True):
                 meta_args, meta_kwargs = _extract_meta((args, kwargs), nonempty=True)
                 meta = self._meta_nonempty.transform(func, *meta_args, **meta_kwargs)
 
@@ -1797,6 +1804,67 @@ class _GroupBy:
         )
 
         return df3
+
+    def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
+        """Provides rolling transformations.
+
+        .. note::
+
+            Since MultiIndexes are not well supported in Dask, this method returns a
+            dataframe with the same index as the original data. The groupby column is
+            not added as the first level of the index like pandas does.
+
+            This method works differently from other groupby methods. It does a groupby
+            on each partition (plus some overlap). This means that the output has the
+            same shape and number of partitions as the original.
+
+        Parameters
+        ----------
+        window : str, offset
+           Size of the moving window. This is the number of observations used
+           for calculating the statistic. Data must have a ``DatetimeIndex``
+        min_periods : int, default None
+            Minimum number of observations in window required to have a value
+            (otherwise result is NA).
+        center : boolean, default False
+            Set the labels at the center of the window.
+        win_type : string, default None
+            Provide a window type. The recognized window types are identical
+            to pandas.
+        axis : int, default 0
+
+        Returns
+        -------
+        a Rolling object on which to call a method to compute a statistic
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> result = ddf.groupby("name").x.rolling('1D').max()
+        """
+        from dask.dataframe.rolling import RollingGroupby
+
+        if isinstance(window, Integral):
+            raise ValueError(
+                "Only time indexes are supported for rolling groupbys in dask dataframe. "
+                "``window`` must be a ``freq`` (e.g. '1H')."
+            )
+
+        if min_periods is not None:
+            if not isinstance(min_periods, Integral):
+                raise ValueError("min_periods must be an integer")
+            if min_periods < 0:
+                raise ValueError("min_periods must be >= 0")
+
+        return RollingGroupby(
+            self,
+            window=window,
+            min_periods=min_periods,
+            center=center,
+            win_type=win_type,
+            axis=axis,
+        )
 
 
 class DataFrameGroupBy(_GroupBy):
