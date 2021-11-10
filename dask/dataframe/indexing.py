@@ -4,13 +4,14 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype
 
 from ..array.core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from . import methods
 from ._compat import PANDAS_GT_130
-from .core import Series, is_bool_dtype, new_dd_object
+from .core import Series, new_dd_object
 from .utils import is_index_like, is_series_like, meta_nonempty
 
 
