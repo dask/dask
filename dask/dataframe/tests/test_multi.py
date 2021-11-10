@@ -1400,8 +1400,7 @@ def test_cheap_single_partition_merge(flip):
     list_eq(cc, pd.merge(*pd_inputs, on="x", how="inner"))
 
 
-@pytest.mark.parametrize("flip", [False, True])
-def test_cheap_single_partition_merge_divisions(flip):
+def test_cheap_single_partition_merge_divisions():
     a = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
     )
