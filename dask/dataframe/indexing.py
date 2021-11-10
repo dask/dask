@@ -114,14 +114,14 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_slice(iindexer, cindexer)
             elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
-            elif is_series_like(iindexer) and not is_bool_dtype(iindexer):
+            elif is_series_like(iindexer) and not is_bool_dtype(iindexer._meta):
                 return self._loc_list(iindexer.values, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
             if isinstance(iindexer, (list, np.ndarray)) or (
-                is_series_like(iindexer) and is_bool_dtype(iindexer)
+                is_series_like(iindexer) and is_bool_dtype(iindexer._meta)
             ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
@@ -148,7 +148,7 @@ class _LocIndexer(_IndexerBase):
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
-        if not is_bool_dtype(iindexer):
+        if not is_bool_dtype(iindexer._meta):
             raise KeyError(
                 "Cannot index with non-boolean dask Series. Try passing computed "
                 "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
