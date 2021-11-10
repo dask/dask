@@ -43,6 +43,8 @@ extensions = [
     "dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
     "sphinx_remove_toctrees",
+    "IPython.sphinxext.ipython_console_highlighting",
+    "IPython.sphinxext.ipython_directive",
 ]
 
 numpydoc_show_class_members = False
@@ -51,7 +53,7 @@ sphinx_tabs_disable_tab_closing = True
 
 # Remove individual API pages from sphinx toctree to prevent long build times.
 # See https://github.com/dask/dask/issues/8227.
-remove_toctrees_from = ["generated/*"]
+remove_from_toctrees = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
