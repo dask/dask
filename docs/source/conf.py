@@ -43,8 +43,8 @@ extensions = [
     "dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
     "sphinx_remove_toctrees",
-    'IPython.sphinxext.ipython_console_highlighting',
-    'IPython.sphinxext.ipython_directive',
+    "IPython.sphinxext.ipython_console_highlighting",
+    "IPython.sphinxext.ipython_directive",
 ]
 
 numpydoc_show_class_members = False
