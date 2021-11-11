@@ -204,11 +204,11 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
 
 def list_eq(aa, bb):
     if isinstance(aa, dd.DataFrame):
-        a = aa.compute(scheduler="sync")
+        a = aa.compute()
     else:
         a = aa
     if isinstance(bb, dd.DataFrame):
-        b = bb.compute(scheduler="sync")
+        b = bb.compute()
     else:
         b = bb
     tm.assert_index_equal(a.columns, b.columns)

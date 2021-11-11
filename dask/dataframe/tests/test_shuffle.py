@@ -50,6 +50,9 @@ shuffle_func = shuffle  # conflicts with keyword argument
 
 
 def test_shuffle(shuffle_method):
+    if shuffle_method == "p2p":
+        pytest.skip()
+
     s = shuffle_func(d, d.b, shuffle=shuffle_method)
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == d.npartitions
@@ -116,7 +119,7 @@ def test_shuffle_from_one_partition_to_one_other(shuffle_method):
 
     for i in [1, 2]:
         b = shuffle(a, "x", npartitions=i, shuffle=shuffle_method)
-        assert len(a.compute(scheduler="sync")) == len(b.compute(scheduler="sync"))
+        assert len(a.compute()) == len(b.compute())
 
 
 def test_shuffle_empty_partitions(shuffle_method):
@@ -232,9 +235,11 @@ def test_set_index_names(shuffle_method):
     assert set(ddf.set_index("x", shuffle=shuffle_method).dask) != set(
         ddf.set_index("y", shuffle=shuffle_method).dask
     )
-    assert set(ddf.set_index("x", max_branch=4, shuffle=shuffle_method).dask) != set(
-        ddf.set_index("x", max_branch=3, shuffle=shuffle_method).dask
-    )
+    if shuffle_method == "tasks":
+        # only tasks has `max_branch`
+        assert set(
+            ddf.set_index("x", max_branch=4, shuffle=shuffle_method).dask
+        ) != set(ddf.set_index("x", max_branch=3, shuffle=shuffle_method).dask)
     assert set(ddf.set_index("x", drop=True, shuffle=shuffle_method).dask) != set(
         ddf.set_index("x", drop=False, shuffle=shuffle_method).dask
     )
@@ -251,7 +256,7 @@ def test_set_index_2(shuffle_method):
     )
 
     df2 = df.set_index("name", shuffle=shuffle_method)
-    df2.value.sum().compute(scheduler="sync")
+    df2.value.sum().compute()
 
 
 def test_set_index_3(shuffle_method):
@@ -278,6 +283,11 @@ def test_shuffle_sort(shuffle_method):
 
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_rearrange(shuffle_method, scheduler):
+    if shuffle_method == "p2p":
+        if scheduler == "processes":
+            pytest.skip()
+        scheduler = "distributed"
+
     df = pd.DataFrame({"x": np.random.random(10)})
     ddf = dd.from_pandas(df, npartitions=4)
     ddf2 = ddf.assign(_partitions=ddf.x % 4)
@@ -384,7 +394,7 @@ def test_set_index_divisions_2():
     result = ddf.set_index("y", divisions=["a", "c", "d"])
     assert result.divisions == ("a", "c", "d")
 
-    assert list(result.compute(scheduler="sync").index[-2:]) == ["d", "d"]
+    assert list(result.compute().index[-2:]) == ["d", "d"]
 
 
 def test_set_index_divisions_compute():
@@ -1092,6 +1102,8 @@ def test_disk_shuffle_check_actual_compression():
     assert len(uncompressed_data) > len(compressed_data)
 
 
+# TODO does this need to be run on all shuffle methods?
+# So many parameterizations already that it adds a lot of time.
 @pytest.mark.parametrize("ignore_index", [None, True, False])
 @pytest.mark.parametrize(
     "on", ["id", "name", ["id", "name"], pd.Series(["id", "name"])]
@@ -1118,7 +1130,11 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     )
     df_out_2 = df_in.shuffle(ext_on, shuffle=shuffle_method, ignore_index=ignore_index)
 
-    assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
+    assert_eq(
+        df_out_1,
+        df_out_2,
+        check_index=(not ignore_index if shuffle_method == "tasks" else True),
+    )
 
     # disk shuffling doesn't support ignore_index
     if ignore_index and shuffle_method == "tasks":
