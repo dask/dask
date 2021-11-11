@@ -468,6 +468,16 @@ def rearrange_by_column(
         if ignore_index:
             df2._meta = df2._meta.reset_index(drop=True)
         return df2
+    elif shuffle == "p2p":
+        try:
+            from distributed.shuffle import rearrange_by_column_p2p
+        except ImportError:
+            raise ImportError(
+                "Cannot use `shuffle='p2p'`, since the package `distributed` is not installed.\n"
+                "Note that a peer-to-peer shuffle only makes sense when using a distributed cluster of "
+                "multiple machines. For large shuffles on a single machine, try `shuffle='disk'`."
+            )
+        return rearrange_by_column_p2p(df, col, npartitions)
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
