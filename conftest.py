@@ -64,7 +64,21 @@ pytest.register_assert_rewrite(
 )
 
 
-@pytest.fixture(params=["disk", "tasks"])
+@pytest.fixture(
+    params=["disk", "tasks", pytest.param("p2p", marks=pytest.mark.shuffle_p2p)]
+)
 def shuffle_method(request):
     with dask.config.set(shuffle=request.param):
-        yield request.param
+        if request.param == "p2p":
+            try:
+                from distributed import Client
+                from distributed.utils_test import cluster
+            except ImportError:
+                pytest.skip("Distributed required for shuffle service")
+                return
+
+            with cluster(worker_kwargs={"nthreads": 2}) as (scheduler, _):
+                with Client(scheduler["address"]):
+                    yield request.param
+        else:
+            yield request.param
