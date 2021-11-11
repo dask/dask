@@ -593,10 +593,9 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases',
-             'memorypressure'}, optional
-        Options to color nodes.
-        colormap
+    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases', 'memorypressure'}, optional
+        Options to color nodes. colormap:
+
         - None, the default, no colors.
         - 'order', colors the nodes' border based on the order they appear in the graph.
         - 'ages', how long the data of a node is held.
@@ -605,9 +604,8 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
           Large values may indicate nodes that should have run later.
         - 'memorydecreases', how many fewer outputs are held after the lifetime of a node.
           Large values may indicate nodes that should have run sooner.
-        - 'memorypressure', the number of data held when:
-            - the node is run (circle)
-            - the data is released (rectangle)
+        - 'memorypressure', the number of data held when the node is run (circle), or
+          the data is released (rectangle).
     maxval : {int, float}, optional
         Maximum value for colormap to normalize form 0 to 1.0. Default is ``None``
         will make it the max number of values

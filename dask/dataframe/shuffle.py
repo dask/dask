@@ -374,6 +374,9 @@ def shuffle(
             )
 
     if not isinstance(index, _Frame):
+        if list_like:
+            # Make sure we don't try to select with pd.Series/pd.Index
+            index = list(index)
         index = df._select_columns_or_index(index)
     elif hasattr(index, "to_frame"):
         # If this is an index, we should still convert to a
