@@ -22,6 +22,7 @@ from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from ..expr import Expr
 from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
@@ -292,6 +293,35 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         return Scalar(graph, name, meta)
 
+class FrameExpr(Expr):
+    @property
+    def graph(self):
+        return self._graph
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def meta(self):
+        return self._meta
+
+    @property
+    def divisions(self):
+        return self._divisions
+
+class FrameLeafExpr(FrameExpr):
+    def __init__(self, graph, name, meta, divisions):
+        self._graph = graph
+        self._name = name
+        self._meta = meta
+        self._divisions = divisions
+        super().__init__(graph, name, meta, divisions)
+
+    def __repr__(self):
+        # Use a custom repr because meta and divisions are too noisy to show
+        # their full str representation
+        return f"{self.func_name}(<graph>, {self.name!r}, <meta>, <divisions>)"
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
@@ -310,7 +340,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
+    def __init__(self, expr):
+        if not isinstance(expr, FrameExpr):
+            raise TypeError('expr should be a FrameExpr')
+        dsk, name, meta, divisions = expr.graph, expr.name, expr.meta, expr.divisions
+        self.expr = expr
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -3940,6 +3974,35 @@ class Index(Series):
         return applied
 
 
+class DataFrameGetItemExpr(FrameExpr):
+    def __init__(self, frame, key):
+        super().__init__(getattr(frame, 'expr', frame), key)
+        self._name = "getitem-%s" % tokenize(self, key)
+        self._divisions = frame.divisions
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
+
+            if isinstance(frame._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
+                if key not in frame._meta.columns:
+                    if PANDAS_GT_120:
+                        warnings.warn(
+                            "Indexing a DataFrame with a datetimelike index using a single "
+                            "string to slice the rows, like `frame[string]`, is deprecated "
+                            "and will be removed in a future version. Use `frame.loc[string]` "
+                            "instead.",
+                            FutureWarning,
+                        )
+                    return frame.loc[key]
+
+            # error is raised from pandas
+            self._meta = frame._meta[_extract_meta(key)]
+            dsk = partitionwise_graph(operator.getitem, self.name, frame, key)
+            self._graph = HighLevelGraph.from_collections(self.name, dsk, dependencies=[frame])
+        else:
+            raise NotImplementedError("DataFrameGetItemExpr currently only supports scalar, tuple, and str keys")
+
+    def __repr__(self):
+        return f"{self.args[0]!r}[{self.args[1]!r}]"
+
 class DataFrame(_Frame):
     """
     Parallel Pandas DataFrame
@@ -3966,8 +4029,9 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
+    def __init__(self, expr):
+        super().__init__(expr)
+        name = self._name
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
                 "npartitions": self.npartitions,
@@ -4062,24 +4126,8 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-
-            if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
-                if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
-                    return self.loc[key]
-
-            # error is raised from pandas
-            meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            expr = DataFrameGetItemExpr(self, key)
+            return new_dd_object(expr=expr)
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -5311,7 +5359,7 @@ for op in [
     _Frame._bind_operator(op)
     Scalar._bind_operator(op)
 
-for name in [
+for _name in [
     "add",
     "sub",
     "mul",
@@ -5330,18 +5378,18 @@ for name in [
     "rmod",
     "rpow",
 ]:
-    meth = getattr(pd.DataFrame, name)
-    DataFrame._bind_operator_method(name, meth)
+    meth = getattr(pd.DataFrame, _name)
+    DataFrame._bind_operator_method(_name, meth)
 
-    meth = getattr(pd.Series, name)
-    Series._bind_operator_method(name, meth)
+    meth = getattr(pd.Series, _name)
+    Series._bind_operator_method(_name, meth)
 
-for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
-    meth = getattr(pd.DataFrame, name)
-    DataFrame._bind_comparison_method(name, meth)
+for _name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+    meth = getattr(pd.DataFrame, _name)
+    DataFrame._bind_comparison_method(_name, meth)
 
-    meth = getattr(pd.Series, name)
-    Series._bind_comparison_method(name, meth)
+    meth = getattr(pd.Series, _name)
+    Series._bind_comparison_method(_name, meth)
 
 
 def is_broadcastable(dfs, s):
@@ -5359,6 +5407,91 @@ def is_broadcastable(dfs, s):
         )
     )
 
+class ElemwiseFrameExpr(FrameExpr):
+    func_name = 'elemwise'
+
+    def __init__(self, op, *args, meta=no_default, transform_divisions=True,
+                 out=None, **kwargs):
+        super().__init__(*[getattr(i, 'expr', i) for i in args], meta=meta,
+                         transform_divisions=transform_divisions, out=out, **kwargs)
+
+        name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
+
+        args = _maybe_from_pandas(args)
+
+        from .multi import _maybe_align_partitions
+
+        args = _maybe_align_partitions(args)
+        dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
+        dfs = [df for df in dasks if isinstance(df, _Frame)]
+
+        # Clean up dask arrays if present
+        deps = dasks.copy()
+        for i, a in enumerate(dasks):
+            if not isinstance(a, Array):
+                continue
+            # Ensure that they have similar-ish chunk structure
+            if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
+                msg = (
+                    "When combining dask arrays with dataframes they must "
+                    "match chunking exactly.  Operation: %s" % funcname(op)
+                )
+                raise ValueError(msg)
+            # Rechunk to have a single chunk along all other axes
+            if a.ndim > 1:
+                a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
+                dasks[i] = a
+
+        divisions = dfs[0].divisions
+        if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+            try:
+                divisions = op(
+                    *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                    **kwargs,
+                )
+                if isinstance(divisions, pd.Index):
+                    divisions = methods.tolist(divisions)
+            except Exception:
+                pass
+            else:
+                if not valid_divisions(divisions):
+                    divisions = [None] * (dfs[0].npartitions + 1)
+
+        _is_broadcastable = partial(is_broadcastable, dfs)
+        dfs = list(remove(_is_broadcastable, dfs))
+
+        other = [
+            (i, arg)
+            for i, arg in enumerate(args)
+            if not isinstance(arg, (_Frame, Scalar, Array))
+        ]
+
+        # adjust the key length of Scalar
+        dsk = partitionwise_graph(op, name, *args, **kwargs)
+
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+
+        if meta is no_default:
+            if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
+                # should not occur in current funcs
+                msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
+                raise NotImplementedError(msg)
+            # For broadcastable series, use no rows.
+            parts = [
+                d._meta
+                if _is_broadcastable(d)
+                else np.empty((), dtype=d.dtype)
+                if isinstance(d, Array)
+                else d._meta_nonempty
+                for d in dasks
+            ]
+            with raise_on_meta_error(funcname(op)):
+                meta = partial_by_order(*parts, function=op, other=other)
+
+        self._graph = graph
+        self._name = name
+        self._meta = meta
+        self._divisions = divisions
 
 def elemwise(op, *args, **kwargs):
     """Elementwise operation for Dask dataframes
@@ -5369,7 +5502,7 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
+    **kwargs: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -5383,84 +5516,9 @@ def elemwise(op, *args, **kwargs):
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
-
-    _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
-
-    args = _maybe_from_pandas(args)
-
-    from .multi import _maybe_align_partitions
-
-    args = _maybe_align_partitions(args)
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
-
-    # Clean up dask arrays if present
-    deps = dasks.copy()
-    for i, a in enumerate(dasks):
-        if not isinstance(a, Array):
-            continue
-        # Ensure that they have similar-ish chunk structure
-        if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
-            msg = (
-                "When combining dask arrays with dataframes they must "
-                "match chunking exactly.  Operation: %s" % funcname(op)
-            )
-            raise ValueError(msg)
-        # Rechunk to have a single chunk along all other axes
-        if a.ndim > 1:
-            a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
-            dasks[i] = a
-
-    divisions = dfs[0].divisions
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = op(
-                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-                **kwargs,
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
-
-    _is_broadcastable = partial(is_broadcastable, dfs)
-    dfs = list(remove(_is_broadcastable, dfs))
-
-    other = [
-        (i, arg)
-        for i, arg in enumerate(args)
-        if not isinstance(arg, (_Frame, Scalar, Array))
-    ]
-
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
-
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
-
-    if meta is no_default:
-        if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
-            # should not occur in current funcs
-            msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
-            raise NotImplementedError(msg)
-        # For broadcastable series, use no rows.
-        parts = [
-            d._meta
-            if _is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else d._meta_nonempty
-            for d in dasks
-        ]
-        with raise_on_meta_error(funcname(op)):
-            meta = partial_by_order(*parts, function=op, other=other)
-
-    result = new_dd_object(graph, _name, meta, divisions)
+    expr = ElemwiseFrameExpr(op, *args, **kwargs)
+    result = new_dd_object(expr=expr)
+    out = expr.kwargs['out']
     return handle_out(out, result)
 
 
@@ -7011,14 +7069,23 @@ def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
     return get_parallel_type(x) is not Scalar
 
-
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk=None, name=None, meta=None, divisions=None, parent_meta=None,
+                  expr=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
+    if any(i is not None for i in [dsk, name, meta, divisions]) and has_parallel_type(meta):
+        if expr is not None:
+            raise ValueError("Just one of (dsk, name, meta, divisions) or expr should be provided")
+        expr = FrameLeafExpr(dsk, name, meta, divisions)
+        typ = get_parallel_type(meta)
+        expr.func_name = typ.__name__
+    else:
+        meta = expr.meta
+
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(expr)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 

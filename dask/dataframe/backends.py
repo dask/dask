@@ -17,7 +17,7 @@ from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
+from .core import DataFrame, FrameLeafExpr, Index, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
     concat,

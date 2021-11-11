@@ -4,7 +4,7 @@ import pandas as pd
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import _deprecated, random_state_data
-from ..core import DataFrame, tokenize
+from ..core import DataFrame, new_dd_object, tokenize
 
 __all__ = ["make_timeseries"]
 
@@ -185,7 +185,7 @@ def make_timeseries(
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(graph, name, head, divisions)
+    return new_dd_object(graph, name, head, divisions)
 
 
 class GenerateDay:
