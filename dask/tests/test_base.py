@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import subprocess
@@ -405,6 +406,16 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+
+
+def test_tokenize_dataclass():
+    a = ADataClass(1)
+    b = ADataClass(2)
+    assert tokenize(a) == tokenize(a)
+    assert tokenize(a) != tokenize(b)
+
+
 def test_tokenize_range():
     assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
     assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
@@ -507,15 +518,6 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
-
-
-try:
-    import dataclasses
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-except ImportError:
-    dataclasses = None
 
 
 def test_unpack_collections():

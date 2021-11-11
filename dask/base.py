@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import inspect
 import os
@@ -927,6 +928,9 @@ def normalize_object(o):
 
     if callable(o):
         return normalize_function(o)
+
+    if dataclasses.is_dataclass(o):
+        return normalize_token(dataclasses.astuple(o))
 
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
