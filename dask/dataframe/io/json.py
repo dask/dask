@@ -22,6 +22,7 @@ def to_json(
     errors="strict",
     compression=None,
     compute_kwargs=None,
+    name_function=None,
     **kwargs,
 ):
     """Write dataframe into JSON text files
@@ -59,6 +60,10 @@ def to_json(
         Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions.
     """
     if lines is None:
         lines = orient == "records"
@@ -73,7 +78,7 @@ def to_json(
         "wt",
         encoding=encoding,
         errors=errors,
-        name_function=kwargs.pop("name_function", None),
+        name_function=name_function,
         num=df.npartitions,
         compression=compression,
         **(storage_options or {}),

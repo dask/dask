@@ -1053,13 +1053,15 @@ class FastParquetEngine(Engine):
         ignore_divisions=False,
         division_info=None,
         schema=None,
+        object_encoding="utf8",
+        index_cols=None,
         **kwargs,
     ):
+        if index_cols is None:
+            index_cols = []
         if append and division_info is None:
             ignore_divisions = True
         fs.mkdirs(path, exist_ok=True)
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        index_cols = kwargs.pop("index_cols", [])
         if object_encoding == "infer" or (
             isinstance(object_encoding, dict) and "infer" in object_encoding.values()
         ):

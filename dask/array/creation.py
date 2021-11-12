@@ -326,7 +326,7 @@ def linspace(
         return Array(dsk, name, chunks, dtype=dtype)
 
 
-def arange(*args, **kwargs):
+def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -349,8 +349,12 @@ def arange(*args, **kwargs):
     chunks :  int
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+        Defaults to "auto" which will automatically determine chunk sizes.
     dtype : numpy.dtype
         Output dtype. Omit to infer it from start, stop, step
+        Defaults to ``None``.
+    like : array type or ``None``
+        Array to extract meta from. Defaults to ``None``.
 
     Returns
     -------
@@ -377,14 +381,10 @@ def arange(*args, **kwargs):
         """
         )
 
-    chunks = kwargs.pop("chunks", "auto")
-
     num = int(max(np.ceil((stop - start) / step), 0))
 
-    like = kwargs.pop("like", None)
     meta = meta_from_array(like) if like is not None else None
 
-    dtype = kwargs.pop("dtype", None)
     if dtype is None:
         dtype = np.arange(start, stop, step * num if num else step).dtype
 
@@ -415,9 +415,8 @@ def arange(*args, **kwargs):
 
 
 @derived_from(np)
-def meshgrid(*xi, **kwargs):
-    indexing = kwargs.pop("indexing", "xy")
-    sparse = bool(kwargs.pop("sparse", False))
+def meshgrid(*xi, sparse=False, indexing="xy", **kwargs):
+    sparse = bool(sparse)
 
     if "copy" in kwargs:
         raise NotImplementedError("`copy` not supported")

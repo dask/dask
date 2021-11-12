@@ -4374,21 +4374,27 @@ def broadcast_shapes(*shapes):
     return tuple(reversed(out))
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, out=None, **kwargs):
     """Apply elementwise function across arguments
 
     Respects broadcasting rules
+
+    Parameters
+    ----------
+    out : dask array or None
+        If out is a dask.array then this overwrites the contents of that array with
+        the result
 
     Examples
     --------
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
+    >>> elemwise(sin, x, out=dask_array)  # doctest: +SKIP
 
     See Also
     --------
     blockwise
     """
-    out = kwargs.pop("out", None)
     if not {"name", "dtype"}.issuperset(kwargs):
         msg = "%s does not take the following keyword arguments %s"
         raise TypeError(
@@ -4609,14 +4615,11 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
 
 @derived_from(np)
-def broadcast_arrays(*args, **kwargs):
-    subok = bool(kwargs.pop("subok", False))
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
 
     to_array = asanyarray if subok else asarray
     args = tuple(to_array(e) for e in args)
-
-    if kwargs:
-        raise TypeError("unsupported keyword argument(s) provided")
 
     # Unify uneven chunking
     inds = [list(reversed(range(x.ndim))) for x in args]
@@ -4926,11 +4929,20 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, **kwargs):
+def to_hdf5(filename, *args, chunks=True, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
     It creates the necessary datasets and handles clean file opening/closing.
+
+    Parameters
+    ----------
+    chunks: tuple or ``True``
+        Chunk shape, or ``True`` to pass the chunks from the dask array.
+        Defaults to ``True``.
+
+    Examples
+    --------
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x)  # doctest: +SKIP
 
@@ -4941,6 +4953,8 @@ def to_hdf5(filename, *args, **kwargs):
     Optionally provide arguments as though to ``h5py.File.create_dataset``
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x, compression='lzf', shuffle=True)  # doctest: +SKIP
+
+    >>> da.to_hdf5('myfile.hdf5', '/x', x, chunks=(10,20,30))  # doctest: +SKIP
 
     This can also be used as a method on a single Array
 
@@ -4957,8 +4971,6 @@ def to_hdf5(filename, *args, **kwargs):
         data = {args[0]: args[1]}
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")
-
-    chunks = kwargs.pop("chunks", True)
 
     import h5py
 

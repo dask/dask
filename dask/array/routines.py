@@ -610,7 +610,7 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
 
 
 @derived_from(np)
-def gradient(f, *varargs, **kwargs):
+def gradient(f, *varargs, axis=None, **kwargs):
     f = asarray(f)
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
@@ -618,7 +618,6 @@ def gradient(f, *varargs, **kwargs):
         raise ValueError("edge_order must be less than or equal to 2.")
 
     drop_result_list = False
-    axis = kwargs.pop("axis", None)
     if axis is None:
         axis = tuple(range(f.ndim))
     elif isinstance(axis, Integral):

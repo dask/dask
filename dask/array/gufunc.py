@@ -625,19 +625,30 @@ class gufunc:
     .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
 
-    def __init__(self, pyfunc, **kwargs):
+    def __init__(
+        self,
+        pyfunc,
+        *,
+        signature=None,
+        vectorize=False,
+        axes=None,
+        axis=None,
+        keepdims=False,
+        output_sizes=None,
+        output_dtypes=None,
+        allow_rechunk=False,
+        meta=None,
+    ):
         self.pyfunc = pyfunc
-        self.signature = kwargs.pop("signature", None)
-        self.vectorize = kwargs.pop("vectorize", False)
-        self.axes = kwargs.pop("axes", None)
-        self.axis = kwargs.pop("axis", None)
-        self.keepdims = kwargs.pop("keepdims", False)
-        self.output_sizes = kwargs.pop("output_sizes", None)
-        self.output_dtypes = kwargs.pop("output_dtypes", None)
-        self.allow_rechunk = kwargs.pop("allow_rechunk", False)
-        self.meta = kwargs.pop("meta", None)
-        if kwargs:
-            raise TypeError("Unsupported keyword argument(s) provided")
+        self.signature = signature
+        self.vectorize = vectorize
+        self.axes = axes
+        self.axis = axis
+        self.keepdims = keepdims
+        self.output_sizes = output_sizes
+        self.output_dtypes = output_dtypes
+        self.allow_rechunk = allow_rechunk
+        self.meta = meta
 
         self.__doc__ = """
         Bound ``dask.array.gufunc``
@@ -659,7 +670,7 @@ class gufunc:
             func=str(self.pyfunc), signature=self.signature
         )
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, allow_rechunk=False, **kwargs):
         return apply_gufunc(
             self.pyfunc,
             self.signature,
@@ -670,7 +681,7 @@ class gufunc:
             keepdims=self.keepdims,
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
-            allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
+            allow_rechunk=self.allow_rechunk or allow_rechunk,
             meta=self.meta,
             **kwargs,
         )
