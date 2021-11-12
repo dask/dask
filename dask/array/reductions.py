@@ -515,6 +515,12 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 
 @derived_from(np)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        a = a.compute_chunk_sizes()
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmin which has no identity"
+        )
     return reduction(
         a,
         _nanmin_skip,
@@ -536,6 +542,12 @@ def _nanmin_skip(x_chunk, axis, keepdims):
 
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        a = a.compute_chunk_sizes()
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmax which has no identity"
+        )
     return reduction(
         a,
         _nanmax_skip,
