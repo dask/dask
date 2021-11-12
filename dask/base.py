@@ -373,7 +373,7 @@ def _extract_graph_and_keys(vals):
     return graph, keys
 
 
-def unpack_collections(*args, **kwargs):
+def unpack_collections(*args, traverse=True):
     """Extract collections in preparation for compute/persist/etc...
 
     Intended use is to find all collections in a set of (possibly nested)
@@ -399,7 +399,6 @@ def unpack_collections(*args, **kwargs):
         A function to call on the transformed collections to repackage them as
         they were in the original ``args``.
     """
-    traverse = kwargs.pop("traverse", True)
 
     collections = []
     repack_dsk = {}
@@ -454,7 +453,7 @@ def unpack_collections(*args, **kwargs):
     return collections, repack
 
 
-def optimize(*args, **kwargs):
+def optimize(*args, traverse=True, **kwargs):
     """Optimize several dask collections at once.
 
     Returns equivalent dask collections that all share the same merged and
@@ -494,7 +493,7 @@ def optimize(*args, **kwargs):
     >>> b2.compute() == b.compute()
     True
     """
-    collections, repack = unpack_collections(*args, **kwargs)
+    collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
@@ -508,7 +507,9 @@ def optimize(*args, **kwargs):
     return repack(postpersists)
 
 
-def compute(*args, **kwargs):
+def compute(
+    *args, traverse=True, optimize_graph=True, scheduler=None, get=None, **kwargs
+):
     """Compute several dask collections at once.
 
     Parameters
@@ -531,6 +532,8 @@ def compute(*args, **kwargs):
         If True [default], the optimizations for each collection are applied
         before computation. Otherwise the graph is run as is. This can be
         useful for debugging.
+    get : ``None``
+        Should be left to ``None`` The get= keyword has been removed.
     kwargs
         Extra keywords to forward to the scheduler function.
 
@@ -548,17 +551,15 @@ def compute(*args, **kwargs):
     >>> d.compute({'a': a, 'b': b, 'c': 1})
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
-    traverse = kwargs.pop("traverse", True)
-    optimize_graph = kwargs.pop("optimize_graph", True)
 
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
     schedule = get_scheduler(
-        scheduler=kwargs.pop("scheduler", None),
+        scheduler=scheduler,
         collections=collections,
-        get=kwargs.pop("get", None),
+        get=get,
     )
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
@@ -571,7 +572,7 @@ def compute(*args, **kwargs):
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
-def visualize(*args, **kwargs):
+def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwargs):
     """
     Visualize several low level dask graphs at once.
 
@@ -605,6 +606,9 @@ def visualize(*args, **kwargs):
           Large values may indicate nodes that should have run sooner.
         - 'memorypressure', the number of data held when the node is run (circle), or
           the data is released (rectangle).
+    maxval : {int, float}, optional
+        Maximum value for colormap to normalize form 0 to 1.0. Default is ``None``
+        will make it the max number of values
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -635,9 +639,6 @@ def visualize(*args, **kwargs):
     https://docs.dask.org/en/latest/optimize.html
     """
     from dask.dot import dot_graph
-
-    filename = kwargs.pop("filename", "mydask")
-    optimize_graph = kwargs.pop("optimize_graph", False)
 
     dsks = []
     args3 = []
@@ -720,7 +721,6 @@ def visualize(*args, **kwargs):
 
         else:
             values = o
-        maxval = kwargs.pop("maxval", None)
         if maxval is None:
             maxval = max(1, max(values.values()))
         colors = {k: _colorize(cmap(v / maxval, bytes=True)) for k, v in values.items()}
@@ -743,7 +743,7 @@ def visualize(*args, **kwargs):
     return dot_graph(dsk, filename=filename, **kwargs)
 
 
-def persist(*args, **kwargs):
+def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):
     """Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
@@ -803,16 +803,11 @@ def persist(*args, **kwargs):
     -------
     New dask collections backed by in-memory data
     """
-    traverse = kwargs.pop("traverse", True)
-    optimize_graph = kwargs.pop("optimize_graph", True)
-
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    schedule = get_scheduler(
-        scheduler=kwargs.pop("scheduler", None), collections=collections
-    )
+    schedule = get_scheduler(scheduler=scheduler, collections=collections)
 
     if inspect.ismethod(schedule):
         try:

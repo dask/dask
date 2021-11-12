@@ -5360,7 +5360,7 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5369,7 +5369,6 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -5378,15 +5377,15 @@ def elemwise(op, *args, **kwargs):
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
+    out : ``dask.array`` or ``None``
+        If out is a dask.DataFrame, dask.Series or dask.Scalar then
+        this overwrites the contents of it with the result
+    **kwargs: scalars
 
     Examples
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
-
     _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
     args = _maybe_from_pandas(args)
@@ -5795,12 +5794,12 @@ def _extract_meta(x, nonempty=False):
         return x
 
 
-def _emulate(func, *args, **kwargs):
+def _emulate(func, *args, udf=False, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=kwargs.pop("udf", False)):
+    with raise_on_meta_error(funcname(func), udf=udf):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 

@@ -232,9 +232,7 @@ allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
 
 
-def merge_chunk(lhs, *args, **kwargs):
-    empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    categorical_columns = kwargs.pop("categorical_columns", None)
+def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **kwargs):
 
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
