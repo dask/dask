@@ -732,12 +732,9 @@ def test_empty_chunk_nanmin_nanmax(func):
     d = da.from_array(x, chunks=2)
     x = x[x > 4]
     d = d[d > 4]
-    chunks = np.array([len(x.compute()) for x in d.blocks])
-    assert 0 in chunks
-    assert_eq(
-        getattr(da, func)(d),
-        getattr(np, func)(x),
-    )
+    block_lens = np.array([len(x.compute()) for x in d.blocks])
+    assert 0 in block_lens
+    assert_eq(getattr(da, func)(d), getattr(np, func)(x))
 
 
 def test_mean_func_does_not_warn():
