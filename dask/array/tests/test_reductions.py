@@ -725,22 +725,19 @@ def test_object_reduction(method):
     assert result == 1
 
 
-def test_nanmin_empty_chunks():
+@pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+def test_empty_chunk_nanmin_nanmax(func):
     # see https://github.com/dask/dask/issues/8352
-    arr = np.array([[-1, -2, -3], [1, 2, 3]], dtype=np.int8)
-    darr = da.from_array(arr, chunks=(1, 3))
-    expeted = np.nanmin(arr[arr >= 0])
-    result = da.nanmin(darr[darr >= 0]).compute()
-    assert_eq(expeted, result)
-
-
-def test_nanmax_empty_chunks():
-    # see https://github.com/dask/dask/issues/8352
-    arr = np.array([[-1, -2, -3], [1, 2, 3]], dtype=np.int8)
-    darr = da.from_array(arr, chunks=(1, 3))
-    expeted = np.nanmax(arr[arr >= 0])
-    result = da.nanmax(darr[darr >= 0]).compute()
-    assert_eq(expeted, result)
+    x = np.arange(10).reshape(2, 5)
+    d = da.from_array(x, chunks=2)
+    x = x[x > 4]
+    d = d[d > 4]
+    chunks = np.array([len(x.compute()) for x in d.blocks])
+    assert 0 in chunks
+    assert_eq(
+        getattr(da, func)(d),
+        getattr(np, func)(x),
+    )
 
 
 def test_mean_func_does_not_warn():
