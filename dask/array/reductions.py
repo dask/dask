@@ -537,7 +537,7 @@ def _nanmin_skip(x_chunk, axis, keepdims):
     if len(x_chunk):
         return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
     else:
-        return np.array([], dtype=x_chunk.dtype)
+        return asarray_safe(np.array([]), like=meta_from_array(x_chunk))
 
 
 @derived_from(np)
@@ -564,7 +564,7 @@ def _nanmax_skip(x_chunk, axis, keepdims):
     if len(x_chunk):
         return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
     else:
-        return np.array([], dtype=x_chunk.dtype)
+        return asarray_safe(np.array([]), like=meta_from_array(x_chunk))
 
 
 def numel(x, **kwargs):
