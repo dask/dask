@@ -725,6 +725,24 @@ def test_object_reduction(method):
     assert result == 1
 
 
+def test_nanmin_empty_chunks():
+    # see https://github.com/dask/dask/issues/8352
+    arr = np.array([[-1, -2, -3], [1, 2, 3]], dtype=np.int8)
+    darr = da.from_array(arr, chunks=(1, 3))
+    expeted = np.nanmin(arr[arr >= 0])
+    result = da.nanmin(darr[darr >= 0]).compute()
+    assert_eq(expeted, result)
+
+
+def test_nanmax_empty_chunks():
+    # see https://github.com/dask/dask/issues/8352
+    arr = np.array([[-1, -2, -3], [1, 2, 3]], dtype=np.int8)
+    darr = da.from_array(arr, chunks=(1, 3))
+    expeted = np.nanmax(arr[arr >= 0])
+    result = da.nanmax(darr[darr >= 0]).compute()
+    assert_eq(expeted, result)
+
+
 def test_mean_func_does_not_warn():
     # non-regression test for https://github.com/pydata/xarray/issues/5151
     xr = pytest.importorskip("xarray")
