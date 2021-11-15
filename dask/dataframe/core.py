@@ -4310,7 +4310,7 @@ class DataFrame(_Frame):
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions
             Defaults to computing this with a single pass over the data. Note
             that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If ``sorted=False``, you should
+            the existing partitions in the data; if this is untrue you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
@@ -4328,9 +4328,10 @@ class DataFrame(_Frame):
 
         Examples
         --------
-        >>> df2 = df.set_index('x')  # doctest: +SKIP
-        >>> df2 = df.set_index(d.x)  # doctest: +SKIP
-        >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
+        >>> ddf2 = ddf.set_index("x")
+        >>> ddf2 = ddf.set_index(ddf.x)
+        >>> ddf2 = ddf.set_index(ddf.timestamp, sorted=True)
 
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
@@ -4338,8 +4339,16 @@ class DataFrame(_Frame):
         divisions along which is is separated
 
         >>> import pandas as pd
-        >>> divisions = pd.date_range('2000', '2010', freq='1D')
-        >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
+        >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
+        ... divisions
+        DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
+                    '2021-01-05', '2021-01-06', '2021-01-07'],
+                    dtype='datetime64[ns]', freq='D')
+
+        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition.
+
+        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions)
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
