@@ -1,8 +1,15 @@
 import os
 from glob import glob
 
+import numpy as np
+
 try:
     from skimage.io import imread as sk_imread
+except (AttributeError, ImportError):
+    pass
+
+try:
+    from pims import open as pims_open
 except (AttributeError, ImportError):
     pass
 
@@ -51,11 +58,20 @@ def imread(filename, imread=None, preprocess=None):
 
     name = "imread-%s" % tokenize(filenames, map(os.path.getmtime, filenames))
 
-    sample = imread(filenames[0])
-    if preprocess:
-        sample = preprocess(sample)
+    if pims_open and not preprocess:
+        sample = pims_open(filenames[0])
+        dtype = np.dtype(sample.pixel_type)
+        shape = sample.frame_shape
+        if len(sample) > 1:
+            shape = (len(sample),) + shape
+    else:
+        sample = imread(filenames[0])
+        if preprocess:
+            sample = preprocess(sample)
+        dtype = sample.dtype
+        shape = sample.shape
 
-    keys = [(name, i) + (0,) * len(sample.shape) for i in range(len(filenames))]
+    keys = [(name, i) + (0,) * len(shape) for i in range(len(filenames))]
     if preprocess:
         values = [
             (add_leading_dimension, (preprocess, (imread, fn))) for fn in filenames
@@ -64,6 +80,6 @@ def imread(filename, imread=None, preprocess=None):
         values = [(add_leading_dimension, (imread, fn)) for fn in filenames]
     dsk = dict(zip(keys, values))
 
-    chunks = ((1,) * len(filenames),) + tuple((d,) for d in sample.shape)
+    chunks = ((1,) * len(filenames),) + tuple((d,) for d in shape)
 
-    return Array(dsk, name, chunks, sample.dtype)
+    return Array(dsk, name, chunks, dtype)
