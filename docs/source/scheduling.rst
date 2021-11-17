@@ -12,7 +12,7 @@ This is the job of a *task scheduler*.
 Different task schedulers exist, and each will consume a task graph and compute the
 same result, but with different performance characteristics.
 
-.. image:: images/collections-schedulers.png
+.. image:: images/dask-overview.svg
    :alt: Dask collections and schedulers
    :width: 80%
    :align: center
