@@ -363,8 +363,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         The "dividing lines" used between the index of the partitions.
         When ``divisions = (0, 10, 50, 100)``, there are three partitions
         with indices containing [0, 10), [10, 50), and [50, 100), respectively.
-        When every item is in ``divisions`` is ``None`` the divisions are unknown. 
-        Some operations can still be performed, but chaining operations might fail. 
+        When every item is in ``divisions`` is ``None`` the divisions are unknown.
+        Some operations can still be performed, but chaining operations might fail.
         It is uncommon to set ``divisions`` directly, instead use ``set_index``
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
