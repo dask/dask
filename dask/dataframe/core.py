@@ -4305,12 +4305,18 @@ class DataFrame(_Frame):
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
+            Only used when ``divisions`` is not given. If ``divisions`` is given,
+            the number of output partitions will be ``len(divisions) - 1``.
         divisions: list, optional
-            Known values on which to separate index values of the partitions.
-            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
-            Defaults to computing this with a single pass over the data. Note
-            that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If ``sorted=False``, you should
+            The "dividing lines" used to split the new index into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+            If not given (default), good divisions are calculated by immediately computing
+            the data and looking at the distribution of its values. For large datasets,
+            this can be expensive.
+            Note that if ``sorted=True``, specified divisions are assumed to match
+            the existing partitions in the data; if this is untrue you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
@@ -4328,9 +4334,11 @@ class DataFrame(_Frame):
 
         Examples
         --------
-        >>> df2 = df.set_index('x')  # doctest: +SKIP
-        >>> df2 = df.set_index(d.x)  # doctest: +SKIP
-        >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
+        >>> ddf2 = ddf.set_index("x")
+        >>> ddf2 = ddf.set_index(ddf.x)
+        >>> ddf2 = ddf.set_index(ddf.timestamp, sorted=True)
 
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
@@ -4338,8 +4346,30 @@ class DataFrame(_Frame):
         divisions along which is is separated
 
         >>> import pandas as pd
-        >>> divisions = pd.date_range('2000', '2010', freq='1D')
-        >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
+        >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
+        >>> divisions
+        DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
+                       '2021-01-05', '2021-01-06', '2021-01-07'],
+                      dtype='datetime64[ns]', freq='D')
+
+        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
+
+        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions.tolist())
+
+        If you'll be running `set_index` on the same (or similar) datasets repeatedly,
+        you could save time by letting Dask calculate good divisions once, then copy-pasting
+        them to reuse. This is especially helpful running in a Jupyter notebook:
+
+        >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
+        >>> ddf2.divisions  # doctest: +SKIP
+        ["Alice", "Laura", "Ursula", "Zelda"]
+        >>> # ^ Now copy-paste this and edit the line above to:
+        >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
