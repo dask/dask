@@ -4346,9 +4346,22 @@ class DataFrame(_Frame):
                     dtype='datetime64[ns]', freq='D')
 
         Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
-        represents the upper and lower bounds of each partition.
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
 
         >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions)
+        If you'll be running `set_index` on the same (or similar) datasets repeatedly,
+        you could save time by letting Dask calculate good divisions once, then copy-pasting
+        them to reuse. This is especially helpful running in a Jupyter notebook:
+
+        >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
+        >>> ddf2.divisions
+        ["Alice", "Laura", "Ursula", "Zelda"]
+        # ^ Now copy-paste this and edit the line above to:
+        # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
