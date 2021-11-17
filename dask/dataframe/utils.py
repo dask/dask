@@ -587,6 +587,9 @@ def assert_dask_graph(dask, label):
 def assert_divisions(ddf):
     if not hasattr(ddf, "divisions"):
         return
+
+    assert isinstance(ddf.divisions, tuple)
+
     if not getattr(ddf, "known_divisions", False):
         return
 
