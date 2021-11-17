@@ -4347,10 +4347,10 @@ class DataFrame(_Frame):
 
         >>> import pandas as pd
         >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
-        ... divisions
+        >>> divisions
         DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
-                    '2021-01-05', '2021-01-06', '2021-01-07'],
-                    dtype='datetime64[ns]', freq='D')
+                       '2021-01-05', '2021-01-06', '2021-01-07'],
+                      dtype='datetime64[ns]', freq='D')
 
         Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
         represents the upper and lower bounds of each partition. The first item is the
@@ -4359,16 +4359,17 @@ class DataFrame(_Frame):
         The second-to-last item is the lower bound of the last partition, and the last
         (extra) item is the upper bound of the last partition.
 
-        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions)
+        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions.tolist())
+
         If you'll be running `set_index` on the same (or similar) datasets repeatedly,
         you could save time by letting Dask calculate good divisions once, then copy-pasting
         them to reuse. This is especially helpful running in a Jupyter notebook:
 
         >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
-        >>> ddf2.divisions
+        >>> ddf2.divisions  # doctest: +SKIP
         ["Alice", "Laura", "Ursula", "Zelda"]
         >>> # ^ Now copy-paste this and edit the line above to:
-        ... ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
+        >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
