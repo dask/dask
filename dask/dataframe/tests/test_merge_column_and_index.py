@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe.multi import single_partition_join
 from dask.dataframe.utils import assert_eq
 
 
@@ -244,3 +245,23 @@ def test_merge_column_with_nulls(repartition):
     dask_result = df1_d.merge(df2_d, how="left", left_on="a", right_index=True)
 
     assert_eq(dask_result, pandas_result)
+
+
+@pytest.mark.parametrize("how", ["inner", "left", "right"])
+def test_single_column_join_regression(
+    ddf_left_single, ddf_right_single, on, how, shuffle_method
+):
+    # won't need this if we standardize divisions typing
+    # see https://github.com/dask/dask/issues/8388
+
+    # compute expected
+    expected = ddf_left_single.merge(
+        ddf_right_single, on=on, how=how, shuffle=shuffle_method
+    )
+
+    # compute with internal function
+    result = single_partition_join(ddf_left_single, ddf_right_single, on=on, how=how)
+
+    assert_eq(result, expected)
+    assert result.divisions == expected.divisions
+    assert len(result.__dask_graph__()) < 30
