@@ -1,6 +1,10 @@
 Setup adaptive deployments
 ==========================
 
+.. image:: images/dask-adaptive.svg
+   :alt: Dask adaptive scaling
+   :align: center
+
 Motivation
 ----------
 
