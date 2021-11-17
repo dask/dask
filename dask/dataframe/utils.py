@@ -23,7 +23,7 @@ from ..utils import is_series_like as dask_is_series_like
 from ..utils import typename
 from . import _dtypes  # noqa: F401 register pandas extension types
 from . import methods
-from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from ._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
 from .dispatch import make_meta  # noqa : F401
 from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
 from .extensions import make_scalar
@@ -147,7 +147,7 @@ def insert_meta_param_description(*args, **kwargs):
     body = textwrap.wrap(
         _META_DESCRIPTION, initial_indent=indent, subsequent_indent=indent, width=78
     )
-    descr = "{0}\n{1}".format(_META_TYPES, "\n".join(body))
+    descr = "{}\n{}".format(_META_TYPES, "\n".join(body))
     if f.__doc__:
         if "$META" in f.__doc__:
             f.__doc__ = f.__doc__.replace("$META", descr)
@@ -156,7 +156,7 @@ def insert_meta_param_description(*args, **kwargs):
             parameter_header = "Parameters\n%s----------" % indent[4:]
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
-            f.__doc__ = "{0}{1}{2}\n{3}{4}\n\n{5}".format(
+            f.__doc__ = "{}{}{}\n{}{}\n\n{}".format(
                 first, parameter_header, parameters, indent[4:], descr, rest
             )
     return f
@@ -193,7 +193,7 @@ def raise_on_meta_error(funcname=None, udf=False):
             "---------\n"
             "{2}"
         )
-        msg = msg.format(" in `{0}`".format(funcname) if funcname else "", repr(e), tb)
+        msg = msg.format(f" in `{funcname}`" if funcname else "", repr(e), tb)
         raise ValueError(msg) from e
 
 
@@ -306,7 +306,7 @@ def _scalar_from_dtype(dtype):
         o = _simple_fake_mapping[dtype.kind]
         return o.astype(dtype) if dtype.kind in ("m", "M") else o
     else:
-        raise TypeError("Can't handle dtype: {0}".format(dtype))
+        raise TypeError(f"Can't handle dtype: {dtype}")
 
 
 def _nonempty_scalar(x):
@@ -317,7 +317,7 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
-    raise TypeError("Can't handle meta of type '{0}'".format(typename(type(x))))
+    raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
 
 
 def is_dataframe_like(df):
@@ -376,7 +376,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     # Notice, we use .__class__ as opposed to type() in order to support
     # object proxies see <https://github.com/dask/dask/pull/6981>
     if x.__class__ != meta.__class__:
-        errmsg = "Expected partition of type `%s` but got `%s`" % (
+        errmsg = "Expected partition of type `{}` but got `{}`".format(
             typename(type(meta)),
             typename(type(x)),
         )
@@ -388,7 +388,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             if not equal_dtypes(a, b)
         ]
         if bad_dtypes:
-            errmsg = "Partition type: `%s`\n%s" % (
+            errmsg = "Partition type: `{}`\n{}".format(
                 typename(type(meta)),
                 asciitable(["Column", "Found", "Expected"], bad_dtypes),
             )
@@ -398,7 +398,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     else:
         if equal_dtypes(x.dtype, meta.dtype):
             return x
-        errmsg = "Partition type: `%s`\n%s" % (
+        errmsg = "Partition type: `{}`\n{}".format(
             typename(type(meta)),
             asciitable(["", "dtype"], [("Found", x.dtype), ("Expected", meta.dtype)]),
         )
@@ -433,11 +433,11 @@ def index_summary(idx, name=None):
     if n:
         head = idx[0]
         tail = idx[-1]
-        summary = ", {} to {}".format(head, tail)
+        summary = f", {head} to {tail}"
     else:
         summary = ""
 
-    return "{}: {} entries{}".format(name, n, summary)
+    return f"{name}: {n} entries{summary}"
 
 
 ###############################################################
@@ -500,7 +500,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         else:
-            msg = "Unsupported dask instance {0} found".format(type(dsk))
+            msg = f"Unsupported dask instance {type(dsk)} found"
             raise AssertionError(msg)
         return result
     return dsk
@@ -526,7 +526,7 @@ def assert_eq(
     a,
     b,
     check_names=True,
-    check_dtypes=True,
+    check_dtype=True,
     check_divisions=True,
     check_index=True,
     **kwargs,
@@ -540,8 +540,8 @@ def assert_eq(
             assert at == bt, (at, bt)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
-    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
+    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtype)
+    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtype)
     if not check_index:
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
@@ -552,13 +552,15 @@ def assert_eq(
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b, **kwargs)
+        tm.assert_frame_equal(a, b, check_dtype=check_dtype, **kwargs)
     elif isinstance(a, pd.Series):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_series_equal(a, b, check_names=check_names, **kwargs)
+        tm.assert_series_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
+        tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     else:
         if a == b:
             return True
@@ -579,9 +581,7 @@ def assert_dask_graph(dask, label):
             k = k[0]
         if k.startswith(label):
             return True
-    raise AssertionError(
-        "given dask graph doesn't contain label: {label}".format(label=label)
-    )
+    raise AssertionError(f"given dask graph doesn't contain label: {label}")
 
 
 def assert_divisions(ddf):
@@ -618,7 +618,7 @@ def assert_sane_keynames(ddf):
         assert isinstance(k, (str, bytes))
         assert len(k) < 100
         assert " " not in k
-        assert k.split("-")[0].isidentifier()
+        assert k.split("-")[0].isidentifier(), k
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):

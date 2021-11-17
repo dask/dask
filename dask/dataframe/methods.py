@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
+from ._compat import PANDAS_GT_131
+
 #  preserve compatibility while moving dispatch objects
 from .dispatch import (  # noqa: F401
     concat,
@@ -51,9 +53,7 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(
-    df, start, stop, right_boundary=True, left_boundary=True, kind="loc"
-):
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kind=None):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -88,6 +88,19 @@ def boundary_slice(
     if len(df.index) == 0:
         return df
 
+    if PANDAS_GT_131:
+        if kind is not None:
+            warnings.warn(
+                "The `kind` argument is no longer used/supported. "
+                "It will be dropped in a future release.",
+                category=FutureWarning,
+            )
+        kind_opts = {}
+        kind = "loc"
+    else:
+        kind = kind or "loc"
+        kind_opts = {"kind": kind}
+
     if kind == "loc" and not df.index.is_monotonic:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
@@ -104,13 +117,13 @@ def boundary_slice(
             else:
                 df = df[df.index < stop]
         return df
-    else:
-        result = getattr(df, kind)[start:stop]
+
+    result = getattr(df, kind)[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left", kind)
+        right_index = result.index.get_slice_bound(stop, "left", **kind_opts)
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right", kind)
+        left_index = result.index.get_slice_bound(start, "right", **kind_opts)
         result = result.iloc[left_index:]
     return result
 
@@ -170,7 +183,9 @@ def describe_aggregate(values):
     return pd.concat(values, axis=1, sort=False).reindex(names)
 
 
-def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
+def describe_numeric_aggregate(
+    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -186,9 +201,18 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
 
-    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+    if is_datetime_col:
+        # mean is not implemented for datetime
+        min = pd.to_datetime(min)
+        max = pd.to_datetime(max)
+        q = q.apply(lambda x: pd.to_datetime(x))
 
-    q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
+    if is_datetime_col:
+        part1 = typ([count, min], index=["count", "min"])
+    else:
+        part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+
+    q.index = [f"{l * 100:g}%" for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])

@@ -16,6 +16,8 @@ from dask.layers import fractional_slice
 class SchedulerImportCheck(SchedulerPlugin):
     """Plugin to help record which modules are imported on the scheduler"""
 
+    name = "import-check"
+
     def __init__(self, pattern):
         self.pattern = pattern
 
@@ -28,16 +30,6 @@ class SchedulerImportCheck(SchedulerPlugin):
             else:
                 # Maually remove the target library
                 sys.modules.pop(mod)
-
-
-def get_start_modules(dask_scheduler):
-    import_check_plugins = [
-        p for p in dask_scheduler.plugins if type(p) is SchedulerImportCheck
-    ]
-    assert len(import_check_plugins) == 1
-
-    plugin = import_check_plugins[0]
-    return plugin.start_modules
 
 
 def _dataframe_shuffle(tmpdir):
@@ -181,7 +173,11 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
             # Get the new modules which were imported on the scheduler during the computation
             end_modules = c.run_on_scheduler(lambda: set(sys.modules))
-            start_modules = c.run_on_scheduler(get_start_modules)
+            start_modules = c.run_on_scheduler(
+                lambda dask_scheduler: dask_scheduler.plugins[
+                    SchedulerImportCheck.name
+                ].start_modules
+            )
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`

@@ -1,10 +1,8 @@
 import contextlib
-import difflib
 import functools
 import itertools
 import math
 import numbers
-import os
 import warnings
 
 import numpy as np
@@ -13,14 +11,6 @@ from tlz import concat, frequencies
 from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
-
-try:
-    AxisError = np.AxisError
-except AttributeError:
-    try:
-        np.array([0]).sum(axis=5)
-    except Exception as e:
-        AxisError = type(e)
 
 
 def normalize_to_array(x):
@@ -281,6 +271,11 @@ def assert_eq(
     a_original = a
     b_original = b
 
+    if isinstance(a, (list, int, float)):
+        a = np.array(a)
+    if isinstance(b, (list, int, float)):
+        b = np.array(b)
+
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
         a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
@@ -289,13 +284,7 @@ def assert_eq(
     )
 
     if str(adt) != str(bdt):
-        # Ignore check for matching length of flexible dtypes, since Array._meta
-        # can't encode that information
-        if adt.type == bdt.type and not (adt.type == np.bytes_ or adt.type == np.str_):
-            diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
-            raise AssertionError(
-                "string repr are different" + os.linesep + os.linesep.join(diff)
-            )
+        raise AssertionError(f"a and b have different dtypes: (a: {adt}, b: {bdt})")
 
     try:
         assert (
@@ -383,59 +372,6 @@ def _dtype_of(a):
         return np.asanyarray(a).dtype
 
 
-def empty_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.empty_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.empty(shape, **kwargs)``.
-    """
-    try:
-        return np.empty_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.empty(shape, **kwargs)
-
-
-def full_like_safe(a, fill_value, shape, **kwargs):
-    """
-    Return ``np.full_like(a, fill_value, shape=shape, **kwargs)`` if the
-    shape argument is supported (requires NumPy >= 1.17), otherwise
-    falls back to using the old behavior, returning
-    ``np.full(shape, fill_value, **kwargs)``.
-    """
-    try:
-        return np.full_like(a, fill_value, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.full(shape, fill_value, **kwargs)
-
-
-def ones_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.ones_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.ones(shape, **kwargs)``.
-    """
-    try:
-        return np.ones_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.ones(shape, **kwargs)
-
-
-def zeros_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.zeros_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.zeros(shape, **kwargs)``.
-    """
-    try:
-        return np.zeros_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.zeros(shape, **kwargs)
-
-
 def arange_safe(*args, like, **kwargs):
     """
     Use the `like=` from `np.arange` to create a new array dispatching
@@ -518,7 +454,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise AxisError(
+        raise np.AxisError(
             "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
         )
     if axis < 0:
@@ -588,15 +524,15 @@ def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
 
 
-def _is_nep18_active():
-    class A:
-        def __array_function__(self, *args, **kwargs):
-            return True
-
-    try:
-        return np.concatenate([A()])
-    except ValueError:
-        return False
-
-
-IS_NEP18_ACTIVE = _is_nep18_active()
+def __getattr__(name):
+    # Can't use the @_deprecated decorator as it would not work on `except AxisError`
+    if name == "AxisError":
+        warnings.warn(
+            "AxisError was deprecated after version 2021.10.0 and will be removed in a "
+            "future release. Please use numpy.AxisError instead.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        return np.AxisError
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")

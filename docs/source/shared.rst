@@ -1,5 +1,3 @@
-:orphan:
-
 Shared Memory
 =============
 
@@ -52,7 +50,7 @@ under different kinds of load (embarrassingly parallel, dense communication).
 
 The quickest/simplest test we can do it to use IPython's ``timeit`` magic:
 
-.. code-block:: python
+.. ipython::
 
    In [1]: import dask.array as da
 
@@ -66,9 +64,10 @@ The quickest/simplest test we can do it to use IPython's ``timeit`` magic:
 
 So this takes ~90 microseconds per task.  About 100ms of this is from overhead:
 
-.. code-block:: python
+.. ipython::
 
    In [5]: x = da.ones(1000, chunks=(1000,)).sum()
+   
    In [6]: %timeit x.compute()
    1.18 ms ± 8.64 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
 

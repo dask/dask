@@ -2,7 +2,6 @@ import gzip
 import os
 import pathlib
 import sys
-from distutils.version import LooseVersion
 from functools import partial
 from time import sleep
 
@@ -11,6 +10,7 @@ import pytest
 from fsspec.compression import compr
 from fsspec.core import open_files
 from fsspec.implementations.local import LocalFileSystem
+from packaging.version import parse as parse_version
 from tlz import concat, valmap
 
 from dask import compute
@@ -356,7 +356,7 @@ def test_get_pyarrow_filesystem():
     from fsspec.implementations.local import LocalFileSystem
 
     pa = pytest.importorskip("pyarrow")
-    if pa.__version__ >= LooseVersion("2.0.0"):
+    if parse_version(pa.__version__).major >= 2:
         pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
 
     fs = LocalFileSystem()
