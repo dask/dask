@@ -4334,6 +4334,7 @@ class DataFrame(_Frame):
 
         Examples
         --------
+        >>> import dask
         >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
         >>> ddf2 = ddf.set_index("x")
         >>> ddf2 = ddf.set_index(ddf.x)
@@ -4366,8 +4367,8 @@ class DataFrame(_Frame):
         >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
         >>> ddf2.divisions
         ["Alice", "Laura", "Ursula", "Zelda"]
-        # ^ Now copy-paste this and edit the line above to:
-        # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
+        >>> # ^ Now copy-paste this and edit the line above to:
+        ... ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
