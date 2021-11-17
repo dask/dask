@@ -745,7 +745,7 @@ def test_empty_chunk_nanmin_nanmax_raise(func):
     d = d[d > 9]
     x = x[x > 9]
     with pytest.raises(ValueError) as err_np:
-        x = getattr(np, func)(x)
+        getattr(np, func)(x)
     with pytest.raises(ValueError) as err_da:
         d = getattr(da, func)(d)
         d.compute()
