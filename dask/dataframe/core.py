@@ -322,7 +322,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(meta))}"
             )
         self._meta = meta
-        self.divisions = tuple(divisions)
+        self._divisions = tuple(divisions)
 
     def __dask_graph__(self):
         return self.dask
@@ -356,6 +356,14 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _constructor(self):
         return new_dd_object
+
+    @property
+    def divisions(self):
+        return self._divisions
+
+    @divisions.setter
+    def divisions(self, value):
+        self._divisions = tuple(value)
 
     @property
     def npartitions(self):
