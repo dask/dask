@@ -440,7 +440,7 @@ def single_partition_join(left, right, **kwargs):
         align_dataframes=False,
         **kwargs,
     )
-    joined.divisions = tuple(divisions)
+    joined.divisions = divisions
     return joined
 
 
