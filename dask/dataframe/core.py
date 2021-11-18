@@ -368,7 +368,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
         where the index in each partition contains values [0, 10), [10, 50),
-        and [50, 100), respectively. Dask therefore knows ``df.loc[45]``
+        and [50, 100], respectively. Dask therefore knows ``df.loc[45]``
         will be in the second partition.
 
         When every item in ``divisions`` is ``None``, the divisions are unknown.
