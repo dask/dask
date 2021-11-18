@@ -6,7 +6,21 @@ locally on your own machine or on a distributed cluster.  If you are just
 getting started, then this page is unnecessary.  Dask does not require any setup
 if you only want to use it on a single computer.
 
+You can continue reading or watch the screencast below:
+
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/TQM9zIBzNBo"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
 Dask has two families of task schedulers:
+
+.. image:: ../images/dask-overview.svg
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
@@ -36,18 +50,8 @@ scheduler you must set up a ``Client``
 
 Note that the newer ``dask.distributed`` scheduler is often preferable, even on
 single workstations.  It contains many diagnostics and features not found in
-the older single-machine scheduler.  The following pages explain in more detail
+the older single-machine scheduler. The following resources explain in more detail
 how to set up Dask on a variety of local and distributed hardware.
-
-.. raw:: html
-
-   <iframe width="560"
-           height="315"
-           src="https://www.youtube.com/embed/TQM9zIBzNBo"
-           style="margin: 0 auto 20px auto; display: block;"
-           frameborder="0"
-           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
-           allowfullscreen></iframe>
 
 - Single Machine:
     - :doc:`Default Scheduler <deploy-dask/single-machine>`: The no-setup default.
