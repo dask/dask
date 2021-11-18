@@ -21,6 +21,7 @@ You can continue reading or watch the screencast below:
 Dask has two families of task schedulers:
 
 .. image:: ../images/dask-overview.png
+   :align: center
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
@@ -31,6 +32,7 @@ Dask has two families of task schedulers:
     run locally or distributed across a cluster.
 
 .. image:: ../images/distributed-overview.svg
+   :align: center
 
 If you import Dask, set up a computation, and then call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
@@ -52,7 +54,11 @@ Note that the newer ``dask.distributed`` scheduler is often preferable, even on
 single workstations.  It contains many diagnostics and features not found in
 the older single-machine scheduler.
 
-.. image:: ../images/dask-cluster-manager.svg
+.. figure:: ../images/dask-cluster-manager.svg
+   :width: 75%
+   :figclass: align-center
+
+   An overview of cluster management with Dask distributed
 
 The following resources explain in more detail how to set up Dask on a
 variety of local and distributed hardware.
