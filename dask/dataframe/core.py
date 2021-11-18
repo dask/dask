@@ -4324,7 +4324,7 @@ class DataFrame(_Frame):
             will still be triggered if ``divisions`` is ``None``.
         partition_size: int, optional
             Desired size of each partitions in bytes.
-            Only used when ``npartition='auto'``
+            Only used when ``npartitions='auto'``
 
         Examples
         --------
