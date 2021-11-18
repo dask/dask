@@ -11,18 +11,24 @@ two situations:
 1.  The user may not be using the cluster, or perhaps they are busy
     interpreting a recent result or plot, and so the workers sit idly,
     taking up valuable shared resources from other potential users
-2.  The user may be very active, and is limited by their original allocation.
+2.  The user may be very active, and is limited by their original allocation,
+    particularly in the case of bursty workloads
 
-.. image:: ../images/dask-adaptive.svg
-   :alt: Dask adaptive scaling
+.. image:: ../images/bursty-workloads.svg
    :align: center
    :width: 75%
 
 Particularly efficient users may learn to manually add and remove workers
 during their session, but this is rare.  Instead, we would like the size of a
 Dask cluster to match the computational needs at any given time.  This is the
-goal of the *adaptive deployments* discussed in this document.  These are
-particularly helpful for interactive workloads, which are characterized by long
+goal of the *adaptive deployments* discussed in this document.
+
+.. image:: ../images/dask-adaptive.svg
+   :alt: Dask adaptive scaling
+   :align: center
+   :width: 75%
+
+These are particularly helpful for interactive workloads, which are characterized by long
 periods of inactivity interrupted with short bursts of heavy activity.
 Adaptive deployments can result in both faster analyses that give users much
 more power, but with much less pressure on computational resources.
