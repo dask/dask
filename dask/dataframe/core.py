@@ -365,16 +365,16 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         to know which partition will contain a given value, significantly
         speeding up operations like `loc`, `merge`, and `groupby` by not
         having to search the full dataset.
-        
+
         Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
         where the index in each partition contains values [0, 10), [10, 50),
         and [50, 100), respectively. Dask therefore knows ``df.loc[45]``
         will be in the second partition.
-        
-        When every item is in ``divisions`` is ``None``, the divisions are unknown.
+
+        When every item in ``divisions`` is ``None``, the divisions are unknown.
         Most operations can still be performed, but some will be much slower,
         and a few may fail.
-        
+
         It is uncommon to set ``divisions`` directly. Instead, use ``set_index``,
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
