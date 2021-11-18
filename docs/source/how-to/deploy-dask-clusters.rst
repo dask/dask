@@ -50,8 +50,12 @@ scheduler you must set up a ``Client``
 
 Note that the newer ``dask.distributed`` scheduler is often preferable, even on
 single workstations.  It contains many diagnostics and features not found in
-the older single-machine scheduler. The following resources explain in more detail
-how to set up Dask on a variety of local and distributed hardware.
+the older single-machine scheduler.
+
+.. image:: ../images/dask-cluster-manager.svg
+
+The following resources explain in more detail how to set up Dask on a
+variety of local and distributed hardware.
 
 - Single Machine:
     - :doc:`Default Scheduler <deploy-dask/single-machine>`: The no-setup default.
