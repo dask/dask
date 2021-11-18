@@ -10,6 +10,7 @@ from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
+    assert_eq,
     check_matching_columns,
     check_meta,
     is_dataframe_like,
@@ -510,3 +511,13 @@ def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)
     assert non_empty.dtype == "Float64"
+
+
+def test_assert_eq_sorts():
+    df1 = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
+    df2 = df1.sort_values("B")
+    df2_r = df2.reset_index(drop=True)
+    assert_eq(df1, df2)
+    assert_eq(df1, df2_r, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df1, df2_r)
