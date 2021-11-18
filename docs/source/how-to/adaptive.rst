@@ -1,10 +1,6 @@
 Setup adaptive deployments
 ==========================
 
-.. image:: images/dask-adaptive.svg
-   :alt: Dask adaptive scaling
-   :align: center
-
 Motivation
 ----------
 
@@ -16,6 +12,11 @@ two situations:
     interpreting a recent result or plot, and so the workers sit idly,
     taking up valuable shared resources from other potential users
 2.  The user may be very active, and is limited by their original allocation.
+
+.. image:: ../images/dask-adaptive.svg
+   :alt: Dask adaptive scaling
+   :align: center
+   :width: 75%
 
 Particularly efficient users may learn to manually add and remove workers
 during their session, but this is rare.  Instead, we would like the size of a
