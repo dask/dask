@@ -383,6 +383,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @divisions.setter
     def divisions(self, value):
+        if None in value:
+            if any(v is not None for v in value):
+                raise ValueError("divisions must be either all null or all non-null")
+        elif any(a > b for a, b in zip(value, value[1:])):
+            raise ValueError("divisions must be sorted in ascending order")
         self._divisions = tuple(value)
 
     @property
