@@ -42,6 +42,9 @@ execute this graph in a way that respects these data dependencies and leverages
 parallelism where possible, multiple independent tasks can be run
 simultaneously.
 
+.. image:: images/map-reduce-task-scheduling.svg
+   :align: center
+
 Many solutions exist.  This is a common approach in parallel execution
 frameworks.  Often task scheduling logic hides within other larger frameworks
 (Luigi, Storm, Spark, IPython Parallel, and so on) and so is often reinvented.
