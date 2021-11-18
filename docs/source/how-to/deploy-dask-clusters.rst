@@ -20,7 +20,7 @@ You can continue reading or watch the screencast below:
 
 Dask has two families of task schedulers:
 
-.. image:: ../images/dask-overview.svg
+.. image:: ../images/dask-overview.png
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the

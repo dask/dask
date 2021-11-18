@@ -29,7 +29,7 @@ Dask emphasizes the following virtues:
    feedback and diagnostics to aid humans
 
 
-.. image:: images/dask-overview.svg
+.. image:: images/dask-overview.png
    :alt: Dask collections and schedulers
    :width: 100%
    :align: center
