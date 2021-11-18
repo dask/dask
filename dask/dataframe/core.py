@@ -190,7 +190,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def divisions(self):
         """Dummy divisions to be compat with Series and DataFrame"""
-        return [None, None]
+        return (None, None)
 
     def __repr__(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + "..."
