@@ -687,6 +687,7 @@ def test_append_with_partition(tmpdir, engine):
     df1.index.name = "index"
 
     # Check that nullable dtypes work
+    # (see: https://github.com/dask/dask/issues/8373)
     df0["lat"] = df0["lat"].astype("Int64")
     df1["lat"].iloc[0] = np.nan
     df1["lat"] = df1["lat"].astype("Int64")
