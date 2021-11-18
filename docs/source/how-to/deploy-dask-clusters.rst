@@ -16,6 +16,8 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster.
 
+.. image:: ../images/distributed-overview.svg
+
 If you import Dask, set up a computation, and then call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
 scheduler you must set up a ``Client``
