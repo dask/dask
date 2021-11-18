@@ -638,6 +638,7 @@ def map_overlap(
         func, args = args[0], [func]
 
     if boundary is None:
+        # Default boundary value is set in the function named "coerce_boundary"
         warnings.warn(
             "Default 'boundary' argument value will change from 'reflect' "
             "to 'none' in future versions.",
