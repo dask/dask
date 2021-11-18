@@ -12,11 +12,6 @@ This is the job of a *task scheduler*.
 Different task schedulers exist, and each will consume a task graph and compute the
 same result, but with different performance characteristics.
 
-.. image:: images/dask-overview.svg
-   :alt: Dask collections and schedulers
-   :width: 80%
-   :align: center
-
 Dask has two families of task schedulers:
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
@@ -26,6 +21,10 @@ Dask has two families of task schedulers:
 2.  **Distributed scheduler**: This scheduler is more sophisticated, offers
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster
+
+.. image:: images/dask-overview.svg
+   :alt: Dask collections and schedulers
+   :align: center
 
 For different computations you may find better performance with particular scheduler settings.
 This document helps you understand how to choose between and configure different schedulers,
