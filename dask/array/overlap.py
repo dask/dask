@@ -637,6 +637,13 @@ def map_overlap(
         trim = get(sig.index("trim"), args, trim)
         func, args = args[0], [func]
 
+        if boundary is None:
+            warnings.warn(
+                "Default 'boundary' argument value will change from 'reflect' "
+                "to 'none' in future versions.",
+                FutureWarning,
+            )
+
     if not callable(func):
         raise TypeError(
             "First argument must be callable function, not {}\n"
