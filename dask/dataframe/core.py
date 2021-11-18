@@ -360,12 +360,22 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def divisions(self):
         """
-        The "dividing lines" used between the index of the partitions.
-        When ``divisions = (0, 10, 50, 100)``, there are three partitions
-        with indices containing [0, 10), [10, 50), and [50, 100), respectively.
-        When every item is in ``divisions`` is ``None`` the divisions are unknown.
-        Some operations can still be performed, but chaining operations might fail.
-        It is uncommon to set ``divisions`` directly, instead use ``set_index``
+        Tuple of ``npartitions + 1`` values, in ascending order, marking the
+        lower/upper bounds of each partition's index. Divisions allow Dask
+        to know which partition will contain a given value, significantly
+        speeding up operations like `loc`, `merge`, and `groupby` by not
+        having to search the full dataset.
+        
+        Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
+        where the index in each partition contains values [0, 10), [10, 50),
+        and [50, 100), respectively. Dask therefore knows ``df.loc[45]``
+        will be in the second partition.
+        
+        When every item is in ``divisions`` is ``None``, the divisions are unknown.
+        Most operations can still be performed, but some will be much slower,
+        and a few may fail.
+        
+        It is uncommon to set ``divisions`` directly. Instead, use ``set_index``,
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
