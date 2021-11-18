@@ -63,7 +63,15 @@ def _append_row_groups(metadata, md):
 
 
 def _write_partitioned(
-    table, root_path, filename, partition_cols, fs, index_cols=(), pandas_dtypes=None, **kwargs
+    table,
+    df,
+    root_path,
+    filename,
+    partition_cols,
+    fs,
+    preserve_index,
+    index_cols=(),
+    **kwargs,
 ):
     """Write table to a partitioned dataset with pyarrow.
 
@@ -78,13 +86,8 @@ def _write_partitioned(
     """
     fs.mkdirs(root_path, exist_ok=True)
 
-    df = table.to_pandas(ignore_metadata=True)
-
-    if pandas_dtypes is not None:
-        for col in list(df.columns):
-            pdtype = pandas_dtypes.get(col, None)
-            if pdtype and pdtype != df[col].dtype:
-                df[col] = df[col].astype(pdtype)
+    if preserve_index:
+        df.reset_index(inplace=True)
 
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
@@ -680,13 +683,14 @@ class ArrowDatasetEngine(Engine):
         if partition_on:
             md_list = _write_partitioned(
                 t,
+                df,
                 path,
                 filename,
                 partition_on,
                 fs,
+                preserve_index,
                 index_cols=index_cols,
                 compression=compression,
-                pandas_dtypes=df.dtypes,
                 **kwargs,
             )
             if md_list:
