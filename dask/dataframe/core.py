@@ -438,7 +438,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+        self.dask, self._name, self._meta, self._divisions = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
