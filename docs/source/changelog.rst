@@ -1,14 +1,34 @@
 Changelog
 =========
 
+2021.11.2
+---------
+
+Released on November 19, 2021
+
+- Only run gpuCI bump script daily (:pr:`8404`) `Charles Blackmon-Luca`_
+- Actually ignore index when asked in ``assert_eq`` (:pr:`8396`) `Gabe Joseph`_
+- Ensure single-partition join ``divisions`` is ``tuple`` (:pr:`8389`) `Charles Blackmon-Luca`_
+- Try to make divisions behavior clearer (:pr:`8379`) `Julia Signell`_
+- Fix typo in ``set_index`` ``partition_size`` parameter description (:pr:`8384`) `FredericOdermatt`_
+- Use ``blockwise`` in ``single_partition_join`` (:pr:`8341`) `Gabe Joseph`_
+- Use more explicit keyword arguments (:pr:`8354`) `Boaz Mohar`_
+- Fix ``.loc`` of DataFrame with nullable boolean ``dtype`` (:pr:`8368`) `Marco Rossi`_
+- Parameterize shuffle implementation in tests (:pr:`8250`) `Ian Rose`_
+- Remove some doc build warnings (:pr:`8369`) `Boaz Mohar`_
+- Include properties in array API docs (:pr:`8356`) `Julia Signell`_
+- Fix Zarr for upstream (:pr:`8367`) `Julia Signell`_
+- Pin ``graphviz`` to avoid issue with windows and Python 3.7 (:pr:`8365`) `Julia Signell`_
+- Import ``graphviz.Diagraph`` from top of module, not from ``dot`` (:pr:`8363`) `Julia Signell`_
+
+
 2021.11.1
 ---------
 
 Released on November 8, 2021
 
+Patch release to update ``distributed`` dependency to version ``2021.11.1``.
 
-Changelog
-=========
 
 2021.11.0
 ---------
@@ -4660,3 +4680,4 @@ Other
 .. _`Matthew Powers`: https://github.com/MrPowers
 .. _`Vyas Ramasubramani`: https://github.com/vyasr
 .. _`Ayush Dattagupta`: https://github.com/ayushdg
+.. _`FredericOdermatt`: https://github.com/FredericOdermatt
