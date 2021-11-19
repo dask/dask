@@ -734,6 +734,10 @@ def test_empty_chunk_nanmin_nanmax(func):
     d = d[d > 4]
     block_lens = np.array([len(x.compute()) for x in d.blocks])
     assert 0 in block_lens
+    with pytest.raises(ValueError) as err:
+        getattr(da, func)(d)
+    assert "Arrays chunk sizes are unknown" in str(err)
+    d = d.compute_chunk_sizes()
     assert_eq(getattr(da, func)(d), getattr(np, func)(x))
 
 
@@ -744,6 +748,7 @@ def test_empty_chunk_nanmin_nanmax_raise(func):
     d = da.from_array(x, chunks=2)
     d = d[d > 9]
     x = x[x > 9]
+    d = d.compute_chunk_sizes()
     with pytest.raises(ValueError) as err_np:
         getattr(np, func)(x)
     with pytest.raises(ValueError) as err_da:

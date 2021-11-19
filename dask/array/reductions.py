@@ -31,6 +31,15 @@ from .utils import (
 )
 from .wrap import ones, zeros
 
+unknown_chunk_message = (
+    "\n\n"
+    "A possible solution: "
+    "https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks\n"
+    "Summary: to compute chunks sizes, use\n\n"
+    "   x.compute_chunk_sizes()  # for Dask Array `x`\n"
+    "   ddf.to_dask_array(lengths=True)  # for Dask DataFrame `ddf`"
+)
+
 
 def divide(a, b, dtype=None):
     key = lambda x: getattr(x, "__array_priority__", float("-inf"))
@@ -516,7 +525,7 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 @derived_from(np)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
     if np.isnan(a.size):
-        a = a.compute_chunk_sizes()
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
     if a.size == 0:
         raise ValueError(
             "zero-size array to reduction operation fmin which has no identity"
@@ -545,7 +554,7 @@ def _nanmin_skip(x_chunk, axis, keepdims):
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
     if np.isnan(a.size):
-        a = a.compute_chunk_sizes()
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
     if a.size == 0:
         raise ValueError(
             "zero-size array to reduction operation fmax which has no identity"
