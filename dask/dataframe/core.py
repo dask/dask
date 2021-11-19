@@ -390,7 +390,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         if None in value:
             if any(v is not None for v in value):
                 raise ValueError("`divisions` must be either all null or all non-null")
-        if isinstance(value, tuple):
+        if not isinstance(value, tuple):
             warnings.warn(
                 f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
                 "tuple",
