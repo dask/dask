@@ -389,10 +389,14 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         if None in value:
             if any(v is not None for v in value):
-                raise ValueError("divisions must be either all null or all non-null")
-        elif any(a > b for a, b in zip(value, value[1:])):
-            raise ValueError("divisions must be sorted in ascending order")
-        self._divisions = tuple(value)
+                raise ValueError("`divisions` must be either all null or all non-null")
+        if isinstance(value, tuple):
+            warnings.warn(
+                f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
+                "tuple",
+                PendingDeprecationWarning,
+            )
+        self._divisions = value
 
     @property
     def npartitions(self):
