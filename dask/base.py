@@ -572,7 +572,9 @@ def compute(
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
-def visualize(*args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs):
+def visualize(
+    *args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs
+):
     """
     Visualize several dask graphs simultaneously.
 
