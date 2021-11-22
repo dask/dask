@@ -572,17 +572,23 @@ def compute(
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
-def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwargs):
+def visualize(
+    *args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs
+):
     """
-    Visualize several low level dask graphs at once.
+    Visualize several dask graphs simultaneously.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    args : dict(s) or collection(s)
-        The low level dask graph(s) to visualize.
+    args : object
+        Any number of objects. If it is a dask object, its associated graph
+        will be included in the output of visualize. By default, python builtin
+        collections are also traversed to look for dask objects (for more
+        information see the ``traverse`` keyword). Arguments lacking an
+        associated graph will be ignored.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -590,6 +596,11 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
+    traverse : bool, optional
+        By default, dask traverses builtin python collections looking for dask
+        objects passed to ``visualize``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
@@ -640,24 +651,9 @@ def visualize(*args, filename="mydask", optimize_graph=False, maxval=None, **kwa
     """
     from dask.dot import dot_graph
 
-    dsks = []
-    args3 = []
-    for arg in args:
-        if isinstance(arg, (list, tuple, set)):
-            for a in arg:
-                if isinstance(a, Mapping):
-                    dsks.append(a)
-                if is_dask_collection(a):
-                    args3.append(a)
-        else:
-            if isinstance(arg, Mapping):
-                dsks.append(arg)
-            if is_dask_collection(arg):
-                args3.append(arg)
+    args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
-    for d in dsks:
-        dsk.update(d)
+    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
