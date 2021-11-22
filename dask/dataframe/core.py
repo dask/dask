@@ -3766,6 +3766,27 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_increasing(self):
+        def _monotonic_increasing(x):
+            return type(x)(x.is_monotonic_increasing, index=x.index[:2])
+
+        return self.map_overlap(_monotonic_increasing, after=1, before=0).all()
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_decreasing(self):
+        def _is_monotonic_decreasing(x):
+            return type(x)(x.is_monotonic_decreasing, index=x.index[:2])
+
+        return self.map_overlap(_is_monotonic_decreasing, after=1, before=0).all()
+
 
 class Index(Series):
 

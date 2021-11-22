@@ -4919,3 +4919,29 @@ def test_use_of_weakref_proxy():
     pxy = weakref.proxy(a)
     res = pxy["b"].groupby(pxy["g"]).sum()
     isinstance(res.compute(), pd.Series)
+
+
+def test_is_monotonic_numeric():
+    s = pd.Series(range(20))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    assert_eq(s.is_monotonic, ds.is_monotonic)
+
+    s_2 = pd.Series(range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5)
+    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
+    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+
+
+def test_is_monotonic_dt64():
+    s = pd.Series(pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+
+    s_2 = pd.Series(list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
