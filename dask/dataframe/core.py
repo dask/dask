@@ -383,10 +383,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @divisions.setter
     def divisions(self, value):
-        if len(value) != len(self._divisions):
-            raise ValueError(
-                f"`divisions` must be of length {len(self._divisions)}, recieved `divisions` of length {len(value)}"
-            )
         if None in value:
             if any(v is not None for v in value):
                 raise ValueError("`divisions` must be either all null or all non-null")
