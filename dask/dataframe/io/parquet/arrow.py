@@ -88,6 +88,7 @@ def _write_partitioned(
 
     if preserve_index:
         df.reset_index(inplace=True)
+    df = df[table.schema.names]
 
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
