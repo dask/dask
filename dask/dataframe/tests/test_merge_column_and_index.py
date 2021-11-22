@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe.multi import single_partition_join
 from dask.dataframe.utils import assert_eq
 
 
@@ -88,12 +89,14 @@ def on(request):
 
 # Tests
 # =====
-def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
+def test_merge_known_to_known(
+    df_left, df_right, ddf_left, ddf_right, on, how, shuffle_method
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle="tasks")
+    result = ddf_left.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
@@ -102,12 +105,14 @@ def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
-def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on, how):
+def test_merge_known_to_single(
+    df_left, df_right, ddf_left, ddf_right_single, on, how, shuffle_method
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle="tasks")
+    result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
@@ -116,12 +121,14 @@ def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
-def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on, how):
+def test_merge_single_to_known(
+    df_left, df_right, ddf_left_single, ddf_right, on, how, shuffle_method
+):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle="tasks")
+    result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
@@ -130,85 +137,92 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
 
 
 def test_merge_known_to_unknown(
-    df_left, df_right, ddf_left, ddf_right_unknown, on, how
+    df_left, df_right, ddf_left, ddf_right_unknown, on, how, shuffle_method
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle="tasks")
+    result = ddf_left.merge(ddf_right_unknown, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) >= 390
 
 
 def test_merge_unknown_to_known(
-    df_left, df_right, ddf_left_unknown, ddf_right, on, how
+    df_left, df_right, ddf_left_unknown, ddf_right, on, how, shuffle_method
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
-    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle="tasks")
+    result = ddf_left_unknown.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) >= 390
 
 
 def test_merge_unknown_to_unknown(
-    df_left, df_right, ddf_left_unknown, ddf_right_unknown, on, how
+    df_left,
+    df_right,
+    ddf_left_unknown,
+    ddf_right_unknown,
+    on,
+    how,
+    shuffle_method,
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Merge unknown to unknown
-    result = ddf_left_unknown.merge(ddf_right_unknown, on=on, how=how, shuffle="tasks")
+    result = ddf_left_unknown.merge(
+        ddf_right_unknown, on=on, how=how, shuffle=shuffle_method
+    )
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, tuple(None for _ in range(11)))
-    assert len(result.__dask_graph__()) >= 390
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_double_bcast_right(
-    df_left, df_right, ddf_left, ddf_right_double, on, how
+    df_left, df_right, ddf_left, ddf_right_double, on, how, shuffle_method
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
     result = ddf_left.merge(
-        ddf_right_double, on=on, how=how, shuffle="tasks", broadcast=True
+        ddf_right_double, on=on, how=how, shuffle=shuffle_method, broadcast=True
     )
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, ddf_left.divisions)
-    assert len(result.__dask_graph__()) < 90
+    # Hash join used in disk-shuffling doesn't preserve divisions.
+    if shuffle_method == "task":
+        assert_eq(result.divisions, ddf_left.divisions)
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
 @pytest.mark.parametrize("broadcast", [True, 0.75])
 def test_merge_known_to_double_bcast_left(
-    df_left, df_right, ddf_left_double, ddf_right, on, how, broadcast
+    df_left, df_right, ddf_left_double, ddf_right, on, shuffle_method, how, broadcast
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
     result = ddf_left_double.merge(
-        ddf_right, on=on, how=how, shuffle="tasks", broadcast=broadcast
+        ddf_right, on=on, how=how, broadcast=broadcast, shuffle=shuffle_method
     )
 
     # Assertions
     assert_eq(result, expected)
-    assert_eq(result.divisions, ddf_right.divisions)
-    assert len(result.__dask_graph__()) < 90
+    # Hash join used in disk-shuffling doesn't preserve divisions.
+    if shuffle_method == "task":
+        assert_eq(result.divisions, ddf_right.divisions)
 
     # Check that culling works
     result.head(1)
@@ -231,3 +245,23 @@ def test_merge_column_with_nulls(repartition):
     dask_result = df1_d.merge(df2_d, how="left", left_on="a", right_index=True)
 
     assert_eq(dask_result, pandas_result)
+
+
+@pytest.mark.parametrize("how", ["inner", "left", "right"])
+def test_single_column_join_regression(
+    ddf_left_single, ddf_right_single, on, how, shuffle_method
+):
+    # won't need this if we standardize divisions typing
+    # see https://github.com/dask/dask/issues/8388
+
+    # compute expected
+    expected = ddf_left_single.merge(
+        ddf_right_single, on=on, how=how, shuffle=shuffle_method
+    )
+
+    # compute with internal function
+    result = single_partition_join(ddf_left_single, ddf_right_single, on=on, how=how)
+
+    assert_eq(result, expected)
+    assert result.divisions == expected.divisions
+    assert len(result.__dask_graph__()) < 30

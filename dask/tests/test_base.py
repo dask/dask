@@ -1018,7 +1018,7 @@ def test_visualize_highlevelgraph():
         x = da.arange(5, chunks=2)
         viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
         # check visualization will automatically render in the jupyter notebook
-        assert isinstance(viz, graphviz.dot.Digraph)
+        assert isinstance(viz, graphviz.Digraph)
 
 
 @pytest.mark.skipif("not da")

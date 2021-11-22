@@ -627,8 +627,25 @@ Dask Name: {name}, {task} tasks"""
             be the first argument, and these will be passed *after*. Arguments
             and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
             or regular python objects. DataFrame-like args (both dask and
-            pandas) will be repartitioned to align (if necessary) before
-            applying the function.
+            pandas) will be repartitioned to align  (if necessary) before
+            applying the function (see ``align_dataframes`` to control).
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Examples
@@ -4288,12 +4305,18 @@ class DataFrame(_Frame):
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
+            Only used when ``divisions`` is not given. If ``divisions`` is given,
+            the number of output partitions will be ``len(divisions) - 1``.
         divisions: list, optional
-            Known values on which to separate index values of the partitions.
-            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
-            Defaults to computing this with a single pass over the data. Note
-            that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If ``sorted=False``, you should
+            The "dividing lines" used to split the new index into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+            If not given (default), good divisions are calculated by immediately computing
+            the data and looking at the distribution of its values. For large datasets,
+            this can be expensive.
+            Note that if ``sorted=True``, specified divisions are assumed to match
+            the existing partitions in the data; if this is untrue you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
@@ -4307,13 +4330,15 @@ class DataFrame(_Frame):
             will still be triggered if ``divisions`` is ``None``.
         partition_size: int, optional
             Desired size of each partitions in bytes.
-            Only used when ``npartition='auto'``
+            Only used when ``npartitions='auto'``
 
         Examples
         --------
-        >>> df2 = df.set_index('x')  # doctest: +SKIP
-        >>> df2 = df.set_index(d.x)  # doctest: +SKIP
-        >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
+        >>> ddf2 = ddf.set_index("x")
+        >>> ddf2 = ddf.set_index(ddf.x)
+        >>> ddf2 = ddf.set_index(ddf.timestamp, sorted=True)
 
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
@@ -4321,8 +4346,30 @@ class DataFrame(_Frame):
         divisions along which is is separated
 
         >>> import pandas as pd
-        >>> divisions = pd.date_range('2000', '2010', freq='1D')
-        >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
+        >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
+        >>> divisions
+        DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
+                       '2021-01-05', '2021-01-06', '2021-01-07'],
+                      dtype='datetime64[ns]', freq='D')
+
+        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
+
+        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions.tolist())
+
+        If you'll be running `set_index` on the same (or similar) datasets repeatedly,
+        you could save time by letting Dask calculate good divisions once, then copy-pasting
+        them to reuse. This is especially helpful running in a Jupyter notebook:
+
+        >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
+        >>> ddf2.divisions  # doctest: +SKIP
+        ["Alice", "Laura", "Ursula", "Zelda"]
+        >>> # ^ Now copy-paste this and edit the line above to:
+        >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
@@ -5343,7 +5390,7 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5352,7 +5399,6 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -5361,15 +5407,15 @@ def elemwise(op, *args, **kwargs):
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
+    out : ``dask.array`` or ``None``
+        If out is a dask.DataFrame, dask.Series or dask.Scalar then
+        this overwrites the contents of it with the result
+    **kwargs: scalars
 
     Examples
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
-
     _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
     args = _maybe_from_pandas(args)
@@ -5778,12 +5824,12 @@ def _extract_meta(x, nonempty=False):
         return x
 
 
-def _emulate(func, *args, **kwargs):
+def _emulate(func, *args, udf=False, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=kwargs.pop("udf", False)):
+    with raise_on_meta_error(funcname(func), udf=udf):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
@@ -5794,6 +5840,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    align_dataframes=True,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5807,11 +5854,24 @@ def map_partitions(
         args should be a Dask.dataframe. Arguments and keywords may contain
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
-        before applying the function.
-    enforce_metadata : bool
-        Whether or not to enforce the structure of the metadata at runtime.
+        before applying the function (see ``align_dataframes`` to control).
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
+
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
     $META
     """
     name = kwargs.pop("token", None)
@@ -5830,8 +5890,10 @@ def map_partitions(
 
     from .multi import _maybe_align_partitions
 
-    args = _maybe_from_pandas(args)
-    args = _maybe_align_partitions(args)
+    if align_dataframes:
+        args = _maybe_from_pandas(args)
+        args = _maybe_align_partitions(args)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
     if parent_meta is None and dfs:
