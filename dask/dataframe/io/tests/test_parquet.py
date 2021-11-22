@@ -2731,6 +2731,20 @@ def test_optimize_and_not(tmpdir):
         assert_eq(a, b)
 
 
+@pytest.mark.parametrize("dtype", ["str", "bool", "float"])
+@write_read_engines()
+def test_chunksize_empty(tmpdir, write_engine, read_engine, dtype):
+    df = pd.DataFrame(
+        {
+            "a": pd.Series(dtype="int"),
+            "b": pd.Series(dtype=dtype)
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf.to_parquet(tmpdir, engine=write_engine)
+    dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+
+
 @PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("partition_on", [None, "a"])
