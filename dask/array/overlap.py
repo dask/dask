@@ -642,7 +642,9 @@ def map_overlap(
         warnings.warn(
             "Default 'boundary' argument value will change from 'reflect' "
             "to 'none' in future versions. "
-            "Use 'boundary=\"none\"' to opt into the future behavior now.",
+            "Use 'boundary=\"none\"' to opt into the future behavior now "
+            "or set 'boundary=\"reflect\"' to maintain the current behavior "
+            "going forward.",
             FutureWarning,
         )
 
