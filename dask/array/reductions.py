@@ -17,7 +17,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements
+from .core import Array, _concatenate2, handle_out, implements, unknown_chunk_message
 from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
@@ -30,15 +30,6 @@ from .utils import (
     validate_axis,
 )
 from .wrap import ones, zeros
-
-unknown_chunk_message = (
-    "\n\n"
-    "A possible solution: "
-    "https://docs.dask.org/en/latest/array-chunks.html#unknown-chunks\n"
-    "Summary: to compute chunks sizes, use\n\n"
-    "   x.compute_chunk_sizes()  # for Dask Array `x`\n"
-    "   ddf.to_dask_array(lengths=True)  # for Dask DataFrame `ddf`"
-)
 
 
 def divide(a, b, dtype=None):
