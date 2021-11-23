@@ -1139,18 +1139,19 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
-    if statistics:
-        # Check that parts and statistics are the same length.
+    if statistics and len(parts) != len(statistics):
         # It is up to the Engine to guarantee that these
-        # lists are the same length (if statistics are defined)
-        if len(parts) != len(statistics):
-            warnings.warn(
-                f"Length of partition statistics ({len(statistics)}) "
-                f"does not match the partition count ({len(parts)}). "
-                f"We must ignore the statistics and disable: "
-                f"filtering, divisions, and/or file aggregation."
-            )
-            statistics = []
+        # lists are the same length (if statistics are defined).
+        # This misalignment may be indicative of a bug or
+        # incorrect read_parquet usage, so throw a warning.
+        warnings.warn(
+            f"Length of partition statistics ({len(statistics)}) "
+            f"does not match the partition count ({len(parts)}). "
+            f"This may indicate a bug or incorrect read_parquet "
+            f"usage. We must ignore the statistics and disable: "
+            f"filtering, divisions, and/or file aggregation."
+        )
+        statistics = []
 
     if statistics:
         result = list(
