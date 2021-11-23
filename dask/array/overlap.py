@@ -641,7 +641,7 @@ def map_overlap(
         # Default boundary value is set in the function named "coerce_boundary"
         warnings.warn(
             "Default 'boundary' argument value will change from 'reflect' "
-            "to 'none' in future versions. "
+            "to 'none' in future versions from 2022.03.0 onwards. "
             "Use 'boundary=\"none\"' to opt into the future behavior now "
             "or set 'boundary=\"reflect\"' to maintain the current behavior "
             "going forward.",
