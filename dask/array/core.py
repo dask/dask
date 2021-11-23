@@ -2466,7 +2466,7 @@ class Array(DaskMethodsMixin):
                [24, 26, 28, 30]])
 
         >>> import cupy  # doctest: +SKIP
-        >>> x = cupy.arange(16).reshape((5, 4))  # doctest: +SKIP
+        >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
         >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
         >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
         >>> y  # doctest: +SKIP
