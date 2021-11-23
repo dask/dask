@@ -1140,6 +1140,18 @@ def process_statistics(
     """
     index_in_columns = False
     if statistics:
+        # Check that parts and statistics are the same length.
+        # It is up to the Engine to guarantee that these
+        # lists are the same length (if statistics are defined)
+        if len(parts) != len(statistics):
+            warnings.warn(
+                f"Length of partition statistics ({len(statistics)}) "
+                f"does not match the partition count ({len(parts)}). "
+                f"We must ignore the statistics and disable: "
+                f"filtering, divisions, and/or file aggregation."
+            )
+
+    if statistics:
         result = list(
             zip(
                 *[
