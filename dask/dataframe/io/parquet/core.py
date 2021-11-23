@@ -1150,6 +1150,7 @@ def process_statistics(
                 f"We must ignore the statistics and disable: "
                 f"filtering, divisions, and/or file aggregation."
             )
+            statistics = []
 
     if statistics:
         result = list(
