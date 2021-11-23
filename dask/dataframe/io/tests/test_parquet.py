@@ -2737,7 +2737,7 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine)
     ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
-    assert_eq(ddf1, ddf2)
+    assert_eq(ddf1, ddf2, check_index=False)
 
 
 @PYARROW_MARK
