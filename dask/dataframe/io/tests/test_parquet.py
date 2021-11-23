@@ -2731,18 +2731,13 @@ def test_optimize_and_not(tmpdir):
         assert_eq(a, b)
 
 
-@pytest.mark.parametrize("dtype", ["str", "bool", "float"])
 @write_read_engines()
-def test_chunksize_empty(tmpdir, write_engine, read_engine, dtype):
-    df = pd.DataFrame(
-        {
-            "a": pd.Series(dtype="int"),
-            "b": pd.Series(dtype=dtype)
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=1)
-    ddf.to_parquet(tmpdir, engine=write_engine)
-    dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+def test_chunksize_empty(tmpdir, write_engine, read_engine):
+    df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="str")})
+    ddf1 = dd.from_pandas(df, npartitions=1)
+    ddf1.to_parquet(tmpdir, engine=write_engine)
+    ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+    assert_eq(ddf1, ddf2)
 
 
 @PYARROW_MARK
