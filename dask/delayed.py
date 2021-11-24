@@ -16,10 +16,9 @@ from .base import (
 )
 from .base import tokenize as _tokenize
 from .context import globalmethod
-from .core import quote
+from .core import flatten, quote
 from .highlevelgraph import HighLevelGraph
-from .optimization import cull
-from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
+from .utils import OperatorMethodMixin, apply, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
 
@@ -207,7 +206,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, **kwargs):
+def tokenize(*args, pure=None, **kwargs):
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -219,7 +218,6 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    pure = kwargs.pop("pure", None)
     if pure is None:
         pure = config.get("delayed_pure", False)
 
@@ -472,9 +470,12 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
-    dsk = ensure_dict(dsk)
-    dsk2, _ = cull(dsk, keys)
-    return dsk2
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    dsk = dsk.cull(set(flatten(keys)))
+    return dsk
 
 
 class Delayed(DaskMethodsMixin, OperatorMethodMixin):
@@ -576,12 +577,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
-    def __call__(self, *args, **kwargs):
-        pure = kwargs.pop("pure", None)
-        name = kwargs.pop("dask_key_name", None)
+    def __call__(self, *args, pure=None, dask_key_name=None, **kwargs):
         func = delayed(apply, pure=pure)
-        if name is not None:
-            return func(self, args, kwargs, dask_key_name=name)
+        if dask_key_name is not None:
+            return func(self, args, kwargs, dask_key_name=dask_key_name)
         return func(self, args, kwargs)
 
     def __bool__(self):

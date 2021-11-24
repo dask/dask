@@ -1,6 +1,65 @@
 Changelog
 =========
 
+2021.11.2
+---------
+
+Released on November 19, 2021
+
+- Only run gpuCI bump script daily (:pr:`8404`) `Charles Blackmon-Luca`_
+- Actually ignore index when asked in ``assert_eq`` (:pr:`8396`) `Gabe Joseph`_
+- Ensure single-partition join ``divisions`` is ``tuple`` (:pr:`8389`) `Charles Blackmon-Luca`_
+- Try to make divisions behavior clearer (:pr:`8379`) `Julia Signell`_
+- Fix typo in ``set_index`` ``partition_size`` parameter description (:pr:`8384`) `FredericOdermatt`_
+- Use ``blockwise`` in ``single_partition_join`` (:pr:`8341`) `Gabe Joseph`_
+- Use more explicit keyword arguments (:pr:`8354`) `Boaz Mohar`_
+- Fix ``.loc`` of DataFrame with nullable boolean ``dtype`` (:pr:`8368`) `Marco Rossi`_
+- Parameterize shuffle implementation in tests (:pr:`8250`) `Ian Rose`_
+- Remove some doc build warnings (:pr:`8369`) `Boaz Mohar`_
+- Include properties in array API docs (:pr:`8356`) `Julia Signell`_
+- Fix Zarr for upstream (:pr:`8367`) `Julia Signell`_
+- Pin ``graphviz`` to avoid issue with windows and Python 3.7 (:pr:`8365`) `Julia Signell`_
+- Import ``graphviz.Diagraph`` from top of module, not from ``dot`` (:pr:`8363`) `Julia Signell`_
+
+
+2021.11.1
+---------
+
+Released on November 8, 2021
+
+Patch release to update ``distributed`` dependency to version ``2021.11.1``.
+
+
+2021.11.0
+---------
+
+Released on November 5, 2021
+
+- Fx ``required_extension`` behavior in ``read_parquet`` (:pr:`8351`) `Richard (Rick) Zamora`_
+- Add ``align_dataframes`` to ``map_partitions`` to broadcast a dataframe passed as an arg (:pr:`6628`) `Julia Signell`_
+- Better handling for arrays/series of keys in ``dask.dataframe.loc`` (:pr:`8254`) `Julia Signell`_
+- Point users to Discourse (:pr:`8332`) `Ian Rose`_
+- Add ``name_function`` option to ``to_parquet`` (:pr:`7682`) `Matthew Powers`_
+- Get rid of ``environment-latest.yml`` and update to Python 3.9 (:pr:`8275`) `Julia Signell`_
+- Require newer ``s3fs`` in CI (:pr:`8336`) `James Bourbeau`_
+- Groupby Rolling (:pr:`8176`) `Julia Signell`_
+- Add more ordering diagnostics to ``dask.visualize`` (:pr:`7992`) `Erik Welch`_
+- Use ``HighLevelGraph`` optimizations for ``delayed`` (:pr:`8316`) `Ian Rose`_
+- ``demo_tuples`` produces malformed ``HighLevelGraph`` (:pr:`8325`) `Guido Imperiale`_
+- Dask calendar should show events in local time (:pr:`8312`) `Genevieve Buckley`_
+- Fix flaky ``test_interrupt`` (:pr:`8314`) `Guido Imperiale`_
+- Deprecate ``AxisError`` (:pr:`8305`) `Guido Imperiale`_
+- Fix name of cuDF in extension documentation. (:pr:`8311`) `Vyas Ramasubramani`_
+- Add single eq operator (=) to parquet filters  (:pr:`8300`) `Ayush Dattagupta`_
+- Improve support for Spark output in ``read_parquet`` (:pr:`8274`) `Richard (Rick) Zamora`_
+- Add ``dask.ml`` module (:pr:`6384`) `Matthew Rocklin`_
+- CI fixups (:pr:`8298`) `James Bourbeau`_
+- Make slice errors match NumPy (:pr:`8248`) `Julia Signell`_
+- Fix API docs misrendering with new sphinx theme (:pr:`8296`) `Julia Signell`_
+- Replace ``block`` property with ``blockview`` for array-like operations on blocks (:pr:`8242`) `Davis Bennett`_
+- Deprecate ``file_path`` and make it possible to save  from within a notebook (:pr:`8283`) `Julia Signell`_
+
+
 2021.10.0
 ---------
 
@@ -4618,3 +4677,7 @@ Other
 .. _`Pankaj Patil`: https://github.com/Patil2099
 .. _`Samuel Gaist`: https://github.com/sgaist
 .. _`Marcel Coetzee`: https://github.com/marcelned
+.. _`Matthew Powers`: https://github.com/MrPowers
+.. _`Vyas Ramasubramani`: https://github.com/vyasr
+.. _`Ayush Dattagupta`: https://github.com/ayushdg
+.. _`FredericOdermatt`: https://github.com/FredericOdermatt

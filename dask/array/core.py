@@ -11,7 +11,14 @@ import traceback
 import uuid
 import warnings
 from bisect import bisect
-from collections.abc import Collection, Hashable, Iterable, Iterator, Mapping
+from collections.abc import (
+    Collection,
+    Hashable,
+    Iterable,
+    Iterator,
+    Mapping,
+    MutableMapping,
+)
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
@@ -2459,7 +2466,7 @@ class Array(DaskMethodsMixin):
                [24, 26, 28, 30]])
 
         >>> import cupy  # doctest: +SKIP
-        >>> x = cupy.arange(16).reshape((5, 4))  # doctest: +SKIP
+        >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
         >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
         >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
         >>> y  # doctest: +SKIP
@@ -3365,7 +3372,7 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, zarr.DictStore)) and "distributed" in config.get(
+        if isinstance(z.store, (dict, MutableMapping)) and "distributed" in config.get(
             "scheduler", ""
         ):
             raise RuntimeError(
@@ -4372,10 +4379,17 @@ def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
 
     Respects broadcasting rules
 
+    Parameters
+    ----------
+    out : dask array or None
+        If out is a dask.array then this overwrites the contents of that array with
+        the result
+
     Examples
     --------
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
+    >>> elemwise(sin, x, out=dask_array)  # doctest: +SKIP
 
     See Also
     --------
@@ -4634,14 +4648,11 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
 
 @derived_from(np)
-def broadcast_arrays(*args, **kwargs):
-    subok = bool(kwargs.pop("subok", False))
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
 
     to_array = asanyarray if subok else asarray
     args = tuple(to_array(e) for e in args)
-
-    if kwargs:
-        raise TypeError("unsupported keyword argument(s) provided")
 
     # Unify uneven chunking
     inds = [list(reversed(range(x.ndim))) for x in args]
@@ -4951,11 +4962,20 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, **kwargs):
+def to_hdf5(filename, *args, chunks=True, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
     It creates the necessary datasets and handles clean file opening/closing.
+
+    Parameters
+    ----------
+    chunks: tuple or ``True``
+        Chunk shape, or ``True`` to pass the chunks from the dask array.
+        Defaults to ``True``.
+
+    Examples
+    --------
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x)  # doctest: +SKIP
 
@@ -4966,6 +4986,8 @@ def to_hdf5(filename, *args, **kwargs):
     Optionally provide arguments as though to ``h5py.File.create_dataset``
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x, compression='lzf', shuffle=True)  # doctest: +SKIP
+
+    >>> da.to_hdf5('myfile.hdf5', '/x', x, chunks=(10,20,30))  # doctest: +SKIP
 
     This can also be used as a method on a single Array
 
@@ -4982,8 +5004,6 @@ def to_hdf5(filename, *args, **kwargs):
         data = {args[0]: args[1]}
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")
-
-    chunks = kwargs.pop("chunks", True)
 
     import h5py
 

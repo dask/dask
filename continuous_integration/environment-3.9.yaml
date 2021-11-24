@@ -30,7 +30,7 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  # Not available for Python 3.9 on conda-forge yet
+  # Not available for Python 3.9 on conda-forge
   # - bcolz
   - blosc
   - boto3
@@ -38,12 +38,13 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs>=2021.8.0
   - cloudpickle
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
   - lz4
   - numba
