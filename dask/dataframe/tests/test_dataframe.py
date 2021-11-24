@@ -4945,3 +4945,29 @@ def test_is_monotonic_dt64():
     s_2 = pd.Series(list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
     assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_numeric():
+    s = pd.Series(1, index=range(20))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+
+    s_2 = pd.Series(1, index=range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
+    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
+    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_dt64():
+    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+
+    s_2 = pd.Series(1, index=list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
