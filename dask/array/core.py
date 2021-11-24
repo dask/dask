@@ -4375,15 +4375,34 @@ def broadcast_shapes(*shapes):
 
 
 def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
-    """Apply elementwise function across arguments
+    """Apply an elementwise ufunc-like function blockwise across arguments.
 
-    Respects broadcasting rules
+    Like numpy ufuncs, broadcasting rules are respected.
 
     Parameters
     ----------
-    out : dask array or None
-        If out is a dask.array then this overwrites the contents of that array with
-        the result
+    op : callable
+        The function to apply. Should be numpy ufunc-like in the parameters
+        that it accepts.
+    *args : Any
+        Arguments to pass to `op`. Non-dask array-like objects are first
+        converted to dask arrays, then all arrays are broadcast together before
+        applying the function blockwise across all arguments. Any scalar
+        arguments are passed as-is following normal numpy ufunc behavior.
+    out : dask array, optional
+        If out is a dask.array then this overwrites the contents of that array
+        with the result.
+    where : array_like, optional
+        An optional boolean mask marking locations where the ufunc should be
+        applied. Can be a scalar, dask array, or any other array-like object.
+        Mirrors the ``where`` argument to numpy ufuncs, see e.g. ``numpy.add``
+        for more information.
+    dtype : dtype, optional
+        If provided, overrides the output array dtype.
+    name : str, optional
+        A unique key name to use when building the backing dask graph. If not
+        provided, one will be automatically generated based on the input
+        arguments.
 
     Examples
     --------
