@@ -14,6 +14,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from distributed.utils_test import gen_cluster
+
 import dask
 import dask.dataframe as dd
 from dask import delayed
@@ -27,7 +29,9 @@ from dask.dataframe.shuffle import (
     remove_nans,
     shuffle,
 )
+from dask.dataframe.shuffle_service import ShuffleService
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.distributed import Nanny
 from dask.optimization import cull
 
 dsk = {
@@ -1257,3 +1261,106 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
+async def test_shuffle_service(c, s, a, b):
+    handlers = set(a.handlers)
+
+    df = pd.DataFrame(
+        {
+            "name": list("aabababbacbdsbsfbdbc") * 5,
+            "x": range(100),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=40)
+    shuffled = shuffle(ddf, "name", shuffle="service")
+    res = await c.compute(shuffled)
+
+    assert len(res) == len(df)
+    assert shuffled.npartitions == ddf.npartitions
+    assert set(map(tuple, res.values.tolist())) == set(map(tuple, df.values.tolist()))
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
+async def test_shuffle_service_fail_concurrent_shuffle(c, s, a, b):
+    handlers = set(a.handlers)
+
+    df1 = dask.datasets.timeseries(
+        start="2000-01-01",
+        end="2000-01-05",
+    )
+    df2 = dask.datasets.timeseries(
+        start="2000-01-05",
+        end="2000-01-10",
+    )
+
+    # Implement the merge ourselves, since `hash_join` already has client-side logic
+    # to block `shuffle="service"`
+    divisions = [
+        "Alice",
+        "Frank",
+        "Patricia",
+        "Ursula",
+        "Zelda",
+    ]
+    shuffled1 = df1.set_index("name", shuffle="service", divisions=divisions)
+    shuffled2 = df2.set_index("name", shuffle="service", divisions=divisions)
+
+    merged = shuffled1.map_partitions(lambda p1, p2: p1.merge(p2, on="name"), shuffled2)
+
+    with pytest.raises(NotImplementedError):
+        await c.compute(merged.size)
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
+
+
+@pytest.mark.slow
+@gen_cluster(
+    client=True,
+    nthreads=[("127.0.0.1", 2), ("127.0.0.1", 2)],
+    timeout=10000,
+    Worker=Nanny,  # dask/distributed#4959
+)
+async def test_shuffle_service_large(c, s, a, b):
+    handlers = set(a.handlers)
+
+    ddf = dask.datasets.timeseries(
+        start="2000-01-01",
+        end="2001-01-01",
+        dtypes={"x": int, "y": float},
+    )
+
+    shuffled = shuffle(ddf, "x", shuffle="service")
+    len_1, len_2 = c.compute([ddf.size, shuffled.size])
+
+    len_1 = await len_1
+    len_2 = await len_2
+
+    assert len_1 == len_2
+    assert shuffled.npartitions == ddf.npartitions
+
+    assert not hasattr(a, "shuffler")
+    assert not hasattr(b, "shuffler")
+    assert set(a.handlers) == set(b.handlers) == handlers  # nothing lingering
+    assert not ShuffleService._instances
