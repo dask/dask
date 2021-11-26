@@ -1,3 +1,4 @@
+from collections import Counter
 from functools import reduce
 from itertools import product
 from operator import mul
@@ -235,8 +236,9 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     if limit is None:
         limit = parse_bytes(config.get("array.chunk-size"))
     if max_chunksize_in_bytes > limit:
+        matching_chunks = Counter(inchunks) & Counter(outchunks)
         outchunks = normalize_chunks(
-            ["auto" for _ in outchunks],
+            [out if out in matching_chunks else "auto" for out in outchunks],
             shape=shape,
             limit=limit,
             dtype=x.dtype,
