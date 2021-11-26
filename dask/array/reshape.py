@@ -233,7 +233,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
     # Check output chunks are not too large
     max_chunksize_in_bytes = np.prod([max(i) for i in outchunks]) * x.dtype.itemsize
-    if limit is None:
+    if limit is None and config["array"]["slicing"]["split-large-chunks"] is not False:
         limit = parse_bytes(config.get("array.chunk-size"))
     if max_chunksize_in_bytes > limit:
         matching_chunks = Counter(inchunks) & Counter(outchunks)
