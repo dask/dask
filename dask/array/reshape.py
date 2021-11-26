@@ -239,9 +239,22 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     ):
         limit = parse_bytes(config.get("array.chunk-size"))
     if max_chunksize_in_bytes > limit:
+        # Leave chunk sizes unaltered where possible
         matching_chunks = Counter(inchunks) & Counter(outchunks)
+        chunk_plan = []
+        for out in outchunks:
+            if out in matching_chunks:
+                chunk_plan.append(out)
+                # Remove match from list
+                if matching_chunks[out] <= 1:
+                    matching_chunks.pop(out)
+                # Decrememt counter if multiple same-size matches exist
+                elif matching_chunks[out] > 1:
+                    matching_chunks[out] -= 1
+            else:
+                chunk_plan.append("auto")
         outchunks = normalize_chunks(
-            [out if out in matching_chunks else "auto" for out in outchunks],
+            chunk_plan,
             shape=shape,
             limit=limit,
             dtype=x.dtype,
