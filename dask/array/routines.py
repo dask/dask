@@ -33,6 +33,7 @@ from .core import (
 from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
 from .numpy_compat import _numpy_120
+from .reductions import reduction
 from .ufunc import multiply, sqrt
 from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
 from .wrap import ones
@@ -332,6 +333,52 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
+def _shape_minus_axis(shape, axis):
+    newshape = list(shape)
+    newshape.pop(axis)
+    return tuple(newshape)
+
+
+def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
+    # Caution: this is not your conventional array-sum: due
+    # to the special nature of the preceding blockwise con-
+    # traction,  each chunk is expected to have exactly the
+    # same shape,  with a size of 1 for the dimension given
+    # by `axis` (the reduction axis).  This makes mere ele-
+    # ment-wise addition of the arrays possible.   Besides,
+    # the output can be merely reshaped to lose the `axis`-
+    # dimension when keepdims = False
+    if type(a) is list:
+        item_type = type(a[0])
+        if item_type is np.ndarray:
+            out = chunk.sum(a, dtype=dtype, axis=0)
+        else:
+            a = [item.__array__() for item in a]
+            out = chunk.sum(a, dtype=dtype, axis=0)
+            out = item_type(out)
+    else:
+        if a.shape == (0,):
+            return a
+        out = a
+    if keepdims:
+        return out
+    else:
+        return out.reshape(_shape_minus_axis(out.shape, axis[0]))
+
+
+def _sum_wo_cat(a, axis=None, dtype=None):
+    if dtype is None:
+        dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
+
+    if a.shape[axis] == 1:
+        return a.reshape(_shape_minus_axis(a.shape, axis))
+
+    result = reduction(
+        a, _chunk_sum, _chunk_sum, axis=axis, dtype=dtype, concatenate=False
+    )
+    return result
+
+
 def _matmul(a, b):
     xp = np
 
@@ -341,9 +388,11 @@ def _matmul(a, b):
         xp = cupy
 
     chunk = xp.matmul(a, b)
-    # Since we have performed the contraction via matmul
-    # but blockwise expects all dimensions back, we need
-    # to add one dummy dimension back
+    # Since we have performed the contraction via xp.matmul
+    # but blockwise expects all dimensions back (including
+    # the contraction-axis in the 2nd to last position of
+    # the output), we must then put it back ourselves in
+    # the expected position:
     return chunk[..., xp.newaxis, :]
 
 
@@ -371,7 +420,9 @@ def matmul(a, b):
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
     # out_ind includes all dimensions to prevent contraction
-    # in the blockwise below
+    # in the blockwise below.  We set the last two dimensions
+    # of the output to the contraction axis and the 2nd
+    # (last) dimension of b in that order
     out_ind = tuple(range(a.ndim + 1))
     # lhs_ind includes `a`/LHS dimensions
     lhs_ind = tuple(range(a.ndim))
@@ -397,12 +448,13 @@ def matmul(a, b):
     # blockwise (without contraction) followed by reduction. More about
     # this issue: https://github.com/dask/dask/issues/6874
 
-    out = out.sum(axis=-2)
+    # We will also perform the reduction without concatenation
+    out = _sum_wo_cat(out, axis=-2)
 
     if a_is_1d:
-        out = out[..., 0, :]
+        out = out.reshape(_shape_minus_axis(out.shape, -2))
     if b_is_1d:
-        out = out[..., 0]
+        out = out.reshape(_shape_minus_axis(out.shape, -1))
 
     return out
 
