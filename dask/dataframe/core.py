@@ -2178,11 +2178,64 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
+
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        is_df_like = is_dataframe_like(self._meta_nonempty)
+        needs_time_conversion = False
+        numeric_dd = self
+
+        if PANDAS_GT_120:
+            from .io import from_pandas
+            from .numeric import to_numeric
+
+            def convert_to_numeric(s):
+                if skipna:
+                    return to_numeric(s.dropna())
+
+                # to_numeric(pd.NaT) => -9223372036854775808 is why we need to do this
+                return to_numeric(s).mask(s.isnull(), np.nan)
+
+            if is_df_like:
+                time_cols = self._meta_nonempty.select_dtypes(
+                    include="datetime"
+                ).columns
+                if len(time_cols) > 0:
+                    needs_time_conversion = True
+
+                    # Ensure all columns are correct type. Need to shallow copy since cols will be modified
+                    if axis == 0:
+                        numeric_dd = self[meta.index].copy()
+                    else:
+                        numeric_dd = self.copy()
+
+                    # If there's different types, just convert everything to NaNs for the time columns
+                    if axis == 1 and len(time_cols) != len(self.columns):
+                        # This is faster that converting each columns to numeric when it's not necessary
+                        numeric_dd[time_cols.tolist()] = from_pandas(
+                            pd.DataFrame(
+                                {col: pd.Series([np.nan]) for col in time_cols},
+                                index=self.index,
+                            ),
+                            npartitions=self.npartitions,
+                        )
+                        needs_time_conversion = False
+                    else:
+                        # Convert timedelta and datetime columns to integer types so we can use var
+                        for col in time_cols:
+                            numeric_dd[col] = convert_to_numeric(numeric_dd[col])
+            else:
+                needs_time_conversion = is_datetime64_any_dtype(self._meta_nonempty)
+                if needs_time_conversion:
+                    numeric_dd = convert_to_numeric(self)
+
         if axis == 1:
+
+            def std_and_convert_to_datetime(p, *args, **kwargs):
+                return pd.to_timedelta(M.std(p, *args, **kwargs))
+
             result = map_partitions(
-                M.std,
-                self,
+                M.std if not needs_time_conversion else std_and_convert_to_datetime,
+                numeric_dd,
                 meta=meta,
                 token=self._token_prefix + "std",
                 axis=axis,
@@ -2193,16 +2246,33 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
         else:
-            v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
+            v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
+
+            def sqrt_and_convert(p):
+                sqrt = np.sqrt(p)
+
+                if not is_df_like:
+                    return pd.to_timedelta(sqrt)
+
+                time_col_mask = sqrt.index.isin(time_cols)
+                matching_vals = sqrt[time_col_mask]
+                for time_col, matching_val in zip(time_cols, matching_vals):
+                    sqrt[time_col] = pd.to_timedelta(matching_val)
+
+                return sqrt
+
             result = map_partitions(
-                np.sqrt,
+                np.sqrt if not needs_time_conversion else sqrt_and_convert,
                 v,
                 meta=meta,
                 token=name,
                 enforce_metadata=False,
                 parent_meta=self._meta,
             )
+
+            if is_df_like:
+                result = result.astype(meta.dtype)
             return handle_out(out, result)
 
     @_numeric_only
