@@ -4,7 +4,6 @@ from bisect import bisect_left
 from itertools import cycle
 from operator import add, itemgetter
 
-from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
@@ -342,7 +341,6 @@ def plot_resources(results, palette="Viridis", **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 

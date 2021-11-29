@@ -4,7 +4,6 @@ from operator import add, mul
 from time import sleep
 
 import pytest
-from packaging.version import parse as parse_version
 
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.threaded import get
@@ -214,6 +213,7 @@ def test_pprint_task():
     assert pprint_task(task, keys) == "foo(_, _, y=[_, _], z=_)"
     task = (apply, foo, (tuple, ["a", "b"]), (dict, [["y", ["a", 1]], ["z", 1]]))
     assert pprint_task(task, keys) == "foo(_, _, y=[_, *], z=*)"
+
 
 @pytest.mark.skipif("not bokeh")
 def test_profiler_plot():
