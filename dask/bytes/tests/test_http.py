@@ -1,5 +1,4 @@
 import os
-from packaging.version import parse
 import subprocess
 import sys
 import time
@@ -7,6 +6,7 @@ import time
 import fsspec
 import pytest
 from fsspec.core import open_files
+from packaging.version import parse
 from packaging.version import parse as parse_version
 
 import dask.bag as db
