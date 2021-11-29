@@ -385,7 +385,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def divisions(self, value):
         if None in value:
             if any(v is not None for v in value):
-                raise ValueError("`divisions` must be either all null or all non-null")
+                warnings.warn(
+                    "recieved `divisions` with mix of nulls and non-nulls, future versions will only accept "
+                    "`divisions` that are all null or all non-null",
+                    PendingDeprecationWarning,
+                )
         if not isinstance(value, tuple):
             warnings.warn(
                 f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
