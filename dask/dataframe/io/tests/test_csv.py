@@ -775,6 +775,22 @@ def test_windows_line_terminator():
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
 
 
+def test_header_int():
+    text = (
+        "id0,name0,x0,y0\n"
+        "id,name,x,y\n"
+        "1034,Victor,-0.25,0.84\n"
+        "998,Xavier,-0.48,-0.13\n"
+        "999,Zelda,0.00,0.47\n"
+        "980,Alice,0.67,-0.98\n"
+        "989,Zelda,-0.04,0.03\n"
+    )
+    with filetexts({"test_header_int.csv": text}):
+        df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
+        expected = pd.read_csv("test_header_int.csv", header=1)
+        assert_eq(df, expected, check_index=False)
+
+
 def test_header_None():
     with filetexts({".tmp.1.csv": "1,2", ".tmp.2.csv": "", ".tmp.3.csv": "3,4"}):
         df = dd.read_csv(".tmp.*.csv", header=None)
