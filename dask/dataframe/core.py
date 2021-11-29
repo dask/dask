@@ -322,7 +322,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(meta))}"
             )
         self._meta = meta
-        self._divisions = tuple(divisions)
+        self.divisions = divisions
 
     def __dask_graph__(self):
         return self.dask
@@ -434,7 +434,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        self.dask, self._name, self._meta, self.divisions = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
