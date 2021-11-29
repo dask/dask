@@ -215,12 +215,6 @@ def test_pprint_task():
     task = (apply, foo, (tuple, ["a", "b"]), (dict, [["y", ["a", 1]], ["z", 1]]))
     assert pprint_task(task, keys) == "foo(_, _, y=[_, *], z=*)"
 
-
-def check_title(p, title):
-    # bokeh 0.12 changed the title attribute to not a string
-    return getattr(p.title, "text", p.title) == title
-
-
 @pytest.mark.skipif("not bokeh")
 def test_profiler_plot():
     with prof:
@@ -237,7 +231,7 @@ def test_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert check_title(p, "Not the default")
+    assert p.title.text == "Not the default"
     # Test empty, checking for errors
     prof.clear()
     with pytest.warns(None) as record:
@@ -263,7 +257,7 @@ def test_resource_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert check_title(p, "Not the default")
+    assert p.title.text == "Not the default"
 
     # Test with empty and one point, checking for errors
     rprof.clear()
@@ -297,7 +291,7 @@ def test_cache_profiler_plot():
     assert p.plot_height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
-    assert check_title(p, "Not the default")
+    assert p.title.text == "Not the default"
     assert p.axis[1].axis_label == "Cache Size (non-standard)"
     # Test empty, checking for errors
     cprof.clear()
@@ -326,15 +320,9 @@ def test_plot_multiple():
     p = visualize(
         [prof, rprof], label_size=50, title="Not the default", show=False, save=False
     )
-    bokeh_version = parse_version(bokeh.__version__)
-    if bokeh_version >= parse_version("1.1.0"):
-        figures = [r[0] for r in p.children[1].children]
-    elif bokeh_version >= parse_version("0.12.0"):
-        figures = [r.children[0] for r in p.children[1].children]
-    else:
-        figures = [r[0] for r in p.children]
+    figures = [r[0] for r in p.children[1].children]
     assert len(figures) == 2
-    assert check_title(figures[0], "Not the default")
+    assert figures[0].title.text == "Not the default"
     assert figures[0].xaxis[0].axis_label is None
     assert figures[1].title is None
     assert figures[1].xaxis[0].axis_label == "Time (s)"
@@ -374,18 +362,14 @@ def test_saves_file_path_deprecated():
 
 @pytest.mark.skipif("not bokeh")
 def test_get_colors():
-    from bokeh.palettes import Blues5, Viridis
+    from bokeh.palettes import Blues5, Blues256, Viridis
 
     from dask.diagnostics.profile_visualize import get_colors
 
-    # 256-color palettes were added in bokeh 1.4.0
-    if parse_version(bokeh.__version__) >= parse_version("1.4.0"):
-        from bokeh.palettes import Blues256
-
-        funcs = list(range(11))
-        cmap = get_colors("Blues", funcs)
-        assert set(cmap) < set(Blues256)
-        assert len(set(cmap)) == 11
+    funcs = list(range(11))
+    cmap = get_colors("Blues", funcs)
+    assert set(cmap) < set(Blues256)
+    assert len(set(cmap)) == 11
 
     funcs = list(range(5))
     cmap = get_colors("Blues", funcs)
