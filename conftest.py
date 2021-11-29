@@ -15,6 +15,7 @@ collect_ignore = [
     "dask/dataframe/io/io.py",
     "dask/dataframe/io/parquet/arrow.py",
     "dask/dot.py",
+    "dask/ml.py",
 ]
 
 collect_ignore_glob = []
