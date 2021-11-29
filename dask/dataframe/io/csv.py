@@ -105,6 +105,8 @@ class CSVFunctionWrapper:
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
+            if rest_kwargs.get("header", 0) is not None:
+                rest_kwargs.pop("header", None)
         if not is_last:
             rest_kwargs.pop("skipfooter", None)
 
@@ -581,6 +583,8 @@ def read_pandas(
             "in `sample` in the call to `read_csv`/`read_table`"
         )
 
+    if isinstance(header, int):
+        firstrow += header
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
