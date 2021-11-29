@@ -4232,11 +4232,11 @@ class DataFrame(_Frame):
             Defaults to 'last'.
         sort_function: function, optional
             Sorting function to use when sorting underlying partitions.
-            If None, defaults to `M.sort_values` (the partition library's
-            implementation of `sort_values`).
+            If None, defaults to ``M.sort_values`` (the partition library's
+            implementation of ``sort_values``).
         sort_function_kwargs: dict, optional
             Additional keyword arguments to pass to the partition sorting function.
-            By default, `by`, `ascending`, and `na_position` are provided.
+            By default, ``by``, ``ascending``, and ``na_position`` are provided.
 
         Examples
         --------
