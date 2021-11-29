@@ -2655,3 +2655,13 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+        
+def test_groupby_sort_as_false_affects_within_chunk_groupby_sort():
+    df = pd.DataFrame(
+        [["2021-11-24", "B"], ["2021-11-25", "A"]], columns=["DATE", "HASH"]
+    )
+
+    expected = df.groupby("HASH", sort=False).last()
+    actual = dd.from_pandas(df, npartitions=1).groupby("HASH", sort=False).last()
+    assert_eq(expected, actual)

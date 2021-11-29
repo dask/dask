@@ -296,13 +296,13 @@ def _groupby_aggregate(
     return aggfunc(grouped, **kwargs)
 
 
-def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
+def _apply_chunk(df, *by, dropna=None, observed=None, sort=True, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
 
-    g = _groupby_raise_unaligned(df, by=by, **observed, **dropna)
+    g = _groupby_raise_unaligned(df, by=by, sort=sort, **observed, **dropna)
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
     else:
@@ -311,13 +311,13 @@ def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
         return func(g[columns], **kwargs)
 
 
-def _var_chunk(df, *by):
+def _var_chunk(df, *by, sort=True):
     if is_series_like(df):
         df = df.to_frame()
 
     df = df.copy()
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, sort=sort)
     x = g.sum()
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
@@ -325,7 +325,7 @@ def _var_chunk(df, *by):
     cols = x.columns
     df[cols] = df[cols] ** 2
 
-    g2 = _groupby_raise_unaligned(df, by=by)
+    g2 = _groupby_raise_unaligned(df, by=by, sort=sort)
     x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
 
     return concat([x, x2, n], axis=1)
@@ -411,7 +411,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, sort=True):
     """Covariance Chunk Logic
 
     Parameters
@@ -443,7 +443,7 @@ def _cov_chunk(df, *by):
         by = [col_mapping[k] for k in by]
         cols = cols.drop(np.array(by))
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, sort=sort)
     x = g.sum()
 
     mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
@@ -524,7 +524,7 @@ def _drop_duplicates_reindex(df):
 def _nunique_df_chunk(df, *by, **kwargs):
     name = kwargs.pop("name")
 
-    g = _groupby_raise_unaligned(df, by=by)
+    g = _groupby_raise_unaligned(df, by=by, **kwargs)
     if len(df) > 0:
         grouped = (
             g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
@@ -551,13 +551,12 @@ def _nunique_df_aggregate(df, levels, name, sort=False):
     return df.groupby(level=levels, sort=sort)[name].nunique()
 
 
-def _nunique_series_chunk(df, *by, **_ignored_):
+def _nunique_series_chunk(df, *by, sort=True, **_ignored_):
     # convert series to data frame, then hand over to dataframe code path
     assert is_series_like(df)
 
     df = df.to_frame()
-    kwargs = dict(name=df.columns[0], levels=_determine_levels(by))
-    return _nunique_df_chunk(df, *by, **kwargs)
+    return _nunique_df_chunk(df, *by, sort=sort, name=df.columns[0], levels=_determine_levels(by))
 
 
 ###############################################################
@@ -1068,7 +1067,6 @@ class _GroupBy:
         self.obj = df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
-        self.sort = sort
 
         partitions_aligned = all(
             item.npartitions == df.npartitions if isinstance(item, Series) else True
@@ -1098,6 +1096,10 @@ class _GroupBy:
         if dropna is not None:
             self.dropna["dropna"] = dropna
 
+        self.sort = {}
+        if sort is not None:
+            self.sort["sort"] = sort
+
         # Hold off on setting observed by default: https://github.com/dask/dask/issues/6951
         self.observed = {}
         if observed is not None:
@@ -1122,7 +1124,7 @@ class _GroupBy:
             "by": self.by,
             "group_keys": self.group_keys,
             **self.dropna,
-            "sort": self.sort,
+            **self.sort,
             **self.observed,
         }
 
@@ -1194,6 +1196,7 @@ class _GroupBy:
                 **self.observed,
                 **chunk_kwargs,
                 **self.dropna,
+                **self.sort,
             ),
             aggregate=_groupby_aggregate,
             meta=meta,
@@ -1208,7 +1211,7 @@ class _GroupBy:
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=self.sort,
+            **self.sort,
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
@@ -1232,6 +1235,7 @@ class _GroupBy:
             token=name_part,
             meta=meta,
             **self.dropna,
+            **self.sort,
         )
 
         cumpart_raw_frame = (
@@ -1261,6 +1265,7 @@ class _GroupBy:
             meta=meta,
             token=name_last,
             **self.dropna,
+            **self.sort,
         )
 
         # aggregate cumulated partitions and its previous last element
@@ -1463,6 +1468,7 @@ class _GroupBy:
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
             chunk=_var_chunk,
+            chunk_kwargs={**self.sort},
             aggregate=_var_agg,
             combine=_var_combine,
             token=self._token_prefix + "var",
@@ -1471,7 +1477,7 @@ class _GroupBy:
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=self.sort,
+            **self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1522,6 +1528,7 @@ class _GroupBy:
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
             chunk=_cov_chunk,
+            chunk_kwargs={**self.sort},
             aggregate=_cov_agg,
             combine=_cov_combine,
             token=self._token_prefix + "cov",
@@ -1530,7 +1537,7 @@ class _GroupBy:
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=self.sort,
+            **self.sort,
         )
 
         if isinstance(self.obj, Series):
@@ -1641,7 +1648,9 @@ class _GroupBy:
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(funcs=chunk_funcs, **self.observed, **self.dropna),
+            chunk_kwargs=dict(
+                funcs=chunk_funcs, **self.observed, **self.dropna, **self.sort
+            ),
             combine=_groupby_apply_funcs,
             combine_kwargs=dict(
                 funcs=aggregate_funcs, level=levels, **self.observed, **self.dropna
@@ -1658,7 +1667,7 @@ class _GroupBy:
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=self.sort,
+            **self.sort,
         )
 
     @insert_meta_param_description(pad=12)
@@ -1991,11 +2000,11 @@ class DataFrameGroupBy(_GroupBy):
     def __getitem__(self, key):
         if isinstance(key, list):
             g = DataFrameGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
+                self.obj, by=self.by, slice=key, **self.sort, **self.dropna
             )
         else:
             g = SeriesGroupBy(
-                self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
+                self.obj, by=self.by, slice=key, **self.sort, **self.dropna
             )
 
         # error is raised from pandas
@@ -2083,13 +2092,13 @@ class SeriesGroupBy(_GroupBy):
             aggregate=_nunique_df_aggregate,
             combine=_nunique_df_combine,
             token="series-groupby-nunique",
-            chunk_kwargs={"levels": levels, "name": name},
+            chunk_kwargs={"levels": levels, "name": name, **self.sort},
             aggregate_kwargs={"levels": levels, "name": name},
             combine_kwargs={"levels": levels},
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
-            sort=self.sort,
+            **self.sort,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
