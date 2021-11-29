@@ -6,7 +6,6 @@ import time
 import fsspec
 import pytest
 from fsspec.core import open_files
-from packaging.version import parse
 from packaging.version import parse as parse_version
 
 import dask.bag as db
@@ -116,7 +115,7 @@ def test_ops_blocksize(dir_server):
         fn = files[1]
         f = open_files(root + fn, block_size=2)[0]
         with f as f:
-            if parse(fsspec.__version__) < parse("2021.11.1"):
+            if parse_version(fsspec.__version__) < parse_version("2021.11.1"):
                 # fails because we want only 12 bytes
                 with pytest.raises(ValueError):
                     assert f.read(10) == expected[:10]
