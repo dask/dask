@@ -610,13 +610,27 @@ def map_blocks(
             'chunk-shape': (100,),
             'dtype': dtype('float64')}}
 
-    For each argument and keyword arguments that are dask arrays (the positions
-    of which are the first index), you will receive the shape of the full
-    array, the number of chunks of the full array in each dimension, the chunk
-    location (for example the fourth chunk over in the first dimension), and
-    the array location (for example the slice corresponding to ``40:50``). The
-    same information is provided for the output, with the key ``None``, plus
-    the shape and dtype that should be returned.
+    The keys to the ``block_info`` dictionary indicate which is the input and
+    output Dask array:
+    - ``block_info[0]`` refers to the input Dask array, and contains information
+      about the input chunks. (The dictionary key here is ``0`` because that is
+      the argument index for the input Dask array)
+    - ``block_info[None]`` refers to the output Dask array, and contains
+      information about the output chunks. The output chunk shape and dtype
+      may may be different than the input chunks.
+
+    For each dask array, ``block_info`` describes:
+    - ``shape``: the shape of the full Dask array,
+    - ``num-chunks``: the number of chunks of the full array in each dimension,
+    - ``chunk-location``: the chunk location (for example the fourth chunk over
+      in the first dimension), and
+    - ``array-location``: the array location within the full Dask array
+      (for example the slice corresponding to ``40:50``).
+
+    In addition to these, there are two extra parameters described by
+    ``block_info`` for the output array (in ``block_info[None]``):
+    - ``chunk-shape``: the output chunk shape, and
+    - ``dtype``: the output dtype.
 
     These features can be combined to synthesize an array from scratch, for
     example:
