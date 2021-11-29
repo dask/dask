@@ -25,6 +25,7 @@ below:
    map_overlap
 
 .. autofunction:: map_overlap
+   :noindex:
 
 
 Explanation
