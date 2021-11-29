@@ -2439,7 +2439,8 @@ class Array(DaskMethodsMixin):
         >>> import dask.array as da
         >>> x = np.arange(16).reshape((4, 4))
         >>> d = da.from_array(x, chunks=(2, 2))
-        >>> d.map_overlap(lambda x: x + x.size, depth=1).compute()
+        >>> y = d.map_overlap(lambda x: x + x.size, depth=1, boundary='reflect')
+        >>> y.compute()
         array([[16, 17, 18, 19],
                [20, 21, 22, 23],
                [24, 25, 26, 27],
@@ -2456,7 +2457,7 @@ class Array(DaskMethodsMixin):
 
         >>> x = np.arange(16).reshape((4, 4))
         >>> d = da.from_array(x, chunks=(2, 2))
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=np.array(()))
         >>> y
         dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
         >>> y.compute()
@@ -2468,7 +2469,7 @@ class Array(DaskMethodsMixin):
         >>> import cupy  # doctest: +SKIP
         >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
         >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=cupy.array(()))  # doctest: +SKIP
         >>> y  # doctest: +SKIP
         dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
         >>> y.compute()  # doctest: +SKIP
