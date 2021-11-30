@@ -1404,7 +1404,11 @@ class Array(DaskMethodsMixin):
     def __len__(self):
         if not self.chunks:
             raise TypeError("len() of unsized object")
-        return sum(self.chunks[0])
+        try:
+            return int(sum(self.chunks[0]))
+        except (TypeError, ValueError):
+            pass
+        raise TypeError("len() of object with unknown size is unsupported.")
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())

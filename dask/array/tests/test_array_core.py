@@ -4961,3 +4961,10 @@ def test_dask_layers():
     assert b.dask.layers.keys() == {a.name, b.name}
     assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
     assert b.__dask_layers__() == (b.name,)
+
+
+def test_len_object_with_unknown_size():
+    a = da.random.random(size=(20, 2))
+    b = a[a < 0.5]
+    with pytest.raises(TypeError, match="object with unknown size"):
+        assert len(b)
