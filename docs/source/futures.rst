@@ -719,9 +719,6 @@ Publish-Subscribe
 Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
 providing an additional channel of communication between ongoing tasks.
 
-.. autoclass:: Pub
-   :members:
-   :noindex:
 
 Actors
 ------
