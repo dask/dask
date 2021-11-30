@@ -52,6 +52,13 @@ except ImportError:
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
+    parser.addoption(
+        "--shuffle",
+        action="extend",
+        nargs="*",
+        choices=["tasks", "disk", "p2p"],
+        help="Shuffle methods to use. Not giving is equivalent to `pytest --shuffle tasks disk ...`",
+    )
 
 
 def pytest_runtest_setup(item):
@@ -64,9 +71,7 @@ pytest.register_assert_rewrite(
 )
 
 
-@pytest.fixture(
-    params=["disk", "tasks", pytest.param("p2p", marks=pytest.mark.shuffle_p2p)]
-)
+@pytest.fixture
 def shuffle_method(request):
     with dask.config.set(shuffle=request.param):
         if request.param == "p2p":
@@ -82,3 +87,12 @@ def shuffle_method(request):
                     yield request.param
         else:
             yield request.param
+
+
+def pytest_generate_tests(metafunc):
+    # Insert the values passed for `--shuffle` as parametrizations for the `shuffle_method` fixture.
+    # See https://docs.pytest.org/en/6.2.x/example/parametrize.html
+    # and https://stackoverflow.com/a/33209382/17100540.
+    if shuffle_method.__name__ in metafunc.fixturenames:
+        shuffles = metafunc.config.getoption("shuffle") or ["tasks", "disk"]
+        metafunc.parametrize(shuffle_method.__name__, shuffles, indirect=True)
