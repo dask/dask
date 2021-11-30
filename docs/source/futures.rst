@@ -721,6 +721,7 @@ providing an additional channel of communication between ongoing tasks.
 
 .. autoclass:: Pub
    :members:
+   :noindex:
 
 Actors
 ------
