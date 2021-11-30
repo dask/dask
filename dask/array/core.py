@@ -487,6 +487,10 @@ def map_blocks(
     ----------
     func : callable
         Function to apply to every block in the array.
+        If ``func`` accepts ``block_info=`` or ``block_id=``
+        as keyword arguments, these will be passed dictionaries
+        containing information about input and output chunks/arrays
+        during computation. See examples for details.
     args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
@@ -590,8 +594,10 @@ def map_blocks(
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
             69, 799,  79, 899,  89, 999,  99])
 
-    Your block function get information about where it is in the array by
+    Your block function can get information about where it is in the array by
     accepting a special ``block_info`` or ``block_id`` keyword argument.
+    During computation, they will contain information about each of the input
+    and output chunks (and dask arrays) relevant to each call of ``func``.
 
     >>> def func(block_info=None):
     ...     pass
@@ -612,9 +618,9 @@ def map_blocks(
 
     The keys to the ``block_info`` dictionary indicate which is the input and
     output Dask array:
-    - ``block_info[0]`` refers to the input Dask array, and contains information
-      about the input chunks. (The dictionary key here is ``0`` because that is
-      the argument index for the input Dask array)
+    - ``block_info[0]`` refers to the first input Dask array.
+      The dictionary key here is ``0`` because that is the argument index
+      corresponding to the first input Dask array.
     - ``block_info[None]`` refers to the output Dask array, and contains
       information about the output chunks. The output chunk shape and dtype
       may may be different than the input chunks.
