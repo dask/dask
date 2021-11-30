@@ -86,6 +86,6 @@ Paid support
 In addition to the previous options, paid support is available from the
 following organizations (listed in alphabetical order):
 
--   Anaconda: `<https://www.anaconda.com/help>`_
+-   Anaconda: `<https://www.anaconda.com/products/professional-services>`_
 -   Coiled: `<https://coiled.io>`_
 -   Quansight: `<https://www.quansight.com/open-source-support>`_
