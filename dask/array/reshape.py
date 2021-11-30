@@ -236,7 +236,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     max_chunksize_in_bytes = math.prod([max(i) for i in outchunks]) * x.dtype.itemsize
     if (
         limit is None
-        and config.config["array"]["slicing"]["split-large-chunks"] is not False
+        and config.get("array.slicing.split-large-chunks") is not False
     ):
         limit = parse_bytes(config.get("array.chunk-size"))
     if max_chunksize_in_bytes > limit:
