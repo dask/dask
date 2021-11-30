@@ -246,7 +246,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
             if out in matching_chunks:
                 chunk_plan.append(out)
                 # Remove match from list
-                if matching_chunks[out] <= 1:
+                if matching_chunks[out] == 1:
                     matching_chunks.pop(out)
                 # Decrememt counter if multiple same-size matches exist
                 elif matching_chunks[out] > 1:
