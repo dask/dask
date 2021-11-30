@@ -241,7 +241,7 @@ def test_hash_join(how, shuffle_method):
     c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
     assert c.npartitions == 3
 
-    result = c.compute(scheduler="single-threaded")
+    result = c.compute()
     expected = pd.merge(A, B, "outer", None, "x", "z")
 
     list_eq(result, expected)
