@@ -30,7 +30,7 @@ Top level functions
    argtopk
    argwhere
    around
-   Array
+   array
    asanyarray
    asarray
    atleast_1d
