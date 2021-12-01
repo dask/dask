@@ -1,4 +1,10 @@
+from __future__ import annotations
+
 import importlib
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .highlevelgraph import HighLevelGraph, Layer
 
 
 def inc(x):
@@ -123,3 +129,16 @@ def import_or_none(name):
         return importlib.import_module(name)
     except (ImportError, AttributeError):
         return None
+
+
+def hlg_layer(hlg: HighLevelGraph, prefix: str) -> Layer:
+    "Get the first layer from a HighLevelGraph whose name starts with a prefix"
+    for key, lyr in hlg.layers.items():
+        if key.startswith(prefix):
+            return lyr
+    raise KeyError(f"No layer starts with {prefix!r}: {list(hlg.layers)}")
+
+
+def hlg_layer_topological(hlg: HighLevelGraph, i: int) -> Layer:
+    "Get the layer from a HighLevelGraph at position ``i``, topologically"
+    return hlg.layers[hlg._toposort_layers()[i]]
