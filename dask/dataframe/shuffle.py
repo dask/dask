@@ -114,6 +114,9 @@ def sort_values(
             sort_function, **sort_function_kwargs
         )
 
+    if not isinstance(ascending, bool):
+        raise ValueError("ascending must be either True or False")
+
     if (
         all(not pd.isna(x) for x in divisions)
         and mins == sorted(mins, reverse=not ascending)
