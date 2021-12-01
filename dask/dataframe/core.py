@@ -3776,8 +3776,8 @@ Dask Name: {name}, {task} tasks""".format(
     def is_monotonic_increasing(self):
         return aca(
             self,
-            chunk=_monotonic_increasing_chunk,
-            aggregate=_monotonic_increasing_aggregate,
+            chunk=methods.monotonic_increasing_chunk,
+            aggregate=methods.monotonic_increasing_aggregate,
             meta=bool,
             token="monotonic_increasing",
         )
@@ -3787,8 +3787,8 @@ Dask Name: {name}, {task} tasks""".format(
     def is_monotonic_decreasing(self):
         return aca(
             self,
-            chunk=_monotonic_decreasing_chunk,
-            aggregate=_monotonic_decreasing_aggregate,
+            chunk=methods.monotonic_decreasing_chunk,
+            aggregate=methods.monotonic_decreasing_aggregate,
             meta=bool,
             token="monotonic_increasing",
         )
@@ -3976,29 +3976,17 @@ class Index(Series):
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
-        return self.is_monotonic_increasing
+        return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
-        return aca(
-            self,
-            chunk=_index_monotonic_increasing_chunk,
-            aggregate=_monotonic_increasing_aggregate,
-            meta=bool,
-            token="monotonic_increasing",
-        )
+        return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
-        return aca(
-            self,
-            chunk=_index_monotonic_decreasing_chunk,
-            aggregate=_monotonic_decreasing_aggregate,
-            meta=bool,
-            token="monotonic_increasing",
-        )
+        return super().is_monotonic_decreasing
 
 
 class DataFrame(_Frame):
@@ -7409,45 +7397,3 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
-
-
-def _monotonic_increasing_chunk(x):
-    return pd.DataFrame(
-        data=[[x.is_monotonic_increasing, x.iloc[0], x.iloc[-1]]],
-        columns=["monotonic", "first", "last"],
-    )
-
-
-def _index_monotonic_increasing_chunk(x):
-    return pd.DataFrame(
-        data=[[x.is_monotonic_increasing, x[0], x[-1]]],
-        columns=["monotonic", "first", "last"],
-    )
-
-
-def _monotonic_increasing_aggregate(concatenated):
-    bounds_are_monotonic = pd.Series(
-        concatenated[["first", "last"]].to_numpy().ravel()
-    ).is_monotonic_increasing
-    return concatenated["monotonic"].all() and bounds_are_monotonic
-
-
-def _monotonic_decreasing_chunk(x):
-    return pd.DataFrame(
-        data=[[x.is_monotonic_decreasing, x.iloc[0], x.iloc[-1]]],
-        columns=["monotonic", "first", "last"],
-    )
-
-
-def _index_monotonic_decreasing_chunk(x):
-    return pd.DataFrame(
-        data=[[x.is_monotonic_decreasing, x[0], x[-1]]],
-        columns=["monotonic", "first", "last"],
-    )
-
-
-def _monotonic_decreasing_aggregate(concatenated):
-    bounds_are_monotonic = pd.Series(
-        concatenated[["first", "last"]].to_numpy().ravel()
-    ).is_monotonic_decreasing
-    return concatenated["monotonic"].all() and bounds_are_monotonic
