@@ -18,9 +18,9 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import dec, inc
 
 a, b, c, d, e, f, g = "abcdefg"
-_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = [
+_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
     _BLOCKWISE_DEFAULT_PREFIX + "%d" % i for i in range(10)
-]
+)
 i, j, k = "ijk"
 
 
@@ -542,7 +542,7 @@ def test_bag_array_conversion():
 
     b = db.range(10, npartitions=1)
     (x,) = b.map_partitions(np.asarray).to_delayed()
-    (x,) = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
+    (x,) = (da.from_delayed(a, shape=(10,), dtype=int) for a in [x])
     z = da.concatenate([x])
     assert_eq(z, np.arange(10), check_graph=False)
 

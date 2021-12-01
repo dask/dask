@@ -16,6 +16,7 @@ dependencies:
       # TODO: Replace this with distributed=2021.05.0 once it is out
       - git+https://github.com/dask/distributed
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures

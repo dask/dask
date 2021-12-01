@@ -9,6 +9,7 @@ dependencies:
   - numpy=1.19
   - pandas=1.2
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
@@ -36,13 +37,13 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - chest
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs>=2021.8.0
   - cloudpickle
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
   - lz4
   - numba

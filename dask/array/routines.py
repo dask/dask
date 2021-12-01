@@ -209,7 +209,7 @@ def flip(m, axis=None):
             sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
-            "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
+            f"`axis` of {str(axis)} invalid for {str(m.ndim)}-D array"
         ) from e
     sl = tuple(sl)
 
@@ -238,9 +238,7 @@ def rot90(m, k=1, axes=(0, 1)):
         raise ValueError("Axes must be different.")
 
     if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
-        raise ValueError(
-            "Axes={} out of range for array of ndim={}.".format(axes, m.ndim)
-        )
+        raise ValueError(f"Axes={axes} out of range for array of ndim={m.ndim}.")
 
     k %= 4
 
@@ -612,7 +610,7 @@ def _gradient_kernel(x, block_id, coord, axis, array_locs, grad_kwargs):
 
 
 @derived_from(np)
-def gradient(f, *varargs, **kwargs):
+def gradient(f, *varargs, axis=None, **kwargs):
     f = asarray(f)
 
     kwargs["edge_order"] = math.ceil(kwargs.get("edge_order", 1))
@@ -620,7 +618,6 @@ def gradient(f, *varargs, **kwargs):
         raise ValueError("edge_order must be less than or equal to 2.")
 
     drop_result_list = False
-    axis = kwargs.pop("axis", None)
     if axis is None:
         axis = tuple(range(f.ndim))
     elif isinstance(axis, Integral):

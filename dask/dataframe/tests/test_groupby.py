@@ -1,6 +1,6 @@
 import collections
+import operator
 import warnings
-from operator import methodcaller
 
 import numpy as np
 import pandas as pd
@@ -37,6 +37,13 @@ def agg_func(request):
     Aggregations supported for groups
     """
     return request.param
+
+
+# Wrapper fixture for shuffle_method to auto-apply it to all the tests in this module,
+# as we don't want to auto-apply the fixture repo-wide.
+@pytest.fixture(autouse=True)
+def auto_shuffle_method(shuffle_method):
+    yield
 
 
 @pytest.mark.xfail(reason="uncertain how to handle. See issue #3481.")
@@ -496,12 +503,6 @@ def test_groupby_set_index():
 
 
 @pytest.mark.parametrize("empty", [True, False])
-@pytest.mark.filterwarnings(
-    "ignore:0 should be:DeprecationWarning"
-)  # fixed in new pandas.
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -724,9 +725,6 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
-@pytest.mark.filterwarnings(
-    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -890,25 +888,27 @@ def test_numeric_column_names():
     )
 
 
-def test_groupby_apply_tasks():
+def test_groupby_apply_tasks(shuffle_method):
+    if shuffle_method == "disk":
+        pytest.skip("Tasks-only shuffle test")
+
     df = _compat.makeTimeDataFrame()
     df["A"] = df.A // 0.1
     df["B"] = df.B // 0.1
     ddf = dd.from_pandas(df, npartitions=10)
 
-    with dask.config.set(shuffle="tasks"):
-        for ind in [lambda x: "A", lambda x: x.A]:
-            a = df.groupby(ind(df)).apply(len)
-            with pytest.warns(UserWarning):
-                b = ddf.groupby(ind(ddf)).apply(len)
-            assert_eq(a, b.compute())
-            assert not any("partd" in k[0] for k in b.dask)
+    for ind in [lambda x: "A", lambda x: x.A]:
+        a = df.groupby(ind(df)).apply(len)
+        with pytest.warns(UserWarning):
+            b = ddf.groupby(ind(ddf)).apply(len)
+        assert_eq(a, b.compute())
+        assert not any("partd" in k[0] for k in b.dask)
 
-            a = df.groupby(ind(df)).B.apply(len)
-            with pytest.warns(UserWarning):
-                b = ddf.groupby(ind(ddf)).B.apply(len)
-            assert_eq(a, b.compute())
-            assert not any("partd" in k[0] for k in b.dask)
+        a = df.groupby(ind(df)).B.apply(len)
+        with pytest.warns(UserWarning):
+            b = ddf.groupby(ind(ddf)).B.apply(len)
+        assert_eq(a, b.compute())
+        assert not any("partd" in k[0] for k in b.dask)
 
 
 def test_groupby_multiprocessing():
@@ -986,7 +986,7 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
     assert len(with_mean_finalizers) == len(with_mean_spec)
 
 
-def test_aggregate__dask():
+def test_aggregate_dask():
     dask_holder = collections.namedtuple("dask_holder", ["dask"])
     get_agg_dask = lambda obj: dask_holder(
         {k: v for (k, v) in obj.dask.items() if k[0].startswith("aggregate")}
@@ -1303,7 +1303,7 @@ def test_groupby_split_out_num():
     assert ddf.groupby("A").sum(split_out=3).npartitions == 3
 
     with pytest.raises(TypeError):
-        # groupby doesn't adcept split_out
+        # groupby doesn't accept split_out
         ddf.groupby("A", split_out=2)
 
 
@@ -1344,7 +1344,7 @@ def test_cumulative(func, key, sel):
     df.iloc[[-18, -12, -6], -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=10)
 
-    g, dg = [d.groupby(key)[sel] for d in (df, ddf)]
+    g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
 
@@ -2249,8 +2249,13 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
-@pytest.mark.gpu
-@pytest.mark.parametrize("backend", ["cudf", "pandas"])
+@pytest.mark.parametrize(
+    "backend",
+    [
+        "pandas",
+        pytest.param("cudf", marks=pytest.mark.gpu),
+    ],
+)
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
     if backend == "cudf":
@@ -2442,7 +2447,7 @@ def test_groupby_empty_partitions_with_rows_operation(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation, 1)
+    caller = operator.methodcaller(operation, 1)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2466,7 +2471,7 @@ def test_groupby_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
@@ -2490,7 +2495,7 @@ def test_groupby_multi_index_with_row_operations(operation):
         columns=["A", "B"],
     )
 
-    caller = methodcaller(operation)
+    caller = operator.methodcaller(operation)
     expected = caller(df.groupby(["A", df["A"].eq("a1")])["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])

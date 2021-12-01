@@ -1,14 +1,14 @@
-Institutional FAQ
-=================
+FAQ
+===
 
-**Question**: *Is appropriate for adoption within a larger institutional context?*
+**Question**: *Is Dask appropriate for adoption within a larger institutional context?*
 
 **Answer**: *Yes.* Dask is used within the world's largest banks, national labs,
 retailers, technology companies, and government agencies.  It is used in highly
 secure environments.  It is used in conservative institutions as well as fast
 moving ones.
 
-This page contains Frequently Asked Questions and concerns from institutions
+This page contains Frequently Asked Questions and concerns from institutions and users
 when they first investigate Dask.
 
 .. contents:: :local:
@@ -127,6 +127,15 @@ Dask differs from Apache Spark in a few ways:
    bet.  If you want to support a wide variety of custom workloads then Dask
    might be more natural.
 
+See the section :doc:`spark`.
+
+
+Are there companies that we can get support from?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are several companies that offer support for dask in different capacities. See
+`Paid support <https://docs.dask.org/en/latest/support.html#paid-support>`_ for a full list.
+
 
 For IT
 ------
@@ -160,7 +169,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
       batch settings
 
-    For more information see :doc:`setup/hpc`
+    For more information see :doc:`how-to/deploy-dask/hpc`
 
 3.  **Kubernetes/Cloud**: Newer clusters may employ Kubernetes for deployment.
     This is particularly commonly used today on major cloud providers,
@@ -173,7 +182,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - **Dask-Kubernetes**: for native Kubernetes integration for fast moving
       or ephemeral deployments.
 
-    For more information see :doc:`setup/kubernetes`
+    For more information see :doc:`how-to/deploy-dask/kubernetes`
 
 
 Is Dask secure?
@@ -265,8 +274,8 @@ real-time traffic in a scalable way, or responding to a broad set of
 interactive users with large datasets that it keeps resident in memory.
 
 
-For Technical Leads
--------------------
+For Users
+---------
 
 Will Dask "just work" on our existing code?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -387,3 +396,81 @@ Does Dask have a SQL interface?
 Dask supports various ways to communicate with SQL databases, some
 requiring extra packages to be installed; see the section
 :doc:`dataframe-sql`.
+
+
+Does Dask work on GPUs?
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Yes! Dask works with GPUs in a few ways.
+
+The `RAPIDS <https://rapids.ai>`_ libraries provide a GPU-accelerated
+Pandas-like library,
+`cuDF <https://github.com/rapidsai/cudf>`_,
+which interoperates well and is tested against Dask DataFrame.
+
+`Chainer's CuPy <https://cupy.chainer.org/>`_ library provides a GPU
+accelerated NumPy-like library that interoperates nicely with Dask Array.
+
+For custom workflows people use Dask alongside GPU-accelerated libraries like PyTorch and
+TensorFlow to manage workloads across several machines.  They typically use
+Dask's custom APIs, notably :doc:`Delayed <delayed>` and :doc:`Futures
+<futures>`.
+
+See the section :doc:`gpu`.
+
+
+How do I cite Dask?
+~~~~~~~~~~~~~~~~~~~
+
+Dask is developed by many people from many institutions.  Some of these
+developers are academics who depend on academic citations to justify their
+efforts.  Unfortunately, no single citation can do all of these developers (and
+the developers to come) sufficient justice.  Instead, we choose to use a single
+blanket citation for all developers past and present.
+
+To cite Dask in publications, please use the following::
+
+   Dask Development Team (2016). Dask: Library for dynamic task scheduling
+   URL https://dask.org
+
+A BibTeX entry for LaTeX users follows::
+
+   @Manual{,
+     title = {Dask: Library for dynamic task scheduling},
+     author = {{Dask Development Team}},
+     year = {2016},
+     url = {https://dask.org},
+   }
+
+The full author list is available using ``git`` (e.g. ``git shortlog -ns``).
+
+
+Are there papers about Dask?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Rocklin, Matthew. "Dask: Parallel Computation with Blocked algorithms and Task
+Scheduling." (2015).
+`PDF <https://conference.scipy.org/proceedings/scipy2015/pdfs/matthew_rocklin.pdf>`_.
+
+::
+
+   @InProceedings{ matthew_rocklin-proc-scipy-2015,
+     author    = { Matthew Rocklin },
+     title     = { Dask: Parallel Computation with Blocked algorithms and Task Scheduling },
+     booktitle = { Proceedings of the 14th Python in Science Conference },
+     pages     = { 130 - 136 },
+     year      = { 2015 },
+     editor    = { Kathryn Huff and James Bergstra }
+   }
+
+
+For Marketing
+-------------
+
+There is a special subsite dedicated to addressing marketing concerns. You can
+find it at `marketing.dask.org <https://marketing.dask.org>`_.
+
+Do you have any standardized logos?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Yes! You can find them at :doc:`logos`.

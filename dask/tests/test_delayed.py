@@ -13,6 +13,7 @@ import dask
 import dask.bag as db
 from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
 
 try:
@@ -162,7 +163,7 @@ def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+    assert getattr not in {v[0] for v in o.__dask_graph__().values()}
 
 
 def test_np_dtype_of_delayed():
@@ -239,8 +240,8 @@ def test_literates():
     assert delayed(lit).compute() == (1, 2, 3)
     lit = [a, b, 3]
     assert delayed(lit).compute() == [1, 2, 3]
-    lit = set((a, b, 3))
-    assert delayed(lit).compute() == set((1, 2, 3))
+    lit = {a, b, 3}
+    assert delayed(lit).compute() == {1, 2, 3}
     lit = {a: "a", b: "b", 3: "c"}
     assert delayed(lit).compute() == {1: "a", 2: "b", 3: "c"}
     assert delayed(lit)[a].compute() == "a"
@@ -712,3 +713,26 @@ def test_dask_layers_to_delayed():
     assert d.dask.layers.keys() == {"delayed-" + name}
     assert d.dask.dependencies == {"delayed-" + name: set()}
     assert d.__dask_layers__() == ("delayed-" + name,)
+
+
+def test_annotations_survive_optimization():
+    with dask.annotate(foo="bar"):
+        graph = HighLevelGraph.from_collections(
+            "b",
+            {"a": 1, "b": (inc, "a"), "c": (inc, "b")},
+            [],
+        )
+        d = Delayed("b", graph)
+
+    assert type(d.dask) is HighLevelGraph
+    assert len(d.dask.layers) == 1
+    assert len(d.dask.layers["b"]) == 3
+    assert d.dask.layers["b"].annotations == {"foo": "bar"}
+
+    # Ensure optimizing a Delayed object returns a HighLevelGraph
+    # and doesn't loose annotations
+    (d_opt,) = dask.optimize(d)
+    assert type(d_opt.dask) is HighLevelGraph
+    assert len(d_opt.dask.layers) == 1
+    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
+    assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
