@@ -1,4 +1,3 @@
-import math
 from collections import Counter
 from functools import reduce
 from itertools import product
@@ -233,11 +232,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
     # Check output chunks are not too large
-    max_chunksize_in_bytes = math.prod([max(i) for i in outchunks]) * x.dtype.itemsize
-    if (
-        limit is None
-        and config.get("array.slicing.split-large-chunks") is not False
-    ):
+    max_chunksize_in_bytes = reduce(mul, [max(i) for i in outchunks]) * x.dtype.itemsize
+    if limit is None and config.get("array.slicing.split-large-chunks") is not False:
         limit = parse_bytes(config.get("array.chunk-size"))
     if max_chunksize_in_bytes > limit:
         # Leave chunk sizes unaltered where possible

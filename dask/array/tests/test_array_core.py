@@ -7,11 +7,11 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
-import math
 import operator
 import os
 import time
 import warnings
+from functools import reduce
 from io import StringIO
 from operator import add, getitem, sub
 from threading import Lock
@@ -1210,7 +1210,8 @@ def test_reshape_avoids_large_chunks():
     x = da.random.random((300, 180, 4, 18483), chunks=(-1, -1, 1, 183))
     result = x.reshape(300, 180, -1)
     nbytes = x.dtype.itemsize
-    assert (math.prod(result.chunksize) * nbytes) < (limit)
+    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+    assert max_chunksize_in_bytes < (limit)
 
 
 def test_full():
