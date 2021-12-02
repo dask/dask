@@ -5016,6 +5016,34 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
+    def nunique(self, split_every=False):
+        nunique_series_list = []
+        for col_index in range(len(self.columns)):
+            col_series = self.iloc[:, col_index]
+            mode_series = Series.mode(col_series, split_every=split_every)
+            mode_series.name = col_series.name
+            nunique_series_list.append(mode_series)
+
+        name = "series-" + tokenize(*nunique_series_list)
+
+        dsk = {
+            (name, 0): (
+                apply,
+                methods.concat,
+                [[(df._name, 0) for df in nunique_series_list]],
+                {"axis": 1},
+            )
+        }
+
+        meta = methods.concat([df._meta for df in nunique_series_list], axis=1)
+        graph = HighLevelGraph.from_collections(
+            name, dsk, dependencies=nunique_series_list
+        )
+        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
+
+        return ddf
+
+    @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False):
         mode_series_list = []
         for col_index in range(len(self.columns)):
