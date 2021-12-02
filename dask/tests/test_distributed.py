@@ -215,9 +215,9 @@ def test_zarr_in_memory_distributed_err(c):
     da = pytest.importorskip("dask.array")
     zarr = pytest.importorskip("zarr")
 
-    c = (1, 1)
-    a = da.ones((3, 3), chunks=c)
-    z = zarr.zeros_like(a, chunks=c)
+    chunks = (1, 1)
+    a = da.ones((3, 3), chunks=chunks)
+    z = zarr.zeros_like(a, chunks=chunks)
 
     with pytest.raises(RuntimeError):
         a.to_zarr(z)

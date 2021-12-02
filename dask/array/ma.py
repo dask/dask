@@ -113,10 +113,10 @@ def getmaskarray(a):
     return a.map_blocks(np.ma.getmaskarray)
 
 
-def _masked_array(data, mask=np.ma.nomask, **kwargs):
-    kwargs.pop("chunks", None)  # A Dask kwarg, not NumPy.
-    dtype = kwargs.pop("masked_dtype", None)
-    return np.ma.masked_array(data, mask=mask, dtype=dtype, **kwargs)
+def _masked_array(data, mask=np.ma.nomask, masked_dtype=None, **kwargs):
+    if "chunks" in kwargs:
+        del kwargs["chunks"]  # A Dask kwarg, not NumPy.
+    return np.ma.masked_array(data, mask=mask, dtype=masked_dtype, **kwargs)
 
 
 @derived_from(np.ma)

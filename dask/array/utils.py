@@ -12,14 +12,6 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
 
-try:
-    AxisError = np.AxisError
-except AttributeError:
-    try:
-        np.array([0]).sum(axis=5)
-    except Exception as e:
-        AxisError = type(e)
-
 
 def normalize_to_array(x):
     if is_cupy_type(x):
@@ -462,7 +454,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise AxisError(
+        raise np.AxisError(
             "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
         )
     if axis < 0:
@@ -530,3 +522,17 @@ def scipy_linalg_safe(func_name, *args, **kwargs):
 
 def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
+
+
+def __getattr__(name):
+    # Can't use the @_deprecated decorator as it would not work on `except AxisError`
+    if name == "AxisError":
+        warnings.warn(
+            "AxisError was deprecated after version 2021.10.0 and will be removed in a "
+            "future release. Please use numpy.AxisError instead.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        return np.AxisError
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")
