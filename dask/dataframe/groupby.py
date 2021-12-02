@@ -9,7 +9,7 @@ import pandas as pd
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import M, derived_from, funcname, itemgetter
+from ..utils import M, _deprecated, derived_from, funcname, itemgetter
 from .core import (
     DataFrame,
     Series,
@@ -1097,6 +1097,15 @@ class _GroupBy:
         self._meta = self.obj._meta.groupby(
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
+
+    @property
+    @_deprecated(use_instead="Groupby.by")
+    def index(self):
+        return self.by
+
+    @index.setter
+    def index(self, value):
+        self.by = value
 
     @property
     def _groupby_kwargs(self):
