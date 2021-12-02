@@ -1,7 +1,7 @@
 import math
 import warnings
 from collections.abc import Iterable
-from functools import partial, wraps
+from functools import partial, reduce, wraps
 from numbers import Integral, Real
 from typing import List, Tuple
 
@@ -349,13 +349,14 @@ def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
     # the output can be merely reshaped to lose the `axis`-
     # dimension when keepdims = False
     if type(a) is list:
-        item_type = type(a[0])
-        if item_type is np.ndarray:
-            out = chunk.sum(a, dtype=dtype, axis=0)
-        else:
-            a = [item.__array__() for item in a]
-            out = chunk.sum(a, dtype=dtype, axis=0)
-            out = item_type(out)
+        xp = np
+
+        if is_cupy_type(a[0]):
+            import cupy
+
+            xp = cupy
+
+        out = reduce(partial(xp.add, dtype=dtype), a)
     else:
         if a.shape == (0,):
             return a
@@ -371,12 +372,11 @@ def _sum_wo_cat(a, axis=None, dtype=None):
         dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
 
     if a.shape[axis] == 1:
-        return a.reshape(_shape_minus_axis(a.shape, axis))
+        return a.squeeze(axis)
 
-    result = reduction(
+    return reduction(
         a, _chunk_sum, _chunk_sum, axis=axis, dtype=dtype, concatenate=False
     )
-    return result
 
 
 def _matmul(a, b):
@@ -389,10 +389,10 @@ def _matmul(a, b):
 
     chunk = xp.matmul(a, b)
     # Since we have performed the contraction via xp.matmul
-    # but blockwise expects all dimensions back (including
-    # the contraction-axis in the 2nd to last position of
-    # the output), we must then put it back ourselves in
-    # the expected position:
+    # but blockwise expects all dimensions back  (including
+    # the contraction-axis in  the 2nd-to-last position  of
+    # the output), we must then put it back in the expected
+    # the position ourselves:
     return chunk[..., xp.newaxis, :]
 
 
@@ -452,9 +452,9 @@ def matmul(a, b):
     out = _sum_wo_cat(out, axis=-2)
 
     if a_is_1d:
-        out = out.reshape(_shape_minus_axis(out.shape, -2))
+        out = out.squeeze(-2)
     if b_is_1d:
-        out = out.reshape(_shape_minus_axis(out.shape, -1))
+        out = out.squeeze(-1)
 
     return out
 
