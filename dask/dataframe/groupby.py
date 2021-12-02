@@ -1180,6 +1180,7 @@ class _GroupBy:
             and self.obj._contains_index_name(
                 first_index if not is_index_like(first_index) else first_index.name
             )
+            and len(set(self.obj.divisions)) == len(self.obj.divisions)
         )
 
         if embarrassingly_parallel:
