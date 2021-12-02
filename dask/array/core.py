@@ -625,7 +625,8 @@ def map_blocks(
       you can access them with the number corresponding to the input argument,
       eg: ``block_info[1]``, ``block_info[2]``, etc.
       (Note that if you pass multiple Dask arrays as input to the function,
-      the arrays must have the same number of chunks.)
+      the arrays must have the same number of chunks, or be able to broadcast
+      to the shape of the first Dask array.)
     - **Output Dask array:** ``block_info[None]`` refers to the output Dask array,
       and contains information about the output chunks.
       The output chunk shape and dtype may may be different than the input chunks.
