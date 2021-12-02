@@ -26,6 +26,7 @@ from .utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
@@ -1172,6 +1173,31 @@ class _GroupBy:
 
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
+
+        first_index = self.index if not isinstance(self.index, list) else self.index[0]
+        embarrassingly_parallel = (
+            self.obj.known_divisions
+            and self.obj._contains_index_name(
+                first_index if not is_index_like(first_index) else first_index.name
+            )
+        )
+
+        if embarrassingly_parallel:
+            return map_partitions(
+                _apply_chunk,
+                self.obj,
+                self.index,
+                chunk=func,
+                meta=meta,
+                token=token,
+                transform_divisions=False,
+                enforce_metadata=False,
+                align_dataframes=False,
+                columns=columns,
+                **self.observed,
+                **chunk_kwargs,
+                **self.dropna,
+            )
 
         return aca(
             [self.obj, self.by]
