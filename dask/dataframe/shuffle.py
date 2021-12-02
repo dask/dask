@@ -78,6 +78,8 @@ def sort_values(
     na_position="last",
     upsample=1.0,
     partition_size=128e6,
+    sort_function=None,
+    sort_function_kwargs=None,
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
@@ -109,7 +111,7 @@ def sort_values(
 
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
+            sort_function, **sort_function_kwargs
         )
 
     if (
@@ -126,9 +128,7 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
-        )
+        return df.map_partitions(sort_function, **sort_function_kwargs)
 
     df = rearrange_by_divisions(
         df,
@@ -138,9 +138,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df = df.map_partitions(sort_function, **sort_function_kwargs)
     return df
 
 
