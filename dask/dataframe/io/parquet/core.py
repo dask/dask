@@ -243,7 +243,7 @@ def read_parquet(
         'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
         (for the backend read function), 'arrow_to_pandas' (for controlling the
         arguments passed to convert from a ``pyarrow.Table.to_pandas()``), and
-        'open_parquet_file' (for arguments to `fsspec.parquet.open_parquet_file`).
+        'open_options' (for arguments to ``dd.parquet.utils.open_parquet_file``).
         Any element of kwargs that is not defined under these top-level keys
         will be passed through to the `engine.read_partitions` classmethod as a
         stand-alone argument (and will be ignored by the engine implementations

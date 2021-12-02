@@ -483,18 +483,18 @@ def test_parquet(s3, engine, s3so, metadata_file):
 
     dd.utils.assert_eq(data, df2)
 
-    # Check that `open_parquet_file` arguments are
+    # Check that `open_options` arguments are
     # really passed through to fsspec
     if fsspec_parquet:
 
-        # Passing `open_parquet_file` kwargs will fail
+        # Passing `open_options` kwargs will fail
         # if you try to modify the engine
         with pytest.raises(TypeError):
             dd.read_parquet(
                 url,
                 engine=engine,
                 storage_options=s3so,
-                open_parquet_file={"engine": "foo"},
+                open_options={"engine": "foo"},
             ).compute()
 
         # ...but should work fine if you modify the
@@ -503,7 +503,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
             url,
             engine=engine,
             storage_options=s3so,
-            open_parquet_file={"max_block": 8_000},
+            open_options={"max_block": 8_000},
         ).compute()
 
 

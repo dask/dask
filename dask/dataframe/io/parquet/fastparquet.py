@@ -32,11 +32,11 @@ from .utils import (
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
-    _open_parquet_file,
     _parse_pandas_metadata,
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    open_parquet_file,
 )
 
 # Thread lock required to reset row-groups
@@ -391,10 +391,10 @@ class FastParquetEngine(Engine):
             **user_kwargs.pop("dataset", {}),
         }
         read_kwargs = user_kwargs.pop("read", {})
-        if "open_parquet_file" in user_kwargs:
-            # Allow user to pass "open_parquet_file"
+        if "open_options" in user_kwargs:
+            # Allow user to pass "open_options"
             # outside of the "read" kwargs
-            read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
+            read_kwargs["open_options"] = user_kwargs.pop("open_options", {})
 
         parts = []
         _metadata_exists = False
@@ -1059,7 +1059,7 @@ class FastParquetEngine(Engine):
         columns=None,
         categories=None,
         index=None,
-        open_parquet_file=None,
+        open_options=None,
         **kwargs,
     ):
         # This method was mostly copied from the fastparquet
@@ -1091,14 +1091,14 @@ class FastParquetEngine(Engine):
         for fn, fn_rgs in fn_rg_map.items():
 
             # Optimized open of fn
-            with _open_parquet_file(
+            with open_parquet_file(
                 fn,
                 fs=fs,
                 metadata=pf,
                 columns=list(set(columns).intersection(pf.columns)),
                 row_groups=fn_rgs,
                 engine="fastparquet",
-                **(open_parquet_file or {}),
+                **(open_options or {}),
             ) as infile:
 
                 # Loop over desired row-groups in fn

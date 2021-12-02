@@ -23,11 +23,11 @@ from .utils import (
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
-    _open_parquet_file,
     _parse_pandas_metadata,
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    open_parquet_file,
 )
 
 # Check PyArrow version for feature support
@@ -197,17 +197,17 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
-    _read_kwargs = kwargs.get("read", {}).copy()
-    _open_parquet_file_kwargs = _read_kwargs.pop("open_parquet_file", {})
+    read_kwargs = kwargs.get("read", {}).copy()
+    open_options = read_kwargs.pop("open_options", {})
     if partition_keys:
         tables = []
-        with _open_parquet_file(
+        with open_parquet_file(
             path,
             fs=fs,
             columns=columns,
             row_groups=row_groups,
             engine="pyarrow",
-            **_open_parquet_file_kwargs,
+            **open_options,
         ) as fil:
             for rg in row_groups:
                 piece = pq.ParquetDatasetPiece(
@@ -225,20 +225,20 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with _open_parquet_file(
+        with open_parquet_file(
             path,
             fs=fs,
             columns=columns,
             row_groups=row_groups,
             engine="pyarrow",
-            **_open_parquet_file_kwargs,
+            **open_options,
         ) as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,
                     use_threads=False,
                     use_pandas_metadata=True,
-                    **_read_kwargs,
+                    **read_kwargs,
                 )
             else:
                 return pq.ParquetFile(fil).read_row_groups(
@@ -246,7 +246,7 @@ def _read_table_from_path(
                     columns=columns,
                     use_threads=False,
                     use_pandas_metadata=True,
-                    **_read_kwargs,
+                    **read_kwargs,
                 )
 
 
@@ -313,10 +313,10 @@ def _split_user_kwargs(kwargs):
     dataset_kwargs = user_kwargs.pop("dataset", {})
     read_kwargs = user_kwargs.pop("read", {})
     arrow_to_pandas_kwargs = user_kwargs.pop("arrow_to_pandas", {})
-    if "open_parquet_file" in user_kwargs:
-        # Allow user to pass "open_parquet_file"
+    if "open_options" in user_kwargs:
+        # Allow user to pass "open_options"
         # outside of the "read" kwargs
-        read_kwargs["open_parquet_file"] = user_kwargs.pop("open_parquet_file", {})
+        read_kwargs["open_options"] = user_kwargs.pop("open_options", {})
 
     return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs, user_kwargs
 

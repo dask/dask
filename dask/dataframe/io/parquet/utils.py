@@ -696,20 +696,62 @@ def _set_metadata_task_size(metadata_task_size, fs):
     return metadata_task_size
 
 
-def _open_parquet_file(path, fs=None, columns=None, mode="rb", **kwargs):
-    # Use fsspec.parquet.open_parquet_file to
-    # ensure optimized caching for remote parquet
-    # files
+def open_parquet_file(
+    path,
+    use_fsspec_parquet=True,
+    fs=None,
+    columns=None,
+    row_groups=None,
+    mode="rb",
+    open_cb=None,
+    **kwargs,
+):
+    """Open a parquet-file path for reading
 
-    if fs is None:
-        raise ValueError("fs input is currently required for _open_parquet_file")
+    Parameters
+    ----------
+    path : str
+        Remote or local path of the parquet file
+    use_fsspec_parquet : bool, optional
+        Whether to use the optimized ``fsspec.parquet`` module to
+        open the file (when available). Default is ``True``.
+    fs : fsspec object, optional
+        File-system instance to use for file handling
+    columns : list, optional
+        List of column names that will need to be accessed.
+        The default value of ``None`` corresponds to all columns.
+    columns : list, optional
+        List of row-group indices that will need to be accessed.
+        The default value of ``None`` corresponds to all row-groups.
+    mode : str, optional
+        Access mode needed by open file
+    open_cb : callable, optional
+        Callable function to use for file opening. If this argument
+        is specified, ``open_cb(path)`` will be returned, and all
+        other options will be ignored.
+    **kwargs :
+        Key-word arguments to pass to the appropriate open function
+    """
 
-    if fsspec_parquet and not isinstance(fs, LocalFileSystem):
+    # Use call-back function if specified
+    if open_cb is not None:
+        return open_cb(path)
+
+    # Check if we are using `fsspec.parquet`
+    if (
+        use_fsspec_parquet
+        and fs is not None
+        and fsspec_parquet is not None
+        and not isinstance(fs, LocalFileSystem)
+    ):
         return fsspec_parquet.open_parquet_file(
             path,
             mode=mode,
             fs=fs,
             columns=columns,
+            row_groups=row_groups,
             **kwargs,
         )
-    return fs.open(path, mode=mode)
+    elif fs is not None:
+        return fs.open(path, mode=mode, **kwargs)
+    return open(path, mode=mode)
