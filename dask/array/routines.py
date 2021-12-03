@@ -333,12 +333,6 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
-def _shape_minus_axis(shape, axis):
-    newshape = list(shape)
-    newshape.pop(axis)
-    return tuple(newshape)
-
-
 def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
     # Caution: this is not your conventional array-sum: due
     # to the special nature of the preceding blockwise con-
@@ -364,7 +358,7 @@ def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
     if keepdims:
         return out
     else:
-        return out.reshape(_shape_minus_axis(out.shape, axis[0]))
+        return out.squeeze(axis[0])
 
 
 def _sum_wo_cat(a, axis=None, dtype=None):
