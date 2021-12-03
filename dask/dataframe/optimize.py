@@ -105,7 +105,7 @@ def optimize_dataframe_getitem(dsk, keys):
         # Project columns and update blocks
         if column_projection:
             old = layers[k]
-            new = old.project_columns(columns)[0]
+            new = old.project_columns(columns)
             if isinstance(new, (list, tuple)):
                 # Support project_columns tuple output, but raise FutureWarning
                 warnings.warn(
