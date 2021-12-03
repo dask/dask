@@ -1177,27 +1177,28 @@ class _GroupBy:
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
 
-        first_index = self.index if not isinstance(self.index, list) else self.index[0]
+        first_by = self.by if not isinstance(self.by, list) else self.by[0]
         embarrassingly_parallel = df.known_divisions and df._contains_index_name(
-            first_index if not is_index_like(first_index) else first_index.name
+            first_by if not is_index_like(first_by) else first_by.name
         )
-
         if embarrassingly_parallel:
-            if len(set(df.divisions[:-1])) != len(df.divisions[:-1]):
+            unique_divisions = tuple(dict.fromkeys(df.divisions[:-1]))
+
+            if len(unique_divisions) != len(df.divisions[:-1]):
                 warnings.warn(
                     "This 'groupby' operation would be better optimized if all the "
                     "rows for each group were contained in a single partition. For "
                     "example: `df.divisions = (0, 1, 3, 4)` is better than "
                     "`df.divisions = (0, 1, 1, 1, 2, 4)`. If you used a `set_index` "
                     "before this `groupby`, consider explicitly passing "
-                    f"`divisions={list(dict.fromkeys(df.divisions[:-1])) + divisions[-1:]}`.",
+                    f"`divisions={(*unique_divisions, df.divisions[-1])}`.",
                     PerformanceWarning,
                 )
             else:
                 return map_partitions(
                     _apply_chunk,
                     df,
-                    self.index,
+                    self.by,
                     chunk=func,
                     meta=meta,
                     token=token,
