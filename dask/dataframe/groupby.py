@@ -1188,7 +1188,9 @@ class _GroupBy:
                     "This 'groupby' operation would be better optimized if all the "
                     "rows for each group were contained in a single partition. For "
                     "example: `df.divisions = (0, 1, 3, 4)` is better than "
-                    "`df.divisions = (0, 1, 1, 1, 2, 4)`.",
+                    "`df.divisions = (0, 1, 1, 1, 2, 4)`. If you used a `set_index` "
+                    "before this `groupby`, consider explicitly passing "
+                    f"`divisions={list(dict.fromkeys(df.divisions[:-1])) + divisions[-1:]}`.",
                     PerformanceWarning,
                 )
             else:
