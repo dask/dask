@@ -340,7 +340,7 @@ def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
     # same shape,  with a size of 1 for the dimension given
     # by `axis` (the reduction axis).  This makes mere ele-
     # ment-wise addition of the arrays possible.   Besides,
-    # the output can be merely reshaped to lose the `axis`-
+    # the output can be merely squeezed to lose the `axis`-
     # dimension when keepdims = False
     if type(a) is list:
         xp = np
@@ -352,9 +352,8 @@ def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
 
         out = reduce(partial(xp.add, dtype=dtype), a)
     else:
-        if a.shape == (0,):
-            return a
         out = a
+
     if keepdims:
         return out
     else:
