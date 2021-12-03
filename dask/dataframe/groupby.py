@@ -1093,7 +1093,7 @@ class _GroupBy:
         )
 
     @property
-    @_deprecated
+    @_deprecated()
     def index(self):
         return self.by
 
