@@ -15,7 +15,7 @@ extras_require = {
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
     "distributed": ["distributed == 2021.11.2"],
     "diagnostics": [
-        "bokeh >= 1.0.0, != 2.0.0",
+        "bokeh >= 2.1.1",
         "jinja2",
     ],
     "delayed": [],  # keeping for backwards compatibility
