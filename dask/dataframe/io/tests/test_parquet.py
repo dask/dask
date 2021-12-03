@@ -2733,7 +2733,7 @@ def test_optimize_and_not(tmpdir):
 
 @write_read_engines()
 def test_chunksize_empty(tmpdir, write_engine, read_engine):
-    df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="str")})
+    df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine)
     ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
