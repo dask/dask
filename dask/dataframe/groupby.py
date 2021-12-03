@@ -1183,7 +1183,7 @@ class _GroupBy:
         )
 
         if embarrassingly_parallel:
-            if len(set(df.divisions[:-1])) == len(df.divisions[:-1]):
+            if len(set(df.divisions[:-1])) != len(df.divisions[:-1]):
                 warnings.warn(
                     "This 'groupby' operation would be better optimized if all the "
                     "rows for each group were contained in a single partition. For "
