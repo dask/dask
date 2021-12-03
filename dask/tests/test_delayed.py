@@ -711,18 +711,6 @@ def test_dask_layers():
     explicit.dask.validate()
 
 
-def test_dask_layers_to_delayed():
-    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
-    # match the key
-    da = pytest.importorskip("dask.array")
-    d = da.ones(1).to_delayed()[0]
-    name = d.key[0]
-    assert d.key[1:] == (0,)
-    assert d.dask.layers.keys() == {"delayed-" + name}
-    assert d.dask.dependencies == {"delayed-" + name: set()}
-    assert d.__dask_layers__() == ("delayed-" + name,)
-
-
 def test_annotations_survive_optimization():
     with dask.annotate(foo="bar"):
         graph = HighLevelGraph.from_collections(
