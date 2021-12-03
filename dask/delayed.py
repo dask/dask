@@ -484,12 +484,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length")
+    __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None):
+    def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
         self._dask = dsk
         self._length = length
+
+        # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
 
     @property
     def key(self):
@@ -506,12 +513,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        # Delayed objects created with .to_delayed() have exactly
-        # one layer which may have a non-canonical name "delayed-<original name>"
-        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
-            return tuple(self.dask.layers)
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key

@@ -702,6 +702,14 @@ def test_dask_layers():
     assert d2.dask.dependencies == {d1.key: set(), d2.key: {d1.key}}
     assert d2.__dask_layers__() == (d2.key,)
 
+    hlg = HighLevelGraph.from_collections("foo", {"alias": d2.key}, dependencies=[d2])
+    with pytest.raises(ValueError, match="not in"):
+        Delayed("alias", hlg)
+
+    explicit = Delayed("alias", hlg, layer="foo")
+    assert explicit.__dask_layers__() == ("foo",)
+    explicit.dask.validate()
+
 
 def test_dask_layers_to_delayed():
     # da.Array.to_delayed squashes the dask graph and causes the layer name not to
