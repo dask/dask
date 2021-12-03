@@ -7,6 +7,8 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
+from dask.array.core import PerformanceWarning
+
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M, _deprecated, derived_from, funcname, itemgetter
@@ -1163,6 +1165,7 @@ class _GroupBy:
         chunk_kwargs={},
         aggregate_kwargs={},
     ):
+        df = self.obj
         if aggfunc is None:
             aggfunc = func
 
@@ -1175,35 +1178,44 @@ class _GroupBy:
         levels = _determine_levels(self.by)
 
         first_index = self.index if not isinstance(self.index, list) else self.index[0]
-        embarrassingly_parallel = (
-            self.obj.known_divisions
-            and self.obj._contains_index_name(
-                first_index if not is_index_like(first_index) else first_index.name
-            )
-            and len(set(self.obj.divisions)) == len(self.obj.divisions)
+        embarrassingly_parallel = df.known_divisions and df._contains_index_name(
+            first_index if not is_index_like(first_index) else first_index.name
         )
 
         if embarrassingly_parallel:
-            return map_partitions(
-                _apply_chunk,
-                self.obj,
-                self.index,
-                chunk=func,
-                meta=meta,
-                token=token,
-                transform_divisions=False,
-                enforce_metadata=False,
-                align_dataframes=False,
-                columns=columns,
-                **self.observed,
-                **chunk_kwargs,
-                **self.dropna,
-            )
+            if len(set(df.divisions[:-1])) == len(df.divisions[:-1]):
+                warnings.warn(
+                    "This 'groupby' operation would be better optimized if all the "
+                    "rows for each group were contained in a single partition. For "
+                    "example: `df.divisions = (0, 1, 3, 4)` is better than "
+                    "`df.divisions = (0, 1, 1, 1, 2, 4)`.",
+                    PerformanceWarning,
+                )
+            else:
+                return map_partitions(
+                    _apply_chunk,
+                    df,
+                    self.index,
+                    chunk=func,
+                    meta=meta,
+                    token=token,
+                    transform_divisions=False,
+                    enforce_metadata=False,
+                    align_dataframes=False,
+                    columns=columns,
+                    **self.observed,
+                    **chunk_kwargs,
+                    **self.dropna,
+                )
 
         return aca(
+<<<<<<< HEAD
             [self.obj, self.by]
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
+=======
+            [df, self.index] if not isinstance(self.index, list) else [df] + self.index,
+>>>>>>> Add warning for case where divisions are duplicated
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
