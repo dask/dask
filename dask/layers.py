@@ -345,20 +345,7 @@ def fractional_slice(task, axes):
 class DataFrameLayer(Layer):
     """DataFrame-based HighLevelGraph Layer"""
 
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
-        """
-
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
+    pass
 
 
 class SimpleShuffleLayer(DataFrameLayer):
@@ -1213,7 +1200,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this IO layer.
+        Given a list of required output columns, this method
+        returns the projected layer.
+        """
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1230,10 +1220,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            return layer, None
+            return layer
         else:
             # Default behavior
-            return self, None
+            return self
 
     def __repr__(self):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
