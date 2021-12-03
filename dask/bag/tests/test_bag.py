@@ -1571,13 +1571,26 @@ def test_dask_layers():
     assert i.dask.dependencies == {a.name: set(), i.key: {a.name}}
 
 
-def test_dask_layers_to_delayed():
-    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
-    # match the key
+@pytest.mark.parametrize("optimize", [False, True])
+def test_dask_layers_to_delayed(optimize):
+    # `da.Array.to_delayed` causes the layer name to not match the key.
+    # Ensure the layer name is propagated between `Delayed` and `Item`.
     da = pytest.importorskip("dask.array")
-    i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
-    name = i.key[0]
-    assert i.key[1:] == (0,)
-    assert i.dask.layers.keys() == {"delayed-" + name}
-    assert i.dask.dependencies == {"delayed-" + name: set()}
-    assert i.__dask_layers__() == ("delayed-" + name,)
+    arr = da.ones(1) + 1
+    delayed = arr.to_delayed(optimize_graph=optimize)[0]
+    i = db.Item.from_delayed(delayed)
+    assert i.key == delayed.key
+    assert i.dask is delayed.dask
+    assert i.__dask_layers__() == delayed.__dask_layers__()
+
+    back = i.to_delayed(optimize_graph=optimize)
+    assert back.__dask_layers__() == i.__dask_layers__()
+
+    if not optimize:
+        assert back.dask is arr.dask
+        # When not optimized, the key is not a layer in the graph, so using it should fail
+        with pytest.raises(ValueError, match="not in"):
+            db.Item(back.dask, back.key)
+
+    with pytest.raises(ValueError, match="not in"):
+        db.Item(arr.dask, (arr.name,), layer="foo")
