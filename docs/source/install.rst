@@ -85,7 +85,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 | Dependency    | Version  |                          Description                         |
 +===============+==========+==============================================================+
-|     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
+|     bokeh     | >=2.1.1  |                Visualizing dask diagnostics                  |
 +---------------+----------+--------------------------------------------------------------+
 |   cityhash    |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+

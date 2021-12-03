@@ -4,7 +4,6 @@ from bisect import bisect_left
 from itertools import cycle
 from operator import add, itemgetter
 
-from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
@@ -342,7 +341,6 @@ def plot_resources(results, palette="Viridis", **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
@@ -383,11 +381,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         cpu,
         color=colors[0],
         line_width=4,
-        **{
-            "legend_label"
-            if parse_version(bokeh.__version__) >= parse_version("1.4")
-            else "legend": "% CPU"
-        },
+        legend_label="% CPU",
     )
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {
@@ -401,11 +395,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         color=colors[2],
         y_range_name="memory",
         line_width=4,
-        **{
-            "legend_label"
-            if parse_version(bokeh.__version__) >= parse_version("1.4")
-            else "legend": "Memory"
-        },
+        legend_label="Memory",
     )
     p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
