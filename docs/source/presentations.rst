@@ -13,8 +13,9 @@ Talks & Tutorials
 
 Dask Tutorial
 -------------
-`Dask Tutorial <https://tutorial.dask.org>`__ provides an overview of Dask and is typically delivered in 3 hours
-`Parallel and Distributed Computing in Python with Dask <https://www.youtube.com/watch?v=EybGGLbLipI>`__ latest Dask Tutorial Recording - Sicpy 2020
+`Dask Tutorial <https://tutorial.dask.org>`__ provides an overview of Dask and is typically delivered in 3 hours.
+See `Parallel and Distributed Computing in Python with Dask <https://www.youtube.com/watch?v=EybGGLbLipI>`__ for the
+latest Dask Tutorial recording from SciPy 2020.
 
 Dask Slides
 -----------
