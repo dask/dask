@@ -1055,20 +1055,14 @@ class _GroupBy:
         self.by = _normalize_by(df, by)
         self.sort = sort
 
-        if isinstance(self.by, list):
-            do_by_partition_align = all(
-                item.npartitions == df.npartitions if isinstance(item, Series) else True
-                for item in self.by
-            )
-        elif isinstance(self.by, Series):
-            do_by_partition_align = df.npartitions == self.by.npartitions
-        else:
-            do_by_partition_align = True
+        partitions_aligned = all(
+            item.npartitions == df.npartitions if isinstance(item, Series) else True
+            for item in (self.by if isinstance(self.by, (tuple, list)) else [self.by])
+        )
 
-        if not do_by_partition_align:
+        if not partitions_aligned:
             raise NotImplementedError(
-                "The grouped object and by of the "
-                "groupby must have the same divisions."
+                "The grouped object and 'by' of the groupby must have the same divisions."
             )
 
         # slicing key applied to _GroupBy instance
@@ -1099,7 +1093,7 @@ class _GroupBy:
         )
 
     @property
-    @_deprecated(use_instead="Groupby.by")
+    @_deprecated
     def index(self):
         return self.by
 
