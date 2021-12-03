@@ -24,10 +24,14 @@ def optimize(dsk, keys, **kwargs):
         dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
-    # Do not perform low-level fusion unless the user has
-    # specified True explicitly. The configuration will
-    # be None by default.
-    if not config.get("optimization.fuse.active"):
+    # Skip low-level fusion if the user has explicitly turned it off (False),
+    # or if all of the layers are high-level, and therefore don't need further fusion.
+    low_level_fuse = config.get("optimization.fuse.active")
+    if low_level_fuse is False:
+        return dsk
+    if low_level_fuse is None and not any(
+        layer.is_materialized() for layer in dsk.layers.values()
+    ):
         return dsk
 
     dependencies = dsk.get_all_dependencies()
