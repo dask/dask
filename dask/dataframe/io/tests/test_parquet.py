@@ -685,6 +685,13 @@ def test_append_with_partition(tmpdir, engine):
         }
     )
     df1.index.name = "index"
+
+    # Check that nullable dtypes work
+    # (see: https://github.com/dask/dask/issues/8373)
+    df0["lat"] = df0["lat"].astype("Int64")
+    df1["lat"].iloc[0] = np.nan
+    df1["lat"] = df1["lat"].astype("Int64")
+
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
     dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
