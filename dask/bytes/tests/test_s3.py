@@ -318,7 +318,8 @@ def test_read_bytes_block(s3, blocksize, s3so):
     _, vals = read_bytes(
         "s3://" + test_bucket_name + "/test/account*", blocksize=blocksize, **s3so
     )
-    assert list(map(len, vals)) == [(len(v) // blocksize + 1) for v in files.values()]
+    # No longer true, the exact blocksize is not generally expected
+    # assert list(map(len, vals)) == [(len(v) // blocksize + 1) for v in files.values()]
 
     results = compute(*concat(vals))
     assert sum(len(r) for r in results) == sum(len(v) for v in files.values())

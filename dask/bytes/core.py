@@ -112,8 +112,20 @@ def read_bytes(
                     "Backing filesystem couldn't determine file size, cannot "
                     "do chunked reads. To read, set blocksize=None."
                 )
-            off = list(range(0, size, blocksize))
-            length = [blocksize] * len(off)
+
+            # shrink blocksize to give same number of parts
+            blocksize = size / (size // blocksize + (size % blocksize > 0))
+            place = 0
+            off = [0]
+            length = []
+
+            # figure out offsets, spreading around spare bytes
+            while size - place > (blocksize * 2) - 1:
+                place += blocksize
+                off.append(int(place))
+                length.append(off[-1] - off[-2])
+            length.append(size - off[-1])
+
             if not_zero:
                 off[0] = 1
                 length[0] -= 1
