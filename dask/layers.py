@@ -1,3 +1,4 @@
+import math
 import operator
 from collections import defaultdict
 from functools import partial
@@ -34,6 +35,26 @@ class CallableLazyImport:
         from distributed.utils import import_term
 
         return import_term(self.function_path)(*args, **kwargs)
+
+
+class CallablePickled:
+    """Wrapper for a pickled "User-Defined" Function
+
+    This Class should be used to wrap user-defined
+    functions used within HLG Layers. The idea here
+    is to avoid the need for explicit unpickling in
+    the user code.
+    """
+
+    def __init__(self, function):
+        self.function = function
+
+    def __call__(self, *args, **kwargs):
+        if isinstance(self.function, bytes):
+            import pickle
+
+            self.function = pickle.loads(self.function)
+        return self.function(*args, **kwargs)
 
 
 #
@@ -1239,3 +1260,200 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.inputs), self.columns
         )
+
+
+class DataFrameTreeReduction(DataFrameLayer):
+    """DataFrame Tree-Reduction Layer
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    name_input : str
+        Name of the input layer that is being reduced.
+    npartitions_input : str
+        Number of partitions in the input layer.
+    tree_node_func : callable
+        Function used by each tree node to reduce a list inputs into
+        a single output value. This function must accept a list as its
+        first positional argument. Any other input arguments must be
+        definded by the ``tree_node_args`` argument.
+    tree_node_args : tuple
+        Tuple of positional arguments to include in every call to
+        the function specified by ``tree_node_func``. Note that the
+        0th positional argument will always correspond to a list of
+        inputs from the input nodex (and these argements will always
+        come after).
+    finalize_func : callable, optional
+        Function used in the final tree node to produce the final
+        output.
+    finalize_args : tuple, optional
+        Tuple of positional arguments to include in the final call
+        to the function specified by ``finalize_func``.
+    split_every : int, optional
+        This argument specifies the maximum number of input nodes
+        inputs to be handled by any one task in the tree. Defaults to 32.
+    """
+
+    def __init__(
+        self,
+        name,
+        name_input,
+        npartitions_input,
+        tree_node_func,
+        tree_node_args=None,
+        finalize_func=None,
+        finalize_args=None,
+        split_every=32,
+        annotations=None,
+    ):
+        super().__init__(annotations=annotations)
+        self.name = name
+        self.name_input = name_input
+        self.npartitions_input = npartitions_input
+        self.tree_node_func = tree_node_func
+        self.tree_node_args = tree_node_args or set()
+        self.finalize_func = finalize_func
+        self.finalize_args = finalize_args or set()
+        self.split_every = split_every
+
+    def _construct_graph(self, deserializing=False):
+        """Construct graph for a broadcast join operation."""
+
+        # Deal with user-defined functions
+        if deserializing:
+            _tree_node_func = CallablePickled(self.tree_node_func)
+            if self.finalize_func:
+                _finalize_func = CallablePickled(self.finalize_func)
+            else:
+                _finalize_func = None
+        else:
+            _tree_node_func = self.tree_node_func
+            _finalize_func = self.finalize_func
+
+        def _tree_finalize(node_input):
+            # Fuse the final "tree-node" function with
+            # the "finalize" function.
+            node_output = _tree_node_func(node_input, *self.tree_node_args)
+            if _finalize_func:
+                return _finalize_func(node_output, *self.finalize_args)
+            return node_output
+
+        # Build a reduction tree
+        dsk = {}
+        tree_node_name = "tree_node-" + self.name
+        parts = self.npartitions_input
+        widths = [parts]
+        while parts > 1:
+            parts = math.ceil(parts / self.split_every)
+            widths.append(parts)
+        height = len(widths)
+        for depth in range(1, height):
+            for group in range(widths[depth]):
+                p_max = widths[depth - 1]
+                lstart = self.split_every * group
+                lstop = min(lstart + self.split_every, p_max)
+                if depth == 1:
+                    node_list = [(self.name_input, p) for p in range(lstart, lstop)]
+                else:
+                    node_list = [
+                        (tree_node_name, p, depth - 1) for p in range(lstart, lstop)
+                    ]
+                if depth == height - 1:
+                    # Final Node (Use fused `_tree_finalize` task)
+                    assert group == 0
+                    dsk[(self.name, 0)] = (_tree_finalize, node_list)
+                else:
+                    # Intermediate Node
+                    dsk[(tree_node_name, group, depth)] = (
+                        _tree_node_func,
+                        node_list,
+                        *self.tree_node_args,
+                    )
+        if not dsk:
+            # Single-partition write doesn't require a tree
+            dsk[(self.name, 0)] = (_tree_finalize, [(self.name_input, 0)])
+        return dsk
+
+    def cull(self, keys, all_keys):
+        """Cull a DataFrameTreeReduction HighLevelGraph layer.
+
+        Since a DataFrameTreeReduction only contains
+        a single output task, culling is "all or nothing"
+        """
+        if keys and (self.name, 0) in keys:
+            deps = {
+                (self.name, 0): {
+                    (self.name_input, i) for i in range(self.npartitions_input)
+                }
+            }
+            return self, deps
+        else:
+            # Not sure if there is a real situation where
+            # culling everything makes sense...
+            raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
+
+    def get_output_keys(self):
+        return {(self.name, 0)}
+
+    def __repr__(self):
+        return "DataFrameTreeReduction<name='{}', input_name={}, split_out={}>".format(
+            self.name, self.name_input, self.split_out
+        )
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        import pickle
+
+        # Pickle the user-defined functions here
+        _tree_node_func = pickle.dumps(self.tree_node_func)
+        if self.finalize_func:
+            _finalize_func = pickle.dumps(self.finalize_func)
+        else:
+            _finalize_func = None
+
+        return {
+            "name": self.name,
+            "name_input": self.name_input,
+            "npartitions_input": self.npartitions_input,
+            "tree_node_func": _tree_node_func,
+            "tree_node_args": self.tree_node_args,
+            "finalize_func": _finalize_func,
+            "finalize_args": self.finalize_args,
+            "split_every": self.split_every,
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.worker import dumps_task
+
+        # Materialize the layer
+        raw = cls(**state)._construct_graph(deserializing=True)
+
+        # Convert all keys to strings and dump tasks
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        keys = raw.keys() | dsk.keys()
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+
+        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
