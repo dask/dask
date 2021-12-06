@@ -1331,14 +1331,6 @@ class DataFrameTreeReduction(DataFrameLayer):
             _tree_node_func = self.tree_node_func
             _finalize_func = self.finalize_func
 
-        def _tree_finalize(node_input):
-            # Fuse the final "tree-node" function with
-            # the "finalize" function.
-            node_output = _tree_node_func(node_input, *self.tree_node_args)
-            if _finalize_func:
-                return _finalize_func(node_output, *self.finalize_args)
-            return node_output
-
         # Build a reduction tree
         dsk = {}
         tree_node_name = "tree_node-" + self.name
@@ -1359,20 +1351,37 @@ class DataFrameTreeReduction(DataFrameLayer):
                     node_list = [
                         (tree_node_name, p, depth - 1) for p in range(lstart, lstop)
                     ]
+                tree_node_task = (_tree_node_func, node_list, *self.tree_node_args)
                 if depth == height - 1:
                     # Final Node (Use fused `_tree_finalize` task)
                     assert group == 0
-                    dsk[(self.name, 0)] = (_tree_finalize, node_list)
+                    if _finalize_func:
+                        dsk[(self.name, 0)] = (
+                            _finalize_func,
+                            tree_node_task,
+                            *self.finalize_args,
+                        )
+                    else:
+                        dsk[(self.name, 0)] = tree_node_task
                 else:
                     # Intermediate Node
-                    dsk[(tree_node_name, group, depth)] = (
-                        _tree_node_func,
-                        node_list,
-                        *self.tree_node_args,
-                    )
+                    dsk[(tree_node_name, group, depth)] = tree_node_task
         if not dsk:
-            # Single-partition write doesn't require a tree
-            dsk[(self.name, 0)] = (_tree_finalize, [(self.name_input, 0)])
+            # Single-partition doesn't require a tree
+            tree_node_task = (
+                _tree_node_func,
+                [(self.name_input, 0)],
+                *self.tree_node_args,
+            )
+            if _finalize_func:
+                dsk[(self.name, 0)] = (
+                    _finalize_func,
+                    tree_node_task,
+                    *self.finalize_args,
+                )
+            else:
+                dsk[(self.name, 0)] = tree_node_task
+
         return dsk
 
     def cull(self, keys, all_keys):
