@@ -113,25 +113,30 @@ def read_bytes(
                     "do chunked reads. To read, set blocksize=None."
                 )
 
-            # shrink blocksize to give same number of parts
-            if size % blocksize and size > blocksize:
-                blocksize = size / (size // blocksize)
-            place = 0
-            off = [0]
-            length = []
+            if size:
+                # shrink blocksize to give same number of parts
+                if size % blocksize and size > blocksize:
+                    blocksize = size / (size // blocksize)
+                place = 0
+                off = [0]
+                length = []
 
-            # figure out offsets, spreading around spare bytes
-            while size - place > (blocksize * 2) - 1:
-                place += blocksize
-                off.append(int(place))
-                length.append(off[-1] - off[-2])
-            length.append(size - off[-1])
+                # figure out offsets, spreading around spare bytes
+                while size - place > (blocksize * 2) - 1:
+                    place += blocksize
+                    off.append(int(place))
+                    length.append(off[-1] - off[-2])
+                length.append(size - off[-1])
 
-            if not_zero:
-                off[0] = 1
-                length[0] -= 1
-            offsets.append(off)
-            lengths.append(length)
+                if not_zero:
+                    off[0] = 1
+                    length[0] -= 1
+                offsets.append(off)
+                lengths.append(length)
+            else:
+                # skip empty
+                offsets.append([])
+                lengths.append([])
 
     delayed_read = delayed(read_block_from_file)
 
