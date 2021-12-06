@@ -151,8 +151,9 @@ def test_read_bytes_block():
     with filetexts(files, mode="b"):
         for bs in [5, 15, 45, 1500]:
             sample, vals = read_bytes(".test.account*", blocksize=bs)
-            # No longer true, the exact blocksize is not generally expected
-            # assert list(map(len, vals)) == [(len(v) // bs + 1) for v in files.values()]
+            assert list(map(len, vals)) == [
+                max((len(v) // bs), 1) for v in files.values()
+            ]
 
             results = compute(*concat(vals))
             assert sum(len(r) for r in results) == sum(len(v) for v in files.values())

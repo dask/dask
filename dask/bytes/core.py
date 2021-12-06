@@ -114,7 +114,8 @@ def read_bytes(
                 )
 
             # shrink blocksize to give same number of parts
-            blocksize = size / (size // blocksize + (size % blocksize > 0))
+            if size % blocksize and size > blocksize:
+                blocksize = size / (size // blocksize)
             place = 0
             off = [0]
             length = []
