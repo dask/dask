@@ -1331,7 +1331,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.finalize_kwargs = finalize_kwargs or {}
         self.split_every = split_every
         self.split_out = split_out
-        self.output_splits = None
+        self.output_splits = output_splits
         self.tree_node_name = "tree_node-" + self.name
 
         # Calculate tree withs and height
