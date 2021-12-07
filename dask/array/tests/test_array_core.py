@@ -1532,12 +1532,11 @@ def test_map_blocks_infer_newaxis():
 
 
 def test_map_blocks_no_array_args():
-    def func(block_info=None):
+    def func(dtype, block_info=None):
         loc = block_info[None]["array-location"]
-        dtype = block_info[None]["dtype"]
         return np.arange(loc[0][0], loc[0][1], dtype=dtype)
 
-    x = da.map_blocks(func, chunks=((5, 3),), dtype=np.float32)
+    x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
 
