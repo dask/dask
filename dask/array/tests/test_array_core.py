@@ -1567,16 +1567,17 @@ def test_map_blocks_unique_name_drop_axis():
     def func(some_3d, block_info=None):
         if not block_info:
             return some_3d
-        return np.zeros(block_info[None]["shape"])
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
 
     input_arr = da.zeros((3, 4, 5), chunks=((3,), (4,), (5,)), dtype=np.float32)
     x = da.map_blocks(func, input_arr, drop_axis=[0], dtype=np.float32)
     assert x.chunks == ((4,), (5,))
-    assert x.compute().shape == (4, 5)
+    assert_eq(x, np.zeros((4, 5), dtype=np.float32))
 
     y = da.map_blocks(func, input_arr, drop_axis=[2], dtype=np.float32)
     assert y.chunks == ((3,), (4,))
-    assert y.compute().shape == (3, 4)
+    assert_eq(y, np.zeros((3, 4), dtype=np.float32))
     assert x.name != y.name
 
 
@@ -1584,16 +1585,17 @@ def test_map_blocks_unique_name_new_axis():
     def func(some_2d, block_info=None):
         if not block_info:
             return some_2d
-        return np.zeros(block_info[None]["shape"])
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
 
     input_arr = da.zeros((3, 4), chunks=((3,), (4,)), dtype=np.float32)
     x = da.map_blocks(func, input_arr, new_axis=[0], dtype=np.float32)
     assert x.chunks == ((1,), (3,), (4,))
-    assert x.compute().shape == (1, 3, 4)
+    assert_eq(x, np.zeros((1, 3, 4), dtype=np.float32))
 
     y = da.map_blocks(func, input_arr, new_axis=[2], dtype=np.float32)
     assert y.chunks == ((3,), (4,), (1,))
-    assert y.compute().shape == (3, 4, 1)
+    assert_eq(y, np.zeros((3, 4, 1), dtype=np.float32))
     assert x.name != y.name
 
 
