@@ -675,7 +675,7 @@ def map_blocks(
         warnings.warn("The token= keyword to map_blocks has been moved to name=")
         name = token
 
-    name = f"{name or funcname(func)}-{tokenize(func, *args, **kwargs)}"
+    name = f"{name or funcname(func)}-{tokenize(func, dtype, chunks, drop_axis, new_axis, *args, **kwargs)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
