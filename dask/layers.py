@@ -1317,6 +1317,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         finalize_kwargs=None,
         split_every=32,
         split_out=None,
+        output_splits=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
@@ -1328,8 +1329,9 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.tree_node_kwargs = tree_node_kwargs or {}
         self.finalize_func = finalize_func
         self.finalize_kwargs = finalize_kwargs or {}
-        self.split_out = split_out
         self.split_every = split_every
+        self.split_out = split_out
+        self.output_splits = None
         self.tree_node_name = "tree_node-" + self.name
 
         # Calculate tree withs and height
@@ -1340,6 +1342,10 @@ class DataFrameTreeReduction(DataFrameLayer):
             parts = math.ceil(parts / self.split_every)
             self.widths.append(parts)
         self.height = len(self.widths)
+
+        # Set default output_splits
+        if self.output_splits is None:
+            self.output_splits = list(range(self.split_out or 1))
 
     def _check_key(self, *task):
         # Helper function to remove the last
@@ -1379,17 +1385,20 @@ class DataFrameTreeReduction(DataFrameLayer):
     def _construct_graph(self, deserializing=False):
         """Construct graph for a broadcast join operation."""
 
+        dsk = {}
+        if not self.output_splits:
+            return dsk
+
         # Deal with `bool(split_out) == True`.
         # These cases require that the input tasks
         # ruturn a type that enables getitem operation
         # with indices: [0, split_out)
         # Therefore, we must add "getitem" tasks to
         # select the appropriate element for each split
-        dsk = {}
         name_input_use = self.name_input
         if self.split_out:
             name_input_use += "-split"
-            for s in range(self.split_out):
+            for s in self.output_splits:
                 for p in range(self.npartitions_input):
                     dsk[(name_input_use, p, s)] = (
                         operator.getitem,
@@ -1399,7 +1408,7 @@ class DataFrameTreeReduction(DataFrameLayer):
 
         if self.height >= 2:
             # Loop over output splits
-            for s in range(self.split_out or 1):
+            for s in self.output_splits:
                 # Loop over reduction levels
                 for depth in range(1, self.height):
                     # Loop over reduction groups
@@ -1435,7 +1444,7 @@ class DataFrameTreeReduction(DataFrameLayer):
                             ] = self._define_task(node_list, output_node=False)
         else:
             # Deal with single-partition case
-            for s in range(self.split_out or 1):
+            for s in self.output_splits:
                 node_list = [self._check_key(name_input_use, 0, s)]
                 dsk[(self.name, s)] = self._define_task(node_list, output_node=True)
 
@@ -1446,15 +1455,15 @@ class DataFrameTreeReduction(DataFrameLayer):
             self.name, self.name_input, self.split_out
         )
 
-    def get_output_keys(self):
+    def _output_keys(self):
         keys = []
         if self.split_out:
             name_input_use = self.name_input + "-split"
-            for s in range(self.split_out):
+            for s in self.output_splits:
                 for p in range(self.npartitions_input):
                     keys.append((name_input_use, p, s))
         if self.height >= 2:
-            for s in range(self.split_out or 1):
+            for s in self.output_splits:
                 for depth in range(1, self.height):
                     for group in range(self.widths[depth]):
                         if depth == self.height - 1:
@@ -1464,9 +1473,17 @@ class DataFrameTreeReduction(DataFrameLayer):
                                 self._check_key(self.tree_node_name, group, depth, s)
                             )
         else:
-            for s in range(self.split_out or 1):
+            for s in self.output_splits:
                 keys.append((self.name, s))
         return set(keys)
+
+    def get_output_keys(self):
+        if hasattr(self, "_cached_output_keys"):
+            return self._cached_output_keys
+        else:
+            output_keys = self._output_keys()
+            self._cached_output_keys = output_keys
+        return self._cached_output_keys
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
@@ -1488,25 +1505,55 @@ class DataFrameTreeReduction(DataFrameLayer):
         return iter(self._dict)
 
     def __len__(self):
-        return len(self._dict)
+        return len(self.get_output_keys())
 
-    # def cull(self, keys, all_keys):
-    #     """Cull a DataFrameTreeReduction HighLevelGraph layer.
+    def _keys_to_splits(self, keys):
+        """Simple utility to convert keys to split indices."""
+        splits = set()
+        for key in keys:
+            try:
+                _name, _split = key
+            except ValueError:
+                continue
+            if _name != self.name:
+                continue
+            splits.add(_split)
+        return splits
 
-    #     Since a DataFrameTreeReduction only contains
-    #     a single output task, culling is "all or nothing"
-    #     """
-    #     if keys and (self.name, 0) in keys:
-    #         deps = {
-    #             (self.name, 0): {
-    #                 (self.name_input, i) for i in range(self.npartitions_input)
-    #             }
-    #         }
-    #         return self, deps
-    #     else:
-    #         # Not sure if there is a real situation where
-    #         # culling everything makes sense...
-    #         raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
+    def _cull(self, output_splits):
+        return DataFrameTreeReduction(
+            self.name,
+            self.name_input,
+            self.npartitions_input,
+            self.concat_func,
+            self.tree_node_func,
+            tree_node_kwargs=self.tree_node_kwargs,
+            finalize_func=self.finalize_func,
+            finalize_kwargs=self.finalize_kwargs,
+            split_every=self.split_every,
+            split_out=self.split_out,
+            output_splits=output_splits,
+            annotations=self.annotations,
+        )
+
+    def cull(self, keys, all_keys):
+        """Cull a DataFrameTreeReduction HighLevelGraph layer"""
+        if keys:
+            deps = {
+                (self.name, 0): {
+                    (self.name_input, i) for i in range(self.npartitions_input)
+                }
+            }
+            output_splits = self._keys_to_splits(keys)
+            if output_splits != set(self.output_splits):
+                culled_layer = self._cull(output_splits)
+                return culled_layer, deps
+            else:
+                return self, deps
+        else:
+            # Not sure if there is a real situation where
+            # culling everything makes sense...
+            raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
 
     # def __dask_distributed_pack__(self, *args, **kwargs):
     #     import pickle
