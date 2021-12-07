@@ -61,7 +61,7 @@ Suppose you had a custom Dask graph for doing a word counting task:
 
 .. image:: images/optimize_dask1.png
    :width: 65 %
-   :alt: The original dask graph
+   :alt: The original non-optimized Dask task graph.
 
 Here we are counting the occurrence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
@@ -100,7 +100,7 @@ later steps:
 
 .. image:: images/optimize_dask2.png
    :width: 50 %
-   :alt: After culling
+   :alt: The Dask task graph after culling tasks for optimization.
 
 Looking at the task graph above, there are multiple accesses to constants such
 as ``'val1'`` or ``'val2'`` in the Dask graph. These can be inlined into the
@@ -116,7 +116,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
 
 .. image:: images/optimize_dask3.png
    :width: 40 %
-   :alt: After inlining
+   :alt: The Dask task graph after inlining for optimization.
 
 Now we have two sets of *almost* linear task chains. The only link between them
 is the word counting function. For cheap operations like this, the
@@ -136,7 +136,7 @@ can be used:
 
 .. image:: images/optimize_dask4.png
    :width: 30 %
-   :alt: After inlining functions
+   :alt: The Dask task graph after inlining functions for optimization.
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
 all of these on the same worker to reduce data serialization between workers.
@@ -153,7 +153,7 @@ One option is just to merge these linear chains into one big task using the
 
 .. image:: images/optimize_dask5.png
    :width: 30 %
-   :alt: After fusing
+   :alt: The Dask task graph after fusing tasks for optimization.
 
 
 Putting it all together:
