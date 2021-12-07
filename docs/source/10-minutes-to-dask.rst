@@ -392,7 +392,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> b.visualize()
 
       .. image:: images/10_minutes_array_graph.png
-         :alt: Dask task graph for the Dask array computation. The task graph shows many "amax" operations on each chunk of the Dask array, that are then aggregated to find "amax" along the first array axis, then reversing the order of the array values with a "getitem" slicing operation, before an "add" operation to get the final result. This computation can be written as: "a.max(axis=1)[::-1] + 10".
+         :alt: Dask task graph for the Dask array computation. The task graph shows many "amax" operations on each chunk of the Dask array, that are then aggregated to find "amax" along the first array axis, then reversing the order of the array values with a "getitem" slicing operation, before an "add" operation to get the final result.
 
    .. group-tab:: Bag
 
