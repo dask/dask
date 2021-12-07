@@ -1273,26 +1273,36 @@ class DataFrameTreeReduction(DataFrameLayer):
         Name of the input layer that is being reduced.
     npartitions_input : str
         Number of partitions in the input layer.
-    tree_node_func : callable
+    concat_func : callable
         Function used by each tree node to reduce a list inputs into
-        a single output value. This function must accept a list as its
-        first positional argument. Any other input arguments must be
-        definded by the ``tree_node_args`` argument.
-    tree_node_args : tuple
-        Tuple of positional arguments to include in every call to
+        a single output value. This function must accept only a list
+        as its first positional argument.
+    tree_node_func : callable
+        Function used on the output of ``concat_func`` in each tree
+        node. a single output value. This function must accept the
+        output of ``concat_func`` as its first positional argument.
+        Any other input arguments must be definded by in
+        ``tree_node_kwargs``.
+    tree_node_args : dict, optional
+        Dictionary of key-word arguments to include in every call to
         the function specified by ``tree_node_func``. Note that the
         0th positional argument will always correspond to a list of
         inputs from the input nodex (and these argements will always
         come after).
     finalize_func : callable, optional
-        Function used in the final tree node to produce the final
-        output.
-    finalize_args : tuple, optional
-        Tuple of positional arguments to include in the final call
-        to the function specified by ``finalize_func``.
+        Function used in the final tree node(s) to produce the final
+        output for each split.
+    finalize_kwargs : dict, optional
+        Dictionary of key-word arguments to include in every call to
+        the function specified by ``finalize_func``.
     split_every : int, optional
         This argument specifies the maximum number of input nodes
         inputs to be handled by any one task in the tree. Defaults to 32.
+    split_out : int, optional
+        This argument specifies the number of output nodes in the
+        reduction tree. If ``split_out`` is set to an integer >=1, the
+        input tasks must contain data that can be indexed by a ``getitem``
+        operation with a key in the range ``[0, split_out)``.
     """
 
     def __init__(
@@ -1300,145 +1310,163 @@ class DataFrameTreeReduction(DataFrameLayer):
         name,
         name_input,
         npartitions_input,
+        concat_func,
         tree_node_func,
-        tree_node_args=None,
+        tree_node_kwargs=None,
         finalize_func=None,
-        finalize_args=None,
-        split_out=None,
+        finalize_kwargs=None,
         split_every=32,
+        split_out=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
         self.name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
+        self.concat_func = concat_func
         self.tree_node_func = tree_node_func
-        self.tree_node_args = tree_node_args or set()
+        self.tree_node_kwargs = tree_node_kwargs or {}
         self.finalize_func = finalize_func
-        self.finalize_args = finalize_args or set()
+        self.finalize_kwargs = finalize_kwargs or {}
         self.split_out = split_out
         self.split_every = split_every
+        self.tree_node_name = "tree_node-" + self.name
+
+        # Calculate tree withs and height
+        # (Used to get output keys without materializing)
+        parts = self.npartitions_input
+        self.widths = [parts]
+        while parts > 1:
+            parts = math.ceil(parts / self.split_every)
+            self.widths.append(parts)
+        self.height = len(self.widths)
+
+    def _check_key(self, *task):
+        # Helper function to remove the last
+        # (split_out) element in a task key
+        # when bool(split_out) is False
+        return task if self.split_out else task[:-1]
+
+    def _define_task(self, node_list, output_node=False):
+        # Define nested concatenation and tree-node task
+        conc = (self.concat_func, node_list)
+        if self.tree_node_kwargs:
+            tree_node_task = (
+                apply,
+                self.tree_node_func,
+                [conc],
+                self.tree_node_kwargs,
+            )
+        else:
+            tree_node_task = (self.tree_node_func, conc)
+        # Return intermediate or output task
+        if output_node:
+            if self.finalize_func:
+                if self.finalize_kwargs:
+                    return (
+                        apply,
+                        self.finalize_func,
+                        [tree_node_task],
+                        self.finalize_kwargs,
+                    )
+                else:
+                    return (self.finalize_func, tree_node_task)
+            else:
+                return tree_node_task
+        else:
+            return tree_node_task
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a broadcast join operation."""
-
-        # Deal with user-defined functions
-        if deserializing:
-            _tree_node_func = CallablePickled(self.tree_node_func)
-            if self.finalize_func:
-                _finalize_func = CallablePickled(self.finalize_func)
-            else:
-                _finalize_func = None
-        else:
-            _tree_node_func = self.tree_node_func
-            _finalize_func = self.finalize_func
 
         # Deal with `bool(split_out) == True`.
         # These cases require that the input tasks
         # ruturn a type that enables getitem operation
         # with indices: [0, split_out)
+        # Therefore, we must add "getitem" tasks to
+        # select the appropriate element for each split
         dsk = {}
-        for s in range(self.split_out or 0):
-            for p in range(self.npartitions_input):
-                dsk[(self.name_input, p, s)] = (
-                    operator.getitem,
-                    (self.name_input, p),
-                    s,
-                )
+        name_input_use = self.name_input
+        if self.split_out:
+            name_input_use += "-split"
+            for s in range(self.split_out):
+                for p in range(self.npartitions_input):
+                    dsk[(name_input_use, p, s)] = (
+                        operator.getitem,
+                        (self.name_input, p),
+                        s,
+                    )
 
-        def _check_key(*task):
-            # Removes final (split) element from
-            # task when bool(split_out) is false
-            if self.split_out:
-                return task
-            return task[:-1]
+        if self.height >= 2:
+            # Loop over output splits
+            for s in range(self.split_out or 1):
+                # Loop over reduction levels
+                for depth in range(1, self.height):
+                    # Loop over reduction groups
+                    for group in range(self.widths[depth]):
+                        # Calculate inputs for the current group
+                        p_max = self.widths[depth - 1]
+                        lstart = self.split_every * group
+                        lstop = min(lstart + self.split_every, p_max)
+                        if depth == 1:
+                            # Input nodes are from input layer
+                            node_list = [
+                                self._check_key(name_input_use, p, s)
+                                for p in range(lstart, lstop)
+                            ]
+                        else:
+                            # Input nodes are tree-reduction nodes
+                            node_list = [
+                                self._check_key(self.tree_node_name, p, depth - 1, s)
+                                for p in range(lstart, lstop)
+                            ]
 
-        # Build a reduction tree
-        tree_node_name = "tree_node-" + self.name
-        parts = self.npartitions_input
-        widths = [parts]
-        while parts > 1:
-            parts = math.ceil(parts / self.split_every)
-            widths.append(parts)
-        height = len(widths)
-        for s in range(self.split_out or 1):
-            for depth in range(1, height):
-                for group in range(widths[depth]):
-                    p_max = widths[depth - 1]
-                    lstart = self.split_every * group
-                    lstop = min(lstart + self.split_every, p_max)
-                    if depth == 1:
-                        node_list = [
-                            _check_key(self.name_input, p, s)
-                            for p in range(lstart, lstop)
-                        ]
-                    else:
-                        node_list = [
-                            _check_key(tree_node_name, p, depth - 1, s)
-                            for p in range(lstart, lstop)
-                        ]
-                    tree_node_task = (_tree_node_func, node_list, *self.tree_node_args)
-                    if depth == height - 1:
-                        # Final Node (Use fused `_tree_finalize` task)
-                        assert group == 0
-                        if _finalize_func:
-                            dsk[(self.name, s)] = (
-                                _finalize_func,
-                                tree_node_task,
-                                *self.finalize_args,
+                        # Define task
+                        if depth == self.height - 1:
+                            # Final Node (Use fused `self.tree_finalize` task)
+                            assert group == 0
+                            dsk[(self.name, s)] = self._define_task(
+                                node_list, output_node=True
                             )
                         else:
-                            dsk[(self.name, s)] = tree_node_task
-                    else:
-                        # Intermediate Node
-                        dsk[
-                            _check_key(tree_node_name, group, depth, s)
-                        ] = tree_node_task
-
-        if height < 2:
-            # Single-partition doesn't require a tree
+                            # Intermediate Node
+                            dsk[
+                                self._check_key(self.tree_node_name, group, depth, s)
+                            ] = self._define_task(node_list, output_node=False)
+        else:
+            # Deal with single-partition case
             for s in range(self.split_out or 1):
-                tree_node_task = (
-                    _tree_node_func,
-                    [_check_key(self.name_input, 0, s)],
-                    *self.tree_node_args,
-                )
-                if _finalize_func:
-                    dsk[(self.name, s)] = (
-                        _finalize_func,
-                        tree_node_task,
-                        *self.finalize_args,
-                    )
-                else:
-                    dsk[(self.name, s)] = tree_node_task
+                node_list = [self._check_key(name_input_use, 0, s)]
+                dsk[(self.name, s)] = self._define_task(node_list, output_node=True)
 
         return dsk
-
-    def cull(self, keys, all_keys):
-        """Cull a DataFrameTreeReduction HighLevelGraph layer.
-
-        Since a DataFrameTreeReduction only contains
-        a single output task, culling is "all or nothing"
-        """
-        if keys and (self.name, 0) in keys:
-            deps = {
-                (self.name, 0): {
-                    (self.name_input, i) for i in range(self.npartitions_input)
-                }
-            }
-            return self, deps
-        else:
-            # Not sure if there is a real situation where
-            # culling everything makes sense...
-            raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
-
-    def get_output_keys(self):
-        return {(self.name, 0)}
 
     def __repr__(self):
         return "DataFrameTreeReduction<name='{}', input_name={}, split_out={}>".format(
             self.name, self.name_input, self.split_out
         )
+
+    def get_output_keys(self):
+        keys = []
+        if self.split_out:
+            name_input_use = self.name_input + "-split"
+            for s in range(self.split_out):
+                for p in range(self.npartitions_input):
+                    keys.append((name_input_use, p, s))
+        if self.height >= 2:
+            for s in range(self.split_out or 1):
+                for depth in range(1, self.height):
+                    for group in range(self.widths[depth]):
+                        if depth == self.height - 1:
+                            keys.append((self.name, s))
+                        else:
+                            keys.append(
+                                self._check_key(self.tree_node_name, group, depth, s)
+                            )
+        else:
+            for s in range(self.split_out or 1):
+                keys.append((self.name, s))
+        return set(keys)
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
@@ -1462,37 +1490,55 @@ class DataFrameTreeReduction(DataFrameLayer):
     def __len__(self):
         return len(self._dict)
 
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        import pickle
+    # def cull(self, keys, all_keys):
+    #     """Cull a DataFrameTreeReduction HighLevelGraph layer.
 
-        # Pickle the user-defined functions here
-        _tree_node_func = pickle.dumps(self.tree_node_func)
-        if self.finalize_func:
-            _finalize_func = pickle.dumps(self.finalize_func)
-        else:
-            _finalize_func = None
+    #     Since a DataFrameTreeReduction only contains
+    #     a single output task, culling is "all or nothing"
+    #     """
+    #     if keys and (self.name, 0) in keys:
+    #         deps = {
+    #             (self.name, 0): {
+    #                 (self.name_input, i) for i in range(self.npartitions_input)
+    #             }
+    #         }
+    #         return self, deps
+    #     else:
+    #         # Not sure if there is a real situation where
+    #         # culling everything makes sense...
+    #         raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
 
-        return {
-            "name": self.name,
-            "name_input": self.name_input,
-            "npartitions_input": self.npartitions_input,
-            "tree_node_func": _tree_node_func,
-            "tree_node_args": self.tree_node_args,
-            "finalize_func": _finalize_func,
-            "finalize_args": self.finalize_args,
-            "split_every": self.split_every,
-        }
+    # def __dask_distributed_pack__(self, *args, **kwargs):
+    #     import pickle
 
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
+    #     # Pickle the user-defined functions here
+    #     _tree_node_func = pickle.dumps(self.tree_node_func)
+    #     if self.finalize_func:
+    #         _finalize_func = pickle.dumps(self.finalize_func)
+    #     else:
+    #         _finalize_func = None
 
-        # Materialize the layer
-        raw = cls(**state)._construct_graph(deserializing=True)
+    #     return {
+    #         "name": self.name,
+    #         "name_input": self.name_input,
+    #         "npartitions_input": self.npartitions_input,
+    #         "tree_node_func": _tree_node_func,
+    #         "tree_node_args": self.tree_node_args,
+    #         "finalize_func": _finalize_func,
+    #         "finalize_args": self.finalize_args,
+    #         "split_every": self.split_every,
+    #     }
 
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+    # @classmethod
+    # def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    #     from distributed.worker import dumps_task
 
-        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
+    #     # Materialize the layer
+    #     raw = cls(**state)._construct_graph(deserializing=True)
+
+    #     # Convert all keys to strings and dump tasks
+    #     raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+    #     keys = raw.keys() | dsk.keys()
+    #     deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+
+    #     return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
