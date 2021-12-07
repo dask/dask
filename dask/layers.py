@@ -1304,6 +1304,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         tree_node_args=None,
         finalize_func=None,
         finalize_args=None,
+        split_out=None,
         split_every=32,
         annotations=None,
     ):
@@ -1315,6 +1316,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.tree_node_args = tree_node_args or set()
         self.finalize_func = finalize_func
         self.finalize_args = finalize_args or set()
+        self.split_out = split_out
         self.split_every = split_every
 
     def _construct_graph(self, deserializing=False):
@@ -1331,8 +1333,27 @@ class DataFrameTreeReduction(DataFrameLayer):
             _tree_node_func = self.tree_node_func
             _finalize_func = self.finalize_func
 
-        # Build a reduction tree
+        # Deal with `bool(split_out) == True`.
+        # These cases require that the input tasks
+        # ruturn a type that enables getitem operation
+        # with indices: [0, split_out)
         dsk = {}
+        for s in range(self.split_out or 0):
+            for p in range(self.npartitions_input):
+                dsk[(self.name_input, p, s)] = (
+                    operator.getitem,
+                    (self.name_input, p),
+                    s,
+                )
+
+        def _check_key(*task):
+            # Removes final (split) element from
+            # task when bool(split_out) is false
+            if self.split_out:
+                return task
+            return task[:-1]
+
+        # Build a reduction tree
         tree_node_name = "tree_node-" + self.name
         parts = self.npartitions_input
         widths = [parts]
@@ -1340,47 +1361,56 @@ class DataFrameTreeReduction(DataFrameLayer):
             parts = math.ceil(parts / self.split_every)
             widths.append(parts)
         height = len(widths)
-        for depth in range(1, height):
-            for group in range(widths[depth]):
-                p_max = widths[depth - 1]
-                lstart = self.split_every * group
-                lstop = min(lstart + self.split_every, p_max)
-                if depth == 1:
-                    node_list = [(self.name_input, p) for p in range(lstart, lstop)]
-                else:
-                    node_list = [
-                        (tree_node_name, p, depth - 1) for p in range(lstart, lstop)
-                    ]
-                tree_node_task = (_tree_node_func, node_list, *self.tree_node_args)
-                if depth == height - 1:
-                    # Final Node (Use fused `_tree_finalize` task)
-                    assert group == 0
-                    if _finalize_func:
-                        dsk[(self.name, 0)] = (
-                            _finalize_func,
-                            tree_node_task,
-                            *self.finalize_args,
-                        )
+        for s in range(self.split_out or 1):
+            for depth in range(1, height):
+                for group in range(widths[depth]):
+                    p_max = widths[depth - 1]
+                    lstart = self.split_every * group
+                    lstop = min(lstart + self.split_every, p_max)
+                    if depth == 1:
+                        node_list = [
+                            _check_key(self.name_input, p, s)
+                            for p in range(lstart, lstop)
+                        ]
                     else:
-                        dsk[(self.name, 0)] = tree_node_task
-                else:
-                    # Intermediate Node
-                    dsk[(tree_node_name, group, depth)] = tree_node_task
-        if not dsk:
+                        node_list = [
+                            _check_key(tree_node_name, p, depth - 1, s)
+                            for p in range(lstart, lstop)
+                        ]
+                    tree_node_task = (_tree_node_func, node_list, *self.tree_node_args)
+                    if depth == height - 1:
+                        # Final Node (Use fused `_tree_finalize` task)
+                        assert group == 0
+                        if _finalize_func:
+                            dsk[(self.name, s)] = (
+                                _finalize_func,
+                                tree_node_task,
+                                *self.finalize_args,
+                            )
+                        else:
+                            dsk[(self.name, s)] = tree_node_task
+                    else:
+                        # Intermediate Node
+                        dsk[
+                            _check_key(tree_node_name, group, depth, s)
+                        ] = tree_node_task
+
+        if height < 2:
             # Single-partition doesn't require a tree
-            tree_node_task = (
-                _tree_node_func,
-                [(self.name_input, 0)],
-                *self.tree_node_args,
-            )
-            if _finalize_func:
-                dsk[(self.name, 0)] = (
-                    _finalize_func,
-                    tree_node_task,
-                    *self.finalize_args,
+            for s in range(self.split_out or 1):
+                tree_node_task = (
+                    _tree_node_func,
+                    [_check_key(self.name_input, 0, s)],
+                    *self.tree_node_args,
                 )
-            else:
-                dsk[(self.name, 0)] = tree_node_task
+                if _finalize_func:
+                    dsk[(self.name, s)] = (
+                        _finalize_func,
+                        tree_node_task,
+                        *self.finalize_args,
+                    )
+                else:
+                    dsk[(self.name, s)] = tree_node_task
 
         return dsk
 
