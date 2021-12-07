@@ -408,7 +408,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> c.visualize()
 
       .. image:: images/10_minutes_bag_graph.png
-         :alt: Dask task graph for the Dask bag computation. The task graph shows a "lambda" operation, and then a "zip" operation is applied to the partitions of the Dask bag. There is no communication needed between the bag partitions, this is an embarrassingly parallel computation. This computation can be written as "db.zip(b, b.map(lambda x: x * 10))".
+         :alt: Dask task graph for the Dask bag computation. The task graph shows a "lambda" operation, and then a "zip" operation is applied to the partitions of the Dask bag. There is no communication needed between the bag partitions, this is an embarrassingly parallel computation.
 
 Low-Level Interfaces
 --------------------
