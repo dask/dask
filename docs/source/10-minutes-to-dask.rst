@@ -373,7 +373,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> result.visualize()
 
       .. image:: images/10_minutes_dataframe_graph.png
-         :alt: Dask task graph for the Dask dataframe computation. The task graph shows a "loc" and "getitem" operations selecting a small section of the dataframe values, before applying a cumulative sum "cumsum" operation, then finally subtracting a value from the result. This computation can be written as "ddf["2021-10-01": "2021-10-09 5:00"].a.cumsum() - 100".
+         :alt: Dask task graph for the Dask dataframe computation. The task graph shows a "loc" and "getitem" operations selecting a small section of the dataframe values, before applying a cumulative sum "cumsum" operation, then finally subtracting a value from the result.
 
    .. group-tab:: Array
 
