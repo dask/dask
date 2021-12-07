@@ -48,7 +48,7 @@ def timeseries(
     ...     '2000', '2010',
     ...     freq='2H', partition_freq='1D', seed=1,  # data frequency
     ...     dtypes={'value': float, 'name': str, 'id': int},  # data types
-    ...     id_lam=1000  # control number of items in id column
+    ...     id_high=1000  # control range of items in id column
     ... )
     """
     from dask.dataframe.io.demo import make_timeseries
