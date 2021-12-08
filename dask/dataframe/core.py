@@ -5731,9 +5731,11 @@ def apply_concat_apply(
     # Start with combined layers and dependencies for dfs
     layers = dfs[0].dask.layers.copy()
     dependencies = dfs[0].dask.dependencies.copy()
+    key_dependencies = (dfs[0].dask.key_dependencies or {}).copy()
     for df in dfs[1:]:
         layers.update(df.dask.layers)
         dependencies.update(df.dask.dependencies)
+        dependencies.update(df.dask.key_dependencies or {})
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
@@ -5811,7 +5813,7 @@ def apply_concat_apply(
         parent_meta=dfs[0]._meta,
     )
 
-    graph = HighLevelGraph(layers, dependencies)
+    graph = HighLevelGraph(layers, dependencies, key_dependencies=key_dependencies)
     divisions = [None] * ((split_out or 1) + 1)
     return new_dd_object(graph, final_name, meta, divisions, parent_meta=dfs[0]._meta)
 
