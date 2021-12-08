@@ -115,7 +115,9 @@ def sort_values(
         )
 
     if not isinstance(ascending, bool):
-        raise ValueError("ascending must be either True or False")
+        raise ValueError(
+            f"Dask currently only supports a single boolean for ascending; got {type(ascending)}"
+        )
 
     if (
         all(not pd.isna(x) for x in divisions)
