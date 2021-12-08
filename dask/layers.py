@@ -169,9 +169,9 @@ class ArrayOverlapLayer(Layer):
         n_tasks = 0
         for k in interior_keys:
             if all([isinstance(i, int) for i in k]):
-                n_tasks += 2  # represents a single getitem task
+                n_tasks += 2  # represents both getitem and overlap tasks
             else:
-                n_tasks += 1  # represents both getitem and overlap tasks
+                n_tasks += 1  # represents a single getitem task
         return n_tasks
 
     def is_materialized(self):
