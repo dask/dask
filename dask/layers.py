@@ -47,6 +47,8 @@ class CallablePickled:
     """
 
     def __init__(self, function):
+        if isinstance(function, CallablePickled):
+            self.function = function.function
         self.function = function
 
     def __call__(self, *args, **kwargs):
@@ -1382,12 +1384,19 @@ class DataFrameTreeReduction(DataFrameLayer):
         else:
             return tree_node_task
 
-    def _construct_graph(self, deserializing=False):
-        """Construct graph for a broadcast join operation."""
+    def _construct_graph(self, on_scheduler=False):
+        """Construct graph for a tree reduction."""
 
         dsk = {}
         if not self.output_splits:
             return dsk
+
+        # Deal with pickled user-defined functions
+        if on_scheduler:
+            self.tree_node_func = CallablePickled(self.tree_node_func)
+            self.concat_func = CallablePickled(self.concat_func)
+            if self.finalize_func:
+                self.finalize_func = CallablePickled(self.finalize_func)
 
         # Deal with `bool(split_out) == True`.
         # These cases require that the input tasks
@@ -1538,54 +1547,62 @@ class DataFrameTreeReduction(DataFrameLayer):
 
     def cull(self, keys, all_keys):
         """Cull a DataFrameTreeReduction HighLevelGraph layer"""
-        if keys:
-            deps = {
-                (self.name, 0): {
-                    (self.name_input, i) for i in range(self.npartitions_input)
-                }
+        deps = {
+            (self.name, 0): {
+                (self.name_input, i) for i in range(self.npartitions_input)
             }
-            output_splits = self._keys_to_splits(keys)
-            if output_splits != set(self.output_splits):
-                culled_layer = self._cull(output_splits)
-                return culled_layer, deps
-            else:
-                return self, deps
+        }
+        output_splits = self._keys_to_splits(keys)
+        if output_splits != set(self.output_splits):
+            culled_layer = self._cull(output_splits)
+            return culled_layer, deps
         else:
-            # Not sure if there is a real situation where
-            # culling everything makes sense...
-            raise ValueError("The entire DataFrameTreeReduction Layer is culled.")
+            return self, deps
 
-    # def __dask_distributed_pack__(self, *args, **kwargs):
-    #     import pickle
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        import pickle
 
-    #     # Pickle the user-defined functions here
-    #     _tree_node_func = pickle.dumps(self.tree_node_func)
-    #     if self.finalize_func:
-    #         _finalize_func = pickle.dumps(self.finalize_func)
-    #     else:
-    #         _finalize_func = None
+        # Pickle the (possibly) user-defined functions here.
+        # We also wrap kwargs into the functions themselves
+        # to simplify serialization
+        _concat_func = pickle.dumps(self.concat_func)
+        _tree_node_func = pickle.dumps(
+            partial(self.tree_node_func, **self.tree_node_kwargs)
+            if self.tree_node_kwargs
+            else self.tree_node_func
+        )
+        if self.finalize_func:
+            _finalize_func = pickle.dumps(
+                partial(self.finalize_func, **self.finalize_kwargs)
+                if self.finalize_kwargs
+                else self.finalize_func
+            )
+        else:
+            _finalize_func = None
 
-    #     return {
-    #         "name": self.name,
-    #         "name_input": self.name_input,
-    #         "npartitions_input": self.npartitions_input,
-    #         "tree_node_func": _tree_node_func,
-    #         "tree_node_args": self.tree_node_args,
-    #         "finalize_func": _finalize_func,
-    #         "finalize_args": self.finalize_args,
-    #         "split_every": self.split_every,
-    #     }
+        return {
+            "name": self.name,
+            "name_input": self.name_input,
+            "npartitions_input": self.npartitions_input,
+            "concat_func": _concat_func,
+            "tree_node_func": _tree_node_func,
+            "tree_node_kwargs": {},
+            "finalize_func": _finalize_func,
+            "finalize_kwargs": {},
+            "split_out": self.split_out,
+            "output_splits": self.output_splits,
+        }
 
-    # @classmethod
-    # def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-    #     from distributed.worker import dumps_task
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.worker import dumps_task
 
-    #     # Materialize the layer
-    #     raw = cls(**state)._construct_graph(deserializing=True)
+        # Materialize the layer
+        raw = cls(**state)._construct_graph(on_scheduler=True)
 
-    #     # Convert all keys to strings and dump tasks
-    #     raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-    #     keys = raw.keys() | dsk.keys()
-    #     deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+        # Convert all keys to strings and dump tasks
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        keys = raw.keys() | dsk.keys()
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-    #     return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
+        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
