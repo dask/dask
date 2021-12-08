@@ -993,6 +993,9 @@ def test_aggregate_dask():
         {
             k: v
             for (k, v) in obj.dask.items()
+            # Skip "chunk" tasks, because they include
+            # SubgraphCallable object with non-deterministic
+            # (uuid-based) function names
             if (k[0].startswith("aggregate") and "-chunk-" not in k[0])
         }
     )

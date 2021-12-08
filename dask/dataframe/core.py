@@ -5752,21 +5752,20 @@ def apply_concat_apply(
     meta_chunk = None
     if split_out and split_out > 1:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
-        df0 = new_dd_object(
-            HighLevelGraph.from_collections(
-                chunk_name,
-                layers[chunk_name],
-                dependencies=dfs,
-            ),
-            chunk_name,
-            meta_chunk,
-            [None] * (npartitions + 1),
-        )
         split_name = "split-%s" % token_key
         layers[split_name] = partitionwise_graph(
             hash_shard,
             split_name,
-            df0,
+            new_dd_object(
+                HighLevelGraph.from_collections(
+                    chunk_name,
+                    layers[chunk_name],
+                    dependencies=dfs,
+                ),
+                chunk_name,
+                meta_chunk,
+                [None] * (npartitions + 1),
+            ),
             split_out,
             split_out_setup,
             split_out_setup_kwargs,
@@ -7073,7 +7072,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-def partitionwise_graph(func, layer_name, *args, **kwargs):
+def partitionwise_graph(func, op_name, *args, **kwargs):
     """
     Apply a function partition-wise across arguments to create layer of a graph
 
@@ -7088,7 +7087,7 @@ def partitionwise_graph(func, layer_name, *args, **kwargs):
     Parameters
     ----------
     func: callable
-    name: str
+    op_name: str
         descriptive name for the operation
     *args:
     **kwargs:
@@ -7108,7 +7107,6 @@ def partitionwise_graph(func, layer_name, *args, **kwargs):
     --------
     map_partitions
     """
-    name = layer_name
     pairs = []
     numblocks = {}
     for arg in args:
@@ -7140,7 +7138,7 @@ def partitionwise_graph(func, layer_name, *args, **kwargs):
         else:
             pairs.extend([arg, None])
     return blockwise(
-        func, name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
+        func, op_name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
     )
 
 

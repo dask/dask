@@ -1307,6 +1307,11 @@ class DataFrameTreeReduction(DataFrameLayer):
         reduction tree. If ``split_out`` is set to an integer >=1, the
         input tasks must contain data that can be indexed by a ``getitem``
         operation with a key in the range ``[0, split_out)``.
+    output_splits : list, optional
+        List of required output partitions. This parameter is used
+        internally by Dask for high-level culling.
+    tree_node_name : str, optional
+        Name to use for intermediate tree-node tasks.
     """
 
     def __init__(
