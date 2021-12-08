@@ -3457,6 +3457,12 @@ def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
 
 
+def test_map_blocks_token_deprecated():
+    with pytest.warns(FutureWarning, match="use `name=` instead"):
+        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
+    assert x.name.startswith("foo-")
+
+
 def test_from_array_names():
     pytest.importorskip("distributed")
 
