@@ -910,7 +910,6 @@ def test_map_partitions():
     result = d.map_partitions(lambda df: df.sum(axis=1))
     layer = hlg_layer(result.dask, "lambda-")
     assert not layer.is_materialized(), layer
-    result.dask.validate()
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
@@ -941,7 +940,7 @@ def test_map_partitions_partition_info():
         return df
 
     df = d.map_partitions(f, meta=d)
-    layer = [layer for k, layer in df.dask.layers.items() if k.startswith("f-")][0]
+    layer = hlg_layer(df.dask, "f-")
     assert not layer.is_materialized()
     df.dask.validate()
     result = df.compute(scheduler="single-threaded")
