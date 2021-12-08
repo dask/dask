@@ -5735,7 +5735,7 @@ def apply_concat_apply(
     for df in dfs[1:]:
         layers.update(df.dask.layers)
         dependencies.update(df.dask.dependencies)
-        dependencies.update(df.dask.key_dependencies or {})
+        key_dependencies.update(df.dask.key_dependencies or {})
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"

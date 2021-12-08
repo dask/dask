@@ -1281,15 +1281,14 @@ class DataFrameTreeReduction(DataFrameLayer):
         as its first positional argument.
     tree_node_func : callable
         Function used on the output of ``concat_func`` in each tree
-        node. a single output value. This function must accept the
-        output of ``concat_func`` as its first positional argument.
-        Any other input arguments must be definded by in
-        ``tree_node_kwargs``.
+        node. This function must accept the output of ``concat_func``
+        as its first positional argument. Any other input arguments
+        must be definded by in ``tree_node_kwargs``.
     tree_node_args : dict, optional
         Dictionary of key-word arguments to include in every call to
         the function specified by ``tree_node_func``. Note that the
-        0th positional argument will always correspond to a list of
-        inputs from the input nodex (and these argements will always
+        first positional argument will always correspond to a list of
+        inputs from the input nodex (and these arguments will always
         come after).
     finalize_func : callable, optional
         Function used in place of ``tree_node_func`` on the final tree
@@ -1535,6 +1534,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             split_every=self.split_every,
             split_out=self.split_out,
             output_splits=output_splits,
+            tree_node_name=self.tree_node_name,
             annotations=self.annotations,
         )
 
@@ -1584,6 +1584,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             "finalize_kwargs": {},
             "split_out": self.split_out,
             "output_splits": self.output_splits,
+            "tree_node_name": self.tree_node_name,
         }
 
     @classmethod
