@@ -154,7 +154,25 @@ class ArrayOverlapLayer(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        return len(self._dict)
+        axes = self.axes
+        chunks = self.chunks
+        dask_keys = self._dask_keys()
+
+        dims = list(map(len, chunks))
+        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
+
+        # Make keys for each of the surrounding sub-arrays
+        interior_keys = toolz.pipe(
+            dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
+        )
+
+        n_tasks = 0
+        for k in interior_keys:
+            if all([isinstance(i, int) for i in k]):
+                n_tasks += 2  # represents a single getitem task
+            else:
+                n_tasks += 1  # represents both getitem and overlap tasks
+        return n_tasks
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
