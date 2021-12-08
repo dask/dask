@@ -1541,6 +1541,64 @@ def test_map_blocks_no_array_args():
     assert_eq(x, np.arange(8, dtype=np.float32))
 
 
+def test_map_blocks_unique_name_chunks_dtype():
+    def func(block_info=None):
+        loc = block_info[None]["array-location"]
+        dtype = block_info[None]["dtype"]
+        return np.arange(loc[0][0], loc[0][1], dtype=dtype)
+
+    x = da.map_blocks(func, chunks=((5, 3),), dtype=np.float32)
+    assert x.chunks == ((5, 3),)
+    assert_eq(x, np.arange(8, dtype=np.float32))
+
+    y = da.map_blocks(func, chunks=((2, 2, 1, 3),), dtype=np.float32)
+    assert y.chunks == ((2, 2, 1, 3),)
+    assert_eq(y, np.arange(8, dtype=np.float32))
+    assert x.name != y.name
+
+    z = da.map_blocks(func, chunks=((5, 3),), dtype=np.float64)
+    assert z.chunks == ((5, 3),)
+    assert_eq(z, np.arange(8, dtype=np.float64))
+    assert x.name != z.name
+    assert y.name != z.name
+
+
+def test_map_blocks_unique_name_drop_axis():
+    def func(some_3d, block_info=None):
+        if not block_info:
+            return some_3d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4, 5), chunks=((3,), (4,), (5,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, drop_axis=[0], dtype=np.float32)
+    assert x.chunks == ((4,), (5,))
+    assert_eq(x, np.zeros((4, 5), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, drop_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,))
+    assert_eq(y, np.zeros((3, 4), dtype=np.float32))
+    assert x.name != y.name
+
+
+def test_map_blocks_unique_name_new_axis():
+    def func(some_2d, block_info=None):
+        if not block_info:
+            return some_2d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4), chunks=((3,), (4,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, new_axis=[0], dtype=np.float32)
+    assert x.chunks == ((1,), (3,), (4,))
+    assert_eq(x, np.zeros((1, 3, 4), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, new_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,), (1,))
+    assert_eq(y, np.zeros((3, 4, 1), dtype=np.float32))
+    assert x.name != y.name
+
+
 @pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
 def test_map_blocks_optimize_blockwise(func):
     # Check that map_blocks layers can merge with elementwise layers
@@ -4961,3 +5019,10 @@ def test_dask_layers():
     assert b.dask.layers.keys() == {a.name, b.name}
     assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
     assert b.__dask_layers__() == (b.name,)
+
+
+def test_len_object_with_unknown_size():
+    a = da.random.random(size=(20, 2))
+    b = a[a < 0.5]
+    with pytest.raises(ValueError, match="on object with unknown chunk size"):
+        assert len(b)

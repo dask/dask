@@ -921,20 +921,20 @@ def test_groupby_multiprocessing():
         )
 
 
-def test_groupby_normalize_index():
+def test_groupby_normalize_by():
     full = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [4, 5, 6, 3, 2, 1, 0, 0, 0]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
     )
     d = dd.from_pandas(full, npartitions=3)
 
-    assert d.groupby("a").index == "a"
-    assert d.groupby(d["a"]).index == "a"
-    assert d.groupby(d["a"] > 2).index._name == (d["a"] > 2)._name
-    assert d.groupby(["a", "b"]).index == ["a", "b"]
+    assert d.groupby("a").by == "a"
+    assert d.groupby(d["a"]).by == "a"
+    assert d.groupby(d["a"] > 2).by._name == (d["a"] > 2)._name
+    assert d.groupby(["a", "b"]).by == ["a", "b"]
 
-    assert d.groupby([d["a"], d["b"]]).index == ["a", "b"]
-    assert d.groupby([d["a"], "b"]).index == ["a", "b"]
+    assert d.groupby([d["a"], d["b"]]).by == ["a", "b"]
+    assert d.groupby([d["a"], "b"]).by == ["a", "b"]
 
 
 def test_aggregate__single_element_groups(agg_func):

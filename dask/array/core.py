@@ -701,7 +701,7 @@ def map_blocks(
         warnings.warn("The token= keyword to map_blocks has been moved to name=")
         name = token
 
-    name = f"{name or funcname(func)}-{tokenize(func, *args, **kwargs)}"
+    name = f"{name or funcname(func)}-{tokenize(func, dtype, chunks, drop_axis, new_axis, *args, **kwargs)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -1430,7 +1430,13 @@ class Array(DaskMethodsMixin):
     def __len__(self):
         if not self.chunks:
             raise TypeError("len() of unsized object")
-        return sum(self.chunks[0])
+        if np.isnan(self.chunks[0]).any():
+            msg = (
+                "Cannot call len() on object with unknown chunk size."
+                f"{unknown_chunk_message}"
+            )
+            raise ValueError(msg)
+        return int(sum(self.chunks[0]))
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
