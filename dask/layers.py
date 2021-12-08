@@ -1292,11 +1292,13 @@ class DataFrameTreeReduction(DataFrameLayer):
         inputs from the input nodex (and these argements will always
         come after).
     finalize_func : callable, optional
-        Function used in the final tree node(s) to produce the final
-        output for each split.
+        Function used in place of ``tree_node_func`` on the final tree
+        node(s) to produce the final output for each split. By default,
+        ``tree_node_func`` will be used.
     finalize_kwargs : dict, optional
         Dictionary of key-word arguments to include in every call to
-        the function specified by ``finalize_func``.
+        the function specified by ``finalize_func``. This parameter
+        is ignored if ``finalize_func`` is not set.
     split_every : int, optional
         This argument specifies the maximum number of input nodes
         inputs to be handled by any one task in the tree. Defaults to 32.
@@ -1320,6 +1322,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         split_every=32,
         split_out=None,
         output_splits=None,
+        tree_node_name=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
@@ -1334,7 +1337,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.split_every = split_every
         self.split_out = split_out
         self.output_splits = output_splits
-        self.tree_node_name = "tree_node-" + self.name
+        self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
         # Calculate tree withs and height
         # (Used to get output keys without materializing)
@@ -1356,33 +1359,18 @@ class DataFrameTreeReduction(DataFrameLayer):
         return task if self.split_out else task[:-1]
 
     def _define_task(self, node_list, output_node=False):
-        # Define nested concatenation and tree-node task
+        # Define nested concatenation and func task
         conc = (self.concat_func, node_list)
-        if self.tree_node_kwargs:
-            tree_node_task = (
-                apply,
-                self.tree_node_func,
-                [conc],
-                self.tree_node_kwargs,
-            )
+        if output_node and self.finalize_func:
+            func = self.finalize_func
+            kwargs = self.finalize_kwargs
         else:
-            tree_node_task = (self.tree_node_func, conc)
-        # Return intermediate or output task
-        if output_node:
-            if self.finalize_func:
-                if self.finalize_kwargs:
-                    return (
-                        apply,
-                        self.finalize_func,
-                        [tree_node_task],
-                        self.finalize_kwargs,
-                    )
-                else:
-                    return (self.finalize_func, tree_node_task)
-            else:
-                return tree_node_task
+            func = self.tree_node_func
+            kwargs = self.tree_node_kwargs
+        if kwargs:
+            return (apply, func, [conc], kwargs)
         else:
-            return tree_node_task
+            return (func, conc)
 
     def _construct_graph(self, on_scheduler=False):
         """Construct graph for a tree reduction."""

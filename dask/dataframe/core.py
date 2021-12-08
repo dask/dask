@@ -26,6 +26,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
+from ..layers import DataFrameTreeReduction
 from ..optimization import SubgraphCallable
 from ..utils import (
     IndexCallable,
@@ -5729,62 +5730,67 @@ def apply_concat_apply(
         split_out_setup_kwargs,
     )
 
-    # Chunk
-    a = f"{token or funcname(chunk)}-chunk-{token_key}"
-    if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {
-            (a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())
-        }
-    else:
-        dsk = {
-            (a, 0, i, 0): (
-                apply,
-                chunk,
-                [(x._name, i) if isinstance(x, _Frame) else x for x in args],
-                chunk_kwargs,
-            )
-            for i in range(npartitions)
-        }
+    # Start with combined layers and dependencies for dfs
+    layers = dfs[0].dask.layers.copy()
+    dependencies = dfs[0].dask.dependencies.copy()
+    for df in dfs[1:]:
+        layers.update(df.dask.layers)
+        dependencies.update(df.dask.dependencies)
 
-    # Split
+    # Blockwise Chunk Layer
+    chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
+    layers[chunk_name] = partitionwise_graph(
+        chunk,
+        chunk_name,
+        *args,
+        **chunk_kwargs,
+    )
+    dependencies[chunk_name] = {df._name for df in dfs}
+
+    # Blockwise Split Layer
+    last_name = chunk_name
+    meta_chunk = None
     if split_out and split_out > 1:
-        split_prefix = "split-%s" % token_key
-        shard_prefix = "shard-%s" % token_key
-        for i in range(npartitions):
-            dsk[(split_prefix, i)] = (
-                hash_shard,
-                (a, 0, i, 0),
-                split_out,
-                split_out_setup,
-                split_out_setup_kwargs,
-                ignore_index,
-            )
-            for j in range(split_out):
-                dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
-        a = shard_prefix
-    else:
-        split_out = 1
+        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        df0 = new_dd_object(
+            HighLevelGraph.from_collections(
+                chunk_name,
+                layers[chunk_name],
+                dependencies=dfs,
+            ),
+            chunk_name,
+            meta_chunk,
+            [None] * (npartitions + 1),
+        )
+        split_name = "split-%s" % token_key
+        layers[split_name] = partitionwise_graph(
+            hash_shard,
+            split_name,
+            df0,
+            split_out,
+            split_out_setup,
+            split_out_setup_kwargs,
+            ignore_index,
+        )
+        dependencies[split_name] = {chunk_name}
+        last_name = split_name
 
-    # Combine
-    b = f"{token or funcname(combine)}-combine-{token_key}"
-    k = npartitions
-    depth = 0
-    while k > split_every:
-        for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            for j in range(split_out):
-                conc = (_concat, [(a, depth, i, j) for i in inds], ignore_index)
-                if combine_kwargs:
-                    dsk[(b, depth + 1, part_i, j)] = (
-                        apply,
-                        combine,
-                        [conc],
-                        combine_kwargs,
-                    )
-                else:
-                    dsk[(b, depth + 1, part_i, j)] = (combine, conc)
-        k = part_i + 1
-        a = b
-        depth += 1
+    # Tree-Reduction Layer
+    final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
+    layers[final_name] = DataFrameTreeReduction(
+        final_name,
+        last_name,
+        npartitions,
+        partial(_concat, ignore_index=ignore_index),
+        combine,
+        tree_node_kwargs=combine_kwargs,
+        finalize_func=aggregate,
+        finalize_kwargs=aggregate_kwargs,
+        split_every=split_every,
+        split_out=split_out if (split_out and split_out > 1) else None,
+        tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
+    )
+    dependencies[final_name] = {last_name}
 
     if sort is not None:
         if sort and split_out > 1:
@@ -5795,17 +5801,9 @@ def apply_concat_apply(
         aggregate_kwargs = aggregate_kwargs or {}
         aggregate_kwargs["sort"] = sort
 
-    # Aggregate
-    for j in range(split_out):
-        b = f"{token or funcname(aggregate)}-agg-{token_key}"
-        conc = (_concat, [(a, depth, i, j) for i in range(k)], ignore_index)
-        if aggregate_kwargs:
-            dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
-        else:
-            dsk[(b, j)] = (aggregate, conc)
-
     if meta is no_default:
-        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        if meta_chunk is None:
+            meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
@@ -5815,11 +5813,9 @@ def apply_concat_apply(
         parent_meta=dfs[0]._meta,
     )
 
-    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
-
-    divisions = [None] * (split_out + 1)
-
-    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
+    graph = HighLevelGraph(layers, dependencies)
+    divisions = [None] * ((split_out or 1) + 1)
+    return new_dd_object(graph, final_name, meta, divisions, parent_meta=dfs[0]._meta)
 
 
 aca = apply_concat_apply
@@ -7092,7 +7088,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-def partitionwise_graph(func, name, *args, **kwargs):
+def partitionwise_graph(func, layer_name, *args, **kwargs):
     """
     Apply a function partition-wise across arguments to create layer of a graph
 
@@ -7127,6 +7123,7 @@ def partitionwise_graph(func, name, *args, **kwargs):
     --------
     map_partitions
     """
+    name = layer_name
     pairs = []
     numblocks = {}
     for arg in args:
