@@ -22,7 +22,7 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster
 
-.. image:: images/dask-overview.png
+.. image:: images/dask-overview.svg
    :alt: Dask collections and schedulers
    :align: center
 

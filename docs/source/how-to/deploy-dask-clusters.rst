@@ -28,7 +28,7 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster.
 
-.. figure:: ../images/dask-overview.png
+.. figure:: ../images/dask-overview.svg
    :class: with-border
    
    High level collections create task graphs which can be executed on a single machine or a cluster.
