@@ -170,7 +170,8 @@ class FastParquetEngine(Engine):
             # NOTE: Here we assume that all column chunks are stored
             # in the same file. This is not strictly required by the
             # parquet spec.
-            fpath = row_group.columns[0].file_path
+            fp = row_group.columns[0].file_path
+            fpath = fp if isinstance(fp, str) else fp.decode()
             if fpath is None:
                 if not has_metadata_file:
                     # There doesn't need to be a file_path if the
@@ -306,9 +307,8 @@ class FastParquetEngine(Engine):
         real_row_groups = []
         for rg, rg_global in row_groups:
             row_group = pf.row_groups[rg_global]
-            row_group.statistics = None
-            row_group.helper = None
-            for c, col in enumerate(row_group.columns):
+            columns = row_group.columns
+            for c, col in enumerate(columns):
                 if c:
                     col.file_path = None
                 col.meta_data.key_value_metadata = None
@@ -324,6 +324,7 @@ class FastParquetEngine(Engine):
                 col.meta_data.encodings = None
                 col.meta_data.total_uncompressed_size = None
                 col.meta_data.encoding_stats = None
+            row_group.columns = columns
             real_row_groups.append(row_group)
         return pickle.dumps(real_row_groups)
 
@@ -513,7 +514,9 @@ class FastParquetEngine(Engine):
         columns = None
         if pf.fmd.key_value_metadata:
             pandas_md = [
-                x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
+                x.value
+                for x in pf.fmd.key_value_metadata
+                if x.key in [b"pandas", "pandas"]
             ]
         else:
             pandas_md = []
@@ -993,6 +996,12 @@ class FastParquetEngine(Engine):
 
             if update_parquet_file:
                 with _FP_FILE_LOCK:
+                    for rg in row_groups:
+                        for chunk in rg.columns:
+                            s = chunk.file_path
+                            if s and isinstance(s, bytes):
+                                chunk.file_path = s.decode()
+
                     parquet_file.fmd.row_groups = row_groups
                     # NOTE: May lose cats after `_set_attrs` call
                     save_cats = parquet_file.cats
@@ -1055,6 +1064,7 @@ class FastParquetEngine(Engine):
         schema=None,
         object_encoding="utf8",
         index_cols=None,
+        custom_metadata=None,
         **kwargs,
     ):
         if index_cols is None:
@@ -1123,6 +1133,15 @@ class FastParquetEngine(Engine):
                 **kwargs,
             )
             i_offset = 0
+        if custom_metadata is not None:
+            kvm = fmd.key_value_metadata or []
+            kvm.extend(
+                [
+                    fastparquet.parquet_thrift.KeyValue(key=key, value=value)
+                    for key, value in custom_metadata.items()
+                ]
+            )
+            fmd.key_value_metadata = kvm
 
         schema = None  # ArrowEngine compatibility
         return (fmd, schema, i_offset)
@@ -1143,8 +1162,12 @@ class FastParquetEngine(Engine):
     ):
         # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
+        for s in fmd.schema:
+            if isinstance(s.name, bytes):
+                # can be coerced to bytes on copy
+                s.name = s.name.decode()
         if custom_metadata and fmd is not None:
-            fmd.key_value_metadata.extend(
+            fmd.key_value_metadata = fmd.key_value_metadata + (
                 [
                     fastparquet.parquet_thrift.KeyValue(key=key, value=value)
                     for key, value in custom_metadata.items()
@@ -1187,16 +1210,22 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
+    def write_metadata(
+        cls, parts, fmd, fs, path, append=False, metadata=None, **kwargs
+    ):
         _meta = copy.copy(fmd)
+        rgs = fmd.row_groups
         if parts:
             for rg in parts:
                 if rg is not None:
                     if isinstance(rg, list):
                         for r in rg:
-                            _meta.row_groups.append(r)
+                            rgs.append(r)
                     else:
-                        _meta.row_groups.append(rg)
+                        rgs.append(rg)
+            _meta.row_groups = rgs
+            if metadata:
+                _meta
             fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, _meta, open_with=fs.open, no_row_groups=False
