@@ -61,11 +61,11 @@ the older single-machine scheduler.
 There are also a number of different *cluster managers* available, so you can use
 Dask distributed with a range of platforms. These *cluster managers* deploy a scheduler
 and the necessary workers as determined by communicating with the *resource manager*.
-`Dask Jobqueue <https://github.com/dask/dask-jobqueue>`, for example, is a set of
+`Dask Jobqueue <https://github.com/dask/dask-jobqueue>`_, for example, is a set of
 *cluster managers* for HPC users and works with job queueing systems
-(in this case, the *resource manager*) such as `PBS <https://en.wikipedia.org/wiki/Portable_Batch_System>`,
-`Slurm <https://en.wikipedia.org/wiki/Slurm_Workload_Manager>`,
-and `SGE <https://en.wikipedia.org/wiki/Oracle_Grid_Engine>`.
+(in this case, the *resource manager*) such as `PBS <https://en.wikipedia.org/wiki/Portable_Batch_System>`_,
+`Slurm <https://en.wikipedia.org/wiki/Slurm_Workload_Manager>`_,
+and `SGE <https://en.wikipedia.org/wiki/Oracle_Grid_Engine>`_.
 Those workers are then allocated physical hardware resources.
 
 .. figure:: ../images/dask-cluster-manager.svg
@@ -84,8 +84,8 @@ variety of local and distributed hardware:
       the newer system on a single machine.  This provides more advanced
       features while still requiring almost no setup.
 - Distributed computing:
-    - `Beginner's Guide to Configuring a Dask distributed Cluster <https://blog.dask.org/2020/07/30/beginners-config>`
-    - `Overview of cluster management options <https://blog.dask.org/2020/07/23/current-state-of-distributed-dask-clusters>`
+    - `Beginner's Guide to Configuring a Dask distributed Cluster <https://blog.dask.org/2020/07/30/beginners-config>`_
+    - `Overview of cluster management options <https://blog.dask.org/2020/07/23/current-state-of-distributed-dask-clusters>`_
     - :doc:`Manual Setup <deploy-dask/cli>`: The command line interface to set up
       ``dask-scheduler`` and ``dask-worker`` processes.  Useful for IT or
       anyone building a deployment solution.
