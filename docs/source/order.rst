@@ -102,6 +102,7 @@ to get a true representation of what order the tasks will be executed in.
 
 
 .. image:: images/order-failure.png
+   :alt: Complex task graph of several vertical node chains at the output, and a few input sub-trees. In between these sections, there is a many-to-many area of crossing dependency arrows. The color coding of the output trees is interleaved without a clear progression.
 
 In this visualization the nodes are colored by order of execution (from dark red
 to light yellow) and the node labels are the order Dask's assigned to each task.
@@ -139,6 +140,7 @@ see the effect of ordering:
 
 
 .. image:: images/order-success.png
+   :alt: Complex task graph of several vertical node chains at the output, and a similar number of input blocks. The outputs and inputs are linked by simple nodes of a few inputs each, laid out without significant crossover between sections of the tree. The color coding of the output chains shows clear progression in the order of execution with each output color having a corresponding input of the same color.
 
 At a glance, we can see that this ordering is looks much more regular and
 uniform. There's fewer lines crossing, and the color of the ordering moves

@@ -30,6 +30,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
+from dask.utils_test import hlg_layer
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -907,6 +908,8 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
+    layer = hlg_layer(result.dask, "lambda-")
+    assert not layer.is_materialized(), layer
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
@@ -936,7 +939,11 @@ def test_map_partitions_partition_info():
         assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
         return df
 
-    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    df = d.map_partitions(f, meta=d)
+    layer = hlg_layer(df.dask, "f-")
+    assert not layer.is_materialized()
+    df.dask.validate()
+    result = df.compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
 

@@ -537,7 +537,7 @@ def map_overlap(
 
     >>> x = np.arange(16).reshape((4, 4))
     >>> d = da.from_array(x, chunks=(2, 2))
-    >>> d.map_overlap(lambda x: x + x.size, depth=1).compute()
+    >>> d.map_overlap(lambda x: x + x.size, depth=1, boundary='reflect').compute()
     array([[16, 17, 18, 19],
            [20, 21, 22, 23],
            [24, 25, 26, 27],
@@ -557,7 +557,7 @@ def map_overlap(
     >>> func = lambda x, y: x + y
     >>> x = da.arange(8).reshape(2, 4).rechunk((1, 2))
     >>> y = da.arange(4).rechunk(2)
-    >>> da.map_overlap(func, x, y, depth=1).compute() # doctest: +NORMALIZE_WHITESPACE
+    >>> da.map_overlap(func, x, y, depth=1, boundary='reflect').compute() # doctest: +NORMALIZE_WHITESPACE
     array([[ 0,  2,  4,  6],
            [ 4,  6,  8,  10]])
 
@@ -569,11 +569,11 @@ def map_overlap(
 
     >>> x = da.arange(8, chunks=4)
     >>> y = da.arange(8, chunks=2)
-    >>> r = da.map_overlap(func, x, y, depth=1, align_arrays=True)
+    >>> r = da.map_overlap(func, x, y, depth=1, boundary='reflect', align_arrays=True)
     >>> len(r.to_delayed())
     4
 
-    >>> da.map_overlap(func, x, y, depth=1, align_arrays=False).compute()
+    >>> da.map_overlap(func, x, y, depth=1, boundary='reflect', align_arrays=False).compute()
     Traceback (most recent call last):
         ...
     ValueError: Shapes do not align {'.0': {2, 4}}
@@ -587,9 +587,9 @@ def map_overlap(
     >>> block_args = dict(chunks=(), drop_axis=0)
     >>> da.map_blocks(func, x, **block_args).compute()
     10
-    >>> da.map_overlap(func, x, **block_args).compute()
+    >>> da.map_overlap(func, x, **block_args, boundary='reflect').compute()
     10
-    >>> da.map_overlap(func, x, **block_args, depth=1).compute()
+    >>> da.map_overlap(func, x, **block_args, depth=1, boundary='reflect').compute()
     12
 
     For functions that may not handle 0-d arrays, it's also possible to specify
@@ -599,7 +599,7 @@ def map_overlap(
 
     >>> x = np.arange(16).reshape((4, 4))
     >>> d = da.from_array(x, chunks=(2, 2))
-    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=np.array(()))
     >>> y
     dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
     >>> y.compute()
@@ -613,7 +613,7 @@ def map_overlap(
     >>> import cupy  # doctest: +SKIP
     >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
     >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
-    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=cupy.array(()))  # doctest: +SKIP
     >>> y  # doctest: +SKIP
     dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
     >>> y.compute()  # doctest: +SKIP
@@ -636,6 +636,17 @@ def map_overlap(
         boundary = get(sig.index("boundary"), args, boundary)
         trim = get(sig.index("trim"), args, trim)
         func, args = args[0], [func]
+
+    if boundary is None:
+        # Default boundary value is set in the function named "coerce_boundary"
+        warnings.warn(
+            "Default 'boundary' argument value will change from 'reflect' "
+            "to 'none' in future versions from 2022.03.0 onwards. "
+            "Use 'boundary=\"none\"' to opt into the future behavior now "
+            "or set 'boundary=\"reflect\"' to maintain the current behavior "
+            "going forward.",
+            FutureWarning,
+        )
 
     if not callable(func):
         raise TypeError(
