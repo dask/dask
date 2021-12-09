@@ -3790,7 +3790,7 @@ Dask Name: {name}, {task} tasks""".format(
             chunk=methods.monotonic_decreasing_chunk,
             aggregate=methods.monotonic_decreasing_aggregate,
             meta=bool,
-            token="monotonic_increasing",
+            token="monotonic_decreasing",
         )
 
 
