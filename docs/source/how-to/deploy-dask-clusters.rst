@@ -21,6 +21,7 @@ You can continue reading or watch the screencast below:
 Dask has two families of task schedulers:
 
 .. image:: ../images/dask-overview.png
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below. 
    :align: center
 
 1.  **Single machine scheduler**: This scheduler provides basic features on a
