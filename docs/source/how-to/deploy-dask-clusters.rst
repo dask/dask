@@ -29,6 +29,9 @@ Dask has two families of task schedulers:
     run locally or distributed across a cluster.
 
 .. figure:: ../images/dask-overview.svg
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which
+   are then sent to the "Scheduler" for execution. There are two types of schedulers
+   that are described in more detail below. 
    :class: with-border
    
    High level collections create task graphs which can be executed on a single machine or a cluster.
