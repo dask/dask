@@ -1528,7 +1528,7 @@ class Bag(DaskMethodsMixin):
             msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, meta=None, columns=None):
+    def to_dataframe(self, meta=None, columns=None, optimize_graph=True):
         """Create Dask Dataframe from a Dask Bag.
 
         Bag should contain tuples, dict records, or scalars.
@@ -1593,11 +1593,15 @@ class Bag(DaskMethodsMixin):
         # the empty frame
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
-        name = "to_dataframe-" + tokenize(self, cols, dtypes)
-        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
 
-        for i in range(self.npartitions):
-            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+        if optimize_graph:
+            name = "to_dataframe-" + tokenize(self, cols, dtypes)
+            dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
+            for i in range(self.npartitions):
+                dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+        else:
+            name = self.name
+            dsk = self.dask
 
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
