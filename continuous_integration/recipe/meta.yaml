@@ -1,10 +1,11 @@
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev') + environ.get('VERSION_SUFFIX', '') %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev') %}
+{% set nightly_version = version + environ.get('VERSION_SUFFIX', '') %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
 
 
 package:
   name: dask
-  version: {{ version }}
+  version: {{ nightly_version }}
 
 source:
   git_url: ../..
