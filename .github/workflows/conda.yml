@@ -37,20 +37,12 @@ jobs:
           which python
           pip list
           mamba list
-      - name: Build dask-core conda package
+      - name: Build conda package
         run: |
           # suffix for nightly package versions
           export VERSION_SUFFIX=a`date +%y%m%d`
 
-          conda mambabuild continuous_integration/recipes/dask-core \
-                           --no-anaconda-upload \
-                           --output-folder .
-      - name: Build dask conda package
-        run: |
-          # suffix for nightly package versions
-          export VERSION_SUFFIX=a`date +%y%m%d`
-
-          conda mambabuild continuous_integration/recipes/dask \
+          conda mambabuild continuous_integration/recipe \
                            --no-anaconda-upload \
                            --output-folder .
       - name: Upload conda package
