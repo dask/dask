@@ -5,7 +5,7 @@ Task Graphs
 
 Internally, Dask encodes algorithms in a simple format involving Python dicts,
 tuples, and functions. This graph format can be used in isolation from the
-dask collections. Working directly with dask graphs is rare, unless you intend
+dask collections. Working directly with dask graphs is rare, though, unless you intend
 to develop new modules with Dask.  Even then, :doc:`dask.delayed <delayed>` is
 often a better choice. If you are a *core developer*, then you should start here.
 
@@ -39,7 +39,7 @@ computation, often a function call on a non-trivial amount of data.  We
 represent these tasks as nodes in a graph with edges between nodes if one task
 depends on data produced by another.  We call upon a *task scheduler* to
 execute this graph in a way that respects these data dependencies and leverages
-parallelism where possible, multiple independent tasks can be run
+parallelism where possible, so multiple independent tasks can be run
 simultaneously.
 
 .. image:: images/map-reduce-task-scheduling.svg
@@ -47,10 +47,10 @@ simultaneously.
 
 Many solutions exist.  This is a common approach in parallel execution
 frameworks.  Often task scheduling logic hides within other larger frameworks
-(Luigi, Storm, Spark, IPython Parallel, and so on) and so is often reinvented.
+(e.g. Luigi, Storm, Spark, IPython Parallel, etc.) and so is often reinvented.
 
-Dask is a specification that encodes task schedules with minimal incidental
-complexity using terms common to all Python projects, namely dicts, tuples,
+Dask is a specification that encodes full task scheduling with minimal incidental
+complexity using terms common to all Python projects, namely, dicts, tuples,
 and callables.  Ideally this minimum solution is easy to adopt and understand
 by a broad community.
 

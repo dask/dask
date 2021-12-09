@@ -20,9 +20,6 @@ You can continue reading or watch the screencast below:
 
 Dask has two families of task schedulers:
 
-.. image:: ../images/dask-overview.png
-   :align: center
-
 1.  **Single machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
     default.  It is simple and cheap to use.  It can only be used on a single
@@ -31,10 +28,17 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster.
 
-.. image:: ../images/distributed-overview.svg
-   :align: center
+.. figure:: ../images/dask-overview.png
+   :class: with-border
+   
+   High level collections create task graphs which can be executed on a single machine or a cluster.
 
-If you import Dask, set up a computation, and then call ``compute``, then you
+.. figure:: ../images/distributed-overview.svg
+   :class: with-border
+   
+   Dask distributed allows the creation of a distributed cluster for multi-machine computation.
+
+If you import Dask, set up a computation, and call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
 scheduler you must set up a ``Client``
 
@@ -54,14 +58,24 @@ Note that the newer ``dask.distributed`` scheduler is often preferable, even on
 single workstations.  It contains many diagnostics and features not found in
 the older single-machine scheduler.
 
+There are also a number of different *cluster managers* available, so you can use
+Dask distributed with a range of platforms. These *cluster managers* deploy a scheduler
+and the necessary workers as determined by communicating with the *resource manager*.
+`Dask Jobqueue <https://github.com/dask/dask-jobqueue>`, for example, is a set of
+*cluster managers* for HPC users and works with job queueing systems
+(in this case, the *resource manager*) such as `PBS <https://en.wikipedia.org/wiki/Portable_Batch_System>`,
+`Slurm <https://en.wikipedia.org/wiki/Slurm_Workload_Manager>`,
+and `SGE <https://en.wikipedia.org/wiki/Oracle_Grid_Engine>`.
+Those workers are then allocated physical hardware resources.
+
 .. figure:: ../images/dask-cluster-manager.svg
    :width: 75%
    :figclass: align-center
 
-   An overview of cluster management with Dask distributed
+   An overview of cluster management with Dask distributed.
 
 The following resources explain in more detail how to set up Dask on a
-variety of local and distributed hardware.
+variety of local and distributed hardware:
 
 - Single Machine:
     - :doc:`Default Scheduler <deploy-dask/single-machine>`: The no-setup default.
@@ -70,6 +84,8 @@ variety of local and distributed hardware.
       the newer system on a single machine.  This provides more advanced
       features while still requiring almost no setup.
 - Distributed computing:
+    - `Beginner's Guide to Configuring a Dask distributed Cluster <https://blog.dask.org/2020/07/30/beginners-config>`
+    - `Overview of cluster management options <https://blog.dask.org/2020/07/23/current-state-of-distributed-dask-clusters>`
     - :doc:`Manual Setup <deploy-dask/cli>`: The command line interface to set up
       ``dask-scheduler`` and ``dask-worker`` processes.  Useful for IT or
       anyone building a deployment solution.
