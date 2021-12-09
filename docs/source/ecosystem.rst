@@ -69,7 +69,7 @@ There are many different implementations of the Dask distributed cluster.
   installations.
 - `dask-cloudprovider <https://cloudprovider.dask.org>`_: Deploy Dask on various cloud platforms such as AWS, Azure, and GCP
   leveraging cloud native APIs.
-- `dask-gateway <https://gateways.dask.org>`_: Secure, multi-tenant server for managing Dask clusters. Launch and use Dask
+- `dask-gateway <https://gateway.dask.org>`_: Secure, multi-tenant server for managing Dask clusters. Launch and use Dask
   clusters in a shared, centrally managed cluster environment, without requiring users to have direct access to the underlying
   cluster backend.
 - `dask-cuda <https://github.com/rapidsai/dask-cuda>`_: Construct a Dask cluster which resembles ``LocalCluster``  and is specifically

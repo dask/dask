@@ -44,7 +44,6 @@ dependencies:
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
   - lz4
   - numba

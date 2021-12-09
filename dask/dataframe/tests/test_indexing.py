@@ -671,3 +671,14 @@ def test_iloc_out_of_order_selection():
     assert a1.name == "C"
     assert b1.name == "A"
     assert c1.name == "B"
+
+
+def test_pandas_nullable_boolean_data_type():
+    s1 = pd.Series([0, 1, 2])
+    s2 = pd.Series([True, False, pd.NA], dtype="boolean")
+
+    ddf1 = dd.from_pandas(s1, npartitions=1)
+    ddf2 = dd.from_pandas(s2, npartitions=1)
+
+    assert_eq(ddf1[ddf2], s1[s2])
+    assert_eq(ddf1.loc[ddf2], s1.loc[s2])
