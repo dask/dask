@@ -1,4 +1,4 @@
-name: Build conda nightly
+name: Build conda nightlies
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   conda:
-    name: Build (and optionally upload) the conda nightly
+    name: Build (and optionally upload) conda nightlies
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -37,12 +37,20 @@ jobs:
           which python
           pip list
           mamba list
-      - name: Build conda package
+      - name: Build dask-core conda package
         run: |
           # suffix for nightly package versions
           export VERSION_SUFFIX=a`date +%y%m%d`
 
-          conda mambabuild continuous_integration/recipe \
+          conda mambabuild continuous_integration/recipes/dask-core \
+                           --no-anaconda-upload \
+                           --output-folder .
+      - name: Build dask conda package
+        run: |
+          # suffix for nightly package versions
+          export VERSION_SUFFIX=a`date +%y%m%d`
+
+          conda mambabuild continuous_integration/recipes/dask \
                            --no-anaconda-upload \
                            --output-folder .
       - name: Upload conda package
