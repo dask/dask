@@ -162,6 +162,8 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
+    open_options : dict, default None
+        Key/value pairs to be passed to ``dd.parquet.utils.open_parquet_file``.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
@@ -242,8 +244,7 @@ def read_parquet(
         Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
         'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
         (for the backend read function), 'arrow_to_pandas' (for controlling the
-        arguments passed to convert from a ``pyarrow.Table.to_pandas()``), and
-        'open_options' (for arguments to ``dd.parquet.utils.open_parquet_file``).
+        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
         Any element of kwargs that is not defined under these top-level keys
         will be passed through to the `engine.read_partitions` classmethod as a
         stand-alone argument (and will be ignored by the engine implementations
