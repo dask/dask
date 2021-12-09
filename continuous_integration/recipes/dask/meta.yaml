@@ -1,0 +1,56 @@
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev') %}
+{% set nightly_version = version + environ.get('VERSION_SUFFIX', '') %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
+
+
+package:
+  name: dask
+  version: {{ nightly_version }}
+
+source:
+  git_url: ../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  noarch: python
+  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script: {{ PYTHON }} -m pip install . --no-deps -vv
+
+requirements:
+  host:
+    - python >=3.7
+  run:
+    - python >=3.7
+    - dask-core {{ nightly_version }}
+    - distributed {{ version }}
+    - cytoolz >=0.8.2
+    - numpy >=1.18
+    - pandas >=1.0
+    - bokeh >=1.0.0,!=2.0.0
+    - jinja2
+
+  run_constrained:
+    - openssl !=1.1.1e
+
+test:
+  imports:
+    - dask
+    - dask.array
+    - dask.bag
+    - dask.bytes
+    - dask.dataframe
+    - dask.dataframe.tseries
+    - dask.delayed
+    - dask.diagnostics
+    - dask.distributed
+    - distributed
+
+about:
+  home: https://dask.org/
+  summary: Parallel PyData with Task Scheduling
+  license: BSD-3-Clause
+  license_file: LICENSE.txt
+  description: |
+    Dask is a flexible parallel computing library for analytics.
+  doc_url: https://dask.org/
+  dev_url: https://github.com/dask/dask
