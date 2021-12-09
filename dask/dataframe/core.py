@@ -5017,31 +5017,16 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def nunique(self, split_every=False):
-        nunique_series_list = []
-        for col_index in range(len(self.columns)):
-            col_series = self.iloc[:, col_index]
-            mode_series = Series.mode(col_series, split_every=split_every)
-            mode_series.name = col_series.name
-            nunique_series_list.append(mode_series)
-
-        name = "series-" + tokenize(*nunique_series_list)
-
-        dsk = {
-            (name, 0): (
-                apply,
-                methods.concat,
-                [[(df._name, 0) for df in nunique_series_list]],
-                {"axis": 1},
-            )
-        }
-
-        meta = methods.concat([df._meta for df in nunique_series_list], axis=1)
-        graph = HighLevelGraph.from_collections(
-            name, dsk, dependencies=nunique_series_list
-        )
-        ddf = new_dd_object(graph, name, meta, divisions=(None, None))
-
-        return ddf
+        nunique_list = []
+        for col in self.columns:
+            nunique = Series.nunique(self[col], split_every=split_every)
+            nunique.name = self[col].name
+            nunique_list.append(nunique)
+        name = "nunique-" + tokenize(*nunique_list)
+        layer = {(name, 0): ([[(df._name, 0) for df in nunique_list]])}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=nunique_list)
+        meta = pd.Series(index=[scalar.name for scalar in nunique_list], dtype=int)
+        return Series(graph, name, meta, (None, None))
 
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False):
