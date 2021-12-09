@@ -212,6 +212,11 @@ def _read_table_from_path(
     open_options = read_kwargs.pop("open_options", {})
     if partition_keys:
         tables = []
+        if open_options == {"use_fsspec_parquet": False}:
+            # If the user is explicitly declining
+            # `fsspec.parquet`, avoid read-ahead
+            # caching (by default)
+            open_options["cache_type"] = "none"
         with open_parquet_file(
             path,
             fs=fs,
