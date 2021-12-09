@@ -23,7 +23,9 @@ Dask has two families of task schedulers:
     run locally or distributed across a cluster
 
 .. image:: images/dask-overview.svg
-   :alt: Dask collections and schedulers
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are
+   then sent to the "Scheduler" for execution. There are two types of schedulers that
+   are described in more detail below.
    :align: center
 
 For different computations you may find better performance with particular scheduler settings.
