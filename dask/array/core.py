@@ -2642,8 +2642,8 @@ class Array(DaskMethodsMixin):
         layer = self.__dask_layers__()[0]
         if optimize_graph:
             graph = self.__dask_optimize__(graph, keys)  # TODO, don't collape graph
-            layer = name = "delayed-" + self.name
-            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
+            layer = "delayed-" + self.name
+            graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         L = ndeepmap(self.ndim, lambda k: Delayed(k, graph, layer=layer), keys)
         return np.array(L, dtype=object)
 
