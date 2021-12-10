@@ -1,5 +1,4 @@
 import copy
-import json
 import pickle
 import threading
 import warnings
@@ -311,22 +310,24 @@ class FastParquetEngine(Engine):
             for c, col in enumerate(columns):
                 if c:
                     col.file_path = None
-                col.meta_data.key_value_metadata = None
+                md = col.meta_data
+                md.key_value_metadata = None
                 # NOTE: Fastparquet may need the null count in the
                 # statistics, so we cannot just set statistics
                 # to none.  Set attributes separately:
-                if col.meta_data.statistics:
-                    col.meta_data.statistics.distinct_count = None
-                    col.meta_data.statistics.max = None
-                    col.meta_data.statistics.min = None
-                    col.meta_data.statistics.max_value = None
-                    col.meta_data.statistics.min_value = None
-                col.meta_data.encodings = None
-                col.meta_data.total_uncompressed_size = None
-                col.meta_data.encoding_stats = None
+                st = md.statistics
+                if st:
+                    st.distinct_count = None
+                    st.max = None
+                    st.min = None
+                    st.max_value = None
+                    st.min_value = None
+                md.encodings = None
+                md.total_uncompressed_size = None
+                md.encoding_stats = None
             row_group.columns = columns
             real_row_groups.append(row_group)
-        return pickle.dumps(real_row_groups)
+        return real_row_groups
 
     @classmethod
     def _make_part(
@@ -512,33 +513,23 @@ class FastParquetEngine(Engine):
         categories = dataset_info["categories"]
 
         columns = None
-        if pf.fmd.key_value_metadata:
-            pandas_md = [
-                x.value
-                for x in pf.fmd.key_value_metadata
-                if x.key in [b"pandas", "pandas"]
-            ]
-        else:
-            pandas_md = []
+        pandas_md = pf.pandas_metadata
 
-        if len(pandas_md) == 0:
-            index_names = []
-            column_names = pf.columns + list(pf.cats)
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
-
-        elif len(pandas_md) == 1:
+        if pandas_md:
             (
                 index_names,
                 column_names,
                 storage_name_mapping,
                 column_index_names,
-            ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
+            ) = _parse_pandas_metadata(pandas_md)
             #  auto-ranges should not be created by fastparquet
             column_names.extend(pf.cats)
 
         else:
-            raise ValueError("File has multiple entries for 'pandas' metadata")
+            index_names = []
+            column_names = pf.columns + list(pf.cats)
+            storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
 
         if index is None and len(index_names) > 0:
             if len(index_names) == 1 and index_names[0] is not None:
@@ -581,20 +572,15 @@ class FastParquetEngine(Engine):
             if getattr(dtypes.get(ind), "numpy_dtype", None):
                 # index does not support masked types
                 dtypes[ind] = dtypes[ind].numpy_dtype
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-
         for cat in categories:
-            if cat in meta:
-                meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
-                    index=meta.index,
-                )
+            if cat in all_columns:
+                dtypes[cat] = pd.CategoricalDtype(categories=[UNKNOWN_CATEGORIES])
 
         for catcol in pf.cats:
-            if catcol in meta.columns:
-                meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
-            elif meta.index.name == catcol:
-                meta.index = meta.index.set_categories(pf.cats[catcol])
+            if catcol in all_columns:
+                dtypes[catcol] = pd.CategoricalDtype(categories=pf.cats[catcol])
+
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
         # Update `dataset_info` and return `meta`
         dataset_info["dtypes"] = dtypes
@@ -649,7 +635,7 @@ class FastParquetEngine(Engine):
         # (if filters are desired)
         if filters:
             # Filters may require us to gather statistics
-            if gather_statistics is False and pf.info.get("partitions", None):
+            if gather_statistics is False and pf.cats:
                 warnings.warn(
                     "Filtering with gather_statistics=False. "
                     "Only partition columns will be filtered correctly."
@@ -831,7 +817,7 @@ class FastParquetEngine(Engine):
                 "fs": fs,
                 "pf": pf,
                 "base_path": base_path,
-                "partitions": pf.info.get("partitions", None),
+                "partitions": list(pf.cats),
             },
         )
 

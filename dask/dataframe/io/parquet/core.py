@@ -1223,6 +1223,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     Used in read_parquet.
     """
     ignore_index_column_intersection = False
+    need_recol = columns is not None
     if columns is None:
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
@@ -1268,10 +1269,12 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
         if index_in_columns:
             meta = meta[columns + index]
         else:
-            meta = meta[columns]
+            if need_recol:
+                meta = meta[columns]
 
     else:
-        meta = meta[list(columns)]
+        if need_recol:
+            meta = meta[list(columns)]
 
     return meta, index, columns
 
