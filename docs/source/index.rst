@@ -30,12 +30,9 @@ Dask emphasizes the following virtues:
 
 
 .. image:: images/dask-overview.svg
-   :alt: Dask collections and schedulers
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
    :width: 100%
    :align: center
-   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are
-   then sent to the "Scheduler" for execution. There are two types of schedulers that
-   are described in more detail below.
 
 See the `dask.distributed documentation (separate website)
 <https://distributed.dask.org/en/latest/>`_ for more technical information

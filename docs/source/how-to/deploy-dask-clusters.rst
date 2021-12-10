@@ -28,10 +28,8 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster.
 
-.. figure:: ../images/dask-overview.svg
-   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which
-   are then sent to the "Scheduler" for execution. There are two types of schedulers
-   that are described in more detail below. 
+.. figure:: ../images/dask-overview_scheduler_border.svg
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
    :class: with-border
    
    High level collections create task graphs which can be executed on a single machine or a cluster.
@@ -39,7 +37,7 @@ Dask has two families of task schedulers:
 .. figure:: ../images/distributed-overview.svg
    :class: with-border
    
-   Dask distributed allows the creation of a distributed cluster for multi-machine computation.
+   Dask distributed uses the distributed scheduler and enables creation of a distributed cluster for multi-machine computation.
 
 If you import Dask, set up a computation, and call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
@@ -77,8 +75,11 @@ Those workers are then allocated physical hardware resources.
 
    An overview of cluster management with Dask distributed.
 
-The following resources explain in more detail how to set up Dask on a
-variety of local and distributed hardware:
+To summarize, you can use the default, single-machine scheduler to use Dask
+on your local machine. If you'd like use a cluster *or* simply take advantage
+of the :doc:`extensive diagnostics <../diagnostics-distributed>`,
+you can use Dask distributed. The following resources explain
+in more detail how to set up Dask on a variety of local and distributed hardware:
 
 - Single Machine:
     - :doc:`Default Scheduler <deploy-dask/single-machine>`: The no-setup default.
