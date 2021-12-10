@@ -1625,7 +1625,8 @@ class Bag(DaskMethodsMixin):
         layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-            layer = None
+            layer = "delayed-" + layer
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
         return [Delayed(k, dsk, layer=layer) for k in keys]
 
     def repartition(self, npartitions=None, partition_size=None):

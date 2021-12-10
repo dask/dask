@@ -1110,16 +1110,20 @@ def test_to_delayed_optimize_graph(tmpdir):
     [d] = b2.to_delayed()
     text = str(dict(d.dask))
     assert text.count("reify") == 1
+    assert d.__dask_layers__() != b2.__dask_layers__()
     [d2] = b2.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(b2.dask)
+    assert d2.__dask_layers__() == b2.__dask_layers__()
     assert d.compute() == d2.compute()
 
     x = b2.sum()
     d = x.to_delayed()
     text = str(dict(d.dask))
+    assert d.__dask_layers__() != x.__dask_layers__()
     assert text.count("reify") == 0
     d2 = x.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(x.dask)
+    assert d2.__dask_layers__() == x.__dask_layers__()
     assert d.compute() == d2.compute()
 
     [d] = b2.to_textfiles(str(tmpdir), compute=False)
