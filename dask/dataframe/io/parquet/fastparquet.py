@@ -4,6 +4,7 @@ import pickle
 import threading
 import warnings
 from collections import OrderedDict, defaultdict
+from contextlib import ExitStack
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,7 @@ from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import natural_sort_key
 from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _meta_from_dtypes
+from ..utils import _meta_from_dtypes, open_input_files
 
 #########################
 # Fastparquet interface #
@@ -36,7 +37,6 @@ from .utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    open_parquet_file,
 )
 
 # Thread lock required to reset row-groups
@@ -1087,22 +1087,31 @@ class FastParquetEngine(Engine):
             fn = pf.row_group_filename(rg)
             fn_rg_map[fn].append(rg)
 
-        # Loop over (fn,row-group) pairs in fn_rg_map
-        for fn, fn_rgs in fn_rg_map.items():
+        # Define default file-opening options
+        open_options = open_options or {}
+        format_options = {}
+        if open_options.get("file_format", "parquet") == "parquet":
+            open_options["file_format"] = "parquet"
+            format_options = {
+                "metadata": pf,
+                "columns": list(set(columns).intersection(pf.columns)),
+                "row_groups": fn_rg_map,
+                "engine": open_options.get("engine", "fastparquet"),
+            }
 
-            # Optimized open of fn
-            with open_parquet_file(
-                fn,
-                fs=fs,
-                metadata=pf,
-                columns=list(set(columns).intersection(pf.columns)),
-                row_groups=fn_rgs,
-                engine="fastparquet",
-                **(open_options or {}),
-            ) as infile:
+        with ExitStack() as stack:
 
-                # Loop over desired row-groups in fn
-                for rg in fn_rgs:
+            for fn, infile in zip(
+                fn_rg_map.keys(),
+                open_input_files(
+                    list(fn_rg_map.keys()),
+                    fs=fs,
+                    context_stack=stack,
+                    format_options=format_options,
+                    **open_options,
+                ),
+            ):
+                for rg in fn_rg_map[fn]:
                     thislen = rg.num_rows
                     parts = {
                         name: (

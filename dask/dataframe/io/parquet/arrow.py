@@ -16,7 +16,7 @@ from ....core import flatten
 from ....delayed import Delayed
 from ....utils import getargspec, natural_sort_key
 from ...utils import clear_known_categories
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
+from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, open_input_files
 from .core import create_metadata_file
 from .utils import (
     Engine,
@@ -27,7 +27,6 @@ from .utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    open_parquet_file,
 )
 
 # Check PyArrow version for feature support
@@ -209,22 +208,29 @@ def _read_table_from_path(
     into tables).
     """
     read_kwargs = kwargs.get("read", {}).copy()
+
+    # Define default file-opening options
     open_options = read_kwargs.pop("open_options", {})
+    format_options = {}
+    if open_options.get("file_format", "parquet") == "parquet":
+        open_options["file_format"] = "parquet"
+        format_options = {
+            "columns": columns,
+            "row_groups": {path: None if row_groups == [None] else row_groups},
+            "engine": open_options.get("engine", "pyarrow"),
+        }
+    else:
+        # Pyarrow is faster with
+        open_options["cache_type"] = open_options.get("cache_type", "none")
+
     if partition_keys:
         tables = []
-        if open_options == {"use_fsspec_parquet": False}:
-            # If the user is explicitly declining
-            # `fsspec.parquet`, avoid read-ahead
-            # caching (by default)
-            open_options["cache_type"] = "none"
-        with open_parquet_file(
-            path,
+        with open_input_files(
+            [path],
             fs=fs,
-            columns=columns,
-            row_groups=row_groups,
-            engine="pyarrow",
+            format_options=format_options,
             **open_options,
-        ) as fil:
+        )[0] as fil:
             for rg in row_groups:
                 piece = pq.ParquetDatasetPiece(
                     path,
@@ -241,14 +247,12 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with open_parquet_file(
-            path,
+        with open_input_files(
+            [path],
             fs=fs,
-            columns=columns,
-            row_groups=row_groups,
-            engine="pyarrow",
+            format_options=format_options,
             **open_options,
-        ) as fil:
+        )[0] as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
                     columns=columns,

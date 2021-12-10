@@ -1,7 +1,10 @@
 import json
 from uuid import uuid4
 
+import fsspec
 import pandas as pd
+from fsspec.implementations.local import LocalFileSystem
+from packaging.version import parse as parse_version
 
 
 def _get_pyarrow_dtypes(schema, categories):
@@ -99,3 +102,83 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
 def _guid():
     """Simple utility function to get random hex string"""
     return uuid4().hex
+
+
+def _set_context(obj, stack):
+    """Helper function to place an object on a context stack"""
+    if stack is None:
+        return obj
+    return stack.enter_context(obj)
+
+
+def open_input_files(
+    paths,
+    fs=None,
+    file_format="parquet",
+    context_stack=None,
+    mode="rb",
+    open_cb=None,
+    format_options=None,
+    **kwargs,
+):
+    """Return a list of open-file objects given
+    a list of input-file paths.
+
+    Parameters
+    ----------
+    paths : list(str)
+        Remote or local path of the parquet file
+    fs : fsspec object, optional
+        File-system instance to use for file handling
+    file_format : str, optional
+        Lable for format-specific file-opening function to use.
+        Supported options are currently 'parquet' and `None`. If
+        'parquet' is specified, `fsspec.parquet.open_parquet_file`
+        will be used for remote storage.
+    context_stack : contextlib.ExitStack, Optional
+        Context manager to use for open files.
+    mode : str, optional
+        Access mode needed by open file
+    open_cb : callable, optional
+        Callable function to use for file opening. If this argument
+        is specified, ``open_cb(path)`` will be returned, and all
+        other options will be ignored.
+    format_options : dict, optional
+        Dictionary of key-word arguments to pass to format-specific
+        open functions only.
+    **kwargs :
+        Key-word arguments to pass to the appropriate open function
+    """
+
+    # Use call-back function if specified
+    if open_cb is not None:
+        return [_set_context(open_cb(path), context_stack) for path in paths]
+
+    # Check if we are using `fsspec.parquet`
+    if (
+        file_format == "parquet"
+        and fs is not None
+        and not isinstance(fs, LocalFileSystem)
+        and parse_version(fsspec.__version__) > parse_version("2021.11.0")
+    ):
+        kwargs.update((format_options or {}).copy())
+        row_groups = kwargs.pop("row_groups", {})
+        return [
+            _set_context(
+                fsspec.parquet.open_parquet_file(
+                    path,
+                    fs=fs,
+                    mode=mode,
+                    row_groups=row_groups.get(path, None),
+                    **kwargs,
+                ),
+                context_stack,
+            )
+            for path in paths
+        ]
+    elif fs is not None:
+        return [
+            _set_context(fs.open(path, mode=mode, **kwargs), context_stack)
+            for path in paths
+        ]
+    return [_set_context(open(path, mode=mode), context_stack) for path in paths]

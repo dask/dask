@@ -489,7 +489,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
 
         # Passing `open_options` kwargs will fail
         # if you try to modify the engine
-        with pytest.raises(TypeError):
+        with pytest.raises(ValueError):
             dd.read_parquet(
                 url,
                 engine=engine,

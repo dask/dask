@@ -163,7 +163,7 @@ def read_parquet(
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     open_options : dict, default None
-        Key/value pairs to be passed to ``dd.parquet.utils.open_parquet_file``.
+        Key/value pairs to be passed to ``dd.io.utils.open_input_files``.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
