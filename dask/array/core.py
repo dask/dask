@@ -618,6 +618,7 @@ def map_blocks(
 
     The keys to the ``block_info`` dictionary indicate which is the input and
     output Dask array:
+
     - **Input Dask array(s):** ``block_info[0]`` refers to the first input Dask array.
       The dictionary key is ``0`` because that is the argument index corresponding
       to the first input Dask array.
@@ -632,6 +633,7 @@ def map_blocks(
       The output chunk shape and dtype may may be different than the input chunks.
 
     For each dask array, ``block_info`` describes:
+
     - ``shape``: the shape of the full Dask array,
     - ``num-chunks``: the number of chunks of the full array in each dimension,
     - ``chunk-location``: the chunk location (for example the fourth chunk over
@@ -641,6 +643,7 @@ def map_blocks(
 
     In addition to these, there are two extra parameters described by
     ``block_info`` for the output array (in ``block_info[None]``):
+
     - ``chunk-shape``: the output chunk shape, and
     - ``dtype``: the output dtype.
 
