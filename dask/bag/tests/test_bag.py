@@ -1119,7 +1119,7 @@ def test_to_delayed_optimize_graph(tmpdir):
     x = b2.sum()
     d = x.to_delayed()
     text = str(dict(d.dask))
-    assert d.__dask_layers__() != x.__dask_layers__()
+    assert d.__dask_layers__() == x.__dask_layers__()
     assert text.count("reify") == 0
     d2 = x.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(x.dask)
