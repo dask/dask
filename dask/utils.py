@@ -21,8 +21,6 @@ from threading import Lock
 from typing import TypeVar
 from weakref import WeakValueDictionary
 
-import pandas as pd
-
 from .core import get_deps
 
 K = TypeVar("K")
@@ -1270,7 +1268,10 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """Looks like a Pandas DataFrame"""
-    if isinstance(df, pd.DataFrame):
+    if (df.__class__.__module__, df.__class__.__name__) == (
+        "pandas.core.frame",
+        "DataFrame",
+    ):
         # fast exec for most likely input
         return True
     typ = df.__class__
