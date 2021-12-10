@@ -162,19 +162,19 @@ def open_input_files(
         and parse_version(fsspec.__version__) > parse_version("2021.11.0")
     ):
         kwargs.update((format_options or {}).copy())
-        row_groups = kwargs.pop("row_groups", {})
+        row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
         return [
             _set_context(
                 fsspec.parquet.open_parquet_file(
                     path,
                     fs=fs,
                     mode=mode,
-                    row_groups=row_groups.get(path, None),
+                    row_groups=rgs,
                     **kwargs,
                 ),
                 context_stack,
             )
-            for path in paths
+            for path, rgs in zip(paths, row_groups)
         ]
     elif fs is not None:
         return [

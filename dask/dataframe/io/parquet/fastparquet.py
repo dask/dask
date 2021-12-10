@@ -1095,7 +1095,7 @@ class FastParquetEngine(Engine):
             format_options = {
                 "metadata": pf,
                 "columns": list(set(columns).intersection(pf.columns)),
-                "row_groups": fn_rg_map,
+                "row_groups": [rgs for rgs in fn_rg_map.values()],
                 "engine": open_options.get("engine", "fastparquet"),
             }
 

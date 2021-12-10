@@ -216,7 +216,7 @@ def _read_table_from_path(
         open_options["file_format"] = "parquet"
         format_options = {
             "columns": columns,
-            "row_groups": {path: None if row_groups == [None] else row_groups},
+            "row_groups": row_groups if row_groups == [None] else [row_groups],
             "engine": open_options.get("engine", "pyarrow"),
         }
     else:
