@@ -127,12 +127,12 @@ class FastParquetEngine(Engine):
         """Organize row-groups by file."""
 
         # Get partitioning metadata
-        pqpartitions = pf.info.get("partitions", None)
+        pqpartitions = list(pf.cats)
 
         # Fastparquet does not use a natural sorting
         # order for partitioned data. Re-sort by path
         if (
-            pqpartitions is not None
+            pqpartitions
             and aggregation_depth
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
@@ -170,7 +170,7 @@ class FastParquetEngine(Engine):
             # in the same file. This is not strictly required by the
             # parquet spec.
             fp = row_group.columns[0].file_path
-            fpath = fp if isinstance(fp, str) else fp.decode()
+            fpath = fp.decode() if isinstance(fp, bytes) else fp
             if fpath is None:
                 if not has_metadata_file:
                     # There doesn't need to be a file_path if the
