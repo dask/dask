@@ -3384,8 +3384,10 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and "distributed" in config.get(
-            "scheduler", ""
+        if (
+            isinstance(z.store, (dict, MutableMapping))
+            and not callable(config.get("scheduler", ""))
+            and "distributed" in config.get("scheduler", "")
         ):
             raise RuntimeError(
                 "Cannot store into in memory Zarr Array using "
