@@ -4729,8 +4729,8 @@ def test_nunique():
         {"x": ["a", "a", "c"], "y": [None, 1, 2], "c": np.arange(0, 1, 0.4)}
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf["y"].nunique().compute(), df["y"].nunique())
-    assert_eq(ddf.nunique().compute(), df.nunique())
+    assert_eq(ddf["y"].nunique(), df["y"].nunique())
+    assert_eq(ddf.nunique(), df.nunique())
 
 
 def test_simple_map_partitions():

@@ -5094,16 +5094,16 @@ class DataFrame(_Frame):
             nunique.name = self[col].name
             nunique_list.append(nunique)
         name = "series-" + tokenize(*nunique_list)
-        layer = {
+        dsk = {
             (name, 0): (
                 apply,
                 pd.Series,
                 [[(s._name, 0) for s in nunique_list]],
-                {"index": [s.name for s in nunique_list]},
+                {"index": self.columns},
             )
         }
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=nunique_list)
-        meta = pd.Series(index=[scalar.name for scalar in nunique_list], dtype=int)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=nunique_list)
+        meta = self._meta_nonempty.nunique()
         return Series(graph, name, meta, (None, None))
 
     @derived_from(pd.DataFrame)
