@@ -132,7 +132,10 @@ class ArrayOverlapLayer(Layer):
         self.chunks = chunks
         self.numblocks = numblocks
         self.token = token
-        self._cached_keys = None
+        self._cached_input_keys = None
+        self._cached_output_keys = None
+        self._interior_keys = None
+        self._expand_keys_func = None
 
     def __repr__(self):
         return f"ArrayOverlapLayer<name='{self.name}'"
@@ -154,18 +157,7 @@ class ArrayOverlapLayer(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        axes = self.axes
-        chunks = self.chunks
-        dask_keys = self._dask_keys()
-
-        dims = list(map(len, chunks))
-        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
-
-        # Make keys for each of the surrounding sub-arrays
-        interior_keys = toolz.pipe(
-            dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
-        )
-
+        interior_keys, _ = self._keys_from_overlap_operation()
         n_tasks = 0
         for k in interior_keys:
             if all([isinstance(i, int) for i in k]):
@@ -178,11 +170,25 @@ class ArrayOverlapLayer(Layer):
         return hasattr(self, "_cached_dict")
 
     def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
+        if self._cached_output_keys is not None:
+            return self._cached_output_keys
 
-    def _dask_keys(self):
-        if self._cached_keys is not None:
-            return self._cached_keys
+        getitem_name = "getitem-" + self.token
+        overlap_name = "overlap-" + self.token
+        interior_keys, _ = self._keys_from_overlap_operation()
+        interior_slices = {}
+        overlap_blocks = {}
+        for k in interior_keys:
+            interior_slices[(getitem_name,) + k] = None
+            if all([isinstance(i, int) for i in k]):
+                overlap_blocks[(overlap_name,) + k] = None
+        output_keys = toolz.merge(interior_slices, overlap_blocks).keys()
+        self._cached_output_keys = output_keys  # cache output_keys
+        return output_keys
+
+    def _keys_from_input_dependencies(self):
+        if self._cached_input_keys is not None:
+            return self._cached_input_keys
 
         name, chunks, numblocks = self.name, self.chunks, self.numblocks
 
@@ -196,16 +202,30 @@ class ArrayOverlapLayer(Layer):
                 result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
             return result
 
-        self._cached_keys = result = keys()
+        self._cached_input_keys = result = keys()
         return result
+
+    def _keys_from_overlap_operation(self):
+        if self._interior_keys is not None and self._expand_keys_func is not None:
+            return self._interior_keys, self._expand_keys_func
+
+        axes = self.axes
+        chunks = self.chunks
+        dask_keys = self._keys_from_input_dependencies()
+
+        dims = list(map(len, chunks))
+        expand_keys_func = partial(_expand_keys_around_center, dims=dims, axes=axes)
+
+        # Make keys for each of the surrounding sub-arrays
+        interior_keys = toolz.pipe(
+            dask_keys, flatten, map(expand_keys_func), map(flatten), toolz.concat, list
+        )
+        return interior_keys, expand_keys_func
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple overlap operation."""
         axes = self.axes
-        chunks = self.chunks
         name = self.name
-        dask_keys = self._dask_keys()
-
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
 
@@ -217,13 +237,7 @@ class ArrayOverlapLayer(Layer):
             # Not running on distributed scheduler - Use explicit functions
             from dask.array.core import concatenate3
 
-        dims = list(map(len, chunks))
-        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
-
-        # Make keys for each of the surrounding sub-arrays
-        interior_keys = toolz.pipe(
-            dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
-        )
+        interior_keys, expand_keys_func = self._keys_from_overlap_operation()
         interior_slices = {}
         overlap_blocks = {}
         for k in interior_keys:
@@ -234,7 +248,7 @@ class ArrayOverlapLayer(Layer):
                 interior_slices[(getitem_name,) + k] = (name,) + k
                 overlap_blocks[(overlap_name,) + k] = (
                     concatenate3,
-                    (concrete, expand_key2((None,) + k, name=getitem_name)),
+                    (concrete, expand_keys_func((None,) + k, name=getitem_name)),
                 )
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
