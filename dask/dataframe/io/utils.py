@@ -76,7 +76,7 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
     data = {
         c: pd.Series([], dtype=file_dtypes.get(c, "int64")) for c in to_read_columns
     }
-    indexes = [data.pop(c) for c in index_cols]
+    indexes = [data.pop(c) for c in index_cols or []]
     if len(indexes) == 0:
         index = None
     elif len(index_cols) == 1:
