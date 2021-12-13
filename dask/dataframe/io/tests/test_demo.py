@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 import dask
 import dask.dataframe as dd
@@ -110,13 +109,6 @@ def test_no_overlaps():
         < df.get_partition(i + 1).index.min().compute()
         for i in range(df.npartitions - 2)
     )
-
-
-@pytest.mark.network
-def test_daily_stock_deprecated():
-    pytest.importorskip("pandas_datareader", minversion="0.10.0")
-    with pytest.warns(FutureWarning, match="deprecated"):
-        dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
 
 
 def test_make_timeseries_keywords():
