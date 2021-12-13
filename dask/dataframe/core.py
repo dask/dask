@@ -5022,8 +5022,15 @@ class DataFrame(_Frame):
             nunique = Series.nunique(self[col], split_every=split_every)
             nunique.name = self[col].name
             nunique_list.append(nunique)
-        name = "nunique-" + tokenize(*nunique_list)
-        layer = {(name, 0): ([(s._name, 0) for s in nunique_list])}
+        name = "series-" + tokenize(*nunique_list)
+        layer = {
+            (name, 0): (
+                apply,
+                pd.Series,
+                [[(s._name, 0) for s in nunique_list]],
+                {"index": [s.name for s in nunique_list]},
+            )
+        }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=nunique_list)
         meta = pd.Series(index=[scalar.name for scalar in nunique_list], dtype=int)
         return Series(graph, name, meta, (None, None))

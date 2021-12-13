@@ -4721,12 +4721,9 @@ def test_nunique():
     df = pd.DataFrame(
         {"x": ["a", "a", "c"], "y": [None, 1, 2], "c": np.arange(0, 1, 0.4)}
     )
-
     ddf = dd.from_pandas(df, npartitions=2)
-
-    dask_series = ddf.nunique()
-    pd_series = df.nunique()
-    assert_eq(dask_series, pd_series)
+    assert_eq(ddf["y"].nunique().compute(), df["y"].nunique())
+    assert_eq(ddf.nunique().compute(), df.nunique())
 
 
 def test_simple_map_partitions():
