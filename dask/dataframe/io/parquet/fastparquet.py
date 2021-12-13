@@ -1196,9 +1196,7 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def write_metadata(
-        cls, parts, fmd, fs, path, append=False, metadata=None, **kwargs
-    ):
+    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
         _meta = copy.copy(fmd)
         rgs = fmd.row_groups
         if parts:
@@ -1210,8 +1208,6 @@ class FastParquetEngine(Engine):
                     else:
                         rgs.append(rg)
             _meta.row_groups = rgs
-            if metadata:
-                _meta
             fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, _meta, open_with=fs.open, no_row_groups=False
