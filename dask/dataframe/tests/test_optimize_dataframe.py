@@ -62,8 +62,8 @@ def test_optimization_requires_hlg():
     assert isinstance(s_from_lowlevel.dask, HighLevelGraph)
     # ^ `_Frame.__init__` converts to HLG
     assert tuple(s_from_lowlevel.dask.layers) == s_from_lowlevel.__dask_layers__()
-    (df_opt,) = dask.optimize(s_from_lowlevel)
-    assert_eq(s, df_opt)
+    (s_opt,) = dask.optimize(s_from_lowlevel)
+    assert_eq(s, s_opt)
 
     # Ensure Scalars constructed from low-level graphs still work
     sc = s.sum()
@@ -72,5 +72,5 @@ def test_optimization_requires_hlg():
     assert isinstance(sc_from_lowlevel.dask, HighLevelGraph)
     # ^ `Scalar.__init__` converts to HLG
     assert tuple(sc_from_lowlevel.dask.layers) == sc_from_lowlevel.__dask_layers__()
-    (df_opt,) = dask.optimize(sc_from_lowlevel)
-    assert_eq(sc, df_opt)
+    (sc_opt,) = dask.optimize(sc_from_lowlevel)
+    assert_eq(sc, sc_opt)
