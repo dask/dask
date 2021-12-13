@@ -3,7 +3,7 @@ import pandas as pd
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ...utils import _deprecated, random_state_data
+from ...utils import random_state_data
 from ..core import DataFrame, tokenize
 
 __all__ = ["make_timeseries"]
@@ -263,94 +263,3 @@ def generate_day(
     return pd.DataFrame(
         {"open": rs.first(), "close": rs.last(), "high": rs.max(), "low": rs.min()}
     )
-
-
-@_deprecated(use_instead="dask.datasets.timeseries for generating example DataFrames")
-def daily_stock(
-    symbol,
-    start,
-    stop,
-    freq=pd.Timedelta(seconds=1),
-    data_source="yahoo",
-    random_state=None,
-):
-    """Create artificial stock data
-
-    This data matches daily open/high/low/close values from Yahoo! Finance, but
-    interpolates values within each day with random values.  This makes the
-    results look natural without requiring the downloading of large volumes of
-    data.  This is useful for education and benchmarking.
-
-    Parameters
-    ----------
-    symbol: string
-        A stock symbol like "GOOG" or "F"
-    start: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    stop: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    freq: timedelta, str, or pd.Timedelta
-        The frequency of sampling
-    data_source: str, optional
-        defaults to 'yahoo'.  See pandas_datareader.data.DataReader for options
-    random_state: int, np.random.RandomState object
-        random seed, defaults to randomly chosen
-
-    Examples
-    --------
-    >>> import dask.dataframe as dd  # doctest: +SKIP
-    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
-    >>> df  # doctest: +SKIP
-    Dask DataFrame Structure:
-                           close     high      low     open
-    npartitions=252
-    2010-01-04 09:00:00  float64  float64  float64  float64
-    2010-01-05 09:00:00      ...      ...      ...      ...
-    ...                      ...      ...      ...      ...
-    2010-12-31 09:00:00      ...      ...      ...      ...
-    2010-12-31 16:00:00      ...      ...      ...      ...
-    Dask Name: from-delayed, 504 tasks
-
-    >>> df.head()  # doctest: +SKIP
-                           close     high      low     open
-    timestamp
-    2010-01-04 09:00:00  626.944  626.964  626.944  626.951
-    2010-01-04 09:00:01  626.906  626.931  626.906  626.931
-    2010-01-04 09:00:02  626.901  626.911  626.901  626.905
-    2010-01-04 09:00:03  626.920  626.920  626.905  626.905
-    2010-01-04 09:00:04  626.894  626.917  626.894  626.906
-    """
-    from pandas_datareader import data
-
-    df = data.DataReader(symbol, data_source, start, stop)
-    npartitions = len(df)
-    if random_state is None:
-        # Get random integer seed for each partition. We can
-        # call `random_state_data` in `GenerateDay`
-        seeds = np.random.randint(2e9, size=npartitions)
-    else:
-        seeds = random_state_data(npartitions, random_state=random_state)
-
-    label = "daily-stock-"
-    name = label + tokenize(symbol, start, stop, freq, data_source, seeds)
-
-    divisions = []
-    inputs = []
-    for i, seed in zip(range(npartitions), seeds):
-        s = df.iloc[i]
-        if s.isnull().any():
-            continue
-        inputs.append((s, seed))
-        divisions.append(s.name + pd.Timedelta(hours=9))
-
-    layer = DataFrameIOLayer(
-        name=name,
-        columns=None,
-        inputs=inputs,
-        io_func=GenerateDay(freq),
-        label=label,
-    )
-
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
-    return DataFrame(graph, name, meta, divisions)
