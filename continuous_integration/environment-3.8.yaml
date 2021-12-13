@@ -58,7 +58,6 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - pandas-datareader
   - python-xxhash
   - mmh3
   - jinja2
