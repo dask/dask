@@ -4134,8 +4134,7 @@ def test_dataframe_mode():
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
     ddf = dd.from_pandas(df, npartitions=1)
-    # check_index=False should be removed once https://github.com/pandas-dev/pandas/issues/33321 is resolved.
-    assert_eq(ddf.mode(), df.mode(), check_index=False)
+    assert_eq(ddf.mode(), df.mode())
 
 
 def test_datetime_loc_open_slicing():
