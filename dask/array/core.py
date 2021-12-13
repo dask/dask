@@ -487,6 +487,10 @@ def map_blocks(
     ----------
     func : callable
         Function to apply to every block in the array.
+        If ``func`` accepts ``block_info=`` or ``block_id=``
+        as keyword arguments, these will be passed dictionaries
+        containing information about input and output chunks/arrays
+        during computation. See examples for details.
     args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
@@ -590,8 +594,10 @@ def map_blocks(
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
             69, 799,  79, 899,  89, 999,  99])
 
-    Your block function get information about where it is in the array by
+    Your block function can get information about where it is in the array by
     accepting a special ``block_info`` or ``block_id`` keyword argument.
+    During computation, they will contain information about each of the input
+    and output chunks (and dask arrays) relevant to each call of ``func``.
 
     >>> def func(block_info=None):
     ...     pass
@@ -610,13 +616,36 @@ def map_blocks(
             'chunk-shape': (100,),
             'dtype': dtype('float64')}}
 
-    For each argument and keyword arguments that are dask arrays (the positions
-    of which are the first index), you will receive the shape of the full
-    array, the number of chunks of the full array in each dimension, the chunk
-    location (for example the fourth chunk over in the first dimension), and
-    the array location (for example the slice corresponding to ``40:50``). The
-    same information is provided for the output, with the key ``None``, plus
-    the shape and dtype that should be returned.
+    The keys to the ``block_info`` dictionary indicate which is the input and
+    output Dask array:
+
+    - **Input Dask array(s):** ``block_info[0]`` refers to the first input Dask array.
+      The dictionary key is ``0`` because that is the argument index corresponding
+      to the first input Dask array.
+      In cases where multiple Dask arrays have been passed as input to the function,
+      you can access them with the number corresponding to the input argument,
+      eg: ``block_info[1]``, ``block_info[2]``, etc.
+      (Note that if you pass multiple Dask arrays as input to map_blocks,
+      the arrays must match each other by having matching numbers of chunks,
+      along corresponding dimensions up to broadcasting rules.)
+    - **Output Dask array:** ``block_info[None]`` refers to the output Dask array,
+      and contains information about the output chunks.
+      The output chunk shape and dtype may may be different than the input chunks.
+
+    For each dask array, ``block_info`` describes:
+
+    - ``shape``: the shape of the full Dask array,
+    - ``num-chunks``: the number of chunks of the full array in each dimension,
+    - ``chunk-location``: the chunk location (for example the fourth chunk over
+      in the first dimension), and
+    - ``array-location``: the array location within the full Dask array
+      (for example the slice corresponding to ``40:50``).
+
+    In addition to these, there are two extra parameters described by
+    ``block_info`` for the output array (in ``block_info[None]``):
+
+    - ``chunk-shape``: the output chunk shape, and
+    - ``dtype``: the output dtype.
 
     These features can be combined to synthesize an array from scratch, for
     example:
@@ -672,7 +701,12 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
     if token:
-        warnings.warn("The token= keyword to map_blocks has been moved to name=")
+        warnings.warn(
+            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
+            "Please use `name=` instead as the `token=` keyword will be removed "
+            "in a future release.",
+            category=FutureWarning,
+        )
         name = token
 
     name = f"{name or funcname(func)}-{tokenize(func, dtype, chunks, drop_axis, new_axis, *args, **kwargs)}"
