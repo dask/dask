@@ -725,6 +725,38 @@ def test_object_reduction(method):
     assert result == 1
 
 
+@pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+def test_empty_chunk_nanmin_nanmax(func):
+    # see https://github.com/dask/dask/issues/8352
+    x = np.arange(10).reshape(2, 5)
+    d = da.from_array(x, chunks=2)
+    x = x[x > 4]
+    d = d[d > 4]
+    block_lens = np.array([len(x.compute()) for x in d.blocks])
+    assert 0 in block_lens
+    with pytest.raises(ValueError) as err:
+        getattr(da, func)(d)
+    assert "Arrays chunk sizes are unknown" in str(err)
+    d = d.compute_chunk_sizes()
+    assert_eq(getattr(da, func)(d), getattr(np, func)(x))
+
+
+@pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+def test_empty_chunk_nanmin_nanmax_raise(func):
+    # see https://github.com/dask/dask/issues/8352
+    x = np.arange(10).reshape(2, 5)
+    d = da.from_array(x, chunks=2)
+    d = d[d > 9]
+    x = x[x > 9]
+    d = d.compute_chunk_sizes()
+    with pytest.raises(ValueError) as err_np:
+        getattr(np, func)(x)
+    with pytest.raises(ValueError) as err_da:
+        d = getattr(da, func)(d)
+        d.compute()
+    assert str(err_np.value) == str(err_da.value)
+
+
 def test_mean_func_does_not_warn():
     # non-regression test for https://github.com/pydata/xarray/issues/5151
     xr = pytest.importorskip("xarray")

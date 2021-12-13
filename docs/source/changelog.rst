@@ -1,14 +1,84 @@
 Changelog
 =========
 
+2021.12.0
+---------
+
+Released on December 10, 2021
+
+New Features
+^^^^^^^^^^^^
+- Add ``Series`` and ``Index`` ``is_monotonic*`` methods (:pr:`8304`) `Daniel Mesejo-León`_
+
+Enhancements
+^^^^^^^^^^^^
+- Blockwise ``map_partitions`` with ``partition_info`` (:pr:`8310`) `Gabe Joseph`_
+- Better error message for length of array with unknown chunk sizes (:pr:`8436`) `Doug Davis`_
+- Use ``by`` instead of ``index`` internally on the Groupby class (:pr:`8441`) `Julia Signell`_
+- Allow custom sort functions for ``sort_values`` (:pr:`8345`) `Charles Blackmon-Luca`_
+- Add warning to ``read_parquet`` when statistics and partitions are misaligned (:pr:`8416`) `Richard (Rick) Zamora`_
+- Support ``where`` argument in ufuncs (:pr:`8253`) `mihir`_
+- Make visualize more consistent with compute (:pr:`8328`) `JSKenyon`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``map_blocks`` not using own arguments in ``name`` generation (:pr:`8462`) `David Hoese`_
+- Fix for index error with reading empty parquet file (:pr:`8410`) `Sarah Charlotte Johnson`_
+- Fix nullable-dtype error when writing partitioned parquet data (:pr:`8400`) `Richard (Rick) Zamora`_
+- Fix CSV header bug (:pr:`8413`) `Richard (Rick) Zamora`_
+- Fix empty chunk causes exception in ``nanmin``/``nanmax`` (:pr:`8375`) `Boaz Mohar`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``token`` keyword argument to ``map_blocks`` (:pr:`8464`) `James Bourbeau`_
+- Deprecation warning for default value of boundary kwarg in ``map_overlap`` (:pr:`8397`) `Genevieve Buckley`_
+
+Documentation
+^^^^^^^^^^^^^
+- Clarify ``block_info`` documentation (:pr:`8425`) `Genevieve Buckley`_
+- Output from alt text sprint (:pr:`8456`) `Sarah Charlotte Johnson`_
+- Update talks and presentations (:pr:`8370`) `Naty Clementi`_
+- Update Anaconda link in "Paid support" section of docs (:pr:`8427`) `Martin Durant`_
+- Fixed broken ``dask-gateway`` link in ``ecosystem.rst`` (:pr:`8424`) `ofirr`_
+- Fix CuPy doctest error (:pr:`8412`) `Genevieve Buckley`_
+
+Maintenance
+^^^^^^^^^^^
+- Bump Bokeh min version to 2.1.1 (:pr:`8431`) `Bryan Van de Ven`_
+- Fix following ``fsspec=2021.11.1`` release (:pr:`8428`) `Martin Durant`_
+- Add ``dask/ml.py`` to pytest exclude list (:pr:`8414`) `Genevieve Buckley`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.02`` (:pr:`8394`)
+- Unpin ``graphviz``  and improve package management in environment-3.7 (:pr:`8411`) `Julia Signell`_
+
+
+2021.11.2
+---------
+
+Released on November 19, 2021
+
+- Only run gpuCI bump script daily (:pr:`8404`) `Charles Blackmon-Luca`_
+- Actually ignore index when asked in ``assert_eq`` (:pr:`8396`) `Gabe Joseph`_
+- Ensure single-partition join ``divisions`` is ``tuple`` (:pr:`8389`) `Charles Blackmon-Luca`_
+- Try to make divisions behavior clearer (:pr:`8379`) `Julia Signell`_
+- Fix typo in ``set_index`` ``partition_size`` parameter description (:pr:`8384`) `FredericOdermatt`_
+- Use ``blockwise`` in ``single_partition_join`` (:pr:`8341`) `Gabe Joseph`_
+- Use more explicit keyword arguments (:pr:`8354`) `Boaz Mohar`_
+- Fix ``.loc`` of DataFrame with nullable boolean ``dtype`` (:pr:`8368`) `Marco Rossi`_
+- Parameterize shuffle implementation in tests (:pr:`8250`) `Ian Rose`_
+- Remove some doc build warnings (:pr:`8369`) `Boaz Mohar`_
+- Include properties in array API docs (:pr:`8356`) `Julia Signell`_
+- Fix Zarr for upstream (:pr:`8367`) `Julia Signell`_
+- Pin ``graphviz`` to avoid issue with windows and Python 3.7 (:pr:`8365`) `Julia Signell`_
+- Import ``graphviz.Diagraph`` from top of module, not from ``dot`` (:pr:`8363`) `Julia Signell`_
+
+
 2021.11.1
 ---------
 
 Released on November 8, 2021
 
+Patch release to update ``distributed`` dependency to version ``2021.11.1``.
 
-Changelog
-=========
 
 2021.11.0
 ---------
@@ -4660,3 +4730,7 @@ Other
 .. _`Matthew Powers`: https://github.com/MrPowers
 .. _`Vyas Ramasubramani`: https://github.com/vyasr
 .. _`Ayush Dattagupta`: https://github.com/ayushdg
+.. _`FredericOdermatt`: https://github.com/FredericOdermatt
+.. _`mihir`: https://github.com/ek234
+.. _`Sarah Charlotte Johnson`: https://github.com/scharlottej13
+.. _`ofirr`: https://github.com/ofirr

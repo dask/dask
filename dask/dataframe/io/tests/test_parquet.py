@@ -685,6 +685,13 @@ def test_append_with_partition(tmpdir, engine):
         }
     )
     df1.index.name = "index"
+
+    # Check that nullable dtypes work
+    # (see: https://github.com/dask/dask/issues/8373)
+    df0["lat"] = df0["lat"].astype("Int64")
+    df1["lat"].iloc[0] = np.nan
+    df1["lat"] = df1["lat"].astype("Int64")
+
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
     dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
@@ -2729,6 +2736,15 @@ def test_optimize_and_not(tmpdir):
     ]
     for a, b in zip(result, expected):
         assert_eq(a, b)
+
+
+@write_read_engines()
+def test_chunksize_empty(tmpdir, write_engine, read_engine):
+    df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
+    ddf1 = dd.from_pandas(df, npartitions=1)
+    ddf1.to_parquet(tmpdir, engine=write_engine)
+    ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+    assert_eq(ddf1, ddf2, check_index=False)
 
 
 @PYARROW_MARK

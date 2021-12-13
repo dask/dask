@@ -1,4 +1,3 @@
-import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -22,11 +21,10 @@ from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
-from ..blockwise import Blockwise, blockwise, subs
+from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..optimization import SubgraphCallable
 from ..utils import (
     IndexCallable,
     M,
@@ -3766,9 +3764,35 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_increasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_increasing_chunk,
+            aggregate=methods.monotonic_increasing_aggregate,
+            meta=bool,
+            token="monotonic_increasing",
+        )
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_decreasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_decreasing_chunk,
+            aggregate=methods.monotonic_decreasing_aggregate,
+            meta=bool,
+            token="monotonic_decreasing",
+        )
+
 
 class Index(Series):
-
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
@@ -3809,11 +3833,19 @@ class Index(Series):
         "rename_categories",
     }
 
+    _monotonic_attributes = {
+        "is_monotonic",
+        "is_monotonic_increasing",
+        "is_monotonic_decreasing",
+    }
+
     def __getattr__(self, key):
         if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
+        elif key in self._monotonic_attributes:
+            return getattr(self, key)
         raise AttributeError("'Index' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -3938,6 +3970,21 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic(self):
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_increasing(self):
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_decreasing(self):
+        return super().is_monotonic_decreasing
 
 
 class DataFrame(_Frame):
@@ -4221,7 +4268,14 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def sort_values(
-        self, by, npartitions=None, ascending=True, na_position="last", **kwargs
+        self,
+        by,
+        npartitions=None,
+        ascending=True,
+        na_position="last",
+        sort_function=None,
+        sort_function_kwargs=None,
+        **kwargs,
     ):
         """Sort the dataset by a single column.
 
@@ -4240,6 +4294,13 @@ class DataFrame(_Frame):
         na_position: {'last', 'first'}, optional
             Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
             Defaults to 'last'.
+        sort_function: function, optional
+            Sorting function to use when sorting underlying partitions.
+            If None, defaults to ``M.sort_values`` (the partition library's
+            implementation of ``sort_values``).
+        sort_function_kwargs: dict, optional
+            Additional keyword arguments to pass to the partition sorting function.
+            By default, ``by``, ``ascending``, and ``na_position`` are provided.
 
         Examples
         --------
@@ -4247,16 +4308,26 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
+        sort_kwargs = {
+            "by": by,
+            "ascending": ascending,
+            "na_position": na_position,
+        }
+        if sort_function is None:
+            sort_function = M.sort_values
+        if sort_function_kwargs is not None:
+            sort_kwargs.update(sort_function_kwargs)
+
         if self.npartitions == 1:
-            return self.map_partitions(
-                M.sort_values, by, ascending=ascending, na_position=na_position
-            )
+            return self.map_partitions(sort_function, **sort_kwargs)
         return sort_values(
             self,
             by,
             ascending=ascending,
             npartitions=npartitions,
             na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_kwargs,
             **kwargs,
         )
 
@@ -5877,9 +5948,6 @@ def map_partitions(
     name = kwargs.pop("token", None)
     parent_meta = kwargs.pop("parent_meta", None)
 
-    if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = {"number": -1, "divisions": None}
-
     assert callable(func)
     if name is not None:
         token = tokenize(meta, *args, **kwargs)
@@ -5905,9 +5973,6 @@ def map_partitions(
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-
-    if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = "__dummy__"
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -5948,22 +6013,6 @@ def map_partitions(
         if collections:
             simple = False
 
-    if enforce_metadata:
-        dsk = partitionwise_graph(
-            apply_and_enforce,
-            name,
-            *args2,
-            dependencies=dependencies,
-            _func=func,
-            _meta=meta,
-            **kwargs3,
-        )
-    else:
-        kwargs4 = kwargs if simple else kwargs3
-        dsk = partitionwise_graph(
-            func, name, *args2, **kwargs4, dependencies=dependencies
-        )
-
     divisions = dfs[0].divisions
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
@@ -5979,25 +6028,32 @@ def map_partitions(
                 divisions = [None] * (dfs[0].npartitions + 1)
 
     if has_keyword(func, "partition_info"):
-        dsk = dict(dsk)
+        partition_info = {
+            (i,): {"number": i, "division": division}
+            for i, division in enumerate(divisions[:-1])
+        }
 
-        for k, v in dsk.items():
-            subgraph = v[0]
-            number = k[-1]
-            assert isinstance(number, int)
-            info = {"number": number, "division": divisions[number]}
-            # Replace the __dummy__ keyword argument with `info`
-            subgraph_dsk = copy.copy(subgraph.dsk)
-            [(key, task)] = subgraph_dsk.items()
-            subgraph_dsk[key] = subs(task, {"__dummy__": info})
-            dsk[k] = (
-                SubgraphCallable(
-                    dsk=subgraph_dsk,
-                    outkey=subgraph.outkey,
-                    inkeys=subgraph.inkeys,
-                    name=f"{subgraph.name}-info-{tokenize(info)}",
-                ),
-            ) + v[1:]
+        args2.insert(0, BlockwiseDepDict(partition_info))
+        orig_func = func
+        func = lambda partition_info, *args, **kwargs: orig_func(
+            *args, **kwargs, partition_info=partition_info
+        )
+
+    if enforce_metadata:
+        dsk = partitionwise_graph(
+            apply_and_enforce,
+            name,
+            *args2,
+            dependencies=dependencies,
+            _func=func,
+            _meta=meta,
+            **kwargs3,
+        )
+    else:
+        kwargs4 = kwargs if simple else kwargs3
+        dsk = partitionwise_graph(
+            func, name, *args2, **kwargs4, dependencies=dependencies
+        )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
@@ -6332,7 +6388,6 @@ def cov_corr_chunk(df, corr=False):
 
 
 def cov_corr_combine(data_in, corr=False):
-
     data = {"sum": None, "count": None, "cov": None}
     if corr:
         data["m"] = None
@@ -7122,6 +7177,15 @@ def partitionwise_graph(func, name, *args, **kwargs):
             else:
                 raise ValueError("Can't add multi-dimensional array to dataframes")
             numblocks[arg._name] = arg.numblocks
+        elif isinstance(arg, BlockwiseDep):
+            if len(arg.numblocks) == 1:
+                pairs.extend([arg, "i"])
+            elif len(arg.numblocks) == 2:
+                pairs.extend([arg, "ij"])
+            else:
+                raise ValueError(
+                    f"BlockwiseDep arg {arg!r} has {len(arg.numblocks)} dimensions; only 1 or 2 are supported."
+                )
         else:
             pairs.extend([arg, None])
     return blockwise(
