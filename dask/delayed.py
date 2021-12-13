@@ -529,7 +529,15 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def _rebuild(self, dsk, *, rename=None):
         key = replace_name_in_key(self.key, rename) if rename else self.key
-        return Delayed(key, dsk, self._length)
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            # FIXME Delayed is currently the only collection type that supports both high- and low-level graphs.
+            # The HLG output of `optimize` will have a layer name that doesn't match `key`.
+            # Remove this when Delayed is HLG-only (because `optimize` will only be passed HLGs, so it won't have
+            # to generate random layer names).
+            layer = next(iter(dsk.layers))
+        else:
+            layer = None
+        return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
         return f"Delayed({repr(self.key)})"
