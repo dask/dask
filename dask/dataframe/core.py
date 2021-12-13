@@ -3446,8 +3446,11 @@ Dask Name: {name}, {task} tasks""".format(
         )
 
     @derived_from(pd.Series)
-    def nunique(self, split_every=None):
-        return self.drop_duplicates(split_every=split_every).count()
+    def nunique(self, split_every=None, dropna=True):
+        if dropna:
+            return self.dropna().drop_duplicates(split_every=split_every).count()
+        else:
+            return self.drop_duplicates(split_every=split_every).count()
 
     @derived_from(pd.Series)
     def value_counts(
@@ -5087,10 +5090,10 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
-    def nunique(self, split_every=False):
+    def nunique(self, split_every=False, dropna=True):
         nunique_list = []
         for col in self.columns:
-            nunique = Series.nunique(self[col], split_every=split_every)
+            nunique = Series.nunique(self[col], split_every=split_every, dropna=dropna)
             nunique.name = self[col].name
             nunique_list.append(nunique)
         name = "series-" + tokenize(*nunique_list)
