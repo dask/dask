@@ -455,3 +455,20 @@ def test_fuse_roots_annotations():
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
+
+
+def test_optimization_requires_hlg():
+    x = da.ones(10, chunks=(2,)) + 1
+    dsk = x.dask.to_dict()
+    assert isinstance(dsk, dict)
+
+    with pytest.raises(TypeError, match="high-level graphs"):
+        x.__dask_optimize__(dsk, x.__dask_keys__())
+
+    # Ensure Arrays constructed from low-level graphs still work
+    x_from_lowlevel = da.Array(dsk, x.name, x.chunks, x.dtype, x._meta)
+    assert isinstance(x_from_lowlevel.dask, HighLevelGraph)
+    # ^ `Array.__new__` converts to HLG
+    assert tuple(x_from_lowlevel.dask.layers) == x_from_lowlevel.__dask_layers__()
+    (x_opt,) = dask.optimize(x_from_lowlevel)
+    assert_eq(x, x_opt)
