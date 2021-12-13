@@ -1098,6 +1098,8 @@ class FastParquetEngine(Engine):
                 "row_groups": [rgs for rgs in fn_rg_map.values()],
                 "engine": open_options.get("engine", "fastparquet"),
             }
+        elif "open_file_cb" not in open_options:
+            open_options["mode"] = open_options.get("mode", "rb")
 
         with ExitStack() as stack:
 

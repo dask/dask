@@ -219,9 +219,10 @@ def _read_table_from_path(
             "row_groups": row_groups if row_groups == [None] else [row_groups],
             "engine": open_options.get("engine", "pyarrow"),
         }
-    else:
+    elif "open_file_cb" not in open_options:
         # Pyarrow is faster with
         open_options["cache_type"] = open_options.get("cache_type", "none")
+        open_options["mode"] = open_options.get("mode", "rb")
 
     if partition_keys:
         tables = []

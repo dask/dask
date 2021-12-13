@@ -114,10 +114,9 @@ def _set_context(obj, stack):
 def open_input_files(
     paths,
     fs=None,
-    file_format="parquet",
+    file_format=None,
     context_stack=None,
-    mode="rb",
-    open_cb=None,
+    open_file_cb=None,
     format_options=None,
     **kwargs,
 ):
@@ -137,12 +136,11 @@ def open_input_files(
         will be used for remote storage.
     context_stack : contextlib.ExitStack, Optional
         Context manager to use for open files.
-    mode : str, optional
-        Access mode needed by open file
-    open_cb : callable, optional
+    open_file_cb : callable, optional
         Callable function to use for file opening. If this argument
-        is specified, ``open_cb(path)`` will be returned, and all
-        other options will be ignored.
+        is specified, ``open_file_cb(path, **kwargs)`` will be used
+        to open each file in ``paths``, and all other options will
+        be ignored.
     format_options : dict, optional
         Dictionary of key-word arguments to pass to format-specific
         open functions only.
@@ -151,8 +149,10 @@ def open_input_files(
     """
 
     # Use call-back function if specified
-    if open_cb is not None:
-        return [_set_context(open_cb(path), context_stack) for path in paths]
+    if open_file_cb is not None:
+        return [
+            _set_context(open_file_cb(path, **kwargs), context_stack) for path in paths
+        ]
 
     # Check if we are using `fsspec.parquet`
     if (
@@ -168,7 +168,6 @@ def open_input_files(
                 fsspec.parquet.open_parquet_file(
                     path,
                     fs=fs,
-                    mode=mode,
                     row_groups=rgs,
                     **kwargs,
                 ),
@@ -177,8 +176,5 @@ def open_input_files(
             for path, rgs in zip(paths, row_groups)
         ]
     elif fs is not None:
-        return [
-            _set_context(fs.open(path, mode=mode, **kwargs), context_stack)
-            for path in paths
-        ]
-    return [_set_context(open(path, mode=mode), context_stack) for path in paths]
+        return [_set_context(fs.open(path, **kwargs), context_stack) for path in paths]
+    return [_set_context(open(path, **kwargs), context_stack) for path in paths]
