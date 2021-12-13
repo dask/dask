@@ -343,14 +343,7 @@ def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
     # the output can be merely squeezed to lose the `axis`-
     # dimension when keepdims = False
     if type(a) is list:
-        xp = np
-
-        if is_cupy_type(a[0]):
-            import cupy
-
-            xp = cupy
-
-        out = reduce(partial(xp.add, dtype=dtype), a)
+        out = reduce(partial(np.add, dtype=dtype), a)
     else:
         out = a
 
