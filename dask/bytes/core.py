@@ -120,14 +120,16 @@ def read_bytes(
             else:
                 # shrink blocksize to give same number of parts
                 if size % blocksize and size > blocksize:
-                    blocksize = size / (size // blocksize)
+                    blocksize1 = size / (size // blocksize)
+                else:
+                    blocksize1 = blocksize
                 place = 0
                 off = [0]
                 length = []
 
                 # figure out offsets, spreading around spare bytes
-                while size - place > (blocksize * 2) - 1:
-                    place += blocksize
+                while size - place > (blocksize1 * 2) - 1:
+                    place += blocksize1
                     off.append(int(place))
                     length.append(off[-1] - off[-2])
                 length.append(size - off[-1])
