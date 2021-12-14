@@ -1,14 +1,16 @@
+from collections import Counter
 from functools import reduce
 from itertools import product
 from operator import mul
 
 import numpy as np
 
+from .. import config
 from ..base import tokenize
 from ..core import flatten
 from ..highlevelgraph import HighLevelGraph
-from ..utils import M
-from .core import Array
+from ..utils import M, parse_bytes
+from .core import Array, normalize_chunks
 from .utils import meta_from_array
 
 
@@ -143,7 +145,7 @@ def contract_tuple(chunks, factor):
     return tuple(out)
 
 
-def reshape(x, shape, merge_chunks=True):
+def reshape(x, shape, merge_chunks=True, limit=None):
     """Reshape array to new shape
 
     Parameters
@@ -158,6 +160,9 @@ def reshape(x, shape, merge_chunks=True):
         when communication is necessary given the input array chunking and
         the output shape. With ``merge_chunks==False``, the input array will
         be rechunked to a chunksize of 1, which can create very many tasks.
+    limit: int (optional)
+        The maximum block size to target in bytes. If no limit is provided,
+        it defaults to using the ``array.chunk-size`` Dask config value.
 
     Notes
     -----
@@ -226,6 +231,28 @@ def reshape(x, shape, merge_chunks=True):
         x = x.rechunk({i: 1 for i in range(din - dout)})
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
+    # Check output chunks are not too large
+    max_chunksize_in_bytes = reduce(mul, [max(i) for i in outchunks]) * x.dtype.itemsize
+    if limit is None and config.get("array.slicing.split-large-chunks") is not False:
+        limit = parse_bytes(config.get("array.chunk-size"))
+    if max_chunksize_in_bytes > limit:
+        # Leave chunk sizes unaltered where possible
+        matching_chunks = Counter(inchunks) & Counter(outchunks)
+        chunk_plan = []
+        for out in outchunks:
+            if matching_chunks[out] > 0:
+                chunk_plan.append(out)
+                matching_chunks[out] -= 1
+            else:
+                chunk_plan.append("auto")
+        outchunks = normalize_chunks(
+            chunk_plan,
+            shape=shape,
+            limit=limit,
+            dtype=x.dtype,
+            previous_chunks=inchunks,
+        )
+
     x2 = x.rechunk(inchunks)
 
     # Construct graph
