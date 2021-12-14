@@ -240,14 +240,9 @@ def reshape(x, shape, merge_chunks=True, limit=None):
         matching_chunks = Counter(inchunks) & Counter(outchunks)
         chunk_plan = []
         for out in outchunks:
-            if out in matching_chunks:
+            if matching_chunks[out] > 0:
                 chunk_plan.append(out)
-                # Remove match from list
-                if matching_chunks[out] == 1:
-                    matching_chunks.pop(out)
-                # Decrememt counter if multiple same-size matches exist
-                elif matching_chunks[out] > 1:
-                    matching_chunks[out] -= 1
+                matching_chunks[out] -= 1
             else:
                 chunk_plan.append("auto")
         outchunks = normalize_chunks(
