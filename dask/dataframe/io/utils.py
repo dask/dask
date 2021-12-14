@@ -76,25 +76,23 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
     -------
     meta : DataFrame
     """
-    meta = pd.DataFrame(
-        {c: pd.Series([], dtype=d) for (c, d) in file_dtypes.items()},
-        columns=to_read_columns,
-    )
-    df = meta[list(to_read_columns)]
+    data = {
+        c: pd.Series([], dtype=file_dtypes.get(c, "int64")) for c in to_read_columns
+    }
+    indexes = [data.pop(c) for c in index_cols or []]
+    if len(indexes) == 0:
+        index = None
+    elif len(index_cols) == 1:
+        index = indexes[0]
+        # XXX: this means we can't roundtrip dataframes where the index names
+        # is actually __index_level_0__
+        if index_cols[0] != "__index_level_0__":
+            index.name = index_cols[0]
+    else:
+        index = pd.MultiIndex.from_arrays(indexes, names=index_cols)
+    df = pd.DataFrame(data, index=index)
 
-    if len(column_index_names) == 1:
-        df.columns.name = column_index_names[0]
-    if not index_cols:
-        return df
-    if not isinstance(index_cols, list):
-        index_cols = [index_cols]
-    df = df.set_index(index_cols)
-    # XXX: this means we can't roundtrip dataframes where the index names
-    # is actually __index_level_0__
-    if len(index_cols) == 1 and index_cols[0] == "__index_level_0__":
-        df.index.name = None
-
-    if len(column_index_names) > 1:
+    if column_index_names:
         df.columns.names = column_index_names
     return df
 
