@@ -373,6 +373,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> result.visualize()
 
       .. image:: images/10_minutes_dataframe_graph.png
+         :alt: Dask task graph for the Dask dataframe computation. The task graph shows a "loc" and "getitem" operations selecting a small section of the dataframe values, before applying a cumulative sum "cumsum" operation, then finally subtracting a value from the result.
 
    .. group-tab:: Array
 
@@ -391,6 +392,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> b.visualize()
 
       .. image:: images/10_minutes_array_graph.png
+         :alt: Dask task graph for the Dask array computation. The task graph shows many "amax" operations on each chunk of the Dask array, that are then aggregated to find "amax" along the first array axis, then reversing the order of the array values with a "getitem" slicing operation, before an "add" operation to get the final result.
 
    .. group-tab:: Bag
 
@@ -406,6 +408,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> c.visualize()
 
       .. image:: images/10_minutes_bag_graph.png
+         :alt: Dask task graph for the Dask bag computation. The task graph shows a "lambda" operation, and then a "zip" operation is applied to the partitions of the Dask bag. There is no communication needed between the bag partitions, this is an embarrassingly parallel computation.
 
 Low-Level Interfaces
 --------------------
