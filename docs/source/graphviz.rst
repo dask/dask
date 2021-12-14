@@ -76,3 +76,21 @@ a tooltip with more detailed information about that layer.
 Note that if you save the graph to disk using the ``filename=`` keyword argument
 in ``visualize``, then the tooltips wil only be preserved by the SVG image format.
 
+High level graph HTML representation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+Dask high level graphs also have their own HTML representation,
+which is useful if you like to work frequently with jupyter notebooks.
+
+.. code-block:: python
+
+   import dask.array as da
+   x = da.ones((15, 15), chunks=(5, 5))
+   y = x + x.T
+
+   y.dask  # shows the HTML representation in a jupyter notebook
+
+.. image:: images/transpose-hlg-html-repr.png
+   :alt: Dask high level graph HTML representation
+
+You can click on any of the layer names to expand or collapse more detailed
+information about each layer.
