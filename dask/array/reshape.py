@@ -161,8 +161,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
         the output shape. With ``merge_chunks==False``, the input array will
         be rechunked to a chunksize of 1, which can create very many tasks.
     limit: int (optional)
-        The maximum block size to target in bytes,
-        if freedom is given to choose
+        The maximum block size to target in bytes. If no limit is provided,
+        it defaults to using the ``array.chunk-size`` Dask config value.
 
     Notes
     -----
