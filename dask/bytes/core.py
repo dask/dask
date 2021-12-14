@@ -112,13 +112,33 @@ def read_bytes(
                     "Backing filesystem couldn't determine file size, cannot "
                     "do chunked reads. To read, set blocksize=None."
                 )
-            off = list(range(0, size, blocksize))
-            length = [blocksize] * len(off)
-            if not_zero:
-                off[0] = 1
-                length[0] -= 1
-            offsets.append(off)
-            lengths.append(length)
+
+            elif size == 0:
+                # skip empty
+                offsets.append([])
+                lengths.append([])
+            else:
+                # shrink blocksize to give same number of parts
+                if size % blocksize and size > blocksize:
+                    blocksize1 = size / (size // blocksize)
+                else:
+                    blocksize1 = blocksize
+                place = 0
+                off = [0]
+                length = []
+
+                # figure out offsets, spreading around spare bytes
+                while size - place > (blocksize1 * 2) - 1:
+                    place += blocksize1
+                    off.append(int(place))
+                    length.append(off[-1] - off[-2])
+                length.append(size - off[-1])
+
+                if not_zero:
+                    off[0] = 1
+                    length[0] -= 1
+                offsets.append(off)
+                lengths.append(length)
 
     delayed_read = delayed(read_block_from_file)
 
