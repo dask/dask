@@ -220,7 +220,7 @@ def _read_table_from_path(
             "engine": open_options.get("engine", "pyarrow"),
         }
     elif "open_file_cb" not in open_options:
-        # Pyarrow is faster with
+        # Pyarrow is faster without read-ahead caching
         open_options["cache_type"] = open_options.get("cache_type", "none")
         open_options["mode"] = open_options.get("mode", "rb")
 
