@@ -369,6 +369,11 @@ def _matmul(a, b):
     xp = np
 
     if is_cupy_type(a):
+        # This branch appears to  be unnecessary since cupy
+        # version 9.0. See the following link:
+        # https://github.com/dask/dask/pull/8423#discussion_r768291271
+        # But it remains here  for  backward-compatibility.
+        # Consider removing it in a future version of dask.
         import cupy
 
         xp = cupy
