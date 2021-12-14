@@ -680,6 +680,15 @@ def to_parquet(
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
+    if custom_metadata:
+        if b"pandas" in custom_metadata.keys():
+            raise ValueError(
+                "User-defined key/value metadata (custom_metadata) can not "
+                "contain a b'pandas' key.  This key is reserved by Pandas, "
+                "and overwriting the corresponding value can render the "
+                "entire dataset unreadable."
+            )
+        kwargs_pass["custom_metadata"] = custom_metadata
     meta, schema, i_offset = engine.initialize_write(
         df,
         fs,
@@ -726,15 +735,6 @@ def to_parquet(
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
-    if custom_metadata:
-        if b"pandas" in custom_metadata.keys():
-            raise ValueError(
-                "User-defined key/value metadata (custom_metadata) can not "
-                "contain a b'pandas' key.  This key is reserved by Pandas, "
-                "and overwriting the corresponding value can render the "
-                "entire dataset unreadable."
-            )
-        kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
