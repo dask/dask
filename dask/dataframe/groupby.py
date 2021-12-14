@@ -1468,7 +1468,7 @@ class _GroupBy:
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
             chunk=_var_chunk,
-            chunk_kwargs={**self.sort},
+            chunk_kwargs=self.sort,
             aggregate=_var_agg,
             combine=_var_combine,
             token=self._token_prefix + "var",
