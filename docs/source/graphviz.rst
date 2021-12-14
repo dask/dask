@@ -15,6 +15,9 @@ where parallelism may not be possible,
 or areas where many tasks depend on each other,
 which may cause a great deal of communication.
 
+Visualize the low level graph
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 The ``.visualize`` method and ``dask.visualize`` function work exactly like
 the ``.compute`` method and ``dask.compute`` function,
 except that rather than computing the result,
@@ -32,10 +35,12 @@ In the case that you prefer to visualize it from left to right, pass
    y = x + x.T
 
    # y.compute()
+
+   # visualize the low level Dask graph
    y.visualize(filename='transpose.svg')
 
 .. image:: images/transpose.svg
-   :alt: Dask task graph for adding an array to its transpose
+   :alt: Dask low level task graph for adding an array to its transpose
 
 Note that the ``visualize`` function is powered by the `GraphViz <https://www.graphviz.org/>`_
 system library.  This library has a few considerations:
@@ -47,4 +52,27 @@ system library.  This library has a few considerations:
 2.  Graphviz takes a while on graphs larger than about 100 nodes.
     For large computations you might have to simplify your computation a bit
     for the visualize method to work well.
+
+Visualize the high level graph
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+The low level Dask task graph can be overwhelimg, especially for large computations.
+A more concise alternative is to look at the Dask high level graph instead.
+The high level graph can be visualized using ``.dask.visualize()``.
+
+.. code-block:: python
+
+   import dask.array as da
+   x = da.ones((15, 15), chunks=(5, 5))
+   y = x + x.T
+
+   # visualize the high level Dask graph
+   y.dask.visualize(filename='transpose-hlg.svg')
+
+.. image:: images/transpose-hlg-hovertooltip.png
+   :alt: Dask high level task graph for adding an array to its transpose
+
+Hovering your mouse above each high level graph label will bring up
+a tooltip with more detailed information about that layer.
+Note that if you save the graph to disk using the ``filename=`` keyword argument
+in ``visualize``, then the tooltips wil only be preserved by the SVG image format.
 
