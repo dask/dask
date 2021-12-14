@@ -85,6 +85,7 @@ class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
     sum = wrap("sum")
     prod = wrap("prod")
     reshape = wrap("reshape")
+    squeeze = wrap("squeeze")
 
 
 da.register_chunk_type(EncapsulateNDArray)
