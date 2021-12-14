@@ -345,20 +345,7 @@ def fractional_slice(task, axes):
 class DataFrameLayer(Layer):
     """DataFrame-based HighLevelGraph Layer"""
 
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
-        """
-
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
+    pass
 
 
 class SimpleShuffleLayer(DataFrameLayer):
@@ -1147,8 +1134,8 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
-    """DataFrame-based Blockwise Layer with IO
+class DataFrameInputLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with Input IO
 
     Parameters
     ----------
@@ -1213,7 +1200,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this IO layer.
+        Given a list of required output columns, this method
+        returns the projected layer.
+        """
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1222,20 +1212,91 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
             except AttributeError:
                 io_func = self.io_func
 
-            layer = DataFrameIOLayer(
+            layer = DataFrameInputLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
                 list(columns),
                 self.inputs,
                 io_func,
+                label=self.label,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            return layer, None
+            return layer
         else:
             # Default behavior
-            return self, None
+            return self
 
     def __repr__(self):
-        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
+        return "DataFrameInputLayer<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.inputs), self.columns
         )
+
+
+# `DataFrameIOLayer` is a bit of a misnomer since
+# it does not handle "output" IO. However, we
+# should probably support the original name for
+# stability (it is used in down-stream code)
+DataFrameIOLayer = DataFrameInputLayer
+
+
+class DataFrameOutputLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with Output IO
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    df : DataFrame
+        DataFrame collection to be written.
+    inputs : list[tuple]
+        List of arguments to be passed to ``io_func`` so
+        that the materialized task to produce partition ``i``
+        will be: ``(<io_func>, inputs[i])``.  Note that each
+        element of ``inputs`` is typically a tuple of arguments.
+    io_func : callable
+        A callable function that will accept a DataFrame
+        partition and a tuple of of arguments. Any output-IO
+        (write) logic should be defined in this function.
+    produces_tasks : bool (optional)
+        Whether one or more elements of `inputs` is expected to
+        contain a nested task. This argument in only used for
+        serialization purposes, and will be deprecated in the
+        future. Default is False.
+    annotations: dict (optional)
+        Layer annotations to pass through to Blockwise.
+    """
+
+    def __init__(
+        self,
+        name,
+        df,
+        inputs,
+        io_func,
+        produces_tasks=False,
+        annotations=None,
+    ):
+        self.name = name
+        self.df = df
+        self.inputs = inputs
+        self.io_func = io_func
+        self.produces_tasks = produces_tasks
+        self.annotations = annotations
+
+        # Define mapping between key index and "part"
+        io_arg_map = BlockwiseDepDict(
+            {(i,): inp for i, inp in enumerate(self.inputs)},
+            produces_tasks=self.produces_tasks,
+        )
+
+        # Use Blockwise initializer
+        super().__init__(
+            output=self.name,
+            output_indices="i",
+            dsk={self.name: (io_func, blockwise_token(0), blockwise_token(1))},
+            indices=[(self.df._name, "i"), (io_arg_map, "i")],
+            numblocks={self.df._name: (self.df.npartitions,)},
+            annotations=annotations,
+        )
+
+    def __repr__(self):
+        return f"DataFrameOutputLayer<name='{self.name}', df={self.df._name}>"

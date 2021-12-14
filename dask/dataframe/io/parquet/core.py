@@ -9,8 +9,8 @@ from packaging.version import parse as parse_version
 
 from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
-from ....highlevelgraph import HighLevelGraph
-from ....layers import DataFrameIOLayer
+from ....highlevelgraph import HighLevelGraph, MaterializedLayer
+from ....layers import DataFrameIOLayer, DataFrameOutputLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
@@ -32,7 +32,7 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetFunctionWrapper:
+class ReadParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
     Reads parquet data from disk to produce a partition
@@ -64,12 +64,12 @@ class ParquetFunctionWrapper:
         self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
 
     def project_columns(self, columns):
-        """Return a new ParquetFunctionWrapper object with
-        a sub-column projection.
+        """Return a new ReadParquetFunctionWrapper object
+        with a sub-column projection.
         """
         if columns == self.columns:
             return self
-        return ParquetFunctionWrapper(
+        return ReadParquetFunctionWrapper(
             self.engine,
             self.fs,
             self.meta,
@@ -92,6 +92,49 @@ class ParquetFunctionWrapper:
             self.columns,
             self.index,
             self.common_kwargs,
+        )
+
+
+ParquetFunctionWrapper = ReadParquetFunctionWrapper
+
+
+class ToParquetFunctionWrapper:
+    """
+    Parquet Function-Wrapper Class
+    Writes parquet data to disk
+    (given a `part` argument).
+    """
+
+    def __init__(
+        self,
+        engine,
+        path,
+        fs,
+        partition_on,
+        write_metadata_file,
+        kwargs_pass,
+    ):
+        self.engine = engine
+        self.path = path
+        self.fs = fs
+        self.partition_on = partition_on
+        self.write_metadata_file = write_metadata_file
+        self.kwargs_pass = kwargs_pass
+
+    def __call__(self, df, part):
+        d, filename = part
+        return self.engine.write_partition(
+            df,
+            self.path,
+            self.fs,
+            filename,
+            self.partition_on,
+            self.write_metadata_file,
+            **(
+                toolz.merge(self.kwargs_pass, {"head": True})
+                if d == 0
+                else self.kwargs_pass
+            ),
         )
 
 
@@ -389,7 +432,7 @@ def read_parquet(
             output_name,
             columns,
             parts,
-            ParquetFunctionWrapper(
+            ReadParquetFunctionWrapper(
                 engine,
                 fs,
                 meta,
@@ -717,9 +760,8 @@ def to_parquet(
     if name_function is not None and len(set(filenames)) < len(filenames):
         raise ValueError("``name_function`` must produce unique filenames.")
 
-    # Construct IO graph
-    dsk = {}
-    name = "to-parquet-" + tokenize(
+    # Create Blockwise layer for parquet-data write
+    data_name = "to-parquet-" + tokenize(
         df,
         fs,
         path,
@@ -730,32 +772,31 @@ def to_parquet(
         index_cols,
         schema,
     )
-    part_tasks = []
     kwargs_pass["fmd"] = meta
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
-    for d, filename in enumerate(filenames):
-        dsk[(name, d)] = (
-            apply,
-            engine.write_partition,
-            [
-                (df._name, d),
-                path,
-                fs,
-                filename,
-                partition_on,
-                write_metadata_file,
-            ],
-            toolz.merge(kwargs_pass, {"head": True}) if d == 0 else kwargs_pass,
-        )
-        part_tasks.append((name, d))
+    data_layer = DataFrameOutputLayer(
+        data_name,
+        df,
+        [(d, filename) for d, filename in enumerate(filenames)],
+        ToParquetFunctionWrapper(
+            engine,
+            path,
+            fs,
+            partition_on,
+            write_metadata_file,
+            kwargs_pass,
+        ),
+    )
 
-    final_name = "metadata-" + name
-    # Collect metadata and write _metadata
-
+    # Collect metadata and write _metadata.
+    # TODO: Use tree-reduction layer (when available)
+    dsk = {}
+    meta_name = "metadata-" + data_name
+    part_tasks = [(data_name, d) for d in range(df.npartitions)]
     if write_metadata_file:
-        dsk[(final_name, 0)] = (
+        dsk[(meta_name, 0)] = (
             apply,
             engine.write_metadata,
             [
@@ -767,16 +808,28 @@ def to_parquet(
             {"append": append, "compression": compression},
         )
     else:
-        dsk[(final_name, 0)] = (lambda x: None, part_tasks)
+        dsk[(meta_name, 0)] = (lambda x: None, part_tasks)
+    meta_layer = MaterializedLayer(dsk)
 
-    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[df])
+    # Convert new layers to graph
+    layers = df.dask.layers.copy()
+    dependencies = df.dask.dependencies.copy()
+    key_dependencies = (
+        df.dask.key_dependencies.copy() if df.dask.key_dependencies else None
+    )
+    layers[data_name] = data_layer
+    layers[meta_name] = meta_layer
+    dependencies[data_name] = {df._name}
+    dependencies[meta_name] = {data_name}
+    graph = HighLevelGraph(layers, dependencies, key_dependencies=key_dependencies)
 
+    # Convert graph to computable collection
     if compute:
         return compute_as_if_collection(
-            Scalar, graph, [(final_name, 0)], **compute_kwargs
+            Scalar, graph, [(meta_name, 0)], **compute_kwargs
         )
     else:
-        return Scalar(graph, final_name, "")
+        return Scalar(graph, meta_name, "")
 
 
 def create_metadata_file(

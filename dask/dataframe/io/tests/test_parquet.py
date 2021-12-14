@@ -18,7 +18,7 @@ from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
-from dask.layers import DataFrameIOLayer
+from dask.layers import DataFrameIOLayer, DataFrameOutputLayer
 from dask.utils import natural_sort_key
 
 try:
@@ -2461,10 +2461,14 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
 
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
-    subgraph = dsk.layers[read]
-    assert isinstance(subgraph, DataFrameIOLayer)
-    assert subgraph.columns == ["B"]
-    assert next(iter(subgraph.dsk.values()))[0].columns == ["B"]
+    subgraph_rd = dsk.layers[read]
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert subgraph_rd.columns == ["B"]
+    assert next(iter(subgraph_rd.dsk.values()))[0].columns == ["B"]
+
+    write = [key for key in dsk.layers if key.startswith("to-parquet")][0]
+    subgraph_wt = dsk.layers[write]
+    assert isinstance(subgraph_wt, DataFrameOutputLayer)
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
