@@ -793,6 +793,13 @@ def test_groupby_with_npartitions_changed():
     assert result.npartitions == 1
 
 
+def test_groupby_with_scheduler_func():
+    from dask.threaded import get
+
+    with dask.config.set(scheduler=get):
+        b.groupby(lambda x: x, npartitions=1).compute()
+
+
 def test_concat():
     a = db.from_sequence([1, 2, 3])
     b = db.from_sequence([4, 5, 6])
