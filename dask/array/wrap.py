@@ -102,8 +102,7 @@ def wrap_func_like(func, *args, **kwargs):
 
 
 @curry
-def wrap(wrap_func, func, **kwargs):
-    func_like = kwargs.pop("func_like", None)
+def wrap(wrap_func, func, func_like=None, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:

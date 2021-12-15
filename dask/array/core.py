@@ -487,6 +487,10 @@ def map_blocks(
     ----------
     func : callable
         Function to apply to every block in the array.
+        If ``func`` accepts ``block_info=`` or ``block_id=``
+        as keyword arguments, these will be passed dictionaries
+        containing information about input and output chunks/arrays
+        during computation. See examples for details.
     args : dask arrays or other objects
     dtype : np.dtype, optional
         The ``dtype`` of the output array. It is recommended to provide this.
@@ -590,8 +594,10 @@ def map_blocks(
     array([ 99,   9, 199,  19, 299,  29, 399,  39, 499,  49, 599,  59, 699,
             69, 799,  79, 899,  89, 999,  99])
 
-    Your block function get information about where it is in the array by
+    Your block function can get information about where it is in the array by
     accepting a special ``block_info`` or ``block_id`` keyword argument.
+    During computation, they will contain information about each of the input
+    and output chunks (and dask arrays) relevant to each call of ``func``.
 
     >>> def func(block_info=None):
     ...     pass
@@ -610,13 +616,36 @@ def map_blocks(
             'chunk-shape': (100,),
             'dtype': dtype('float64')}}
 
-    For each argument and keyword arguments that are dask arrays (the positions
-    of which are the first index), you will receive the shape of the full
-    array, the number of chunks of the full array in each dimension, the chunk
-    location (for example the fourth chunk over in the first dimension), and
-    the array location (for example the slice corresponding to ``40:50``). The
-    same information is provided for the output, with the key ``None``, plus
-    the shape and dtype that should be returned.
+    The keys to the ``block_info`` dictionary indicate which is the input and
+    output Dask array:
+
+    - **Input Dask array(s):** ``block_info[0]`` refers to the first input Dask array.
+      The dictionary key is ``0`` because that is the argument index corresponding
+      to the first input Dask array.
+      In cases where multiple Dask arrays have been passed as input to the function,
+      you can access them with the number corresponding to the input argument,
+      eg: ``block_info[1]``, ``block_info[2]``, etc.
+      (Note that if you pass multiple Dask arrays as input to map_blocks,
+      the arrays must match each other by having matching numbers of chunks,
+      along corresponding dimensions up to broadcasting rules.)
+    - **Output Dask array:** ``block_info[None]`` refers to the output Dask array,
+      and contains information about the output chunks.
+      The output chunk shape and dtype may may be different than the input chunks.
+
+    For each dask array, ``block_info`` describes:
+
+    - ``shape``: the shape of the full Dask array,
+    - ``num-chunks``: the number of chunks of the full array in each dimension,
+    - ``chunk-location``: the chunk location (for example the fourth chunk over
+      in the first dimension), and
+    - ``array-location``: the array location within the full Dask array
+      (for example the slice corresponding to ``40:50``).
+
+    In addition to these, there are two extra parameters described by
+    ``block_info`` for the output array (in ``block_info[None]``):
+
+    - ``chunk-shape``: the output chunk shape, and
+    - ``dtype``: the output dtype.
 
     These features can be combined to synthesize an array from scratch, for
     example:
@@ -672,10 +701,15 @@ def map_blocks(
         )
         raise TypeError(msg % type(func).__name__)
     if token:
-        warnings.warn("The token= keyword to map_blocks has been moved to name=")
+        warnings.warn(
+            "The `token=` keyword to `map_blocks` has been moved to `name=`. "
+            "Please use `name=` instead as the `token=` keyword will be removed "
+            "in a future release.",
+            category=FutureWarning,
+        )
         name = token
 
-    name = f"{name or funcname(func)}-{tokenize(func, *args, **kwargs)}"
+    name = f"{name or funcname(func)}-{tokenize(func, dtype, chunks, drop_axis, new_axis, *args, **kwargs)}"
     new_axes = {}
 
     if isinstance(drop_axis, Number):
@@ -1404,7 +1438,13 @@ class Array(DaskMethodsMixin):
     def __len__(self):
         if not self.chunks:
             raise TypeError("len() of unsized object")
-        return sum(self.chunks[0])
+        if np.isnan(self.chunks[0]).any():
+            msg = (
+                "Cannot call len() on object with unknown chunk size."
+                f"{unknown_chunk_message}"
+            )
+            raise ValueError(msg)
+        return int(sum(self.chunks[0]))
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
@@ -2439,7 +2479,8 @@ class Array(DaskMethodsMixin):
         >>> import dask.array as da
         >>> x = np.arange(16).reshape((4, 4))
         >>> d = da.from_array(x, chunks=(2, 2))
-        >>> d.map_overlap(lambda x: x + x.size, depth=1).compute()
+        >>> y = d.map_overlap(lambda x: x + x.size, depth=1, boundary='reflect')
+        >>> y.compute()
         array([[16, 17, 18, 19],
                [20, 21, 22, 23],
                [24, 25, 26, 27],
@@ -2456,7 +2497,7 @@ class Array(DaskMethodsMixin):
 
         >>> x = np.arange(16).reshape((4, 4))
         >>> d = da.from_array(x, chunks=(2, 2))
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=np.array(()))
         >>> y
         dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
         >>> y.compute()
@@ -2466,9 +2507,9 @@ class Array(DaskMethodsMixin):
                [24, 26, 28, 30]])
 
         >>> import cupy  # doctest: +SKIP
-        >>> x = cupy.arange(16).reshape((5, 4))  # doctest: +SKIP
+        >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
         >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=cupy.array(()))  # doctest: +SKIP
         >>> y  # doctest: +SKIP
         dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
         >>> y.compute()  # doctest: +SKIP
@@ -4374,27 +4415,54 @@ def broadcast_shapes(*shapes):
     return tuple(reversed(out))
 
 
-def elemwise(op, *args, **kwargs):
-    """Apply elementwise function across arguments
+def elemwise(op, *args, out=None, where=True, dtype=None, name=None, **kwargs):
+    """Apply an elementwise ufunc-like function blockwise across arguments.
 
-    Respects broadcasting rules
+    Like numpy ufuncs, broadcasting rules are respected.
+
+    Parameters
+    ----------
+    op : callable
+        The function to apply. Should be numpy ufunc-like in the parameters
+        that it accepts.
+    *args : Any
+        Arguments to pass to `op`. Non-dask array-like objects are first
+        converted to dask arrays, then all arrays are broadcast together before
+        applying the function blockwise across all arguments. Any scalar
+        arguments are passed as-is following normal numpy ufunc behavior.
+    out : dask array, optional
+        If out is a dask.array then this overwrites the contents of that array
+        with the result.
+    where : array_like, optional
+        An optional boolean mask marking locations where the ufunc should be
+        applied. Can be a scalar, dask array, or any other array-like object.
+        Mirrors the ``where`` argument to numpy ufuncs, see e.g. ``numpy.add``
+        for more information.
+    dtype : dtype, optional
+        If provided, overrides the output array dtype.
+    name : str, optional
+        A unique key name to use when building the backing dask graph. If not
+        provided, one will be automatically generated based on the input
+        arguments.
 
     Examples
     --------
     >>> elemwise(add, x, y)  # doctest: +SKIP
     >>> elemwise(sin, x)  # doctest: +SKIP
+    >>> elemwise(sin, x, out=dask_array)  # doctest: +SKIP
 
     See Also
     --------
     blockwise
     """
-    out = kwargs.pop("out", None)
-    if not {"name", "dtype"}.issuperset(kwargs):
-        msg = "%s does not take the following keyword arguments %s"
+    if kwargs:
         raise TypeError(
-            msg % (op.__name__, str(sorted(set(kwargs) - {"name", "dtype"})))
+            f"{op.__name__} does not take the following keyword arguments "
+            f"{sorted(kwargs)}"
         )
 
+    out = _elemwise_normalize_out(out)
+    where = _elemwise_normalize_where(where)
     args = [np.asarray(a) if isinstance(a, (list, tuple)) else a for a in args]
 
     shapes = []
@@ -4404,6 +4472,10 @@ def elemwise(op, *args, **kwargs):
             # Want to exclude Delayed shapes and dd.Scalar
             shape = ()
         shapes.append(shape)
+    if isinstance(where, Array):
+        shapes.append(where.shape)
+    if isinstance(out, Array):
+        shapes.append(out.shape)
 
     shapes = [s if isinstance(s, Iterable) else () for s in shapes]
     out_ndim = len(
@@ -4411,10 +4483,8 @@ def elemwise(op, *args, **kwargs):
     )  # Raises ValueError if dimensions mismatch
     expr_inds = tuple(range(out_ndim))[::-1]
 
-    need_enforce_dtype = False
-    if "dtype" in kwargs:
+    if dtype is not None:
         need_enforce_dtype = True
-        dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
         # scalars and 0d ndarrays (which it considers equivalent) by using
@@ -4431,20 +4501,28 @@ def elemwise(op, *args, **kwargs):
             for a in args
         ]
         try:
-            dt = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
+            dtype = apply_infer_dtype(op, vals, {}, "elemwise", suggest_dtype=False)
         except Exception:
             return NotImplemented
         need_enforce_dtype = any(
             not is_scalar_for_elemwise(a) and a.ndim == 0 for a in args
         )
 
-    name = kwargs.get("name", None) or f"{funcname(op)}-{tokenize(op, dt, *args)}"
+    if not name:
+        name = f"{funcname(op)}-{tokenize(op, dtype, *args, where)}"
 
-    blockwise_kwargs = dict(dtype=dt, name=name, token=funcname(op).strip("_"))
+    blockwise_kwargs = dict(dtype=dtype, name=name, token=funcname(op).strip("_"))
+
+    if where is not True:
+        blockwise_kwargs["elemwise_where_function"] = op
+        op = _elemwise_handle_where
+        args.extend([where, out])
+
     if need_enforce_dtype:
-        blockwise_kwargs["enforce_dtype"] = dt
+        blockwise_kwargs["enforce_dtype"] = dtype
         blockwise_kwargs["enforce_dtype_function"] = op
         op = _enforce_dtype
+
     result = blockwise(
         op,
         expr_inds,
@@ -4458,12 +4536,23 @@ def elemwise(op, *args, **kwargs):
     return handle_out(out, result)
 
 
-def handle_out(out, result):
-    """Handle out parameters
+def _elemwise_normalize_where(where):
+    if where is True:
+        return True
+    elif where is False or where is None:
+        return False
+    return asarray(where)
 
-    If out is a dask.array then this overwrites the contents of that array with
-    the result
-    """
+
+def _elemwise_handle_where(*args, **kwargs):
+    function = kwargs.pop("elemwise_where_function")
+    *args, where, out = args
+    if hasattr(out, "copy"):
+        out = out.copy()
+    return function(*args, where=where, out=out, **kwargs)
+
+
+def _elemwise_normalize_out(out):
     if isinstance(out, tuple):
         if len(out) == 1:
             out = out[0]
@@ -4471,6 +4560,21 @@ def handle_out(out, result):
             raise NotImplementedError("The out parameter is not fully supported")
         else:
             out = None
+    if not (out is None or isinstance(out, Array)):
+        raise NotImplementedError(
+            f"The out parameter is not fully supported."
+            f" Received type {type(out).__name__}, expected Dask Array"
+        )
+    return out
+
+
+def handle_out(out, result):
+    """Handle out parameters
+
+    If out is a dask.array then this overwrites the contents of that array with
+    the result
+    """
+    out = _elemwise_normalize_out(out)
     if isinstance(out, Array):
         if out.shape != result.shape:
             raise ValueError(
@@ -4481,12 +4585,7 @@ def handle_out(out, result):
         out.dask = result.dask
         out._meta = result._meta
         out._name = result.name
-    elif out is not None:
-        msg = (
-            "The out parameter is not fully supported."
-            " Received type %s, expected Dask Array" % type(out).__name__
-        )
-        raise NotImplementedError(msg)
+        return out
     else:
         return result
 
@@ -4609,14 +4708,11 @@ def broadcast_to(x, shape, chunks=None, meta=None):
 
 
 @derived_from(np)
-def broadcast_arrays(*args, **kwargs):
-    subok = bool(kwargs.pop("subok", False))
+def broadcast_arrays(*args, subok=False):
+    subok = bool(subok)
 
     to_array = asanyarray if subok else asarray
     args = tuple(to_array(e) for e in args)
-
-    if kwargs:
-        raise TypeError("unsupported keyword argument(s) provided")
 
     # Unify uneven chunking
     inds = [list(reversed(range(x.ndim))) for x in args]
@@ -4926,11 +5022,20 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
-def to_hdf5(filename, *args, **kwargs):
+def to_hdf5(filename, *args, chunks=True, **kwargs):
     """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
     It creates the necessary datasets and handles clean file opening/closing.
+
+    Parameters
+    ----------
+    chunks: tuple or ``True``
+        Chunk shape, or ``True`` to pass the chunks from the dask array.
+        Defaults to ``True``.
+
+    Examples
+    --------
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x)  # doctest: +SKIP
 
@@ -4941,6 +5046,8 @@ def to_hdf5(filename, *args, **kwargs):
     Optionally provide arguments as though to ``h5py.File.create_dataset``
 
     >>> da.to_hdf5('myfile.hdf5', '/x', x, compression='lzf', shuffle=True)  # doctest: +SKIP
+
+    >>> da.to_hdf5('myfile.hdf5', '/x', x, chunks=(10,20,30))  # doctest: +SKIP
 
     This can also be used as a method on a single Array
 
@@ -4957,8 +5064,6 @@ def to_hdf5(filename, *args, **kwargs):
         data = {args[0]: args[1]}
     else:
         raise ValueError("Please provide {'/data/path': array} dictionary")
-
-    chunks = kwargs.pop("chunks", True)
 
     import h5py
 
