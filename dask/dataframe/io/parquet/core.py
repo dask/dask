@@ -197,7 +197,6 @@ def read_parquet(
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        Only the "pyarrow" engine supports this argument.
     chunksize : int or str, default None
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
