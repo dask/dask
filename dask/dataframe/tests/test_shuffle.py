@@ -51,6 +51,7 @@ shuffle_func = shuffle  # conflicts with keyword argument
 
 def test_shuffle(shuffle_method):
     if shuffle_method == "p2p":
+        # uses synchronous scheduler
         pytest.skip()
 
     s = shuffle_func(d, d.b, shuffle=shuffle_method)
@@ -284,6 +285,7 @@ def test_shuffle_sort(shuffle_method):
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_rearrange(shuffle_method, scheduler):
     if shuffle_method == "p2p":
+        # p2p shuffle only runs on the distributed scheduler; substitute that for the "threads" case
         if scheduler == "processes":
             pytest.skip()
         scheduler = "distributed"
