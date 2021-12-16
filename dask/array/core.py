@@ -2029,7 +2029,7 @@ class Array(DaskMethodsMixin):
         .. note::
 
            See :meth:`dask.array.reshape` for an explanation of
-           the ``merge_chunks`` keyword.
+           the ``merge_chunks`` and `limit` keywords.
         """
         from .reshape import reshape
 
