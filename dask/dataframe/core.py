@@ -3447,10 +3447,12 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def nunique(self, split_every=None, dropna=True):
+        uniqs = self.drop_duplicates(split_every=split_every)
         if dropna:
-            return self.dropna().drop_duplicates(split_every=split_every).count()
+            # count mimics pandas behavior and excludes NA values
+            return uniqs.count()
         else:
-            return self.drop_duplicates(split_every=split_every).count()
+            return uniqs.size
 
     @derived_from(pd.Series)
     def value_counts(
@@ -5090,24 +5092,37 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
-    def nunique(self, split_every=False, dropna=True):
-        nunique_list = []
-        for col in self.columns:
-            nunique = Series.nunique(self[col], split_every=split_every, dropna=dropna)
-            nunique.name = self[col].name
-            nunique_list.append(nunique)
-        name = "series-" + tokenize(*nunique_list)
-        dsk = {
-            (name, 0): (
-                apply,
-                pd.Series,
-                [[(s._name, 0) for s in nunique_list]],
-                {"index": self.columns},
+    def nunique(self, split_every=False, dropna=True, axis=0):
+        if axis == 1:
+            meta = self._meta_nonempty.nunique(axis=axis)
+            return self.map_partitions(
+                M.nunique,
+                meta=meta,
+                token="series-nunique",
+                axis=axis,
+                enforce_metadata=False,
             )
-        }
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=nunique_list)
-        meta = self._meta_nonempty.nunique()
-        return Series(graph, name, meta, (None, None))
+        else:
+            nunique_list = []
+            for col in self.columns:
+                nunique = Series.nunique(
+                    self[col], split_every=split_every, dropna=dropna
+                )
+                nunique.name = self[col].name
+                nunique_list.append(nunique)
+            name = "series-" + tokenize(*nunique_list)
+            dsk = {
+                (name, 0): (
+                    apply,
+                    pd.Series,
+                    [[(s._name, 0) for s in nunique_list]],
+                    {"index": self.columns},
+                )
+            }
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=nunique_list
+            )
+            return Series(graph, name, self._meta.nunique(), (None, None))
 
     @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False):
