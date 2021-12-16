@@ -12,6 +12,7 @@ import operator
 import os
 import time
 import warnings
+from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -50,7 +51,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from ..chunk import getitem
@@ -1207,6 +1208,24 @@ def test_reshape_unknown_dimensions():
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
+
+
+@pytest.mark.parametrize(
+    "shape, chunks, reshape_size",
+    [
+        # Test reshape where output chunks would otherwise be too large
+        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
+        # Test reshape where multiple chunks match between input and output
+        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
+    ],
+)
+def test_reshape_avoids_large_chunks(shape, chunks, reshape_size):
+    limit = parse_bytes("128MiB")
+    array = da.random.random(shape, chunks=chunks)
+    result = array.reshape(*reshape_size)
+    nbytes = array.dtype.itemsize
+    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+    assert max_chunksize_in_bytes < (limit)
 
 
 def test_full():

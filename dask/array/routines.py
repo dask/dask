@@ -1,7 +1,7 @@
 import math
 import warnings
 from collections.abc import Iterable
-from functools import partial, wraps
+from functools import partial, reduce, wraps
 from numbers import Integral, Real
 from typing import List, Tuple
 
@@ -33,6 +33,7 @@ from .core import (
 from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
 from .numpy_compat import _numpy_120
+from .reductions import reduction
 from .ufunc import multiply, sqrt
 from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
 from .wrap import ones
@@ -332,19 +333,58 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
+def _chunk_sum(a, axis=None, dtype=None, keepdims=None):
+    # Caution: this is not your conventional array-sum: due
+    # to the special nature of the preceding blockwise con-
+    # traction,  each chunk is expected to have exactly the
+    # same shape,  with a size of 1 for the dimension given
+    # by `axis` (the reduction axis).  This makes mere ele-
+    # ment-wise addition of the arrays possible.   Besides,
+    # the output can be merely squeezed to lose the `axis`-
+    # dimension when keepdims = False
+    if type(a) is list:
+        out = reduce(partial(np.add, dtype=dtype), a)
+    else:
+        out = a
+
+    if keepdims:
+        return out
+    else:
+        return out.squeeze(axis[0])
+
+
+def _sum_wo_cat(a, axis=None, dtype=None):
+    if dtype is None:
+        dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
+
+    if a.shape[axis] == 1:
+        return a.squeeze(axis)
+
+    return reduction(
+        a, _chunk_sum, _chunk_sum, axis=axis, dtype=dtype, concatenate=False
+    )
+
+
 def _matmul(a, b):
     xp = np
 
     if is_cupy_type(a):
+        # This branch appears to  be unnecessary since cupy
+        # version 9.0. See the following link:
+        # https://github.com/dask/dask/pull/8423#discussion_r768291271
+        # But it remains here  for  backward-compatibility.
+        # Consider removing it in a future version of dask.
         import cupy
 
         xp = cupy
 
     chunk = xp.matmul(a, b)
-    # Since we have performed the contraction via matmul
-    # but blockwise expects all dimensions back, we need
-    # to add one dummy dimension back
-    return chunk[..., xp.newaxis]
+    # Since we have performed the contraction via xp.matmul
+    # but blockwise expects all dimensions back  (including
+    # the contraction-axis in  the 2nd-to-last position  of
+    # the output), we must then put it back in the expected
+    # the position ourselves:
+    return chunk[..., xp.newaxis, :]
 
 
 @derived_from(np)
@@ -371,7 +411,9 @@ def matmul(a, b):
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
     # out_ind includes all dimensions to prevent contraction
-    # in the blockwise below
+    # in the blockwise below.  We set the last two dimensions
+    # of the output to the contraction axis and the 2nd
+    # (last) dimension of b in that order
     out_ind = tuple(range(a.ndim + 1))
     # lhs_ind includes `a`/LHS dimensions
     lhs_ind = tuple(range(a.ndim))
@@ -397,32 +439,13 @@ def matmul(a, b):
     # blockwise (without contraction) followed by reduction. More about
     # this issue: https://github.com/dask/dask/issues/6874
 
-    # When we perform reduction, we need to worry about the last 2 dimensions
-    # which hold the matrices, some care is required to handle chunking in
-    # that space.
-    contraction_dimension_is_chunked = (
-        max(min(a.chunks[-1], b.chunks[-2])) < a.shape[-1]
-    )
-    b_last_dim_max_chunk = max(b.chunks[-1])
-    if contraction_dimension_is_chunked or b_last_dim_max_chunk < b.shape[-1]:
-        if b_last_dim_max_chunk > 1:
-            # This is the case when both contraction and last dimension axes
-            # are chunked
-            out = out.reshape(out.shape[:-1] + (1, -1))
-            out = out.sum(axis=-3)
-            out = out.reshape(out.shape[:-2] + (b.shape[-1],))
-        else:
-            # Contraction axis is chunked
-            out = out.sum(axis=-2)
-    else:
-        # Neither contraction nor last dimension axes are chunked, we
-        # remove the dummy dimension without reduction
-        out = out.reshape(out.shape[:-2] + (b.shape[-1],))
+    # We will also perform the reduction without concatenation
+    out = _sum_wo_cat(out, axis=-2)
 
     if a_is_1d:
-        out = out[..., 0, :]
+        out = out.squeeze(-2)
     if b_is_1d:
-        out = out[..., 0]
+        out = out.squeeze(-1)
 
     return out
 
