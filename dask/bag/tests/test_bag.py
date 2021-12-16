@@ -1581,3 +1581,25 @@ def test_dask_layers_to_delayed():
     assert i.dask.layers.keys() == {"delayed-" + name}
     assert i.dask.dependencies == {"delayed-" + name: set()}
     assert i.__dask_layers__() == ("delayed-" + name,)
+
+
+def test_to_dataframe_optimize_graph():
+    x = db.from_sequence(
+        [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2
+    )
+
+    # linear operations will be fused by graph optimization
+    y = x.map(lambda a: dict(**a, v2=a["v1"] + 1))
+    y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
+
+    # with optimizations
+    d = y.to_dataframe()["v3"]
+    assert len([k for k in d.dask if k[0].startswith("getitem")]) == 2
+
+    # no optimizations
+    d2 = y.to_dataframe(optimize_graph=False)["v3"]
+
+    # due to fusing the unoptimized graph will be larger
+    assert len(dict(d2.dask)) > len(dict(d.dask))
+
+    assert (d.compute() == d2.compute()).all()
