@@ -3764,9 +3764,35 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_increasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_increasing_chunk,
+            aggregate=methods.monotonic_increasing_aggregate,
+            meta=bool,
+            token="monotonic_increasing",
+        )
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_decreasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_decreasing_chunk,
+            aggregate=methods.monotonic_decreasing_aggregate,
+            meta=bool,
+            token="monotonic_decreasing",
+        )
+
 
 class Index(Series):
-
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
@@ -3807,11 +3833,19 @@ class Index(Series):
         "rename_categories",
     }
 
+    _monotonic_attributes = {
+        "is_monotonic",
+        "is_monotonic_increasing",
+        "is_monotonic_decreasing",
+    }
+
     def __getattr__(self, key):
         if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
+        elif key in self._monotonic_attributes:
+            return getattr(self, key)
         raise AttributeError("'Index' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -3936,6 +3970,21 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic(self):
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_increasing(self):
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_decreasing(self):
+        return super().is_monotonic_decreasing
 
 
 class DataFrame(_Frame):
@@ -6339,7 +6388,6 @@ def cov_corr_chunk(df, corr=False):
 
 
 def cov_corr_combine(data_in, corr=False):
-
     data = {"sum": None, "count": None, "cov": None}
     if corr:
         data["m"] = None
