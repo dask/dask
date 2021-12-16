@@ -5100,6 +5100,7 @@ class DataFrame(_Frame):
                 meta=meta,
                 token="series-nunique",
                 axis=axis,
+                dropna=dropna,
                 enforce_metadata=False,
             )
         else:
