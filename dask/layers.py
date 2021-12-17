@@ -1431,7 +1431,7 @@ class DataFrameTreeReduction(DataFrameLayer):
                             # Final Node (Use fused `self.tree_finalize` task)
                             assert group == 0
                             dsk[(self.name, s)] = self._define_task(
-                                input_keys, output_node=True
+                                input_keys, final_task=True
                             )
                         else:
                             # Intermediate Node
@@ -1439,12 +1439,12 @@ class DataFrameTreeReduction(DataFrameLayer):
                                 self._make_key(
                                     self.tree_node_name, group, depth, split=s
                                 )
-                            ] = self._define_task(input_keys, output_node=False)
+                            ] = self._define_task(input_keys, final_task=False)
         else:
             # Deal with single-partition case
             for s in self.output_partitions:
                 input_keys = [self._make_key(name_input_use, 0, split=s)]
-                dsk[(self.name, s)] = self._define_task(input_keys, output_node=True)
+                dsk[(self.name, s)] = self._define_task(input_keys, final_task=True)
 
         return dsk
 
