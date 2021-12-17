@@ -29,6 +29,7 @@ from dask.bag.core import (
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
+from dask.dataframe.utils import assert_eq as assert_eq_df
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, inc
@@ -1593,13 +1594,13 @@ def test_to_dataframe_optimize_graph():
     y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
 
     # with optimizations
-    d = y.to_dataframe()["v3"]
-    assert len([k for k in d.dask if k[0].startswith("getitem")]) == 2
+    d = y.to_dataframe()
+    assert len([k for k in d.dask if k[0].startswith("lambda")]) == d.npartitions
 
     # no optimizations
-    d2 = y.to_dataframe(optimize_graph=False)["v3"]
+    d2 = y.to_dataframe(optimize_graph=False)
 
-    # due to fusing the unoptimized graph will be larger
-    assert len(dict(d2.dask)) > len(dict(d.dask))
+    # without fusing, both `map` calls will still be there
+    assert len([k for k in d2.dask if k[0].startswith("lambda")]) == d.npartitions * 2
 
-    assert (d.compute() == d2.compute()).all()
+    assert assert_eq_df(d, d2)
