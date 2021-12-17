@@ -1306,7 +1306,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         reduction tree. If ``split_out`` is set to an integer >=1, the
         input tasks must contain data that can be indexed by a ``getitem``
         operation with a key in the range ``[0, split_out)``.
-    output_splits : list, optional
+    output_partitions : list, optional
         List of required output partitions. This parameter is used
         internally by Dask for high-level culling.
     tree_node_name : str, optional
@@ -1325,7 +1325,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         finalize_kwargs=None,
         split_every=32,
         split_out=None,
-        output_splits=None,
+        output_partitions=None,
         tree_node_name=None,
         annotations=None,
     ):
@@ -1340,10 +1340,10 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.finalize_kwargs = finalize_kwargs or {}
         self.split_every = split_every
         self.split_out = split_out
-        self.output_splits = output_splits
+        self.output_partitions = output_partitions
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
-        # Calculate tree withs and height
+        # Calculate tree widths and height
         # (Used to get output keys without materializing)
         parts = self.npartitions_input
         self.widths = [parts]
@@ -1352,20 +1352,20 @@ class DataFrameTreeReduction(DataFrameLayer):
             self.widths.append(parts)
         self.height = len(self.widths)
 
-        # Set default output_splits
-        if self.output_splits is None:
-            self.output_splits = list(range(self.split_out or 1))
+        # Set default output_partitions
+        if self.output_partitions is None:
+            self.output_partitions = list(range(self.split_out or 1))
 
-    def _check_key(self, *task):
-        # Helper function to remove the last
-        # (split_out) element in a task key
-        # when bool(split_out) is False
-        return task if self.split_out else task[:-1]
+    def _make_key(self, *name_parts, split=0):
+        # Helper function construct a key
+        # with a "split" element when
+        # bool(split_out) is True
+        return name_parts + (split,) if self.split_out else name_parts
 
-    def _define_task(self, node_list, output_node=False):
+    def _define_task(self, input_keys, final_task=False):
         # Define nested concatenation and func task
-        conc = (self.concat_func, node_list)
-        if output_node and self.finalize_func:
+        conc = (self.concat_func, input_keys)
+        if final_task and self.finalize_func:
             func = self.finalize_func
             kwargs = self.finalize_kwargs
         else:
@@ -1380,19 +1380,19 @@ class DataFrameTreeReduction(DataFrameLayer):
         """Construct graph for a tree reduction."""
 
         dsk = {}
-        if not self.output_splits:
+        if not self.output_partitions:
             return dsk
 
         # Deal with `bool(split_out) == True`.
         # These cases require that the input tasks
-        # ruturn a type that enables getitem operation
+        # return a type that enables getitem operation
         # with indices: [0, split_out)
         # Therefore, we must add "getitem" tasks to
         # select the appropriate element for each split
         name_input_use = self.name_input
         if self.split_out:
             name_input_use += "-split"
-            for s in self.output_splits:
+            for s in self.output_partitions:
                 for p in range(self.npartitions_input):
                     dsk[(name_input_use, p, s)] = (
                         operator.getitem,
@@ -1402,7 +1402,7 @@ class DataFrameTreeReduction(DataFrameLayer):
 
         if self.height >= 2:
             # Loop over output splits
-            for s in self.output_splits:
+            for s in self.output_partitions:
                 # Loop over reduction levels
                 for depth in range(1, self.height):
                     # Loop over reduction groups
@@ -1413,14 +1413,16 @@ class DataFrameTreeReduction(DataFrameLayer):
                         lstop = min(lstart + self.split_every, p_max)
                         if depth == 1:
                             # Input nodes are from input layer
-                            node_list = [
-                                self._check_key(name_input_use, p, s)
+                            input_keys = [
+                                self._make_key(name_input_use, p, split=s)
                                 for p in range(lstart, lstop)
                             ]
                         else:
                             # Input nodes are tree-reduction nodes
-                            node_list = [
-                                self._check_key(self.tree_node_name, p, depth - 1, s)
+                            input_keys = [
+                                self._make_key(
+                                    self.tree_node_name, p, depth - 1, split=s
+                                )
                                 for p in range(lstart, lstop)
                             ]
 
@@ -1429,18 +1431,20 @@ class DataFrameTreeReduction(DataFrameLayer):
                             # Final Node (Use fused `self.tree_finalize` task)
                             assert group == 0
                             dsk[(self.name, s)] = self._define_task(
-                                node_list, output_node=True
+                                input_keys, output_node=True
                             )
                         else:
                             # Intermediate Node
                             dsk[
-                                self._check_key(self.tree_node_name, group, depth, s)
-                            ] = self._define_task(node_list, output_node=False)
+                                self._make_key(
+                                    self.tree_node_name, group, depth, split=s
+                                )
+                            ] = self._define_task(input_keys, output_node=False)
         else:
             # Deal with single-partition case
-            for s in self.output_splits:
-                node_list = [self._check_key(name_input_use, 0, s)]
-                dsk[(self.name, s)] = self._define_task(node_list, output_node=True)
+            for s in self.output_partitions:
+                input_keys = [self._make_key(name_input_use, 0, split=s)]
+                dsk[(self.name, s)] = self._define_task(input_keys, output_node=True)
 
         return dsk
 
@@ -1453,21 +1457,23 @@ class DataFrameTreeReduction(DataFrameLayer):
         keys = []
         if self.split_out:
             name_input_use = self.name_input + "-split"
-            for s in self.output_splits:
+            for s in self.output_partitions:
                 for p in range(self.npartitions_input):
                     keys.append((name_input_use, p, s))
         if self.height >= 2:
-            for s in self.output_splits:
+            for s in self.output_partitions:
                 for depth in range(1, self.height):
                     for group in range(self.widths[depth]):
                         if depth == self.height - 1:
                             keys.append((self.name, s))
                         else:
                             keys.append(
-                                self._check_key(self.tree_node_name, group, depth, s)
+                                self._make_key(
+                                    self.tree_node_name, group, depth, split=s
+                                )
                             )
         else:
-            for s in self.output_splits:
+            for s in self.output_partitions:
                 keys.append((self.name, s))
         return set(keys)
 
@@ -1514,7 +1520,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             splits.add(_split)
         return splits
 
-    def _cull(self, output_splits):
+    def _cull(self, output_partitions):
         return DataFrameTreeReduction(
             self.name,
             self.name_input,
@@ -1526,7 +1532,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             finalize_kwargs=self.finalize_kwargs,
             split_every=self.split_every,
             split_out=self.split_out,
-            output_splits=output_splits,
+            output_partitions=output_partitions,
             tree_node_name=self.tree_node_name,
             annotations=self.annotations,
         )
@@ -1538,9 +1544,9 @@ class DataFrameTreeReduction(DataFrameLayer):
                 (self.name_input, i) for i in range(self.npartitions_input)
             }
         }
-        output_splits = self._keys_to_splits(keys)
-        if output_splits != set(self.output_splits):
-            culled_layer = self._cull(output_splits)
+        output_partitions = self._keys_to_splits(keys)
+        if output_partitions != set(self.output_partitions):
+            culled_layer = self._cull(output_partitions)
             return culled_layer, deps
         else:
             return self, deps
@@ -1576,7 +1582,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             "finalize_func": _finalize_func,
             "finalize_kwargs": {},
             "split_out": self.split_out,
-            "output_splits": self.output_splits,
+            "output_partitions": self.output_partitions,
             "tree_node_name": self.tree_node_name,
         }
 
