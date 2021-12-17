@@ -1502,7 +1502,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self.get_output_keys())
 
     def __len__(self):
         return len(self.get_output_keys())
