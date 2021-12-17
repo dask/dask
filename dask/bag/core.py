@@ -1600,12 +1600,12 @@ class Bag(DaskMethodsMixin):
 
         dfs = self.map_partitions(to_dataframe, cols, dtypes)
         if optimize_graph:
-            dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
+            dsk = self.__dask_optimize__(dfs.dask, dfs.__dask_keys__())
         else:
-            dsk = self.dask
-
+            dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
+        name = dfs.__dask_layers__()[0]
         return dd.DataFrame(dsk, name, meta, divisions)
 
     def to_delayed(self, optimize_graph=True):
