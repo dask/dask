@@ -1556,6 +1556,10 @@ class Bag(DaskMethodsMixin):
             result (any names not found in the data will become all-NA
             columns).  Note that if ``meta`` is provided, column names will be
             taken from there and this parameter is invalid.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.dataframe.DataFrame`.
+
 
         Examples
         --------
