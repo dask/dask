@@ -5728,57 +5728,39 @@ def apply_concat_apply(
         split_out_setup_kwargs,
     )
 
-    # Start with combined layers and dependencies for dfs
-    layers = dfs[0].dask.layers.copy()
-    dependencies = dfs[0].dask.dependencies.copy()
-    key_dependencies = (dfs[0].dask.key_dependencies or {}).copy()
-    for df in dfs[1:]:
-        layers.update(df.dask.layers)
-        dependencies.update(df.dask.dependencies)
-        key_dependencies.update(df.dask.key_dependencies or {})
-
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
-    layers[chunk_name] = partitionwise_graph(
+    chunked = map_partitions(
         chunk,
-        chunk_name,
         *args,
+        token=chunk_name,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        normalize_args=False,
         **chunk_kwargs,
     )
-    dependencies[chunk_name] = {df._name for df in dfs}
 
     # Blockwise Split Layer
-    last_name = chunk_name
-    meta_chunk = None
     if split_out and split_out > 1:
-        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
-        split_name = "split-%s" % token_key
-        layers[split_name] = partitionwise_graph(
+        chunked = chunked.map_partitions(
             hash_shard,
-            split_name,
-            new_dd_object(
-                HighLevelGraph.from_collections(
-                    chunk_name,
-                    layers[chunk_name],
-                    dependencies=dfs,
-                ),
-                chunk_name,
-                meta_chunk,
-                [None] * (npartitions + 1),
-            ),
             split_out,
             split_out_setup,
             split_out_setup_kwargs,
             ignore_index,
+            token="split-%s" % token_key,
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
+            normalize_args=False,
         )
-        dependencies[split_name] = {chunk_name}
-        last_name = split_name
 
     # Tree-Reduction Layer
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
-    layers[final_name] = DataFrameTreeReduction(
+    layer = DataFrameTreeReduction(
         final_name,
-        last_name,
+        chunked._name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         combine,
@@ -5789,7 +5771,6 @@ def apply_concat_apply(
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
     )
-    dependencies[final_name] = {last_name}
 
     if sort is not None:
         if sort and split_out > 1:
@@ -5801,8 +5782,7 @@ def apply_concat_apply(
         aggregate_kwargs["sort"] = sort
 
     if meta is no_default:
-        if meta_chunk is None:
-            meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
@@ -5812,7 +5792,7 @@ def apply_concat_apply(
         parent_meta=dfs[0]._meta,
     )
 
-    graph = HighLevelGraph(layers, dependencies, key_dependencies=key_dependencies)
+    graph = HighLevelGraph.from_collections(final_name, layer, dependencies=(chunked,))
     divisions = [None] * ((split_out or 1) + 1)
     return new_dd_object(graph, final_name, meta, divisions, parent_meta=dfs[0]._meta)
 
@@ -5895,6 +5875,7 @@ def map_partitions(
     """
     name = kwargs.pop("token", None)
     parent_meta = kwargs.pop("parent_meta", None)
+    normalize_args = kwargs.pop("normalize_args", True)
 
     assert callable(func)
     if name is not None:
@@ -5943,7 +5924,7 @@ def map_partitions(
             args2.append(arg)
             dependencies.append(arg)
             continue
-        arg = normalize_arg(arg)
+        arg = normalize_arg(arg) if normalize_args else arg
         arg2, collections = unpack_collections(arg)
         if collections:
             args2.append(arg2)
@@ -5954,7 +5935,7 @@ def map_partitions(
     kwargs3 = {}
     simple = True
     for k, v in kwargs.items():
-        v = normalize_arg(v)
+        v = normalize_arg(v) if normalize_args else v
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
         kwargs3[k] = v
