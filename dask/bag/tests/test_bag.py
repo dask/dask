@@ -32,7 +32,7 @@ from dask.bag.utils import assert_eq
 from dask.dataframe.utils import assert_eq as assert_eq_df
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, inc
+from dask.utils_test import add, hlg_layer_topological, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -1590,17 +1590,27 @@ def test_to_dataframe_optimize_graph():
     )
 
     # linear operations will be fused by graph optimization
-    y = x.map(lambda a: dict(**a, v2=a["v1"] + 1))
-    y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
+    with dask.annotate(foo=True):
+        y = x.map(lambda a: dict(**a, v2=a["v1"] + 1))
+        y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
+
+    # verifying the maps are not fused yet
+    assert len(y.dask) > y.npartitions
 
     # with optimizations
     d = y.to_dataframe()
-    assert len([k for k in d.dask if k[0].startswith("lambda")]) == d.npartitions
+
+    # Graph has been fused, so there are three tasks per partition
+    assert len(d.dask) == d.npartitions * 3
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
-    # without fusing, both `map` calls will still be there
-    assert len([k for k in d2.dask if k[0].startswith("lambda")]) == d.npartitions * 2
+    # Graph hasn't been fused. It should contain all the original keys,
+    # plus a `map_partitions` step converting to DataFrames
+    assert len(d2.dask) == len(d.dask) + d.npartitions
+
+    # Annotations are still there
+    assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
 
     assert assert_eq_df(d, d2)
