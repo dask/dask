@@ -1,4 +1,4 @@
-name: Build conda nightlies
+name: Conda build
 on:
   push:
     branches:
@@ -18,7 +18,7 @@ defaults:
 
 jobs:
   conda:
-    name: Build (and optionally upload) conda nightlies
+    name: Build (and upload)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
