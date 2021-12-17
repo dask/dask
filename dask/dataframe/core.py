@@ -5094,6 +5094,7 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def nunique(self, split_every=False, dropna=True, axis=0):
         if axis == 1:
+            # split_every not used for axis=1
             meta = self._meta_nonempty.nunique(axis=axis)
             return self.map_partitions(
                 M.nunique,
