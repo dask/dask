@@ -1602,4 +1602,4 @@ def test_to_dataframe_optimize_graph():
     # due to fusing the unoptimized graph will be larger
     assert len(dict(d2.dask)) > len(dict(d.dask))
 
-    assert (d.compute() == d2.compute()).all()
+    assert_eq(d, d2)
