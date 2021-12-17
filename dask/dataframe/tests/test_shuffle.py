@@ -1104,17 +1104,17 @@ def test_disk_shuffle_check_actual_compression():
     assert len(uncompressed_data) > len(compressed_data)
 
 
-# TODO does this need to be run on all shuffle methods?
-# So many parameterizations already that it adds a lot of time.
 @pytest.mark.parametrize("ignore_index", [None, True, False])
 @pytest.mark.parametrize(
     "on", ["id", "name", ["id", "name"], pd.Series(["id", "name"])]
 )
 @pytest.mark.parametrize("max_branch", [None, 4])
-def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
+def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch):
     # Make sure DataFrame.shuffle API returns the same result
     # whether the ``on`` argument is a list of column names,
     # or a separate DataFrame with equivalent values...
+    # NOTE: only tested on `shuffle="tasks"` to save time, because behavior here
+    # is mostly only relevant there, or tests common logic outside of specific shuffles.
     df_in = dask.datasets.timeseries(
         "2000",
         "2001",
@@ -1128,18 +1128,17 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     else:
         ext_on = df_in[on].copy()
     df_out_1 = df_in.shuffle(
-        on, shuffle=shuffle_method, ignore_index=ignore_index, max_branch=max_branch
+        on, shuffle="tasks", ignore_index=ignore_index, max_branch=max_branch
     )
-    df_out_2 = df_in.shuffle(ext_on, shuffle=shuffle_method, ignore_index=ignore_index)
+    df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
 
     assert_eq(
         df_out_1,
         df_out_2,
-        check_index=(not ignore_index if shuffle_method == "tasks" else True),
+        check_index=not ignore_index,
     )
 
-    # disk shuffling doesn't support ignore_index
-    if ignore_index and shuffle_method == "tasks":
+    if ignore_index:
         assert df_out_1.index.dtype != df_in.index.dtype
     else:
         assert df_out_1.index.dtype == df_in.index.dtype
