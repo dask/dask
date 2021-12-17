@@ -37,7 +37,7 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return type(x) is tuple and x and (callable(x[0]) or hasattr(x[0], "_callable"))
+    return type(x) is tuple and x and callable(x[0])
 
 
 def has_tasks(dsk, x):
