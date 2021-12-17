@@ -1276,14 +1276,14 @@ class DataFrameTreeReduction(DataFrameLayer):
     npartitions_input : str
         Number of partitions in the input layer.
     concat_func : callable
-        Function used by each tree node to reduce a list inputs into
-        a single output value. This function must accept only a list
-        as its first positional argument.
+        Function used by each tree node to reduce a list of inputs
+        into a single output value. This function must accept only
+        a list as its first positional argument.
     tree_node_func : callable
         Function used on the output of ``concat_func`` in each tree
         node. This function must accept the output of ``concat_func``
         as its first positional argument. Any other input arguments
-        must be definded by in ``tree_node_kwargs``.
+        must be defined by in ``tree_node_kwargs``.
     tree_node_args : dict, optional
         Dictionary of key-word arguments to include in every call to
         the function specified by ``tree_node_func``. Note that the
@@ -1300,7 +1300,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         is ignored if ``finalize_func`` is not set.
     split_every : int, optional
         This argument specifies the maximum number of input nodes
-        inputs to be handled by any one task in the tree. Defaults to 32.
+        to be handled by any one task in the tree. Defaults to 32.
     split_out : int, optional
         This argument specifies the number of output nodes in the
         reduction tree. If ``split_out`` is set to an integer >=1, the
@@ -1376,19 +1376,12 @@ class DataFrameTreeReduction(DataFrameLayer):
         else:
             return (func, conc)
 
-    def _construct_graph(self, on_scheduler=False):
+    def _construct_graph(self):
         """Construct graph for a tree reduction."""
 
         dsk = {}
         if not self.output_splits:
             return dsk
-
-        # Deal with pickled user-defined functions
-        if on_scheduler:
-            self.tree_node_func = CallablePickled(self.tree_node_func)
-            self.concat_func = CallablePickled(self.concat_func)
-            if self.finalize_func:
-                self.finalize_func = CallablePickled(self.finalize_func)
 
         # Deal with `bool(split_out) == True`.
         # These cases require that the input tasks
@@ -1591,8 +1584,15 @@ class DataFrameTreeReduction(DataFrameLayer):
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         from distributed.worker import dumps_task
 
+        # Deal with `Serialized` user-defined functions
+        state["tree_node_func"] = CallablePickled(state.get("tree_node_func"))
+        state["concat_func"] = CallablePickled(state.get("concat_func"))
+        finalize_func = state.get("finalize_func", None)
+        if finalize_func:
+            state["finalize_func"] = CallablePickled(finalize_func)
+
         # Materialize the layer
-        raw = cls(**state)._construct_graph(on_scheduler=True)
+        raw = cls(**state)._construct_graph()
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
