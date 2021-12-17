@@ -1598,14 +1598,12 @@ class Bag(DaskMethodsMixin):
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
 
+        dfs = self.map_partitions(to_dataframe, cols, dtypes)
         if optimize_graph:
             dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
         else:
-            dsk = dict(self.dask)
+            dsk = self.dask
 
-        name = "to_dataframe-" + tokenize(self, cols, dtypes)
-        for i in range(self.npartitions):
-            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
 
         divisions = [None] * (self.npartitions + 1)
         return dd.DataFrame(dsk, name, meta, divisions)
