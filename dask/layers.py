@@ -1505,7 +1505,12 @@ class DataFrameTreeReduction(DataFrameLayer):
         return iter(self.get_output_keys())
 
     def __len__(self):
-        return len(self.get_output_keys())
+        # Start with "base" tree-reduction size
+        tree_size = (sum(self.widths[1:]) or 1) * (self.split_out or 1)
+        if self.split_out:
+            # Add on "split-*" tasks used for `getitem` ops
+            return tree_size + self.npartitions_input * len(self.output_partitions)
+        return tree_size
 
     def _keys_to_splits(self, keys):
         """Simple utility to convert keys to split indices."""
