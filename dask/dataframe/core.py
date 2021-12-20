@@ -251,11 +251,12 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             ``dask.delayed`` objects.
         """
         dsk = self.__dask_graph__()
+        layer = self.__dask_layers__()[0]
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
-            name = "delayed-" + self._name
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=())
-        return Delayed(self.key, dsk)
+            layer = "delayed-" + self._name
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
+        return Delayed(self.key, dsk, layer=layer)
 
 
 def _scalar_binary(op, self, other, inv=False):
@@ -1570,11 +1571,12 @@ Dask Name: {name}, {task} tasks"""
         """
         keys = self.__dask_keys__()
         graph = self.__dask_graph__()
+        layer = self.__dask_layers__()[0]
         if optimize_graph:
             graph = self.__dask_optimize__(graph, self.__dask_keys__())
-            name = "delayed-" + self._name
-            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
-        return [Delayed(k, graph) for k in keys]
+            layer = "delayed-" + self._name
+            graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
+        return [Delayed(k, graph, layer=layer) for k in keys]
 
     @classmethod
     def _get_unary_operator(cls, op):
