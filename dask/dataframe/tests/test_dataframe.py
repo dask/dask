@@ -4824,7 +4824,7 @@ def test_dask_layers():
     # Note that the `min` operation will use two layers
     # now that ACA uses uses HLG
     assert {ddf._name, dds._name, ddi.key[0]}.issubset(ddi.dask.layers.keys())
-    assert len(ddi.dask.layers.keys()) == 4
+    assert len(ddi.dask.layers) == 4
     assert ddi.dask.dependencies[ddf._name] == set()
     assert ddi.dask.dependencies[dds._name] == {ddf._name}
     assert len(ddi.dask.dependencies) == 4
