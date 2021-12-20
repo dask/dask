@@ -123,6 +123,7 @@ try:
         isin,
         isnull,
         matmul,
+        ndim,
         nonzero,
         notnull,
         outer,

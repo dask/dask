@@ -1554,6 +1554,12 @@ def round(a, decimals=0):
     return a.map_blocks(np.round, decimals=decimals, dtype=a.dtype)
 
 
+@implements(np.ndim)
+@derived_from(np)
+def ndim(a):
+    return a.ndim
+
+
 @implements(np.iscomplexobj)
 @derived_from(np)
 def iscomplexobj(x):
