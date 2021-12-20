@@ -48,14 +48,14 @@ def optimize(dsk, keys, **kwargs):
 
 
 def optimize_dataframe_getitem(dsk, keys):
-    # This optimization looks for all `DataFrameInputLayer` instances,
+    # This optimization looks for all `DataFrameIOLayer` instances,
     # and calls `project_columns` on any layers that directly precede
     # a (qualified) `getitem` operation.
 
-    from ..layers import DataFrameInputLayer
+    from ..layers import DataFrameIOLayer
 
     dataframe_blockwise = [
-        k for k, v in dsk.layers.items() if isinstance(v, DataFrameInputLayer)
+        k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
     ]
 
     layers = dsk.layers.copy()
