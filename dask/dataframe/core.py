@@ -5756,6 +5756,16 @@ def apply_concat_apply(
             normalize_args=False,
         )
 
+    # Handle sort behavior
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarantee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
+
     # Tree-Reduction Layer
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
     layer = DataFrameTreeReduction(
@@ -5771,15 +5781,6 @@ def apply_concat_apply(
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
     )
-
-    if sort is not None:
-        if sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1`."
-                " Try using split_out=1, or grouping with sort=False."
-            )
-        aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = sort
 
     if meta is no_default:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
