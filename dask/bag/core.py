@@ -1514,7 +1514,7 @@ class Bag(DaskMethodsMixin):
         if shuffle is None:
             shuffle = config.get("shuffle", None)
         if shuffle is None:
-            if "distributed" in config.get("scheduler", ""):
+            if config.get("scheduler", None) in ("dask.distributed", "distributed"):
                 shuffle = "tasks"
             else:
                 shuffle = "disk"
