@@ -484,12 +484,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length")
+    __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None):
+    def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
         self._dask = dsk
         self._length = length
+
+        # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
 
     @property
     def key(self):
@@ -506,12 +513,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        # Delayed objects created with .to_delayed() have exactly
-        # one layer which may have a non-canonical name "delayed-<original name>"
-        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
-            return tuple(self.dask.layers)
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -527,7 +529,15 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def _rebuild(self, dsk, *, rename=None):
         key = replace_name_in_key(self.key, rename) if rename else self.key
-        return Delayed(key, dsk, self._length)
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            # FIXME Delayed is currently the only collection type that supports both high- and low-level graphs.
+            # The HLG output of `optimize` will have a layer name that doesn't match `key`.
+            # Remove this when Delayed is HLG-only (because `optimize` will only be passed HLGs, so it won't have
+            # to generate random layer names).
+            layer = next(iter(dsk.layers))
+        else:
+            layer = None
+        return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
         return f"Delayed({repr(self.key)})"

@@ -3354,10 +3354,16 @@ def test_to_delayed_optimize_graph():
     # optimizations
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
+    assert d.key == (y.name, 0, 0)
+    assert d.dask.layers.keys() == {"delayed-" + y.name}
+    assert d.dask.dependencies == {"delayed-" + y.name: set()}
+    assert d.__dask_layers__() == ("delayed-" + y.name,)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
-    assert dict(d2.dask) == dict(y.dask)
+    assert d2.dask is y.dask
+    assert d2.key == (y.name, 0, 0)
+    assert d2.__dask_layers__() == y.__dask_layers__()
 
     assert (d.compute() == d2.compute()).all()
 
