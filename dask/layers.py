@@ -1310,7 +1310,6 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.split_out = split_out
         self.output_partitions = output_partitions
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
-        self._nested_function = nested_function
 
         # Calculate tree widths and height
         # (Used to get output keys without materializing)
@@ -1337,7 +1336,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             outer_func = self.finalize_func
         else:
             outer_func = self.tree_node_func
-        return (self._nested_function, outer_func, self.concat_func, input_keys)
+        return (nested_function, outer_func, self.concat_func, input_keys)
 
     def _construct_graph(self):
         """Construct graph for a tree reduction."""
@@ -1547,9 +1546,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         from distributed.protocol.serialize import to_serialize
 
         # Materialize the layer
-        raw = cls(**state)
-        raw._nested_function = CallableLazyImport("dask.layers.nested_function")
-        raw = raw._construct_graph()
+        raw = cls(**state)._construct_graph()
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
