@@ -3413,9 +3413,9 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and "distributed" in config.get(
+        if isinstance(z.store, (dict, MutableMapping)) and config.get(
             "scheduler", ""
-        ):
+        ) in ("dask.distributed", "distributed"):
             raise RuntimeError(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
