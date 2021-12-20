@@ -5763,10 +5763,10 @@ def apply_concat_apply(
         chunked._name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
-        combine,
-        tree_node_kwargs=combine_kwargs,
-        finalize_func=aggregate,
-        finalize_kwargs=aggregate_kwargs,
+        partial(combine, **combine_kwargs) if combine_kwargs else combine,
+        finalize_func=partial(aggregate, **aggregate_kwargs)
+        if aggregate_kwargs
+        else aggregate,
         split_every=split_every,
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",

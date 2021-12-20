@@ -37,26 +37,9 @@ class CallableLazyImport:
         return import_term(self.function_path)(*args, **kwargs)
 
 
-class CallablePickled:
-    """Wrapper for a pickled "User-Defined" Function
-
-    This Class should be used to wrap user-defined
-    functions used within HLG Layers. The idea here
-    is to avoid the need for explicit unpickling in
-    the user code.
-    """
-
-    def __init__(self, function):
-        if isinstance(function, CallablePickled):
-            self.function = function.function
-        self.function = function
-
-    def __call__(self, *args, **kwargs):
-        if isinstance(self.function, bytes):
-            import pickle
-
-            self.function = pickle.loads(self.function)
-        return self.function(*args, **kwargs)
+def nested_function(outer_func, inner_func, inputs):
+    """Nested-Function Utility"""
+    return outer_func(inner_func(inputs))
 
 
 #
@@ -1282,22 +1265,11 @@ class DataFrameTreeReduction(DataFrameLayer):
     tree_node_func : callable
         Function used on the output of ``concat_func`` in each tree
         node. This function must accept the output of ``concat_func``
-        as its first positional argument. Any other input arguments
-        must be defined by in ``tree_node_kwargs``.
-    tree_node_args : dict, optional
-        Dictionary of key-word arguments to include in every call to
-        the function specified by ``tree_node_func``. Note that the
-        first positional argument will always correspond to a list of
-        inputs from the input nodex (and these arguments will always
-        come after).
+        as its first positional argument.
     finalize_func : callable, optional
         Function used in place of ``tree_node_func`` on the final tree
         node(s) to produce the final output for each split. By default,
         ``tree_node_func`` will be used.
-    finalize_kwargs : dict, optional
-        Dictionary of key-word arguments to include in every call to
-        the function specified by ``finalize_func``. This parameter
-        is ignored if ``finalize_func`` is not set.
     split_every : int, optional
         This argument specifies the maximum number of input nodes
         to be handled by any one task in the tree. Defaults to 32.
@@ -1320,9 +1292,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         npartitions_input,
         concat_func,
         tree_node_func,
-        tree_node_kwargs=None,
         finalize_func=None,
-        finalize_kwargs=None,
         split_every=32,
         split_out=None,
         output_partitions=None,
@@ -1335,13 +1305,12 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.npartitions_input = npartitions_input
         self.concat_func = concat_func
         self.tree_node_func = tree_node_func
-        self.tree_node_kwargs = tree_node_kwargs or {}
         self.finalize_func = finalize_func
-        self.finalize_kwargs = finalize_kwargs or {}
         self.split_every = split_every
         self.split_out = split_out
         self.output_partitions = output_partitions
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
+        self._nested_function = nested_function
 
         # Calculate tree widths and height
         # (Used to get output keys without materializing)
@@ -1364,17 +1333,11 @@ class DataFrameTreeReduction(DataFrameLayer):
 
     def _define_task(self, input_keys, final_task=False):
         # Define nested concatenation and func task
-        conc = (self.concat_func, input_keys)
         if final_task and self.finalize_func:
-            func = self.finalize_func
-            kwargs = self.finalize_kwargs
+            outer_func = self.finalize_func
         else:
-            func = self.tree_node_func
-            kwargs = self.tree_node_kwargs
-        if kwargs:
-            return (apply, func, [conc], kwargs)
-        else:
-            return (func, conc)
+            outer_func = self.tree_node_func
+        return (self._nested_function, outer_func, self.concat_func, input_keys)
 
     def _construct_graph(self):
         """Construct graph for a tree reduction."""
@@ -1532,9 +1495,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             self.npartitions_input,
             self.concat_func,
             self.tree_node_func,
-            tree_node_kwargs=self.tree_node_kwargs,
             finalize_func=self.finalize_func,
-            finalize_kwargs=self.finalize_kwargs,
             split_every=self.split_every,
             split_out=self.split_out,
             output_partitions=output_partitions,
@@ -1557,23 +1518,15 @@ class DataFrameTreeReduction(DataFrameLayer):
             return self, deps
 
     def __dask_distributed_pack__(self, *args, **kwargs):
-        import pickle
+        from distributed.protocol.serialize import to_serialize
 
         # Pickle the (possibly) user-defined functions here.
         # We also wrap kwargs into the functions themselves
         # to simplify serialization
-        _concat_func = pickle.dumps(self.concat_func)
-        _tree_node_func = pickle.dumps(
-            partial(self.tree_node_func, **self.tree_node_kwargs)
-            if self.tree_node_kwargs
-            else self.tree_node_func
-        )
+        _concat_func = to_serialize(self.concat_func)
+        _tree_node_func = to_serialize(self.tree_node_func)
         if self.finalize_func:
-            _finalize_func = pickle.dumps(
-                partial(self.finalize_func, **self.finalize_kwargs)
-                if self.finalize_kwargs
-                else self.finalize_func
-            )
+            _finalize_func = to_serialize(self.finalize_func)
         else:
             _finalize_func = None
 
@@ -1583,9 +1536,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             "npartitions_input": self.npartitions_input,
             "concat_func": _concat_func,
             "tree_node_func": _tree_node_func,
-            "tree_node_kwargs": {},
             "finalize_func": _finalize_func,
-            "finalize_kwargs": {},
             "split_out": self.split_out,
             "output_partitions": self.output_partitions,
             "tree_node_name": self.tree_node_name,
@@ -1593,21 +1544,18 @@ class DataFrameTreeReduction(DataFrameLayer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
-
-        # Deal with `Serialized` user-defined functions
-        state["tree_node_func"] = CallablePickled(state.get("tree_node_func"))
-        state["concat_func"] = CallablePickled(state.get("concat_func"))
-        finalize_func = state.get("finalize_func", None)
-        if finalize_func:
-            state["finalize_func"] = CallablePickled(finalize_func)
+        from distributed.protocol.serialize import to_serialize
 
         # Materialize the layer
-        raw = cls(**state)._construct_graph()
+        raw = cls(**state)
+        raw._nested_function = CallableLazyImport("dask.layers.nested_function")
+        raw = raw._construct_graph()
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         keys = raw.keys() | dsk.keys()
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
+        # Must use `to_serialize` directly to ensure Serialized functions
+        # are deserialized correctly on worker
+        return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
