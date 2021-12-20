@@ -188,7 +188,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def divisions(self):
         """Dummy divisions to be compat with Series and DataFrame"""
-        return [None, None]
+        return (None, None)
 
     def __repr__(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + "..."
@@ -321,7 +321,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(meta))}"
             )
         self._meta = meta
-        self.divisions = tuple(divisions)
+        self._divisions = tuple(divisions)
 
     def __dask_graph__(self):
         return self.dask
@@ -355,6 +355,47 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _constructor(self):
         return new_dd_object
+
+    @property
+    def divisions(self):
+        """
+        Tuple of ``npartitions + 1`` values, in ascending order, marking the
+        lower/upper bounds of each partition's index. Divisions allow Dask
+        to know which partition will contain a given value, significantly
+        speeding up operations like `loc`, `merge`, and `groupby` by not
+        having to search the full dataset.
+
+        Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
+        where the index in each partition contains values [0, 10), [10, 50),
+        and [50, 100], respectively. Dask therefore knows ``df.loc[45]``
+        will be in the second partition.
+
+        When every item in ``divisions`` is ``None``, the divisions are unknown.
+        Most operations can still be performed, but some will be much slower,
+        and a few may fail.
+
+        It is uncommon to set ``divisions`` directly. Instead, use ``set_index``,
+        which sorts and splits the data as needed.
+        See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+        """
+        return self._divisions
+
+    @divisions.setter
+    def divisions(self, value):
+        if None in value:
+            if any(v is not None for v in value):
+                warnings.warn(
+                    "recieved `divisions` with mix of nulls and non-nulls, future versions will only accept "
+                    "`divisions` that are all null or all non-null",
+                    PendingDeprecationWarning,
+                )
+        if not isinstance(value, tuple):
+            warnings.warn(
+                f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
+                "tuple",
+                PendingDeprecationWarning,
+            )
+        self._divisions = value
 
     @property
     def npartitions(self):
@@ -396,7 +437,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+        self.dask, self._name, self._meta, self._divisions = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe

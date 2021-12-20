@@ -335,7 +335,7 @@ def test_merge_asof_left_on_right_index(
     b = dd.from_pandas(B, npartitions=2)
 
     if unknown_divisions:
-        a.divisions = [None] * len(a.divisions)
+        a.divisions = (None,) * len(a.divisions)
 
     C = pd.merge_asof(
         A,
@@ -368,7 +368,7 @@ def test_merge_asof_left_on_right_index(
             b = dd.from_pandas(B, npartitions=nparts)
 
             if unknown_divisions:
-                a.divisions = [None] * len(a.divisions)
+                a.divisions = (None,) * len(a.divisions)
 
             C = pd.merge_asof(
                 A,
