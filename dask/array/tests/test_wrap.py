@@ -5,6 +5,7 @@ pytest.importorskip("numpy")
 import numpy as np
 
 import dask.array as da
+from dask.array.utils import assert_eq
 from dask.array.wrap import ones
 
 
@@ -50,10 +51,12 @@ def test_full_error_nonscalar_fill_value():
 
 def test_full_detects_da_dtype():
     x = da.from_array(100)
-    # This shall not raise an NotImplementedError due to dtype detected as object.
-    a = da.full(shape=(3, 3), fill_value=x)
-    assert a.dtype == x.dtype
-    assert (a.compute() == 100).all()
+    with pytest.warns(FutureWarning, match="not implemented by Dask array") as record:
+        # This shall not raise an NotImplementedError due to dtype detected as object.
+        a = da.full(shape=(3, 3), fill_value=x)
+        assert a.dtype == x.dtype
+        assert_eq(a, np.full(shape=(3, 3), fill_value=100))
+    assert len(record) == 2
 
 
 def test_full_like_error_nonscalar_fill_value():
