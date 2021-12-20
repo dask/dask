@@ -5737,7 +5737,6 @@ def apply_concat_apply(
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
-        normalize_args=False,
         **chunk_kwargs,
     )
 
@@ -5753,7 +5752,6 @@ def apply_concat_apply(
             enforce_metadata=False,
             transform_divisions=False,
             align_dataframes=False,
-            normalize_args=False,
         )
 
     # Handle sort behavior
@@ -5876,7 +5874,6 @@ def map_partitions(
     """
     name = kwargs.pop("token", None)
     parent_meta = kwargs.pop("parent_meta", None)
-    normalize_args = kwargs.pop("normalize_args", True)
 
     assert callable(func)
     if name is not None:
@@ -5925,7 +5922,7 @@ def map_partitions(
             args2.append(arg)
             dependencies.append(arg)
             continue
-        arg = normalize_arg(arg) if normalize_args else arg
+        arg = normalize_arg(arg)
         arg2, collections = unpack_collections(arg)
         if collections:
             args2.append(arg2)
@@ -5936,7 +5933,7 @@ def map_partitions(
     kwargs3 = {}
     simple = True
     for k, v in kwargs.items():
-        v = normalize_arg(v) if normalize_args else v
+        v = normalize_arg(v)
         v, collections = unpack_collections(v)
         dependencies.extend(collections)
         kwargs3[k] = v
