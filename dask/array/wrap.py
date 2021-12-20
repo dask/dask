@@ -188,7 +188,10 @@ def full(shape, fill_value, *args, **kwargs):
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
     if "dtype" not in kwargs:
-        kwargs["dtype"] = np.dtype(fill_value)
+        if hasattr(fill_value, "dtype"):
+            kwargs["dtype"] = fill_value.dtype
+        else:
+            kwargs["dtype"] = type(fill_value)
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 
