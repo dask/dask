@@ -32,7 +32,7 @@ Dask has two families of task schedulers:
    :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
    :class: with-border
    
-   High level collections are used to generate task graphs which can be executed on a single machine or a cluster. Using the distributed scheduler enables creation of a Dask cluster for multi-machine computation.
+   High level collections are used to generate task graphs which can be executed on a single machine or a cluster. Using the Distributed scheduler enables creation of a Dask cluster for multi-machine computation.
 
 If you import Dask, set up a computation, and call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
