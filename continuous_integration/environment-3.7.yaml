@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
+  - setuptools<60.0
   - packaging
   - numpy=1.18
   - pandas=1.0
