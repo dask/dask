@@ -59,16 +59,20 @@ You can specify configuration values in YAML files. For example:
 
 .. code-block:: yaml
 
-   array:
-      chunk-size: 128 MiB
+  array:
+    chunk-size: 128 MiB
 
-   distributed:
-      worker:
-         memory:
-            spill: 0.85  # default: 0.7
-            target: 0.75  # default: 0.6
-            terminate: 0.98  # default: 0.95
-
+  distributed:
+    worker:
+      memory:
+        spill: 0.85  # default: 0.7
+        target: 0.75  # default: 0.6
+        terminate: 0.98  # default: 0.95
+            
+    dashboard:
+      # Locate the dashboard on a server
+      link: /user/<user>/proxy/8787/status
+        
 
 These files can live in any of the following locations:
 
