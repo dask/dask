@@ -1102,7 +1102,7 @@ def store(
         store_dsk = HighLevelGraph(layers, dependencies)
         load_store_dsk = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsk) for k in map_keys]
+            store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
             load_store_dsk = retrieve_from_ooc(map_keys, store_dsk, store_dsk_2)
@@ -2679,11 +2679,12 @@ class Array(DaskMethodsMixin):
         """
         keys = self.__dask_keys__()
         graph = self.__dask_graph__()
+        layer = self.__dask_layers__()[0]
         if optimize_graph:
             graph = self.__dask_optimize__(graph, keys)  # TODO, don't collape graph
-            name = "delayed-" + self.name
-            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
-        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph), keys)
+            layer = "delayed-" + self.name
+            graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
+        L = ndeepmap(self.ndim, lambda k: Delayed(k, graph, layer=layer), keys)
         return np.array(L, dtype=object)
 
     @derived_from(np.ndarray)
@@ -3413,9 +3414,9 @@ def to_zarr(
 
     if isinstance(url, zarr.Array):
         z = url
-        if isinstance(z.store, (dict, MutableMapping)) and "distributed" in config.get(
+        if isinstance(z.store, (dict, MutableMapping)) and config.get(
             "scheduler", ""
-        ):
+        ) in ("dask.distributed", "distributed"):
             raise RuntimeError(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
