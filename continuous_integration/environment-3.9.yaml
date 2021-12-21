@@ -2,6 +2,7 @@
 name: test-environment
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # required dependencies
   - python=3.9
