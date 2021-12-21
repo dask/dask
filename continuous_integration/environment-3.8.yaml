@@ -8,6 +8,7 @@ dependencies:
   - packaging
   - numpy=1.19
   - pandas=1.2
+  - setuptools<60.0
   # test dependencies
   - pre-commit
   - pytest
