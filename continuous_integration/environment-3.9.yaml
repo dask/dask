@@ -2,6 +2,7 @@
 name: test-environment
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # required dependencies
   - python=3.9
@@ -22,6 +23,9 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  # resolver was pulling in old versions, so hard-coding floor
+  # https://github.com/dask/dask/pull/8505
+  - tiledb>=2.5.0
   - xarray
   - fsspec
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
