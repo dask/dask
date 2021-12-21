@@ -446,7 +446,7 @@ def test_set_index_consistent_divisions():
     ddf = ddf.clear_divisions()
 
     ctx = mp.get_context("spawn")
-    with ProcessPoolExecutor(8, ctx) as pool:
+    with ProcessPoolExecutor(4, ctx) as pool:
         func = partial(_set_index, df=ddf, idx="x")
         divisions_set = set(pool.map(func, range(100)))
     assert len(divisions_set) == 1
