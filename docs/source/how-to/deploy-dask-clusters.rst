@@ -28,16 +28,11 @@ Dask has two families of task schedulers:
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster.
 
-.. figure:: ../images/dask-overview_scheduler_border.svg
+.. figure:: ../images/dask-overview-distributed-callout.svg
    :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
    :class: with-border
    
-   High level collections create task graphs which can be executed on a single machine or a cluster.
-
-.. figure:: ../images/distributed-overview.svg
-   :class: with-border
-   
-   Dask distributed uses the distributed scheduler and enables creation of a distributed cluster for multi-machine computation.
+   High level collections are used to generate task graphs which can be executed on a single machine or a cluster. Using the distributed scheduler enables creation of a Dask cluster for multi-machine computation.
 
 If you import Dask, set up a computation, and call ``compute``, then you
 will use the single-machine scheduler by default.  To use the ``dask.distributed``
