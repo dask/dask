@@ -70,7 +70,7 @@ You can specify configuration values in YAML files. For example:
         terminate: 0.98  # default: 0.95
             
     dashboard:
-      # Locate the dashboard on a server
+      # Locate the dashboard if working on a server
       link: /user/<user>/proxy/8787/status
         
 
