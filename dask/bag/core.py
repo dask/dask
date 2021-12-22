@@ -1605,8 +1605,7 @@ class Bag(DaskMethodsMixin):
             dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        name = dfs.__dask_layers__()[0]
-        return dd.DataFrame(dsk, name, meta, divisions)
+        return dd.DataFrame(dsk, dfs.name, meta, divisions)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
