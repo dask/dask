@@ -1643,9 +1643,10 @@ class _GroupBy:
 
            Pandas' groupby-apply can be used to to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
-           groupby-apply will apply ``func`` once to each partition-group pair,
-           so when ``func`` is a reduction you'll end up with one row per
-           partition-group pair. To apply a custom aggregation with Dask,
+           groupby-apply will apply ``func`` once on each group, doing a shuffle
+           if needed, such that each group is contained in one partition.
+           When ``func`` is a reduction, e.g., you'll end up with one row
+           per group. To apply a custom aggregation with Dask,
            use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
@@ -1728,9 +1729,10 @@ class _GroupBy:
 
            Pandas' groupby-transform can be used to to apply arbitrary functions,
            including aggregations that result in one row per group. Dask's
-           groupby-transform will apply ``func`` once to each partition-group pair,
-           so when ``func`` is a reduction you'll end up with one row per
-           partition-group pair. To apply a custom aggregation with Dask,
+           groupby-transform will apply ``func`` once on each group, doing a shuffle
+           if needed, such that each group is contained in one partition.
+           When ``func`` is a reduction, e.g., you'll end up with one row
+           per group. To apply a custom aggregation with Dask,
            use :class:`dask.dataframe.groupby.Aggregation`.
 
         Parameters
