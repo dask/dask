@@ -1329,9 +1329,12 @@ def test_roll(chunks, shift, axis):
 
 
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
-def test_shape(shape):
+def test_shape_and_ndim(shape):
     x = da.random.random(shape)
     assert np.shape(x) == shape
+
+    x = da.random.random(shape)
+    assert np.ndim(x) == len(shape)
 
 
 @pytest.mark.parametrize(
