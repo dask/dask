@@ -1613,4 +1613,4 @@ def test_to_dataframe_optimize_graph():
     # Annotations are still there
     assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
 
-    assert assert_eq_df(d, d2)
+    assert_eq_df(d, d2)
