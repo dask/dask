@@ -18,10 +18,14 @@ during their session, but this is rare.  Instead, we would like the size of a
 Dask cluster to match the computational needs at any given time.  This is the
 goal of the *adaptive deployments* discussed in this document.
 
+|
+
 .. image:: ../images/dask-adaptive.svg
    :alt: Dask adaptive scaling
    :align: center
-   :width: 100%
+   :scale: 40%
+
+|
 
 These are particularly helpful for interactive workloads, which are characterized by long
 periods of inactivity interrupted with short bursts of heavy activity.

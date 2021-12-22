@@ -28,11 +28,15 @@ Dask emphasizes the following virtues:
 *  **Responsive**: Designed with interactive computing in mind, it provides rapid
    feedback and diagnostics to aid humans
 
+|
 
-.. image:: images/dask-overview.svg
+.. figure:: images/dask-overview.svg
    :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
-   :width: 100%
    :align: center
+
+   High level collections are used to generate task graphs which can be executed by schedulers on a single machine or a cluster.
+
+|
 
 See the `dask.distributed documentation (separate website)
 <https://distributed.dask.org/en/latest/>`_ for more technical information
