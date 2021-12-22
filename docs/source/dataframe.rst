@@ -40,14 +40,16 @@ Dask DataFrame.
 Design
 ------
 
+.. image:: images/dask-dataframe.svg
+   :alt: Column of four squares collectively labeled as a Dask DataFrame with a single constituent square labeled as a Pandas DataFrame.
+   :width: 35%
+   :align: right
+
 Dask DataFrames coordinate many Pandas DataFrames/Series arranged along the
 index.  A Dask DataFrame is partitioned *row-wise*, grouping rows by index value
 for efficiency.  These Pandas objects may live on disk or on other machines.
 
-.. image:: images/dask-dataframe.svg
-   :alt: Dask DataFrames coordinate many Pandas DataFrames
-   :width: 40%
-
+|
 
 Dask DataFrame copies the Pandas API
 ------------------------------------

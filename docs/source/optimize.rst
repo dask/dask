@@ -59,7 +59,7 @@ Suppose you had a custom Dask graph for doing a word counting task:
     ...        'print2': (print_and_return, 'format2'),
     ...        'print3': (print_and_return, 'format3')}
 
-.. image:: images/optimize_dask1.png
+.. image:: images/optimize_dask1.svg
    :width: 65 %
    :alt: The original non-optimized Dask task graph.
 
@@ -98,7 +98,7 @@ later steps:
     >>> outputs = ['print1', 'print2']
     >>> dsk1, dependencies = cull(dsk, outputs)
 
-.. image:: images/optimize_dask2.png
+.. image:: images/optimize_dask2.svg
    :width: 50 %
    :alt: The Dask task graph after culling tasks for optimization.
 
@@ -114,7 +114,7 @@ tasks to improve efficiency using the ``inline`` function. For example:
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask3.png
+.. image:: images/optimize_dask3.svg
    :width: 40 %
    :alt: The Dask task graph after inlining for optimization.
 
@@ -134,7 +134,7 @@ can be used:
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask4.png
+.. image:: images/optimize_dask4.svg
    :width: 30 %
    :alt: The Dask task graph after inlining functions for optimization.
 
@@ -151,7 +151,7 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask5.png
+.. image:: images/optimize_dask5.svg
    :width: 30 %
    :alt: The Dask task graph after fusing tasks for optimization.
 

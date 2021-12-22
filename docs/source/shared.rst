@@ -88,7 +88,7 @@ This may be mediated by using a global or contextual pool:
 We now measure scaling the number of tasks and scaling the density of the
 graph:
 
-.. image:: images/trivial.png
+.. image:: images/trivial.svg
    :width: 30 %
    :align: right
    :alt: Adding nodes
@@ -106,7 +106,7 @@ milliseconds and the single threaded schedulers have costs of a few microseconds
    
    Scheduling overhead for the entire graph (left) vs. per task (right)
 
-.. image:: images/crosstalk.png
+.. image:: images/crosstalk.svg
    :width: 40 %
    :align: right
    :alt: Adding edges
