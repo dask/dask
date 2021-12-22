@@ -105,7 +105,7 @@ the following:
 
    export DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True
    export DASK_DISTRIBUTED__SCHEDULER__ALLOWED_FAILURES=5
-   export DASK_DISTRIBUTED__DASHBOARD__LINK="/user/{JUPYTERHUB_USER}/proxy/{port}/status"
+   export DASK_DISTRIBUTED__DASHBOARD__LINK="/user/<user>/proxy/8787/status"
 
 resulting in configuration values like the following:
 
