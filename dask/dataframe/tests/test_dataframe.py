@@ -4752,6 +4752,19 @@ def test_pop():
     assert_eq(ddf, df[["x"]])
 
 
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_nunique(dropna, axis):
+    df = pd.DataFrame(
+        {"x": ["a", "a", "c"], "y": [None, 1, 2], "c": np.arange(0, 1, 0.4)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf["y"].nunique(dropna=dropna), df["y"].nunique(dropna=dropna))
+    assert_eq(
+        ddf.nunique(dropna=dropna, axis=axis), df.nunique(dropna=dropna, axis=axis)
+    )
+
+
 def test_simple_map_partitions():
     data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
     df = pd.DataFrame(data)

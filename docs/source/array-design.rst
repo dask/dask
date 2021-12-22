@@ -4,7 +4,7 @@ Internal Design
 Overview
 --------
 
-.. image:: images/array.png
+.. image:: images/array.svg
    :width: 40 %
    :align: right
    :alt: 12 rectangular blocks arranged as a 4-row, 3-column layout. Each block includes 'x' and its location in the table starting with ('x',0,0) in the top-left, and a size of 5x8.
