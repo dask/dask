@@ -5107,13 +5107,10 @@ class DataFrame(_Frame):
                 enforce_metadata=False,
             )
         else:
-            nunique_list = []
-            for col in self.columns:
-                nunique = Series.nunique(
-                    self[col], split_every=split_every, dropna=dropna
-                )
-                nunique.name = self[col].name
-                nunique_list.append(nunique)
+            nunique_list = [
+                self[col].nunique(split_every=split_every, dropna=dropna)
+                for col in self.columns
+            ]
             name = "series-" + tokenize(*nunique_list)
             dsk = {
                 (name, 0): (
