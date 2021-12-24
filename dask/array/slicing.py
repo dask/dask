@@ -138,8 +138,10 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     >>> from pprint import pprint
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),), 8)
-    >>> pprint(dsk)  # doctest: +ELLIPSIS
-    {('y', 0): (<function getitem at ...>, ('x', 0), (slice(10, 20, 1),)),
+    >>> pprint(dsk)  # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    {('y', 0): (<function getitem at ...>,
+                ('x', 0),
+                (slice(10, 20, 1),)),
      ('y', 1): (<function getitem at ...>, ('x', 1), (slice(0, 15, 1),))}
     >>> blockdims
     ((10, 15),)
@@ -601,8 +603,10 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], 8, axis=0)
     >>> chunks
     ((3, 1),)
-    >>> pprint(dsk)     # doctest: +ELLIPSIS
-    {('y', 0): (<function getitem at ...>, ('x', 0), (array([1, 3, 5]),)),
+    >>> pprint(dsk)     # doctest: +ELLIPSIS +NORMALIZE_WHITESPACE
+    {('y', 0): (<function getitem at ...>,
+                ('x', 0),
+                (array([1, 3, 5]),)),
      ('y', 1): (<function getitem at ...>, ('x', 2), (array([7]),))}
 
     When any indexed blocks would otherwise grow larger than
