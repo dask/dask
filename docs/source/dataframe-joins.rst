@@ -33,12 +33,17 @@ parallel way, where each partition of the large DataFrame is joined against the
 single small table.  This incurs almost no overhead relative to Pandas joins.
 
 If your smaller table can easily fit in memory, then you might want to ensure
-that it is a single partition with the following
+that it is a single partition with the repartition method.
 
 .. code-block:: python
 
+    from dask.datasets import timeseries
+    large = timeseries(freq="10s", npartitions=10)
+    small = timeseries(freq="1D", dtypes={"z": int})
+
     small = small.repartition(npartitions=1)
-    result = big.merge(small)
+    result = large.merge(small, how="left", on=["timestamp"])
+    result.compute()
 
 Sorted Joins
 ------------
@@ -58,8 +63,29 @@ maintains that index, like Parquet.
 
 .. code-block:: python
 
-    left = left.set_index('id').persist()
+    from dask.datasets import timeseries
+    from dask.dataframe import read_parquet
 
-    left.merge(right_one, left_index=True, ...)
-    left.merge(right_two, left_index=True, ...)
-    ...
+    left = timeseries(dtypes={"foo": int}, freq="1s")
+
+    # timeseries returns a dataframe indexed by
+    # timestamp, we don't need to set_index.
+
+    # left.set_index("timestamp")
+
+    left.to_parquet("left", overwrite=True)
+    left = read_parquet("left")
+
+    # If the dataframe can fit in RAM, you can also use persist
+
+    # left = left.persist()
+
+    right_one = timeseries(freq="1s", dtypes={"bar": int})
+    right_two = timeseries(freq="1s", dtypes={"baz": int})
+
+    result = left.merge(
+        right_one, how="left", left_index=True, right_index=True)
+    result = result.merge(
+        right_two, how="left", left_index=True, right_index=True)
+
+    result.compute()
