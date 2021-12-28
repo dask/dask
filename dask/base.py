@@ -829,15 +829,16 @@ def normalize_set(s):
     return normalize_token(sorted(s, key=str))
 
 
+def _normalize_seq_func(seq):
+    try:
+        return list(map(normalize_token, seq))
+    except RecursionError:
+        return str(uuid.uuid4())
+
+
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
-    def func(seq):
-        try:
-            return list(map(normalize_token, seq))
-        except RecursionError:
-            return str(uuid.uuid4())
-
-    return type(seq).__name__, func(seq)
+    return type(seq).__name__, _normalize_seq_func(seq)
 
 
 @normalize_token.register(literal)
