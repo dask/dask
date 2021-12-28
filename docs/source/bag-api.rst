@@ -3,102 +3,121 @@ API
 
 .. currentmodule:: dask.bag
 
-Top level user functions:
-
-.. autosummary::
-    Bag
-    Bag.all
-    Bag.any
-    Bag.compute
-    Bag.count
-    Bag.distinct
-    Bag.filter
-    Bag.flatten
-    Bag.fold
-    Bag.foldby
-    Bag.frequencies
-    Bag.groupby
-    Bag.join
-    Bag.map
-    Bag.map_partitions
-    Bag.max
-    Bag.mean
-    Bag.min
-    Bag.pluck
-    Bag.product
-    Bag.reduction
-    Bag.random_sample
-    Bag.remove
-    Bag.repartition
-    Bag.starmap
-    Bag.std
-    Bag.sum
-    Bag.take
-    Bag.to_dataframe
-    Bag.to_delayed
-    Bag.to_textfiles
-    Bag.to_avro
-    Bag.topk
-    Bag.var
-    Bag.visualize
-
 Create Bags
 -----------
 
 .. autosummary::
+   :toctree: generated/
+
    from_sequence
    from_delayed
-   read_text
    from_url
-   read_avro
    range
-   dask.dataframe.DataFrame.to_bag
-   dask.dataframe.Series.to_bag
+   read_text
+   read_avro
+
+From dataframe
+~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
+.. autosummary::
+   :toctree: generated/
+
+   DataFrame.to_bag
+   Series.to_bag
 
 Top-level functions
 -------------------
 
+.. currentmodule:: dask.bag
+
 .. autosummary::
+   :toctree: generated/
+
    concat
    map
    map_partitions
+   to_textfiles
    zip
+
+Random Sampling
+---------------
+
+.. autosummary::
+   :toctree: generated/
+
    random.choices
    random.sample
+
 
 Turn Bags into other things
 ---------------------------
 
 .. autosummary::
+   :toctree: generated/
+
    Bag.to_textfiles
    Bag.to_dataframe
    Bag.to_delayed
    Bag.to_avro
 
-Bag methods
+
+Bag Methods
 -----------
 
-.. autoclass:: Bag
-   :members:
+.. autosummary::
+   :toctree: generated/
 
-Other functions
----------------
+   Bag
+   Bag.accumulate
+   Bag.all
+   Bag.any
+   Bag.compute
+   Bag.count
+   Bag.distinct
+   Bag.filter
+   Bag.flatten
+   Bag.fold
+   Bag.foldby
+   Bag.frequencies
+   Bag.groupby
+   Bag.join
+   Bag.map
+   Bag.map_partitions
+   Bag.max
+   Bag.mean
+   Bag.min
+   Bag.persist
+   Bag.pluck
+   Bag.product
+   Bag.reduction
+   Bag.random_sample
+   Bag.remove
+   Bag.repartition
+   Bag.starmap
+   Bag.std
+   Bag.sum
+   Bag.take
+   Bag.to_avro
+   Bag.to_dataframe
+   Bag.to_delayed
+   Bag.to_textfiles
+   Bag.topk
+   Bag.var
+   Bag.visualize
 
-.. autofunction:: from_sequence
-.. autofunction:: from_delayed
-.. autofunction:: read_text
-.. autofunction:: from_url
-.. autofunction:: read_avro
-.. autofunction:: range
-.. autofunction:: concat
-.. autofunction:: map_partitions
-.. autofunction:: map
-.. autofunction:: zip
 
+Item Methods
+------------
 
-Random Sampling
----------------
+.. autosummary::
+   :toctree: generated/
 
-.. automodule:: dask.bag.random
-   :members:
-
+   Item
+   Item.apply
+   Item.compute
+   Item.from_delayed
+   Item.persist
+   Item.to_delayed
+   Item.visualize

@@ -3,8 +3,6 @@ import random
 import sys
 from array import array
 
-from packaging.version import parse as parse_version
-
 from .utils import Dispatch
 
 try:  # PyPy does not support sys.getsizeof
@@ -217,10 +215,3 @@ def register_pyarrow():
     @sizeof.register(pa.ChunkedArray)
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
-
-    # Handle pa.Column for pyarrow < 0.15
-    if parse_version(pa.__version__) < parse_version("0.15.0"):
-
-        @sizeof.register(pa.Column)
-        def sizeof_pyarrow_column(col):
-            return int(_get_col_size(col)) + 1000

@@ -49,6 +49,38 @@ def test_numel(dtype, keepdims):
             )
 
 
+def reduction_0d_test(da_func, darr, np_func, narr):
+    expected = np_func(narr)
+    actual = da_func(darr)
+
+    assert_eq(actual, expected)
+    assert_eq(da_func(narr), expected)  # Ensure Dask reductions work with NumPy arrays
+    assert actual.size == 1
+
+
+def test_reductions_0D():
+    x = np.int_(3)  # np.int_ has a dtype attribute, np.int does not.
+    a = da.from_array(x, chunks=(1,))
+
+    reduction_0d_test(da.sum, a, np.sum, x)
+    reduction_0d_test(da.prod, a, np.prod, x)
+    reduction_0d_test(da.mean, a, np.mean, x)
+    reduction_0d_test(da.var, a, np.var, x)
+    reduction_0d_test(da.std, a, np.std, x)
+    reduction_0d_test(da.min, a, np.min, x)
+    reduction_0d_test(da.max, a, np.max, x)
+    reduction_0d_test(da.any, a, np.any, x)
+    reduction_0d_test(da.all, a, np.all, x)
+
+    reduction_0d_test(da.nansum, a, np.nansum, x)
+    reduction_0d_test(da.nanprod, a, np.nanprod, x)
+    reduction_0d_test(da.nanmean, a, np.mean, x)
+    reduction_0d_test(da.nanvar, a, np.var, x)
+    reduction_0d_test(da.nanstd, a, np.std, x)
+    reduction_0d_test(da.nanmin, a, np.nanmin, x)
+    reduction_0d_test(da.nanmax, a, np.nanmax, x)
+
+
 def reduction_1d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
     assert_eq(da_func(darr), np_func(narr))
     assert_eq(
@@ -418,7 +450,8 @@ def test_nan_object(func):
             warnings.simplefilter("default", RuntimeWarning)
 
         assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
-        assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+        # wrap the scalar in a numpy array since the dask version cannot know dtype
+        assert_eq(np.array(getattr(np, func)(x)).astype(object), getattr(da, func)(d))
 
 
 def test_0d_array():
@@ -521,11 +554,10 @@ def test_general_reduction_names():
         da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
     )
     names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
-    assert set(names) == {"ones", "foo", "foo-partial", "foo-aggregate"}
+    assert set(names) == {"ones_like", "foo", "foo-partial", "foo-aggregate"}
     assert all(tokens)
 
 
-@pytest.mark.filterwarnings("ignore:`argmax` is not implemented by dask")
 @pytest.mark.parametrize("func", [np.sum, np.argmax])
 def test_array_reduction_out(func):
     x = da.arange(10, chunks=(5,))
@@ -723,6 +755,48 @@ def test_object_reduction(method):
     arr = da.ones(1).astype(object)
     result = getattr(arr, method)().compute()
     assert result == 1
+
+
+@pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+def test_empty_chunk_nanmin_nanmax(func):
+    # see https://github.com/dask/dask/issues/8352
+    x = np.arange(10).reshape(2, 5)
+    d = da.from_array(x, chunks=2)
+    x = x[x > 4]
+    d = d[d > 4]
+    block_lens = np.array([len(x.compute()) for x in d.blocks])
+    assert 0 in block_lens
+    with pytest.raises(ValueError) as err:
+        getattr(da, func)(d)
+    assert "Arrays chunk sizes are unknown" in str(err)
+    d = d.compute_chunk_sizes()
+    assert_eq(getattr(da, func)(d), getattr(np, func)(x))
+
+
+@pytest.mark.parametrize("func", ["nanmin", "nanmax"])
+def test_empty_chunk_nanmin_nanmax_raise(func):
+    # see https://github.com/dask/dask/issues/8352
+    x = np.arange(10).reshape(2, 5)
+    d = da.from_array(x, chunks=2)
+    d = d[d > 9]
+    x = x[x > 9]
+    d = d.compute_chunk_sizes()
+    with pytest.raises(ValueError) as err_np:
+        getattr(np, func)(x)
+    with pytest.raises(ValueError) as err_da:
+        d = getattr(da, func)(d)
+        d.compute()
+    assert str(err_np.value) == str(err_da.value)
+
+
+def test_mean_func_does_not_warn():
+    # non-regression test for https://github.com/pydata/xarray/issues/5151
+    xr = pytest.importorskip("xarray")
+    a = xr.DataArray(da.from_array(np.full((10, 10), np.nan)))
+
+    with pytest.warns(None) as rec:
+        a.mean().compute()
+    assert not rec  # did not warn
 
 
 @pytest.mark.parametrize("func", ["nanvar", "nanstd"])

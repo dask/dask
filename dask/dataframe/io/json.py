@@ -22,7 +22,8 @@ def to_json(
     errors="strict",
     compression=None,
     compute_kwargs=None,
-    **kwargs
+    name_function=None,
+    **kwargs,
 ):
     """Write dataframe into JSON text files
 
@@ -59,6 +60,10 @@ def to_json(
         Text conversion, ``see str.encode()``
     compression : string or None
         String like 'gzip' or 'xz'.
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions.
     """
     if lines is None:
         lines = orient == "records"
@@ -73,10 +78,10 @@ def to_json(
         "wt",
         encoding=encoding,
         errors=errors,
-        name_function=kwargs.pop("name_function", None),
+        name_function=name_function,
         num=df.npartitions,
         compression=compression,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
     parts = [
         delayed(write_json_partition)(d, outfile, kwargs)
@@ -109,7 +114,7 @@ def read_json(
     compression="infer",
     meta=None,
     engine=pd.read_json,
-    **kwargs
+    **kwargs,
 ):
     """Create a dataframe from a set of JSON files
 
@@ -193,7 +198,7 @@ def read_json(
             blocksize=blocksize,
             sample=sample,
             compression=compression,
-            **storage_options
+            **storage_options,
         )
         chunks = list(flatten(chunks))
         if meta is None:
@@ -211,7 +216,7 @@ def read_json(
             encoding=encoding,
             errors=errors,
             compression=compression,
-            **storage_options
+            **storage_options,
         )
         parts = [
             delayed(read_json_file)(f, orient, lines, engine, kwargs) for f in files

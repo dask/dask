@@ -1,0 +1,42 @@
+<table>
+    <tr>
+        <td>
+            <table>
+                <thead>
+                    <tr>
+                        <td> </td>
+                        <th> Array </th>
+                        <th> Chunk </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if nbytes %}
+                    <tr>
+                        <th> Bytes </th>
+                        <td> {{ nbytes }} </td>
+                        <td> {{ cbytes }} </td>
+                    </tr>
+                    {% endif %}
+                    <tr>
+                        <th> Shape </th>
+                        <td> {{ array.shape }} </td>
+                        <td> {{ array.chunksize }} </td>
+                    </tr>
+                    <tr>
+                        <th> Count </th>
+                        <td> {{ array.__dask_graph__() | length }} Tasks </td>
+                        <td> {{ array.npartitions }} Chunks </td>
+                    </tr>
+                    <tr>
+                    <th> Type </th>
+                    <td> {{ array.dtype }} </td>
+                    <td> {{ array._meta | type | typename }} </td>
+                    </tr>
+                </tbody>
+            </table>
+        </td>
+        <td>
+        {{grid}}
+        </td>
+    </tr>
+</table>

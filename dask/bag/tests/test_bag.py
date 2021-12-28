@@ -164,10 +164,10 @@ def test_filter():
     c = b.filter(iseven)
     expected = merge(
         dsk,
-        dict(
-            ((c.name, i), (reify, (filter, iseven, (b.name, i))))
+        {
+            (c.name, i): (reify, (filter, iseven, (b.name, i)))
             for i in range(b.npartitions)
-        ),
+        },
     )
     assert c.dask == expected
     assert c.name == b.filter(iseven).name
@@ -636,8 +636,8 @@ def test_from_url():
 
 def test_read_text():
     with filetexts({"a1.log": "A\nB", "a2.log": "C\nD"}) as fns:
-        assert set(line.strip() for line in db.read_text(fns)) == set("ABCD")
-        assert set(line.strip() for line in db.read_text("a*.log")) == set("ABCD")
+        assert {line.strip() for line in db.read_text(fns)} == set("ABCD")
+        assert {line.strip() for line in db.read_text("a*.log")} == set("ABCD")
 
     pytest.raises(ValueError, lambda: db.read_text("non-existent-*-path"))
 
@@ -791,6 +791,13 @@ def test_groupby_with_npartitions_changed():
     }
 
     assert result.npartitions == 1
+
+
+def test_groupby_with_scheduler_func():
+    from dask.threaded import get
+
+    with dask.config.set(scheduler=get):
+        b.groupby(lambda x: x, npartitions=1).compute()
 
 
 def test_concat():
@@ -999,7 +1006,7 @@ def test_to_textfiles_endlines():
     with tmpfile() as fn:
         for last_endline in False, True:
             b.to_textfiles([fn], last_endline=last_endline)
-            with open(fn, "r") as f:
+            with open(fn) as f:
                 result = f.readlines()
             assert result == ["a\n", "b\n", "c\n" if last_endline else "c"]
 
@@ -1078,7 +1085,7 @@ def test_bag_class_extend():
 
 
 def test_gh715():
-    bin_data = "\u20ac".encode("utf-8")
+    bin_data = "\u20ac".encode()
     with tmpfile() as fn:
         with open(fn, "wb") as f:
             f.write(bin_data)
@@ -1110,16 +1117,20 @@ def test_to_delayed_optimize_graph(tmpdir):
     [d] = b2.to_delayed()
     text = str(dict(d.dask))
     assert text.count("reify") == 1
+    assert d.__dask_layers__() != b2.__dask_layers__()
     [d2] = b2.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(b2.dask)
+    assert d2.__dask_layers__() == b2.__dask_layers__()
     assert d.compute() == d2.compute()
 
     x = b2.sum()
     d = x.to_delayed()
     text = str(dict(d.dask))
+    assert d.__dask_layers__() == x.__dask_layers__()
     assert text.count("reify") == 0
     d2 = x.to_delayed(optimize_graph=False)
     assert dict(d2.dask) == dict(x.dask)
+    assert d2.__dask_layers__() == x.__dask_layers__()
     assert d.compute() == d2.compute()
 
     [d] = b2.to_textfiles(str(tmpdir), compute=False)
@@ -1257,7 +1268,7 @@ def test_repartition_input_errors():
 
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]
-    dsk = dict((("test", i), p) for (i, p) in enumerate(parts))
+    dsk = {("test", i): p for (i, p) in enumerate(parts)}
     b = db.Bag(dsk, "test", len(parts))
     r = b.accumulate(add)
     assert r.name == b.accumulate(add).name
@@ -1571,13 +1582,26 @@ def test_dask_layers():
     assert i.dask.dependencies == {a.name: set(), i.key: {a.name}}
 
 
-def test_dask_layers_to_delayed():
-    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
-    # match the key
+@pytest.mark.parametrize("optimize", [False, True])
+def test_dask_layers_to_delayed(optimize):
+    # `da.Array.to_delayed` causes the layer name to not match the key.
+    # Ensure the layer name is propagated between `Delayed` and `Item`.
     da = pytest.importorskip("dask.array")
-    i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
-    name = i.key[0]
-    assert i.key[1:] == (0,)
-    assert i.dask.layers.keys() == {"delayed-" + name}
-    assert i.dask.dependencies == {"delayed-" + name: set()}
-    assert i.__dask_layers__() == ("delayed-" + name,)
+    arr = da.ones(1) + 1
+    delayed = arr.to_delayed(optimize_graph=optimize)[0]
+    i = db.Item.from_delayed(delayed)
+    assert i.key == delayed.key
+    assert i.dask is delayed.dask
+    assert i.__dask_layers__() == delayed.__dask_layers__()
+
+    back = i.to_delayed(optimize_graph=optimize)
+    assert back.__dask_layers__() == i.__dask_layers__()
+
+    if not optimize:
+        assert back.dask is arr.dask
+        # When not optimized, the key is not a layer in the graph, so using it should fail
+        with pytest.raises(ValueError, match="not in"):
+            db.Item(back.dask, back.key)
+
+    with pytest.raises(ValueError, match="not in"):
+        db.Item(arr.dask, (arr.name,), layer="foo")

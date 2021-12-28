@@ -156,5 +156,5 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
    ...               storage_options={'account_name': 'ACCOUNT_NAME',
    ...                                'account_key': 'ACCOUNT_KEY'}
 
-See the :doc:`remote data services documentation<remote-data-services>`
+See the :doc:`how to connect to remote data <how-to/connect-to-remote-data>`
 for more information.

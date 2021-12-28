@@ -166,7 +166,7 @@ def test_ufunc_array_wrap(ufunc):
     - np.ufunc(dd.Series) => np.ndarray
     - np.ufunc(pd.Series) => np.ndarray
     """
-    if ufunc == "fix" and np.__version__ >= "1.13.0":
+    if ufunc == "fix":
         pytest.skip("fix calls floor in a way that we do not yet support")
 
     dafunc = getattr(da, ufunc)
