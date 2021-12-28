@@ -1,5 +1,3 @@
-:orphan:
-
 Shared Memory
 =============
 
@@ -52,7 +50,7 @@ under different kinds of load (embarrassingly parallel, dense communication).
 
 The quickest/simplest test we can do it to use IPython's ``timeit`` magic:
 
-.. code-block:: python
+.. ipython::
 
    In [1]: import dask.array as da
 
@@ -66,9 +64,10 @@ The quickest/simplest test we can do it to use IPython's ``timeit`` magic:
 
 So this takes ~90 microseconds per task.  About 100ms of this is from overhead:
 
-.. code-block:: python
+.. ipython::
 
    In [5]: x = da.ones(1000, chunks=(1000,)).sum()
+   
    In [6]: %timeit x.compute()
    1.18 ms ± 8.64 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
 
@@ -89,7 +88,7 @@ This may be mediated by using a global or contextual pool:
 We now measure scaling the number of tasks and scaling the density of the
 graph:
 
-.. image:: images/trivial.png
+.. image:: images/trivial.svg
    :width: 30 %
    :align: right
    :alt: Adding nodes
@@ -102,9 +101,12 @@ overhead grows linearly.  The asymptotic cost per task depends on the scheduler.
 The schedulers that depend on some sort of asynchronous pool have costs of a few
 milliseconds and the single threaded schedulers have costs of a few microseconds.
 
-.. image:: images/scaling-nodes.png
+.. figure:: images/scaling-nodes.png
+   :alt: Graph depicting how well Dask scales with the number of nodes in the task graph. Graph shows the duration in seconds on the y-axis versus number of edges per task on the x-axis. The time to schedule the entire graph is constant initially, followed by a linear increase after roughly 500 tasks for multiprocessing and threaded schedulers and 10 tasks for async and core schedulers. The inverse is true for the cost per task, with a linear cost decrease, followed by more or less constant cost.
+   
+   Scheduling overhead for the entire graph (left) vs. per task (right)
 
-.. image:: images/crosstalk.png
+.. image:: images/crosstalk.svg
    :width: 40 %
    :align: right
    :alt: Adding edges
@@ -119,7 +121,10 @@ Note: Neither the naive core scheduler nor the multiprocessing scheduler
 are good at workflows with non-trivial cross-task
 communication; they have been removed from the plot.
 
-.. image:: images/scaling-edges.png
+.. figure:: images/scaling-edges.png
+   :alt: Graph depicting how well Dask scales with the number of edges in the task graph. Graph shows the duration in seconds on the y-axis versus number of edges per task on the x-axis. As the number of edges increases from 0 to 100, the time to schedule the entire graph using the threaded scheduler goes from 2 to 8 seconds whereas using the async scheduler goes from 0 to 3 seconds. The cost per edge decreases up until about 10 edges, after which the cost plateaus for both the threaded and async schedulers, with the async scheduler being consistenly faster.
+   
+   Scheduling overhead of the entire graph (left) vs. per edge (right)
 
 `Download scheduling script`_
 

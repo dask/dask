@@ -84,7 +84,7 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
         cache=cache,
         get_id=_thread_get_id,
         pack_exception=pack_exception,
-        **kwargs
+        **kwargs,
     )
 
     # Cleanup pools associated to dead threads

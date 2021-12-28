@@ -512,8 +512,33 @@ def test_to_bag():
 
     assert ddf.to_bag().compute() == list(a.itertuples(False))
     assert ddf.to_bag(True).compute() == list(a.itertuples(True))
+    assert ddf.to_bag(format="dict").compute() == [
+        {"x": "a", "y": 2},
+        {"x": "b", "y": 3},
+        {"x": "c", "y": 4},
+        {"x": "d", "y": 5},
+    ]
+    assert ddf.to_bag(True, format="dict").compute() == [
+        {"index": 1.0, "x": "a", "y": 2},
+        {"index": 2.0, "x": "b", "y": 3},
+        {"index": 3.0, "x": "c", "y": 4},
+        {"index": 4.0, "x": "d", "y": 5},
+    ]
     assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
     assert ddf.x.to_bag().compute() == list(a.x)
+
+    assert ddf.x.to_bag(True, format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
+    assert ddf.x.to_bag(format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
 
 
 def test_to_records():
@@ -598,6 +623,20 @@ def test_from_delayed():
     with pytest.raises(ValueError) as e:
         dd.from_delayed(dfs, meta=meta.a).compute()
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
+
+
+def test_from_delayed_preserves_hlgs():
+    df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
+    parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
+    dfs = [delayed(parts.__getitem__)(i) for i in range(4)]
+    meta = dfs[0].compute()
+
+    chained = [d.a for d in dfs]
+    hlg = dd.from_delayed(chained, meta=meta).dask
+    for d in chained:
+        for layer_name, layer in d.dask.layers.items():
+            assert hlg.layers[layer_name] == layer
+            assert hlg.dependencies[layer_name] == d.dask.dependencies[layer_name]
 
 
 def test_from_delayed_misordered_meta():

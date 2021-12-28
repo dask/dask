@@ -434,7 +434,7 @@ storage file format with a good selection of encoding and compression options.
 Due to each chunk being stored in a separate file, it is ideal for parallel
 access in both reading and writing (for the latter, if the Dask array
 chunks are aligned with the target). Furthermore, storage in
-:doc:`remote data services <remote-data-services>` such as S3 and GCS is
+:doc:`remote data services <how-to/connect-to-remote-data>` such as S3 and GCS is
 supported.
 
 For example, to save data to a local zarr dataset you would do:

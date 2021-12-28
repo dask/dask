@@ -265,9 +265,10 @@ of the input array. In reshaping operations, there's the concept of "fast-moving
 or "high" axes. For a 2d array the second axis (``axis=1``) is the fastest-moving,
 followed by the first. This means that if we draw a line indicating how values
 are filled, we move across the "columns" first (along ``axis=1``), and then down
-to the next row.
+to the next row. Consider ``np.ones((3, 4)).reshape(12)``:
 
 .. image:: images/reshape.png
+   :alt: Visual representation of a 2-dimensional (3 rows by 4 colurmns) NumPy array being reshaped to 1 dimension (12 columns by 1 row). Arrows indicate the order in which values from the original array are copied to the new array, moving across the columns in axis 1 first before moving down to the next row in axis 0.
 
 Now consider the impact of Dask's chunking on this operation. If the slow-moving
 axis (just ``axis=0`` in this case) has chunks larger than size 1, we run into

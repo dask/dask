@@ -60,10 +60,10 @@ You can specify configuration values in YAML files. For example:
 .. code-block:: yaml
 
    array:
-     chunk-size: 128 MiB
-     
+      chunk-size: 128 MiB
+
    distributed:
-      workers: 
+      worker:
          memory:
             spill: 0.85  # default: 0.7
             target: 0.75  # default: 0.6
@@ -208,13 +208,13 @@ your own configuration items below to convert back and forth.
    <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
    array:
       chunk-size: 128 MiB
- 
+
    distributed:
       workers:
          memory:
-            spill: 0.85 
-            target: 0.75  
-            terminate: 0.98  
+            spill: 0.85
+            target: 0.75
+            terminate: 0.98
    </textarea>
 
 **Environment variable**
@@ -441,3 +441,101 @@ API
 .. autofunction:: dask.config.refresh
 .. autofunction:: dask.config.ensure_file
 .. autofunction:: dask.config.expand_environment_variables
+
+
+Configuration Reference
+-----------------------
+
+.. contents:: :local:
+
+.. note::
+   It is possible to configure Dask inline with dot notation, with YAML or via environment variables.
+   See the `conversion utility <#conversion-utility>`_ for converting the following dot notation to other forms.
+
+Dask
+~~~~
+
+.. dask-config-block::
+    :location: dask
+    :config: https://raw.githubusercontent.com/dask/dask/main/dask/dask.yaml
+    :schema: https://raw.githubusercontent.com/dask/dask/main/dask/dask-schema.yaml
+
+
+Distributed Client
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.client
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+Distributed Comm
+~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.comm
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Dashboard
+~~~~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.dashboard
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Deploy
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.deploy
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Scheduler
+~~~~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.scheduler
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Worker
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.worker
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Nanny
+~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.nanny
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Admin
+~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.admin
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed RMM
+~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.rmm
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml

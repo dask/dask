@@ -6,8 +6,6 @@ from packaging.version import parse as parse_version
 from ..utils import derived_from
 
 _np_version = parse_version(np.__version__)
-_numpy_117 = _np_version >= parse_version("1.17.0")
-_numpy_118 = _np_version >= parse_version("1.18.0")
 _numpy_120 = _np_version >= parse_version("1.20.0")
 _numpy_121 = _np_version >= parse_version("1.21.0")
 
@@ -126,8 +124,7 @@ class _Recurser:
             return
         for i, xi in enumerate(x):
             # yield from ...
-            for v in self.walk(xi, index + (i,)):
-                yield v
+            yield from self.walk(xi, index + (i,))
 
 
 # Implementation taken directly from numpy:

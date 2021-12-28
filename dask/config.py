@@ -138,12 +138,10 @@ def collect_yaml(paths=paths):
                 try:
                     file_paths.extend(
                         sorted(
-                            [
-                                os.path.join(path, p)
-                                for p in os.listdir(path)
-                                if os.path.splitext(p)[1].lower()
-                                in (".json", ".yaml", ".yml")
-                            ]
+                            os.path.join(path, p)
+                            for p in os.listdir(path)
+                            if os.path.splitext(p)[1].lower()
+                            in (".json", ".yaml", ".yml")
                         )
                     )
                 except OSError:
@@ -160,7 +158,7 @@ def collect_yaml(paths=paths):
             with open(path) as f:
                 data = yaml.safe_load(f.read()) or {}
                 configs.append(data)
-        except (OSError, IOError):
+        except OSError:
             # Ignore permission errors
             pass
 
@@ -261,7 +259,7 @@ def ensure_file(source, destination=None, comment=True):
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except (IOError, OSError):
+    except OSError:
         pass
 
 
@@ -549,6 +547,15 @@ deprecations = {
     "fuse_subgraphs": "optimization.fuse.subgraphs",
     "fuse_rename_keys": "optimization.fuse.rename-keys",
     "fuse_max_depth_new_edges": "optimization.fuse.max-depth-new-edges",
+    # See https://github.com/dask/distributed/pull/4916
+    "ucx.cuda_copy": "distributed.ucx.cuda_copy",
+    "ucx.tcp": "distributed.ucx.tcp",
+    "ucx.nvlink": "distributed.ucx.nvlink",
+    "ucx.infiniband": "distributed.ucx.infiniband",
+    "ucx.rdmacm": "distributed.ucx.rdmacm",
+    "ucx.net-devices": "distributed.ucx.net-devices",
+    "ucx.reuse-endpoints": "distributed.ucx.reuse-endpoints",
+    "rmm.pool-size": "distributed.rmm.pool-size",
 }
 
 
@@ -591,7 +598,7 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
             )
             return new
         else:
-            raise ValueError('Configuration value "{}" has been removed'.format(key))
+            raise ValueError(f'Configuration value "{key}" has been removed')
     else:
         return key
 

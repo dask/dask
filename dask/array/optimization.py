@@ -1,6 +1,5 @@
 from itertools import zip_longest
 from numbers import Integral
-from operator import getitem
 
 import numpy as np
 
@@ -10,6 +9,7 @@ from ..core import flatten, reverse_dict
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import fuse, inline_functions
 from ..utils import ensure_dict
+from .chunk import getitem
 from .core import getter, getter_inline, getter_nofancy
 
 # All get* functions the optimizations know about
@@ -27,7 +27,7 @@ def optimize(
     fast_functions=None,
     inline_functions_fast_functions=(getter_inline,),
     rename_fused_keys=True,
-    **kwargs
+    **kwargs,
 ):
     """Optimize dask for array computation
 
