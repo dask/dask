@@ -188,6 +188,19 @@ def _groupby_slice_transform(
     return g.transform(func, *args, **kwargs)
 
 
+def _groupby_slice_shift(
+    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+):
+    # No need to use raise if unaligned here - this is only called after
+    # shuffling, which makes everything aligned already
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    observed = {"observed": observed} if observed is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
+    if key:
+        g = g[key]
+    return g.shift(**kwargs)
+
+
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
@@ -1799,6 +1812,95 @@ class _GroupBy:
         )
 
         return df3
+
+    @insert_meta_param_description(pad=12)
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None, meta=no_default):
+        """Parallel version of pandas GroupBy.shift
+
+        This mimics the pandas version except for the following:
+
+        If the grouper does not align with the index then this causes a full
+        shuffle.  The order of rows within each group may not be preserved.
+
+        Parameters
+        ----------
+        periods : Delayed, Scalar or int, default 1
+            Number of periods to shift.
+        freq : Delayed, Scalar or str, optional
+            Frequency string.
+        axis : axis to shift, default 0
+            Shift direction.
+        fill_value : Scalar, Delayed or object, optional
+            The scalar value to use for newly introduced missing values.
+        $META
+
+        Returns
+        -------
+        shifted : Series or DataFrame shifted within each group.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> result = ddf.groupby("name").shift()
+        >>> result = ddf.groupby("name")["x"].shift(1, fill_value=ddf.x.mean())
+        """
+        if meta is no_default:
+            with raise_on_meta_error("groupby.shift()", udf=False):
+                meta_kwargs = _extract_meta(
+                    {
+                        "periods": periods,
+                        "freq": freq,
+                        "axis": axis,
+                        "fill_value": fill_value,
+                    },
+                    nonempty=True,
+                )
+                meta = self._meta_nonempty.shift(**meta_kwargs)
+
+            msg = (
+                "`meta` is not specified, inferred from partial data. "
+                "Please provide `meta` if the result is unexpected.\n"
+                "  Before: .shift(1)\n"
+                "  After:  .shift(1, meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                "  or:     .shift(1, meta=('x', 'f8'))            for series result"
+            )
+            warnings.warn(msg, stacklevel=2)
+
+        meta = make_meta(meta, parent_meta=self._meta.obj)
+
+        # Validate self.by
+        if isinstance(self.by, list) and any(
+            isinstance(item, Series) for item in self.by
+        ):
+            raise NotImplementedError(
+                "groupby-transform with a multiple Series is currently not supported"
+            )
+        df = self.obj
+        should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
+
+        if should_shuffle:
+            df2, by = self._shuffle(meta)
+        else:
+            df2 = df
+            by = self.by
+
+        # Perform embarrassingly parallel groupby-shift
+        result = map_partitions(
+            _groupby_slice_shift,
+            df2,
+            by,
+            self._slice,
+            periods=periods,
+            freq=freq,
+            axis=axis,
+            fill_value=fill_value,
+            group_keys=self.group_keys,
+            meta=meta,
+            **self.observed,
+            **self.dropna,
+        )
+        return result
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
