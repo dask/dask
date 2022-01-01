@@ -1842,8 +1842,7 @@ class _GroupBy:
         --------
         >>> import dask
         >>> ddf = dask.datasets.timeseries(freq="1H")
-        >>> result = ddf.groupby("name").shift()
-        >>> result = ddf.groupby("name")["x"].shift(1, fill_value=ddf.x.mean())
+        >>> result = ddf.groupby("name").shift(1, meta={"id": int, "x": float, "y": float})
         """
         if meta is no_default:
             with raise_on_meta_error("groupby.shift()", udf=False):
