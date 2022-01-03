@@ -29,7 +29,6 @@ from dask.bag.core import (
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
-from dask.dataframe.utils import assert_eq as assert_eq_df
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
 from dask.utils_test import add, hlg_layer_topological, inc
@@ -1616,6 +1615,9 @@ def test_dask_layers_to_delayed(optimize):
 
 
 def test_to_dataframe_optimize_graph():
+    pytest.importorskip("dask.dataframe")
+    from dask.dataframe.utils import assert_eq as assert_eq_df
+
     x = db.from_sequence(
         [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2
     )
