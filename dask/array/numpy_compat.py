@@ -263,3 +263,11 @@ else:
         return np.lib.stride_tricks.as_strided(
             x, strides=out_strides, shape=out_shape, subok=subok, writeable=writeable
         )
+
+
+# kwarg is renamed in numpy 1.22.0
+def percentile(a, q, method="linear"):
+    if _numpy_122:
+        return np.percentile(a, q, method=method)
+    else:
+        return np.percentile(a, q, interpolation=method)

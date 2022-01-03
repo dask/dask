@@ -9,22 +9,18 @@ from tlz import merge
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from .core import Array
-from .numpy_compat import _numpy_122
+from .numpy_compat import percentile as np_percentile
 
 
 @wraps(np.percentile)
 def _percentile(a, q, method="linear"):
-    if _numpy_122:
-        method_kwarg = {"method": method}
-    else:
-        method_kwarg = {"interpolation": method}
     n = len(a)
     if not len(a):
         return None, n
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == "category":
-        result = np.percentile(a.cat.codes, q, **method_kwarg)
+        result = np_percentile(a.cat.codes, q, method=method)
         import pandas as pd
 
         return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
@@ -37,14 +33,14 @@ def _percentile(a, q, method="linear"):
     if np.issubdtype(a.dtype, np.datetime64):
         values = a
         a2 = values.view("i8")
-        result = np.percentile(a2, q, **method_kwarg).astype(values.dtype)
+        result = np_percentile(a2, q, method=method).astype(values.dtype)
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
             result[0] = min(result[0], values.min())
         return result, n
     if not np.issubdtype(a.dtype, np.number):
         method = "nearest"
-    return np.percentile(a, q, **method_kwarg), n
+    return np_percentile(a, q, method=method), n
 
 
 def _tdigest_chunk(a):
