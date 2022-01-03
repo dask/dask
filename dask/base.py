@@ -979,7 +979,7 @@ def _normalize_function(func):
         try:
             import cloudpickle
 
-            return cloudpickle.dumps(func, protocol=0)
+            return cloudpickle.dumps(func, protocol=None)
         except Exception:
             return str(func)
 
