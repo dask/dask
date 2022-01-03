@@ -22,8 +22,9 @@ divide_lookup.register(np.ma.masked_array, ma_divide)
 
 
 @percentile_lookup.register(np.ndarray)
-def percentile(a, q, interpolation="linear"):
-    return _percentile(a, q, interpolation)
+def percentile(a, q, method="linear"):
+
+    return _percentile(a, q, method)
 
 
 @concatenate_lookup.register(np.ma.masked_array)
