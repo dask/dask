@@ -109,7 +109,7 @@ The ``progress`` function takes a Dask object that is executing in the backgroun
 
 .. code-block:: python
 
-   # Progress bar on a single machine
+   # Progress bar on a single-machine scheduler
    from dask.diagnostics import ProgressBar
 
    with ProgressBar():
