@@ -50,27 +50,40 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseDep):
-    """Index-chunk mapping for BlockwiseCreateArray"""
+class ArrayChunkShapeDep(BlockwiseDep):
+    """Index-chunkshape mapping for BlockwiseCreateArray"""
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
-        self.shape = tuple(sum(c) for c in chunks)
+        self.numblocks = tuple(len(chunk) for chunk in chunks)
+        self.produces_tasks = False
+
+    def __getitem__(self, idx: tuple):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        return {"chunks": self.chunks}
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
+
+
+class ArraySliceDep(BlockwiseDep):
+    """Index-slice mapping for BlockwiseCreateArray"""
+
+    def __init__(self, chunks: tuple):
+        self.chunks = chunks
         self.starts = [cached_cumsum(c, initial_zero=True) for c in chunks]
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
 
     def __getitem__(self, idx: tuple):
-        chunk_shape = tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
-        array_location = tuple(
-            (start[i], start[i + 1]) for i, start in zip(idx, self.starts)
-        )
-        return {
-            "shape": self.shape,
-            "num-chunks": self.numblocks,
-            "array-location": array_location,
-            "chunk-shape": chunk_shape,
-        }
+        loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
+        print(loc)
+        return tuple(slice(*s, None) for s in loc)
 
     def __dask_distributed_pack__(
         self, required_indices: Optional[List[Tuple[int, ...]]] = None
@@ -104,19 +117,19 @@ class BlockwiseCreateArray(Blockwise):
     def __init__(
         self,
         name,
-        func,
         shape,
-        chunks,
+        func,
+        *deps,
     ):
         # Define "blockwise" graph
-        dsk = {name: (func, blockwise_token(0))}
+        dsk = {name: (func, *[blockwise_token(i) for i in range(len(deps))])}
 
         out_ind = tuple(range(len(shape)))
         super().__init__(
             output=name,
             output_indices=out_ind,
             dsk=dsk,
-            indices=[(CreateArrayDeps(chunks), out_ind)],
+            indices=[(d, out_ind) for d in deps],
             numblocks={},
         )
 

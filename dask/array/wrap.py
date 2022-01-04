@@ -5,7 +5,8 @@ import numpy as np
 from tlz import curry
 
 from ..base import tokenize
-from ..layers import BlockwiseCreateArray
+from ..blockwise import blockwise as core_blockwise
+from ..layers import ArrayChunkShapeDep
 from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import meta_from_array
@@ -41,14 +42,6 @@ def _parse_wrap_args(func, args, kwargs, shape):
     }
 
 
-def _create_uniform_array_from_block_info(func, block_info, **kwargs):
-    """
-    CreateArrayDeps produces a block_info object. Extract the appropriate information
-    from that for creating wrapped uniform arrays.
-    """
-    return func(block_info["chunk-shape"], **kwargs)
-
-
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     """
     Transform np creation function into blocked version
@@ -70,14 +63,24 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-    func = partial(_create_uniform_array_from_block_info, func, dtype=dtype, **kwargs)
+    func = partial(func, dtype=dtype, **kwargs)
 
-    graph = BlockwiseCreateArray(
-        name,
+    # graph = BlockwiseCreateArray(
+    #    name,
+    #    shape,
+    #    func,
+    #    ArrayChunkShapeDep(chunks),
+    # )
+    out_ind = dep_ind = tuple(range(len(shape)))
+    graph = core_blockwise(
         func,
-        shape,
-        chunks,
+        name,
+        out_ind,
+        ArrayChunkShapeDep(chunks),
+        dep_ind,
+        numblocks={},
     )
+
     return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
@@ -110,8 +113,7 @@ def wrap_func_like(func, *args, **kwargs):
 
 
 @curry
-def wrap(wrap_func, func, **kwargs):
-    func_like = kwargs.pop("func_like", None)
+def wrap(wrap_func, func, func_like=None, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:
