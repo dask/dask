@@ -109,14 +109,13 @@ The ``progress`` function takes a Dask object that is executing in the backgroun
 
 .. code-block:: python
 
-   # Single machine progress bar
+   # Progress bar on a single machine
    from dask.diagnostics import ProgressBar
 
    with ProgressBar():
        x.compute()
 
-   # Distributed scheduler ProgressBar
-
+   # Progress bar with the distributed scheduler
    from dask.distributed import Client, progress
 
    client = Client()  # use dask.distributed by default
