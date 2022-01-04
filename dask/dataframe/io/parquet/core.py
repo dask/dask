@@ -197,7 +197,6 @@ def read_parquet(
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        Only the "pyarrow" engine supports this argument.
     chunksize : int or str, default None
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
@@ -464,6 +463,7 @@ def to_parquet(
     compute=True,
     compute_kwargs=None,
     schema=None,
+    name_function=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -529,6 +529,14 @@ def to_parquet(
         output partition. If the partitions produce inconsistent schemas,
         pyarrow will throw an error when writing the shared _metadata file.
         Note that this argument is ignored by the "fastparquet" engine.
+    name_function : callable, default None
+        Function to generate the filename for each output partition.
+        The function should accept an integer (partition index) as input and
+        return a string which will be used as the filename for the corresponding
+        partition. Should preserve the lexicographic order of partitions.
+        If not specified, files will created using the convention
+        ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
+        and so on for each partition in the DataFrame.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -536,6 +544,28 @@ def to_parquet(
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
+
+    By default, files will be created in the specified output directory using the
+    convention ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ... and so on for
+    each partition in the DataFrame. To customize the names of each file, you can use the
+    ``name_function=`` keyword argument. The function passed to ``name_function`` will be
+    used to generate the filename for each partition and should expect a partition's index
+    integer as input and return a string which will be used as the filename for the corresponding
+    partition. Strings produced by ``name_function`` must preserve the order of their respective
+    partition indices.
+
+    For example:
+
+    >>> name_function = lambda x: f"data-{x}.parquet"
+    >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
+
+    will result in the following files being created::
+
+        /path/to/output/
+            ├── data-0.parquet
+            ├── data-1.parquet
+            ├── data-2.parquet
+            └── ...
 
     See Also
     --------
@@ -649,6 +679,15 @@ def to_parquet(
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
+    if custom_metadata:
+        if b"pandas" in custom_metadata.keys():
+            raise ValueError(
+                "User-defined key/value metadata (custom_metadata) can not "
+                "contain a b'pandas' key.  This key is reserved by Pandas, "
+                "and overwriting the corresponding value can render the "
+                "entire dataset unreadable."
+            )
+        kwargs_pass["custom_metadata"] = custom_metadata
     meta, schema, i_offset = engine.initialize_write(
         df,
         fs,
@@ -662,8 +701,20 @@ def to_parquet(
         **kwargs_pass,
     )
 
+    # check name_function is valid
+    if name_function is not None and not callable(name_function):
+        raise ValueError("``name_function`` must be a callable with one argument.")
+
     # Use i_offset and df.npartitions to define file-name list
-    filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
+    filenames = [
+        f"part.{i + i_offset}.parquet"
+        if name_function is None
+        else name_function(i + i_offset)
+        for i in range(df.npartitions)
+    ]
+
+    if name_function is not None and len(set(filenames)) < len(filenames):
+        raise ValueError("``name_function`` must produce unique filenames.")
 
     # Construct IO graph
     dsk = {}
@@ -683,15 +734,6 @@ def to_parquet(
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
-    if custom_metadata:
-        if b"pandas" in custom_metadata.keys():
-            raise ValueError(
-                "User-defined key/value metadata (custom_metadata) can not "
-                "contain a b'pandas' key.  This key is reserved by Pandas, "
-                "and overwriting the corresponding value can render the "
-                "entire dataset unreadable."
-            )
-        kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
@@ -1096,6 +1138,20 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
+    if statistics and len(parts) != len(statistics):
+        # It is up to the Engine to guarantee that these
+        # lists are the same length (if statistics are defined).
+        # This misalignment may be indicative of a bug or
+        # incorrect read_parquet usage, so throw a warning.
+        warnings.warn(
+            f"Length of partition statistics ({len(statistics)}) "
+            f"does not match the partition count ({len(parts)}). "
+            f"This may indicate a bug or incorrect read_parquet "
+            f"usage. We must ignore the statistics and disable: "
+            f"filtering, divisions, and/or file aggregation."
+        )
+        statistics = []
+
     if statistics:
         result = list(
             zip(
@@ -1222,7 +1278,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 def aggregate_row_groups(
     parts, stats, chunksize, split_row_groups, fs, aggregation_depth
 ):
-    if not stats[0].get("file_path_0", None):
+    if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []

@@ -341,10 +341,19 @@ def robust_wraps(wrapper):
 
 
 class Item(DaskMethodsMixin):
-    def __init__(self, dsk, key):
+    def __init__(self, dsk, key, layer=None):
         self.dask = dsk
         self.key = key
         self.name = key
+
+        # NOTE: Layer only used by `Item.from_delayed`, to handle Delayed objects created by other collections.
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__init__
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
 
     def __dask_graph__(self):
         return self.dask
@@ -353,13 +362,7 @@ class Item(DaskMethodsMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        # Deal with instances created with Item.from_delayed()
-        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
-        # See Delayed.__dask_layers__
-        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
-            return tuple(self.dask.layers)
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -388,7 +391,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(value.dask, value.key)
+        return Item(value.dask, value.key, layer=value.__dask_layers__()[0])
 
     @property
     def _args(self):
@@ -422,7 +425,7 @@ class Item(DaskMethodsMixin):
         dsk = self.__dask_graph__()
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
-        return Delayed(self.key, dsk)
+        return Delayed(self.key, dsk, layer=self._layer)
 
 
 class Bag(DaskMethodsMixin):
@@ -1514,7 +1517,7 @@ class Bag(DaskMethodsMixin):
         if shuffle is None:
             shuffle = config.get("shuffle", None)
         if shuffle is None:
-            if "distributed" in config.get("scheduler", ""):
+            if config.get("scheduler", None) in ("dask.distributed", "distributed"):
                 shuffle = "tasks"
             else:
                 shuffle = "disk"
@@ -1619,9 +1622,12 @@ class Bag(DaskMethodsMixin):
 
         keys = self.__dask_keys__()
         dsk = self.__dask_graph__()
+        layer = self.name
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, keys)
-        return [Delayed(k, dsk) for k in keys]
+            layer = "delayed-" + layer
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
+        return [Delayed(k, dsk, layer=layer) for k in keys]
 
     def repartition(self, npartitions=None, partition_size=None):
         """Repartition Bag across new divisions.
@@ -1782,7 +1788,7 @@ def from_url(urls):
     (b'Dask\\n',
      b'====\\n',
      b'\\n',
-     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Discourse| |Version Status| |NumFOCUS|\\n',
      b'\\n',
      b'Dask is a flexible parallel computing library for analytics.  See\\n',
      b'documentation_ for more information.\\n',

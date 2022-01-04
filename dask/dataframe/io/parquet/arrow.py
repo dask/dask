@@ -63,7 +63,15 @@ def _append_row_groups(metadata, md):
 
 
 def _write_partitioned(
-    table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs
+    table,
+    df,
+    root_path,
+    filename,
+    partition_cols,
+    fs,
+    preserve_index,
+    index_cols=(),
+    **kwargs,
 ):
     """Write table to a partitioned dataset with pyarrow.
 
@@ -78,7 +86,10 @@ def _write_partitioned(
     """
     fs.mkdirs(root_path, exist_ok=True)
 
-    df = table.to_pandas(ignore_metadata=True)
+    if preserve_index:
+        df.reset_index(inplace=True)
+    df = df[table.schema.names]
+
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
     if index_cols:
@@ -673,10 +684,12 @@ class ArrowDatasetEngine(Engine):
         if partition_on:
             md_list = _write_partitioned(
                 t,
+                df,
                 path,
                 filename,
                 partition_on,
                 fs,
+                preserve_index,
                 index_cols=index_cols,
                 compression=compression,
                 **kwargs,
@@ -807,9 +820,16 @@ class ArrowDatasetEngine(Engine):
                     gather_statistics = True
             elif require_extension:
                 # Need to materialize all paths if we are missing the _metadata file
+                # Raise error if all files have been filtered by extension
+                len0 = len(paths)
                 paths = [
                     path for path in fs.find(paths) if path.endswith(require_extension)
                 ]
+                if len0 and paths == []:
+                    raise ValueError(
+                        "No files satisfy the `require_extension` criteria "
+                        f"(files must end with {require_extension})."
+                    )
 
         elif len(paths) > 1:
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -833,13 +853,7 @@ class ArrowDatasetEngine(Engine):
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
                 fns.remove("_metadata")
-                valid_paths = (
-                    [fn for fn in fns if fn.endswith(require_extension)]
-                    if require_extension
-                    else fns
-                )
-            elif require_extension:
-                paths = [path for path in paths if path.endswith(require_extension)]
+                valid_paths = fns
 
         # Final "catch-all" pyarrow.dataset call
         if ds is None:

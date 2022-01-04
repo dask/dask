@@ -4,10 +4,10 @@ Internal Design
 Overview
 --------
 
-.. image:: images/array.png
+.. image:: images/array.svg
    :width: 40 %
    :align: right
-   :alt: A dask array
+   :alt: 12 rectangular blocks arranged as a 4-row, 3-column layout. Each block includes 'x' and its location in the table starting with ('x',0,0) in the top-left, and a size of 5x8.
 
 Dask arrays define a large array with a grid of blocks of smaller arrays.
 These arrays may be actual arrays or functions that produce arrays. We 

@@ -1,5 +1,4 @@
 import copy
-import json
 import pickle
 import threading
 import warnings
@@ -128,12 +127,12 @@ class FastParquetEngine(Engine):
         """Organize row-groups by file."""
 
         # Get partitioning metadata
-        pqpartitions = pf.info.get("partitions", None)
+        pqpartitions = list(pf.cats)
 
         # Fastparquet does not use a natural sorting
         # order for partitioned data. Re-sort by path
         if (
-            pqpartitions is not None
+            pqpartitions
             and aggregation_depth
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
@@ -170,7 +169,8 @@ class FastParquetEngine(Engine):
             # NOTE: Here we assume that all column chunks are stored
             # in the same file. This is not strictly required by the
             # parquet spec.
-            fpath = row_group.columns[0].file_path
+            fp = row_group.columns[0].file_path
+            fpath = fp.decode() if isinstance(fp, bytes) else fp
             if fpath is None:
                 if not has_metadata_file:
                     # There doesn't need to be a file_path if the
@@ -306,26 +306,28 @@ class FastParquetEngine(Engine):
         real_row_groups = []
         for rg, rg_global in row_groups:
             row_group = pf.row_groups[rg_global]
-            row_group.statistics = None
-            row_group.helper = None
-            for c, col in enumerate(row_group.columns):
+            columns = row_group.columns
+            for c, col in enumerate(columns):
                 if c:
                     col.file_path = None
-                col.meta_data.key_value_metadata = None
+                md = col.meta_data
+                md.key_value_metadata = None
                 # NOTE: Fastparquet may need the null count in the
                 # statistics, so we cannot just set statistics
                 # to none.  Set attributes separately:
-                if col.meta_data.statistics:
-                    col.meta_data.statistics.distinct_count = None
-                    col.meta_data.statistics.max = None
-                    col.meta_data.statistics.min = None
-                    col.meta_data.statistics.max_value = None
-                    col.meta_data.statistics.min_value = None
-                col.meta_data.encodings = None
-                col.meta_data.total_uncompressed_size = None
-                col.meta_data.encoding_stats = None
+                st = md.statistics
+                if st:
+                    st.distinct_count = None
+                    st.max = None
+                    st.min = None
+                    st.max_value = None
+                    st.min_value = None
+                md.encodings = None
+                md.total_uncompressed_size = None
+                md.encoding_stats = None
+            row_group.columns = columns
             real_row_groups.append(row_group)
-        return pickle.dumps(real_row_groups)
+        return real_row_groups
 
     @classmethod
     def _make_part(
@@ -407,9 +409,6 @@ class FastParquetEngine(Engine):
                 if _update_paths:
                     paths = [fs.sep.join([base, fn]) for fn in fns]
                 _metadata_exists = False
-
-            if require_extension:
-                paths = [path for path in paths if path.endswith(require_extension)]
             if _metadata_exists:
                 # Using _metadata file (best-case scenario)
                 pf = ParquetFile(
@@ -423,6 +422,15 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
+                if require_extension:
+                    # Raise error if all files have been filtered by extension
+                    len0 = len(paths)
+                    paths = [path for path in paths if path.endswith(require_extension)]
+                    if len0 and paths == []:
+                        raise ValueError(
+                            "No files satisfy the `require_extension` criteria "
+                            f"(files must end with {require_extension})."
+                        )
                 pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
@@ -439,8 +447,6 @@ class FastParquetEngine(Engine):
             if _metadata_exists and ignore_metadata_file:
                 fns.remove("_metadata")
                 _metadata_exists = False
-            if require_extension:
-                fns = [fn for fn in fns if fn.endswith(require_extension)]
             paths = [fs.sep.join([base, fn]) for fn in fns]
 
             if _metadata_exists:
@@ -507,31 +513,23 @@ class FastParquetEngine(Engine):
         categories = dataset_info["categories"]
 
         columns = None
-        if pf.fmd.key_value_metadata:
-            pandas_md = [
-                x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
-            ]
-        else:
-            pandas_md = []
+        pandas_md = pf.pandas_metadata
 
-        if len(pandas_md) == 0:
-            index_names = []
-            column_names = pf.columns + list(pf.cats)
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
-
-        elif len(pandas_md) == 1:
+        if pandas_md:
             (
                 index_names,
                 column_names,
                 storage_name_mapping,
                 column_index_names,
-            ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
+            ) = _parse_pandas_metadata(pandas_md)
             #  auto-ranges should not be created by fastparquet
             column_names.extend(pf.cats)
 
         else:
-            raise ValueError("File has multiple entries for 'pandas' metadata")
+            index_names = []
+            column_names = pf.columns + list(pf.cats)
+            storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
 
         if index is None and len(index_names) > 0:
             if len(index_names) == 1 and index_names[0] is not None:
@@ -574,20 +572,15 @@ class FastParquetEngine(Engine):
             if getattr(dtypes.get(ind), "numpy_dtype", None):
                 # index does not support masked types
                 dtypes[ind] = dtypes[ind].numpy_dtype
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-
         for cat in categories:
-            if cat in meta:
-                meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
-                    index=meta.index,
-                )
+            if cat in all_columns:
+                dtypes[cat] = pd.CategoricalDtype(categories=[UNKNOWN_CATEGORIES])
 
         for catcol in pf.cats:
-            if catcol in meta.columns:
-                meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
-            elif meta.index.name == catcol:
-                meta.index = meta.index.set_categories(pf.cats[catcol])
+            if catcol in all_columns:
+                dtypes[catcol] = pd.CategoricalDtype(categories=pf.cats[catcol])
+
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
         # Update `dataset_info` and return `meta`
         dataset_info["dtypes"] = dtypes
@@ -642,7 +635,7 @@ class FastParquetEngine(Engine):
         # (if filters are desired)
         if filters:
             # Filters may require us to gather statistics
-            if gather_statistics is False and pf.info.get("partitions", None):
+            if gather_statistics is False and pf.cats:
                 warnings.warn(
                     "Filtering with gather_statistics=False. "
                     "Only partition columns will be filtered correctly."
@@ -824,7 +817,7 @@ class FastParquetEngine(Engine):
                 "fs": fs,
                 "pf": pf,
                 "base_path": base_path,
-                "partitions": pf.info.get("partitions", None),
+                "partitions": list(pf.cats),
             },
         )
 
@@ -989,6 +982,12 @@ class FastParquetEngine(Engine):
 
             if update_parquet_file:
                 with _FP_FILE_LOCK:
+                    for rg in row_groups:
+                        for chunk in rg.columns:
+                            s = chunk.file_path
+                            if s and isinstance(s, bytes):
+                                chunk.file_path = s.decode()
+
                     parquet_file.fmd.row_groups = row_groups
                     # NOTE: May lose cats after `_set_attrs` call
                     save_cats = parquet_file.cats
@@ -1049,13 +1048,16 @@ class FastParquetEngine(Engine):
         ignore_divisions=False,
         division_info=None,
         schema=None,
+        object_encoding="utf8",
+        index_cols=None,
+        custom_metadata=None,
         **kwargs,
     ):
+        if index_cols is None:
+            index_cols = []
         if append and division_info is None:
             ignore_divisions = True
         fs.mkdirs(path, exist_ok=True)
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        index_cols = kwargs.pop("index_cols", [])
         if object_encoding == "infer" or (
             isinstance(object_encoding, dict) and "infer" in object_encoding.values()
         ):
@@ -1117,6 +1119,15 @@ class FastParquetEngine(Engine):
                 **kwargs,
             )
             i_offset = 0
+        if custom_metadata is not None:
+            kvm = fmd.key_value_metadata or []
+            kvm.extend(
+                [
+                    fastparquet.parquet_thrift.KeyValue(key=key, value=value)
+                    for key, value in custom_metadata.items()
+                ]
+            )
+            fmd.key_value_metadata = kvm
 
         schema = None  # ArrowEngine compatibility
         return (fmd, schema, i_offset)
@@ -1137,8 +1148,12 @@ class FastParquetEngine(Engine):
     ):
         # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
+        for s in fmd.schema:
+            if isinstance(s.name, bytes):
+                # can be coerced to bytes on copy
+                s.name = s.name.decode()
         if custom_metadata and fmd is not None:
-            fmd.key_value_metadata.extend(
+            fmd.key_value_metadata = fmd.key_value_metadata + (
                 [
                     fastparquet.parquet_thrift.KeyValue(key=key, value=value)
                     for key, value in custom_metadata.items()
@@ -1183,14 +1198,16 @@ class FastParquetEngine(Engine):
     @classmethod
     def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
         _meta = copy.copy(fmd)
+        rgs = fmd.row_groups
         if parts:
             for rg in parts:
                 if rg is not None:
                     if isinstance(rg, list):
                         for r in rg:
-                            _meta.row_groups.append(r)
+                            rgs.append(r)
                     else:
-                        _meta.row_groups.append(rg)
+                        rgs.append(rg)
+            _meta.row_groups = rgs
             fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, _meta, open_with=fs.open, no_row_groups=False

@@ -7,10 +7,11 @@ from .utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",
-    "Drawing dask graphs requires the "
-    "`graphviz` python library and the "
-    "`graphviz` system library to be "
-    "installed.",
+    "Drawing dask graphs requires the `graphviz` python library and the "
+    "`graphviz` system library.\n\n"
+    "Please either conda or pip install as follows:\n\n"
+    "  conda install python-graphviz     # either conda install\n"
+    "  python -m pip install graphviz    # or pip install and follow installation instructions",
 )
 
 

@@ -1271,6 +1271,12 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """Looks like a Pandas DataFrame"""
+    if (df.__class__.__module__, df.__class__.__name__) == (
+        "pandas.core.frame",
+        "DataFrame",
+    ):
+        # fast exec for most likely input
+        return True
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))

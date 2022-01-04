@@ -17,7 +17,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements
+from .core import Array, _concatenate2, handle_out, implements, unknown_chunk_message
 from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
@@ -515,30 +515,60 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 
 @derived_from(np)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmin which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmin,
-        chunk.nanmin,
+        _nanmin_skip,
+        _nanmin_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmin_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmax which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmax,
-        chunk.nanmax,
+        _nanmax_skip,
+        _nanmax_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmax_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 def numel(x, **kwargs):

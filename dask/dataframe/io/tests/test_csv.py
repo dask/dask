@@ -253,6 +253,23 @@ def test_skiprows(dd_read, pd_read, files):
     "dd_read,pd_read,files",
     [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
 )
+def test_comment(dd_read, pd_read, files):
+    files = {
+        name: comment_header
+        + b"\n"
+        + content.replace(b"\n", b"  # just some comment\n", 1)
+        for name, content in files.items()
+    }
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", comment="#")
+        expected_df = pd.concat([pd_read(n, comment="#") for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dd_read,pd_read,files",
+    [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
+)
 def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
@@ -773,6 +790,22 @@ def test_windows_line_terminator():
         df = dd.read_csv(fn, blocksize=5, lineterminator="\r\n")
         assert df.b.sum().compute() == 2 + 3 + 4 + 5 + 6 + 7
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
+
+
+def test_header_int():
+    text = (
+        "id0,name0,x0,y0\n"
+        "id,name,x,y\n"
+        "1034,Victor,-0.25,0.84\n"
+        "998,Xavier,-0.48,-0.13\n"
+        "999,Zelda,0.00,0.47\n"
+        "980,Alice,0.67,-0.98\n"
+        "989,Zelda,-0.04,0.03\n"
+    )
+    with filetexts({"test_header_int.csv": text}):
+        df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
+        expected = pd.read_csv("test_header_int.csv", header=1)
+        assert_eq(df, expected, check_index=False)
 
 
 def test_header_None():

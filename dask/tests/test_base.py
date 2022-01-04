@@ -1018,19 +1018,7 @@ def test_visualize_highlevelgraph():
         x = da.arange(5, chunks=2)
         viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
         # check visualization will automatically render in the jupyter notebook
-        assert isinstance(viz, graphviz.dot.Digraph)
-
-
-@pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
-)
-def test_visualize_lists(tmpdir):
-    pytest.importorskip("graphviz")
-    fn = os.path.join(str(tmpdir), "myfile.dot")
-    dask.visualize([{"abc-xyz": (add, 1, 2)}], filename=fn)
-    with open(fn) as f:
-        text = f.read()
-    assert "abc-xyz" in text
+        assert isinstance(viz, graphviz.Digraph)
 
 
 @pytest.mark.skipif("not da")

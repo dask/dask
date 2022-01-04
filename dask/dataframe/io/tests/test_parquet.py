@@ -685,6 +685,13 @@ def test_append_with_partition(tmpdir, engine):
         }
     )
     df1.index.name = "index"
+
+    # Check that nullable dtypes work
+    # (see: https://github.com/dask/dask/issues/8373)
+    df0["lat"] = df0["lat"].astype("Int64")
+    df1["lat"].iloc[0] = np.nan
+    df1["lat"] = df1["lat"].astype("Int64")
+
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
     dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
@@ -2731,6 +2738,15 @@ def test_optimize_and_not(tmpdir):
         assert_eq(a, b)
 
 
+@write_read_engines()
+def test_chunksize_empty(tmpdir, write_engine, read_engine):
+    df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
+    ddf1 = dd.from_pandas(df, npartitions=1)
+    ddf1.to_parquet(tmpdir, engine=write_engine)
+    ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+    assert_eq(ddf1, ddf2, check_index=False)
+
+
 @PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("partition_on", [None, "a"])
@@ -3762,8 +3778,143 @@ def test_extra_file(tmpdir, engine):
         )
         assert_eq(out, df)
 
-        # Should Fail
+        # Should Fail (for not capturing the _SUCCESS and crc files)
         with pytest.raises((OSError, pa.lib.ArrowInvalid)):
             dd.read_parquet(
                 tmpdir, engine=engine, dataset={"require_extension": False}
             ).compute()
+
+        # Should Fail (for filtering out all files)
+        # (Related to: https://github.com/dask/dask/issues/8349)
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                tmpdir, engine=engine, dataset={"require_extension": ".foo"}
+            ).compute()
+
+
+def test_unsupported_extension_file(tmpdir, engine):
+    # File extension shouldn't matter when we are only
+    # reading a single file.
+    # (See: https://github.com/dask/dask/issues/8349)
+    fn = os.path.join(str(tmpdir), "multi.foo")
+    df0 = pd.DataFrame({"a": range(10)})
+    df0.to_parquet(fn, engine=engine.split("-")[0])
+    assert_eq(df0, dd.read_parquet(fn, engine=engine, index=False))
+
+
+def test_unsupported_extension_dir(tmpdir, engine):
+    # File extensions shouldn't matter when we have
+    # a _metadata file
+    # (Related to: https://github.com/dask/dask/issues/8349)
+    path = str(tmpdir)
+    ddf0 = dd.from_pandas(pd.DataFrame({"a": range(10)}), 1)
+    ddf0.to_parquet(path, engine=engine, name_function=lambda i: f"part.{i}.foo")
+    assert_eq(ddf0, dd.read_parquet(path, engine=engine))
+
+
+def test_custom_filename(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x}.parquet", engine=engine)
+
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-1.parquet" in files
+    assert_eq(df, dd.read_parquet(fn, engine=engine))
+
+
+def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, name_function=lambda x: f"hi-{x * 2}.parquet", engine=engine)
+
+    pdf = pd.DataFrame(
+        {"num1": [33], "num2": [44]},
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    if engine == "fastparquet":
+        pytest.xfail(
+            "fastparquet errors our with IndexError when ``name_function`` is customized "
+            "and append is set to True.  We didn't do a detailed investigation for expediency. "
+            "See this comment for the conversation: https://github.com/dask/dask/pull/7682#issuecomment-845243623"
+        )
+    df.to_parquet(
+        fn,
+        name_function=lambda x: f"hi-{x * 2}.parquet",
+        engine=engine,
+        append=True,
+        ignore_divisions=True,
+    )
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-2.parquet" in files
+    assert "hi-4.parquet" in files
+    expected_pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4, 33], "num2": [7, 8, 9, 10, 44]},
+    )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(actual, expected_pdf, check_index=False)
+
+
+def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    with pytest.raises(
+        ValueError, match="``name_function`` must be a callable with one argument."
+    ):
+        df.to_parquet(fn, name_function="whatever.parquet", engine=engine)
+
+    with pytest.raises(
+        ValueError, match="``name_function`` must produce unique filenames."
+    ):
+        df.to_parquet(fn, name_function=lambda x: "whatever.parquet", engine=engine)
+
+
+def test_custom_filename_with_partition(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {
+            "first_name": ["frank", "li", "marcela", "luis"],
+            "country": ["canada", "china", "venezuela", "venezuela"],
+        },
+    )
+    df = dd.from_pandas(pdf, npartitions=4)
+    df.to_parquet(
+        fn,
+        partition_on=["country"],
+        name_function=lambda x: f"{x}-cool.parquet",
+        write_index=False,
+    )
+
+    for _, dirs, files in os.walk(fn):
+        for dir in dirs:
+            assert dir in (
+                "country=canada",
+                "country=china",
+                "country=venezuela",
+            )
+        for file in files:
+            assert file in (
+                "0-cool.parquet",
+                "1-cool.parquet",
+                "2-cool.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    assert_eq(
+        pdf, actual, check_index=False, check_dtype=False, check_categorical=False
+    )

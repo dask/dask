@@ -78,6 +78,8 @@ def sort_values(
     na_position="last",
     upsample=1.0,
     partition_size=128e6,
+    sort_function=None,
+    sort_function_kwargs=None,
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
@@ -109,7 +111,7 @@ def sort_values(
 
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
+            sort_function, **sort_function_kwargs
         )
 
     if (
@@ -126,9 +128,7 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
-        )
+        return df.map_partitions(sort_function, **sort_function_kwargs)
 
     df = rearrange_by_divisions(
         df,
@@ -138,9 +138,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df = df.map_partitions(sort_function, **sort_function_kwargs)
     return df
 
 
@@ -322,7 +320,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = methods.tolist(divisions)
+    df4.divisions = tuple(methods.tolist(divisions))
 
     return df4.map_partitions(M.sort_index)
 
@@ -374,6 +372,9 @@ def shuffle(
             )
 
     if not isinstance(index, _Frame):
+        if list_like:
+            # Make sure we don't try to select with pd.Series/pd.Index
+            index = list(index)
         index = df._select_columns_or_index(index)
     elif hasattr(index, "to_frame"):
         # If this is an index, we should still convert to a
