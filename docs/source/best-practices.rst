@@ -235,7 +235,7 @@ For example ...
     not work well
 -   You may want to partition or chunk your data in ways that align well to
     common queries.  In Dask DataFrame this might mean choosing a column to
-    sort by for fast selection and joins.  For Dask dataframe this might mean
+    sort by for fast selection and joins.  For Dask Array this might mean
     choosing chunk sizes that are aligned with your access patterns and
     algorithms.
 
