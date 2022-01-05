@@ -45,7 +45,7 @@ from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph, MaterializedLayer
+from ..highlevelgraph import HighLevelGraph
 from ..layers import ArraySliceDep, reshapelist
 from ..sizeof import sizeof
 from ..utils import (
@@ -233,10 +233,6 @@ def slices_from_chunks(chunks):
     return list(product(*slices))
 
 
-def _get_from_block_info(getter, block_info):
-    return getter(tuple(slice(*s, None) for s in block_info["array-location"]))
-
-
 def graph_from_arraylike(
     arr,
     chunks,
@@ -278,8 +274,9 @@ def graph_from_arraylike(
             # Common case, drop extra parameters
             getter = partial(getitem, arr)
 
-        return BlockwiseCreateArray(
-            out_name, partial(_get_from_block_info, getter), shape, chunks
+        out_ind = tuple(range(len(shape)))
+        return core_blockwise(
+            getter, out_name, out_ind, ArraySliceDep(chunks), out_ind, numblocks={}
         )
     else:
         keys = product([out_name], *(range(len(bds)) for bds in chunks))

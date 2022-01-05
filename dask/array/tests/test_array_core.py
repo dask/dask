@@ -51,7 +51,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.layers import BlockwiseCreateArray
+from dask.layers import Blockwise
 from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
@@ -71,7 +71,7 @@ def test_graph_from_arraylike(inline_array):
     )
 
     if inline_array:
-        assert isinstance(dsk, BlockwiseCreateArray)
+        assert isinstance(dsk, Blockwise)
     dsk = dict(dsk)
 
     # Somewhat odd membership check to avoid numpy elemwise __in__ overload

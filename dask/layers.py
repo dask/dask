@@ -82,7 +82,6 @@ class ArraySliceDep(BlockwiseDep):
 
     def __getitem__(self, idx: tuple):
         loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
-        print(loc)
         return tuple(slice(*s, None) for s in loc)
 
     def __dask_distributed_pack__(
