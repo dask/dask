@@ -234,7 +234,7 @@ def slices_from_chunks(chunks):
 
 
 def graph_from_arraylike(
-    arr,
+    arr,  # Any array-like which supports slicing
     chunks,
     shape,
     name,
@@ -244,19 +244,30 @@ def graph_from_arraylike(
     dtype=None,
     inline_array=True,
 ):
-    """Dask getting various chunks from an array-like
+    """
+    Dask getting various chunks from an array-like, which should support slicing.
 
-    >>> graph_from_arraylike('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+    If ``inline_array`` is True, this generates a HighLevelGraph with blockwise logic,
+    where the array-like is embedded in every task.
+    If ``inline_array`` is False, this generates a materialized graph where the
+    array-like is in a separate value in the graph, and other slicing tasks refer to it.
 
-    >>> graph_from_arraylike('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+    >>> dict(graph_from_arraylike(arr, chunks=(2, 3), shape=(4, 6), name="X", inline_array=True))  # doctest: +SKIP
+    {(arr, 0, 0): (getter, arr, (slice(0, 2), slice(0, 3))),
+     (arr, 1, 0): (getter, arr, (slice(2, 4), slice(0, 3))),
+     (arr, 1, 1): (getter, arr, (slice(2, 4), slice(3, 6))),
+     (arr, 0, 1): (getter, arr, (slice(0, 2), slice(3, 6)))}
+
+    >>> dict(
+            graph_from_arraylike(
+                arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False
+            )
+    )  # doctest: +SKIP
+    {"original-X": arr,
+     ('X', 0, 0): (getter, 'original-X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'original-X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'original-X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'original-X', (slice(0, 2), slice(3, 6)))}
     """
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
