@@ -889,6 +889,8 @@ def normalize_set(s):
 
 
 def _normalize_seq_func(seq):
+    # Defined outside normalize_seq to avoid unneccessary redefinitions and
+    # therefore improving computation times.
     try:
         return list(map(normalize_token, seq))
     except RecursionError:
