@@ -50,48 +50,47 @@ class CallableLazyImport:
 #
 
 
-class ArrayChunkShapeDep(BlockwiseDep):
-    """Index-chunkshape mapping for array-like"""
+class ArrayBlockwiseDep(BlockwiseDep):
+    """
+    Blockwise dep for array-likes, which only needs chunking
+    information to compute its data.
+    """
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
+
+    def __getitem__(self, idx: tuple):
+        raise NotImplementedError("Need to implement __getitem__")
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        return {"chunks": self.chunks}
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
+
+
+class ArrayChunkShapeDep(ArrayBlockwiseDep):
+    """Index-chunkshape mapping for array-like"""
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
-    ):
-        return {"chunks": self.chunks}
 
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
-
-
-class ArraySliceDep(BlockwiseDep):
+class ArraySliceDep(ArrayBlockwiseDep):
     """Index-slice mapping for array-like"""
 
     def __init__(self, chunks: tuple):
-        self.chunks = chunks
+        super().__init__(chunks)
         self.starts = [cached_cumsum(c, initial_zero=True) for c in chunks]
-        self.numblocks = tuple(len(chunk) for chunk in chunks)
-        self.produces_tasks = False
 
     def __getitem__(self, idx: tuple):
         loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
         return tuple(slice(*s, None) for s in loc)
-
-    def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
-    ):
-        return {"chunks": self.chunks}
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 class ArrayOverlapLayer(Layer):
