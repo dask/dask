@@ -40,12 +40,13 @@ from ..base import (
     persist,
     tokenize,
 )
+from ..blockwise import blockwise as core_blockwise
 from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph
-from ..layers import BlockwiseCreateArray, reshapelist
+from ..highlevelgraph import HighLevelGraph, MaterializedLayer
+from ..layers import ArraySliceDep, reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -3088,7 +3089,7 @@ def from_array(
     fancy=True,
     getitem=None,
     meta=None,
-    inline_array=True,
+    inline_array=False,
 ):
     """Create dask array from something that looks like an array.
 
@@ -3154,24 +3155,10 @@ def from_array(
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
         Defaults to the input array.
-    inline_array : bool, default True
+    inline_array : bool, default False
         How to include the array in the task graph. By default
-        (``inline_array=True``) Dask will inline the array directly
-        in the tasks of the task graph:
-
-        .. code-block:: python
-
-           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
-           >>> dict(a.dask)  # doctest: +SKIP
-           {
-              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
-              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
-           }
-
-        Note that there's no key in the task graph with just the array `x`.
-        Instead it's placed directly into the task values.
-        With ``inline_array=False`` the array is included in a task by itself,
-        and each chunk refers to that task by its key:
+        (``inline_array=False``) the array is included in a task by itself,
+        and each chunk refers to that task by its key.
 
         .. code-block:: python
 
@@ -3184,18 +3171,30 @@ def from_array(
               ('array-<name>', 1): (getitem, "array-original-<name>", ...)
            }
 
+        With ``inline_array=True``, Dask will instead inline the array directly
+        in the values of the task graph.
+
+        .. code-block:: python
+
+           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
+              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
+           }
+
+        Note that there's no key in the task graph with just the array `x`
+        anymore. Instead it's placed directly in the values.
+
         The right choice for ``inline_array`` depends on several factors,
         including the size of ``x``, how expensive it is to create, which
         scheduler you're using, and the pattern of downstream computations.
         As a heuristic, ``inline_array=True`` may be the right choice when
         the array ``x`` is cheap to serialize and deserialize (since it's
-        included in the graph many times), as is the case with certain lazy
-        array representations like Zarr objects.
-
-        You might also inline an array if you are experiencing ordering
+        included in the graph many times) and if you're experiencing ordering
         issues (see :ref:`order` for more).
 
-        This has no effect when ``x`` is a NumPy array and you are using a single chunk.
+        This has no effect when ``x`` is a NumPy array.
 
     Examples
     --------
@@ -3320,7 +3319,7 @@ def from_zarr(
     storage_options=None,
     chunks=None,
     name=None,
-    inline_array=True,
+    inline_array=False,
     **kwargs,
 ):
     """Load array from the zarr storage format
