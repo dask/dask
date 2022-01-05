@@ -4766,9 +4766,9 @@ def test_nunique(dropna, axis):
 
 
 def test_view():
-    s = pd.Series(range(10), dtype='int8')
+    s = pd.Series(range(10), dtype="int8")
     ds = dd.from_pandas(s, npartitions=2)
-    assert_eq(ds.view('uint8'), s.view('uint8'))
+    assert_eq(ds.view("uint8"), s.view("uint8"))
 
 
 def test_simple_map_partitions():
