@@ -65,12 +65,6 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     kwargs = parsed["kwargs"]
     func = partial(func, dtype=dtype, **kwargs)
 
-    # graph = BlockwiseCreateArray(
-    #    name,
-    #    shape,
-    #    func,
-    #    ArrayChunkShapeDep(chunks),
-    # )
     out_ind = dep_ind = tuple(range(len(shape)))
     graph = core_blockwise(
         func,

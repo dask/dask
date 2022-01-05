@@ -10,7 +10,7 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask.layers import CreateArrayDeps, fractional_slice
+from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
 class SchedulerImportCheck(SchedulerPlugin):
@@ -32,37 +32,41 @@ class SchedulerImportCheck(SchedulerPlugin):
                 sys.modules.pop(mod)
 
 
-def test_create_array_deps():
+def test_array_chunk_shape_dep():
     dac = pytest.importorskip("dask.array.core")
     d = 2  # number of chunks in x,y
     chunk = (2, 3)  # chunk shape
     shape = tuple(d * n for n in chunk)  # array shape
     chunks = dac.normalize_chunks(chunk, shape)
-    array_deps = CreateArrayDeps(chunks)
+    array_deps = ArrayChunkShapeDep(chunks)
 
-    def check_block_info(i, j):
-        block_info = array_deps[(i, j)]
-        assert block_info["shape"] == shape
-        assert block_info["chunk-shape"] == chunk
-        assert block_info["array-location"] == (
-            (chunk[0] * i, chunk[0] * (i + 1)),
-            (chunk[1] * j, chunk[1] * (j + 1)),
-        )
-        assert block_info["num-chunks"] == (d, d)
+    def check(i, j):
+        chunk_shape = array_deps[(i, j)]
+        chunk_shape == chunk
 
     for i in range(d):
         for j in range(d):
-            check_block_info(i, j)
+            check(i, j)
 
 
-def get_start_modules(dask_scheduler):
-    import_check_plugins = [
-        p for p in dask_scheduler.plugins if type(p) is SchedulerImportCheck
-    ]
-    assert len(import_check_plugins) == 1
+def test_array_slice_deps():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = ArraySliceDep(chunks)
 
-    plugin = import_check_plugins[0]
-    return plugin.start_modules
+    def check(i, j):
+        slices = array_deps[(i, j)]
+        assert slices == (
+            slice(chunk[0] * i, chunk[0] * (i + 1), None),
+            slice(chunk[1] * j, chunk[1] * (j + 1), None),
+        )
+
+    for i in range(d):
+        for j in range(d):
+            check(i, j)
 
 
 def _dataframe_shuffle(tmpdir):

@@ -51,7 +51,7 @@ class CallableLazyImport:
 
 
 class ArrayChunkShapeDep(BlockwiseDep):
-    """Index-chunkshape mapping for BlockwiseCreateArray"""
+    """Index-chunkshape mapping for array-like"""
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
@@ -72,7 +72,7 @@ class ArrayChunkShapeDep(BlockwiseDep):
 
 
 class ArraySliceDep(BlockwiseDep):
-    """Index-slice mapping for BlockwiseCreateArray"""
+    """Index-slice mapping for array-like"""
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
