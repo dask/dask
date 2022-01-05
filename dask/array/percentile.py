@@ -87,7 +87,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         .. versionchanged:: 2022.1.0
             This argument was previously called "interpolation"
 
-    internal_method : {'dask', 'dask', 'tdigest'}, optional
+    internal_method : {'default', 'dask', 'tdigest'}, optional
         What internal method to use. By default will use dask's internal custom
         algorithm (``'dask'``).  If set to ``'tdigest'`` will use tdigest for
         floats and ints and fallback to the ``'dask'`` otherwise.
