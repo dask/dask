@@ -236,9 +236,9 @@ def slices_from_chunks(chunks):
 def graph_from_arraylike(
     arr,
     chunks,
+    shape,
+    name,
     getitem=getter,
-    shape=None,
-    out_name=None,
     lock=False,
     asarray=True,
     dtype=None,
@@ -258,7 +258,6 @@ def graph_from_arraylike(
      ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
     # If we are inlining the array-like, we can make it an embarassingly parallel
@@ -275,26 +274,28 @@ def graph_from_arraylike(
             getter = partial(getitem, arr)
 
         out_ind = tuple(range(len(shape)))
-        return core_blockwise(
-            getter, out_name, out_ind, ArraySliceDep(chunks), out_ind, numblocks={}
+        layer = core_blockwise(
+            getter, name, out_ind, ArraySliceDep(chunks), out_ind, numblocks={}
         )
+        return HighLevelGraph.from_collections(name, layer)
     else:
-        keys = product([out_name], *(range(len(bds)) for bds in chunks))
+        keys = product([name], *(range(len(bds)) for bds in chunks))
         slices = slices_from_chunks(chunks)
+        original_name = "original-" + name
 
         if (
             has_keyword(getitem, "asarray")
             and has_keyword(getitem, "lock")
             and (not asarray or lock)
         ):
-            values = [(getitem, out_name, x, asarray, lock) for x in slices]
+            values = [(getitem, original_name, x, asarray, lock) for x in slices]
         else:
             # Common case, drop extra parameters
-            values = [(getitem, out_name, x) for x in slices]
+            values = [(getitem, original_name, x) for x in slices]
 
         dsk = dict(zip(keys, values))
-        dsk[out_name] = arr
-        return dsk
+        dsk[original_name] = arr
+        return HighLevelGraph.from_collections(name, dsk)
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -3256,7 +3257,7 @@ def from_array(
     )
 
     if name in (None, True):
-        token = tokenize(x, chunks)
+        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or "array-" + token
     elif name is False:
         name = "array-" + str(uuid.uuid1())
@@ -3289,15 +3290,14 @@ def from_array(
         dsk = graph_from_arraylike(
             x,
             chunks,
+            x.shape,
+            name,
             getitem=getitem,
-            shape=x.shape,
-            out_name=name,
             lock=lock,
             asarray=asarray,
             dtype=x.dtype,
             inline_array=inline_array,
         )
-        dsk = HighLevelGraph.from_collections(name, dsk)
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
