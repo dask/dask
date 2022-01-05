@@ -143,7 +143,7 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
 
     if internal_method not in allowed_internal_methods:
         raise ValueError(
-            "`internal_method=` can only be 'default', 'dask' or 'tdigest'"
+            f"`internal_method=` must be one of {allowed_internal_methods}"
         )
 
     # Allow using t-digest if method is allowed and dtype is of floating or integer type
