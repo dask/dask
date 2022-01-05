@@ -3,6 +3,7 @@ import base64
 import builtins
 import json
 import os
+import site
 import sys
 import threading
 import warnings
@@ -16,6 +17,7 @@ no_default = "__no_default__"
 paths = [
     os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
     os.path.join(sys.prefix, "etc", "dask"),
+    *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
     os.path.join(os.path.expanduser("~"), ".config", "dask"),
     os.path.join(os.path.expanduser("~"), ".dask"),
 ]
