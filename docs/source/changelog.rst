@@ -1,7 +1,7 @@
 Changelog
 =========
 
-2021.12.0
+v2021.12.0
 ---------
 
 Released on December 10, 2021
@@ -51,7 +51,7 @@ Maintenance
 - Unpin ``graphviz``  and improve package management in environment-3.7 (:pr:`8411`) `Julia Signell`_
 
 
-2021.11.2
+v2021.11.2
 ---------
 
 Released on November 19, 2021
@@ -72,7 +72,7 @@ Released on November 19, 2021
 - Import ``graphviz.Diagraph`` from top of module, not from ``dot`` (:pr:`8363`) `Julia Signell`_
 
 
-2021.11.1
+v2021.11.1
 ---------
 
 Released on November 8, 2021
@@ -80,7 +80,7 @@ Released on November 8, 2021
 Patch release to update ``distributed`` dependency to version ``2021.11.1``.
 
 
-2021.11.0
+v2021.11.0
 ---------
 
 Released on November 5, 2021
@@ -110,7 +110,7 @@ Released on November 5, 2021
 - Deprecate ``file_path`` and make it possible to save  from within a notebook (:pr:`8283`) `Julia Signell`_
 
 
-2021.10.0
+v2021.10.0
 ---------
 
 Released on October 22, 2021
@@ -175,7 +175,7 @@ Released on October 22, 2021
 - Include divisions when doing ``Index.to_series`` (:pr:`8165`) `Julia Signell`_
 
 
-2021.09.1
+v2021.09.1
 ---------
 
 Released on September 21, 2021
@@ -201,7 +201,7 @@ Released on September 21, 2021
 - Deprecate ``boundary_slice`` kwarg: ``kind`` for pandas compat (:pr:`8037`) `Julia Signell`_
 
 
-2021.09.0
+v2021.09.0
 ---------
 
 Released on September 3, 2021
@@ -228,7 +228,7 @@ Released on September 3, 2021
 - Order requirements alphabetically (:pr:`8073`) `John A Kirkham`_
 
 
-2021.08.1
+v2021.08.1
 ---------
 
 Released on August 20, 2021
@@ -255,7 +255,7 @@ Released on August 20, 2021
 - Fix "point" -> "pointers" typo in docs (:pr:`8043`) `David Chudzicki`_
 
 
-2021.08.0
+v2021.08.0
 ---------
 
 Released on August 13, 2021
@@ -292,7 +292,7 @@ Released on August 13, 2021
 - Require NumPy 1.18+ & Pandas 1.0+ (:pr:`7939`) `John A Kirkham`_
 
 
-2021.07.2
+v2021.07.2
 ---------
 
 Released on July 30, 2021
@@ -319,7 +319,7 @@ Released on July 30, 2021
 - Remove skips from doctests (3 of 6) (:pr:`7872`) `Zhengnan Zhao`_
 
 
-2021.07.1
+v2021.07.1
 ---------
 
 Released on July 23, 2021
@@ -350,7 +350,7 @@ Released on July 23, 2021
 - Handle infinite loops in ``merge_asof`` (:pr:`7842`) `gerrymanoim`_
 
 
-2021.07.0
+v2021.07.0
 ---------
 
 Released on July 9, 2021
@@ -379,7 +379,7 @@ Released on July 9, 2021
 - Make ``PY_VERSION`` private (:pr:`7824`) `James Bourbeau`_
 
 
-2021.06.2
+v2021.06.2
 ---------
 
 Released on June 22, 2021
@@ -389,7 +389,7 @@ Released on June 22, 2021
 - Remove "Educational Resources" doc page (:pr:`7818`) `James Bourbeau`_
 
 
-2021.06.1
+v2021.06.1
 ---------
 
 Released on June 18, 2021
@@ -433,7 +433,7 @@ Released on June 18, 2021
 - Fix HDFS tests (:pr:`7752`) `Julia Signell`_
 
 
-2021.06.0
+v2021.06.0
 ---------
 
 Released on June 4, 2021
@@ -457,7 +457,7 @@ Released on June 4, 2021
 - Add ``autofunction`` for ``unify_chunks`` in API docs (:pr:`7730`) `James Bourbeau`_
 
 
-2021.05.1
+v2021.05.1
 ---------
 
 Released on May 28, 2021
@@ -490,7 +490,7 @@ Released on May 28, 2021
 - Fix spelling in Series ``getitem`` error message (:pr:`7659`) `Maisie Marshall`_
 
 
-2021.05.0
+v2021.05.0
 ---------
 
 Released on May 14, 2021
@@ -521,7 +521,7 @@ Released on May 14, 2021
 - Support all or no overlap between partition columns and real columns (:pr:`7541`) `Richard (Rick) Zamora`_
 
 
-2021.04.1
+v2021.04.1
 ---------
 
 Released on April 23, 2021
@@ -561,7 +561,7 @@ Released on April 23, 2021
 - Add ``check_type`` to array ``assert_eq`` (:pr:`7491`) `Julia Signell`_
 
 
-2021.04.0
+v2021.04.0
 ---------
 
 Released on April 2, 2021
@@ -580,7 +580,7 @@ Released on April 2, 2021
 - Use ``concurrent.futures`` in local scheduler (:pr:`6322`) `John A Kirkham`_
 
 
-2021.03.1
+v2021.03.1
 ---------
 
 Released on March 26, 2021
@@ -648,7 +648,7 @@ Released on March 26, 2021
 - Move NumPy skip into test (:pr:`7247`) `Julia Signell`_
 
 
-2021.03.0
+v2021.03.0
 ---------
 
 Released on March 5, 2021
@@ -713,7 +713,7 @@ Released on March 5, 2021
 - Don't fail fast in CI (:pr:`7188`) `James Bourbeau`_
 
 
-2021.02.0
+v2021.02.0
 ---------
 
 Released on February 5, 2021
@@ -740,7 +740,7 @@ Released on February 5, 2021
 - Add cytoolz back to CI environment (:pr:`7103`) `James Bourbeau`_
 
 
-2021.01.1
+v2021.01.1
 ---------
 
 Released on January 22, 2021
@@ -754,7 +754,7 @@ Released on January 22, 2021
 - Make cached properties read-only (:pr:`7077`) `Illviljan`_
 
 
-2021.01.0
+v2021.01.0
 ---------
 
 Released on January 15, 2021
@@ -806,7 +806,7 @@ Released on January 15, 2021
 - Prevent ``fuse_roots`` from clobbering annotations (:pr:`6955`) `Simon Perkins`_
 
 
-2020.12.0
+v2020.12.0
 ---------
 
 Released on December 10, 2020
@@ -934,7 +934,7 @@ All changes
 - Update ``dask-sphinx-theme`` version (:pr:`6700`) `Gil Forsyth`_
 
 
-2.30.0 / 2020-10-06
+v2.30.0 / 2020-10-06
 -------------------
 
 Array
@@ -943,7 +943,7 @@ Array
 - Allow ``rechunk`` to evenly split into N chunks (:pr:`6420`) `Scott Sievert`_
 
 
-2.29.0 / 2020-10-02
+v2.29.0 / 2020-10-02
 -------------------
 
 Array
@@ -978,7 +978,7 @@ Documentation
 - Fix a few typos (:pr:`6678`) `Pav A`_
 
 
-2.28.0 / 2020-09-25
+v2.28.0 / 2020-09-25
 -------------------
 
 Array
@@ -1010,7 +1010,7 @@ DataFrame
 - Slightly better error message (:pr:`6657`) `Julia Signell`_
 
 
-2.27.0 / 2020-09-18
+v2.27.0 / 2020-09-18
 -------------------
 
 Array
@@ -1041,7 +1041,7 @@ Documentation
 - Add ``HelmCluster`` docs (:pr:`6290`) `Jacob Tomlinson`_
 
 
-2.26.0 / 2020-09-11
+v2.26.0 / 2020-09-11
 -------------------
 
 Array
@@ -1086,7 +1086,7 @@ Documentation
 - Document dask/daskhub helm chart (:pr:`6560`) `Tom Augspurger`_
 
 
-2.25.0 / 2020-08-28
+v2.25.0 / 2020-08-28
 -------------------
 
 Core
@@ -1109,7 +1109,7 @@ Documentation
 - Stop 2020 survey (:pr:`6547`) `Tom Augspurger`_
 
 
-2.24.0 / 2020-08-22
+v2.24.0 / 2020-08-22
 -------------------
 
 Array
@@ -1137,7 +1137,7 @@ Core
 -   Make tests run on moto server (:pr:`6528`) `Martin Durant`_
 
 
-2.23.0 / 2020-08-14
+v2.23.0 / 2020-08-14
 -------------------
 
 Array
@@ -1177,7 +1177,7 @@ Documentation
 - Docs for SQLing (:pr:`6453`) `Martin Durant`_
 
 
-2.22.0 / 2020-07-31
+v2.22.0 / 2020-07-31
 -------------------
 
 Array
@@ -1214,7 +1214,7 @@ Documentation
 - Fix typo (:pr:`6436`) `Jack Xiaosong Xu`_
 
 
-2.21.0 / 2020-07-17
+v2.21.0 / 2020-07-17
 -------------------
 
 Array
@@ -1252,7 +1252,7 @@ Documentation
 - Update ``visualize`` docstrings (:pr:`6383`) `Zhengnan Zhao`_
 
 
-2.20.0 / 2020-07-02
+v2.20.0 / 2020-07-02
 -------------------
 
 Array
@@ -1276,7 +1276,7 @@ Documentation
 - Add doc describing argument (:pr:`6318`) `asmith26`_
 
 
-2.19.0 / 2020-06-19
+v2.19.0 / 2020-06-19
 -------------------
 
 Array
@@ -1308,7 +1308,7 @@ Documentation
 - Update ``bag.rst`` (:pr:`6317`) `Ben Shaver`_
 
 
-2.18.1 / 2020-06-09
+v2.18.1 / 2020-06-09
 -------------------
 
 Array
@@ -1330,7 +1330,7 @@ Documentation
 - Add ``asyncssh`` intersphinx mappings (:pr:`6298`) `Jacob Tomlinson`_
 
 
-2.18.0 / 2020-06-05
+v2.18.0 / 2020-06-05
 -------------------
 
 Array
@@ -1362,7 +1362,7 @@ Documentation
 - Update remote data section (:pr:`6258`) `Ray Bell`_
 
 
-2.17.2 / 2020-05-28
+v2.17.2 / 2020-05-28
 -------------------
 
 Core
@@ -1376,7 +1376,7 @@ DataFrame
 - Raise error if ``resample`` isn't going to give right answer (:pr:`6244`) `Julia Signell`_
 
 
-2.17.1 / 2020-05-28
+v2.17.1 / 2020-05-28
 -------------------
 
 Array
@@ -1399,7 +1399,7 @@ DataFrame
 - Generalize ``describe`` & ``quantile`` apis (:pr:`5137`) `GALI PREM SAGAR`_
 
 
-2.17.0 / 2020-05-26
+v2.17.0 / 2020-05-26
 -------------------
 
 Array
@@ -1448,7 +1448,7 @@ Documentation
 - Doc write to remote (:pr:`6124`) `Ray Bell`_
 
 
-2.16.0 / 2020-05-08
+v2.16.0 / 2020-05-08
 -------------------
 
 Array
@@ -1487,7 +1487,7 @@ Documentation
 - Add Tom's log config example (:pr:`6143`) `Martin Durant`_
 
 
-2.15.0 / 2020-04-24
+v2.15.0 / 2020-04-24
 -------------------
 
 Array
@@ -1531,7 +1531,7 @@ Documentation
 - Add section about ``Semaphore`` in distributed (:pr:`6053`) `Florian Jetter`_
 
 
-2.14.0 / 2020-04-03
+v2.14.0 / 2020-04-03
 -------------------
 
 Array
@@ -1557,7 +1557,7 @@ Documentation
 - DOC: Add name caveats (:pr:`6040`) `Tom Augspurger`_
 
 
-2.13.0 / 2020-03-25
+v2.13.0 / 2020-03-25
 -------------------
 
 Array
@@ -1598,7 +1598,7 @@ Documentation
 - Optionally get rid of intermediary boxes in visualize, and add more labels (:pr:`5976`) `Julia Signell`_
 
 
-2.12.0 / 2020-03-06
+v2.12.0 / 2020-03-06
 -------------------
 
 Array
@@ -1646,7 +1646,7 @@ Documentation
 - Update optimization doc for python 3 (:pr:`5926`) `Julia Signell`_
 
 
-2.11.0 / 2020-02-19
+v2.11.0 / 2020-02-19
 -------------------
 
 Array
@@ -1706,14 +1706,14 @@ Documentation
 - Add note pointing to code of conduct and diversity statement (:pr:`5844`) `Matthew Rocklin`_
 
 
-2.10.1 / 2020-01-30
+v2.10.1 / 2020-01-30
 -------------------
 
 - Fix Pandas 1.0 version comparison (:pr:`5851`) `Tom Augspurger`_
 - Fix typo in distributed diagnostics documentation (:pr:`5841`) `Gerrit Holl`_
 
 
-2.10.0 / 2020-01-28
+v2.10.0 / 2020-01-28
 -------------------
 
 - Support for pandas 1.0's new ``BooleanDtype`` and ``StringDtype`` (:pr:`5815`) `Tom Augspurger`_
@@ -1726,7 +1726,7 @@ Documentation
 - Fixed exception in ``groupby.std()`` when some of the keys were large integers (:pr:`5737`) `H. Thomson Comer`_
 
 
-2.9.2 / 2020-01-16
+v2.9.2 / 2020-01-16
 ------------------
 
 Array
@@ -1766,7 +1766,7 @@ Documentation
 - Add docs section on task expectations to graph page (:pr:`5764`) `Devin Petersohn`_
 
 
-2.9.1 / 2019-12-27
+v2.9.1 / 2019-12-27
 ------------------
 
 Array
@@ -1806,7 +1806,7 @@ Documentation
 -  Update numpydoc dependency (:pr:`5694`) `James Bourbeau`_
 
 
-2.9.0 / 2019-12-06
+v2.9.0 / 2019-12-06
 ------------------
 
 Array
@@ -1836,7 +1836,7 @@ Documentation
 - Add documentation build (:pr:`5617`) `James Bourbeau`_
 
 
-2.8.1 / 2019-11-22
+v2.8.1 / 2019-11-22
 ------------------
 
 Array
@@ -1864,7 +1864,7 @@ Documentation
 - Fixed See Also referencence (:pr:`5612`) `Tom Augspurger`_
 
 
-2.8.0 / 2019-11-14
+v2.8.0 / 2019-11-14
 ------------------
 
 Array
@@ -1901,7 +1901,7 @@ Documentation
 -  Update calendar link (:pr:`5569`) `Tom Augspurger`_
 
 
-2.7.0 / 2019-11-08
+v2.7.0 / 2019-11-08
 ------------------
 
 This release drops support for Python 3.5
@@ -1956,7 +1956,7 @@ Documentation
 -  Add adaptive deployments screencast [skip ci] (:pr:`5566`) `Matthew Rocklin`_
 
 
-2.6.0 / 2019-10-15
+v2.6.0 / 2019-10-15
 ------------------
 
 Core
@@ -1987,7 +1987,7 @@ Documentation
 - Fix typos in docstrings (:pr:`5469`) `garanews`_
 
 
-2.5.2 / 2019-10-04
+v2.5.2 / 2019-10-04
 ------------------
 
 Array
@@ -2009,7 +2009,7 @@ Documentation
 -  Update cloud documentation (:pr:`5444`) `Matthew Rocklin`_
 
 
-2.5.0 / 2019-09-27
+v2.5.0 / 2019-09-27
 ------------------
 
 Core
@@ -2039,7 +2039,7 @@ Documentation
 -  Update overview image (:pr:`5404`) `James Bourbeau`_
 
 
-2.4.0 / 2019-09-13
+v2.4.0 / 2019-09-13
 ------------------
 
 Array
@@ -2099,7 +2099,7 @@ Documentation
 - Update link in reshape docstring (:pr:`5297`) `James Bourbeau`_
 
 
-2.3.0 / 2019-08-16
+v2.3.0 / 2019-08-16
 ------------------
 
 Array
@@ -2169,7 +2169,7 @@ Documentation
 - Update GUFunc documentation (:pr:`5232`) `Matthew Rocklin`_
 
 
-2.2.0 / 2019-08-01
+v2.2.0 / 2019-08-01
 ------------------
 
 Array
@@ -2231,7 +2231,7 @@ Documentation
 
 
 
-2.1.0 / 2019-07-08
+v2.1.0 / 2019-07-08
 ------------------
 
 Array
@@ -2279,7 +2279,7 @@ Documentation
 - Update community meeting information (:pr:`5006`) `Tom Augspurger`_
 
 
-2.0.0 / 2019-06-25
+v2.0.0 / 2019-06-25
 ------------------
 
 Array
@@ -2397,7 +2397,7 @@ Documentation
 -  Add "Avoid Large Partitions" section to best practices (:pr:`4808`) `Matthew Rocklin`_
 -  Update URL for joblib to new website hosting their doc (:pr:`4816`) `Christian Hudon`_
 
-1.2.2 / 2019-05-08
+v1.2.2 / 2019-05-08
 ------------------
 
 Array
@@ -2448,7 +2448,7 @@ Documentation
 - Update optimization docs now that cull is not automatic (:pr:`4752`) `Matthew Rocklin`_
 
 
-1.2.1 / 2019-04-29
+v1.2.1 / 2019-04-29
 ------------------
 
 Array
@@ -2495,7 +2495,7 @@ Documentation
 -   Fix minor typo fix in a Queue/fire_and_forget example (:pr:`4709`) `Matthew Rocklin`_
 -   Update from_pandas docstring to match signature (:pr:`4698`) `James Bourbeau`_
 
-1.2.0 / 2019-04-12
+v1.2.0 / 2019-04-12
 ------------------
 
 Array
@@ -2533,7 +2533,7 @@ Documentation
 -  Add delayed extra dependencies to install docs (:pr:`4660`) `James Bourbeau`_
 
 
-1.1.5 / 2019-03-29
+v1.1.5 / 2019-03-29
 ------------------
 
 Array
@@ -2581,7 +2581,7 @@ Documentation
 -  Update and secure several references (:pr:`4649`) `Søren Fuglede Jørgensen`_
 
 
-1.1.4 / 2019-03-08
+v1.1.4 / 2019-03-08
 ------------------
 
 Array
@@ -2614,7 +2614,7 @@ Documentation
 -  Fix typo in docstring (:pr:`4572`) `Shyam Saladi`_
 
 
-1.1.3 / 2019-03-01
+v1.1.3 / 2019-03-01
 ------------------
 
 Array
@@ -2638,7 +2638,7 @@ Documentation
 -  Add missing method to documentation index (:pr:`4528`) `Bart Broere`_
 
 
-1.1.2 / 2019-02-25
+v1.1.2 / 2019-02-25
 ------------------
 
 Array
@@ -2692,7 +2692,7 @@ Core
 -  Repeat optimize_blockwise for diamond fusion (:pr:`4492`) `Matthew Rocklin`_
 
 
-1.1.1 / 2019-01-31
+v1.1.1 / 2019-01-31
 ------------------
 
 Array
@@ -2729,7 +2729,7 @@ Core
 -  Work around psutil 5.5.0 not allowing pickling Process objects `Janne Vuorela`_
 
 
-1.1.0 / 2019-01-18
+v1.1.0 / 2019-01-18
 ------------------
 
 Array
@@ -2797,7 +2797,7 @@ Core
 -  Ignore non-readable config files (:pr:`4388`) `Jim Crist`_
 
 
-1.0.0 / 2018-11-28
+v1.0.0 / 2018-11-28
 ------------------
 
 Array
@@ -2827,7 +2827,7 @@ Core
 -  Remove AUTHORS.md `Jim Crist`_
 
 
-0.20.2 / 2018-11-15
+v0.20.2 / 2018-11-15
 -------------------
 
 Array
@@ -2850,7 +2850,7 @@ Documentation
 -  Fix link in dataframe documentation (:pr:`4208`) `James Bourbeau`_
 
 
-0.20.1 / 2018-11-09
+v0.20.1 / 2018-11-09
 -------------------
 
 Array
@@ -2889,7 +2889,7 @@ Documentation
 -  Fix typo in docstring (:pr:`4183`) `Carlos Valiente`_
 
 
-0.20.0 / 2018-10-26
+v0.20.0 / 2018-10-26
 -------------------
 
 Array
@@ -2943,7 +2943,7 @@ Documentation
 
 
 
-0.19.4 / 2018-10-09
+v0.19.4 / 2018-10-09
 -------------------
 
 Array
@@ -2974,7 +2974,7 @@ Documentation
 -  Extensive copy-editing: (:pr:`4065`), (:pr:`4064`), (:pr:`4063`) `Miguel Farrajota`_
 
 
-0.19.3 / 2018-10-05
+v0.19.3 / 2018-10-05
 -------------------
 
 Array
@@ -3029,7 +3029,7 @@ Documentation
 -   Updates DataFrame.to_hdf docstring for returned values (:pr:`3992`) `James Bourbeau`_
 
 
-0.19.2 / 2018-09-17
+v0.19.2 / 2018-09-17
 -------------------
 
 Array
@@ -3055,7 +3055,7 @@ Documentation
 -  DOC: fixed sphinx syntax (:pr:`3960`) `Tom Augspurger`_
 
 
-0.19.1 / 2018-09-06
+v0.19.1 / 2018-09-06
 -------------------
 
 Array
@@ -3084,7 +3084,7 @@ Documentation
 -  Add try-now button to main landing page (:pr:`3924`) `Matthew Rocklin`_
 
 
-0.19.0 / 2018-08-29
+v0.19.0 / 2018-08-29
 -------------------
 
 Array
@@ -3151,7 +3151,7 @@ Docs
 -  Add missing ` to docstring (:pr:`3915`) `@rtobar`_
 
 
-0.18.2 / 2018-07-23
+v0.18.2 / 2018-07-23
 -------------------
 
 Array
@@ -3204,7 +3204,7 @@ Core
 - Add datasets module (:pr:`3780`) `Matthew Rocklin`_
 
 
-0.18.1 / 2018-06-22
+v0.18.1 / 2018-06-22
 -------------------
 
 Array
@@ -3236,7 +3236,7 @@ Core
 - Avoid deepcopy in dask.config.set (:pr:`3649`) `Matthew Rocklin`_
 
 
-0.18.0 / 2018-06-14
+v0.18.0 / 2018-06-14
 -------------------
 
 Array
@@ -3300,7 +3300,7 @@ Core
 - Remove "da.random" from random array keys (:pr:`3604`) `Matthew Rocklin`_
 
 
-0.17.5 / 2018-05-16
+v0.17.5 / 2018-05-16
 -------------------
 
 Array
@@ -3316,7 +3316,7 @@ DataFrame
 - Compatibility with pandas 0.23.0 (:pr:`3499`) `Tom Augspurger`_
 
 
-0.17.4 / 2018-05-03
+v0.17.4 / 2018-05-03
 -------------------
 
 Dataframe
@@ -3328,7 +3328,7 @@ Dataframe
 - Switches to using dask.compat string_types (:pr:`3462`) `James Bourbeau`_
 
 
-0.17.3 / 2018-05-02
+v0.17.3 / 2018-05-02
 -------------------
 
 Array
@@ -3371,7 +3371,7 @@ Core
 - Add schedule= keyword to compute and persist.  This replaces common use of the get= keyword (:pr:`3448`) `Matthew Rocklin`_
 
 
-0.17.2 / 2018-03-21
+v0.17.2 / 2018-03-21
 -------------------
 
 Array
@@ -3405,7 +3405,7 @@ Core
 - Avoid sorting tasks in order when the number of tasks is very large (:pr:`3298`) `Matthew Rocklin`_
 
 
-0.17.1 / 2018-02-22
+v0.17.1 / 2018-02-22
 -------------------
 
 Array
@@ -3429,7 +3429,7 @@ Core
 - Introduce output stream parameter for progress bar (:pr:`3185`) `Dieter Weber`_
 
 
-0.17.0 / 2018-02-09
+v0.17.0 / 2018-02-09
 -------------------
 
 Array
@@ -3481,7 +3481,7 @@ Core
 - Remove write_bytes (:pr:`3116`) `Jim Crist`_
 
 
-0.16.1 / 2018-01-09
+v0.16.1 / 2018-01-09
 -------------------
 
 Array
@@ -3527,7 +3527,7 @@ Core
 - Change task prioritization to avoid upwards branching (:pr:`3017`) `Matthew Rocklin`_
 
 
-0.16.0 / 2017-11-17
+v0.16.0 / 2017-11-17
 -------------------
 
 This is a major release.  It includes breaking changes, new protocols, and a
@@ -3586,7 +3586,7 @@ Core
 -  Wrap Dask filesystems for PyArrow compatibility (:pr:`2881`) `Jim Crist`_
 
 
-0.15.4 / 2017-10-06
+v0.15.4 / 2017-10-06
 -------------------
 
 Array
@@ -3618,7 +3618,7 @@ Core
 -  Drop s3fs from ``pip install dask[complete]`` (:pr:`2750`)
 
 
-0.15.3 / 2017-09-24
+v0.15.3 / 2017-09-24
 -------------------
 
 Array
@@ -3655,7 +3655,7 @@ Core
 -  Remove resize tool in Bokeh plots (:pr:`2688`)
 
 
-0.15.2 / 2017-08-25
+v0.15.2 / 2017-08-25
 -------------------
 
 Array
@@ -3692,7 +3692,7 @@ Core
 
 -  Remove bare ``except:`` blocks everywhere (:pr:`2590`)
 
-0.15.1 / 2017-07-08
+v0.15.1 / 2017-07-08
 -------------------
 
 -  Add storage_options to to_textfiles and to_csv (:pr:`2466`)
@@ -3702,7 +3702,7 @@ Core
 -  Threadsafe cache handling with tokenization (:pr:`2511`)
 
 
-0.15.0 / 2017-06-09
+v0.15.0 / 2017-06-09
 -------------------
 
 Array
@@ -3737,7 +3737,7 @@ Core
 -  Support pathlib.Path objects as uris  (:pr:`2310`)
 
 
-0.14.3 / 2017-05-05
+v0.14.3 / 2017-05-05
 -------------------
 
 DataFrame
@@ -3745,7 +3745,7 @@ DataFrame
 
 -  Pandas 0.20.0 support
 
-0.14.2 / 2017-05-03
+v0.14.2 / 2017-05-03
 -------------------
 
 Array
@@ -3784,7 +3784,7 @@ Core
 -  Improve fusion performance (:pr:`2129`), (:pr:`2131`), and (:pr:`2112`)
 
 
-0.14.1 / 2017-03-22
+v0.14.1 / 2017-03-22
 -------------------
 
 Array
@@ -3822,7 +3822,7 @@ Core
 -   Ensure that worker processes have different random seeds (:pr:`2094`)
 
 
-0.14.0 / 2017-02-24
+v0.14.0 / 2017-02-24
 -------------------
 
 Array
@@ -3871,7 +3871,7 @@ Core
 - Structural sharing between graphs in dask.array and dask.delayed (:pr:`1985`)
 
 
-0.13.0 / 2017-01-02
+v0.13.0 / 2017-01-02
 -------------------
 
 Array
@@ -3925,7 +3925,7 @@ Core
 - Improve import time (:pr:`1833`)
 
 
-0.12.0 / 2016-11-03
+v0.12.0 / 2016-11-03
 -------------------
 
 DataFrame
@@ -3998,7 +3998,7 @@ Administration
 - Micro-optimize get_dependencies (:pr:`1722`)
 
 
-0.11.0 / 2016-08-24
+v0.11.0 / 2016-08-24
 -------------------
 
 Major Points
@@ -4025,7 +4025,7 @@ Breaking Changes
   create a very large number of tasks
 
 
-0.10.2 / 2016-07-27
+v0.10.2 / 2016-07-27
 -------------------
 
 - More Dataframe shuffles now work in distributed settings, ranging from
@@ -4047,7 +4047,7 @@ Breaking Changes
   multiple files and docs
 
 
-0.10.0 / 2016-06-13
+v0.10.0 / 2016-06-13
 -------------------
 
 Major Changes
@@ -4104,7 +4104,7 @@ Other
   argument.  Anonymous mode must be explicitly declared if desired.
 
 
-0.9.0 / 2016-05-11
+v0.9.0 / 2016-05-11
 ------------------
 
 API Changes
@@ -4165,7 +4165,7 @@ Other
 - General performance tuning
 
 
-0.8.1 / 2016-03-11
+v0.8.1 / 2016-03-11
 ------------------
 
 Array
@@ -4187,7 +4187,7 @@ DataFrame
 - Bugfixes for io to bcolz and hdf5
 
 
-0.8.0 / 2016-02-20
+v0.8.0 / 2016-02-20
 ------------------
 
 Array
@@ -4224,7 +4224,7 @@ Other
 - Moved the dask project to a new dask organization
 
 
-0.7.6 / 2016-01-05
+v0.7.6 / 2016-01-05
 ------------------
 
 Array
@@ -4252,7 +4252,7 @@ Core
 - Test Python 3.5
 
 
-0.7.4 / 2015-10-23
+v0.7.4 / 2015-10-23
 ------------------
 
 This was mostly a bugfix release. Some notable changes:
@@ -4279,7 +4279,7 @@ https://distributed.dask.org . General feedback on that project is most
 welcome from this community.
 
 
-0.7.3 / 2015-09-25
+v0.7.3 / 2015-09-25
 ------------------
 
 Diagnostics
@@ -4296,7 +4296,7 @@ with resample. More flexible read_hdf with globbing. And many more. Various
 bug fixes in ``dask.imperative`` and ``dask.bag``.
 
 
-0.7.0 / 2015-08-15
+v0.7.0 / 2015-08-15
 ------------------
 
 DataFrame
@@ -4325,7 +4325,7 @@ Infrastructure
 - All collections (Array, Bag, DataFrame) inherit from common subclass
 
 
-0.6.1 / 2015-07-23
+v0.6.1 / 2015-07-23
 ------------------
 
 Distributed
