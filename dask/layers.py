@@ -94,45 +94,6 @@ class ArraySliceDep(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseCreateArray(Blockwise):
-    """
-    Specialized Blockwise Layer for array creation routines.
-
-    Enables HighLevelGraph optimizations.
-
-    Parameters
-    ----------
-    name: string
-        The output name.
-    func : callable
-        Function to apply to populate individual blocks. This function should take
-        an iterable containing the dimensions of the given block.
-    shape: iterable
-        Iterable containing the overall shape of the array.
-    chunks: iterable
-        Iterable containing the chunk sizes along each dimension of array.
-    """
-
-    def __init__(
-        self,
-        name,
-        shape,
-        func,
-        *deps,
-    ):
-        # Define "blockwise" graph
-        dsk = {name: (func, *[blockwise_token(i) for i in range(len(deps))])}
-
-        out_ind = tuple(range(len(shape)))
-        super().__init__(
-            output=name,
-            output_indices=out_ind,
-            dsk=dsk,
-            indices=[(d, out_ind) for d in deps],
-            numblocks={},
-        )
-
-
 class ArrayOverlapLayer(Layer):
     """Simple HighLevelGraph array overlap layer.
 
