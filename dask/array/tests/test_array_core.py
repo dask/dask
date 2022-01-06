@@ -3855,6 +3855,15 @@ def test_setitem_extended_API_1d():
             ),
             -1,
         ],
+        [
+            (
+                slice(2, 4),
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            [[-100, -101, -102, -103], [-200, -201, -202, -203]],
+        ],
     ],
 )
 def test_setitem_extended_API_2d(index, value):
@@ -4024,17 +4033,23 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[[True, True, True, False], 0] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [1, 2, 3, 4, 5]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[da.from_array([True, True, True, False]), 0] = [2, 3]
+        x[da.from_array([True, True, True, False]), 0] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, False, False, True])] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[:, 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[0, :] = [1, 2, 3, 4, 5]
 
     x = da.ones((4, 4), chunks=(2, 2))
 
