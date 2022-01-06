@@ -1640,9 +1640,9 @@ def test_to_dataframe_optimize_graph():
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
-    # Graph hasn't been fused. It contains 3 `map` tasks per partition,
-    # 2 more than in the optimized case.
-    assert len(d2.dask) == len(d.dask) + 2 * d.npartitions
+    # Graph hasn't been fused. It contains all the original tasks,
+    # plus one extra layer converting to DataFrame
+    assert len(d2.dask) == len(y.dask) + d.npartitions
 
     # Annotations are still there
     assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
