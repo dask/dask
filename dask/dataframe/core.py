@@ -654,7 +654,7 @@ Dask Name: {name}, {task} tasks"""
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
-        """Apply Python function on each DataFrame partition
+        """Apply Python function on each DataFrame partition.
 
         Note that the index and divisions are assumed to remain unchanged.
 
