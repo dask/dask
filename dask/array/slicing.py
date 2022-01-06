@@ -1400,7 +1400,7 @@ def parse_assignment_indices(indices, shape):
     ([3, slice(3, 8, 1)], [5], [1], [1])
 
     >>> parse_assignment_indices((slice(-1, 2, -1), 3, [1, 2]), (7, 8, 9))
-    ([slice(3, 8, 1), 3, [1, 2]], [5, 2], [0], [1, 2])
+    ([slice(3, 7, 1), 3, array([1, 2])], [4, 2], [0], [0, 2])
 
     """
     if not isinstance(indices, tuple):
