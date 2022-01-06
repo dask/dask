@@ -45,7 +45,7 @@ from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph, MaterializedLayer
 from ..layers import ArraySliceDep, reshapelist
 from ..sizeof import sizeof
 from ..utils import (
@@ -270,21 +270,19 @@ def graph_from_arraylike(
      ('X', 0, 1): (getter, 'original-X', (slice(0, 2), slice(3, 6)))}
     """
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
+    out_ind = tuple(range(len(shape)))
 
-    # If we are inlining the array-like, we can make it an embarassingly parallel
-    # blockwise operation.
+    if (
+        has_keyword(getitem, "asarray")
+        and has_keyword(getitem, "lock")
+        and (not asarray or lock)
+    ):
+        getter = partial(getitem, asarray=asarray, lock=lock)
+    else:
+        # Common case, drop extra parameters
+        getter = getitem
+
     if inline_array:
-        if (
-            has_keyword(getitem, "asarray")
-            and has_keyword(getitem, "lock")
-            and (not asarray or lock)
-        ):
-            getter = partial(getitem, asarray=asarray, lock=lock)
-        else:
-            # Common case, drop extra parameters
-            getter = getitem
-
-        out_ind = tuple(range(len(shape)))
         layer = core_blockwise(
             getter,
             name,
@@ -297,23 +295,26 @@ def graph_from_arraylike(
         )
         return HighLevelGraph.from_collections(name, layer)
     else:
-        keys = product([name], *(range(len(bds)) for bds in chunks))
-        slices = slices_from_chunks(chunks)
         original_name = "original-" + name
 
-        if (
-            has_keyword(getitem, "asarray")
-            and has_keyword(getitem, "lock")
-            and (not asarray or lock)
-        ):
-            values = [(getitem, original_name, x, asarray, lock) for x in slices]
-        else:
-            # Common case, drop extra parameters
-            values = [(getitem, original_name, x) for x in slices]
+        layers = {}
+        layers[original_name] = MaterializedLayer({original_name: arr})
+        layers[name] = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            original_name,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
 
-        dsk = dict(zip(keys, values))
-        dsk[original_name] = arr
-        return HighLevelGraph.from_collections(name, dsk)
+        deps = {}
+        deps[original_name] = set()
+        deps[name] = {original_name}
+
+        return HighLevelGraph(layers, deps)
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
