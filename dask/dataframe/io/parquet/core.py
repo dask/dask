@@ -101,7 +101,7 @@ ParquetFunctionWrapper = ReadParquetFunctionWrapper
 class ToParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
-    
+
     Writes a DataFrame partition into a distinct
     parquet file. When called, the function also
     requires a ``partition_info`` kwarg.
