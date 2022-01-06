@@ -19,10 +19,10 @@ Status](https://img.shields.io/pypi/v/dask.svg)](https://pypi.python.org/pypi/da
 See [documentation](https://dask.org) for more information.
 
 
+# Installation
 
 <details>
-    <summary> 
-    <h2> Install Dask </h2> </summary>
+<summary>Install Dask </summary>
 
 You can install dask with `conda`, with `pip`, or by installing from source.
 
@@ -30,15 +30,19 @@ Conda
 -----
 
 Dask is installed by default in [Anaconda](https://www.anaconda.com/download/).
-You can update Dask using the [conda](https://www.anaconda.com/download/) command::
+You can update Dask using the [conda](https://www.anaconda.com/download/) command:
 
-   ```conda install dask```
+  ```
+  conda install dask
+  ```
 
 This installs Dask and **all** common dependencies, including Pandas and NumPy.
 Dask packages are maintained both on the default channel and on [conda-forge](https://conda-forge.github.io/).
 Optionally, you can obtain a minimal Dask installation using the following command::
 
-   ```conda install dask-core```
+   ```
+   conda install dask-core
+   ```
 
 This will install a minimal set of dependencies required to run Dask similar to (but not exactly the same as) ``python -m pip install dask`` below.
 
@@ -50,14 +54,18 @@ dataframes, ...)  This installs both Dask and dependencies like NumPy, Pandas,
 and so on that are necessary for different workloads.  This is often the right
 choice for Dask users::
 
-  ```python -m pip install "dask[complete]"    # Install everything```
+  ```
+  python -m pip install "dask[complete]"    # Install everything
+  ```
 
 You can also install only the Dask library.  Modules like ``dask.array``,
 ``dask.dataframe``, or `dask.distributed` won't work until you also install NumPy,
 Pandas, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
-   ```python -m pip install dask                # Install only core parts of dask```
+   ```
+   python -m pip install dask                # Install only core parts of dask
+   ```
 
 We also maintain other dependency sets for different subsets of functionality::
 
@@ -146,7 +154,7 @@ follows::
     py.test dask/tests dask/array/tests
 </details>
 
-_______________________________________________
+
 
 
 Contribution guidelines
