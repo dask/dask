@@ -1806,9 +1806,6 @@ def setitem_array(out_name, array, indices, value):
         indices, array_shape
     )
 
-    # Whether or not each index is a 1-d boolean dask array
-    dask_boolean_indices = [is_dask_collection(i) and i.dtype == bool for i in indices]
-
     # Empty slices can only be assigned size 1 values
     if 0 in implied_shape and value_shape and max(value_shape) > 1:
         raise ValueError(
