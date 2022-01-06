@@ -1622,26 +1622,27 @@ def test_to_dataframe_optimize_graph():
         [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2
     )
 
-    # linear operations will be fused by graph optimization
+    # linear `map` tasks will be fused by graph optimization
     with dask.annotate(foo=True):
         y = x.map(lambda a: dict(**a, v2=a["v1"] + 1))
         y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
+        y = y.map(lambda a: dict(**a, v4=a["v3"] + 1))
 
     # verifying the maps are not fused yet
-    assert len(y.dask) > y.npartitions
+    assert len(y.dask) == y.npartitions * 4
 
     # with optimizations
     d = y.to_dataframe()
 
-    # Graph has been fused, so there are three tasks per partition
-    assert len(d.dask) == d.npartitions * 3
+    # All the `map` tasks have been fused
+    assert len(d.dask) < len(y.dask)
 
     # no optimizations
     d2 = y.to_dataframe(optimize_graph=False)
 
-    # Graph hasn't been fused. It should contain all the original keys,
-    # plus a `map_partitions` step converting to DataFrames
-    assert len(d2.dask) == len(d.dask) + d.npartitions
+    # Graph hasn't been fused. It contains 3 `map` tasks per partition,
+    # 2 more than in the optimized case.
+    assert len(d2.dask) == len(d.dask) + 2 * d.npartitions
 
     # Annotations are still there
     assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
