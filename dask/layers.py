@@ -75,14 +75,14 @@ class ArrayBlockwiseDep(BlockwiseDep):
 
 
 class ArrayChunkShapeDep(ArrayBlockwiseDep):
-    """Index-chunkshape mapping for array-like"""
+    """Produce chunk shapes given a chunk index"""
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
 
 class ArraySliceDep(ArrayBlockwiseDep):
-    """Index-slice mapping for array-like"""
+    """Produce slice(s) into the full-sized array given a chunk index"""
 
     def __init__(self, chunks: tuple):
         super().__init__(chunks)

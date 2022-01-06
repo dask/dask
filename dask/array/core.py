@@ -243,14 +243,16 @@ def graph_from_arraylike(
     asarray=True,
     dtype=None,
     inline_array=True,
-):
+) -> HighLevelGraph:
     """
-    Dask getting various chunks from an array-like, which should support slicing.
+    HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
 
-    If ``inline_array`` is True, this generates a HighLevelGraph with blockwise logic,
-    where the array-like is embedded in every task.
-    If ``inline_array`` is False, this generates a materialized graph where the
-    array-like is in a separate value in the graph, and other slicing tasks refer to it.
+    If ``inline_array`` is True, this make a Blockwise layer of slicing tasks where the
+    array-like is embedded into every task.,
+
+    If ``inline_array`` is False, this inserts the array-like as a standalone value in
+    a MaterializedLayer, then generates a Blockwise layer of slicing tasks that refer
+    to it.
 
     >>> dict(graph_from_arraylike(arr, chunks=(2, 3), shape=(4, 6), name="X", inline_array=True))  # doctest: +SKIP
     {(arr, 0, 0): (getter, arr, (slice(0, 2), slice(0, 3))),
@@ -310,10 +312,10 @@ def graph_from_arraylike(
             numblocks={},
         )
 
-        deps = {}
-        deps[original_name] = set()
-        deps[name] = {original_name}
-
+        deps = {
+            original_name: set(),
+            name: {original_name},
+        }
         return HighLevelGraph(layers, deps)
 
 

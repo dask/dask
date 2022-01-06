@@ -51,10 +51,10 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.highlevelgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.layers import Blockwise
 from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
-from dask.utils_test import dec, inc
+from dask.utils_test import dec, hlg_layer_topological, inc
 
 from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
@@ -71,10 +71,14 @@ def test_graph_from_arraylike(inline_array):
         arr, chunk, shape=shape, name="X", inline_array=inline_array
     )
 
+    assert isinstance(dsk, HighLevelGraph)
     if inline_array:
-        assert isinstance(dsk, HighLevelGraph)
         assert len(dsk.layers) == 1
-        assert isinstance(next(iter(dsk.layers.values())), Blockwise)
+        assert isinstance(hlg_layer_topological(dsk, 0), Blockwise)
+    else:
+        assert len(dsk.layers) == 2
+        assert isinstance(hlg_layer_topological(dsk, 0), MaterializedLayer)
+        assert isinstance(hlg_layer_topological(dsk, 1), Blockwise)
     dsk = dict(dsk)
 
     # Somewhat odd membership check to avoid numpy elemwise __in__ overload

@@ -42,7 +42,7 @@ def test_array_chunk_shape_dep():
 
     def check(i, j):
         chunk_shape = array_deps[(i, j)]
-        chunk_shape == chunk
+        assert chunk_shape == chunk
 
     for i in range(d):
         for j in range(d):
