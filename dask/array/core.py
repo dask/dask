@@ -24,7 +24,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Protocol, Sequence, TypeVar
+from typing import Any, Sequence
 
 import numpy as np
 from fsspec import get_mapper
@@ -91,28 +91,11 @@ unknown_chunk_message = (
 )
 
 
-T = TypeVar("T", covariant=True)
-
-
-# A protocol for an array-like that will work with da.from_array, roughly following
-# numpy: https://github.com/numpy/numpy/blame/main/numpy/typing/_nested_sequence.py
-class ArrayLike(Protocol[T]):
-    def __getitem__(
-        self, index: slice | None | tuple[slice | None, ...]
-    ) -> ArrayLike[T]:
-        raise NotImplementedError
-
-
 class PerformanceWarning(Warning):
     """A warning given when bad chunking may cause poor performance"""
 
 
-def getter(
-    a: ArrayLike[T],
-    b: slice | None | tuple[slice | None, ...],
-    asarray: bool = True,
-    lock=None,
-) -> ArrayLike[T]:
+def getter(a, b, asarray=True, lock=None):
     if isinstance(b, tuple) and any(x is None for x in b):
         b2 = tuple(x for x in b if x is not None)
         b3 = tuple(
@@ -125,13 +108,13 @@ def getter(
     if lock:
         lock.acquire()
     try:
-        c: ArrayLike[T] = a[b]
+        c = a[b]
         # Below we special-case `np.matrix` to force a conversion to
         # `np.ndarray` and preserve original Dask behavior for `getter`,
         # as for all purposes `np.matrix` is array-like and thus
         # `is_arraylike` evaluates to `True` in that case.
         if asarray and (not is_arraylike(c) or isinstance(c, np.matrix)):
-            c = np.asarray(c)  # type: ignore
+            c = np.asarray(c)
     finally:
         if lock:
             lock.release()
@@ -251,15 +234,15 @@ def slices_from_chunks(chunks):
 
 
 def graph_from_arraylike(
-    arr: ArrayLike,
+    arr,  # Any array-like which supports slicing
     chunks,
-    shape: tuple[int, ...],
-    name: str,
+    shape,
+    name,
     getitem=getter,
     lock=False,
-    asarray: bool = True,
+    asarray=True,
     dtype=None,
-    inline_array: bool = True,
+    inline_array=True,
 ) -> HighLevelGraph:
     """
     HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
@@ -329,7 +312,7 @@ def graph_from_arraylike(
             numblocks={},
         )
 
-        deps: dict[str, set[str]] = {
+        deps = {
             original_name: set(),
             name: {original_name},
         }
@@ -3326,7 +3309,7 @@ def from_array(
                 getitem = getter_nofancy
 
         dsk = graph_from_arraylike(
-            x,  # type: ignore
+            x,
             chunks,
             x.shape,
             name,
