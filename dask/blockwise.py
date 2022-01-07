@@ -1443,9 +1443,7 @@ def rewrite_blockwise(inputs):
     io_deps = {}
     for v in inputs.values():
         io_deps.update(v.io_deps)
-    import pdb
 
-    pdb.set_trace()
     return Blockwise(
         root,
         inputs[root].output_indices,
