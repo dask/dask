@@ -1,6 +1,5 @@
 import itertools
 import os
-from collections import defaultdict
 from itertools import product
 from typing import (
     Any,
@@ -1344,7 +1343,7 @@ def rewrite_blockwise(inputs):
     new_axes = inputs[root].new_axes
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
-    seen = defaultdict(int)
+    seen = {}
 
     changed = True
     while changed:
@@ -1362,8 +1361,19 @@ def rewrite_blockwise(inputs):
             # to the name to avoid fusing distinct indices
             # into a single dependency within the subgraph
             # (see: https://github.com/dask/dask/issues/8535)
-            use_dep = dep + f"_{seen[dep]}" if seen[dep] else dep
-            seen[dep] += 1
+            use_dep = dep
+            if dep in seen:
+                try:
+                    _ind = seen[dep][ind]
+                    if _ind:
+                        # We only append a "counting" label for
+                        # `ind` cases after the first ooccurrence
+                        use_dep = dep + f"_{_ind}"
+                except KeyError:
+                    use_dep = dep + f"_{len(seen[dep])}"
+                    seen[dep][ind] = len(seen[dep])
+            else:
+                seen[dep] = {ind: 0}
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
