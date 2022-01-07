@@ -228,7 +228,7 @@ def test_profiler_plot():
         show=False,
         save=False,
     )
-    if BOKEH_VERSION.major < 3:
+    if BOKEH_VERSION().major < 3:
         assert p.plot_width == 500
         assert p.plot_height == 300
     else:
@@ -258,7 +258,7 @@ def test_resource_profiler_plot():
         show=False,
         save=False,
     )
-    if BOKEH_VERSION.major < 3:
+    if BOKEH_VERSION().major < 3:
         assert p.plot_width == 500
         assert p.plot_height == 300
     else:
@@ -296,7 +296,7 @@ def test_cache_profiler_plot():
         show=False,
         save=False,
     )
-    if BOKEH_VERSION.major < 3:
+    if BOKEH_VERSION().major < 3:
         assert p.plot_width == 500
         assert p.plot_height == 300
     else:

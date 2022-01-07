@@ -4,14 +4,18 @@ from bisect import bisect_left
 from itertools import cycle
 from operator import add, itemgetter
 
-import bokeh
-from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
 from ..utils import apply, funcname, import_required
 
-BOKEH_VERSION = parse_version(bokeh.__version__)
+
+def BOKEH_VERSION():
+    import bokeh
+    from packaging.version import parse as parse_version
+
+    return parse_version(bokeh.__version__)
+
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 
@@ -204,14 +208,14 @@ def visualize(
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            if BOKEH_VERSION.major < 3:
+            if BOKEH_VERSION().major < 3:
                 f.plot_height -= 30
             else:
                 f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            if BOKEH_VERSION.major < 3:
+            if BOKEH_VERSION().major < 3:
                 f.plot_height -= 30
             else:
                 f.height -= 30
