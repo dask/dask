@@ -1873,7 +1873,7 @@ class _GroupBy:
             isinstance(item, Series) for item in self.by
         ):
             raise NotImplementedError(
-                "groupby-transform with a multiple Series is currently not supported"
+                "groupby-shift with a multiple Series is currently not supported"
             )
         df = self.obj
         should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
@@ -1894,6 +1894,7 @@ class _GroupBy:
             freq=freq,
             axis=axis,
             fill_value=fill_value,
+            token="groupby-shift",
             group_keys=self.group_keys,
             meta=meta,
             **self.observed,
