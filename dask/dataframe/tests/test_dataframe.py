@@ -2322,6 +2322,34 @@ def test_fillna():
     assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
 
 
+@pytest.mark.parametrize("optimize", [True, False])
+def test_delayed_roundtrip(optimize: bool):
+    df1 = d + 1 + 1
+    delayed = df1.to_delayed(optimize_graph=optimize)
+
+    for x in delayed:
+        assert x.__dask_layers__() == (
+            "delayed-" + df1._name if optimize else df1._name,
+        )
+        x.dask.validate()
+
+    assert len(delayed) == df1.npartitions
+    assert len(delayed[0].dask.layers) == (1 if optimize else 3)
+
+    dm = d.a.mean().to_delayed(optimize_graph=optimize)
+
+    delayed2 = [x * 2 - dm for x in delayed]
+
+    for x in delayed2:
+        x.dask.validate()
+
+    df3 = dd.from_delayed(delayed2, meta=df1, divisions=df1.divisions)
+    df4 = df3 - 1 - 1
+
+    df4.dask.validate()
+    assert_eq(df4, (full + 2) * 2 - full.a.mean() - 2)
+
+
 def test_from_delayed_lazy_if_meta_provided():
     """Ensure that the graph is 100% lazily evaluted if meta is provided"""
 
@@ -4724,6 +4752,19 @@ def test_pop():
     assert_eq(ddf, df[["x"]])
 
 
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_nunique(dropna, axis):
+    df = pd.DataFrame(
+        {"x": ["a", "a", "c"], "y": [None, 1, 2], "c": np.arange(0, 1, 0.4)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf["y"].nunique(dropna=dropna), df["y"].nunique(dropna=dropna))
+    assert_eq(
+        ddf.nunique(dropna=dropna, axis=axis), df.nunique(dropna=dropna, axis=axis)
+    )
+
+
 def test_simple_map_partitions():
     data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
     df = pd.DataFrame(data)
@@ -4927,3 +4968,55 @@ def test_use_of_weakref_proxy():
     pxy = weakref.proxy(a)
     res = pxy["b"].groupby(pxy["g"]).sum()
     isinstance(res.compute(), pd.Series)
+
+
+def test_is_monotonic_numeric():
+    s = pd.Series(range(20))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    assert_eq(s.is_monotonic, ds.is_monotonic)
+
+    s_2 = pd.Series(range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5)
+    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
+    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+
+
+def test_is_monotonic_dt64():
+    s = pd.Series(pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+
+    s_2 = pd.Series(list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_numeric():
+    s = pd.Series(1, index=range(20))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+
+    s_2 = pd.Series(1, index=range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
+    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
+    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_dt64():
+    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+
+    s_2 = pd.Series(1, index=list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)

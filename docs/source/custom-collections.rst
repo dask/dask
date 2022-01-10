@@ -339,7 +339,7 @@ created. It too has three stages:
 
    - A ``rebuild`` function, which takes in a persisted graph.  The keys of
      this graph are the same as ``__dask_keys__`` for the corresponding
-     collection, and the values are computed results (for the single machine
+     collection, and the values are computed results (for the single-machine
      scheduler) or futures (for the distributed scheduler).
    - A tuple of extra arguments to pass to ``rebuild`` after the graph
 

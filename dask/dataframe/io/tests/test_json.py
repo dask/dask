@@ -117,7 +117,7 @@ def test_read_chunked(block):
         fn = os.path.join(path, "1.json")
         df.to_json(fn, orient="records", lines=True)
         d = dd.read_json(fn, blocksize=block, sample=10)
-        assert (d.npartitions > 1) or (block > 50)
+        assert (d.npartitions > 1) or (block > 30)
         assert_eq(d, df, check_index=False)
 
 

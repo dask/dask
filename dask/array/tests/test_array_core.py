@@ -12,6 +12,7 @@ import operator
 import os
 import time
 import warnings
+from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -50,7 +51,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from ..chunk import getitem
@@ -1207,6 +1208,24 @@ def test_reshape_unknown_dimensions():
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
+
+
+@pytest.mark.parametrize(
+    "shape, chunks, reshape_size",
+    [
+        # Test reshape where output chunks would otherwise be too large
+        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
+        # Test reshape where multiple chunks match between input and output
+        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
+    ],
+)
+def test_reshape_avoids_large_chunks(shape, chunks, reshape_size):
+    limit = parse_bytes("128MiB")
+    array = da.random.random(shape, chunks=chunks)
+    result = array.reshape(*reshape_size)
+    nbytes = array.dtype.itemsize
+    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+    assert max_chunksize_in_bytes < (limit)
 
 
 def test_full():
@@ -3335,10 +3354,16 @@ def test_to_delayed_optimize_graph():
     # optimizations
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
+    assert d.key == (y.name, 0, 0)
+    assert d.dask.layers.keys() == {"delayed-" + y.name}
+    assert d.dask.dependencies == {"delayed-" + y.name: set()}
+    assert d.__dask_layers__() == ("delayed-" + y.name,)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
-    assert dict(d2.dask) == dict(y.dask)
+    assert d2.dask is y.dask
+    assert d2.key == (y.name, 0, 0)
+    assert d2.__dask_layers__() == y.__dask_layers__()
 
     assert (d.compute() == d2.compute()).all()
 
@@ -3455,6 +3480,12 @@ def test_elemwise_name():
 
 def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
+
+
+def test_map_blocks_token_deprecated():
+    with pytest.warns(FutureWarning, match="use `name=` instead"):
+        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
+    assert x.name.startswith("foo-")
 
 
 def test_from_array_names():
