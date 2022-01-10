@@ -2488,12 +2488,10 @@ def test_from_array_with_lock(inline_array):
     assert_eq(d, x)
 
     lock = CounterLock()
-    e = da.from_array(x, chunks=5, lock=lock, inline_array=inline_array)
+    e = da.from_array(x, chunks=5, lock=lock)
+    f = da.from_array(x, chunks=5, lock=lock)
 
-    assert_eq(e, x)
-    # Note: the specific counts here can vary significantly based on the
-    # complexity of the computation, whether we are inlining, and optimization
-    # fusion settings. But for this simple comparison it seems pretty stable.
+    assert_eq(e + f, x + x)
     assert lock.release_count == 2
     assert lock.acquire_count == 2
 
@@ -2584,13 +2582,11 @@ def test_from_array_scalar(type_):
 def test_from_array_no_asarray(asarray, cls):
     def assert_chunks_are_of_type(x):
         chunks = compute_as_if_collection(Array, x.dask, x.__dask_keys__())
-        # If it's a tuple of tuples we want to concat, but if it's a tuple
-        # of 1d arrays, we just want to iterate directly
-        for c in concat(chunks) if isinstance(chunks[0], tuple) else chunks:
+        for c in concat(chunks):
             assert type(c) is cls
 
     x = np.matrix(np.arange(100).reshape((10, 10)))
-    dx = da.from_array(x, chunks=(5, 5), asarray=asarray, inline_array=True)
+    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
     assert_chunks_are_of_type(dx)
     assert_chunks_are_of_type(dx[0:5])
     assert_chunks_are_of_type(dx[0:5][:, 0])

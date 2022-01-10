@@ -242,7 +242,7 @@ def graph_from_arraylike(
     lock=False,
     asarray=True,
     dtype=None,
-    inline_array=True,
+    inline_array=False,
 ) -> HighLevelGraph:
     """
     HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
@@ -4314,7 +4314,7 @@ def asarray(
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=True):
+def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
