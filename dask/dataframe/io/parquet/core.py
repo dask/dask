@@ -162,8 +162,13 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
-    open_options : dict, default None
-        Key/value pairs to be passed to ``dd.io.utils.open_input_files``.
+    open_file_options : dict, default None
+        Key/value arguments to be passed along to ``AbstractFileSystem.open``
+        when each parquet data file is open for reading. Experimental
+        (optimized) "pre-caching" for remote file systems (e.g. S3, GCS) can
+        be enabled with ``{"cache_type": "parquet"}``. A custom file-open
+        function can be used (instead of ``AbstractFileSystem.open``), by
+        specifying the desired function with the ``"open_file_func"`` key.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',

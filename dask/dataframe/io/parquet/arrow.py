@@ -16,7 +16,7 @@ from ....core import flatten
 from ....delayed import Delayed
 from ....utils import getargspec, natural_sort_key
 from ...utils import clear_known_categories
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, open_input_files
+from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, _open_input_files
 from .core import create_metadata_file
 from .utils import (
     Engine,
@@ -207,30 +207,33 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
-    read_kwargs = kwargs.get("read", {}).copy()
 
     # Define default file-opening options
-    open_options = read_kwargs.pop("open_options", {})
-    format_options = {}
-    if open_options.get("file_format", "parquet") == "parquet":
-        open_options["file_format"] = "parquet"
-        format_options = {
-            "columns": columns,
-            "row_groups": row_groups if row_groups == [None] else [row_groups],
-            "engine": open_options.get("engine", "pyarrow"),
-        }
-    elif "open_file_cb" not in open_options:
-        # Pyarrow is faster without read-ahead caching
-        open_options["cache_type"] = open_options.get("cache_type", "none")
-        open_options["mode"] = open_options.get("mode", "rb")
+    read_kwargs = kwargs.get("read", {}).copy()
+    open_file_options = read_kwargs.pop("open_file_options", {})
+    cache_options = open_file_options.pop("cache_options", {})
+
+    # Pyarrow is faster without read-ahead caching
+    cache_type = open_file_options.pop("cache_type", "none")
+    if cache_type == "parquet":
+        cache_options.update(
+            {
+                "columns": columns,
+                "row_groups": row_groups if row_groups == [None] else [row_groups],
+                "engine": cache_options.get("engine", "pyarrow"),
+            }
+        )
+    elif "open_file_func" not in open_file_options:
+        open_file_options["mode"] = open_file_options.get("mode", "rb")
 
     if partition_keys:
         tables = []
-        with open_input_files(
+        with _open_input_files(
             [path],
             fs=fs,
-            format_options=format_options,
-            **open_options,
+            cache_type=cache_type,
+            cache_options=cache_options,
+            **open_file_options,
         )[0] as fil:
             for rg in row_groups:
                 piece = pq.ParquetDatasetPiece(
@@ -248,11 +251,12 @@ def _read_table_from_path(
         else:
             return tables[0]
     else:
-        with open_input_files(
+        with _open_input_files(
             [path],
             fs=fs,
-            format_options=format_options,
-            **open_options,
+            cache_type=cache_type,
+            cache_options=cache_options,
+            **open_file_options,
         )[0] as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
@@ -334,10 +338,10 @@ def _split_user_kwargs(kwargs):
     dataset_kwargs = user_kwargs.pop("dataset", {})
     read_kwargs = user_kwargs.pop("read", {})
     arrow_to_pandas_kwargs = user_kwargs.pop("arrow_to_pandas", {})
-    if "open_options" in user_kwargs:
-        # Allow user to pass "open_options"
+    if "open_file_options" in user_kwargs:
+        # Allow user to pass "open_file_options"
         # outside of the "read" kwargs
-        read_kwargs["open_options"] = user_kwargs.pop("open_options", {})
+        read_kwargs["open_file_options"] = user_kwargs.pop("open_file_options", {})
 
     return dataset_kwargs, read_kwargs, arrow_to_pandas_kwargs, user_kwargs
 

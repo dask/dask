@@ -22,7 +22,7 @@ from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import natural_sort_key
 from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _meta_from_dtypes, open_input_files
+from ..utils import _meta_from_dtypes, _open_input_files
 
 #########################
 # Fastparquet interface #
@@ -393,10 +393,10 @@ class FastParquetEngine(Engine):
             **user_kwargs.pop("dataset", {}),
         }
         read_kwargs = user_kwargs.pop("read", {})
-        if "open_options" in user_kwargs:
-            # Allow user to pass "open_options"
+        if "open_file_options" in user_kwargs:
+            # Allow user to pass "open_file_options"
             # outside of the "read" kwargs
-            read_kwargs["open_options"] = user_kwargs.pop("open_options", {})
+            read_kwargs["open_file_options"] = user_kwargs.pop("open_file_options", {})
 
         parts = []
         _metadata_exists = False
@@ -1054,7 +1054,7 @@ class FastParquetEngine(Engine):
         columns=None,
         categories=None,
         index=None,
-        open_options=None,
+        open_file_options=None,
         **kwargs,
     ):
         # This method was mostly copied from the fastparquet
@@ -1083,29 +1083,32 @@ class FastParquetEngine(Engine):
             fn_rg_map[fn].append(rg)
 
         # Define default file-opening options
-        open_options = open_options or {}
-        format_options = {}
-        if open_options.get("file_format", "parquet") == "parquet":
-            open_options["file_format"] = "parquet"
-            format_options = {
-                "metadata": pf,
-                "columns": list(set(columns).intersection(pf.columns)),
-                "row_groups": [rgs for rgs in fn_rg_map.values()],
-                "engine": open_options.get("engine", "fastparquet"),
-            }
-        elif "open_file_cb" not in open_options:
-            open_options["mode"] = open_options.get("mode", "rb")
+        open_file_options = open_file_options or {}
+        cache_type = open_file_options.pop("cache_type", "readahead")
+        cache_options = open_file_options.pop("cache_options", {})
+        if cache_type == "parquet":
+            cache_options.update(
+                {
+                    "metadata": pf,
+                    "columns": list(set(columns).intersection(pf.columns)),
+                    "row_groups": [rgs for rgs in fn_rg_map.values()],
+                    "engine": cache_options.get("engine", "fastparquet"),
+                }
+            )
+        elif "open_file_func" not in open_file_options:
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
 
         with ExitStack() as stack:
 
             for fn, infile in zip(
                 fn_rg_map.keys(),
-                open_input_files(
+                _open_input_files(
                     list(fn_rg_map.keys()),
                     fs=fs,
                     context_stack=stack,
-                    format_options=format_options,
-                    **open_options,
+                    cache_type=cache_type,
+                    cache_options=cache_options,
+                    **open_file_options,
                 ),
             ):
                 for rg in fn_rg_map[fn]:

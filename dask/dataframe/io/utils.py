@@ -109,17 +109,20 @@ def _set_context(obj, stack):
     return stack.enter_context(obj)
 
 
-def open_input_files(
+def _open_input_files(
     paths,
     fs=None,
-    file_format=None,
     context_stack=None,
-    open_file_cb=None,
-    format_options=None,
+    open_file_func=None,
+    cache_type=None,
+    cache_options=None,
     **kwargs,
 ):
     """Return a list of open-file objects given
     a list of input-file paths.
+
+    WARNING: This utility is experimental, and is meant
+    for internal ``dask.dataframe`` use only.
 
     Parameters
     ----------
@@ -127,39 +130,37 @@ def open_input_files(
         Remote or local path of the parquet file
     fs : fsspec object, optional
         File-system instance to use for file handling
-    file_format : str, optional
-        Lable for format-specific file-opening function to use.
-        Supported options are currently 'parquet' and `None`. If
-        'parquet' is specified, `fsspec.parquet.open_parquet_file`
-        will be used for remote storage.
     context_stack : contextlib.ExitStack, Optional
         Context manager to use for open files.
-    open_file_cb : callable, optional
+    open_file_func : callable, optional
         Callable function to use for file opening. If this argument
-        is specified, ``open_file_cb(path, **kwargs)`` will be used
-        to open each file in ``paths``, and all other options will
-        be ignored.
-    format_options : dict, optional
-        Dictionary of key-word arguments to pass to format-specific
-        open functions only.
+        is specified, ``open_file_func(path, **kwargs)`` will be used
+        to open each file in ``paths``. Default is ``fs.open``.
+    cache_type: str, default "readahead"
+        Caching policy to pass to ``fs.open``. If "parquet" is
+        specified, ``fsspec.parquet.open_parquet_file`` will be used
+        for remote storage.
+    cache_options : dict, optional
+        Dictionary of key-word arguments to pass to ``fs.open``.
     **kwargs :
         Key-word arguments to pass to the appropriate open function
     """
 
     # Use call-back function if specified
-    if open_file_cb is not None:
+    if open_file_func is not None:
         return [
-            _set_context(open_file_cb(path, **kwargs), context_stack) for path in paths
+            _set_context(open_file_func(path, **kwargs), context_stack)
+            for path in paths
         ]
 
     # Check if we are using `fsspec.parquet`
     if (
-        file_format == "parquet"
+        cache_type == "parquet"
         and fs is not None
         and not isinstance(fs, LocalFileSystem)
         and parse_version(fsspec.__version__) > parse_version("2021.11.0")
     ):
-        kwargs.update((format_options or {}).copy())
+        kwargs.update((cache_options or {}).copy())
         row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
         return [
             _set_context(
