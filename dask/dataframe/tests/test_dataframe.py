@@ -4766,9 +4766,24 @@ def test_nunique(dropna, axis):
 
 
 def test_view():
-    s = pd.Series(range(10), dtype="int8")
-    ds = dd.from_pandas(s, npartitions=2)
-    assert_eq(ds.view("uint8"), s.view("uint8"))
+    data = {
+        "x": pd.Series(range(5), dtype="int8"),
+        "y": pd.Series(
+            [
+                "2021-11-27 00:05:02.175274",
+                "2021-11-27 00:05:05.205596",
+                "2021-11-27 00:05:29.212572",
+                "2021-11-27 00:05:25.708343",
+                "2021-11-27 00:05:47.714958",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    }
+
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
+    assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
 
 
 def test_simple_map_partitions():

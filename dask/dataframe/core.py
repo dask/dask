@@ -3841,7 +3841,8 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def view(self, dtype):
-        return self.map_partitions(M.view, dtype, enforce_metadata=False)
+        meta = self._meta.view(dtype)
+        return self.map_partitions(M.view, dtype, meta=meta)
 
 
 class Index(Series):
