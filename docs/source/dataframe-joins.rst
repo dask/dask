@@ -37,13 +37,12 @@ that it is a single partition with the repartition method.
 
 .. code-block:: python
 
-    from dask.datasets import timeseries
-    large = timeseries(freq="10s", npartitions=10)
-    small = timeseries(freq="1D", dtypes={"z": int})
+    import dask
+    large = dask.datasets.timeseries(freq="10s", npartitions=10)
+    small = dask.datasets.timeseries(freq="1D", dtypes={"z": int})
 
     small = small.repartition(npartitions=1)
     result = large.merge(small, how="left", on=["timestamp"])
-    result.compute()
 
 Sorted Joins
 ------------
@@ -63,10 +62,10 @@ maintains that index, like Parquet.
 
 .. code-block:: python
 
-    from dask.datasets import timeseries
-    from dask.dataframe import read_parquet
+    import dask
+    import dask.dataframe as dd
 
-    left = timeseries(dtypes={"foo": int}, freq="1s")
+    left = dask.datasets.timeseries(dtypes={"foo": int})
 
     # timeseries returns a dataframe indexed by
     # timestamp, we don't need to set_index.
@@ -74,18 +73,16 @@ maintains that index, like Parquet.
     # left.set_index("timestamp")
 
     left.to_parquet("left", overwrite=True)
-    left = read_parquet("left")
+    left = dd.read_parquet("left")
 
     # If the dataframe can fit in RAM, you can also use persist
 
     # left = left.persist()
 
-    right_one = timeseries(freq="1s", dtypes={"bar": int})
-    right_two = timeseries(freq="1s", dtypes={"baz": int})
+    right_one = dask.datasets.timeseries(dtypes={"bar": int})
+    right_two = dask.datasets.timeseries(dtypes={"baz": int})
 
     result = left.merge(
         right_one, how="left", left_index=True, right_index=True)
     result = result.merge(
         right_two, how="left", left_index=True, right_index=True)
-
-    result.compute()
