@@ -2040,6 +2040,87 @@ def test_groupby_value_counts():
     assert_eq(dd_gb, pd_gb)
 
 
+@pytest.mark.parametrize("npartitions", [1, 2, 5])
+@pytest.mark.parametrize("period", [1, -1, 10])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_groupby_shift_basic_input(npartitions, period, axis):
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+            "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
+        },
+    )
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(["a", "c"]).shift(period, axis=axis),
+            ddf.groupby(["a", "c"]).shift(period, axis=axis),
+        )
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(["a"]).shift(period, axis=axis),
+            ddf.groupby(["a"]).shift(period, axis=axis),
+        )
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(pdf.c).shift(period, axis=axis),
+            ddf.groupby(ddf.c).shift(period, axis=axis),
+        )
+
+
+def test_groupby_shift_series():
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+        },
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby("a")["b"].shift(periods=2),
+            ddf.groupby("a")["b"].shift(periods=2),
+        )
+
+
+def test_groupby_shift_lazy_input():
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+            "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
+        },
+    )
+    delayed_periods = dask.delayed(lambda: 1)()
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    assert_eq(
+        pdf.groupby(pdf.c).shift(periods=1),
+        ddf.groupby(ddf.c).shift(periods=delayed_periods, meta={"a": int, "b": int}),
+    )
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(pdf.c).shift(periods=1, fill_value=pdf.b.max()),
+            ddf.groupby(ddf.c).shift(periods=1, fill_value=ddf.b.max()),
+        )
+
+
+def test_groupby_shift_with_freq():
+    pdf = pd.DataFrame(
+        dict(a=[1, 2, 3, 4, 5, 6], b=[0, 0, 0, 1, 1, 1]),
+        index=pd.date_range(start="20100101", periods=6),
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    # just pass the pandas result as meta for convenience
+    df_result = pdf.groupby(pdf.index).shift(periods=-2, freq="D")
+    assert_eq(
+        df_result, ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result)
+    )
+    df_result = pdf.groupby("b").shift(periods=-2, freq="D")
+    assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
+
+
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
