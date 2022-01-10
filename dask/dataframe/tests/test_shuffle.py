@@ -4,6 +4,7 @@ import os
 import pickle
 import random
 import string
+import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
@@ -435,6 +436,10 @@ def test_set_index_divisions_sorted():
         ddf.set_index("y", divisions=["a", "b", "d", "c"], sorted=True)
 
 
+@pytest.mark.xfail(
+    sys.platform == "win32" and sys.version_info[:2] == (3, 7),
+    reason="https://github.com/dask/dask/issues/8549",
+)
 @pytest.mark.slow
 def test_set_index_consistent_divisions():
     # See https://github.com/dask/dask/issues/3867
