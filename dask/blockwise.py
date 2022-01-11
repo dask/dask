@@ -1,6 +1,5 @@
 import itertools
 import os
-from collections import defaultdict
 from itertools import product
 from typing import (
     Any,
@@ -1301,6 +1300,11 @@ def _optimize_blockwise(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
+def _unique_dep(dep, ind):
+    # Append blockwise index information to dependency name
+    return dep + "_" + "_".join(str(i) for i in list(ind))
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1344,7 +1348,6 @@ def rewrite_blockwise(inputs):
     new_axes = inputs[root].new_axes
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
-    seen = defaultdict(int)
 
     changed = True
     while changed:
@@ -1357,17 +1360,14 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
-            # Check if this dep was already encountered.
-            # If so, we should append a "counter" label
-            # to the name to avoid fusing distinct indices
+            # Change dep name to avoid fusing distinct indices
             # into a single dependency within the subgraph
             # (see: https://github.com/dask/dask/issues/8535)
-            use_dep = dep + f"_{seen[dep]}" if seen[dep] else dep
-            seen[dep] += 1
+            local_dep = dep if dep == root else _unique_dep(dep, ind)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): use_dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -1411,9 +1411,9 @@ def rewrite_blockwise(inputs):
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
-            # Change new_dsk key to match use_dep
-            if dep != use_dep and dep in new_dsk:
-                new_dsk[use_dep] = new_dsk.pop(dep)
+            # Change new_dsk key to match local_dep
+            if dep != local_dep and dep in new_dsk:
+                new_dsk[local_dep] = new_dsk.pop(dep)
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)
