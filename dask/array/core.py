@@ -260,11 +260,9 @@ def graph_from_arraylike(
      (arr, 1, 1): (getter, arr, (slice(2, 4), slice(3, 6))),
      (arr, 0, 1): (getter, arr, (slice(0, 2), slice(3, 6)))}
 
-    >>> dict(
-            graph_from_arraylike(
-                arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False
-            )
-    )  # doctest: +SKIP
+    >>> dict(  # doctest: +SKIP
+            graph_from_arraylike(arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False)
+        )
     {"original-X": arr,
      ('X', 0, 0): (getter, 'original-X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getter, 'original-X', (slice(2, 4), slice(0, 3))),
