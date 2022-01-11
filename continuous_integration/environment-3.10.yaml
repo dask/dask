@@ -18,7 +18,11 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  - fastparquet
+  # Avoid `SystemError: PY_SSIZE_T_CLEAN macro must be defined for '#' formats`
+  # from thrift on Python 3.10
+  # https://github.com/dask/fastparquet/issues/514
+  # https://github.com/apache/thrift/pull/2487
+  # - fastparquet
   - h5py
   - pytables
   - zarr
