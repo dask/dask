@@ -481,7 +481,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    # dd.utils.assert_eq(data, df2)
+    dd.utils.assert_eq(data, df2)
 
     # Check that `open_file_options` arguments are
     # really passed through to fsspec
