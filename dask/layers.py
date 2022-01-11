@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import operator
 from collections import defaultdict
 from functools import partial
 from itertools import product
-from typing import List, Optional, Tuple
 
 import tlz as toolz
 from tlz.curried import map
@@ -56,16 +57,20 @@ class ArrayBlockwiseDep(BlockwiseDep):
     information to compute its data.
     """
 
-    def __init__(self, chunks: tuple):
+    chunks: tuple[tuple[int, ...], ...]
+    numblocks: tuple[int, ...]
+    produces_tasks: bool = False
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
 
-    def __getitem__(self, idx: tuple):
-        raise NotImplementedError("Need to implement __getitem__")
+    def __getitem__(self, idx: tuple[int, ...]):
+        raise NotImplementedError("Subclasses must implement __getitem__")
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         return {"chunks": self.chunks}
 
@@ -77,16 +82,18 @@ class ArrayBlockwiseDep(BlockwiseDep):
 class ArrayChunkShapeDep(ArrayBlockwiseDep):
     """Produce chunk shapes given a chunk index"""
 
-    def __getitem__(self, idx: tuple):
+    def __getitem__(self, idx: tuple[int, ...]):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
 
 class ArraySliceDep(ArrayBlockwiseDep):
     """Produce slice(s) into the full-sized array given a chunk index"""
 
-    def __init__(self, chunks: tuple):
+    starts: tuple[tuple[int, ...], ...]
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         super().__init__(chunks)
-        self.starts = [cached_cumsum(c, initial_zero=True) for c in chunks]
+        self.starts = tuple(cached_cumsum(c, initial_zero=True) for c in chunks)
 
     def __getitem__(self, idx: tuple):
         loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
