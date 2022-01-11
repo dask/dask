@@ -549,4 +549,4 @@ def test_assert_eq_scheduler():
 
     assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
     with dask.config.set(scheduler=custom_scheduler):
-        assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
+        assert_eq(ddf2, ddf2, scheduler=None)
