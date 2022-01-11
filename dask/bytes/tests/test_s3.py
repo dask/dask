@@ -487,17 +487,17 @@ def test_parquet(s3, engine, s3so, metadata_file):
     # really passed through to fsspec
     if fsspec_parquet:
 
-        # # Passing `open_file_options` kwargs will fail
-        # # if you try to modify the engine
-        # with pytest.raises(ValueError):
-        #     dd.read_parquet(
-        #         url,
-        #         engine=engine,
-        #         storage_options=s3so,
-        #         open_file_options={
-        #             "cache_options": {"precache": "parquet", "engine": "foo"},
-        #         },
-        #     ).compute(scheduler="synchronous")
+        # Passing `open_file_options` kwargs will fail
+        # if you try to modify the engine
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                url,
+                engine=engine,
+                storage_options=s3so,
+                open_file_options={
+                    "cache_options": {"precache": "parquet", "engine": "foo"},
+                },
+            ).compute(scheduler="synchronous")
 
         # ...but should work fine if you modify the
         # maximum block-transfer size (max_block)
