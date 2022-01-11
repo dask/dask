@@ -74,11 +74,11 @@ logic.
 Dask schedulers differ in the following ways:
 
 1.  You specify the entire graph as a Python dict rather than using a
-    specialized API
-2.  You get a variety of schedulers ranging from single machine, single core 
-    to threaded, multiprocessing, distributed, and
-3.  The Dask single-machine schedulers have logic to execute the graph in a
-    way that minimizes memory footprint
+    specialized API.
+2.  You get a variety of schedulers, ranging from a single-machine, single-core
+    scheduler to threaded, multi-process, and distributed options.
+3.  You benefit from logic to execute the graph in a way that minimizes memory
+    footprint with the Dask single-machine schedulers.
 
 But the other projects offer different advantages and different programming
 paradigms.  One should inspect all such projects before selecting one.

@@ -22,7 +22,7 @@ from threading import Lock
 from typing import TypeVar
 from weakref import WeakValueDictionary
 
-from tlz import accumulate
+import tlz as toolz
 
 from .core import get_deps
 
@@ -1164,9 +1164,8 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     except AttributeError:
         return dict(d)
 
-    unique_layers = {id(layer): layer for layer in layers.values()}
     result = {}
-    for layer in unique_layers.values():
+    for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
 
@@ -1897,9 +1896,9 @@ def _cumsum(seq, initial_zero):
     if isinstance(seq, _HashIdWrapper):
         seq = seq.wrapped
     if initial_zero:
-        return tuple(accumulate(add, seq, 0))
+        return tuple(toolz.accumulate(add, seq, 0))
     else:
-        return tuple(accumulate(add, seq))
+        return tuple(toolz.accumulate(add, seq))
 
 
 def cached_cumsum(seq, initial_zero=False):
