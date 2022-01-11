@@ -114,7 +114,6 @@ def _open_input_files(
     fs=None,
     context_stack=None,
     open_file_func=None,
-    cache_type=None,
     cache_options=None,
     **kwargs,
 ):
@@ -136,12 +135,11 @@ def _open_input_files(
         Callable function to use for file opening. If this argument
         is specified, ``open_file_func(path, **kwargs)`` will be used
         to open each file in ``paths``. Default is ``fs.open``.
-    cache_type: str, default "readahead"
-        Caching policy to pass to ``fs.open``. If "parquet" is
-        specified, ``fsspec.parquet.open_parquet_file`` will be used
-        for remote storage.
     cache_options : dict, optional
         Dictionary of key-word arguments to pass to ``fs.open``.
+        If ``cache_options`` contains ``{"precache": "parquet"}``,
+        ``fsspec.parquet.open_parquet_file`` will be used for remote
+        storage.
     **kwargs :
         Key-word arguments to pass to the appropriate open function
     """
@@ -153,15 +151,26 @@ def _open_input_files(
             for path in paths
         ]
 
-    # Check if we are using `fsspec.parquet`
+    # Check if we are using `fsspec.parquet`.
+    # In the future, fsspec should be able to handle
+    # `{"precache": "parquet"}`. However, for now we
+    # will redirect to `open_parquet_file` manually
+    cache_options = (cache_options or {}).copy()
+    precache = cache_options.pop("precache", None)
     if (
-        cache_type == "parquet"
+        precache == "parquet"
         and fs is not None
         and not isinstance(fs, LocalFileSystem)
         and parse_version(fsspec.__version__) > parse_version("2021.11.0")
     ):
-        kwargs.update((cache_options or {}).copy())
+        kwargs.update(cache_options)
         row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
+        cache_type = kwargs.pop("cache_type", "parts")
+        if cache_type != "parts":
+            raise ValueError(
+                f"'parts' `cache_type` required for 'parquet' precaching,"
+                f" got {cache_type}."
+            )
         return [
             _set_context(
                 fsspec.parquet.open_parquet_file(
@@ -175,5 +184,10 @@ def _open_input_files(
             for path, rgs in zip(paths, row_groups)
         ]
     elif fs is not None:
-        return [_set_context(fs.open(path, **kwargs), context_stack) for path in paths]
+        return [
+            _set_context(
+                fs.open(path, cache_options=cache_options, **kwargs), context_stack
+            )
+            for path in paths
+        ]
     return [_set_context(open(path, **kwargs), context_stack) for path in paths]

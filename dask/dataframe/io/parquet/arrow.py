@@ -213,9 +213,9 @@ def _read_table_from_path(
     open_file_options = read_kwargs.pop("open_file_options", {})
     cache_options = open_file_options.pop("cache_options", {})
 
-    # Pyarrow is faster without read-ahead caching
-    cache_type = open_file_options.pop("cache_type", "none")
-    if cache_type == "parquet":
+    # Define file-opening options
+    if cache_options.get("precache", None) == "parquet":
+        open_file_options["cache_type"] = open_file_options.get("cache_type", "parts")
         cache_options.update(
             {
                 "columns": columns,
@@ -223,15 +223,17 @@ def _read_table_from_path(
                 "engine": cache_options.get("engine", "pyarrow"),
             }
         )
-    elif "open_file_func" not in open_file_options:
-        open_file_options["mode"] = open_file_options.get("mode", "rb")
+    else:
+        # Pyarrow is faster without read-ahead caching
+        open_file_options["cache_type"] = open_file_options.get("cache_type", "none")
+        if "open_file_func" not in open_file_options:
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
 
     if partition_keys:
         tables = []
         with _open_input_files(
             [path],
             fs=fs,
-            cache_type=cache_type,
             cache_options=cache_options,
             **open_file_options,
         )[0] as fil:
@@ -254,7 +256,6 @@ def _read_table_from_path(
         with _open_input_files(
             [path],
             fs=fs,
-            cache_type=cache_type,
             cache_options=cache_options,
             **open_file_options,
         )[0] as fil:

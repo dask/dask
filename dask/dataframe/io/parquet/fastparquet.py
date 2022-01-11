@@ -1082,11 +1082,13 @@ class FastParquetEngine(Engine):
             fn = pf.row_group_filename(rg)
             fn_rg_map[fn].append(rg)
 
-        # Define default file-opening options
+        # Define file-opening options
         open_file_options = open_file_options or {}
-        cache_type = open_file_options.pop("cache_type", "readahead")
         cache_options = open_file_options.pop("cache_options", {})
-        if cache_type == "parquet":
+        if cache_options.get("precache", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
             cache_options.update(
                 {
                     "metadata": pf,
@@ -1095,8 +1097,12 @@ class FastParquetEngine(Engine):
                     "engine": cache_options.get("engine", "fastparquet"),
                 }
             )
-        elif "open_file_func" not in open_file_options:
-            open_file_options["mode"] = open_file_options.get("mode", "rb")
+        else:
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "readahead"
+            )
+            if "open_file_func" not in open_file_options:
+                open_file_options["mode"] = open_file_options.get("mode", "rb")
 
         with ExitStack() as stack:
 
@@ -1106,7 +1112,6 @@ class FastParquetEngine(Engine):
                     list(fn_rg_map.keys()),
                     fs=fs,
                     context_stack=stack,
-                    cache_type=cache_type,
                     cache_options=cache_options,
                     **open_file_options,
                 ),
