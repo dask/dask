@@ -8,7 +8,6 @@ import uuid
 from collections import OrderedDict
 from concurrent.futures import Executor
 from contextlib import contextmanager
-from dataclasses import fields, is_dataclass
 from functools import partial
 from hashlib import md5
 from numbers import Integral, Number
@@ -424,7 +423,7 @@ def unpack_collections(*args, traverse=True):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr) and not isinstance(expr, type):
+            elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -433,7 +432,7 @@ def unpack_collections(*args, traverse=True):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in fields(expr)
+                            for f in dataclasses.fields(expr)
                         ],
                     ),
                 )
