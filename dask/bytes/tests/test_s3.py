@@ -497,7 +497,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
                 open_file_options={
                     "cache_options": {"precache": "parquet", "engine": "foo"},
                 },
-            ).compute(scheduler="synchronous")
+            ).compute()
 
         # ...but should work fine if you modify the
         # maximum block-transfer size (max_block)
@@ -508,7 +508,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
             open_file_options={
                 "cache_options": {"precache": "parquet", "max_block": 8_000},
             },
-        ).compute(scheduler="synchronous")
+        ).compute()
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
