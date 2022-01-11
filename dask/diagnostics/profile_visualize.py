@@ -368,8 +368,12 @@ def plot_resources(results, palette="Viridis", **kwargs):
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
 
     # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
     if "label_size" in kwargs:
@@ -462,8 +466,12 @@ def plot_cache(
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
     defaults.update(**kwargs)
 
     if results:
