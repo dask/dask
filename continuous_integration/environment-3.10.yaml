@@ -5,11 +5,11 @@ channels:
   - nodefaults
 dependencies:
   # required dependencies
-  - python=3.9
+  - python=3.10
   - setuptools<60.0
   - packaging
-  - numpy=1.21
-  - pandas=1.3
+  - numpy
+  - pandas
   # test dependencies
   - pre-commit
   - pytest
@@ -30,12 +30,13 @@ dependencies:
   - fsspec
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  - sqlalchemy<1.4.0
+  # sqlalchemy<1.4.0 doesn't support Python 3.10
+  # - sqlalchemy<1.4.0
   - pyarrow
   - coverage
   - jsonschema
   # other -- IO
-  # Not available for Python 3.9 on conda-forge
+  # Not available for Python 3.9+ on conda-forge
   # - bcolz
   - blosc
   - boto3
@@ -52,7 +53,9 @@ dependencies:
   - distributed
   - ipython
   - lz4
-  - numba
+  # Numba isn't yet built with Python 3.10 on conda-forge
+  # see https://github.com/conda-forge/numba-feedstock/pull/86
+  # - numba
   - partd
   - psutil
   - requests
