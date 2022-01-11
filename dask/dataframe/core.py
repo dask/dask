@@ -3996,7 +3996,7 @@ class Index(Series):
         return self.map_partitions(
             M.to_frame,
             *args,
-            meta=self._meta.to_frame(index, *args),
+            meta=self._meta.to_frame(*args),
             transform_divisions=False,
         )
 
