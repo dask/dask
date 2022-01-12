@@ -5,6 +5,7 @@ from collections import OrderedDict
 from contextlib import contextmanager
 
 import pytest
+import yaml
 
 import dask.config
 from dask.config import (
@@ -26,8 +27,6 @@ from dask.config import (
     update_defaults,
 )
 from dask.utils import tmpfile
-
-yaml = pytest.importorskip("yaml")
 
 
 def test_canonical_name():
