@@ -503,3 +503,15 @@ def test_config_inheritance():
         {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
     )
     assert dask.config.get("array.svg.size", config=config) == 150
+
+
+def test_path_includes_site_prefix():
+    import subprocess
+    import sys
+
+    command = ('import site; '
+               'site.PREFIXES.append("include/this/path"); '
+               'import dask.config; '
+               'print("include/this/path/etc/dask" in dask.config.paths)')
+    res = subprocess.run([sys.executable, "-c", command], capture_output=True)
+    assert res.stdout == b"True\n"
