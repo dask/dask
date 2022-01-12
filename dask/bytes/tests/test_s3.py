@@ -16,6 +16,7 @@ moto = pytest.importorskip("moto", minversion="1.3.14")
 pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
+import fsspec
 from fsspec.compression import compr
 from fsspec.core import open_files
 from s3fs import S3FileSystem as DaskS3FileSystem
@@ -564,5 +565,7 @@ def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
     if parse_version(pa.__version__).major >= 2:
         pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
+    if parse_version(fsspec.__version__).major > 2021:
+        pytest.skip("fsspec>=2022.1 no loger inherits from pyarrow")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)

@@ -6,6 +6,7 @@ from functools import partial
 from time import sleep
 
 import cloudpickle
+import fsspec
 import pytest
 from fsspec.compression import compr
 from fsspec.core import open_files
@@ -360,6 +361,8 @@ def test_get_pyarrow_filesystem():
     pa = pytest.importorskip("pyarrow")
     if parse_version(pa.__version__).major >= 2:
         pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
+    if parse_version(fsspec.__version__).major > 2021:
+        pytest.skip("fsspec>=2022.1 no loger inherits from pyarrow")
 
     fs = LocalFileSystem()
     assert isinstance(fs, pa.filesystem.FileSystem)
