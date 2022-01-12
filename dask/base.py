@@ -929,7 +929,7 @@ def normalize_object(o):
         return normalize_function(o)
 
     if dataclasses.is_dataclass(o):
-        return normalize_token(dataclasses.astuple(o))
+        return normalize_dataclass(o)
 
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
@@ -988,6 +988,37 @@ def _normalize_function(func):
             return cloudpickle.dumps(func, protocol=0)
         except Exception:
             return str(func)
+
+
+def normalize_dataclass(obj):
+    # If dataclasses should not be compared, they should not be deterministically
+    # tokenized either, since the purpose of tokenization is comparision.
+    try:
+        comparable = obj.__dataclass_params__.eq
+    except AttributeError:
+        comparable = False
+
+    if comparable:
+        fields = [
+            (field.name, getattr(obj, field.name))
+            for field in dataclasses.fields(obj)
+            if field.compare
+        ]
+        if fields:
+            return (
+                normalize_function(type(obj)),
+                _normalize_seq_func(fields),
+            )
+
+    if not config.get("tokenize.ensure-deterministic"):
+        return uuid.uuid4().hex
+
+    raise RuntimeError(
+        f"Dataclass {str(obj)} cannot be deterministically hashed, since it (or all of its fields) "
+        "do not support comparision. Set `eq=True` on the Dataclass, and at least one field. Please see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
+    )
 
 
 @normalize_token.register_lazy("pandas")

@@ -7,6 +7,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures import Executor
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -407,13 +408,53 @@ def test_tokenize_ordered_dict():
 
 
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
 
 
 def test_tokenize_dataclass():
-    a = ADataClass(1)
-    b = ADataClass(2)
-    assert tokenize(a) == tokenize(a)
-    assert tokenize(a) != tokenize(b)
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Non-comparable fields are ignored in tokenization
+    NonCompField = dataclasses.make_dataclass(
+        "NonCompField",
+        [("a", int), ("ignore", str, dataclasses.field(compare=False))],
+    )
+    c1 = NonCompField(1, "foo")
+    c2 = NonCompField(1, "bar")
+
+    assert c1 == c2
+    assert tokenize(c1) == tokenize(c2)
+    assert tokenize(c1) != tokenize(a1)
+
+    NonCompClass = dataclasses.make_dataclass("NonCompClass", [("a", int)], eq=False)
+    d1 = NonCompClass(1)
+    d2 = NonCompClass(1)
+
+    assert d1 != d2
+    assert tokenize(d1) != tokenize(d2)
+    assert tokenize(d1) != tokenize(d1)
+
+    NoCompFields = dataclasses.make_dataclass(
+        "NoCompFields", [("ignore", str, dataclasses.field(compare=False))]
+    )
+    d1 = NoCompFields(1)
+    d2 = NoCompFields(1)
+
+    assert tokenize(d1) != tokenize(d2)
+    assert tokenize(d1) != tokenize(d1)
 
 
 def test_tokenize_range():
