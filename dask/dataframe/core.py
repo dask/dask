@@ -6051,8 +6051,10 @@ def map_partitions(
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
+        meta_is_emulated = True
     else:
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+        meta_is_emulated = False
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -6061,9 +6063,14 @@ def map_partitions(
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
     elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        # If `meta` is not a pandas object, the concatenated results will be a
-        # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
+        if meta_is_emulated:
+            # If `meta` is not a pandas object, the concatenated results will be a
+            # different type
+            meta = make_meta(_concat([meta]), index=meta_index)
+        else:
+            raise UserWarning(
+                "Meta is not valid, `map_partitions` expects output to be a pandas object."
+            )
 
     # Ensure meta is empty series
     meta = make_meta(meta, parent_meta=parent_meta)
