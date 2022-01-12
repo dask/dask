@@ -119,7 +119,7 @@ def _open_input_files(
     fs=None,
     context_stack=None,
     open_file_func=None,
-    cache_options=None,
+    precache_options=None,
     **kwargs,
 ):
     """Return a list of open-file objects given
@@ -140,15 +140,14 @@ def _open_input_files(
         Callable function to use for file opening. If this argument
         is specified, ``open_file_func(path, **kwargs)`` will be used
         to open each file in ``paths``. Default is ``fs.open``.
-    cache_options : dict, optional
-        Dictionary of key-word arguments to pass to ``fs.open``.
-        If ``cache_options`` contains ``{"precache": "parquet"}``,
+    precache_options : dict, optional
+        Dictionary of key-word arguments to use for precaching.
+        If ``precache_options`` contains ``{"method": "parquet"}``,
         ``fsspec.parquet.open_parquet_file`` will be used for remote
         storage.
     **kwargs :
         Key-word arguments to pass to the appropriate open function
     """
-
     # Use call-back function if specified
     if open_file_func is not None:
         return [
@@ -158,17 +157,17 @@ def _open_input_files(
 
     # Check if we are using `fsspec.parquet`.
     # In the future, fsspec should be able to handle
-    # `{"precache": "parquet"}`. However, for now we
+    # `{"method": "parquet"}`. However, for now we
     # will redirect to `open_parquet_file` manually
-    cache_options = (cache_options or {}).copy()
-    precache = cache_options.pop("precache", None)
+    precache_options = (precache_options or {}).copy()
+    precache = precache_options.pop("method", None)
     if (
         precache == "parquet"
         and fs is not None
         and not isinstance(fs, LocalFileSystem)
         and parse_version(fsspec.__version__) > parse_version("2021.11.0")
     ):
-        kwargs.update(cache_options)
+        kwargs.update(precache_options)
         row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
         cache_type = kwargs.pop("cache_type", "parts")
         if cache_type != "parts":
@@ -189,10 +188,5 @@ def _open_input_files(
             for path, rgs in zip(paths, row_groups)
         ]
     elif fs is not None:
-        return [
-            _set_context(
-                fs.open(path, cache_options=cache_options, **kwargs), context_stack
-            )
-            for path in paths
-        ]
+        return [_set_context(fs.open(path, **kwargs), context_stack) for path in paths]
     return [_set_context(open(path, **kwargs), context_stack) for path in paths]

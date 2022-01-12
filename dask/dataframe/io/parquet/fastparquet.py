@@ -1084,18 +1084,18 @@ class FastParquetEngine(Engine):
 
         # Define file-opening options
         open_file_options = (open_file_options or {}).copy()
-        cache_options = open_file_options.pop("cache_options", {}).copy()
+        precache_options = open_file_options.pop("precache_options", {}).copy()
         if "open_file_func" not in open_file_options:
-            if cache_options.get("precache", None) == "parquet":
+            if precache_options.get("method", None) == "parquet":
                 open_file_options["cache_type"] = open_file_options.get(
                     "cache_type", "parts"
                 )
-                cache_options.update(
+                precache_options.update(
                     {
                         "metadata": pf,
                         "columns": list(set(columns).intersection(pf.columns)),
                         "row_groups": [rgs for rgs in fn_rg_map.values()],
-                        "engine": cache_options.get("engine", "fastparquet"),
+                        "engine": precache_options.get("engine", "fastparquet"),
                     }
                 )
             else:
@@ -1112,7 +1112,7 @@ class FastParquetEngine(Engine):
                     list(fn_rg_map.keys()),
                     fs=fs,
                     context_stack=stack,
-                    cache_options=cache_options,
+                    precache_options=precache_options,
                     **open_file_options,
                 ),
             ):

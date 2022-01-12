@@ -211,17 +211,17 @@ def _read_table_from_path(
     # Define file-opening options
     read_kwargs = kwargs.get("read", {}).copy()
     open_file_options = read_kwargs.pop("open_file_options", {}).copy()
-    cache_options = open_file_options.pop("cache_options", {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
     if "open_file_func" not in open_file_options:
-        if cache_options.get("precache", None) == "parquet":
+        if precache_options.get("method", None) == "parquet":
             open_file_options["cache_type"] = open_file_options.get(
                 "cache_type", "parts"
             )
-            cache_options.update(
+            precache_options.update(
                 {
                     "columns": columns,
                     "row_groups": row_groups if row_groups == [None] else [row_groups],
-                    "engine": cache_options.get("engine", "pyarrow"),
+                    "engine": precache_options.get("engine", "pyarrow"),
                 }
             )
         else:
@@ -236,7 +236,7 @@ def _read_table_from_path(
         with _open_input_files(
             [path],
             fs=fs,
-            cache_options=cache_options,
+            precache_options=precache_options,
             **open_file_options,
         )[0] as fil:
             for rg in row_groups:
@@ -258,7 +258,7 @@ def _read_table_from_path(
         with _open_input_files(
             [path],
             fs=fs,
-            cache_options=cache_options,
+            precache_options=precache_options,
             **open_file_options,
         )[0] as fil:
             if row_groups == [None]:

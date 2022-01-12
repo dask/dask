@@ -166,10 +166,10 @@ def read_parquet(
         Key/value arguments to be passed along to ``AbstractFileSystem.open``
         when each parquet data file is open for reading. Experimental
         (optimized) "precaching" for remote file systems (e.g. S3, GCS) can
-        be enabled by adding ``{"precache": "parquet"}`` under the
-        ``"cache_options"`` key. Also, a custom file-open function can be used
-        (instead of ``AbstractFileSystem.open``), by specifying the desired
-        function under the ``"open_file_func"`` key.
+        be enabled by adding ``{"method": "parquet"}`` under the
+        ``"precache_options"`` key. Also, a custom file-open function can be
+        used (instead of ``AbstractFileSystem.open``), by specifying the
+        desired function under the ``"open_file_func"`` key.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',

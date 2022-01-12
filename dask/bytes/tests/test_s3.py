@@ -17,7 +17,7 @@ pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
 from fsspec.compression import compr
-from fsspec.core import open_files
+from fsspec.core import get_fs_token_paths, open_files
 from s3fs import S3FileSystem as DaskS3FileSystem
 from tlz import concat, valmap
 
@@ -488,14 +488,14 @@ def test_parquet(s3, engine, s3so, metadata_file):
     if fsspec_parquet:
 
         # Passing `open_file_options` kwargs will fail
-        # if you try to modify the engine
+        # if you set an unsupported engine
         with pytest.raises(ValueError):
             dd.read_parquet(
                 url,
                 engine=engine,
                 storage_options=s3so,
                 open_file_options={
-                    "cache_options": {"precache": "parquet", "engine": "foo"},
+                    "precache_options": {"method": "parquet", "engine": "foo"},
                 },
             ).compute()
 
@@ -506,9 +506,43 @@ def test_parquet(s3, engine, s3so, metadata_file):
             engine=engine,
             storage_options=s3so,
             open_file_options={
-                "cache_options": {"precache": "parquet", "max_block": 8_000},
+                "precache_options": {"method": "parquet", "max_block": 8_000},
             },
         ).compute()
+
+    # Check "open_file_func"
+    fs = get_fs_token_paths(url, storage_options=s3so)[0]
+
+    def _open(*args, check=True, **kwargs):
+        assert check
+        return fs.open(*args, **kwargs)
+
+    # Should fail if `check=False`
+    with pytest.raises(AssertionError):
+        dd.read_parquet(
+            url,
+            engine=engine,
+            storage_options=s3so,
+            open_file_options={"open_file_func": _open, "check": False},
+        ).compute()
+
+    # Should succeed otherwise
+    df3 = dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        open_file_options={"open_file_func": _open},
+    )
+    dd.utils.assert_eq(data, df3)
+
+    # Check that `cache_type="all"` result is same
+    df4 = dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        open_file_options={"cache_type": "all"},
+    )
+    dd.utils.assert_eq(data, df4)
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
