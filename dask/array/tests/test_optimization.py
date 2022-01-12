@@ -1,5 +1,7 @@
 import pytest
 
+from dask.blockwise import Blockwise
+
 pytest.importorskip("numpy")
 
 import numpy as np
@@ -18,6 +20,7 @@ from dask.array.utils import assert_eq
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import fuse
 from dask.utils import SerializableLock
+from dask.utils_test import hlg_layer_topological
 
 
 def test_fuse_getitem():
@@ -455,3 +458,20 @@ def test_fuse_roots_annotations():
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
+
+
+def test_cull_before_fuse_roots(monkeypatch):
+    x = da.ones(100, chunks=2)
+    y = da.zeros(100, chunks=2)
+    z = (x + 1) + (2 * y)
+    part = z[0]
+
+    def check_fuse_roots(graph: HighLevelGraph, keys: list):
+        assert len(graph.layers) == 2  # 1 fused blockwise, 1 materialized slicing
+        lyr = hlg_layer_topological(graph, 0)
+        assert isinstance(lyr, Blockwise)
+        assert len(lyr) == 1  # culled from 50 initial tasks
+        return graph
+
+    monkeypatch.setattr(da.optimization, "fuse_roots", check_fuse_roots)
+    optimize(part.dask, part.__dask_keys__())
