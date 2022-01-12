@@ -2425,7 +2425,7 @@ Dask Name: {name}, {task} tasks"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=None, ddof=1, split_every=False, numeric_only=None):
+    def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
