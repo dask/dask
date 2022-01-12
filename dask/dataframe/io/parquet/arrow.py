@@ -208,25 +208,27 @@ def _read_table_from_path(
     into tables).
     """
 
-    # Define default file-opening options
-    read_kwargs = kwargs.get("read", {}).copy()
-    open_file_options = read_kwargs.pop("open_file_options", {})
-    cache_options = open_file_options.pop("cache_options", {})
-
     # Define file-opening options
-    if cache_options.get("precache", None) == "parquet":
-        open_file_options["cache_type"] = open_file_options.get("cache_type", "parts")
-        cache_options.update(
-            {
-                "columns": columns,
-                "row_groups": row_groups if row_groups == [None] else [row_groups],
-                "engine": cache_options.get("engine", "pyarrow"),
-            }
-        )
-    else:
-        # Pyarrow is faster without read-ahead caching
-        open_file_options["cache_type"] = open_file_options.get("cache_type", "none")
-        if "open_file_func" not in open_file_options:
+    read_kwargs = kwargs.get("read", {}).copy()
+    open_file_options = read_kwargs.pop("open_file_options", {}).copy()
+    cache_options = open_file_options.pop("cache_options", {}).copy()
+    if "open_file_func" not in open_file_options:
+        if cache_options.get("precache", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
+            cache_options.update(
+                {
+                    "columns": columns,
+                    "row_groups": row_groups if row_groups == [None] else [row_groups],
+                    "engine": cache_options.get("engine", "pyarrow"),
+                }
+            )
+        else:
+            # Pyarrow is faster without read-ahead caching
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "none"
+            )
             open_file_options["mode"] = open_file_options.get("mode", "rb")
 
     if partition_keys:

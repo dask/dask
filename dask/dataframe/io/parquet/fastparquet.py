@@ -1083,25 +1083,25 @@ class FastParquetEngine(Engine):
             fn_rg_map[fn].append(rg)
 
         # Define file-opening options
-        open_file_options = open_file_options or {}
-        cache_options = open_file_options.pop("cache_options", {})
-        if cache_options.get("precache", None) == "parquet":
-            open_file_options["cache_type"] = open_file_options.get(
-                "cache_type", "parts"
-            )
-            cache_options.update(
-                {
-                    "metadata": pf,
-                    "columns": list(set(columns).intersection(pf.columns)),
-                    "row_groups": [rgs for rgs in fn_rg_map.values()],
-                    "engine": cache_options.get("engine", "fastparquet"),
-                }
-            )
-        else:
-            open_file_options["cache_type"] = open_file_options.get(
-                "cache_type", "readahead"
-            )
-            if "open_file_func" not in open_file_options:
+        open_file_options = (open_file_options or {}).copy()
+        cache_options = open_file_options.pop("cache_options", {}).copy()
+        if "open_file_func" not in open_file_options:
+            if cache_options.get("precache", None) == "parquet":
+                open_file_options["cache_type"] = open_file_options.get(
+                    "cache_type", "parts"
+                )
+                cache_options.update(
+                    {
+                        "metadata": pf,
+                        "columns": list(set(columns).intersection(pf.columns)),
+                        "row_groups": [rgs for rgs in fn_rg_map.values()],
+                        "engine": cache_options.get("engine", "fastparquet"),
+                    }
+                )
+            else:
+                open_file_options["cache_type"] = open_file_options.get(
+                    "cache_type", "readahead"
+                )
                 open_file_options["mode"] = open_file_options.get("mode", "rb")
 
         with ExitStack() as stack:

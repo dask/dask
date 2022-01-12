@@ -6,6 +6,11 @@ import pandas as pd
 from fsspec.implementations.local import LocalFileSystem
 from packaging.version import parse as parse_version
 
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
+
 
 def _get_pyarrow_dtypes(schema, categories):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
@@ -173,7 +178,7 @@ def _open_input_files(
             )
         return [
             _set_context(
-                fsspec.parquet.open_parquet_file(
+                fsspec_parquet.open_parquet_file(
                     path,
                     fs=fs,
                     row_groups=rgs,
