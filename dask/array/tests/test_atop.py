@@ -259,32 +259,29 @@ i, j, k = "ijk"
         ],
         [
             [
-                (b, "ij", {b: (add, _0, _1)}, [(a, "ij"), (2, None)]),
-                (c, "ijk", {c: (add, _0, _1, _2)}, [(b, "ij"), (b, "jk"), (b, "ij")]),
-                (d, "ijk", {d: (add, _0, _1)}, [(c, "ij"), (c, "jk")]),
+                (b, "jk", {b: (add, _0, _1)}, [(a, "jk"), (2, None)]),
+                (c, "ijk", {c: (add, _0, _1)}, [(b, "ij"), (b, "jk")]),
+                (d, "ijk", {d: (add, _0, _1, _2)}, [(b, "ij"), (c, "ij"), (b, "ij")]),
             ],
             (
                 "d",
                 "ijk",
                 {
-                    "d": (add, _unique_dep(c, "ij"), _unique_dep(c, "jk")),
+                    "d": (
+                        add,
+                        _unique_dep(b, "ij"),
+                        _unique_dep(c, "ij"),
+                        _unique_dep(b, "ij"),
+                    ),
                     _unique_dep(c, "ij"): (
                         add,
                         _unique_dep(b, "ij"),
                         _unique_dep(b, "jk"),
-                        _unique_dep(b, "ij"),
-                    ),
-                    _unique_dep(c, "jk"): (
-                        add,
-                        _unique_dep(b, "jk"),
-                        _unique_dep(b, "kk"),
-                        _unique_dep(b, "jk"),
                     ),
                     _unique_dep(b, "ij"): (add, _0, _1),
-                    _unique_dep(b, "jk"): (add, _3, _1),
-                    _unique_dep(b, "kk"): (add, _2, _1),
+                    _unique_dep(b, "jk"): (add, _2, _1),
                 },
-                [(a, "ij"), (2, None), (a, "kk"), (a, "jk")],
+                [(a, "ij"), (2, None), (a, "jk")],
             ),
         ],
     ],
