@@ -537,14 +537,14 @@ def test_assert_eq_scheduler():
             using_custom_scheduler = False
 
     def check_custom_scheduler(part: pd.DataFrame) -> pd.DataFrame:
-        assert using_custom_scheduler
+        assert using_custom_scheduler, "not using custom scheduler"
         return part + 1
 
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.map_partitions(check_custom_scheduler, meta=ddf)
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(AssertionError, match="not using custom scheduler"):
         assert_eq(ddf2, ddf2)
 
     assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
