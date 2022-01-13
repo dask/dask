@@ -980,7 +980,7 @@ def test_svd_incompatible_dimensions(ndim):
         da.linalg.svd(x)
 
 
-@pytest.mark.xfail(  # Remove after NumPy 1.22 release is out
+@pytest.mark.xfail(
     sys.platform == "darwin" and _np_version < parse_version("1.22"),
     reason="https://github.com/dask/dask/issues/7189",
     strict=False,
@@ -1002,7 +1002,7 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(  # Remove after NumPy 1.22 release is out
+@pytest.mark.xfail(
     sys.platform == "darwin" and _np_version < parse_version("1.22"),
     reason="https://github.com/dask/dask/issues/7189",
     strict=False,
