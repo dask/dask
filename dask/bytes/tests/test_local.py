@@ -10,7 +10,6 @@ import pytest
 from fsspec.compression import compr
 from fsspec.core import open_files
 from fsspec.implementations.local import LocalFileSystem
-from packaging.version import parse as parse_version
 from tlz import concat, valmap
 
 from dask import compute
@@ -352,14 +351,3 @@ def test_abs_paths(tmpdir):
     with fs.open(out[0], "r") as f:
         res = f.read()
     assert res == "hi"
-
-
-def test_get_pyarrow_filesystem():
-    from fsspec.implementations.local import LocalFileSystem
-
-    pa = pytest.importorskip("pyarrow")
-    if parse_version(pa.__version__).major >= 2:
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-
-    fs = LocalFileSystem()
-    assert isinstance(fs, pa.filesystem.FileSystem)
