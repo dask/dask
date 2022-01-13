@@ -450,14 +450,24 @@ def test_tokenize_dataclass():
     assert tokenize(d1) != tokenize(d2)
     assert tokenize(d1) != tokenize(d1)
 
+    with dask.config.set({"tokenize.ensure-deterministic": True}), pytest.raises(
+        RuntimeError, match="do not support comparision"
+    ):
+        tokenize(d1)
+
     NoCompFields = dataclasses.make_dataclass(
         "NoCompFields", [("ignore", str, dataclasses.field(compare=False))]
     )
-    d1 = NoCompFields(1)
-    d2 = NoCompFields(1)
+    e1 = NoCompFields(1)
+    e2 = NoCompFields(1)
 
-    assert tokenize(d1) != tokenize(d2)
-    assert tokenize(d1) != tokenize(d1)
+    assert tokenize(e1) != tokenize(e2)
+    assert tokenize(e1) != tokenize(e1)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}), pytest.raises(
+        RuntimeError, match="do not support comparision"
+    ):
+        tokenize(e1)
 
 
 def test_tokenize_range():
