@@ -1,5 +1,6 @@
 import os
 import stat
+import subprocess
 import sys
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -506,14 +507,13 @@ def test_config_inheritance():
 
 
 def test_path_includes_site_prefix():
-    import subprocess
-    import sys
 
     command = (
-        'import site; '
-        'site.PREFIXES.append("include/this/path"); '
-        'import dask.config; '
-        'print("include/this/path/etc/dask" in dask.config.paths)'
+        "import site, os; "
+        'prefix = os.path.join("include", "this", "path"); '
+        "site.PREFIXES.append(prefix); "
+        "import dask.config; "
+        'assert os.path.join(prefix, "etc", "dask") in dask.config.paths'
     )
-    res = subprocess.run([sys.executable, "-c", command], capture_output=True)
-    assert res.stdout == b"True\n"
+
+    subprocess.check_call([sys.executable, "-c", command])
