@@ -424,6 +424,9 @@ def test_tokenize_dataclass():
     class SubA(ADataClass):
         pass
 
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
     assert tokenize(SubA(1)) == tokenize(SubA(1))
     assert tokenize(SubA(1)) != tokenize(a1)
 
