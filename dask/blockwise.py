@@ -1360,8 +1360,9 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
-            # Change dep name to avoid fusing distinct indices
-            # into a single dependency within the subgraph
+            # Change dep name to avoid fusing the same dep
+            # (in different iteration orders) into a single
+            # subgraph key/dependency
             # (see: https://github.com/dask/dask/issues/8535)
             local_dep = dep if dep == root else _unique_dep(dep, ind)
 

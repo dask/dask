@@ -231,8 +231,9 @@ i, j, k = "ijk"
                 [(123, None), (a, "j")],
             ),
         ],
-        # Check case where two distinct indices are used
-        # for the same dependency name
+        # Check cases where two distinct indices are used
+        # for the same dependency name, and where the same
+        # dependency-index combination is repeated
         # (See: https://github.com/dask/dask/issues/8535)
         [
             [
@@ -254,6 +255,36 @@ i, j, k = "ijk"
                     _unique_dep(b, "jk"): (add, _3, _2),
                 },
                 [(123, None), (a, "ij"), (2, None), (a, "jk")],
+            ),
+        ],
+        [
+            [
+                (b, "ij", {b: (add, _0, _1)}, [(a, "ij"), (2, None)]),
+                (c, "ijk", {c: (add, _0, _1, _2)}, [(b, "ij"), (b, "jk"), (b, "ij")]),
+                (d, "ijk", {d: (add, _0, _1)}, [(c, "ij"), (c, "jk")]),
+            ],
+            (
+                "d",
+                "ijk",
+                {
+                    "d": (add, _unique_dep(c, "ij"), _unique_dep(c, "jk")),
+                    _unique_dep(c, "ij"): (
+                        add,
+                        _unique_dep(b, "ij"),
+                        _unique_dep(b, "jk"),
+                        _unique_dep(b, "ij"),
+                    ),
+                    _unique_dep(c, "jk"): (
+                        add,
+                        _unique_dep(b, "jk"),
+                        _unique_dep(b, "kk"),
+                        _unique_dep(b, "jk"),
+                    ),
+                    _unique_dep(b, "ij"): (add, _0, _1),
+                    _unique_dep(b, "jk"): (add, _3, _1),
+                    _unique_dep(b, "kk"): (add, _2, _1),
+                },
+                [(a, "ij"), (2, None), (a, "kk"), (a, "jk")],
             ),
         ],
     ],
