@@ -29,7 +29,7 @@ else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
 # Remove duplicate paths while preserving ordering
-paths = list(dict.fromkeys(_paths))
+paths = list(reversed(dict.fromkeys(reversed(_paths))))
 
 global_config = config = {}
 
