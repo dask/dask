@@ -16,12 +16,18 @@ def optimize(dsk, keys, **kwargs):
     keys = list(core.flatten(keys))
 
     if not isinstance(dsk, HighLevelGraph):
-        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
-    else:
-        # Perform Blockwise optimizations for HLG input
-        dsk = optimize_dataframe_getitem(dsk, keys=keys)
-        dsk = optimize_blockwise(dsk, keys=keys)
-        dsk = fuse_roots(dsk, keys=keys)
+        # NOTE: we cannot convert to a HLG here, because we don't know the proper
+        # layer name. So a _Frame re-constructed from the HLG could have a mismatch between
+        # its `.name` and the layer name in the HLG.
+        # `_Frame/Scalar.__init__` converts low-level graphs to HLGs, so this case should be impossible in normal use.
+        raise TypeError(
+            "DataFrame optimization can only be performed on high-level graphs"
+        )
+
+    # Perform Blockwise optimizations for HLG input
+    dsk = optimize_dataframe_getitem(dsk, keys=keys)
+    dsk = optimize_blockwise(dsk, keys=keys)
+    dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
     # Do not perform low-level fusion unless the user has

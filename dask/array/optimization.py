@@ -40,7 +40,11 @@ def optimize(
     keys = list(flatten(keys))
 
     if not isinstance(dsk, HighLevelGraph):
-        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+        # NOTE: we cannot convert to a HLG here, because we don't know the proper
+        # layer name. So an Array re-constructed from the HLG could have a mismatch between
+        # its `.name` and the layer name in the HLG.
+        # `Array.__new__` ensures all Arrays use HLGs, so this case should be impossible in normal use.
+        raise TypeError("Array optimization can only be performed on high-level graphs")
 
     dsk = optimize_blockwise(dsk, keys=keys)
     dsk = fuse_roots(dsk, keys=keys)
