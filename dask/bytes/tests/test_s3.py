@@ -558,11 +558,3 @@ def test_parquet_wstoragepars(s3, s3so):
     assert s3.current().default_block_size == 2 ** 20
     with s3.current().open(url + "/_metadata") as f:
         assert f.blocksize == 2 ** 20
-
-
-def test_get_pyarrow_fs_s3(s3):
-    pa = pytest.importorskip("pyarrow")
-    if parse_version(pa.__version__).major >= 2:
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-    fs = DaskS3FileSystem(anon=True)
-    assert isinstance(fs, pa.filesystem.FileSystem)
