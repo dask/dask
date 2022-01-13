@@ -82,7 +82,7 @@ interface is used inside Dask.
 
 .. method:: __dask_layers__(self)
 
-    This method should only be implemented if the collection uses
+    This method only needs to be implemented if the collection uses
     :class:`~dask.highlevelgraph.HighLevelGraph` to implement its dask graph.
 
     **Returns**
