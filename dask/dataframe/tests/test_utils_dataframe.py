@@ -545,6 +545,7 @@ def test_assert_eq_scheduler():
     ddf2 = ddf.map_partitions(check_custom_scheduler, meta=ddf)
 
     with pytest.raises(AssertionError, match="not using custom scheduler"):
+        # NOTE: we compare `ddf2` to itself in order to test both sides of the `assert_eq` logic.
         assert_eq(ddf2, ddf2)
 
     assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
