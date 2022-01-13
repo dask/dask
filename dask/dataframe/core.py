@@ -6068,8 +6068,10 @@ def map_partitions(
             # different type
             meta = make_meta(_concat([meta]), index=meta_index)
         else:
-            raise UserWarning(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object."
+            raise ValueError(
+                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns."
             )
 
     # Ensure meta is empty series
