@@ -996,6 +996,7 @@ def normalize_dataclass(obj):
     try:
         comparable = obj.__dataclass_params__.eq
     except AttributeError:
+        # `__dataclass_params__` is not a API; be resilient to it changing
         comparable = False
 
     if comparable:
