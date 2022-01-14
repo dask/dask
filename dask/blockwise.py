@@ -1300,6 +1300,11 @@ def _optimize_blockwise(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
+def _unique_dep(dep, ind):
+    # Append blockwise index information to dependency name
+    return dep + "_" + "_".join(str(i) for i in list(ind))
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1355,9 +1360,15 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
+            # Change dep name to avoid fusing the same dep
+            # (in different iteration orders) into a single
+            # subgraph key/dependency
+            # (see: https://github.com/dask/dask/issues/8535)
+            local_dep = dep if dep == root else _unique_dep(dep, ind)
+
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -1400,6 +1411,10 @@ def rewrite_blockwise(inputs):
                     sub[blockwise_token(ii)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
+
+            # Change new_dsk key to match local_dep
+            if dep != local_dep and dep in new_dsk:
+                new_dsk[local_dep] = new_dsk.pop(dep)
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)

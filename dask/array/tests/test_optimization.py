@@ -455,3 +455,16 @@ def test_fuse_roots_annotations():
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
+
+
+@pytest.mark.parametrize("optimize_graph", [True, False])
+def test_optimize_blockwise_duplicate_dependency(optimize_graph):
+    # Two blockwise operations in a row with duplicate name
+    # (See: https://github.com/dask/dask/issues/8535)
+    xx = da.from_array(np.array([[1, 1], [2, 2]]), chunks=1)
+    xx = xx * 2
+    z = da.matmul(xx, xx)
+
+    # Compare to known answer
+    result = z.compute(optimize_graph=optimize_graph)
+    assert assert_eq(result, [[12, 12], [24, 24]])
