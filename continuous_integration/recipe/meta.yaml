@@ -17,11 +17,11 @@ build:
 
 requirements:
   host:
-    - python >=3.7
+    - python >=3.8
     - pip
 
   run:
-    - python >=3.7
+    - python >=3.8
     - cloudpickle >=1.1.1
     - fsspec >=0.6.0
     - packaging >=20.0
