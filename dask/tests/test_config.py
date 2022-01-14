@@ -23,7 +23,6 @@ from dask.config import (
     refresh,
     rename,
     serialize,
-    set,
     update,
     update_defaults,
 )
@@ -239,47 +238,47 @@ def test_ensure_file(tmpdir):
 
 
 def test_set():
-    with set(abc=123):
+    with dask.config.set(abc=123):
         assert config["abc"] == 123
-        with set(abc=456):
+        with dask.config.set(abc=456):
             assert config["abc"] == 456
         assert config["abc"] == 123
 
     assert "abc" not in config
 
-    with set({"abc": 123}):
+    with dask.config.set({"abc": 123}):
         assert config["abc"] == 123
     assert "abc" not in config
 
-    with set({"abc.x": 1, "abc.y": 2, "abc.z.a": 3}):
+    with dask.config.set({"abc.x": 1, "abc.y": 2, "abc.z.a": 3}):
         assert config["abc"] == {"x": 1, "y": 2, "z": {"a": 3}}
     assert "abc" not in config
 
     d = {}
-    set({"abc.x": 123}, config=d)
+    dask.config.set({"abc.x": 123}, config=d)
     assert d["abc"]["x"] == 123
 
 
 def test_set_kwargs():
-    with set(foo__bar=1, foo__baz=2):
+    with dask.config.set(foo__bar=1, foo__baz=2):
         assert config["foo"] == {"bar": 1, "baz": 2}
     assert "foo" not in config
 
     # Mix kwargs and dict, kwargs override
-    with set({"foo.bar": 1, "foo.baz": 2}, foo__buzz=3, foo__bar=4):
+    with dask.config.set({"foo.bar": 1, "foo.baz": 2}, foo__buzz=3, foo__bar=4):
         assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
     assert "foo" not in config
 
     # Mix kwargs and nested dict, kwargs override
-    with set({"foo": {"bar": 1, "baz": 2}}, foo__buzz=3, foo__bar=4):
+    with dask.config.set({"foo": {"bar": 1, "baz": 2}}, foo__buzz=3, foo__bar=4):
         assert config["foo"] == {"bar": 4, "baz": 2, "buzz": 3}
     assert "foo" not in config
 
 
 def test_set_nested():
-    with set({"abc": {"x": 123}}):
+    with dask.config.set({"abc": {"x": 123}}):
         assert config["abc"] == {"x": 123}
-        with set({"abc.y": 456}):
+        with dask.config.set({"abc.y": 456}):
             assert config["abc"] == {"x": 123, "y": 456}
         assert config["abc"] == {"x": 123}
     assert "abc" not in config
@@ -288,8 +287,8 @@ def test_set_nested():
 def test_set_hard_to_copyables():
     import threading
 
-    with set(x=threading.Lock()):
-        with set(y=1):
+    with dask.config.set(x=threading.Lock()):
+        with dask.config.set(y=1):
             pass
 
 
