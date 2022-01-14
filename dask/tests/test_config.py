@@ -1,5 +1,6 @@
 import os
 import stat
+import subprocess
 import sys
 from collections import OrderedDict
 from contextlib import contextmanager
@@ -503,3 +504,16 @@ def test_config_inheritance():
         {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
     )
     assert dask.config.get("array.svg.size", config=config) == 150
+
+
+def test_path_includes_site_prefix():
+
+    command = (
+        "import site, os; "
+        'prefix = os.path.join("include", "this", "path"); '
+        "site.PREFIXES.append(prefix); "
+        "import dask.config; "
+        'assert os.path.join(prefix, "etc", "dask") in dask.config.paths'
+    )
+
+    subprocess.check_call([sys.executable, "-c", command])
