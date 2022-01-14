@@ -14,7 +14,10 @@ no_default = "__no_default__"
 
 
 def _get_paths():
-    """Get locations to search for config files"""
+    """Get locations to search for YAML configuration files.
+
+    This logic exists as a separate function for testing purposes.
+    """
 
     paths = [
         os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
