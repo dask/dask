@@ -1,4 +1,5 @@
 import os
+import site
 import stat
 import sys
 from collections import OrderedDict
@@ -507,6 +508,8 @@ def test_config_inheritance():
 
 
 def test__get_paths(monkeypatch):
+    from builtins import set
+
     # These environment variables are used by Dask's config system.
     # We temporarily remove them to avoid interference from the
     # machine where tests are being run.
@@ -518,15 +521,28 @@ def test__get_paths(monkeypatch):
         os.path.join(sys.prefix, "etc", "dask"),
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
     ]
-    assert _get_paths() == expected
+    paths = _get_paths()
+    assert paths == expected
+    assert len(paths) == len(set(paths))  # No duplicate paths
 
     with monkeypatch.context() as m:
         m.setenv("DASK_CONFIG", "foo-bar")
-        assert _get_paths() == expected + ["foo-bar"]
+        paths = _get_paths()
+        assert paths == expected + ["foo-bar"]
+        assert len(paths) == len(set(paths))
 
     with monkeypatch.context() as m:
         m.setenv("DASK_ROOT_CONFIG", "foo-bar")
-        assert _get_paths() == ["foo-bar"] + expected[1:]
+        paths = _get_paths()
+        assert paths == ["foo-bar"] + expected[1:]
+        assert len(paths) == len(set(paths))
+
+    with monkeypatch.context() as m:
+        prefix = os.path.join("include", "this", "path")
+        m.setattr(site, "PREFIXES", site.PREFIXES + [prefix])
+        paths = _get_paths()
+        assert os.path.join(prefix, "etc", "dask") in paths
+        assert len(paths) == len(set(paths))
 
 
 def test_default_search_paths():

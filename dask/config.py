@@ -3,6 +3,7 @@ import base64
 import builtins
 import json
 import os
+import site
 import sys
 import threading
 import warnings
@@ -22,10 +23,14 @@ def _get_paths():
     paths = [
         os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
         os.path.join(sys.prefix, "etc", "dask"),
+        *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
     ]
     if "DASK_CONFIG" in os.environ:
         paths.append(os.environ["DASK_CONFIG"])
+
+    # Remove duplicate paths while preserving ordering
+    paths = list(reversed(list(dict.fromkeys(reversed(paths)))))
 
     return paths
 
