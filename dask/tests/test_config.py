@@ -8,6 +8,7 @@ import pytest
 
 import dask.config
 from dask.config import (
+    _get_paths,
     canonical_name,
     collect,
     collect_env,
@@ -503,3 +504,32 @@ def test_config_inheritance():
         {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
     )
     assert dask.config.get("array.svg.size", config=config) == 150
+
+
+def test__get_paths(monkeypatch):
+    # These environment variables are used by Dask's config system.
+    # We temporarily remove them to avoid interference from the
+    # machine where tests are being run.
+    monkeypatch.delenv("DASK_CONFIG", raising=False)
+    monkeypatch.delenv("DASK_ROOT_CONFIG", raising=False)
+
+    expected = [
+        "/etc/dask",
+        os.path.join(sys.prefix, "etc", "dask"),
+        os.path.join(os.path.expanduser("~"), ".config", "dask"),
+        os.path.join(os.path.expanduser("~"), ".dask"),
+    ]
+    assert _get_paths() == expected
+
+    with monkeypatch.context() as m:
+        m.setenv("DASK_CONFIG", "foo-bar")
+        assert _get_paths() == expected + ["foo-bar"]
+
+    with monkeypatch.context() as m:
+        m.setenv("DASK_ROOT_CONFIG", "foo-bar")
+        assert _get_paths() == ["foo-bar"] + expected[1:]
+
+
+def test_default_search_paths():
+    # Ensure _get_paths() is used for default paths
+    assert dask.config.paths == _get_paths()

@@ -13,16 +13,25 @@ import yaml
 no_default = "__no_default__"
 
 
-paths = [
-    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
-    os.path.join(sys.prefix, "etc", "dask"),
-    os.path.join(os.path.expanduser("~"), ".config", "dask"),
-    os.path.join(os.path.expanduser("~"), ".dask"),
-]
+def _get_paths():
+    """Get locations to search for config files"""
+
+    paths = [
+        os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+        os.path.join(sys.prefix, "etc", "dask"),
+        os.path.join(os.path.expanduser("~"), ".config", "dask"),
+        os.path.join(os.path.expanduser("~"), ".dask"),
+    ]
+    if "DASK_CONFIG" in os.environ:
+        paths.append(os.environ["DASK_CONFIG"])
+
+    return paths
+
+
+paths = _get_paths()
 
 if "DASK_CONFIG" in os.environ:
     PATH = os.environ["DASK_CONFIG"]
-    paths.append(PATH)
 else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
