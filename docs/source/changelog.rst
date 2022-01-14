@@ -1,6 +1,73 @@
 Changelog
 =========
 
+.. _v2022.01.0:
+
+2022.01.0
+---------
+
+Released on January 14, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``groupby.shift`` method (:pr:`8522`) `kori73`_
+- Add ``DataFrame.nunique`` (:pr:`8479`) `Sarah Charlotte Johnson`_
+- Add ``da.ndim`` to match ``np.ndim`` (:pr:`8502`) `Julia Signell`_
+
+Enhancements
+^^^^^^^^^^^^
+- Only show ``percentile`` ``interpolation=`` keyword warning if NumPy version >= 1.22 (:pr:`8564`) `Julia Signell`_
+- Raise ``PerformanceWarning`` when ``limit`` and ``"array.slicing.split-large-chunks"`` are ``None`` (:pr:`8511`) `Julia Signell`_
+- Define ``normalize_seq`` function at import time (:pr:`8521`) `Illviljan`_
+- Ensure that divisions are alway tuples (:pr:`8393`) `Charles Blackmon-Luca`_
+- Allow a callable scheduler for ``bag.groupby`` (:pr:`8492`) `Julia Signell`_
+- Save Zarr arrays with dask-on-ray scheduler (:pr:`8472`) `TnTo`_
+- Make byte blocks more even in ``read_bytes`` (:pr:`8459`) `Martin Durant`_
+- Improved the efficiency of ``matmul()`` by completely removing concatenation (:pr:`8423`) `ParticularMiner`_
+- Limit max chunk size when reshaping dask arrays (:pr:`8124`) `Genevieve Buckley`_
+- Changes for fastparquet superthrift (:pr:`8470`) `Martin Durant`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix boolean indices in array assignment (:pr:`8538`) `David Hassell`_
+- Detect default ``dtype`` on array-likes (:pr:`8501`) `aeisenbarth`_
+- Fix ``optimize_blockwise`` bug for duplicate dependency names (:pr:`8542`) `Richard (Rick) Zamora`_
+- Update warnings for ``DataFrame.GroupBy.apply`` and transform (:pr:`8507`) `Sarah Charlotte Johnson`_
+- Track HLG layer name in ``Delayed`` (:pr:`8452`) `Gabe Joseph`_
+- Fix single item ``nanmin`` and ``nanmax`` reductions (:pr:`8484`) `Julia Signell`_
+- Make ``read_csv`` with ``comment`` ``kwarg`` work even if there is a comment in the header (:pr:`8433`) `Julia Signell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Replace ``interpolation`` with ``method`` and ``method`` with ``internal_method`` (:pr:`8525`) `Julia Signell`_
+- Remove daily stock demo utility (:pr:`8477`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add a join example in docs that be run with copy/paste (:pr:`8520`) `kori73`_
+- Mention dashboard link in config (:pr:`8510`) `Ray Bell`_
+- Fix changelog section hyperlinks (:pr:`8534`) `Aneesh Nema`_
+- Hyphenate "single-machine scheduler" for consistency (:pr:`8519`) `Deepyaman Datta`_
+- Normalize whitespace in doctests in ``slicing.py`` (:pr:`8512`) `Maren Westermann`_
+- Best practices storage line typo (:pr:`8529`) `Michael Delgado`_
+- Update figures (:pr:`8401`) `Sarah Charlotte Johnson`_
+- Remove ``pyarrow``-only reference from ``split_row_groups`` in ``read_parquet`` docstring (:pr:`8490`) `Naty Clementi`_
+
+Maintenance
+^^^^^^^^^^^
+- Remove obsolete ``LocalFileSystem`` tests that fail for ``fsspec>=2022.1.0`` (:pr:`8565`) `Richard (Rick) Zamora`_
+- Tweak: "RuntimeWarning: invalid value encountered in reciprocal" (:pr:`8561`) `Guido Imperiale`_
+- Fix ``skipna=None`` for ``DataFrame.sem`` (:pr:`8556`) `Julia Signell`_
+- Fix ``PANDAS_GT_140`` (:pr:`8552`) `Julia Signell`_
+- Collections with HLG must always implement ``__dask_layers__`` (:pr:`8548`) `Guido Imperiale`_
+- Work around race condition in ``import llvmlite`` (:pr:`8550`) `Guido Imperiale`_
+- Set a minimum version for ``pyyaml`` (:pr:`8545`) `Gaurav Sheni`_
+- Adding ``nodefaults`` to environments to fix ``tiledb`` + mac issue (:pr:`8505`) `Julia Signell`_
+- Set ceiling for ``setuptools`` (:pr:`8509`) `Julia Signell`_
+- Add workflow / recipe to generate Dask nightlies (:pr:`8469`) `Charles Blackmon-Luca`_
+- Bump gpuCI ``CUDA_VER`` to 11.5 (:pr:`8489`) `Charles Blackmon-Luca`_
+
+
 .. _v2021.12.0:
 
 2021.12.0
@@ -4964,3 +5031,11 @@ Other
 .. _`mihir`: https://github.com/ek234
 .. _`Sarah Charlotte Johnson`: https://github.com/scharlottej13
 .. _`ofirr`: https://github.com/ofirr
+.. _`kori73`: https://github.com/kori73
+.. _`TnTo`: https://github.com/TnTo
+.. _`ParticularMiner`: https://github.com/ParticularMiner
+.. _`aeisenbarth`: https://github.com/aeisenbarth
+.. _`Aneesh Nema`: https://github.com/aneeshnema
+.. _`Deepyaman Datta`: https://github.com/deepyaman
+.. _`Maren Westermann`: https://github.com/marenwestermann
+.. _`Michael Delgado`: https://github.com/delgadom
