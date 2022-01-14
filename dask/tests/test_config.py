@@ -517,7 +517,6 @@ def test__get_paths(monkeypatch):
         "/etc/dask",
         os.path.join(sys.prefix, "etc", "dask"),
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
-        os.path.join(os.path.expanduser("~"), ".dask"),
     ]
     assert _get_paths() == expected
 

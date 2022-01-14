@@ -91,9 +91,6 @@ The contents of these YAML files are merged together, allowing different
 Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
 
-*Note: for historical reasons we also look in the ``~/.dask`` directory for
-config files.  This is deprecated and will soon be removed.*
-
 
 Environment Variables
 ~~~~~~~~~~~~~~~~~~~~~

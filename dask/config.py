@@ -20,7 +20,6 @@ def _get_paths():
         os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
         os.path.join(sys.prefix, "etc", "dask"),
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
-        os.path.join(os.path.expanduser("~"), ".dask"),
     ]
     if "DASK_CONFIG" in os.environ:
         paths.append(os.environ["DASK_CONFIG"])
