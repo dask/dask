@@ -1308,7 +1308,7 @@ class _HashIdWrapper:
         return id(self.wrapped)
 
 
-@functools.lru_cache()
+@functools.lru_cache
 def _cumsum(seq, initial_zero):
     if isinstance(seq, _HashIdWrapper):
         seq = seq.wrapped
@@ -1622,7 +1622,7 @@ def setitem_array(out_name, array, indices, value):
 
     """
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The positions of index elements in the range values loc0 and loc1.
 
@@ -1687,7 +1687,7 @@ def setitem_array(out_name, array, indices, value):
 
         return i
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
         """Number of True index elements between positions loc0 and loc1.
 
@@ -1715,7 +1715,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[loc0:loc1])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def n_preceeding_from_1d_bool_index(dim, loc0):
         """Number of True index elements preceeding position loc0.
 
@@ -1741,7 +1741,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[:loc0])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
         """Value indices for index elements between loc0 and loc1.
 
