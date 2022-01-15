@@ -152,7 +152,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(sort_function, **sort_function_kwargs)
+    df = df.map_partitions(sort_function, **sort_kwargs)
     return df
 
 
