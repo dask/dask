@@ -507,8 +507,6 @@ def test_config_inheritance():
 
 
 def test__get_paths(monkeypatch):
-    from builtins import set
-
     # These environment variables are used by Dask's config system.
     # We temporarily remove them to avoid interference from the
     # machine where tests are being run.
