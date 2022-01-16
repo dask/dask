@@ -30,7 +30,7 @@ from ...base import tokenize
 from ...bytes import read_bytes
 from ...core import flatten
 from ...delayed import delayed
-from ...utils import asciitable, parse_bytes
+from ...utils import asciitable, delegates, parse_bytes
 from ..core import new_dd_object
 from ..utils import clear_known_categories
 
@@ -723,6 +723,8 @@ you can specify ``blocksize=None`` to not split files into multiple partitions,
 at the cost of reduced parallelism.
 """
 
+UNSUPPORTED_KWARGS = {"chunksize", "index", "index_col", "iterator", "nrows"}
+
 
 def make_reader(reader, reader_name, file_type):
     def read(
@@ -755,6 +757,11 @@ def make_reader(reader, reader_name, file_type):
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
     read.__name__ = reader_name
+    if reader is not None:
+        try:
+            read = delegates(to=reader, keep=True, but=UNSUPPORTED_KWARGS)(read)
+        except Exception:
+            pass
     return read
 
 

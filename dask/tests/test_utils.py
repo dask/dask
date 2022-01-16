@@ -1,5 +1,6 @@
 import datetime
 import functools
+import inspect
 import operator
 import pickle
 
@@ -15,6 +16,7 @@ from dask.utils import (
     SerializableLock,
     _deprecated,
     asciitable,
+    delegates,
     derived_from,
     ensure_dict,
     extra_titles,
@@ -778,3 +780,88 @@ class MyType:
 def test_typename_on_instances():
     instance = MyType()
     assert typename(instance) == typename(MyType)
+
+
+class TestDelegates:
+    # Based on fastcore.meta.delegates
+    # [original docs](https://fastcore.fast.ai/meta.html#delegates).
+
+    @staticmethod
+    def check_signature(obj, expected):
+        "Check the signature of an object"
+        return str(inspect.signature(obj)) == expected
+
+    def test_decorator(self):
+        def baz(a, b=2, c=3):
+            return a + b + c
+
+        @delegates(baz, keep=False)
+        def foo(c, a, **kwargs):
+            return c + baz(a, **kwargs)
+
+        assert self.check_signature(foo, "(c, a, b=2)")
+
+        @delegates(baz, keep=True)
+        def foo(c, a, **kwargs):
+            return c + baz(a, **kwargs)
+
+        assert self.check_signature(foo, "(c, a, b=2, **kwargs)")
+
+    def test_excludes_no_defaults(self):
+        def basefoo(e, d, c=2):
+            pass
+
+        @delegates(basefoo, keep=False)
+        def foo(a, b=1, **kwargs):
+            pass
+
+        # e and d are not included b/c they don't have default parameters.
+        assert self.check_signature(foo, "(a, b=1, c=2)")
+
+    def test_excludes_but(self):
+        def basefoo(e, c=2, d=3):
+            pass
+
+        @delegates(basefoo, but=["d"], keep=False)
+        def foo(a, b=1, **kwargs):
+            pass
+
+        assert self.check_signature(foo, "(a, b=1, c=2)")
+
+    def test_class_method(self):
+        class _T:
+            @classmethod
+            def foo(cls, a=1, b=2):
+                pass
+
+            @classmethod
+            @delegates(foo, keep=False)
+            def bar(cls, c=3, **kwargs):
+                pass
+
+        assert self.check_signature(_T.bar, "(c=3, a=1, b=2)")
+
+    def test_class_instance(self):
+        class _T:
+            def foo(self, a=1, b=2):
+                pass
+
+            @delegates(foo, keep=False)
+            def bar(self, c=3, **kwargs):
+                pass
+
+        t = _T()
+        assert self.check_signature(t.bar, "(c=3, a=1, b=2)")
+
+    def test_inherits_super(self):
+        class BaseFoo:
+            def __init__(self, e, c=2):
+                pass
+
+        @delegates(keep=False)
+        class Foo(BaseFoo):
+            def __init__(self, a, b=1, **kwargs):
+                super().__init__(**kwargs)
+
+        # since no argument was passsed here we delegate to the superclass
+        assert self.check_signature(Foo, "(a, b=1, c=2)")
