@@ -570,10 +570,11 @@ def from_delayed(
 
     Parameters
     ----------
-    dfs : list of Delayed
+    dfs : list of Delayed or Future
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` These comprise the individual partitions of the
-        resulting dataframe.
+        ``dask.delayed`` or an iterable of ``concurrent.futures.Future`` objects,
+        such as come from ``concurrent.futures``. These comprise the individual 
+        partitions of the resulting dataframe.
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
