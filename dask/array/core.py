@@ -46,6 +46,7 @@ from ..core import quote
 from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
 from ..layers import reshapelist
+from ..layers_utils import cached_cumsum
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
