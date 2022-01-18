@@ -1,14 +1,17 @@
+import warnings
+from collections import Counter
 from functools import reduce
 from itertools import product
 from operator import mul
 
 import numpy as np
 
+from .. import config
 from ..base import tokenize
 from ..core import flatten
 from ..highlevelgraph import HighLevelGraph
-from ..utils import M
-from .core import Array
+from ..utils import M, parse_bytes
+from .core import Array, normalize_chunks
 from .utils import meta_from_array
 
 
@@ -143,7 +146,7 @@ def contract_tuple(chunks, factor):
     return tuple(out)
 
 
-def reshape(x, shape, merge_chunks=True):
+def reshape(x, shape, merge_chunks=True, limit=None):
     """Reshape array to new shape
 
     Parameters
@@ -158,6 +161,9 @@ def reshape(x, shape, merge_chunks=True):
         when communication is necessary given the input array chunking and
         the output shape. With ``merge_chunks==False``, the input array will
         be rechunked to a chunksize of 1, which can create very many tasks.
+    limit: int (optional)
+        The maximum block size to target in bytes. If no limit is provided,
+        it defaults to using the ``array.chunk-size`` Dask config value.
 
     Notes
     -----
@@ -182,6 +188,7 @@ def reshape(x, shape, merge_chunks=True):
     numpy.reshape
     """
     # Sanitize inputs, look for -1 in shape
+    from .core import PerformanceWarning
     from .slicing import sanitize_index
 
     shape = tuple(map(sanitize_index, shape))
@@ -226,6 +233,48 @@ def reshape(x, shape, merge_chunks=True):
         x = x.rechunk({i: 1 for i in range(din - dout)})
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
+    # Check output chunks are not too large
+    max_chunksize_in_bytes = reduce(mul, [max(i) for i in outchunks]) * x.dtype.itemsize
+
+    if limit is None:
+        limit = parse_bytes(config.get("array.chunk-size"))
+        split = config.get("array.slicing.split-large-chunks", None)
+    else:
+        limit = parse_bytes(limit)
+        split = True
+
+    if max_chunksize_in_bytes > limit:
+        if split is None:
+            msg = (
+                "Reshaping is producing a large chunk. To accept the large\n"
+                "chunk and silence this warning, set the option\n"
+                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
+                "    ...     array.reshape(shape)\n\n"
+                "To avoid creating the large chunks, set the option\n"
+                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
+                "    ...     array.reshape(shape)"
+                "Explictly passing ``limit`` to ``reshape`` will also silence this warning\n"
+                "    >>> array.reshape(shape, limit='128 MiB')"
+            )
+            warnings.warn(msg, PerformanceWarning, stacklevel=6)
+        elif split:
+            # Leave chunk sizes unaltered where possible
+            matching_chunks = Counter(inchunks) & Counter(outchunks)
+            chunk_plan = []
+            for out in outchunks:
+                if matching_chunks[out] > 0:
+                    chunk_plan.append(out)
+                    matching_chunks[out] -= 1
+                else:
+                    chunk_plan.append("auto")
+            outchunks = normalize_chunks(
+                chunk_plan,
+                shape=shape,
+                limit=limit,
+                dtype=x.dtype,
+                previous_chunks=inchunks,
+            )
+
     x2 = x.rechunk(inchunks)
 
     # Construct graph

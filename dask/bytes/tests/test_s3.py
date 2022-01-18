@@ -323,7 +323,9 @@ def test_read_bytes_block(s3, blocksize, s3so):
     _, vals = read_bytes(
         "s3://" + test_bucket_name + "/test/account*", blocksize=blocksize, **s3so
     )
-    assert list(map(len, vals)) == [(len(v) // blocksize + 1) for v in files.values()]
+    assert list(map(len, vals)) == [
+        max((len(v) // blocksize), 1) for v in files.values()
+    ]
 
     results = compute(*concat(vals))
     assert sum(len(r) for r in results) == sum(len(v) for v in files.values())
@@ -622,11 +624,3 @@ def test_parquet_wstoragepars(s3, s3so):
     assert s3.current().default_block_size == 2 ** 20
     with s3.current().open(url + "/_metadata") as f:
         assert f.blocksize == 2 ** 20
-
-
-def test_get_pyarrow_fs_s3(s3):
-    pa = pytest.importorskip("pyarrow")
-    if parse_version(pa.__version__).major >= 2:
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-    fs = DaskS3FileSystem(anon=True)
-    assert isinstance(fs, pa.filesystem.FileSystem)

@@ -10,7 +10,6 @@ import pytest
 from fsspec.compression import compr
 from fsspec.core import open_files
 from fsspec.implementations.local import LocalFileSystem
-from packaging.version import parse as parse_version
 from tlz import concat, valmap
 
 from dask import compute
@@ -151,7 +150,9 @@ def test_read_bytes_block():
     with filetexts(files, mode="b"):
         for bs in [5, 15, 45, 1500]:
             sample, vals = read_bytes(".test.account*", blocksize=bs)
-            assert list(map(len, vals)) == [(len(v) // bs + 1) for v in files.values()]
+            assert list(map(len, vals)) == [
+                max((len(v) // bs), 1) for v in files.values()
+            ]
 
             results = compute(*concat(vals))
             assert sum(len(r) for r in results) == sum(len(v) for v in files.values())
@@ -350,14 +351,3 @@ def test_abs_paths(tmpdir):
     with fs.open(out[0], "r") as f:
         res = f.read()
     assert res == "hi"
-
-
-def test_get_pyarrow_filesystem():
-    from fsspec.implementations.local import LocalFileSystem
-
-    pa = pytest.importorskip("pyarrow")
-    if parse_version(pa.__version__).major >= 2:
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-
-    fs = LocalFileSystem()
-    assert isinstance(fs, pa.filesystem.FileSystem)

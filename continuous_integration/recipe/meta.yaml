@@ -1,0 +1,47 @@
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev') + environ.get('VERSION_SUFFIX', '') %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
+
+
+package:
+  name: dask-core
+  version: {{ version }}
+
+source:
+  git_url: ../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  noarch: python
+  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script: {{ PYTHON }} -m pip install . -vv
+
+requirements:
+  host:
+    - python >=3.7
+    - pip
+
+  run:
+    - python >=3.7
+    - cloudpickle >=1.1.1
+    - fsspec >=0.6.0
+    - packaging >=20.0
+    - partd >=0.3.10
+    - pyyaml >=5.3.1
+    - toolz >=0.8.2
+
+test:
+  imports:
+    - dask
+  commands:
+    - pip check
+  requires:
+    - pip
+
+about:
+  home: https://github.com/dask/dask/
+  summary: Parallel PyData with Task Scheduling
+  license: BSD-3-Clause
+  license_file: LICENSE.txt
+  summary: Parallel Python with task scheduling
+  doc_url: https://dask.org/
+  dev_url: https://github.com/dask/dask

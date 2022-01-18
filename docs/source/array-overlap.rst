@@ -32,20 +32,20 @@ Explanation
 
 Consider two neighboring blocks in a Dask array:
 
-.. image:: images/unoverlapping-neighbors.png
+.. image:: images/unoverlapping-neighbors.svg
    :width: 30%
    :alt: Two neighboring blocks which do not overlap.
 
 We extend each block by trading thin nearby slices between arrays:
 
-.. image:: images/overlapping-neighbors.png
+.. image:: images/overlapping-neighbors.svg
    :width: 30%
    :alt: Two neighboring block with thin strips along their shared border representing data shared between them.
 
 We do this in all directions, including also diagonal interactions with the
 overlap function:
 
-.. image:: images/overlapping-blocks.png
+.. image:: images/overlapping-blocks.svg
    :width: 40%
    :alt: A two-dimensional grid of blocks where each one has thin strips around their borders representing data shared from their neighbors. They include small corner bits for data shared from diagonal neighbors as well.
 

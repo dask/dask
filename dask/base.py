@@ -888,22 +888,25 @@ def normalize_set(s):
     return normalize_token(sorted(s, key=str))
 
 
+def _normalize_seq_func(seq):
+    # Defined outside normalize_seq to avoid unneccessary redefinitions and
+    # therefore improving computation times.
+    try:
+        return list(map(normalize_token, seq))
+    except RecursionError:
+        if not config.get("tokenize.ensure-deterministic"):
+            return uuid.uuid4().hex
+
+        raise RuntimeError(
+            f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+            "for more information"
+        )
+
+
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
-    def func(seq):
-        try:
-            return list(map(normalize_token, seq))
-        except RecursionError:
-            if not config.get("tokenize.ensure-deterministic"):
-                return uuid.uuid4().hex
-
-            raise RuntimeError(
-                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
-                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-                "for more information"
-            )
-
-    return type(seq).__name__, func(seq)
+    return type(seq).__name__, _normalize_seq_func(seq)
 
 
 @normalize_token.register(literal)
