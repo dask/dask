@@ -3839,6 +3839,11 @@ Dask Name: {name}, {task} tasks""".format(
             token="monotonic_decreasing",
         )
 
+    @derived_from(pd.Series)
+    def view(self, dtype):
+        meta = self._meta.view(dtype)
+        return self.map_partitions(M.view, dtype, meta=meta)
+
 
 class Index(Series):
     _partition_type = pd.Index
