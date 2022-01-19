@@ -1,4 +1,5 @@
 import io
+import os
 
 import pandas as pd
 from fsspec.core import open_files
@@ -90,8 +91,7 @@ def to_json(
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        dask_compute(parts, **compute_kwargs)
-        return [f.path for f in outfiles]
+        return list(dask_compute(*parts, **compute_kwargs))
     else:
         return parts
 
@@ -99,6 +99,7 @@ def to_json(
 def write_json_partition(df, openfile, kwargs):
     with openfile as f:
         df.to_json(f, **kwargs)
+    return os.path.normpath(openfile.path)
 
 
 @insert_meta_param_description
