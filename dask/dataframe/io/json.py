@@ -1,4 +1,5 @@
 import io
+import os
 
 import pandas as pd
 from fsspec.core import open_files
@@ -98,7 +99,7 @@ def to_json(
 def write_json_partition(df, openfile, kwargs):
     with openfile as f:
         df.to_json(f, **kwargs)
-    return openfile.path
+    return os.path.normpath(openfile.path)
 
 
 @insert_meta_param_description
