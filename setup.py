@@ -13,7 +13,7 @@ extras_require = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2021.12.0"],
+    "distributed": ["distributed == 2022.01.0"],
     "diagnostics": [
         "bokeh >= 2.1.1",
         "jinja2",
@@ -34,7 +34,7 @@ install_requires = [
     "fsspec >= 0.6.0",
     "packaging >= 20.0",
     "partd >= 0.3.10",
-    "pyyaml",
+    "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
 ]
 

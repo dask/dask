@@ -2425,7 +2425,7 @@ Dask Name: {name}, {task} tasks"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=None, ddof=1, split_every=False, numeric_only=None):
+    def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
@@ -3656,7 +3656,8 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
-        return self.map_partitions(M.to_frame, name, meta=self._meta.to_frame(name))
+        args = [] if name is None else [name]
+        return self.map_partitions(M.to_frame, *args, meta=self._meta.to_frame(*args))
 
     @derived_from(pd.Series)
     def to_string(self, max_rows=5):
@@ -3839,6 +3840,11 @@ Dask Name: {name}, {task} tasks""".format(
             token="monotonic_decreasing",
         )
 
+    @derived_from(pd.Series)
+    def view(self, dtype):
+        meta = self._meta.view(dtype)
+        return self.map_partitions(M.view, dtype, meta=meta)
+
 
 class Index(Series):
     _partition_type = pd.Index
@@ -3990,12 +3996,12 @@ class Index(Series):
     def to_frame(self, index=True, name=None):
         if not index:
             raise NotImplementedError()
+        args = [index] if name is None else [index, name]
 
         return self.map_partitions(
             M.to_frame,
-            index,
-            name,
-            meta=self._meta.to_frame(index, name),
+            *args,
+            meta=self._meta.to_frame(*args),
             transform_divisions=False,
         )
 

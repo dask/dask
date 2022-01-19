@@ -3,6 +3,7 @@ import base64
 import builtins
 import json
 import os
+import site
 import sys
 import threading
 import warnings
@@ -13,19 +14,22 @@ import yaml
 no_default = "__no_default__"
 
 
-paths = [
+_paths = [
     os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
     os.path.join(sys.prefix, "etc", "dask"),
+    *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
     os.path.join(os.path.expanduser("~"), ".config", "dask"),
     os.path.join(os.path.expanduser("~"), ".dask"),
 ]
 
 if "DASK_CONFIG" in os.environ:
     PATH = os.environ["DASK_CONFIG"]
-    paths.append(PATH)
+    _paths.append(PATH)
 else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
+# Remove duplicate paths while preserving ordering
+paths = list(reversed(list(dict.fromkeys(reversed(_paths)))))
 
 global_config = config = {}
 

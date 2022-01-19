@@ -26,6 +26,7 @@ import dask.array as da
 from dask.array.core import (
     Array,
     BlockView,
+    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -1211,6 +1212,14 @@ def test_reshape_unknown_dimensions():
 
 
 @pytest.mark.parametrize(
+    "limit",  # in bytes
+    [
+        None,  # Default value: dask.config.get("array.chunk-size")
+        134217728,  # 128 MiB (default value size on a typical laptop)
+        67108864,  # 64 MiB (half the typical default value size)
+    ],
+)
+@pytest.mark.parametrize(
     "shape, chunks, reshape_size",
     [
         # Test reshape where output chunks would otherwise be too large
@@ -1219,13 +1228,47 @@ def test_reshape_unknown_dimensions():
         ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
     ],
 )
-def test_reshape_avoids_large_chunks(shape, chunks, reshape_size):
-    limit = parse_bytes("128MiB")
+def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
     array = da.random.random(shape, chunks=chunks)
-    result = array.reshape(*reshape_size)
+    if limit is None:
+        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+            result = array.reshape(*reshape_size, limit=limit)
+    else:
+        result = array.reshape(*reshape_size, limit=limit)
     nbytes = array.dtype.itemsize
     max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
-    assert max_chunksize_in_bytes < (limit)
+    if limit is None:
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+    assert max_chunksize_in_bytes < limit
+
+
+def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
+    # Test reshape where output chunks would otherwise be too large
+    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
+    array = da.random.random(shape, chunks=chunks)
+
+    with pytest.warns(PerformanceWarning) as record:
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    assert len(record) == 1
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes < limit
 
 
 def test_full():
@@ -3855,6 +3898,15 @@ def test_setitem_extended_API_1d():
             ),
             -1,
         ],
+        [
+            (
+                slice(2, 4),
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            [[-100, -101, -102, -103], [-200, -201, -202, -203]],
+        ],
     ],
 )
 def test_setitem_extended_API_2d(index, value):
@@ -4024,17 +4076,23 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[[True, True, True, False], 0] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [1, 2, 3, 4, 5]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[da.from_array([True, True, True, False]), 0] = [2, 3]
+        x[da.from_array([True, True, True, False]), 0] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, False, False, True])] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[:, 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[0, :] = [1, 2, 3, 4, 5]
 
     x = da.ones((4, 4), chunks=(2, 2))
 

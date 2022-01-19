@@ -1375,24 +1375,32 @@ def parse_assignment_indices(indices, shape):
     parsed_indices : `list`
         The reformated indices that are equivalent to the input
         indices.
-    indices_shape : `list`
-        The shape implied by of the parsed indices. For instance,
-        indices of ``(slice(0,2), 5, [4,1,-1])`` will have shape
+    implied_shape : `list`
+        The shape implied by the parsed indices. For instance, indices
+        of ``(slice(0,2), 5, [4,1,-1])`` will have implied shape
         ``[2,3]``.
     reverse : `list`
         The positions of the dimensions whose indices in the
         parsed_indices output are reversed slices.
+    implied_shape_positions: `list`
+        The positions of the dimensions whose indices contribute to
+        the implied_shape. For instance, indices of ``(slice(0,2), 5,
+        [4,1,-1])`` will have implied_shape ``[2,3]`` and
+        implied_shape_positions ``[0,2]``.
 
     Examples
     --------
     >>> parse_assignment_indices((slice(1, -1),), (8,))
-    ([slice(1, 7, 1)], [6], [])
+    ([slice(1, 7, 1)], [6], [], [0])
 
     >>> parse_assignment_indices(([1, 2, 6, 5],), (8,))
-    ([array([1, 2, 6, 5])], [4], [])
+    ([array([1, 2, 6, 5])], [4], [], [0])
 
     >>> parse_assignment_indices((3, slice(-1, 2, -1)), (7, 8))
-    ([3, slice(3, 8, 1)], [5], [1])
+    ([3, slice(3, 8, 1)], [5], [1], [1])
+
+    >>> parse_assignment_indices((slice(-1, 2, -1), 3, [1, 2]), (7, 8, 9))
+    ([slice(3, 7, 1), 3, array([1, 2])], [4, 2], [0], [0, 2])
 
     """
     if not isinstance(indices, tuple):
@@ -1417,7 +1425,8 @@ def parse_assignment_indices(indices, shape):
             )
 
     # Inititalize output variables
-    indices_shape = []
+    implied_shape = []
+    implied_shape_positions = []
     reverse = []
     parsed_indices = list(normalize_index(indices, shape))
 
@@ -1462,12 +1471,13 @@ def parse_assignment_indices(indices, shape):
             start, stop, step = index.indices(size)
             div, mod = divmod(stop - start, step)
             if div <= 0:
-                indices_shape.append(0)
+                implied_shape.append(0)
             else:
                 if mod != 0:
                     div += 1
 
-                indices_shape.append(div)
+                implied_shape.append(div)
+                implied_shape_positions.append(i)
 
         elif isinstance(index, (int, np.integer)):
             # Index is an integer
@@ -1504,14 +1514,18 @@ def parse_assignment_indices(indices, shape):
 
             # Posify an integer dask array (integer numpy arrays were
             # posified in `normalize_index`)
-            if is_dask_collection(index) and index.dtype != bool:
-                index = np.where(index < 0, index + size, index)
+            if is_dask_collection(index):
+                if index.dtype == bool:
+                    index_size = np.nan
+                else:
+                    index = np.where(index < 0, index + size, index)
 
-            indices_shape.append(index_size)
+            implied_shape.append(index_size)
+            implied_shape_positions.append(i)
 
         parsed_indices[i] = index
 
-    return parsed_indices, indices_shape, reverse
+    return parsed_indices, implied_shape, reverse, implied_shape_positions
 
 
 def concatenate_array_chunks(x):
@@ -1788,14 +1802,16 @@ def setitem_array(out_name, array, indices, value):
     value_ndim = len(value_shape)
 
     # Reformat input indices
-    indices, indices_shape, reverse = parse_assignment_indices(indices, array_shape)
+    indices, implied_shape, reverse, implied_shape_positions = parse_assignment_indices(
+        indices, array_shape
+    )
 
     # Empty slices can only be assigned size 1 values
-    if 0 in indices_shape and value_shape and max(value_shape) > 1:
+    if 0 in implied_shape and value_shape and max(value_shape) > 1:
         raise ValueError(
             f"shape mismatch: value array of shape {value_shape} "
             "could not be broadcast to indexing result "
-            f"of shape {tuple(indices_shape)}"
+            f"of shape {tuple(implied_shape)}"
         )
 
     # Set variables needed when creating the part of the assignment
@@ -1846,18 +1862,18 @@ def setitem_array(out_name, array, indices, value):
     #
     # Note that array_common_shape and value_common_shape may be
     # different if there are any size 1 dimensions being brodacast.
-    offset = len(indices_shape) - value_ndim
+    offset = len(implied_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the
         # assignment value
-        array_common_shape = indices_shape[offset:]
+        array_common_shape = implied_shape[offset:]
         value_common_shape = value_shape
         value_offset = 0
         reverse = [i - offset for i in reverse if i >= offset]
     else:
         # The assigmment value has more dimensions than the array
         value_offset = -offset
-        array_common_shape = indices_shape
+        array_common_shape = implied_shape
         value_common_shape = value_shape[value_offset:]
         offset = 0
 
@@ -1865,12 +1881,29 @@ def setitem_array(out_name, array, indices, value):
         if value_shape[:value_offset] != (1,) * value_offset:
             raise ValueError(
                 "could not broadcast input array from shape"
-                f"{value_shape} into shape {tuple(indices_shape)}"
+                f"{value_shape} into shape {tuple(implied_shape)}"
             )
 
     base_value_indices = []
     non_broadcast_dimensions = []
-    for i, (a, b) in enumerate(zip(array_common_shape, value_common_shape)):
+
+    for i, (a, b, j) in enumerate(
+        zip(array_common_shape, value_common_shape, implied_shape_positions)
+    ):
+        index = indices[j]
+        if is_dask_collection(index) and index.dtype == bool:
+            if math.isnan(b) or b <= index.size:
+                base_value_indices.append(None)
+                non_broadcast_dimensions.append(i)
+            else:
+                raise ValueError(
+                    f"shape mismatch: value array dimension size of {b} is "
+                    "greater then corresponding boolean index size of "
+                    f"{index.size}"
+                )
+
+            continue
+
         if b == 1:
             base_value_indices.append(slice(None))
         elif a == b:
@@ -1880,11 +1913,12 @@ def setitem_array(out_name, array, indices, value):
             base_value_indices.append(None)
             non_broadcast_dimensions.append(i)
         else:
-            # Can't check  ...
             raise ValueError(
-                f"Can't broadcast data with shape {value_common_shape} "
-                f"across shape {tuple(indices_shape)}"
+                f"shape mismatch: value array of shape {value_shape} "
+                "could not be broadcast to indexing result of shape "
+                f"{tuple(implied_shape)}"
             )
+
     # Translate chunks tuple to a set of array locations in product
     # order
     chunks = array.chunks
@@ -1985,7 +2019,6 @@ def setitem_array(out_name, array, indices, value):
                 # Index is a 1-d array
                 is_bool = index.dtype == bool
                 block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
-
                 if is_bool:
                     block_index_size = block_index_shape_from_1d_bool_index(
                         dim, loc0, loc1
