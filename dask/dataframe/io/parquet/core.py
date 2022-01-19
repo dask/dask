@@ -409,7 +409,7 @@ def read_parquet(
                 meta,
                 columns,
                 index,
-                {},  # kwargs should no longer be passed this way
+                {},  # All kwargs should now be in `common_kwargs`
                 common_kwargs,
             ),
             label=label,
