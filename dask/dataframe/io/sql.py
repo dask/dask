@@ -101,7 +101,7 @@ def read_sql_table(
     """
     import sqlalchemy as sa
     from sqlalchemy import sql
-    from sqlalchemy.sql import elements
+    from sqlalchemy.sql import elements, expression
 
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
@@ -111,6 +111,13 @@ def read_sql_table(
     m = sa.MetaData()
     if isinstance(table, str):
         table = sa.Table(table, m, autoload=True, autoload_with=engine, schema=schema)
+
+    if (
+        isinstance(table, expression.SelectBase)
+        # sqlalchemy >= 1.4 https://github.com/sqlalchemy/sqlalchemy/issues/4617
+        and hasattr(table, "subquery")
+    ):
+        table = table.subquery()
 
     index = table.columns[index_col] if isinstance(index_col, str) else index_col
     if not isinstance(index_col, (str, elements.Label)):
