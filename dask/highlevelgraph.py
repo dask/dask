@@ -511,6 +511,7 @@ class Layer(collections.abc.Mapping):
         info = {
             "layer_type": type(self).__name__,
             "is_materialized": self.is_materialized(),
+            "tasks (unoptimized)": f"{len(self)}",
         }
         if self.annotations is not None:
             for key, val in self.annotations.items():
@@ -1146,6 +1147,7 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            task_count=len(self),
         )
 
 
