@@ -29,14 +29,15 @@ from ..utils import _meta_from_dtypes, _open_input_files
 #########################
 from .utils import (
     Engine,
-    _check_user_options,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
+    _process_open_file_options,
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    _split_user_options,
 )
 
 # Thread lock required to reset row-groups
@@ -386,7 +387,7 @@ class FastParquetEngine(Engine):
 
         # Extract "supported" key-word arguments from `kwargs`.
         # Split items into `dataset_kwargs` and `read_kwargs`
-        dataset_kwargs, read_kwargs, user_kwargs = _check_user_options(**kwargs)
+        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
 
         parts = []
         _metadata_exists = False
@@ -1073,26 +1074,14 @@ class FastParquetEngine(Engine):
             fn_rg_map[fn].append(rg)
 
         # Define file-opening options
-        open_file_options = (open_file_options or {}).copy()
-        precache_options = open_file_options.pop("precache_options", {}).copy()
-        if "open_file_func" not in open_file_options:
-            if precache_options.get("method", None) == "parquet":
-                open_file_options["cache_type"] = open_file_options.get(
-                    "cache_type", "parts"
-                )
-                precache_options.update(
-                    {
-                        "metadata": pf,
-                        "columns": list(set(columns).intersection(pf.columns)),
-                        "row_groups": [rgs for rgs in fn_rg_map.values()],
-                        "engine": precache_options.get("engine", "fastparquet"),
-                    }
-                )
-            else:
-                open_file_options["cache_type"] = open_file_options.get(
-                    "cache_type", "readahead"
-                )
-                open_file_options["mode"] = open_file_options.get("mode", "rb")
+        precache_options, open_file_options = _process_open_file_options(
+            open_file_options,
+            metadata=pf,
+            columns=list(set(columns).intersection(pf.columns)),
+            row_groups=[rgs for rgs in fn_rg_map.values()],
+            default_engine="fastparquet",
+            default_cache="readahead",
+        )
 
         with ExitStack() as stack:
 

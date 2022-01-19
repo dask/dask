@@ -20,14 +20,15 @@ from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, _open_input_files
 from .core import create_metadata_file
 from .utils import (
     Engine,
-    _check_user_options,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
+    _process_open_file_options,
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    _split_user_options,
 )
 
 # Check PyArrow version for feature support
@@ -211,26 +212,13 @@ def _read_table_from_path(
 
     # Define file-opening options
     read_kwargs = kwargs.get("read", {}).copy()
-    open_file_options = read_kwargs.pop("open_file_options", {}).copy()
-    precache_options = open_file_options.pop("precache_options", {}).copy()
-    if "open_file_func" not in open_file_options:
-        if precache_options.get("method", None) == "parquet":
-            open_file_options["cache_type"] = open_file_options.get(
-                "cache_type", "parts"
-            )
-            precache_options.update(
-                {
-                    "columns": columns,
-                    "row_groups": row_groups if row_groups == [None] else [row_groups],
-                    "engine": precache_options.get("engine", "pyarrow"),
-                }
-            )
-        else:
-            # Pyarrow is faster without read-ahead caching
-            open_file_options["cache_type"] = open_file_options.get(
-                "cache_type", "none"
-            )
-            open_file_options["mode"] = open_file_options.get("mode", "rb")
+    precache_options, open_file_options = _process_open_file_options(
+        read_kwargs.pop("open_file_options", {}),
+        columns=columns,
+        row_groups=row_groups if row_groups == [None] else [row_groups],
+        default_engine="pyarrow",
+        default_cache="none",
+    )
 
     if partition_keys:
         tables = []
@@ -822,7 +810,7 @@ class ArrowDatasetEngine(Engine):
             _dataset_kwargs,
             read_kwargs,
             user_kwargs,
-        ) = _check_user_options(**kwargs)
+        ) = _split_user_options(**kwargs)
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -1775,7 +1763,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             dataset_kwargs,
             read_kwargs,
             user_kwargs,
-        ) = _check_user_options(**kwargs)
+        ) = _split_user_options(**kwargs)
 
         (
             schema,

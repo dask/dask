@@ -690,8 +690,42 @@ def _set_metadata_task_size(metadata_task_size, fs):
     return metadata_task_size
 
 
-def _check_user_options(**kwargs):
-    # Check user-defined options and kwargs
+def _process_open_file_options(
+    open_file_options,
+    metadata=None,
+    columns=None,
+    row_groups=None,
+    default_engine=None,
+    default_cache="readahead",
+):
+    # Process `open_file_options`.
+    # Set default values and extract `precache_options`
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if "open_file_func" not in open_file_options:
+        if precache_options.get("method", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
+            precache_options.update(
+                {
+                    "metadata": metadata,
+                    "columns": columns,
+                    "row_groups": row_groups,
+                    "engine": precache_options.get("engine", default_engine),
+                }
+            )
+        else:
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", default_cache
+            )
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
+    return precache_options, open_file_options
+
+
+def _split_user_options(**kwargs):
+    # Check user-defined options.
+    # Split into "file" and "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
