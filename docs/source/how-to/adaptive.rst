@@ -16,8 +16,18 @@ two situations:
 Particularly efficient users may learn to manually add and remove workers
 during their session, but this is rare.  Instead, we would like the size of a
 Dask cluster to match the computational needs at any given time.  This is the
-goal of the *adaptive deployments* discussed in this document.  These are
-particularly helpful for interactive workloads, which are characterized by long
+goal of the *adaptive deployments* discussed in this document.
+
+|
+
+.. image:: ../images/dask-adaptive.svg
+   :alt: Dask adaptive scaling
+   :align: center
+   :scale: 40%
+
+|
+
+These are particularly helpful for interactive workloads, which are characterized by long
 periods of inactivity interrupted with short bursts of heavy activity.
 Adaptive deployments can result in both faster analyses that give users much
 more power, but with much less pressure on computational resources.

@@ -534,7 +534,7 @@ def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def _nanmin_skip(x_chunk, axis, keepdims):
-    if len(x_chunk):
+    if x_chunk.size > 0:
         return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(
@@ -563,7 +563,7 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def _nanmax_skip(x_chunk, axis, keepdims):
-    if len(x_chunk):
+    if x_chunk.size > 0:
         return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
     else:
         return asarray_safe(

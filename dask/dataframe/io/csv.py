@@ -1,3 +1,4 @@
+import os
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -572,7 +573,23 @@ def read_pandas(
     names = kwargs.get("names", None)
     header = kwargs.get("header", "infer" if names is None else None)
     need = 1 if header is None else 2
-    parts = b_sample.split(b_lineterminator, lastskiprow + need)
+
+    if kwargs.get("comment"):
+        # if comment is provided, step through lines of b_sample and strip out comments
+        parts = []
+        for part in b_sample.split(b_lineterminator):
+            split_comment = part.decode().split(kwargs.get("comment"))
+            if len(split_comment) > 1:
+                # if line starts with comment, don't include that line in parts.
+                if len(split_comment[0]) > 0:
+                    parts.append(split_comment[0].strip().encode())
+            else:
+                parts.append(part)
+            if len(parts) > need:
+                break
+    else:
+        parts = b_sample.split(b_lineterminator, lastskiprow + need)
+
     # If the last partition is empty, don't count it
     nparts = 0 if not parts else len(parts) - int(not parts[-1])
 
@@ -750,7 +767,7 @@ read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
     with fil as f:
         df.to_csv(f, **kwargs)
-    return None
+    return os.path.normpath(fil.path)
 
 
 def to_csv(
@@ -937,8 +954,7 @@ def to_csv(
 
         import dask
 
-        dask.compute(*values, **compute_kwargs)
-        return [f.path for f in files]
+        return list(dask.compute(*values, **compute_kwargs))
     else:
         return values
 

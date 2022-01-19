@@ -253,6 +253,23 @@ def test_skiprows(dd_read, pd_read, files):
     "dd_read,pd_read,files",
     [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
 )
+def test_comment(dd_read, pd_read, files):
+    files = {
+        name: comment_header
+        + b"\n"
+        + content.replace(b"\n", b"  # just some comment\n", 1)
+        for name, content in files.items()
+    }
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", comment="#")
+        expected_df = pd.concat([pd_read(n, comment="#") for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dd_read,pd_read,files",
+    [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
+)
 def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
@@ -1288,13 +1305,20 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, scheduler="sync")
+            paths = dask.compute(*r, scheduler="sync")
+            # this is a tuple rather than a list since it's the output of dask.compute
+            assert paths == tuple(
+                os.path.join(dn, f"{n}.part") for n in range(npartitions)
+            )
             result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
             assert_eq(result, df)
 
         with tmpdir() as dn:
             fn = os.path.join(dn, "data_*.csv")
-            a.to_csv(fn, index=False)
+            paths = a.to_csv(fn, index=False)
+            assert paths == [
+                os.path.join(dn, f"data_{n}.csv") for n in range(npartitions)
+            ]
             result = dd.read_csv(fn).compute().reset_index(drop=True)
             assert_eq(result, df)
 

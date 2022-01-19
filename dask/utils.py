@@ -21,6 +21,8 @@ from threading import Lock
 from typing import TypeVar
 from weakref import WeakValueDictionary
 
+import tlz as toolz
+
 from .core import get_deps
 
 K = TypeVar("K")
@@ -1161,9 +1163,8 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     except AttributeError:
         return dict(d)
 
-    unique_layers = {id(layer): layer for layer in layers.values()}
     result = {}
-    for layer in unique_layers.values():
+    for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
 
@@ -1268,6 +1269,12 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """Looks like a Pandas DataFrame"""
+    if (df.__class__.__module__, df.__class__.__name__) == (
+        "pandas.core.frame",
+        "DataFrame",
+    ):
+        # fast exec for most likely input
+        return True
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))

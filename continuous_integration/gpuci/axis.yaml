@@ -2,7 +2,7 @@ PYTHON_VER:
 - "3.8"
 
 CUDA_VER:
-- "11.2"
+- "11.5"
 
 LINUX_VER:
 - ubuntu18.04

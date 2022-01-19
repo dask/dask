@@ -4,11 +4,18 @@ from bisect import bisect_left
 from itertools import cycle
 from operator import add, itemgetter
 
-from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
 from ..utils import apply, funcname, import_required
+
+
+def BOKEH_VERSION():
+    import bokeh
+    from packaging.version import parse as parse_version
+
+    return parse_version(bokeh.__version__)
+
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 
@@ -201,11 +208,17 @@ def visualize(
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
@@ -342,7 +355,6 @@ def plot_resources(results, palette="Viridis", **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
@@ -356,8 +368,12 @@ def plot_resources(results, palette="Viridis", **kwargs):
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
 
     # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
     if "label_size" in kwargs:
@@ -383,11 +399,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         cpu,
         color=colors[0],
         line_width=4,
-        **{
-            "legend_label"
-            if parse_version(bokeh.__version__) >= parse_version("1.4")
-            else "legend": "% CPU"
-        },
+        legend_label="% CPU",
     )
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {
@@ -401,11 +413,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         color=colors[2],
         y_range_name="memory",
         line_width=4,
-        **{
-            "legend_label"
-            if parse_version(bokeh.__version__) >= parse_version("1.4")
-            else "legend": "Memory"
-        },
+        legend_label="Memory",
     )
     p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
@@ -458,8 +466,12 @@ def plot_cache(
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
     defaults.update(**kwargs)
 
     if results:

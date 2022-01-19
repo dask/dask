@@ -12,9 +12,8 @@ import pandas as pd
 from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
-from ..base import is_dask_collection
+from ..base import get_scheduler, is_dask_collection
 from ..core import get_deps
-from ..local import get_sync
 from ..utils import is_arraylike  # noqa: F401
 from ..utils import asciitable
 from ..utils import is_dataframe_like as dask_is_dataframe_like
@@ -445,7 +444,7 @@ def index_summary(idx, name=None):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
+def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler=None):
     import dask.dataframe as dd
 
     if hasattr(dsk, "__dask_graph__"):
@@ -453,7 +452,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
         if hasattr(graph, "validate"):
             graph.validate()
         if result is None:
-            result = dsk.compute(scheduler="sync")
+            result = dsk.compute(scheduler=scheduler)
         if isinstance(dsk, dd.Index):
             assert "Index" in type(result).__name__, type(result)
             # assert type(dsk._meta) == type(result), type(dsk._meta)
@@ -529,19 +528,24 @@ def assert_eq(
     check_dtype=True,
     check_divisions=True,
     check_index=True,
+    scheduler="sync",
     **kwargs,
 ):
     if check_divisions:
-        assert_divisions(a)
-        assert_divisions(b)
+        assert_divisions(a, scheduler=scheduler)
+        assert_divisions(b, scheduler=scheduler)
         if hasattr(a, "divisions") and hasattr(b, "divisions"):
             at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
             bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
             assert at == bt, (at, bt)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtype)
-    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtype)
+    a = _check_dask(
+        a, check_names=check_names, check_dtypes=check_dtype, scheduler=scheduler
+    )
+    b = _check_dask(
+        b, check_names=check_names, check_dtypes=check_dtype, scheduler=scheduler
+    )
     if hasattr(a, "to_pandas"):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
@@ -585,9 +589,12 @@ def assert_dask_graph(dask, label):
     raise AssertionError(f"given dask graph doesn't contain label: {label}")
 
 
-def assert_divisions(ddf):
+def assert_divisions(ddf, scheduler=None):
     if not hasattr(ddf, "divisions"):
         return
+
+    assert isinstance(ddf.divisions, tuple)
+
     if not getattr(ddf, "known_divisions", False):
         return
 
@@ -599,7 +606,8 @@ def assert_divisions(ddf):
         except AttributeError:
             return x.index
 
-    results = get_sync(ddf.dask, ddf.__dask_keys__())
+    get = get_scheduler(scheduler=scheduler, collections=[type(ddf)])
+    results = get(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]

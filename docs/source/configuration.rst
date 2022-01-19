@@ -60,21 +60,27 @@ You can specify configuration values in YAML files. For example:
 .. code-block:: yaml
 
    array:
-      chunk-size: 128 MiB
+     chunk-size: 128 MiB
 
    distributed:
-      worker:
-         memory:
-            spill: 0.85  # default: 0.7
-            target: 0.75  # default: 0.6
-            terminate: 0.98  # default: 0.95
-
+     worker:
+       memory:
+         spill: 0.85  # default: 0.7
+         target: 0.75  # default: 0.6
+         terminate: 0.98  # default: 0.95
+            
+     dashboard:
+       # Locate the dashboard if working on a Jupyter Hub server
+       link: /user/<user>/proxy/8787/status
+        
 
 These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+3.  The ``{prefix}/etc/dask`` directories with ``{prefix}`` in `site.PREFIXES
+    <https://docs.python.org/3/library/site.html#site.PREFIXES>`_
+4.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
     variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
@@ -101,6 +107,7 @@ the following:
 
    export DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True
    export DASK_DISTRIBUTED__SCHEDULER__ALLOWED_FAILURES=5
+   export DASK_DISTRIBUTED__DASHBOARD__LINK="/user/<user>/proxy/8787/status"
 
 resulting in configuration values like the following:
 

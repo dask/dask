@@ -12,6 +12,7 @@ import operator
 import os
 import time
 import warnings
+from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -25,6 +26,7 @@ import dask.array as da
 from dask.array.core import (
     Array,
     BlockView,
+    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -50,7 +52,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from ..chunk import getitem
@@ -1209,6 +1211,66 @@ def test_reshape_unknown_dimensions():
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
 
 
+@pytest.mark.parametrize(
+    "limit",  # in bytes
+    [
+        None,  # Default value: dask.config.get("array.chunk-size")
+        134217728,  # 128 MiB (default value size on a typical laptop)
+        67108864,  # 64 MiB (half the typical default value size)
+    ],
+)
+@pytest.mark.parametrize(
+    "shape, chunks, reshape_size",
+    [
+        # Test reshape where output chunks would otherwise be too large
+        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
+        # Test reshape where multiple chunks match between input and output
+        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
+    ],
+)
+def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
+    array = da.random.random(shape, chunks=chunks)
+    if limit is None:
+        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+            result = array.reshape(*reshape_size, limit=limit)
+    else:
+        result = array.reshape(*reshape_size, limit=limit)
+    nbytes = array.dtype.itemsize
+    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+    if limit is None:
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+    assert max_chunksize_in_bytes < limit
+
+
+def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
+    # Test reshape where output chunks would otherwise be too large
+    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
+    array = da.random.random(shape, chunks=chunks)
+
+    with pytest.warns(PerformanceWarning) as record:
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    assert len(record) == 1
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes < limit
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))
@@ -1539,6 +1601,64 @@ def test_map_blocks_no_array_args():
     x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
+
+
+def test_map_blocks_unique_name_chunks_dtype():
+    def func(block_info=None):
+        loc = block_info[None]["array-location"]
+        dtype = block_info[None]["dtype"]
+        return np.arange(loc[0][0], loc[0][1], dtype=dtype)
+
+    x = da.map_blocks(func, chunks=((5, 3),), dtype=np.float32)
+    assert x.chunks == ((5, 3),)
+    assert_eq(x, np.arange(8, dtype=np.float32))
+
+    y = da.map_blocks(func, chunks=((2, 2, 1, 3),), dtype=np.float32)
+    assert y.chunks == ((2, 2, 1, 3),)
+    assert_eq(y, np.arange(8, dtype=np.float32))
+    assert x.name != y.name
+
+    z = da.map_blocks(func, chunks=((5, 3),), dtype=np.float64)
+    assert z.chunks == ((5, 3),)
+    assert_eq(z, np.arange(8, dtype=np.float64))
+    assert x.name != z.name
+    assert y.name != z.name
+
+
+def test_map_blocks_unique_name_drop_axis():
+    def func(some_3d, block_info=None):
+        if not block_info:
+            return some_3d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4, 5), chunks=((3,), (4,), (5,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, drop_axis=[0], dtype=np.float32)
+    assert x.chunks == ((4,), (5,))
+    assert_eq(x, np.zeros((4, 5), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, drop_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,))
+    assert_eq(y, np.zeros((3, 4), dtype=np.float32))
+    assert x.name != y.name
+
+
+def test_map_blocks_unique_name_new_axis():
+    def func(some_2d, block_info=None):
+        if not block_info:
+            return some_2d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4), chunks=((3,), (4,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, new_axis=[0], dtype=np.float32)
+    assert x.chunks == ((1,), (3,), (4,))
+    assert_eq(x, np.zeros((1, 3, 4), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, new_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,), (1,))
+    assert_eq(y, np.zeros((3, 4, 1), dtype=np.float32))
+    assert x.name != y.name
 
 
 @pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
@@ -3277,10 +3397,16 @@ def test_to_delayed_optimize_graph():
     # optimizations
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
+    assert d.key == (y.name, 0, 0)
+    assert d.dask.layers.keys() == {"delayed-" + y.name}
+    assert d.dask.dependencies == {"delayed-" + y.name: set()}
+    assert d.__dask_layers__() == ("delayed-" + y.name,)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
-    assert dict(d2.dask) == dict(y.dask)
+    assert d2.dask is y.dask
+    assert d2.key == (y.name, 0, 0)
+    assert d2.__dask_layers__() == y.__dask_layers__()
 
     assert (d.compute() == d2.compute()).all()
 
@@ -3397,6 +3523,12 @@ def test_elemwise_name():
 
 def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
+
+
+def test_map_blocks_token_deprecated():
+    with pytest.warns(FutureWarning, match="use `name=` instead"):
+        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
+    assert x.name.startswith("foo-")
 
 
 def test_from_array_names():
@@ -3766,6 +3898,15 @@ def test_setitem_extended_API_1d():
             ),
             -1,
         ],
+        [
+            (
+                slice(2, 4),
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            [[-100, -101, -102, -103], [-200, -201, -202, -203]],
+        ],
     ],
 )
 def test_setitem_extended_API_2d(index, value):
@@ -3935,17 +4076,23 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[[True, True, True, False], 0] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [1, 2, 3, 4, 5]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[da.from_array([True, True, True, False]), 0] = [2, 3]
+        x[da.from_array([True, True, True, False]), 0] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, False, False, True])] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[:, 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[0, :] = [1, 2, 3, 4, 5]
 
     x = da.ones((4, 4), chunks=(2, 2))
 
@@ -4961,3 +5108,10 @@ def test_dask_layers():
     assert b.dask.layers.keys() == {a.name, b.name}
     assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
     assert b.__dask_layers__() == (b.name,)
+
+
+def test_len_object_with_unknown_size():
+    a = da.random.random(size=(20, 2))
+    b = a[a < 0.5]
+    with pytest.raises(ValueError, match="on object with unknown chunk size"):
+        assert len(b)
