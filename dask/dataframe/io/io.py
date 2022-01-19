@@ -572,8 +572,8 @@ def from_delayed(
     ----------
     dfs : list of Delayed or Future
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` or an iterable of ``concurrent.futures.Future`` objects,
-        such as come from ``concurrent.futures``. These comprise the individual
+        ``dask.delayed`` or an iterable of ``distributed.Future`` objects,
+        such as come from ``client.submit`` interface. These comprise the individual
         partitions of the resulting dataframe.
     $META
     divisions : tuple, str, optional
