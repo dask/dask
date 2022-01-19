@@ -29,6 +29,7 @@ from ..utils import _meta_from_dtypes, _open_input_files
 #########################
 from .utils import (
     Engine,
+    _check_user_options,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
@@ -383,20 +384,9 @@ class FastParquetEngine(Engine):
         # dataset.  If _metadata is available, set `gather_statistics=True`
         # (if `gather_statistics=None`).
 
-        # Extract "supported" kwargs from `kwargs`.
+        # Extract "supported" key-word arguments from `kwargs`.
         # Split items into `dataset_kwargs` and `read_kwargs`
-        user_kwargs = kwargs.copy()
-        dataset_kwargs = {
-            # The correct key is "dataset", but we
-            # will support "file" for backwards compat
-            **user_kwargs.pop("file", {}),
-            **user_kwargs.pop("dataset", {}),
-        }
-        read_kwargs = user_kwargs.pop("read", {})
-        if "open_file_options" in user_kwargs:
-            # Allow user to pass "open_file_options"
-            # outside of the "read" kwargs
-            read_kwargs["open_file_options"] = user_kwargs.pop("open_file_options", {})
+        dataset_kwargs, read_kwargs, user_kwargs = _check_user_options(**kwargs)
 
         parts = []
         _metadata_exists = False

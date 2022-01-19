@@ -688,3 +688,19 @@ def _set_metadata_task_size(metadata_task_size, fs):
         return config.get(config_str, 0)
 
     return metadata_task_size
+
+
+def _check_user_options(**kwargs):
+    # Check user-defined options and kwargs
+    user_kwargs = kwargs.copy()
+    dataset_options = {
+        **user_kwargs.pop("file", {}).copy(),
+        **user_kwargs.pop("dataset", {}).copy(),
+    }
+    read_options = user_kwargs.pop("read", {}).copy()
+    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    return (
+        dataset_options,
+        read_options,
+        user_kwargs,
+    )
