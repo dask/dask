@@ -1231,7 +1231,7 @@ class _GroupBy:
         cumpart_ext = cumpart_raw_frame.assign(
             **{
                 i: self.obj[i]
-                if np.isscalar(i) and i in self.obj.columns
+                if np.isscalar(i) and i in getattr(self.obj, "columns", [])
                 else self.obj.index
                 for i in by
             }

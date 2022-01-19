@@ -430,6 +430,14 @@ def test_series_groupby_propagates_names():
     assert_eq(result, expected)
 
 
+def test_series_groupby_with_named_index():
+    df = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]}).set_index("x")
+    ddf = dd.from_pandas(df, 2)
+    expected = df["y"].groupby("x").cumsum()
+    result = ddf["y"].groupby("x").cumsum()
+    assert_eq(result, expected)
+
+
 def test_series_groupby():
     s = pd.Series([1, 2, 2, 1, 1])
     pd_group = s.groupby(s)
