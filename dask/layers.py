@@ -37,21 +37,6 @@ class CallableLazyImport:
         return import_term(self.function_path)(*args, **kwargs)
 
 
-def _compose(arg, *funcs):
-    """Nested-Function Utility
-
-    The first positional argument (`arg`) corresponds to
-    a single input argument to the inner-most function.
-    Other posional arguments (`*funcs`), correspond to
-    the nested functions in inner-to-outer order.
-    """
-    return functools.reduce(
-        lambda input, func: func(input),
-        funcs,
-        arg,
-    )
-
-
 #
 ##
 ###  Array Layers & Utilities
@@ -1305,7 +1290,7 @@ class DataFrameTreeReduction(DataFrameLayer):
     finalize_func: Optional[Callable]
     split_every: Optional[int]
     split_out: Optional[int]
-    output_partitions: Optional[List[int]]
+    output_partitions: List[int]
     tree_node_name: Optional[str]
     widths: List[int]
     height: int
@@ -1361,7 +1346,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             outer_func = self.finalize_func
         else:
             outer_func = self.tree_node_func
-        return (_compose, input_keys, self.concat_func, outer_func)
+        return (toolz.pipe, input_keys, self.concat_func, outer_func)
 
     def _construct_graph(self):
         """Construct graph for a tree reduction."""
@@ -1480,8 +1465,8 @@ class DataFrameTreeReduction(DataFrameLayer):
             return tree_size + self.npartitions_input * len(self.output_partitions)
         return tree_size
 
-    def _keys_to_splits(self, keys):
-        """Simple utility to convert keys to split indices."""
+    def _keys_to_output_partitions(self, keys):
+        """Simple utility to convert keys to output partition indices."""
         splits = set()
         for key in keys:
             try:
@@ -1515,7 +1500,7 @@ class DataFrameTreeReduction(DataFrameLayer):
                 (self.name_input, i) for i in range(self.npartitions_input)
             }
         }
-        output_partitions = self._keys_to_splits(keys)
+        output_partitions = self._keys_to_output_partitions(keys)
         if output_partitions != set(self.output_partitions):
             culled_layer = self._cull(output_partitions)
             return culled_layer, deps
