@@ -188,6 +188,30 @@ class BlockwiseDepDict(BlockwiseDep):
         return cls(**state)
 
 
+class BlockIndex(BlockwiseDep):
+    """Index BlockwiseDep argument
+
+    The purpose of this class is to provide each
+    block of a ``Blockwise``-based operation with
+    the current index.
+    """
+
+    produces_tasks: bool = False
+
+    def __init__(self, numblocks: Tuple[int, ...]):
+        self.numblocks = numblocks
+
+    def __getitem__(self, idx: Tuple[int, ...]) -> Tuple[int, ...]:
+        return idx
+
+    def __dask_distributed_pack__(self, **kwargs):
+        return {"numblocks": self.numblocks}
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
+
+
 def subs(task, substitution):
     """Create a new task with the values substituted
 

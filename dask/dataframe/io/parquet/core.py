@@ -8,6 +8,7 @@ from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
 from ....base import compute_as_if_collection, tokenize
+from ....blockwise import BlockIndex
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
@@ -32,7 +33,7 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ReadParquetFunctionWrapper:
+class ParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
     Reads parquet data from disk to produce a partition
@@ -64,12 +65,12 @@ class ReadParquetFunctionWrapper:
         self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
 
     def project_columns(self, columns):
-        """Return a new ReadParquetFunctionWrapper object
+        """Return a new ParquetFunctionWrapper object
         with a sub-column projection.
         """
         if columns == self.columns:
             return self
-        return ReadParquetFunctionWrapper(
+        return ParquetFunctionWrapper(
             self.engine,
             self.fs,
             self.meta,
@@ -93,9 +94,6 @@ class ReadParquetFunctionWrapper:
             self.index,
             self.common_kwargs,
         )
-
-
-ParquetFunctionWrapper = ReadParquetFunctionWrapper
 
 
 class ToParquetFunctionWrapper:
@@ -127,10 +125,9 @@ class ToParquetFunctionWrapper:
         self.name_function = name_function
         self.kwargs_pass = kwargs_pass
 
-    def __call__(self, df, partition_info=None):
-
-        # Get partition index
-        part_i = (partition_info or {}).get("number")
+    def __call__(self, df, block_index):
+        # Get partition index from block index tuple
+        part_i = block_index[0]
         filename = (
             f"part.{part_i + self.i_offset}.parquet"
             if self.name_function is None
@@ -145,11 +142,7 @@ class ToParquetFunctionWrapper:
             filename,
             self.partition_on,
             self.write_metadata_file,
-            **(
-                toolz.merge(self.kwargs_pass, {"head": True})
-                if part_i == 0
-                else self.kwargs_pass
-            ),
+            **(dict(self.kwargs_pass, head=True) if part_i == 0 else self.kwargs_pass),
         )
 
 
@@ -446,7 +439,7 @@ def read_parquet(
             output_name,
             columns,
             parts,
-            ReadParquetFunctionWrapper(
+            ParquetFunctionWrapper(
                 engine,
                 fs,
                 meta,
@@ -784,6 +777,7 @@ def to_parquet(
             name_function,
             kwargs_pass,
         ),
+        BlockIndex((df.npartitions,)),
         token="to-parquet-"
         + tokenize(
             df,

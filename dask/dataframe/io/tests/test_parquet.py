@@ -20,6 +20,7 @@ from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
+from dask.utils_test import hlg_layer
 
 try:
     import fastparquet
@@ -2460,14 +2461,12 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
     dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
 
-    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
-    subgraph_rd = dsk.layers[read]
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
     assert isinstance(subgraph_rd, DataFrameIOLayer)
     assert subgraph_rd.columns == ["B"]
     assert next(iter(subgraph_rd.dsk.values()))[0].columns == ["B"]
 
-    write = [key for key in dsk.layers if key.startswith("to-parquet")][0]
-    subgraph_wt = dsk.layers[write]
+    subgraph_wt = hlg_layer(dsk, "to-parquet")
     assert isinstance(subgraph_wt, Blockwise)
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
