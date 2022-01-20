@@ -7179,7 +7179,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-def partitionwise_graph(func, op_name, *args, **kwargs):
+def partitionwise_graph(func, layer_name, *args, **kwargs):
     """
     Apply a function partition-wise across arguments to create layer of a graph
 
@@ -7194,8 +7194,9 @@ def partitionwise_graph(func, op_name, *args, **kwargs):
     Parameters
     ----------
     func: callable
-    op_name: str
-        descriptive name for the operation
+    layer_name: str
+        Descriptive name for the operation. Used as the output name
+        in the resulting ``Blockwise`` graph layer.
     *args:
     **kwargs:
 
@@ -7245,7 +7246,7 @@ def partitionwise_graph(func, op_name, *args, **kwargs):
         else:
             pairs.extend([arg, None])
     return blockwise(
-        func, op_name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
+        func, layer_name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
     )
 
 
