@@ -1443,28 +1443,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         )
 
     def _output_keys(self):
-        keys = []
-        if self.split_out:
-            name_input_use = self.name_input + "-split"
-            for s in self.output_partitions:
-                for p in range(self.npartitions_input):
-                    keys.append(self._make_key(name_input_use, p, split=s))
-        if self.height >= 2:
-            for s in self.output_partitions:
-                for depth in range(1, self.height):
-                    for group in range(self.widths[depth]):
-                        if depth == self.height - 1:
-                            keys.append((self.name, s))
-                        else:
-                            keys.append(
-                                self._make_key(
-                                    self.tree_node_name, group, depth, split=s
-                                )
-                            )
-        else:
-            for s in self.output_partitions:
-                keys.append((self.name, s))
-        return set(keys)
+        return {(self.name, s) for s in self.output_partitions}
 
     def get_output_keys(self):
         if hasattr(self, "_cached_output_keys"):
@@ -1491,7 +1470,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self.get_output_keys())
+        return iter(self._dict)
 
     def __len__(self):
         # Start with "base" tree-reduction size
