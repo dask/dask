@@ -4563,6 +4563,29 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_regions():
+    zarr = pytest.importorskip("zarr")
+
+    a = da.arange(16).reshape((4, 4)).rechunk(2)
+    z = zarr.zeros_like(a, chunks=2)
+
+    a[:2, :2].to_zarr(z, region=(slice(2), slice(2)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    with pytest.raises(ValueError):
+        with tmpdir() as d:
+            a.to_zarr(d, region=(slice(2), slice(2)))
+
+
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
