@@ -1,5 +1,6 @@
 import math
 import warnings
+from typing import Tuple
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -100,9 +101,9 @@ class ToParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
 
-    Writes a DataFrame partition into a distinct
-    parquet file. When called, the function also
-    requires a ``partition_info`` kwarg.
+    Writes a DataFrame partition into a distinct parquet
+    file. When called, the function also requires the
+    current block index (via ``blockwise.BlockIndex``).
     """
 
     def __init__(
@@ -125,7 +126,7 @@ class ToParquetFunctionWrapper:
         self.name_function = name_function
         self.kwargs_pass = kwargs_pass
 
-    def __call__(self, df, block_index):
+    def __call__(self, df, block_index: Tuple[int]):
         # Get partition index from block index tuple
         part_i = block_index[0]
         filename = (

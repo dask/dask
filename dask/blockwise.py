@@ -193,12 +193,14 @@ class BlockIndex(BlockwiseDep):
 
     The purpose of this class is to provide each
     block of a ``Blockwise``-based operation with
-    the current index.
+    the current block index.
     """
 
     produces_tasks: bool = False
 
     def __init__(self, numblocks: Tuple[int, ...]):
+        # NOTE: Unused - Just needs to be set to
+        # follow the `BlockwiseDep` interface
         self.numblocks = numblocks
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Tuple[int, ...]:
