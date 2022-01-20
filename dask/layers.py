@@ -1,9 +1,9 @@
+import functools
 import math
 import operator
 from collections import defaultdict
-from functools import partial
 from itertools import product
-from typing import List, Optional, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Tuple
 
 import tlz as toolz
 from tlz.curried import map
@@ -37,9 +37,19 @@ class CallableLazyImport:
         return import_term(self.function_path)(*args, **kwargs)
 
 
-def nested_function(outer_func, inner_func, inputs):
-    """Nested-Function Utility"""
-    return outer_func(inner_func(inputs))
+def _compose(arg, *funcs):
+    """Nested-Function Utility
+
+    The first positional argument (`arg`) corresponds to
+    a single input argument to the inner-most function.
+    Other posional arguments (`*funcs`), correspond to
+    the nested functions in inner-to-outer order.
+    """
+    return functools.reduce(
+        lambda input, func: func(input),
+        funcs,
+        arg,
+    )
 
 
 #
@@ -206,7 +216,9 @@ class ArrayOverlapLayer(Layer):
             from dask.array.core import concatenate3
 
         dims = list(map(len, chunks))
-        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
+        expand_key2 = functools.partial(
+            _expand_keys_around_center, dims=dims, axes=axes
+        )
 
         # Make keys for each of the surrounding sub-arrays
         interior_keys = toolz.pipe(
@@ -1285,19 +1297,32 @@ class DataFrameTreeReduction(DataFrameLayer):
         Name to use for intermediate tree-node tasks.
     """
 
+    name: str
+    name_input: str
+    npartitions_input: str
+    concat_func: Callable
+    tree_node_func: Callable
+    finalize_func: Optional[Callable]
+    split_every: Optional[int]
+    split_out: Optional[int]
+    output_partitions: Optional[List[int]]
+    tree_node_name: Optional[str]
+    widths: List[int]
+    height: int
+
     def __init__(
         self,
-        name,
-        name_input,
-        npartitions_input,
-        concat_func,
-        tree_node_func,
-        finalize_func=None,
-        split_every=32,
-        split_out=None,
-        output_partitions=None,
-        tree_node_name=None,
-        annotations=None,
+        name: str,
+        name_input: str,
+        npartitions_input: str,
+        concat_func: Callable,
+        tree_node_func: Callable,
+        finalize_func: Optional[Callable] = None,
+        split_every: Optional[int] = 32,
+        split_out: Optional[int] = None,
+        output_partitions: Optional[List[int]] = None,
+        tree_node_name: Optional[str] = None,
+        annotations: Mapping[str, Any] = None,
     ):
         super().__init__(annotations=annotations)
         self.name = name
@@ -1336,7 +1361,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             outer_func = self.finalize_func
         else:
             outer_func = self.tree_node_func
-        return (nested_function, outer_func, self.concat_func, input_keys)
+        return (_compose, input_keys, self.concat_func, outer_func)
 
     def _construct_graph(self):
         """Construct graph for a tree reduction."""
@@ -1356,7 +1381,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             name_input_use += "-split"
             for s in self.output_partitions:
                 for p in range(self.npartitions_input):
-                    dsk[(name_input_use, p, s)] = (
+                    dsk[self._make_key(name_input_use, p, split=s)] = (
                         operator.getitem,
                         (self.name_input, p),
                         s,
@@ -1391,7 +1416,9 @@ class DataFrameTreeReduction(DataFrameLayer):
                         # Define task
                         if depth == self.height - 1:
                             # Final Node (Use fused `self.tree_finalize` task)
-                            assert group == 0
+                            assert (
+                                group == 0
+                            ), f"group = {group}, not 0 for final tree reduction task"
                             dsk[(self.name, s)] = self._define_task(
                                 input_keys, final_task=True
                             )
@@ -1421,7 +1448,7 @@ class DataFrameTreeReduction(DataFrameLayer):
             name_input_use = self.name_input + "-split"
             for s in self.output_partitions:
                 for p in range(self.npartitions_input):
-                    keys.append((name_input_use, p, s))
+                    keys.append(self._make_key(name_input_use, p, split=s))
         if self.height >= 2:
             for s in self.output_partitions:
                 for depth in range(1, self.height):
@@ -1519,9 +1546,7 @@ class DataFrameTreeReduction(DataFrameLayer):
     def __dask_distributed_pack__(self, *args, **kwargs):
         from distributed.protocol.serialize import to_serialize
 
-        # Pickle the (possibly) user-defined functions here.
-        # We also wrap kwargs into the functions themselves
-        # to simplify serialization
+        # Pickle the (possibly) user-defined functions here
         _concat_func = to_serialize(self.concat_func)
         _tree_node_func = to_serialize(self.tree_node_func)
         if self.finalize_func:
@@ -1553,6 +1578,9 @@ class DataFrameTreeReduction(DataFrameLayer):
         keys = raw.keys() | dsk.keys()
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        # Must use `to_serialize` directly to ensure Serialized functions
-        # are deserialized correctly on worker
+        # Must use `to_serialize` on the entire task to ensure any
+        # already-`Serialized` functions are detected. If we use
+        # `dumps_task` instead, any already-`Serialized` function object
+        # in the task will be pickled, and the worker will ultimately
+        # end up with a `Serialized` object (and not the underlying data)
         return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
