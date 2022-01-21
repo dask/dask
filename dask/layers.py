@@ -1540,9 +1540,12 @@ class DataFrameTreeReduction(DataFrameLayer):
         keys = raw.keys() | dsk.keys()
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        # Must use `to_serialize` on the entire task to ensure any
-        # already-`Serialized` functions are detected. If we use
-        # `dumps_task` instead, any already-`Serialized` function object
-        # in the task will be pickled, and the worker will ultimately
-        # end up with a `Serialized` object (and not the underlying data)
+        # Must use `to_serialize` on the entire task.
+        # This is required because the task-tuples contain `Serialized`
+        # function objects instead of real functions. Using `dumps_task`
+        # may or may not correctly wrap the entire tuple in `to_serialize`.
+        # So we use `to_serialize` here to be explicit. When the task
+        # arrives at a worker, both the `Serialized` task-tuples and the
+        # `Serialized` functions nested within them should be deserialzed
+        # automatically by the comm.
         return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}

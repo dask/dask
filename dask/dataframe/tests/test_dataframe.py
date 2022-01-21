@@ -402,8 +402,6 @@ def test_describe_numeric(method, test_values):
 
     test_quantiles = [0.25, 0.75]
 
-    ddf.describe(percentiles_method=method)
-
     assert_eq(df.describe(), ddf.describe(percentiles_method=method))
     assert_eq(s.describe(), ds.describe(percentiles_method=method))
 
