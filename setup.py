@@ -75,7 +75,7 @@ setup(
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=["pytest"],
