@@ -1,6 +1,5 @@
 import abc
 import collections.abc
-import contextlib
 import copy
 import html
 from typing import (
@@ -645,20 +644,19 @@ class HighLevelGraph(Mapping):
     @classmethod
     def _from_collection(cls, name, layer, collection):
         """`from_collections` optimized for a single collection"""
-        if is_dask_collection(collection):
-            graph = collection.__dask_graph__()
-            if isinstance(graph, HighLevelGraph):
-                layers = ensure_dict(graph.layers, copy=True)
-                layers.update({name: layer})
-                deps = ensure_dict(graph.dependencies, copy=True)
-                with contextlib.suppress(AttributeError):
-                    deps.update({name: set(collection.__dask_layers__())})
-            else:
-                key = _get_some_layer_name(collection)
-                layers = {name: layer, key: graph}
-                deps = {name: {key}, key: set()}
-        else:
+        if not is_dask_collection(collection):
             raise TypeError(type(collection))
+
+        graph = collection.__dask_graph__()
+        if isinstance(graph, HighLevelGraph):
+            layers = ensure_dict(graph.layers, copy=True)
+            layers[name] = layer
+            deps = ensure_dict(graph.dependencies, copy=True)
+            deps[name] = set(collection.__dask_layers__())
+        else:
+            key = _get_some_layer_name(collection)
+            layers = {name: layer, key: graph}
+            deps = {name: {key}, key: set()}
 
         return cls(layers, deps)
 
@@ -707,8 +705,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with contextlib.suppress(AttributeError):
-                        deps[name] |= set(collection.__dask_layers__())
+                    deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
                     layers[key] = graph
@@ -1198,7 +1195,6 @@ def to_graphviz(
             "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
             "Blockwise": ["#D9FFE6", False],  # green
             "BlockwiseLayer": ["#D9FFE6", False],  # green
-            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
             "MaterializedLayer": ["#DBDEE5", False],  # gray
         }
 

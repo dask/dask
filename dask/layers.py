@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import functools
 import math
 import operator
 from collections import defaultdict
 from itertools import product
-from typing import Any, Callable, List, Mapping, Optional, Tuple
+from typing import Any
 
 import tlz as toolz
 from tlz.curried import map
@@ -12,7 +14,14 @@ from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
 from .highlevelgraph import Layer
-from .utils import apply, concrete, insert, stringify, stringify_collection_keys
+from .utils import (
+    apply,
+    cached_cumsum,
+    concrete,
+    insert,
+    stringify,
+    stringify_collection_keys,
+)
 
 #
 ##
@@ -44,19 +53,26 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseDep):
-    """Index-chunk mapping for BlockwiseCreateArray"""
+class ArrayBlockwiseDep(BlockwiseDep):
+    """
+    Blockwise dep for array-likes, which only needs chunking
+    information to compute its data.
+    """
 
-    def __init__(self, chunks: tuple):
+    chunks: tuple[tuple[int, ...], ...]
+    numblocks: tuple[int, ...]
+    produces_tasks: bool = False
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
 
-    def __getitem__(self, idx: tuple):
-        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+    def __getitem__(self, idx: tuple[int, ...]):
+        raise NotImplementedError("Subclasses must implement __getitem__")
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         return {"chunks": self.chunks}
 
@@ -65,43 +81,25 @@ class CreateArrayDeps(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseCreateArray(Blockwise):
-    """
-    Specialized Blockwise Layer for array creation routines.
+class ArrayChunkShapeDep(ArrayBlockwiseDep):
+    """Produce chunk shapes given a chunk index"""
 
-    Enables HighLevelGraph optimizations.
+    def __getitem__(self, idx: tuple[int, ...]):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    Parameters
-    ----------
-    name: string
-        The output name.
-    func : callable
-        Function to apply to populate individual blocks. This function should take
-        an iterable containing the dimensions of the given block.
-    shape: iterable
-        Iterable containing the overall shape of the array.
-    chunks: iterable
-        Iterable containing the chunk sizes along each dimension of array.
-    """
 
-    def __init__(
-        self,
-        name,
-        func,
-        shape,
-        chunks,
-    ):
-        # Define "blockwise" graph
-        dsk = {name: (func, blockwise_token(0))}
+class ArraySliceDep(ArrayBlockwiseDep):
+    """Produce slice(s) into the full-sized array given a chunk index"""
 
-        out_ind = tuple(range(len(shape)))
-        super().__init__(
-            output=name,
-            output_indices=out_ind,
-            dsk=dsk,
-            indices=[(CreateArrayDeps(chunks), out_ind)],
-            numblocks={},
-        )
+    starts: tuple[tuple[int, ...], ...]
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
+        super().__init__(chunks)
+        self.starts = tuple(cached_cumsum(c, initial_zero=True) for c in chunks)
+
+    def __getitem__(self, idx: tuple):
+        loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
+        return tuple(slice(*s, None) for s in loc)
 
 
 class ArrayOverlapLayer(Layer):
@@ -1285,14 +1283,14 @@ class DataFrameTreeReduction(DataFrameLayer):
     name: str
     name_input: str
     npartitions_input: str
-    concat_func: Callable
-    tree_node_func: Callable
-    finalize_func: Optional[Callable]
-    split_every: Optional[int]
-    split_out: Optional[int]
-    output_partitions: List[int]
-    tree_node_name: Optional[str]
-    widths: List[int]
+    concat_func: callable
+    tree_node_func: callable
+    finalize_func: callable | None
+    split_every: int
+    split_out: int
+    output_partitions: list[int]
+    tree_node_name: str
+    widths: list[int]
     height: int
 
     def __init__(
@@ -1300,14 +1298,14 @@ class DataFrameTreeReduction(DataFrameLayer):
         name: str,
         name_input: str,
         npartitions_input: str,
-        concat_func: Callable,
-        tree_node_func: Callable,
-        finalize_func: Optional[Callable] = None,
-        split_every: Optional[int] = 32,
-        split_out: Optional[int] = None,
-        output_partitions: Optional[List[int]] = None,
-        tree_node_name: Optional[str] = None,
-        annotations: Mapping[str, Any] = None,
+        concat_func: callable,
+        tree_node_func: callable,
+        finalize_func: callable | None = None,
+        split_every: int = 32,
+        split_out: int | None = None,
+        output_partitions: list[int] | None = None,
+        tree_node_name: str | None = None,
+        annotations: dict[str, Any] = None,
     ):
         super().__init__(annotations=annotations)
         self.name = name
@@ -1318,7 +1316,11 @@ class DataFrameTreeReduction(DataFrameLayer):
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out
-        self.output_partitions = output_partitions
+        self.output_partitions = (
+            list(range(self.split_out or 1))
+            if output_partitions is None
+            else output_partitions
+        )
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
         # Calculate tree widths and height
@@ -1329,10 +1331,6 @@ class DataFrameTreeReduction(DataFrameLayer):
             parts = math.ceil(parts / self.split_every)
             self.widths.append(parts)
         self.height = len(self.widths)
-
-        # Set default output_partitions
-        if self.output_partitions is None:
-            self.output_partitions = list(range(self.split_out or 1))
 
     def _make_key(self, *name_parts, split=0):
         # Helper function construct a key
