@@ -3426,8 +3426,21 @@ def to_zarr(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
             )
-        arr = arr.rechunk(z.chunks)
-        regions = [region] if region is not None else None
+
+        if region is None:
+            arr = arr.rechunk(z.chunks)
+            regions = None
+        else:
+            from .slicing import new_blockdim, normalize_index
+
+            old_chunks = normalize_chunks(z.chunks, z.shape)
+            index = normalize_index(region, z.shape)
+            chunks = tuple(
+                tuple(new_blockdim(s, c, r))
+                for s, c, r in zip(z.shape, old_chunks, index)
+            )
+            arr = arr.rechunk(chunks)
+            regions = [region]
         return arr.store(
             z, lock=False, regions=regions, compute=compute, return_stored=return_stored
         )
