@@ -4,7 +4,7 @@ Command Line
 This is the most fundamental way to deploy Dask on multiple machines.  In
 production environments this process is often automated by some other resource
 manager. Hence, it is rare that people need to follow these instructions
-explicitly.  Instead, these instructions are useful to helm understand what
+explicitly.  Instead, these instructions are useful to help understand what
 *cluster managers* and other automated tooling is doing under the hood and to
 help users deploy onto platforms that have no automated tools today.
 

@@ -1,5 +1,5 @@
-Cloud Deployments
-=================
+Cloud
+=====
 
 There are a variety of ways to deploy Dask on cloud providers.
 Cloud providers provide managed services,
