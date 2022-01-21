@@ -126,6 +126,24 @@ class ToParquetFunctionWrapper:
         self.name_function = name_function
         self.kwargs_pass = kwargs_pass
 
+    def __repr__(self):
+        # This repr must begin with "to-parquet"
+        # for the name of the resulting `Blockwise`
+        # layer to begin with "to-parquet-"
+        return "to-parquet"
+
+    def __dask_tokenize__(self):
+        return tokenize(
+            self.engine,
+            self.path,
+            self.fs,
+            self.partition_on,
+            self.write_metadata_file,
+            self.i_offset,
+            self.name_function,
+            self.kwargs_pass,
+        )
+
     def __call__(self, df, block_index: Tuple[int]):
         # Get partition index from block index tuple
         part_i = block_index[0]
@@ -779,18 +797,6 @@ def to_parquet(
             kwargs_pass,
         ),
         BlockIndex((df.npartitions,)),
-        token="to-parquet-"
-        + tokenize(
-            df,
-            fs,
-            path,
-            append,
-            ignore_divisions,
-            partition_on,
-            division_info,
-            index_cols,
-            schema,
-        ),
         meta=df._meta,
         enforce_metadata=False,
         transform_divisions=False,
