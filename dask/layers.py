@@ -1305,7 +1305,7 @@ class DataFrameTreeReduction(DataFrameLayer):
         split_out: int | None = None,
         output_partitions: list[int] | None = None,
         tree_node_name: str | None = None,
-        annotations: dict[str, Any] = None,
+        annotations: dict[str, Any] | None = None,
     ):
         super().__init__(annotations=annotations)
         self.name = name
