@@ -115,6 +115,7 @@ def read_json(
     compression="infer",
     meta=None,
     engine=pd.read_json,
+    include_path_column=False,
     **kwargs,
 ):
     """Create a dataframe from a set of JSON files
@@ -192,24 +193,61 @@ def read_json(
             "input (orient='records', lines=True)."
         )
     storage_options = storage_options or {}
+    if include_path_column is True:
+        include_path_column = "path"
+    if isinstance(kwargs.get("converters"), dict) and include_path_column:
+        path_converter = kwargs["converters"].get(include_path_column, None)
+    else:
+        path_converter = None
+
     if blocksize:
-        first, chunks = read_bytes(
+        b_out = read_bytes(
             url_path,
             b"\n",
             blocksize=blocksize,
             sample=sample,
             compression=compression,
+            include_path=include_path_column,
             **storage_options,
         )
-        chunks = list(flatten(chunks))
+        if include_path_column:
+            first, chunks, paths = b_out
+        else:
+            first, chunks = b_out
+            paths = None
+        if not isinstance(chunks[0], (list, tuple)):
+            chunks = [chunks]
+
+        if path_converter is not None:
+            first_path = path_converter(paths[0])
+            flat_paths = flatten(
+                [path_converter(p)] * len(chunk) for p, chunk in zip(paths, chunks)
+            )
+        else:
+            first_path = paths[0]
+            flat_paths = flatten(
+                [path] * len(chunk) for path, chunk in zip(paths, chunks)
+            )
+
+        flat_chunks = flatten(chunks)
         if meta is None:
-            meta = read_json_chunk(first, encoding, errors, engine, kwargs)
+            meta = read_json_chunk(
+                first, encoding, errors, engine, include_path_column, first_path, kwargs
+            )
         meta = make_meta(meta)
         parts = [
-            delayed(read_json_chunk)(chunk, encoding, errors, engine, kwargs, meta=meta)
-            for chunk in chunks
+            delayed(read_json_chunk)(
+                chunk,
+                encoding,
+                errors,
+                engine,
+                include_path_column,
+                path,
+                kwargs,
+                meta=meta,
+            )
+            for chunk, path in zip(flat_chunks, flat_paths)
         ]
-        return from_delayed(parts, meta=meta)
     else:
         files = open_files(
             url_path,
@@ -220,21 +258,35 @@ def read_json(
             **storage_options,
         )
         parts = [
-            delayed(read_json_file)(f, orient, lines, engine, kwargs) for f in files
+            delayed(read_json_file)(
+                f, orient, lines, engine, include_path_column, path_converter, kwargs
+            )
+            for f in files
         ]
-        return from_delayed(parts, meta=meta)
+
+    return from_delayed(parts, meta=meta)
 
 
-def read_json_chunk(chunk, encoding, errors, engine, kwargs, meta=None):
+def read_json_chunk(chunk, encoding, errors, engine, colname, path, kwargs, meta=None):
     s = io.StringIO(chunk.decode(encoding, errors))
     s.seek(0)
     df = engine(s, orient="records", lines=True, **kwargs)
+    if colname:
+        df[colname] = path
+
     if meta is not None and df.empty:
         return meta
     else:
         return df
 
 
-def read_json_file(f, orient, lines, engine, kwargs):
-    with f as f:
-        return engine(f, orient=orient, lines=lines, **kwargs)
+def read_json_file(f, orient, lines, engine, colname, path_converter, kwargs):
+    with f as open_file:
+        df = engine(open_file, orient=orient, lines=lines, **kwargs)
+    if colname:
+        if path_converter is not None:
+            df[colname] = path_converter(f.path)
+        else:
+            df[colname] = f.path
+
+    return df

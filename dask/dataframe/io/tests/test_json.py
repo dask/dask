@@ -13,6 +13,39 @@ df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 ddf = dd.from_pandas(df, npartitions=2)
 
 
+def test_read_json_with_path_column():
+    with tmpfile("json") as f:
+        df.to_json(f, orient="records", lines=True)
+        actual = dd.read_json(f, orient="records", lines=True, include_path_column=True)
+        actual_pd = pd.read_json(f, orient="records", lines=True)
+        actual_pd["path"] = str(f)
+        out = actual.compute()
+        assert_eq(out, actual_pd)
+
+
+@pytest.mark.parametrize("blocksize", [None, 50])
+def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
+    fil1 = str(tmpdir.join("fil1.json"))
+    fil2 = str(tmpdir.join("fil2.json"))
+    df = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
+    df2 = df.assign(x=df.x + 0.5)
+    orient = "records"
+    lines = orient == "records"
+    df.to_json(fil1, orient=orient, lines=lines)
+    df2.to_json(fil2, orient=orient, lines=lines)
+    df["path"] = fil1
+    df2["path"] = fil2
+    sol = pd.concat([df, df2])
+    res = dd.read_json(
+        str(tmpdir.join("fil*.json")),
+        orient=orient,
+        lines=lines,
+        include_path_column=True,
+        blocksize=blocksize,
+    ).compute()
+    assert_eq(res, sol, check_index=False)
+
+
 @pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
 def test_read_json_basic(orient):
     with tmpfile("json") as f:
