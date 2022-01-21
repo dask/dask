@@ -126,14 +126,13 @@ class ToParquetFunctionWrapper:
         self.name_function = name_function
         self.kwargs_pass = kwargs_pass
 
-    def __repr__(self):
-        # This repr must begin with "to-parquet"
+        # NOTE: __name__ must begin with "to-parquet"
         # for the name of the resulting `Blockwise`
-        # layer to begin with "to-parquet-"
-        return "to-parquet"
+        # layer to begin with "to-parquet"
+        self.__name__ = "to-parquet"
 
     def __dask_tokenize__(self):
-        return tokenize(
+        return (
             self.engine,
             self.path,
             self.fs,
