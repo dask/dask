@@ -2583,12 +2583,7 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
-        np.ndarray,
-    )
+    assert isinstance(dx.dask[dx.name,], np.ndarray)
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -3542,11 +3537,7 @@ def test_from_array_names():
 
 
 @pytest.mark.parametrize(
-    "array",
-    [
-        da.arange(100, chunks=25),
-        da.ones((10, 10), chunks=25),
-    ],
+    "array", [da.arange(100, chunks=25), da.ones((10, 10), chunks=25)]
 )
 def test_array_picklable(array):
     from pickle import dumps, loads
@@ -3855,17 +3846,29 @@ def test_setitem_extended_API_0d():
     assert_eq(x, dx.compute())
 
 
-def test_setitem_extended_API_1d():
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [Ellipsis, -1],
+        [slice(2, 8, 2), -2],
+        [slice(8, None, 2), -3],
+        [slice(8, None, 2), [-30]],
+        [slice(1, None, -2), -4],
+        [slice(1, None, -2), [-40]],
+        [slice(3, None, 2), -5],
+        [slice(-3, None, -2), -6],
+        [slice(1, None, -2), -4],
+        [slice(3, None, 2), -5],
+        [slice(3, None, 2), [10, 11, 12, 13]],
+        [slice(-4, None, -2), [14, 15, 16, 17]],
+    ],
+)
+def test_setitem_extended_API_1d(index, value):
     # 1-d array
     x = np.arange(10)
-    dx = da.from_array(x.copy(), chunks=(4, 6))
-
-    x[2:8:2] = -1
-    dx[2:8:2] = -1
-    assert_eq(x, dx.compute())
-
-    x[...] = -11
-    dx[...] = -11
+    dx = da.from_array(x, chunks=(4, 6))
+    dx[index] = value
+    x[index] = value
     assert_eq(x, dx.compute())
 
 
@@ -3907,6 +3910,10 @@ def test_setitem_extended_API_1d():
             ),
             [[-100, -101, -102, -103], [-200, -201, -202, -203]],
         ],
+        [slice(5, None, 2), -99],
+        [slice(5, None, 2), range(1, 11)],
+        [slice(1, None, -2), -98],
+        [slice(1, None, -2), range(11, 21)],
     ],
 )
 def test_setitem_extended_API_2d(index, value):

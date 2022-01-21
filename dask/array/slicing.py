@@ -1402,6 +1402,12 @@ def parse_assignment_indices(indices, shape):
     >>> parse_assignment_indices((slice(-1, 2, -1), 3, [1, 2]), (7, 8, 9))
     ([slice(3, 7, 1), 3, array([1, 2])], [4, 2], [0], [0, 2])
 
+    >>> parse_assignment_indices((slice(0, 5), slice(3, None, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 4, 2)], [5, 1], [], [0, 1])
+
+    >>> parse_assignment_indices((slice(0, 5), slice(3, 3, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 3, 2)], [5, 0], [], [0])
+
     """
     if not isinstance(indices, tuple):
         indices = (indices,)
@@ -1435,6 +1441,7 @@ def parse_assignment_indices(indices, shape):
     for i, (index, size) in enumerate(zip(parsed_indices, shape)):
         is_slice = isinstance(index, slice)
         if is_slice:
+            print(index)
             # Index is a slice
             start, stop, step = index.indices(size)
             if step < 0 and stop == -1:
@@ -1469,8 +1476,13 @@ def parse_assignment_indices(indices, shape):
                 reverse.append(i)
 
             start, stop, step = index.indices(size)
+
+            # Note: We now have stop >= start and step >= 0
+
             div, mod = divmod(stop - start, step)
-            if div <= 0:
+            if not div and not mod:
+                # stop equals start => zero-sized slice for this
+                # dimension
                 implied_shape.append(0)
             else:
                 if mod != 0:
@@ -1970,11 +1982,7 @@ def setitem_array(out_name, array, indices, value):
         dim_1d_int_index = None
 
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
-            zip(
-                indices,
-                array_shape,
-                locations,
-            )
+            zip(indices, array_shape, locations)
         ):
 
             integer_index = isinstance(index, int)
@@ -2078,9 +2086,7 @@ def setitem_array(out_name, array, indices, value):
                 index = indices[j]
 
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index,
-                    value_shape[i + value_offset],
-                    *loc0_loc1,
+                    dim_1d_int_index, value_shape[i + value_offset], *loc0_loc1
                 )
             else:
                 # Index is a slice or 1-d boolean array
