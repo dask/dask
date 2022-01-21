@@ -5,7 +5,8 @@ import numpy as np
 from tlz import curry
 
 from ..base import tokenize
-from ..layers import BlockwiseCreateArray
+from ..blockwise import blockwise as core_blockwise
+from ..layers import ArrayChunkShapeDep
 from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import meta_from_array
@@ -64,12 +65,16 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     kwargs = parsed["kwargs"]
     func = partial(func, dtype=dtype, **kwargs)
 
-    graph = BlockwiseCreateArray(
-        name,
+    out_ind = dep_ind = tuple(range(len(shape)))
+    graph = core_blockwise(
         func,
-        shape,
-        chunks,
+        name,
+        out_ind,
+        ArrayChunkShapeDep(chunks),
+        dep_ind,
+        numblocks={},
     )
+
     return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 

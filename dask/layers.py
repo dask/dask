@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import operator
 from collections import defaultdict
 from functools import partial
 from itertools import product
-from typing import List, Optional, Tuple
 
 import tlz as toolz
 from tlz.curried import map
@@ -11,7 +12,14 @@ from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
 from .highlevelgraph import Layer
-from .utils import apply, concrete, insert, stringify, stringify_collection_keys
+from .utils import (
+    apply,
+    cached_cumsum,
+    concrete,
+    insert,
+    stringify,
+    stringify_collection_keys,
+)
 
 #
 ##
@@ -43,19 +51,26 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseDep):
-    """Index-chunk mapping for BlockwiseCreateArray"""
+class ArrayBlockwiseDep(BlockwiseDep):
+    """
+    Blockwise dep for array-likes, which only needs chunking
+    information to compute its data.
+    """
 
-    def __init__(self, chunks: tuple):
+    chunks: tuple[tuple[int, ...], ...]
+    numblocks: tuple[int, ...]
+    produces_tasks: bool = False
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
 
-    def __getitem__(self, idx: tuple):
-        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+    def __getitem__(self, idx: tuple[int, ...]):
+        raise NotImplementedError("Subclasses must implement __getitem__")
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         return {"chunks": self.chunks}
 
@@ -64,43 +79,25 @@ class CreateArrayDeps(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseCreateArray(Blockwise):
-    """
-    Specialized Blockwise Layer for array creation routines.
+class ArrayChunkShapeDep(ArrayBlockwiseDep):
+    """Produce chunk shapes given a chunk index"""
 
-    Enables HighLevelGraph optimizations.
+    def __getitem__(self, idx: tuple[int, ...]):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    Parameters
-    ----------
-    name: string
-        The output name.
-    func : callable
-        Function to apply to populate individual blocks. This function should take
-        an iterable containing the dimensions of the given block.
-    shape: iterable
-        Iterable containing the overall shape of the array.
-    chunks: iterable
-        Iterable containing the chunk sizes along each dimension of array.
-    """
 
-    def __init__(
-        self,
-        name,
-        func,
-        shape,
-        chunks,
-    ):
-        # Define "blockwise" graph
-        dsk = {name: (func, blockwise_token(0))}
+class ArraySliceDep(ArrayBlockwiseDep):
+    """Produce slice(s) into the full-sized array given a chunk index"""
 
-        out_ind = tuple(range(len(shape)))
-        super().__init__(
-            output=name,
-            output_indices=out_ind,
-            dsk=dsk,
-            indices=[(CreateArrayDeps(chunks), out_ind)],
-            numblocks={},
-        )
+    starts: tuple[tuple[int, ...], ...]
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
+        super().__init__(chunks)
+        self.starts = tuple(cached_cumsum(c, initial_zero=True) for c in chunks)
+
+    def __getitem__(self, idx: tuple):
+        loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
+        return tuple(slice(*s, None) for s in loc)
 
 
 class ArrayOverlapLayer(Layer):
