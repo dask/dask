@@ -22,14 +22,12 @@ from dask.utils import (
     funcname,
     getargspec,
     has_keyword,
-    ignoring,
     is_arraylike,
     itemgetter,
     iter_chunks,
     memory_repr,
     methodcaller,
     ndeepmap,
-    noop_context,
     parse_bytes,
     parse_timedelta,
     partial_by_order,
@@ -752,18 +750,6 @@ def test_deprecated_message():
 
     assert len(record) == 1
     assert str(record[0].message) == "woohoo"
-
-
-def test_ignoring_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.suppress"):
-        with ignoring(ValueError):
-            pass
-
-
-def test_noop_context_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
-        with noop_context():
-            pass
 
 
 def test_typename():
