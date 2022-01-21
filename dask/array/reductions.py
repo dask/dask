@@ -294,7 +294,7 @@ def partial_reduce(
     dsk = {}
     for k, p in zip(keys, product(*parts)):
         decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
-        dummy = dict(i for i in enumerate(p) if i[0] not in decided)
+        dummy = dict(i for i in enumerate(p) if i[0] in split_every)
         g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])

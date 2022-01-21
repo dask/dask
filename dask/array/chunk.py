@@ -244,6 +244,7 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     and return the index only.
     """
     assert keepdims is True
+    a_plus_idx = a_plus_idx if len(a_plus_idx) > 1 else a_plus_idx[0]
     a, idx = argtopk(a_plus_idx, k, axis, keepdims)
     axis = axis[0]
 
