@@ -1,6 +1,5 @@
 """ Dataframe optimizations """
 import operator
-import warnings
 
 import numpy as np
 
@@ -106,14 +105,6 @@ def optimize_dataframe_getitem(dsk, keys):
         if column_projection:
             old = layers[k]
             new = old.project_columns(columns)
-            if isinstance(new, (list, tuple)):
-                # Support project_columns tuple output, but raise FutureWarning
-                warnings.warn(
-                    f"{type(new)} return type for project_columns is deprecated. "
-                    f"This method should now return the projected Layer only.",
-                    FutureWarning,
-                )
-                new = new[0]
             if new.name != old.name:
                 columns = list(columns)
                 assert len(update_blocks)

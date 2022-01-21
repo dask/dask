@@ -342,13 +342,7 @@ def fractional_slice(task, axes):
 #
 
 
-class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
-
-    pass
-
-
-class SimpleShuffleLayer(DataFrameLayer):
+class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -839,7 +833,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(DataFrameLayer):
+class BroadcastJoinLayer(Layer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -1134,7 +1128,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
+class DataFrameIOLayer(Blockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
@@ -1224,6 +1218,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 list(columns),
                 self.inputs,
                 io_func,
+                label=self.label,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
