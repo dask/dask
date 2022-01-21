@@ -1305,13 +1305,20 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, scheduler="sync")
+            paths = dask.compute(*r, scheduler="sync")
+            # this is a tuple rather than a list since it's the output of dask.compute
+            assert paths == tuple(
+                os.path.join(dn, f"{n}.part") for n in range(npartitions)
+            )
             result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
             assert_eq(result, df)
 
         with tmpdir() as dn:
             fn = os.path.join(dn, "data_*.csv")
-            a.to_csv(fn, index=False)
+            paths = a.to_csv(fn, index=False)
+            assert paths == [
+                os.path.join(dn, f"data_{n}.csv") for n in range(npartitions)
+            ]
             result = dd.read_csv(fn).compute().reset_index(drop=True)
             assert_eq(result, df)
 

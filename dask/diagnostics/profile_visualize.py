@@ -9,6 +9,14 @@ from tlz import accumulate, groupby, pluck, unique
 from ..core import istask
 from ..utils import apply, funcname, import_required
 
+
+def BOKEH_VERSION():
+    import bokeh
+    from packaging.version import parse as parse_version
+
+    return parse_version(bokeh.__version__)
+
+
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 
 
@@ -200,11 +208,17 @@ def visualize(
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
@@ -354,8 +368,12 @@ def plot_resources(results, palette="Viridis", **kwargs):
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
 
     # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
     if "label_size" in kwargs:
@@ -448,8 +466,12 @@ def plot_cache(
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
     defaults.update(**kwargs)
 
     if results:

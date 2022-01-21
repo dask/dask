@@ -235,6 +235,11 @@ def blockwise(
     This is like the ``make_blockwise_graph`` function, but rather than construct a
     dict, it returns a symbolic Blockwise object.
 
+    ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
+    allowing for collections it can accept BlockwiseDep instances, which allows for lazy
+    evaluation of arguments to ``func`` which might be different for different
+    chunks/paritions.
+
     See Also
     --------
     make_blockwise_graph
