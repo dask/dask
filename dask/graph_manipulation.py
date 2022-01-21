@@ -9,6 +9,7 @@ from typing import (
     Callable,
     Dict,
     Hashable,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -32,12 +33,7 @@ from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
-try:
-    from typing import Literal  # Python >= 3.8
-
-    SplitEvery = Union[Number, Literal[False], None]
-except ImportError:
-    SplitEvery = Union[Number, bool, None]  # type: ignore
+SplitEvery = Union[Number, Literal[False], None]
 
 
 def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:

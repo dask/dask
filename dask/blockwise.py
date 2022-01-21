@@ -1,6 +1,7 @@
 import itertools
 import os
 from itertools import product
+from math import prod
 from typing import (
     Any,
     Hashable,
@@ -17,7 +18,6 @@ from typing import (
 import tlz as toolz
 
 from .base import clone_key, get_name_from_key, tokenize
-from .compatibility import prod
 from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
