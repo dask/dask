@@ -39,7 +39,7 @@ class ProgressBar(Callback):
         Update resolution in seconds, default is 0.1 seconds
     out : file object, optional
         File object to which the progress bar will be written. Default is sys.stdout.
-        
+
     Examples
     --------
 
