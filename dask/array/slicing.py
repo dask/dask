@@ -1441,7 +1441,6 @@ def parse_assignment_indices(indices, shape):
     for i, (index, size) in enumerate(zip(parsed_indices, shape)):
         is_slice = isinstance(index, slice)
         if is_slice:
-            print(index)
             # Index is a slice
             start, stop, step = index.indices(size)
             if step < 0 and stop == -1:
