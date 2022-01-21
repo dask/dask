@@ -14,11 +14,3 @@ using Dask. If you have an idea of a how-to that we should add, please
 
    *
    Use GPUs <../gpu.rst>
-   Deploy Dask via the CLI <deploy-dask/cli>
-   Deploy Dask via SSH <deploy-dask/ssh>
-   Deploy Dask on High Performance Computers <deploy-dask/hpc>
-   Deploy Dask on Kubernetes <deploy-dask/kubernetes>
-   Deploy Dask on YARN clusters  <https://yarn.dask.org/en/latest/>
-   Deploy Dask via the Python API (advanced) <deploy-dask/python-advanced>
-   Deploy Dask on Docker <deploy-dask/docker>
-   Deploy Dask on the Cloud (Amazon, Google, Microsoft Azure...) <deploy-dask/cloud>

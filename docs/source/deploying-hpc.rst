@@ -34,15 +34,9 @@ production workloads.
 Dask-jobqueue and Dask-drmaa
 ----------------------------
 
-The following projects provide easy high-level access to Dask using resource
-managers that are commonly deployed on HPC systems:
-
-1.  `dask-jobqueue <https://jobqueue.dask.org>`_ for use with PBS,
-    SLURM, LSF, SGE and other resource managers
-2.  `dask-drmaa <https://github.com/dask/dask-drmaa>`_ for use with any DRMAA
-    compliant resource manager
-
-They provide interfaces that look like the following:
+`dask-jobqueue <https://jobqueue.dask.org>`_ provides cluster managers for PBS,
+SLURM, LSF, SGE and other resource managers. You can launch a Dask cluster on
+these systems like this.
 
 .. code-block:: python
 
@@ -69,11 +63,8 @@ returning to this documentation for fine-tuning if necessary.
 Using MPI
 ---------
 
-.. note:: This section may not be necessary if you use a tool like
-   dask-jobqueue.
-
-You can launch a Dask network using ``mpirun`` or ``mpiexec`` and the
-``dask-mpi`` command line executable.
+You can launch a Dask cluster using ``mpirun`` or ``mpiexec`` and the
+`dask-mpi <http://mpi.dask.org/en/latest/>`_ command line tool.
 
 .. code-block:: bash
 

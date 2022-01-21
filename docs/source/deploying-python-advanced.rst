@@ -8,7 +8,7 @@ In some rare cases, experts may want to create ``Scheduler``, ``Worker``, and
 tools to automatically deploy Dask in custom settings.
 
 It is more common to create a :doc:`Local cluster with Client() on a single
-machine <single-distributed>` or use the :doc:`Command Line Interface (CLI) <cli>`.
+machine <deploying-python>` or use the :doc:`Command Line Interface (CLI) <deploying-cli>`.
 New readers are recommended to start there.
 
 If you do want to start Scheduler and Worker objects yourself you should be a

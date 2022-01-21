@@ -153,6 +153,7 @@ messy situations in everyday problems.
    futures.rst
    scheduling.rst
    graphs.rst
+   deploying.rst
    internals.rst
 
 .. toctree::

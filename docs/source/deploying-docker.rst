@@ -4,7 +4,7 @@ Docker Images
 Example docker images are maintained at https://github.com/dask/dask-docker
 and https://hub.docker.com/r/daskdev/ .
 
-Each image installs the full Dask conda package (including the distributed
+Each image installs the full Dask conda environment (including the distributed
 scheduler), Numpy, and Pandas on top of a Miniconda installation on top of
 a Debian image.
 

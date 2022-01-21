@@ -1,17 +1,5 @@
-:orphan:
-
-Single Machine: dask.distributed
-================================
-
-The ``dask.distributed`` scheduler works well on a single machine.  It is sometimes
-preferred over the default scheduler for the following reasons:
-
-1.  It provides access to asynchronous API, notably :doc:`Futures <../../futures>`
-2.  It provides a diagnostic dashboard that can provide valuable insight on
-    performance and progress
-3.  It handles data locality with more sophistication, and so can be more
-    efficient than the multiprocessing scheduler on workloads that require
-    multiple processes
+Python API
+==========
 
 You can create a ``dask.distributed`` scheduler by importing and creating a
 ``Client`` with no arguments.  This overrides whatever default was previously
@@ -63,10 +51,46 @@ and then passing that to your client.
    cluster = LocalCluster()
    client = Client(cluster)
 
-This is equivalent, but somewhat more explicit.  You may want to look at the
+This is equivalent, but somewhat more explicit.
+
+You may want to look at the
 keyword arguments available on ``LocalCluster`` to understand the options available
 to you on handling the mixture of threads and processes, like specifying explicit
 ports, and so on.
+
+Cluster manager features
+------------------------
+
+Instantiating a cluster manager class like ``LocalCluster`` and then passing it to the
+``Client`` is a common pattern. Cluster managers also provide useful utilities to help
+you understand what is going on.
+
+For example you can retreive the Dashboard URL.
+
+.. code-block:: python
+
+   >>> cluster.dashboard_link
+   'http://127.0.0.1:8787/status'
+
+You can retreive logs from cluster components.
+
+.. code-block:: python
+
+   >>> cluster.get_logs()
+   {'Cluster': '',
+   'Scheduler': "distributed.scheduler - INFO - Clear task state\ndistributed.scheduler - INFO -   S...
+
+If you are using a cluster manager that supports scaling you can modify the number of workers manually
+or automatically based on workload.
+
+.. code-block:: python
+
+   >>> cluster.scale(10)  # Sets the number of workers to 10
+
+   >>> cluster.adapt(minimum=1, maximum=10)  # Allows the cluster to auto scale to 10 when tasks are computed
+
+Reference
+---------
 
 .. currentmodule:: distributed.deploy.local
 
