@@ -22,7 +22,7 @@ from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import natural_sort_key
 from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _meta_from_dtypes, _open_input_files
+from ..utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 
 #########################
 # Fastparquet interface #
@@ -1076,11 +1076,20 @@ class FastParquetEngine(Engine):
         # Define file-opening options
         precache_options, open_file_options = _process_open_file_options(
             open_file_options,
-            metadata=pf,
-            columns=list(set(columns).intersection(pf.columns)),
-            row_groups=[rgs for rgs in fn_rg_map.values()],
-            default_engine="fastparquet",
-            default_cache="readahead",
+            **(
+                {
+                    "allow_precache": False,
+                    "default_cache": "readahead",
+                }
+                if _is_local_fs(fs)
+                else {
+                    "metadata": pf,
+                    "columns": list(set(columns).intersection(pf.columns)),
+                    "row_groups": [rgs for rgs in fn_rg_map.values()],
+                    "default_engine": "fastparquet",
+                    "default_cache": "readahead",
+                }
+            ),
         )
 
         with ExitStack() as stack:

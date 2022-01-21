@@ -1,11 +1,11 @@
 import re
 
 import pandas as pd
-from fsspec.implementations.local import LocalFileSystem
 
 from .... import config
 from ....core import flatten
 from ....utils import natural_sort_key
+from ..utils import _is_local_fs
 
 
 class Engine:
@@ -683,7 +683,7 @@ def _set_metadata_task_size(metadata_task_size, fs):
         # If a default value is not specified in the config file,
         # otherwise we use "0"
         config_str = "dataframe.parquet.metadata-task-size-" + (
-            "local" if isinstance(fs, LocalFileSystem) else "remote"
+            "local" if _is_local_fs(fs) else "remote"
         )
         return config.get(config_str, 0)
 
@@ -697,11 +697,16 @@ def _process_open_file_options(
     row_groups=None,
     default_engine=None,
     default_cache="readahead",
+    allow_precache=True,
 ):
     # Process `open_file_options`.
     # Set default values and extract `precache_options`
     open_file_options = (open_file_options or {}).copy()
     precache_options = open_file_options.pop("precache_options", {}).copy()
+    if not allow_precache:
+        # Precaching not allowed
+        # (probably because the file system is local)
+        precache_options = {}
     if "open_file_func" not in open_file_options:
         if precache_options.get("method", None) == "parquet":
             open_file_options["cache_type"] = open_file_options.get(

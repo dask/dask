@@ -3,7 +3,6 @@ import warnings
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
-from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
@@ -14,6 +13,7 @@ from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
+from ..utils import _is_local_fs
 from .utils import _sort_and_analyze_paths
 
 try:
@@ -615,7 +615,7 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        if isinstance(fs, LocalFileSystem):
+        if _is_local_fs(fs):
             working_dir = fs.expand_path(".")[0]
             if path.rstrip("/") == working_dir.rstrip("/"):
                 raise ValueError(

@@ -12,6 +12,11 @@ except ImportError:
     fsspec_parquet = None
 
 
+def _is_local_fs(fs):
+    """Check if an fsspec file-system is local"""
+    return fs and isinstance(fs, LocalFileSystem)
+
+
 def _get_pyarrow_dtypes(schema, categories):
     """Convert a pyarrow.Schema object to pandas dtype dict"""
 
@@ -164,7 +169,7 @@ def _open_input_files(
     if (
         precache == "parquet"
         and fs is not None
-        and not isinstance(fs, LocalFileSystem)
+        and not _is_local_fs(fs)
         and parse_version(fsspec.__version__) > parse_version("2021.11.0")
     ):
         kwargs.update(precache_options)

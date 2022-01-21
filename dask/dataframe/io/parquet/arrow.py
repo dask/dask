@@ -16,7 +16,12 @@ from ....core import flatten
 from ....delayed import Delayed
 from ....utils import getargspec, natural_sort_key
 from ...utils import clear_known_categories
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, _open_input_files
+from ..utils import (
+    _get_pyarrow_dtypes,
+    _is_local_fs,
+    _meta_from_dtypes,
+    _open_input_files,
+)
 from .core import create_metadata_file
 from .utils import (
     Engine,
@@ -214,10 +219,19 @@ def _read_table_from_path(
     read_kwargs = kwargs.get("read", {}).copy()
     precache_options, open_file_options = _process_open_file_options(
         read_kwargs.pop("open_file_options", {}),
-        columns=columns,
-        row_groups=row_groups if row_groups == [None] else [row_groups],
-        default_engine="pyarrow",
-        default_cache="none",
+        **(
+            {
+                "allow_precache": False,
+                "default_cache": "none",
+            }
+            if _is_local_fs(fs)
+            else {
+                "columns": columns,
+                "row_groups": row_groups if row_groups == [None] else [row_groups],
+                "default_engine": "pyarrow",
+                "default_cache": "none",
+            }
+        ),
     )
 
     if partition_keys:
