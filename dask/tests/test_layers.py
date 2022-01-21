@@ -78,6 +78,15 @@ def _dataframe_shuffle(tmpdir):
     return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
 
 
+def _dataframe_tree_reduction(tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Perform a computation using an HLG-based tree reduction
+    df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+    return dd.from_pandas(df, npartitions=2).mean()
+
+
 def _dataframe_broadcast_join(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -187,6 +196,7 @@ def _read_csv(tmpdir):
     "op,lib",
     [
         (_dataframe_shuffle, "pandas."),
+        (_dataframe_tree_reduction, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
         (_pq_pyarrow, "pandas."),
         (_pq_fastparquet, "pandas."),
