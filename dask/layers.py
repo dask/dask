@@ -1234,7 +1234,7 @@ class DataFrameIOLayer(Blockwise):
         )
 
 
-class DataFrameTreeReduction(DataFrameLayer):
+class DataFrameTreeReduction(Layer):
     """DataFrame Tree-Reduction Layer
 
     Parameters
