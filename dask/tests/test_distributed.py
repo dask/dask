@@ -181,9 +181,15 @@ async def test_serializable_groupby_agg(c, s, a, b):
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    result = ddf.groupby("y").agg("count")
+    result = ddf.groupby("y").agg("count", split_out=2)
 
-    await c.compute(result)
+    # Check Culling and Compute
+    agg0 = await c.compute(result.partitions[0])
+    agg1 = await c.compute(result.partitions[1])
+    dd.utils.assert_eq(
+        pd.concat([agg0, agg1]),
+        pd.DataFrame({"x": [2, 2], "y": [0, 1]}).set_index("y"),
+    )
 
 
 def test_futures_in_graph(c):
