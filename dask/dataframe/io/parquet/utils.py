@@ -1,11 +1,11 @@
 import re
 
 import pandas as pd
-from fsspec.implementations.local import LocalFileSystem
 
 from .... import config
 from ....core import flatten
 from ....utils import natural_sort_key
+from ..utils import _is_local_fs
 
 
 class Engine:
@@ -683,8 +683,63 @@ def _set_metadata_task_size(metadata_task_size, fs):
         # If a default value is not specified in the config file,
         # otherwise we use "0"
         config_str = "dataframe.parquet.metadata-task-size-" + (
-            "local" if isinstance(fs, LocalFileSystem) else "remote"
+            "local" if _is_local_fs(fs) else "remote"
         )
         return config.get(config_str, 0)
 
     return metadata_task_size
+
+
+def _process_open_file_options(
+    open_file_options,
+    metadata=None,
+    columns=None,
+    row_groups=None,
+    default_engine=None,
+    default_cache="readahead",
+    allow_precache=True,
+):
+    # Process `open_file_options`.
+    # Set default values and extract `precache_options`
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if not allow_precache:
+        # Precaching not allowed
+        # (probably because the file system is local)
+        precache_options = {}
+    if "open_file_func" not in open_file_options:
+        if precache_options.get("method", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
+            precache_options.update(
+                {
+                    "metadata": metadata,
+                    "columns": columns,
+                    "row_groups": row_groups,
+                    "engine": precache_options.get("engine", default_engine),
+                }
+            )
+        else:
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", default_cache
+            )
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
+    return precache_options, open_file_options
+
+
+def _split_user_options(**kwargs):
+    # Check user-defined options.
+    # Split into "file" and "dataset"-specific kwargs
+    user_kwargs = kwargs.copy()
+    dataset_options = {
+        **user_kwargs.pop("file", {}).copy(),
+        **user_kwargs.pop("dataset", {}).copy(),
+    }
+    read_options = user_kwargs.pop("read", {}).copy()
+    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    return (
+        dataset_options,
+        read_options,
+        user_kwargs,
+    )
