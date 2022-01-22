@@ -328,51 +328,43 @@ def read_parquet(
             FutureWarning,
         )
 
+    # Store initial function arguments
+    input_kwargs = {
+        "columns": columns,
+        "filters": filters,
+        "categories": categories,
+        "index": index,
+        "storage_options": storage_options,
+        "engine": engine,
+        "gather_statistics": gather_statistics,
+        "ignore_metadata_file": ignore_metadata_file,
+        "metadata_task_size": metadata_task_size,
+        "split_row_groups": split_row_groups,
+        "chunksize=": chunksize,
+        "aggregate_files": aggregate_files,
+        **kwargs,
+    }
+
     if isinstance(columns, str):
-        df = read_parquet(
-            path,
-            columns=[columns],
-            filters=filters,
-            categories=categories,
-            index=index,
-            storage_options=storage_options,
-            engine=engine,
-            gather_statistics=gather_statistics,
-            ignore_metadata_file=ignore_metadata_file,
-            split_row_groups=split_row_groups,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
-            metadata_task_size=metadata_task_size,
-        )
+        input_kwargs["columns"] = [columns]
+        df = read_parquet(path, **input_kwargs)
         return df[columns]
 
     if columns is not None:
         columns = list(columns)
-
-    label = "read-parquet-"
-    output_name = label + tokenize(
-        path,
-        columns,
-        filters,
-        categories,
-        index,
-        storage_options,
-        engine,
-        gather_statistics,
-        ignore_metadata_file,
-        metadata_task_size,
-        split_row_groups,
-        chunksize,
-        aggregate_files,
-    )
 
     if isinstance(engine, str):
         engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
 
+    # Update input_kwargs and tokenize inputs
+    label = "read-parquet-"
+    input_kwargs.update({"columns": columns, "engine": engine})
+    output_name = label + tokenize(path, **input_kwargs)
+
+    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -467,6 +459,11 @@ def read_parquet(
                 common_kwargs,
             ),
             label=label,
+            creation_info={
+                "func": read_parquet,
+                "args": (path,),
+                "kwargs": input_kwargs,
+            },
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 

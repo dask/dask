@@ -40,12 +40,13 @@ from ..base import (
     persist,
     tokenize,
 )
+from ..blockwise import blockwise as core_blockwise
 from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph
-from ..layers import reshapelist
+from ..highlevelgraph import HighLevelGraph, MaterializedLayer
+from ..layers import ArraySliceDep, reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -232,46 +233,88 @@ def slices_from_chunks(chunks):
     return list(product(*slices))
 
 
-def getem(
-    arr,
+def graph_from_arraylike(
+    arr,  # Any array-like which supports slicing
     chunks,
+    shape,
+    name,
     getitem=getter,
-    shape=None,
-    out_name=None,
     lock=False,
     asarray=True,
     dtype=None,
-):
-    """Dask getting various chunks from an array-like
-
-    >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
-
-    >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+    inline_array=False,
+) -> HighLevelGraph:
     """
-    out_name = out_name or arr
+    HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
+
+    If ``inline_array`` is True, this make a Blockwise layer of slicing tasks where the
+    array-like is embedded into every task.,
+
+    If ``inline_array`` is False, this inserts the array-like as a standalone value in
+    a MaterializedLayer, then generates a Blockwise layer of slicing tasks that refer
+    to it.
+
+    >>> dict(graph_from_arraylike(arr, chunks=(2, 3), shape=(4, 6), name="X", inline_array=True))  # doctest: +SKIP
+    {(arr, 0, 0): (getter, arr, (slice(0, 2), slice(0, 3))),
+     (arr, 1, 0): (getter, arr, (slice(2, 4), slice(0, 3))),
+     (arr, 1, 1): (getter, arr, (slice(2, 4), slice(3, 6))),
+     (arr, 0, 1): (getter, arr, (slice(0, 2), slice(3, 6)))}
+
+    >>> dict(  # doctest: +SKIP
+            graph_from_arraylike(arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False)
+        )
+    {"original-X": arr,
+     ('X', 0, 0): (getter, 'original-X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'original-X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'original-X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'original-X', (slice(0, 2), slice(3, 6)))}
+    """
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *(range(len(bds)) for bds in chunks))
-    slices = slices_from_chunks(chunks)
+    out_ind = tuple(range(len(shape)))
 
     if (
         has_keyword(getitem, "asarray")
         and has_keyword(getitem, "lock")
         and (not asarray or lock)
     ):
-        values = [(getitem, arr, x, asarray, lock) for x in slices]
+        getter = partial(getitem, asarray=asarray, lock=lock)
     else:
         # Common case, drop extra parameters
-        values = [(getitem, arr, x) for x in slices]
+        getter = getitem
 
-    return dict(zip(keys, values))
+    if inline_array:
+        layer = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            arr,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+        return HighLevelGraph.from_collections(name, layer)
+    else:
+        original_name = "original-" + name
+
+        layers = {}
+        layers[original_name] = MaterializedLayer({original_name: arr})
+        layers[name] = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            original_name,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+
+        deps = {
+            original_name: set(),
+            name: {original_name},
+        }
+        return HighLevelGraph(layers, deps)
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -3233,13 +3276,10 @@ def from_array(
     )
 
     if name in (None, True):
-        token = tokenize(x, chunks)
-        original_name = "array-original-" + token
+        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or "array-" + token
     elif name is False:
-        original_name = name = "array-" + str(uuid.uuid1())
-    else:
-        original_name = name
+        name = "array-" + str(uuid.uuid1())
 
     if lock is True:
         lock = SerializableLock()
@@ -3266,23 +3306,17 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        if inline_array:
-            get_from = x
-        else:
-            get_from = original_name
-
-        dsk = getem(
-            get_from,
+        dsk = graph_from_arraylike(
+            x,
             chunks,
+            x.shape,
+            name,
             getitem=getitem,
-            shape=x.shape,
-            out_name=name,
             lock=lock,
             asarray=asarray,
             dtype=x.dtype,
+            inline_array=inline_array,
         )
-        if not inline_array:
-            dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
@@ -4278,7 +4312,7 @@ def asarray(
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, dtype=None, order=None, *, like=None):
+def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4305,6 +4339,9 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
         Requires NumPy 1.20.0 or higher.
+    inline_array:
+        Whether to inline the array in the resulting dask graph. For more information,
+        see the documentation for ``dask.array.from_array()``.
 
     Returns
     -------
@@ -4343,7 +4380,13 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
+    return from_array(
+        a,
+        chunks=a.shape,
+        getitem=getter_inline,
+        asarray=False,
+        inline_array=inline_array,
+    )
 
 
 def is_scalar_for_elemwise(arg):
