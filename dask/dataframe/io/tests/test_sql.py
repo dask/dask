@@ -552,3 +552,11 @@ def test_to_sql_kwargs():
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
         ):
             ddf.to_sql("test", uri, unknown=None)
+
+
+def test_to_sql_engine_kwargs(capsys):
+    ddf = dd.from_pandas(df, 1)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": True})
+        out, err = capsys.readouterr()
+        assert "CREATE" in out
