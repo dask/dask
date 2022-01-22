@@ -1,8 +1,11 @@
+from __future__ import annotations
+
+import functools
+import math
 import operator
 from collections import defaultdict
-from functools import partial
 from itertools import product
-from typing import List, Optional, Tuple
+from typing import Any
 
 import tlz as toolz
 from tlz.curried import map
@@ -11,7 +14,14 @@ from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
 from .highlevelgraph import Layer
-from .utils import apply, concrete, insert, stringify, stringify_collection_keys
+from .utils import (
+    apply,
+    cached_cumsum,
+    concrete,
+    insert,
+    stringify,
+    stringify_collection_keys,
+)
 
 #
 ##
@@ -43,19 +53,26 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseDep):
-    """Index-chunk mapping for BlockwiseCreateArray"""
+class ArrayBlockwiseDep(BlockwiseDep):
+    """
+    Blockwise dep for array-likes, which only needs chunking
+    information to compute its data.
+    """
 
-    def __init__(self, chunks: tuple):
+    chunks: tuple[tuple[int, ...], ...]
+    numblocks: tuple[int, ...]
+    produces_tasks: bool = False
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
         self.produces_tasks = False
 
-    def __getitem__(self, idx: tuple):
-        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+    def __getitem__(self, idx: tuple[int, ...]):
+        raise NotImplementedError("Subclasses must implement __getitem__")
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         return {"chunks": self.chunks}
 
@@ -64,43 +81,25 @@ class CreateArrayDeps(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseCreateArray(Blockwise):
-    """
-    Specialized Blockwise Layer for array creation routines.
+class ArrayChunkShapeDep(ArrayBlockwiseDep):
+    """Produce chunk shapes given a chunk index"""
 
-    Enables HighLevelGraph optimizations.
+    def __getitem__(self, idx: tuple[int, ...]):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    Parameters
-    ----------
-    name: string
-        The output name.
-    func : callable
-        Function to apply to populate individual blocks. This function should take
-        an iterable containing the dimensions of the given block.
-    shape: iterable
-        Iterable containing the overall shape of the array.
-    chunks: iterable
-        Iterable containing the chunk sizes along each dimension of array.
-    """
 
-    def __init__(
-        self,
-        name,
-        func,
-        shape,
-        chunks,
-    ):
-        # Define "blockwise" graph
-        dsk = {name: (func, blockwise_token(0))}
+class ArraySliceDep(ArrayBlockwiseDep):
+    """Produce slice(s) into the full-sized array given a chunk index"""
 
-        out_ind = tuple(range(len(shape)))
-        super().__init__(
-            output=name,
-            output_indices=out_ind,
-            dsk=dsk,
-            indices=[(CreateArrayDeps(chunks), out_ind)],
-            numblocks={},
-        )
+    starts: tuple[tuple[int, ...], ...]
+
+    def __init__(self, chunks: tuple[tuple[int, ...], ...]):
+        super().__init__(chunks)
+        self.starts = tuple(cached_cumsum(c, initial_zero=True) for c in chunks)
+
+    def __getitem__(self, idx: tuple):
+        loc = tuple((start[i], start[i + 1]) for i, start in zip(idx, self.starts))
+        return tuple(slice(*s, None) for s in loc)
 
 
 class ArrayOverlapLayer(Layer):
@@ -200,7 +199,9 @@ class ArrayOverlapLayer(Layer):
             from dask.array.core import concatenate3
 
         dims = list(map(len, chunks))
-        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
+        expand_key2 = functools.partial(
+            _expand_keys_around_center, dims=dims, axes=axes
+        )
 
         # Make keys for each of the surrounding sub-arrays
         interior_keys = toolz.pipe(
@@ -342,26 +343,7 @@ def fractional_slice(task, axes):
 #
 
 
-class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
-
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
-        """
-
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
-
-
-class SimpleShuffleLayer(DataFrameLayer):
+class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -852,7 +834,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(DataFrameLayer):
+class BroadcastJoinLayer(Layer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -1147,7 +1129,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
+class DataFrameIOLayer(Blockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
@@ -1173,6 +1155,11 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
         future. Default is False.
+    creation_info: dict (optional)
+        Dictionary containing the callable function ('func'),
+        positional arguments ('args'), and key-word arguments
+        ('kwargs') used to produce the dask collection with
+        this underlying ``DataFrameIOLayer``.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -1185,6 +1172,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         label=None,
         produces_tasks=False,
+        creation_info=None,
         annotations=None,
     ):
         self.name = name
@@ -1194,6 +1182,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.label = label
         self.produces_tasks = produces_tasks
         self.annotations = annotations
+        self.creation_info = creation_info
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
@@ -1213,7 +1202,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this IO layer.
+        Given a list of required output columns, this method
+        returns the projected layer.
+        """
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1227,15 +1219,325 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 list(columns),
                 self.inputs,
                 io_func,
+                label=self.label,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            return layer, None
+            return layer
         else:
             # Default behavior
-            return self, None
+            return self
 
     def __repr__(self):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.inputs), self.columns
         )
+
+
+class DataFrameTreeReduction(DataFrameLayer):
+    """DataFrame Tree-Reduction Layer
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    name_input : str
+        Name of the input layer that is being reduced.
+    npartitions_input : str
+        Number of partitions in the input layer.
+    concat_func : callable
+        Function used by each tree node to reduce a list of inputs
+        into a single output value. This function must accept only
+        a list as its first positional argument.
+    tree_node_func : callable
+        Function used on the output of ``concat_func`` in each tree
+        node. This function must accept the output of ``concat_func``
+        as its first positional argument.
+    finalize_func : callable, optional
+        Function used in place of ``tree_node_func`` on the final tree
+        node(s) to produce the final output for each split. By default,
+        ``tree_node_func`` will be used.
+    split_every : int, optional
+        This argument specifies the maximum number of input nodes
+        to be handled by any one task in the tree. Defaults to 32.
+    split_out : int, optional
+        This argument specifies the number of output nodes in the
+        reduction tree. If ``split_out`` is set to an integer >=1, the
+        input tasks must contain data that can be indexed by a ``getitem``
+        operation with a key in the range ``[0, split_out)``.
+    output_partitions : list, optional
+        List of required output partitions. This parameter is used
+        internally by Dask for high-level culling.
+    tree_node_name : str, optional
+        Name to use for intermediate tree-node tasks.
+    """
+
+    name: str
+    name_input: str
+    npartitions_input: str
+    concat_func: callable
+    tree_node_func: callable
+    finalize_func: callable | None
+    split_every: int
+    split_out: int
+    output_partitions: list[int]
+    tree_node_name: str
+    widths: list[int]
+    height: int
+
+    def __init__(
+        self,
+        name: str,
+        name_input: str,
+        npartitions_input: str,
+        concat_func: callable,
+        tree_node_func: callable,
+        finalize_func: callable | None = None,
+        split_every: int = 32,
+        split_out: int | None = None,
+        output_partitions: list[int] | None = None,
+        tree_node_name: str | None = None,
+        annotations: dict[str, Any] | None = None,
+    ):
+        super().__init__(annotations=annotations)
+        self.name = name
+        self.name_input = name_input
+        self.npartitions_input = npartitions_input
+        self.concat_func = concat_func
+        self.tree_node_func = tree_node_func
+        self.finalize_func = finalize_func
+        self.split_every = split_every
+        self.split_out = split_out
+        self.output_partitions = (
+            list(range(self.split_out or 1))
+            if output_partitions is None
+            else output_partitions
+        )
+        self.tree_node_name = tree_node_name or "tree_node-" + self.name
+
+        # Calculate tree widths and height
+        # (Used to get output keys without materializing)
+        parts = self.npartitions_input
+        self.widths = [parts]
+        while parts > 1:
+            parts = math.ceil(parts / self.split_every)
+            self.widths.append(parts)
+        self.height = len(self.widths)
+
+    def _make_key(self, *name_parts, split=0):
+        # Helper function construct a key
+        # with a "split" element when
+        # bool(split_out) is True
+        return name_parts + (split,) if self.split_out else name_parts
+
+    def _define_task(self, input_keys, final_task=False):
+        # Define nested concatenation and func task
+        if final_task and self.finalize_func:
+            outer_func = self.finalize_func
+        else:
+            outer_func = self.tree_node_func
+        return (toolz.pipe, input_keys, self.concat_func, outer_func)
+
+    def _construct_graph(self):
+        """Construct graph for a tree reduction."""
+
+        dsk = {}
+        if not self.output_partitions:
+            return dsk
+
+        # Deal with `bool(split_out) == True`.
+        # These cases require that the input tasks
+        # return a type that enables getitem operation
+        # with indices: [0, split_out)
+        # Therefore, we must add "getitem" tasks to
+        # select the appropriate element for each split
+        name_input_use = self.name_input
+        if self.split_out:
+            name_input_use += "-split"
+            for s in self.output_partitions:
+                for p in range(self.npartitions_input):
+                    dsk[self._make_key(name_input_use, p, split=s)] = (
+                        operator.getitem,
+                        (self.name_input, p),
+                        s,
+                    )
+
+        if self.height >= 2:
+            # Loop over output splits
+            for s in self.output_partitions:
+                # Loop over reduction levels
+                for depth in range(1, self.height):
+                    # Loop over reduction groups
+                    for group in range(self.widths[depth]):
+                        # Calculate inputs for the current group
+                        p_max = self.widths[depth - 1]
+                        lstart = self.split_every * group
+                        lstop = min(lstart + self.split_every, p_max)
+                        if depth == 1:
+                            # Input nodes are from input layer
+                            input_keys = [
+                                self._make_key(name_input_use, p, split=s)
+                                for p in range(lstart, lstop)
+                            ]
+                        else:
+                            # Input nodes are tree-reduction nodes
+                            input_keys = [
+                                self._make_key(
+                                    self.tree_node_name, p, depth - 1, split=s
+                                )
+                                for p in range(lstart, lstop)
+                            ]
+
+                        # Define task
+                        if depth == self.height - 1:
+                            # Final Node (Use fused `self.tree_finalize` task)
+                            assert (
+                                group == 0
+                            ), f"group = {group}, not 0 for final tree reduction task"
+                            dsk[(self.name, s)] = self._define_task(
+                                input_keys, final_task=True
+                            )
+                        else:
+                            # Intermediate Node
+                            dsk[
+                                self._make_key(
+                                    self.tree_node_name, group, depth, split=s
+                                )
+                            ] = self._define_task(input_keys, final_task=False)
+        else:
+            # Deal with single-partition case
+            for s in self.output_partitions:
+                input_keys = [self._make_key(name_input_use, 0, split=s)]
+                dsk[(self.name, s)] = self._define_task(input_keys, final_task=True)
+
+        return dsk
+
+    def __repr__(self):
+        return "DataFrameTreeReduction<name='{}', input_name={}, split_out={}>".format(
+            self.name, self.name_input, self.split_out
+        )
+
+    def _output_keys(self):
+        return {(self.name, s) for s in self.output_partitions}
+
+    def get_output_keys(self):
+        if hasattr(self, "_cached_output_keys"):
+            return self._cached_output_keys
+        else:
+            output_keys = self._output_keys()
+            self._cached_output_keys = output_keys
+        return self._cached_output_keys
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        # Start with "base" tree-reduction size
+        tree_size = (sum(self.widths[1:]) or 1) * (self.split_out or 1)
+        if self.split_out:
+            # Add on "split-*" tasks used for `getitem` ops
+            return tree_size + self.npartitions_input * len(self.output_partitions)
+        return tree_size
+
+    def _keys_to_output_partitions(self, keys):
+        """Simple utility to convert keys to output partition indices."""
+        splits = set()
+        for key in keys:
+            try:
+                _name, _split = key
+            except ValueError:
+                continue
+            if _name != self.name:
+                continue
+            splits.add(_split)
+        return splits
+
+    def _cull(self, output_partitions):
+        return DataFrameTreeReduction(
+            self.name,
+            self.name_input,
+            self.npartitions_input,
+            self.concat_func,
+            self.tree_node_func,
+            finalize_func=self.finalize_func,
+            split_every=self.split_every,
+            split_out=self.split_out,
+            output_partitions=output_partitions,
+            tree_node_name=self.tree_node_name,
+            annotations=self.annotations,
+        )
+
+    def cull(self, keys, all_keys):
+        """Cull a DataFrameTreeReduction HighLevelGraph layer"""
+        deps = {
+            (self.name, 0): {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+        }
+        output_partitions = self._keys_to_output_partitions(keys)
+        if output_partitions != set(self.output_partitions):
+            culled_layer = self._cull(output_partitions)
+            return culled_layer, deps
+        else:
+            return self, deps
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        from distributed.protocol.serialize import to_serialize
+
+        # Pickle the (possibly) user-defined functions here
+        _concat_func = to_serialize(self.concat_func)
+        _tree_node_func = to_serialize(self.tree_node_func)
+        if self.finalize_func:
+            _finalize_func = to_serialize(self.finalize_func)
+        else:
+            _finalize_func = None
+
+        return {
+            "name": self.name,
+            "name_input": self.name_input,
+            "npartitions_input": self.npartitions_input,
+            "concat_func": _concat_func,
+            "tree_node_func": _tree_node_func,
+            "finalize_func": _finalize_func,
+            "split_out": self.split_out,
+            "output_partitions": self.output_partitions,
+            "tree_node_name": self.tree_node_name,
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.protocol.serialize import to_serialize
+
+        # Materialize the layer
+        raw = cls(**state)._construct_graph()
+
+        # Convert all keys to strings and dump tasks
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        keys = raw.keys() | dsk.keys()
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+
+        # Must use `to_serialize` on the entire task.
+        # This is required because the task-tuples contain `Serialized`
+        # function objects instead of real functions. Using `dumps_task`
+        # may or may not correctly wrap the entire tuple in `to_serialize`.
+        # So we use `to_serialize` here to be explicit. When the task
+        # arrives at a worker, both the `Serialized` task-tuples and the
+        # `Serialized` functions nested within them should be deserialzed
+        # automatically by the comm.
+        return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}

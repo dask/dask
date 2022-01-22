@@ -10,7 +10,7 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask.layers import fractional_slice
+from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
 class SchedulerImportCheck(SchedulerPlugin):
@@ -32,6 +32,43 @@ class SchedulerImportCheck(SchedulerPlugin):
                 sys.modules.pop(mod)
 
 
+def test_array_chunk_shape_dep():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = ArrayChunkShapeDep(chunks)
+
+    def check(i, j):
+        chunk_shape = array_deps[(i, j)]
+        assert chunk_shape == chunk
+
+    for i in range(d):
+        for j in range(d):
+            check(i, j)
+
+
+def test_array_slice_deps():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = ArraySliceDep(chunks)
+
+    def check(i, j):
+        slices = array_deps[(i, j)]
+        assert slices == (
+            slice(chunk[0] * i, chunk[0] * (i + 1), None),
+            slice(chunk[1] * j, chunk[1] * (j + 1), None),
+        )
+
+    for i in range(d):
+        for j in range(d):
+            check(i, j)
+
+
 def _dataframe_shuffle(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -39,6 +76,15 @@ def _dataframe_shuffle(tmpdir):
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+
+
+def _dataframe_tree_reduction(tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Perform a computation using an HLG-based tree reduction
+    df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+    return dd.from_pandas(df, npartitions=2).mean()
 
 
 def _dataframe_broadcast_join(tmpdir):
@@ -142,6 +188,7 @@ def _read_csv(tmpdir):
     "op,lib",
     [
         (_dataframe_shuffle, "pandas."),
+        (_dataframe_tree_reduction, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
         (_pq_pyarrow, "pandas."),
         (_pq_fastparquet, "pandas."),

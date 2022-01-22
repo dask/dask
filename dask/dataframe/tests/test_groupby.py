@@ -1,5 +1,6 @@
 import collections
 import operator
+import pickle
 import warnings
 
 import numpy as np
@@ -136,11 +137,12 @@ def test_full_groupby():
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    expected = df.groupby("a").apply(func)
+
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert ddf.groupby("a").apply(func)._name.startswith("func")
 
-        assert_eq(df.groupby("a").apply(func), ddf.groupby("a").apply(func))
+        assert_eq(expected, ddf.groupby("a").apply(func))
 
 
 def test_full_groupby_apply_multiarg():
@@ -161,10 +163,7 @@ def test_full_groupby_apply_multiarg():
     c_delayed = dask.delayed(lambda: c)()
     d_delayed = dask.delayed(lambda: d)()
 
-    meta = df.groupby("a").apply(func, c)
-
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert_eq(
             df.groupby("a").apply(func, c, d=d),
             ddf.groupby("a").apply(func, c, d=d_scalar),
@@ -182,15 +181,17 @@ def test_full_groupby_apply_multiarg():
             check_dtype=False,
         )
 
-        assert_eq(
-            df.groupby("a").apply(func, c),
-            ddf.groupby("a").apply(func, c_scalar, meta=meta),
-        )
+    meta = df.groupby("a").apply(func, c)
 
-        assert_eq(
-            df.groupby("a").apply(func, c, d=d),
-            ddf.groupby("a").apply(func, c, d=d_scalar, meta=meta),
-        )
+    assert_eq(
+        df.groupby("a").apply(func, c),
+        ddf.groupby("a").apply(func, c_scalar, meta=meta),
+    )
+
+    assert_eq(
+        df.groupby("a").apply(func, c, d=d),
+        ddf.groupby("a").apply(func, c, d=d_scalar, meta=meta),
+    )
 
     # Delayed arguments work, but only if metadata is provided
     with pytest.raises(ValueError) as exc:
@@ -243,10 +244,7 @@ def test_full_groupby_multilevel(grouper, reverse):
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
-    # last one causes a DeprecationWarning from pandas.
-    # See https://github.com/pandas-dev/pandas/issues/16481
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert_eq(
             df.groupby(grouper(df)).apply(func), ddf.groupby(grouper(ddf)).apply(func)
         )
@@ -989,7 +987,14 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 def test_aggregate_dask():
     dask_holder = collections.namedtuple("dask_holder", ["dask"])
     get_agg_dask = lambda obj: dask_holder(
-        {k: v for (k, v) in obj.dask.items() if k[0].startswith("aggregate")}
+        {
+            k: v
+            for (k, v) in obj.dask.items()
+            # Skip "chunk" tasks, because they include
+            # SubgraphCallable object with non-deterministic
+            # (uuid-based) function names
+            if (k[0].startswith("aggregate") and "-chunk-" not in k[0])
+        }
     )
 
     specs = [
@@ -1002,6 +1007,8 @@ def test_aggregate_dask():
             "max",
             "count",
             "size",
+        ],
+        [
             "std",
             "var",
             "first",
@@ -1044,14 +1051,20 @@ def test_aggregate_dask():
         assert_max_deps(agg_dask1, 2)
         assert_max_deps(agg_dask2, 2)
 
-        # check for deterministic key names and values
-        assert agg_dask1 == agg_dask2
+        # check for deterministic key names and values.
+        # Require pickle since "partial" concat functions
+        # used in tree-reduction cannot be compared
+        assert pickle.dumps(agg_dask1[0]) == pickle.dumps(agg_dask2[0])
 
         # the length of the dask does not depend on the passed spec
         for other_spec in specs:
-            other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
-            assert len(other.dask) == len(result1.dask)
-            assert len(other.dask) == len(result2.dask)
+            # Note: List-based aggregation specs may result in
+            # an extra delayed layer. This is because a "long" list
+            # arg will be detected in `dask.array.core.normalize_arg`.
+            if isinstance(spec, list) == isinstance(other_spec, list):
+                other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
+                assert len(other.dask) == len(result1.dask)
+                assert len(other.dask) == len(result2.dask)
 
 
 @pytest.mark.parametrize(
@@ -1597,7 +1610,8 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
 
 @pytest.mark.parametrize("group_args", [["idx", "a"], ["a", "idx"], ["idx"], "idx"])
 @pytest.mark.parametrize(
-    "apply_func", [np.min, np.mean, lambda s: np.max(s) - np.mean(s)]
+    "apply_func",
+    [np.min, np.mean, lambda s, axis=None: np.max(s.values) - np.mean(s.values)],
 )
 def test_groupby_column_and_index_apply(group_args, apply_func):
     df = pd.DataFrame(
@@ -1608,32 +1622,32 @@ def test_groupby_column_and_index_apply(group_args, apply_func):
     ddf_no_divs = dd.from_pandas(df, npartitions=df.index.nunique(), sort=False)
 
     # Expected result
-    expected = df.groupby(group_args).apply(apply_func)
+    expected = df.groupby(group_args).apply(apply_func, axis=0)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+    # Compute on dask DataFrame with divisions (no shuffling)
+    result = ddf.groupby(group_args).apply(apply_func, axis=0, meta=expected)
+    assert_eq(expected, result, check_divisions=False)
 
-        # Compute on dask DataFrame with divisions (no shuffling)
-        result = ddf.groupby(group_args).apply(apply_func)
-        assert_eq(expected, result, check_divisions=False)
+    # Check that partitioning is preserved
+    assert ddf.divisions == result.divisions
 
-        # Check that partitioning is preserved
-        assert ddf.divisions == result.divisions
+    # Check that no shuffling occurred.
+    # The groupby operation should add only 1 task per partition
+    assert len(result.dask) == (len(ddf.dask) + ddf.npartitions)
 
-        # Check that no shuffling occurred.
-        # The groupby operation should add only 1 task per partition
-        assert len(result.dask) == (len(ddf.dask) + ddf.npartitions)
+    expected = df.groupby(group_args).apply(apply_func, axis=0)
 
-        # Compute on dask DataFrame without divisions (requires shuffling)
-        result = ddf_no_divs.groupby(group_args).apply(apply_func)
-        assert_eq(expected, result, check_divisions=False)
+    # Compute on dask DataFrame without divisions (requires shuffling)
+    result = ddf_no_divs.groupby(group_args).apply(apply_func, axis=0, meta=expected)
 
-        # Check that divisions were preserved (all None in this case)
-        assert ddf_no_divs.divisions == result.divisions
+    assert_eq(expected, result, check_divisions=False)
 
-        # Crude check to see if shuffling was performed.
-        # The groupby operation should add only more than 1 task per partition
-        assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
+    # Check that divisions were preserved (all None in this case)
+    assert ddf_no_divs.divisions == result.divisions
+
+    # Crude check to see if shuffling was performed.
+    # The groupby operation should add only more than 1 task per partition
+    assert len(result.dask) > (len(ddf_no_divs.dask) + ddf_no_divs.npartitions)
 
 
 custom_mean = dd.Aggregation(
