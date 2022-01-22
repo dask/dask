@@ -339,26 +339,7 @@ def fractional_slice(task, axes):
 #
 
 
-class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
-
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
-        """
-
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
-
-
-class SimpleShuffleLayer(DataFrameLayer):
+class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -849,7 +830,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(DataFrameLayer):
+class BroadcastJoinLayer(Layer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -1144,7 +1125,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
+class DataFrameIOLayer(Blockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
@@ -1170,6 +1151,11 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
         future. Default is False.
+    creation_info: dict (optional)
+        Dictionary containing the callable function ('func'),
+        positional arguments ('args'), and key-word arguments
+        ('kwargs') used to produce the dask collection with
+        this underlying ``DataFrameIOLayer``.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -1182,6 +1168,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         label=None,
         produces_tasks=False,
+        creation_info=None,
         annotations=None,
     ):
         self.name = name
@@ -1191,6 +1178,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.label = label
         self.produces_tasks = produces_tasks
         self.annotations = annotations
+        self.creation_info = creation_info
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
@@ -1210,7 +1198,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this IO layer.
+        Given a list of required output columns, this method
+        returns the projected layer.
+        """
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1224,13 +1215,14 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 list(columns),
                 self.inputs,
                 io_func,
+                label=self.label,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            return layer, None
+            return layer
         else:
             # Default behavior
-            return self, None
+            return self
 
     def __repr__(self):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
