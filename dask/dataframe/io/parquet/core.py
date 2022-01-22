@@ -3,7 +3,6 @@ import warnings
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
-from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
@@ -14,6 +13,7 @@ from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
+from ..utils import _is_local_fs
 from .utils import _sort_and_analyze_paths
 
 try:
@@ -162,6 +162,14 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
+    open_file_options : dict, default None
+        Key/value arguments to be passed along to ``AbstractFileSystem.open``
+        when each parquet data file is open for reading. Experimental
+        (optimized) "precaching" for remote file systems (e.g. S3, GCS) can
+        be enabled by adding ``{"method": "parquet"}`` under the
+        ``"precache_options"`` key. Also, a custom file-open function can be
+        used (instead of ``AbstractFileSystem.open``), by specifying the
+        desired function under the ``"open_file_func"`` key.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
@@ -239,9 +247,13 @@ def read_parquet(
         the second level corresponds to the kwargs that will be passed on to
         the underlying ``pyarrow`` or ``fastparquet`` function.
         Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
-        backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a ``pyarrow.Table.to_pandas()``)
+        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
+        (for the backend read function), 'arrow_to_pandas' (for controlling the
+        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
+        Any element of kwargs that is not defined under these top-level keys
+        will be passed through to the `engine.read_partitions` classmethod as a
+        stand-alone argument (and will be ignored by the engine implementations
+        defined in ``dask.dataframe``).
 
     Examples
     --------
@@ -254,6 +266,7 @@ def read_parquet(
     """
 
     if "read_from_paths" in kwargs:
+        kwargs.pop("read_from_paths")
         warnings.warn(
             "`read_from_paths` is no longer supported and will be ignored.",
             FutureWarning,
@@ -386,7 +399,7 @@ def read_parquet(
                 meta,
                 columns,
                 index,
-                kwargs,
+                {},  # All kwargs should now be in `common_kwargs`
                 common_kwargs,
             ),
             label=label,
@@ -597,7 +610,7 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        if isinstance(fs, LocalFileSystem):
+        if _is_local_fs(fs):
             working_dir = fs.expand_path(".")[0]
             if path.rstrip("/") == working_dir.rstrip("/"):
                 raise ValueError(
