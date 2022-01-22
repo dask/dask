@@ -2501,6 +2501,32 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+def test_layer_creation_info(tmpdir, engine):
+    df = pd.DataFrame({"a": range(10), "b": ["cat", "dog"] * 5})
+    dd.from_pandas(df, npartitions=1).to_parquet(
+        tmpdir, engine=engine, partition_on=["b"]
+    )
+
+    # Apply filters directly in dd.read_parquet
+    filters = [("b", "==", "cat")]
+    ddf1 = dd.read_parquet(tmpdir, engine=engine, filters=filters)
+    assert "dog" not in ddf1["b"].compute()
+
+    # Results will not match if we use dd.read_parquet
+    # without filters
+    ddf2 = dd.read_parquet(tmpdir, engine=engine)
+    with pytest.raises(AssertionError):
+        assert_eq(ddf1, ddf2)
+
+    # However, we can use `creation_info` to regenerate
+    # the same collection with `filters` defined
+    info = ddf2.dask.layers[ddf2._name].creation_info
+    kwargs = info.get("kwargs", {})
+    kwargs["filters"] = filters
+    ddf3 = info["func"](*info.get("args", []), **kwargs)
+    assert_eq(ddf1, ddf3)
+
+
 @ANY_ENGINE_MARK
 def test_blockwise_parquet_annotations(tmpdir):
     df = pd.DataFrame({"a": np.arange(40, dtype=np.int32)})
