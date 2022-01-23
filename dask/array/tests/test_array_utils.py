@@ -2,7 +2,9 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.core import Array
 from dask.array.utils import assert_eq, meta_from_array
+from dask.local import get_sync
 
 asarrays = [np.asarray]
 
@@ -87,3 +89,29 @@ def test_meta_from_array_type_inputs():
 def test_assert_eq_checks_dtype(a, b):
     with pytest.raises(AssertionError, match="a and b have different dtypes"):
         assert_eq(a, b)
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        (1.0, 1.0),
+        ([1, 2], [1, 2]),
+        (da.array([1, 2]), da.array([1, 2])),
+    ],
+)
+def test_assert_eq_scheduler(a, b):
+    counter = 0
+
+    def custom_scheduler(*args, **kwargs):
+        nonlocal counter
+        counter += 1
+        return get_sync(*args, **kwargs)
+
+    assert_eq(a, b)
+    assert counter == 0
+
+    assert_eq(a, b, scheduler=custom_scheduler)
+    if isinstance(a, Array) and isinstance(b, Array):
+        assert counter == 2
+    else:
+        assert counter == 0
