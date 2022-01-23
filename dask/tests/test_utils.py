@@ -558,6 +558,8 @@ def test_derived_from_dask_dataframe():
     assert "not supported" in axis_arg.lower()
     assert "dask" in axis_arg.lower()
 
+    assert "Object with missing values filled" in dd.DataFrame.ffill.__doc__
+
 
 def test_parse_bytes():
     assert parse_bytes("100") == 100
