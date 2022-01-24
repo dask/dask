@@ -1,5 +1,6 @@
 import io
 import os
+from itertools import zip_longest
 
 import pandas as pd
 from fsspec.core import open_files
@@ -212,27 +213,36 @@ def read_json(
         )
         if include_path_column:
             first, chunks, paths = b_out
+            if path_converter is not None:
+                first_path = path_converter(paths[0])
+                path_dtype = pd.CategoricalDtype(path_converter(p) for p in paths)
+                flat_paths = flatten(
+                    [path_converter(p)] * len(chunk) for p, chunk in zip(paths, chunks)
+                )
+            else:
+                first_path = paths[0]
+                path_dtype = pd.CategoricalDtype(paths)
+                flat_paths = flatten(
+                    [path] * len(chunk) for path, chunk in zip(paths, chunks)
+                )
+
         else:
             first, chunks = b_out
-            paths = None
-        if not isinstance(chunks[0], (list, tuple)):
-            chunks = [chunks]
-
-        if path_converter is not None:
-            first_path = path_converter(paths[0])
-            flat_paths = flatten(
-                [path_converter(p)] * len(chunk) for p, chunk in zip(paths, chunks)
-            )
-        else:
-            first_path = paths[0]
-            flat_paths = flatten(
-                [path] * len(chunk) for path, chunk in zip(paths, chunks)
-            )
+            first_path = None
+            flat_paths = (None,)
+            path_dtype = None
 
         flat_chunks = flatten(chunks)
         if meta is None:
             meta = read_json_chunk(
-                first, encoding, errors, engine, include_path_column, first_path, kwargs
+                first,
+                encoding,
+                errors,
+                engine,
+                include_path_column,
+                first_path,
+                path_dtype,
+                kwargs,
             )
         meta = make_meta(meta)
         parts = [
@@ -243,10 +253,11 @@ def read_json(
                 engine,
                 include_path_column,
                 path,
+                path_dtype,
                 kwargs,
                 meta=meta,
             )
-            for chunk, path in zip(flat_chunks, flat_paths)
+            for chunk, path in zip_longest(flat_chunks, flat_paths)
         ]
     else:
         files = open_files(
@@ -257,9 +268,22 @@ def read_json(
             compression=compression,
             **storage_options,
         )
+        if path_converter is not None:
+            path_dtype = pd.CategoricalDtype(path_converter(f.path) for f in files)
+        elif include_path_column:
+            path_dtype = pd.CategoricalDtype(f.path for f in files)
+        else:
+            path_dtype = None
         parts = [
             delayed(read_json_file)(
-                f, orient, lines, engine, include_path_column, path_converter, kwargs
+                f,
+                orient,
+                lines,
+                engine,
+                include_path_column,
+                path_converter,
+                path_dtype,
+                kwargs,
             )
             for f in files
         ]
@@ -267,12 +291,14 @@ def read_json(
     return from_delayed(parts, meta=meta)
 
 
-def read_json_chunk(chunk, encoding, errors, engine, colname, path, kwargs, meta=None):
+def read_json_chunk(
+    chunk, encoding, errors, engine, column_name, path, path_dtype, kwargs, meta=None
+):
     s = io.StringIO(chunk.decode(encoding, errors))
     s.seek(0)
     df = engine(s, orient="records", lines=True, **kwargs)
-    if colname:
-        df[colname] = path
+    if column_name:
+        df = add_path_column(df, column_name, path, path_dtype)
 
     if meta is not None and df.empty:
         return meta
@@ -280,13 +306,25 @@ def read_json_chunk(chunk, encoding, errors, engine, colname, path, kwargs, meta
         return df
 
 
-def read_json_file(f, orient, lines, engine, colname, path_converter, kwargs):
+def read_json_file(
+    f, orient, lines, engine, column_name, path_converter, path_dtype, kwargs
+):
     with f as open_file:
         df = engine(open_file, orient=orient, lines=lines, **kwargs)
-    if colname:
-        if path_converter is not None:
-            df[colname] = path_converter(f.path)
-        else:
-            df[colname] = f.path
-
+    if column_name:
+        df = add_path_column(df, column_name, f.path, path_dtype, path_converter)
     return df
+
+
+def add_path_column(df, column_name, path, dtype, path_converter=None):
+    if column_name in df.columns:
+        raise ValueError(
+            f"Files already contain the column name: '{column_name}', so the path "
+            "column cannot use this name. Please set `include_path_column` to a "
+            "`include_path_column` to a unique name."
+        )
+    if path_converter is not None:
+        paths = pd.Series((path_converter(path),) * len(df), dtype=dtype)
+    else:
+        paths = pd.Series([path] * len(df), dtype=dtype)
+    return df.assign(**{column_name: paths})

@@ -13,17 +13,18 @@ df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 ddf = dd.from_pandas(df, npartitions=2)
 
 
-def test_read_json_with_path_column():
+@pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
+def test_read_json_with_path_column(orient):
     with tmpfile("json") as f:
-        df.to_json(f, orient="records", lines=True)
-        actual = dd.read_json(f, orient="records", lines=True, include_path_column=True)
-        actual_pd = pd.read_json(f, orient="records", lines=True)
-        actual_pd["path"] = str(f)
+        df.to_json(f, orient=orient, lines=False)
+        actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
+        actual_pd = pd.read_json(f, orient=orient, lines=False)
+        actual_pd["path"] = pd.Series((str(f),) * len(actual_pd), dtype="category")
         out = actual.compute()
         assert_eq(out, actual_pd)
 
 
-@pytest.mark.parametrize("blocksize", [None, 50])
+@pytest.mark.parametrize("blocksize", [None, 5])
 def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
     fil1 = str(tmpdir.join("fil1.json"))
     fil2 = str(tmpdir.join("fil2.json"))
@@ -33,8 +34,9 @@ def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
     lines = orient == "records"
     df.to_json(fil1, orient=orient, lines=lines)
     df2.to_json(fil2, orient=orient, lines=lines)
-    df["path"] = fil1
-    df2["path"] = fil2
+    path_dtype = pd.CategoricalDtype((fil1, fil2))
+    df["path"] = pd.Series((fil1,) * len(df), dtype=path_dtype)
+    df2["path"] = pd.Series((fil2,) * len(df2), dtype=path_dtype)
     sol = pd.concat([df, df2])
     res = dd.read_json(
         str(tmpdir.join("fil*.json")),
