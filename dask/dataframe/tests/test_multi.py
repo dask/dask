@@ -6,7 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_140, tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
@@ -2009,6 +2009,7 @@ def test_concat_datetimeindex():
     assert_eq(result, expected)
 
 
+@pytest.mark.skipif(PANDAS_GT_140, reason="Append is deprecated in pandas 1.4.0")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2049,6 +2050,7 @@ def test_append():
     check_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
+@pytest.mark.skipif(PANDAS_GT_140, reason="Append is deprecated in pandas 1.4.0")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2096,6 +2098,7 @@ def test_append2():
     )
 
 
+@pytest.mark.skipif(PANDAS_GT_140, reason="Append is deprecated in pandas 1.4.0")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2146,6 +2149,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
+@pytest.mark.skipif(PANDAS_GT_140, reason="Append is deprecated in pandas 1.4.0")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
