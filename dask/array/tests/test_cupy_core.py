@@ -309,12 +309,14 @@ def test_setitem_extended_API_0d():
         [slice(2, 8, 2), -2],
         [slice(8, None, 2), -3],
         pytest.param(
-            [slice(8, None, 2), [-30]],
+            slice(8, None, 2),
+            [-30],
             marks=pytest.mark.skip(reason="Unsupported assigning `list` to CuPy array"),
         ),
         [slice(1, None, -2), -4],
         pytest.param(
-            [slice(1, None, -2), [-40]],
+            slice(1, None, -2),
+            [-40],
             marks=pytest.mark.skip(reason="Unsupported assigning `list` to CuPy array"),
         ),
         [slice(3, None, 2), -5],
@@ -322,11 +324,13 @@ def test_setitem_extended_API_0d():
         [slice(1, None, -2), -4],
         [slice(3, None, 2), -5],
         pytest.param(
-            [slice(3, None, 2), [10, 11, 12, 13]],
+            slice(3, None, 2),
+            [10, 11, 12, 13],
             marks=pytest.mark.skip(reason="Unsupported assigning `list` to CuPy array"),
         ),
         pytest.param(
-            [slice(-4, None, -2), [14, 15, 16, 17]],
+            slice(-4, None, -2),
+            [14, 15, 16, 17],
             marks=pytest.mark.skip(reason="Unsupported assigning `list` to CuPy array"),
         ),
     ],
@@ -399,14 +403,16 @@ def test_setitem_extended_API_1d(index, value):
         ),
         [slice(5, None, 2), -99],
         pytest.param(
-            [slice(5, None, 2), range(1, 11)],
+            slice(5, None, 2),
+            range(1, 11),
             marks=pytest.mark.skip(
                 reason="Assigning `range` to CuPy array is not supported"
             ),
         ),
         [slice(1, None, -2), -98],
         pytest.param(
-            [slice(1, None, -2), range(11, 21)],
+            slice(1, None, -2),
+            range(11, 21),
             marks=pytest.mark.skip(
                 reason="Assigning `range` to CuPy array is not supported"
             ),
