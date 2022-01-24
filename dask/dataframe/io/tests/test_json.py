@@ -24,7 +24,7 @@ def test_read_json_with_path_column(orient):
         assert_eq(out, actual_pd)
 
 
-@pytest.mark.parametrize("blocksize", [None, 5])
+@pytest.mark.parametrize("blocksize", [None, 5, 50, 5000])
 def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
     fil1 = str(tmpdir.join("fil1.json"))
     fil2 = str(tmpdir.join("fil2.json"))
