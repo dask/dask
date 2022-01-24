@@ -152,7 +152,7 @@ def read_json(
         newline character.
     sample: int
         Number of bytes to pre-load, to provide an empty dataframe structure
-        to any blocks without data. Only relevant is using blocksize.
+        to any blocks without data. Only relevant when using blocksize.
     encoding, errors:
         Text conversion, ``see bytes.decode()``
     compression : string or None
@@ -160,6 +160,14 @@ def read_json(
     engine : function object, default ``pd.read_json``
         The underlying function that dask will use to read JSON files. By
         default, this will be the pandas JSON reader (``pd.read_json``).
+    include_path_column : bool or str, optional
+        Include a column with the file path where each row in the dataframe
+        originated. If ``True``, a new column is added to the dataframe called
+        ``path``. If ``str``, sets new column name. Default is ``False``.
+    path_converter : function or None, optional
+        A function that takes one argument and returns a string. Used to convert
+        paths in the ``path`` column, for instance, to strip a common prefix from
+        all the paths.
     $META
 
     Returns
