@@ -3005,6 +3005,16 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
+def test_apply_fails_with_invalid_meta():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    func = lambda row: row["x"] + row["y"]
+
+    with pytest.raises(ValueError, match="Meta is not valid"):
+        ddf.apply(func, axis=1, meta=int)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
