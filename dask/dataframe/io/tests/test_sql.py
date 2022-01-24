@@ -170,10 +170,15 @@ def test_needs_rational(db):
             "c": [True, True, False, True, True],
         }
     )
-    df = df.append(
+    df = pd.concat(
         [
-            {"a": "x", "b": now + d * 1000, "c": None},
-            {"a": None, "b": now + d * 1001, "c": None},
+            df,
+            pd.DataFrame(
+                [
+                    {"a": "x", "b": now + d * 1000, "c": None},
+                    {"a": None, "b": now + d * 1001, "c": None},
+                ]
+            ),
         ]
     )
     with tmpfile() as f:
