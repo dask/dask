@@ -115,7 +115,7 @@ information:
 2.  Name: the special name used above
 3.  Meta: an empty pandas DataFrame with names, dtypes and index matching
     the expected output. Can also be a list of tuples where each tuple defines
-    a ``(name, dtype)`` pair.
+    a ``(name, dtype)`` pair referring to one column.
 4.  Divisions: a list of index values that separate the different partitions.
     Alternatively, if you don't know the divisions (this is common), you can
     provide a list of ``[None, None, None, ...]`` with as many partitions as
