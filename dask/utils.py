@@ -751,6 +751,14 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     if doc is None:
         doc = ""
 
+    # pandas DataFrame/Series sometimes override methods without setting __doc__
+    if not doc and cls.__name__ in {"DataFrame", "Series"}:
+        for obj in cls.mro():
+            obj_method = getattr(obj, method.__name__, None)
+            if obj_method is not None and obj_method.__doc__:
+                doc = obj_method.__doc__
+                break
+
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(
