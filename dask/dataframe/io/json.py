@@ -117,6 +117,7 @@ def read_json(
     meta=None,
     engine=pd.read_json,
     include_path_column=False,
+    path_converter=None,
     **kwargs,
 ):
     """Create a dataframe from a set of JSON files
@@ -196,10 +197,6 @@ def read_json(
     storage_options = storage_options or {}
     if include_path_column is True:
         include_path_column = "path"
-    if isinstance(kwargs.get("converters"), dict) and include_path_column:
-        path_converter = kwargs["converters"].get(include_path_column, None)
-    else:
-        path_converter = None
 
     if path_converter is None:
         path_converter = lambda x: x

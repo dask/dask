@@ -24,14 +24,47 @@ def test_read_json_with_path_column(orient):
         assert_eq(out, actual_pd)
 
 
-@pytest.mark.parametrize("blocksize", [None, 5, 50, 5000])
+def test_read_json_path_column_present():
+    with tmpfile("json") as f:
+        df.to_json(f, orient="records", lines=False)
+        with pytest.raises(ValueError, match="Files already contain"):
+            dd.read_json(f, orient="records", lines=False, include_path_column="x")
+
+
+def test_read_json_with_converter():
+    with tmpfile("json") as f:
+        df.to_json(f, orient="records", lines=False)
+        actual = dd.read_json(
+            f,
+            orient="records",
+            lines=False,
+            include_path_column="path",
+            path_converter=lambda x: "asdf.json",
+        )
+        actual_pd = pd.read_json(f, orient="records", lines=False)
+        actual_pd["path"] = pd.Series(("asdf.json",) * len(actual_pd), dtype="category")
+        out = actual.compute()
+        assert_eq(out, actual_pd)
+
+
+def test_read_orient_not_records_and_lines():
+    with pytest.raises(ValueError, match="Line-delimited JSON"):
+        dd.read_json("nofile.json", orient="split", lines=True)
+
+
+def test_write_orient_not_records_and_lines():
+    with pytest.raises(ValueError, match="Line-delimited JSON"):
+        dd.to_json(df, "nofile.json", orient="split", lines=True)
+
+
+@pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])
 def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
     fil1 = str(tmpdir.join("fil1.json"))
     fil2 = str(tmpdir.join("fil2.json"))
     df = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
     df2 = df.assign(x=df.x + 0.5)
     orient = "records"
-    lines = orient == "records"
+    lines = True
     df.to_json(fil1, orient=orient, lines=lines)
     df2.to_json(fil2, orient=orient, lines=lines)
     path_dtype = pd.CategoricalDtype((fil1, fil2))
