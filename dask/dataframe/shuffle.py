@@ -85,16 +85,14 @@ def sort_values(
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
-    if not isinstance(by, str):
-        # support ["a"] as input
-        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
-            by = by[0]
-        else:
-            raise NotImplementedError(
-                "Dataframe only supports sorting by a single column which must "
-                "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(by)
-            )
+    if not isinstance(by, list):
+        by = [by]
+    if len(by) > 1 and df.npartitions > 1:
+        raise NotImplementedError(
+            "Single-partition dataframes only support sorting by a single column which must "
+            "be passed as a string or a list of a single string.\n"
+            "You passed %s" % str(by)
+        )
 
     sort_kwargs = {
         "by": by,
@@ -117,7 +115,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[by]
+    sort_by_col = df[by[0]]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
