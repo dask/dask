@@ -4,12 +4,14 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
+    assert_eq,
     check_matching_columns,
     check_meta,
     is_dataframe_like,
@@ -20,6 +22,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     shard_df_on_index,
 )
+from dask.local import get_sync
 
 
 def test_shard_df_on_index():
@@ -510,3 +513,41 @@ def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
     non_empty = meta_nonempty(ser)
     assert non_empty.dtype == "Float64"
+
+
+def test_assert_eq_sorts():
+    df1 = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
+    df2 = df1.sort_values("B")
+    df2_r = df2.reset_index(drop=True)
+    assert_eq(df1, df2)
+    assert_eq(df1, df2_r, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df1, df2_r)
+
+
+def test_assert_eq_scheduler():
+    using_custom_scheduler = False
+
+    def custom_scheduler(*args, **kwargs):
+        nonlocal using_custom_scheduler
+        try:
+            using_custom_scheduler = True
+            return get_sync(*args, **kwargs)
+        finally:
+            using_custom_scheduler = False
+
+    def check_custom_scheduler(part: pd.DataFrame) -> pd.DataFrame:
+        assert using_custom_scheduler, "not using custom scheduler"
+        return part + 1
+
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.map_partitions(check_custom_scheduler, meta=ddf)
+
+    with pytest.raises(AssertionError, match="not using custom scheduler"):
+        # NOTE: we compare `ddf2` to itself in order to test both sides of the `assert_eq` logic.
+        assert_eq(ddf2, ddf2)
+
+    assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
+    with dask.config.set(scheduler=custom_scheduler):
+        assert_eq(ddf2, ddf2, scheduler=None)

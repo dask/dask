@@ -209,7 +209,7 @@ def index_subs(ind, substitution):
     if ind is None:
         return ind
     else:
-        return tuple([substitution.get(c, c) for c in ind])
+        return tuple(substitution.get(c, c) for c in ind)
 
 
 _BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
@@ -234,6 +234,11 @@ def blockwise(
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a
     dict, it returns a symbolic Blockwise object.
+
+    ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
+    allowing for collections it can accept BlockwiseDep instances, which allows for lazy
+    evaluation of arguments to ``func`` which might be different for different
+    chunks/paritions.
 
     See Also
     --------
@@ -428,7 +433,7 @@ class Blockwise(Layer):
         return self._dims
 
     def __repr__(self):
-        return "Blockwise<{} -> {}>".format(self.indices, self.output)
+        return f"Blockwise<{self.indices} -> {self.output}>"
 
     @property
     def _dict(self):
@@ -1300,6 +1305,11 @@ def _optimize_blockwise(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
+def _unique_dep(dep, ind):
+    # Append blockwise index information to dependency name
+    return dep + "_" + "_".join(str(i) for i in list(ind))
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1355,9 +1365,15 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
+            # Change dep name to avoid fusing the same dep
+            # (in different iteration orders) into a single
+            # subgraph key/dependency
+            # (see: https://github.com/dask/dask/issues/8535)
+            local_dep = dep if dep == root else _unique_dep(dep, ind)
+
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -1400,6 +1416,10 @@ def rewrite_blockwise(inputs):
                     sub[blockwise_token(ii)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
+
+            # Change new_dsk key to match local_dep
+            if dep != local_dep and dep in new_dsk:
+                new_dsk[local_dep] = new_dsk.pop(dep)
 
             # indices.extend(new_indices)
             dsk.update(new_dsk)
@@ -1512,14 +1532,14 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
     )
 
     g = toolz.groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
+    g = {k: {d for i, d in v} for k, v in g.items()}
 
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+    g2 = {k: v - set(sentinels) if len(v) > 1 else v for k, v in g.items()}
 
     if consolidate:
         return toolz.valmap(consolidate, g2)
 
-    if g2 and not set(map(len, g2.values())) == set([1]):
+    if g2 and not set(map(len, g2.values())) == {1}:
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)

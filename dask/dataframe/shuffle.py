@@ -75,11 +75,16 @@ def sort_values(
     by,
     npartitions=None,
     ascending=True,
+    na_position="last",
     upsample=1.0,
     partition_size=128e6,
+    sort_function=None,
+    sort_function_kwargs=None,
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
+    if na_position not in ("first", "last"):
+        raise ValueError("na_position must be either 'first' or 'last'")
     if not isinstance(by, str):
         # support ["a"] as input
         if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
@@ -104,8 +109,27 @@ def sort_values(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
+    if len(divisions) == 2:
+        return df.repartition(npartitions=1).map_partitions(
+            sort_function, **sort_function_kwargs
+        )
+
+    if not isinstance(ascending, bool):
+        # support [True] as input
+        if (
+            isinstance(ascending, list)
+            and len(ascending) == 1
+            and isinstance(ascending[0], bool)
+        ):
+            ascending = ascending[0]
+        else:
+            raise NotImplementedError(
+                f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
+            )
+
     if (
-        mins == sorted(mins, reverse=not ascending)
+        all(not pd.isna(x) for x in divisions)
+        and mins == sorted(mins, reverse=not ascending)
         and maxes == sorted(maxes, reverse=not ascending)
         and all(
             mx < mn
@@ -117,10 +141,17 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(M.sort_values, by, ascending=ascending)
+        return df.map_partitions(sort_function, **sort_function_kwargs)
 
-    df = rearrange_by_divisions(df, by, divisions, ascending=ascending)
-    df = df.map_partitions(M.sort_values, by, ascending=ascending)
+    df = rearrange_by_divisions(
+        df,
+        by,
+        divisions,
+        ascending=ascending,
+        na_position=na_position,
+        duplicates=False,
+    )
+    df = df.map_partitions(sort_function, **sort_function_kwargs)
     return df
 
 
@@ -302,7 +333,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = methods.tolist(divisions)
+    df4.divisions = tuple(methods.tolist(divisions))
 
     return df4.map_partitions(M.sort_index)
 
@@ -354,6 +385,9 @@ def shuffle(
             )
 
     if not isinstance(index, _Frame):
+        if list_like:
+            # Make sure we don't try to select with pd.Series/pd.Index
+            index = list(index)
         index = df._select_columns_or_index(index)
     elif hasattr(index, "to_frame"):
         # If this is an index, we should still convert to a
@@ -389,13 +423,22 @@ def rearrange_by_divisions(
     max_branch=None,
     shuffle=None,
     ascending=True,
+    na_position="last",
+    duplicates=True,
 ):
     """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
+    # duplicates need to be removed sometimes to properly sort null dataframes
+    if not duplicates:
+        divisions = divisions.drop_duplicates()
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
     partitions = df[column].map_partitions(
-        set_partitions_pre, divisions=divisions, ascending=ascending, meta=meta
+        set_partitions_pre,
+        divisions=divisions,
+        ascending=ascending,
+        na_position=na_position,
+        meta=meta,
     )
     df2 = df.assign(_partitions=partitions)
 
@@ -471,7 +514,7 @@ class maybe_buffered_partd:
             )
         except AttributeError as e:
             raise ImportError(
-                "Not able to import and load {0} as compression algorithm."
+                "Not able to import and load {} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
                     self.compression
                 )
@@ -760,18 +803,15 @@ def collect(p, part, meta, barrier_token):
         return res if len(res) > 0 else meta
 
 
-def set_partitions_pre(s, divisions, ascending=True):
+def set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     try:
         if ascending:
             partitions = divisions.searchsorted(s, side="right") - 1
         else:
             partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     except TypeError:
-        # When `searchsorted` fails with `TypeError`, it may be
-        # caused by nulls in `s`. Try again with the null-values
-        # explicitly mapped to the first partition.
+        # `searchsorted` fails if `s` contains nulls and strings
         partitions = np.empty(len(s), dtype="int32")
-        partitions[s.isna()] = 0
         not_null = s.notna()
         if ascending:
             partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
@@ -779,9 +819,10 @@ def set_partitions_pre(s, divisions, ascending=True):
             partitions[not_null] = (
                 len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
             )
-    partitions[(s >= divisions.iloc[-1]).values] = (
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         len(divisions) - 2 if ascending else 0
     )
+    partitions[s.isna().values] = len(divisions) - 2 if na_position == "last" else 0
     return partitions
 
 

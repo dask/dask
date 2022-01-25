@@ -253,6 +253,23 @@ def test_skiprows(dd_read, pd_read, files):
     "dd_read,pd_read,files",
     [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
 )
+def test_comment(dd_read, pd_read, files):
+    files = {
+        name: comment_header
+        + b"\n"
+        + content.replace(b"\n", b"  # just some comment\n", 1)
+        for name, content in files.items()
+    }
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", comment="#")
+        expected_df = pd.concat([pd_read(n, comment="#") for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dd_read,pd_read,files",
+    [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
+)
 def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
@@ -775,6 +792,22 @@ def test_windows_line_terminator():
         assert df.a.sum().compute() == 1 + 2 + 3 + 4 + 5 + 6
 
 
+def test_header_int():
+    text = (
+        "id0,name0,x0,y0\n"
+        "id,name,x,y\n"
+        "1034,Victor,-0.25,0.84\n"
+        "998,Xavier,-0.48,-0.13\n"
+        "999,Zelda,0.00,0.47\n"
+        "980,Alice,0.67,-0.98\n"
+        "989,Zelda,-0.04,0.03\n"
+    )
+    with filetexts({"test_header_int.csv": text}):
+        df = dd.read_csv("test_header_int.csv", header=1, blocksize=64)
+        expected = pd.read_csv("test_header_int.csv", header=1)
+        assert_eq(df, expected, check_index=False)
+
+
 def test_header_None():
     with filetexts({".tmp.1.csv": "1,2", ".tmp.2.csv": "", ".tmp.3.csv": "3,4"}):
         df = dd.read_csv(".tmp.*.csv", header=None)
@@ -848,7 +881,7 @@ def test_read_csv_raises_on_no_files():
     try:
         dd.read_csv(fn)
         assert False
-    except (OSError, IOError) as e:
+    except OSError as e:
         assert fn in str(e)
 
 
@@ -1272,13 +1305,20 @@ def test_to_csv():
 
         with tmpdir() as dn:
             r = a.to_csv(dn, index=False, compute=False)
-            dask.compute(*r, scheduler="sync")
+            paths = dask.compute(*r, scheduler="sync")
+            # this is a tuple rather than a list since it's the output of dask.compute
+            assert paths == tuple(
+                os.path.join(dn, f"{n}.part") for n in range(npartitions)
+            )
             result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
             assert_eq(result, df)
 
         with tmpdir() as dn:
             fn = os.path.join(dn, "data_*.csv")
-            a.to_csv(fn, index=False)
+            paths = a.to_csv(fn, index=False)
+            assert paths == [
+                os.path.join(dn, f"data_{n}.csv") for n in range(npartitions)
+            ]
             result = dd.read_csv(fn).compute().reset_index(drop=True)
             assert_eq(result, df)
 
@@ -1537,7 +1577,7 @@ def test_to_csv_header_empty_dataframe(header, expected):
         ddfe.to_csv(os.path.join(dn, "fooe*.csv"), index=False, header=header)
         assert not os.path.exists(os.path.join(dn, "fooe1.csv"))
         filename = os.path.join(dn, "fooe0.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected
         os.remove(filename)
@@ -1571,13 +1611,13 @@ def test_to_csv_header(
             header_first_partition_only=header_first_partition_only,
         )
         filename = os.path.join(dn, "fooa0.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected_first
         os.remove(filename)
 
         filename = os.path.join(dn, "fooa1.csv")
-        with open(filename, "r") as fp:
+        with open(filename) as fp:
             line = fp.readline()
             assert line == expected_next
         os.remove(filename)

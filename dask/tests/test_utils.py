@@ -15,6 +15,7 @@ from dask.utils import (
     SerializableLock,
     _deprecated,
     asciitable,
+    cached_cumsum,
     derived_from,
     ensure_dict,
     extra_titles,
@@ -159,6 +160,38 @@ def test_dispatch_lazy():
     assert foo.dispatch(decimal.Decimal) == foo_dec
     assert foo(decimal.Decimal(1)) == decimal.Decimal(2)
     assert foo(1) == 1
+
+
+def test_dispatch_lazy_walks_mro():
+    """Check that subclasses of classes with lazily registered handlers still
+    use their parent class's handler by default"""
+    import decimal
+
+    class Lazy(decimal.Decimal):
+        pass
+
+    class Eager(Lazy):
+        pass
+
+    foo = Dispatch()
+
+    @foo.register(Eager)
+    def eager_handler(x):
+        return "eager"
+
+    def lazy_handler(a):
+        return "lazy"
+
+    @foo.register_lazy("decimal")
+    def register_decimal():
+        foo.register(decimal.Decimal, lazy_handler)
+
+    assert foo.dispatch(Lazy) == lazy_handler
+    assert foo(Lazy(1)) == "lazy"
+    assert foo.dispatch(decimal.Decimal) == lazy_handler
+    assert foo(decimal.Decimal(1)) == "lazy"
+    assert foo.dispatch(Eager) == eager_handler
+    assert foo(Eager(1)) == "eager"
 
 
 def test_random_state_data():
@@ -443,6 +476,10 @@ def test_itemgetter():
     assert g2(data) == 2
     assert g2.index == 1
 
+    assert itemgetter(1) == itemgetter(1)
+    assert itemgetter(1) != itemgetter(2)
+    assert itemgetter(1) != 123
+
 
 def test_partial_by_order():
     assert partial_by_order(5, function=operator.add, other=[(1, 20)]) == 25
@@ -521,6 +558,8 @@ def test_derived_from_dask_dataframe():
     ]
     assert "not supported" in axis_arg.lower()
     assert "dask" in axis_arg.lower()
+
+    assert "Object with missing values filled" in dd.DataFrame.ffill.__doc__
 
 
 def test_parse_bytes():
@@ -688,6 +727,15 @@ def test_deprecated_version():
         assert foo() == "bar"
 
 
+def test_deprecated_after_version():
+    @_deprecated(after_version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated after version 1.2.3"):
+        assert foo() == "bar"
+
+
 def test_deprecated_category():
     @_deprecated(category=DeprecationWarning)
     def foo():
@@ -733,3 +781,27 @@ class MyType:
 def test_typename_on_instances():
     instance = MyType()
     assert typename(instance) == typename(MyType)
+
+
+def test_cached_cumsum():
+    a = (1, 2, 3, 4)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    assert x == (1, 3, 6, 10)
+    assert y == (0, 1, 3, 6, 10)
+
+
+def test_cached_cumsum_nan():
+    np = pytest.importorskip("numpy")
+    a = (1, np.nan, 3)
+    x = cached_cumsum(a)
+    y = cached_cumsum(a, initial_zero=True)
+    np.testing.assert_equal(x, (1, np.nan, np.nan))
+    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
+
+
+def test_cached_cumsum_non_tuple():
+    a = [1, 2, 3]
+    assert cached_cumsum(a) == (1, 3, 6)
+    a[1] = 4
+    assert cached_cumsum(a) == (1, 5, 8)

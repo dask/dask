@@ -3,7 +3,6 @@ import warnings
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
-from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
@@ -14,6 +13,7 @@ from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
+from ..utils import _is_local_fs
 from .utils import _sort_and_analyze_paths
 
 try:
@@ -105,8 +105,8 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     ignore_metadata_file=False,
+    metadata_task_size=None,
     split_row_groups=None,
-    read_from_paths=None,
     chunksize=None,
     aggregate_files=None,
     **kwargs,
@@ -162,6 +162,14 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
+    open_file_options : dict, default None
+        Key/value arguments to be passed along to ``AbstractFileSystem.open``
+        when each parquet data file is open for reading. Experimental
+        (optimized) "precaching" for remote file systems (e.g. S3, GCS) can
+        be enabled by adding ``{"method": "parquet"}`` under the
+        ``"precache_options"`` key. Also, a custom file-open function can be
+        used (instead of ``AbstractFileSystem.open``), by specifying the
+        desired function under the ``"open_file_func"`` key.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
@@ -179,6 +187,17 @@ def read_parquet(
         every file will be parsed (which is very slow on some systems).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
+        If ``True``, or if the global ``_metadata`` file is missing, the parquet
+        metadata may be gathered and processed in parallel. Parallel metadata
+        processing is currently supported for ``ArrowDatasetEngine`` only.
+    metadata_task_size : int, default configurable
+        If parquet metadata is processed in parallel (see ``ignore_metadata_file``
+        description above), this argument can be used to specify the number of
+        dataset files to be processed by each task in the Dask graph.  If this
+        argument is set to ``0``, parallel metadata processing will be disabled.
+        The default values for local and remote filesystems can be specified
+        with the "metadata-task-size-local" and "metadata-task-size-remote"
+        config fields, respectively (see "dataframe.parquet").
     split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
@@ -186,16 +205,6 @@ def read_parquet(
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool, default None
-        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
-        Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph.  If this option
-        is True, ``read_partition`` will need to regenerate the appropriate
-        fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to ``read_partition``.
-        By default (None), ``ArrowDatasetEngine`` will set this option to
-        ``False`` when there are filters.
     chunksize : int or str, default None
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
@@ -238,9 +247,13 @@ def read_parquet(
         the second level corresponds to the kwargs that will be passed on to
         the underlying ``pyarrow`` or ``fastparquet`` function.
         Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
-        backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a ``pyarrow.Table.to_pandas()``)
+        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
+        (for the backend read function), 'arrow_to_pandas' (for controlling the
+        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
+        Any element of kwargs that is not defined under these top-level keys
+        will be passed through to the `engine.read_partitions` classmethod as a
+        stand-alone argument (and will be ignored by the engine implementations
+        defined in ``dask.dataframe``).
 
     Examples
     --------
@@ -252,51 +265,50 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if isinstance(columns, str):
-        df = read_parquet(
-            path,
-            columns=[columns],
-            filters=filters,
-            categories=categories,
-            index=index,
-            storage_options=storage_options,
-            engine=engine,
-            gather_statistics=gather_statistics,
-            ignore_metadata_file=ignore_metadata_file,
-            split_row_groups=split_row_groups,
-            read_from_paths=read_from_paths,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
+    if "read_from_paths" in kwargs:
+        kwargs.pop("read_from_paths")
+        warnings.warn(
+            "`read_from_paths` is no longer supported and will be ignored.",
+            FutureWarning,
         )
+
+    # Store initial function arguments
+    input_kwargs = {
+        "columns": columns,
+        "filters": filters,
+        "categories": categories,
+        "index": index,
+        "storage_options": storage_options,
+        "engine": engine,
+        "gather_statistics": gather_statistics,
+        "ignore_metadata_file": ignore_metadata_file,
+        "metadata_task_size": metadata_task_size,
+        "split_row_groups": split_row_groups,
+        "chunksize=": chunksize,
+        "aggregate_files": aggregate_files,
+        **kwargs,
+    }
+
+    if isinstance(columns, str):
+        input_kwargs["columns"] = [columns]
+        df = read_parquet(path, **input_kwargs)
         return df[columns]
 
     if columns is not None:
         columns = list(columns)
-
-    label = "read-parquet-"
-    output_name = label + tokenize(
-        path,
-        columns,
-        filters,
-        categories,
-        index,
-        storage_options,
-        engine,
-        gather_statistics,
-        ignore_metadata_file,
-        split_row_groups,
-        read_from_paths,
-        chunksize,
-        aggregate_files,
-    )
 
     if isinstance(engine, str):
         engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
 
+    # Update input_kwargs and tokenize inputs
+    label = "read-parquet-"
+    input_kwargs.update({"columns": columns, "engine": engine})
+    output_name = label + tokenize(path, **input_kwargs)
+
+    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -323,10 +335,10 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        read_from_paths=read_from_paths,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
+        metadata_task_size=metadata_task_size,
         **kwargs,
     )
 
@@ -387,10 +399,15 @@ def read_parquet(
                 meta,
                 columns,
                 index,
-                kwargs,
+                {},  # All kwargs should now be in `common_kwargs`
                 common_kwargs,
             ),
             label=label,
+            creation_info={
+                "func": read_parquet,
+                "args": (path,),
+                "kwargs": input_kwargs,
+            },
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
@@ -456,6 +473,7 @@ def to_parquet(
     compute=True,
     compute_kwargs=None,
     schema=None,
+    name_function=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -521,6 +539,14 @@ def to_parquet(
         output partition. If the partitions produce inconsistent schemas,
         pyarrow will throw an error when writing the shared _metadata file.
         Note that this argument is ignored by the "fastparquet" engine.
+    name_function : callable, default None
+        Function to generate the filename for each output partition.
+        The function should accept an integer (partition index) as input and
+        return a string which will be used as the filename for the corresponding
+        partition. Should preserve the lexicographic order of partitions.
+        If not specified, files will created using the convention
+        ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
+        and so on for each partition in the DataFrame.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -528,6 +554,28 @@ def to_parquet(
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
+
+    By default, files will be created in the specified output directory using the
+    convention ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ... and so on for
+    each partition in the DataFrame. To customize the names of each file, you can use the
+    ``name_function=`` keyword argument. The function passed to ``name_function`` will be
+    used to generate the filename for each partition and should expect a partition's index
+    integer as input and return a string which will be used as the filename for the corresponding
+    partition. Strings produced by ``name_function`` must preserve the order of their respective
+    partition indices.
+
+    For example:
+
+    >>> name_function = lambda x: f"data-{x}.parquet"
+    >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
+
+    will result in the following files being created::
+
+        /path/to/output/
+            ├── data-0.parquet
+            ├── data-1.parquet
+            ├── data-2.parquet
+            └── ...
 
     See Also
     --------
@@ -562,7 +610,7 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        if isinstance(fs, LocalFileSystem):
+        if _is_local_fs(fs):
             working_dir = fs.expand_path(".")[0]
             if path.rstrip("/") == working_dir.rstrip("/"):
                 raise ValueError(
@@ -641,6 +689,15 @@ def to_parquet(
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
+    if custom_metadata:
+        if b"pandas" in custom_metadata.keys():
+            raise ValueError(
+                "User-defined key/value metadata (custom_metadata) can not "
+                "contain a b'pandas' key.  This key is reserved by Pandas, "
+                "and overwriting the corresponding value can render the "
+                "entire dataset unreadable."
+            )
+        kwargs_pass["custom_metadata"] = custom_metadata
     meta, schema, i_offset = engine.initialize_write(
         df,
         fs,
@@ -654,8 +711,20 @@ def to_parquet(
         **kwargs_pass,
     )
 
+    # check name_function is valid
+    if name_function is not None and not callable(name_function):
+        raise ValueError("``name_function`` must be a callable with one argument.")
+
     # Use i_offset and df.npartitions to define file-name list
-    filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
+    filenames = [
+        f"part.{i + i_offset}.parquet"
+        if name_function is None
+        else name_function(i + i_offset)
+        for i in range(df.npartitions)
+    ]
+
+    if name_function is not None and len(set(filenames)) < len(filenames):
+        raise ValueError("``name_function`` must produce unique filenames.")
 
     # Construct IO graph
     dsk = {}
@@ -675,15 +744,6 @@ def to_parquet(
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
-    if custom_metadata:
-        if b"pandas" in custom_metadata.keys():
-            raise ValueError(
-                "User-defined key/value metadata (custom_metadata) can not "
-                "contain a b'pandas' key.  This key is reserved by Pandas, "
-                "and overwriting the corresponding value can render the "
-                "entire dataset unreadable."
-            )
-        kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
@@ -718,17 +778,12 @@ def to_parquet(
     else:
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=[df])
 
     if compute:
-        if write_metadata_file:
-            return compute_as_if_collection(
-                DataFrame, graph, (final_name, 0), **compute_kwargs
-            )
-        else:
-            return compute_as_if_collection(
-                DataFrame, graph, part_tasks, **compute_kwargs
-            )
+        return compute_as_if_collection(
+            Scalar, graph, [(final_name, 0)], **compute_kwargs
+        )
     else:
         return Scalar(graph, final_name, "")
 
@@ -948,8 +1003,8 @@ def get_engine(engine):
 
     else:
         raise ValueError(
-            'Unsupported engine: "{0}".'.format(engine)
-            + '  Valid choices include "pyarrow" and "fastparquet".'
+            f'Unsupported engine: "{engine}".'
+            '  Valid choices include "pyarrow" and "fastparquet".'
         )
 
 
@@ -1047,7 +1102,7 @@ def apply_filters(parts, statistics, filters):
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator == "=="
+                        operator in ("==", "=")
                         and min <= value <= max
                         or operator == "<"
                         and min < value
@@ -1093,6 +1148,20 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
+    if statistics and len(parts) != len(statistics):
+        # It is up to the Engine to guarantee that these
+        # lists are the same length (if statistics are defined).
+        # This misalignment may be indicative of a bug or
+        # incorrect read_parquet usage, so throw a warning.
+        warnings.warn(
+            f"Length of partition statistics ({len(statistics)}) "
+            f"does not match the partition count ({len(parts)}). "
+            f"This may indicate a bug or incorrect read_parquet "
+            f"usage. We must ignore the statistics and disable: "
+            f"filtering, divisions, and/or file aggregation."
+        )
+        statistics = []
+
     if statistics:
         result = list(
             zip(
@@ -1127,7 +1196,7 @@ def process_statistics(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+                raise ValueError(f"Specified index is invalid.\nindex: {index}")
         elif index is not False and len(out) > 1:
             if any(o["name"] == NONE_LABEL for o in out):
                 # Use sorted column matching NONE_LABEL as the index
@@ -1137,9 +1206,7 @@ def process_statistics(
                     index = [o["name"]]
                     index_in_columns = True
                 elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
+                    raise ValueError(f"Specified index is invalid.\nindex: {index}")
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
@@ -1221,7 +1288,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 def aggregate_row_groups(
     parts, stats, chunksize, split_row_groups, fs, aggregation_depth
 ):
-    if not stats[0].get("file_path_0", None):
+    if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
@@ -1286,10 +1353,8 @@ def aggregate_row_groups(
         next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
 
         if (same_path or multi_path_allowed) and (
-            (
-                _check_row_group_criteria(stat, next_stat)
-                or _check_chunksize_criteria(stat, next_stat)
-            )
+            _check_row_group_criteria(stat, next_stat)
+            or _check_chunksize_criteria(stat, next_stat)
         ):
 
             # Update part list

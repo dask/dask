@@ -17,9 +17,14 @@ pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
 from fsspec.compression import compr
-from fsspec.core import open_files
+from fsspec.core import get_fs_token_paths, open_files
 from s3fs import S3FileSystem as DaskS3FileSystem
 from tlz import concat, valmap
+
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
 
 from dask import compute
 from dask.bytes.core import read_bytes
@@ -101,7 +106,7 @@ def s3_base():
             proc.kill()
             if sys.platform == "win32":
                 # belt & braces
-                subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
+                subprocess.call(f"TASKKILL /F /PID {proc.pid} /T")
 
 
 @pytest.fixture
@@ -264,21 +269,21 @@ def test_read_bytes_sample_delimiter(s3, s3so):
         "s3://" + test_bucket_name + "/test/accounts.*",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=80,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
     sample, values = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts.1.json",
         sample=2,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     assert sample.endswith(b"\n")
 
@@ -297,18 +302,18 @@ def test_read_bytes_blocksize_none(s3, s3so):
 
 def test_read_bytes_blocksize_on_large_data(s3_with_yellow_tripdata, s3so):
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2015/yellow_tripdata_2015-01.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2015/yellow_tripdata_2015-01.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 1
 
     _, L = read_bytes(
-        "s3://{}/nyc-taxi/2014/*.csv".format(test_bucket_name),
+        f"s3://{test_bucket_name}/nyc-taxi/2014/*.csv",
         blocksize=None,
         anon=True,
-        **s3so
+        **s3so,
     )
     assert len(L) == 12
 
@@ -318,7 +323,9 @@ def test_read_bytes_block(s3, blocksize, s3so):
     _, vals = read_bytes(
         "s3://" + test_bucket_name + "/test/account*", blocksize=blocksize, **s3so
     )
-    assert list(map(len, vals)) == [(len(v) // blocksize + 1) for v in files.values()]
+    assert list(map(len, vals)) == [
+        max((len(v) // blocksize), 1) for v in files.values()
+    ]
 
     results = compute(*concat(vals))
     assert sum(len(r) for r in results) == sum(len(v) for v in files.values())
@@ -334,13 +341,13 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"\n",
-        **s3so
+        **s3so,
     )
     _, values2 = read_bytes(
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=b"foo",
-        **s3so
+        **s3so,
     )
     assert [a.key for a in concat(values)] != [b.key for b in concat(values2)]
 
@@ -357,7 +364,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
         "s3://" + test_bucket_name + "/test/accounts*",
         blocksize=blocksize,
         delimiter=d,
-        **s3so
+        **s3so,
     )
     results = compute(*concat(values))
     res = [r for r in results if r]
@@ -382,14 +389,14 @@ def test_compression(s3, fmt, blocksize, s3so):
                     "s3://compress/test/accounts.*",
                     compression=fmt,
                     blocksize=blocksize,
-                    **s3so
+                    **s3so,
                 )
             return
         sample, values = read_bytes(
             "s3://compress/test/accounts.*",
             compression=fmt,
             blocksize=blocksize,
-            **s3so
+            **s3so,
         )
         assert sample.startswith(files[sorted(files)[0]][:10])
         assert sample.endswith(b"\n")
@@ -435,7 +442,6 @@ def test_parquet(s3, engine, s3so, metadata_file):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
-    from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
     lib_version = parse_version(lib.__version__)
@@ -477,7 +483,122 @@ def test_parquet(s3, engine, s3so, metadata_file):
     )
     assert len(df2.divisions) > 1
 
-    tm.assert_frame_equal(data, df2.compute())
+    dd.utils.assert_eq(data, df2)
+
+    # Check that `open_file_options` arguments are
+    # really passed through to fsspec
+    if fsspec_parquet:
+
+        # Passing `open_file_options` kwargs will fail
+        # if you set an unsupported engine
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                url,
+                engine=engine,
+                storage_options=s3so,
+                open_file_options={
+                    "precache_options": {"method": "parquet", "engine": "foo"},
+                },
+            ).compute()
+
+        # ...but should work fine if you modify the
+        # maximum block-transfer size (max_block)
+        dd.read_parquet(
+            url,
+            engine=engine,
+            storage_options=s3so,
+            open_file_options={
+                "precache_options": {"method": "parquet", "max_block": 8_000},
+            },
+        ).compute()
+
+    # Check "open_file_func"
+    fs = get_fs_token_paths(url, storage_options=s3so)[0]
+
+    def _open(*args, check=True, **kwargs):
+        assert check
+        return fs.open(*args, **kwargs)
+
+    # Should fail if `check=False`
+    with pytest.raises(AssertionError):
+        dd.read_parquet(
+            url,
+            engine=engine,
+            storage_options=s3so,
+            open_file_options={"open_file_func": _open, "check": False},
+        ).compute()
+
+    # Should succeed otherwise
+    df3 = dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        open_file_options={"open_file_func": _open},
+    )
+    dd.utils.assert_eq(data, df3)
+
+    # Check that `cache_type="all"` result is same
+    df4 = dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        open_file_options={"cache_type": "all"},
+    )
+    dd.utils.assert_eq(data, df4)
+
+
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+def test_parquet_append(s3, engine, s3so):
+    pytest.importorskip(engine)
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
+
+    url = "s3://%s/test.parquet.append" % test_bucket_name
+
+    data = pd.DataFrame(
+        {
+            "i32": np.arange(1000, dtype=np.int32),
+            "i64": np.arange(1000, dtype=np.int64),
+            "f": np.arange(1000, dtype=np.float64),
+            "bhello": np.random.choice(["hello", "you", "people"], size=1000).astype(
+                "O"
+            ),
+        },
+    )
+    df = dd.from_pandas(data, chunksize=500)
+    df.to_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        write_index=False,
+    )
+    df.to_parquet(
+        url,
+        engine=engine,
+        storage_options=s3so,
+        write_index=False,
+        append=True,
+        ignore_divisions=True,
+    )
+
+    files = [f.split("/")[-1] for f in s3.ls(url)]
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "part.0.parquet" in files
+
+    df2 = dd.read_parquet(
+        url,
+        index=False,
+        engine=engine,
+        storage_options=s3so,
+    )
+
+    dd.utils.assert_eq(
+        pd.concat([data, data]),
+        df2,
+        check_index=False,
+    )
 
 
 def test_parquet_wstoragepars(s3, s3so):
@@ -503,11 +624,3 @@ def test_parquet_wstoragepars(s3, s3so):
     assert s3.current().default_block_size == 2 ** 20
     with s3.current().open(url + "/_metadata") as f:
         assert f.blocksize == 2 ** 20
-
-
-def test_get_pyarrow_fs_s3(s3):
-    pa = pytest.importorskip("pyarrow")
-    if parse_version(pa.__version__).major >= 2:
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-    fs = DaskS3FileSystem(anon=True)
-    assert isinstance(fs, pa.filesystem.FileSystem)

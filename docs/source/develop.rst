@@ -17,18 +17,20 @@ Where to ask for help
 
 Dask conversation happens in the following places:
 
-1.  `Stack Overflow #dask tag`_: for usage questions
-2.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
-3.  `Gitter chat`_: for real-time discussion
+#.  `Dask Discourse forum`_: for usage questions and general discussion
+#.  `Stack Overflow #dask tag`_: for usage questions
+#.  `GitHub Issue Tracker`_: for discussions around new features or established bugs
+#.  `Dask Community Slack`_: for real-time discussion
 
-For usage questions and bug reports we strongly prefer the use of Stack Overflow
-and GitHub issues over gitter chat.  GitHub and Stack Overflow are more easily
-searchable by future users and so is more efficient for everyone's time.
-Gitter chat is generally reserved for community discussion.
+For usage questions and bug reports we prefer the use of Discourse, Stack Overflow
+and GitHub issues over Slack chat.  Discourse, GitHub and Stack Overflow are more easily
+searchable by future users, so conversations had there can be useful to many more people
+than just those directly involved.
 
+.. _`Dask Discourse forum`: https://dask.discourse.group
 .. _`Stack Overflow  #dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub Issue Tracker`: https://github.com/dask/dask/issues/
-.. _`Gitter chat`: https://gitter.im/dask/dask
+.. _`Dask Community Slack`: https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g
 
 
 Separate Code Repositories
@@ -105,7 +107,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.9.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -261,36 +263,19 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_,
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_, and
-`isort <https://pycqa.github.io/isort/>`_ to ensure a consistent code
-format throughout the project. ``black``, ``flake8``, and ``isort`` can
-be installed with ``pip``::
+Dask uses several code linters (flake8, black, isort, pyupgrade), which are enforced by
+CI. Developers should run them locally before they submit a PR, through the single
+command ``pre-commit run --all-files``. This makes sure that linter versions and options
+are aligned for all developers.
 
-   python -m pip install black flake8 isort
-
-and then run from the root of the Dask repository::
-
-   black dask
-   flake8 dask
-   isort dask
-
-to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` and ``isort`` as you edit files.
-
-Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black``, ``flake8``, and ``isort`` when you make a git
-commit. This can be done by installing ``pre-commit``::
-
-   python -m pip install pre-commit
-
-and then running::
+Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
+run automatically when you make a git commit. This can be done by running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black``, ``flake8``, and ``isort``
-will be run each time you commit changes. You can skip these checks with
-``git commit --no-verify`` or with the short version ``git commit -n``.
+from the root of the Dask repository. Now the code linters will be run each time you
+commit changes. You can skip these checks with ``git commit --no-verify`` or with the
+short version ``git commit -n``.
 
 
 Contributing to Documentation
@@ -310,21 +295,21 @@ How to build the Dask documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To build the documentation locally, make a fork of the main
-`Dask repository <https://github.com/dask/dask>`_, clone the fork,
-and install the necessary requirements using ``pip`` or ``conda``::
-
+`Dask repository <https://github.com/dask/dask>`_, clone the fork::
 
   git clone https://github.com/<your-github-username>/dask.git
   cd dask/docs
 
-``pip``::
+Install the packages in ``requirements-docs.txt``.
+
+Optionally create and activate a ``conda`` environment first::
+
+  conda create -n daskdocs -c conda-forge python=3.8
+  conda activate daskdocs
+
+Install the dependencies with ``pip``::
 
   python -m pip install -r requirements-docs.txt
-
-``conda``::
-
-  conda create -n daskdocs -c conda-forge --file requirements-docs.txt
-  conda activate daskdocs
 
 Then build the documentation with ``make``::
 
@@ -381,6 +366,7 @@ Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
 .. note:: Can one of the admins verify this patch?
 
 .. image:: images/gputester-msg.png
+   :alt: "Screenshot of a GitHub comment left by the GPUtester bot, where the comment says 'Can one of the admins verify this patch?'."
 
 Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
 

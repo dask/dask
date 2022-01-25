@@ -5,7 +5,6 @@ Array
    :maxdepth: 1
    :hidden:
 
-   array-api.rst
    array-best-practices.rst
    array-chunks.rst
    array-creation.rst
@@ -43,9 +42,10 @@ Dask Array.
 Design
 ------
 
-.. image:: images/dask-array-black-text.svg
+.. image:: images/dask-array.svg
    :alt: Dask arrays coordinate many numpy arrays
    :align: right
+   :scale: 35%
 
 Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
 sufficiently NumPy-like in API such as CuPy or Sparse arrays) arranged into a

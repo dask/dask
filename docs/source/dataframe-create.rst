@@ -115,7 +115,9 @@ information:
     corresponding to ``(name, i)`` should produce ``pandas.DataFrame`` objects
     that correspond to the columns and divisions information discussed below
 2.  Name: the special name used above
-3.  Columns: a list of column names
+3.  Meta: an empty pandas DataFrame with names, dtypes and index matching
+    the expected output. Can also be a list of tuples where each tuple defines
+    a ``(name, dtype)`` pair referring to one column.
 4.  Divisions: a list of index values that separate the different partitions.
     Alternatively, if you don't know the divisions (this is common), you can
     provide a list of ``[None, None, None, ...]`` with as many partitions as
@@ -132,13 +134,13 @@ The ``dd.read_csv`` function does this for you:
           ('mydf', 1): (pd.read_csv, 'data/2000-01-02.csv'),
           ('mydf', 2): (pd.read_csv, 'data/2000-01-03.csv')}
    name = 'mydf'
-   columns = ['price', 'name', 'id']
+   meta = [('price', float), ('name', str), ('id', int)]
    divisions = [Timestamp('2000-01-01 00:00:00'),
                 Timestamp('2000-01-02 00:00:00'),
                 Timestamp('2000-01-03 00:00:00'),
                 Timestamp('2000-01-03 23:59:59')]
 
-   df = dd.DataFrame(dsk, name, columns, divisions)
+   df = dd.DataFrame(dsk, name, meta, divisions)
 
 Storing
 -------
@@ -158,5 +160,5 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
    ...               storage_options={'account_name': 'ACCOUNT_NAME',
    ...                                'account_key': 'ACCOUNT_KEY'}
 
-See the :doc:`remote data services documentation<remote-data-services>`
+See the :doc:`how to connect to remote data <how-to/connect-to-remote-data>`
 for more information.

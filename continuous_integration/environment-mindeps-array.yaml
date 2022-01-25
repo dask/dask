@@ -5,7 +5,8 @@ dependencies:
   # required dependencies
   - packaging=20.0
   - python=3.7
-  - pyyaml
+  - setuptools<60.0
+  - pyyaml>=5.3.1
   - cloudpickle=1.1.1
   - partd=0.3.10
   - fsspec=0.6.0
@@ -13,6 +14,7 @@ dependencies:
   # optional dependencies pulled in by pip install dask[array]
   - numpy=1.18
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures

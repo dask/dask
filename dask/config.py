@@ -3,6 +3,7 @@ import base64
 import builtins
 import json
 import os
+import site
 import sys
 import threading
 import warnings
@@ -13,16 +14,31 @@ import yaml
 no_default = "__no_default__"
 
 
-paths = [
-    os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
-    os.path.join(sys.prefix, "etc", "dask"),
-    os.path.join(os.path.expanduser("~"), ".config", "dask"),
-    os.path.join(os.path.expanduser("~"), ".dask"),
-]
+def _get_paths():
+    """Get locations to search for YAML configuration files.
+
+    This logic exists as a separate function for testing purposes.
+    """
+
+    paths = [
+        os.getenv("DASK_ROOT_CONFIG", "/etc/dask"),
+        os.path.join(sys.prefix, "etc", "dask"),
+        *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
+        os.path.join(os.path.expanduser("~"), ".config", "dask"),
+    ]
+    if "DASK_CONFIG" in os.environ:
+        paths.append(os.environ["DASK_CONFIG"])
+
+    # Remove duplicate paths while preserving ordering
+    paths = list(reversed(list(dict.fromkeys(reversed(paths)))))
+
+    return paths
+
+
+paths = _get_paths()
 
 if "DASK_CONFIG" in os.environ:
     PATH = os.environ["DASK_CONFIG"]
-    paths.append(PATH)
 else:
     PATH = os.path.join(os.path.expanduser("~"), ".config", "dask")
 
@@ -138,12 +154,10 @@ def collect_yaml(paths=paths):
                 try:
                     file_paths.extend(
                         sorted(
-                            [
-                                os.path.join(path, p)
-                                for p in os.listdir(path)
-                                if os.path.splitext(p)[1].lower()
-                                in (".json", ".yaml", ".yml")
-                            ]
+                            os.path.join(path, p)
+                            for p in os.listdir(path)
+                            if os.path.splitext(p)[1].lower()
+                            in (".json", ".yaml", ".yml")
                         )
                     )
                 except OSError:
@@ -160,7 +174,7 @@ def collect_yaml(paths=paths):
             with open(path) as f:
                 data = yaml.safe_load(f.read()) or {}
                 configs.append(data)
-        except (OSError, IOError):
+        except OSError:
             # Ignore permission errors
             pass
 
@@ -261,7 +275,7 @@ def ensure_file(source, destination=None, comment=True):
                 os.rename(tmp, destination)
             except OSError:
                 os.remove(tmp)
-    except (IOError, OSError):
+    except OSError:
         pass
 
 
@@ -600,7 +614,7 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
             )
             return new
         else:
-            raise ValueError('Configuration value "{}" has been removed'.format(key))
+            raise ValueError(f'Configuration value "{key}" has been removed')
     else:
         return key
 

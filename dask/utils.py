@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import functools
 import inspect
 import os
@@ -8,16 +10,19 @@ import tempfile
 import uuid
 import warnings
 from _thread import RLock
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
+from operator import add
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
+from typing import TypeVar
 from weakref import WeakValueDictionary
+
+import tlz as toolz
 
 from .core import get_deps
 
@@ -39,19 +44,23 @@ def apply(func, args, kwargs=None):
 
 def _deprecated(
     *,
-    version: str = None,
-    message: str = None,
-    use_instead: str = None,
-    category: Type[Warning] = FutureWarning,
+    version: str | None = None,
+    after_version: str | None = None,
+    message: str | None = None,
+    use_instead: str | None = None,
+    category: type[Warning] = FutureWarning,
 ):
     """Decorator to mark a function as deprecated
 
     Parameters
     ----------
     version : str, optional
-        Version of Dask in which the function was deprecated.
-        If specified, the version will be included in the default
-        warning message.
+        Version of Dask in which the function was deprecated. If specified, the version
+        will be included in the default warning message. This should no longer be used
+        after the introduction of automated versioning system.
+    after_version : str, optional
+        Version of Dask after which the function was deprecated. If specified, the
+        version will be included in the default warning message.
     message : str, optional
         Custom warning message to raise.
     use_instead : str, optional
@@ -65,7 +74,7 @@ def _deprecated(
     --------
 
     >>> from dask.utils import _deprecated
-    >>> @_deprecated(version="X.Y.Z", use_instead="bar")
+    >>> @_deprecated(after_version="X.Y.Z", use_instead="bar")
     ... def foo():
     ...     return "baz"
     """
@@ -73,7 +82,9 @@ def _deprecated(
     def decorator(func):
         if message is None:
             msg = f"{func.__name__} "
-            if version is not None:
+            if after_version is not None:
+                msg += f"was deprecated after version {after_version} "
+            elif version is not None:
                 msg += f"was deprecated in version {version} "
             else:
                 msg += "is deprecated "
@@ -165,6 +176,31 @@ def import_required(mod_name, error_msg):
 
 @contextmanager
 def tmpfile(extension="", dir=None):
+    """
+    Function to create and return a unique temporary file with the given extension, if provided.
+
+    Parameters
+    ----------
+    extension : str
+        The extension of the temporary file to be created
+    dir : str
+        If ``dir`` is not None, the file will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary file
+
+    See Also
+    --------
+    NamedTemporaryFile : Built-in alternative for creating temporary files
+    tmp_path : pytest fixture for creating a temporary directory unique to the test invocation
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
+    """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
@@ -174,15 +210,33 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with suppress(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
 @contextmanager
 def tmpdir(dir=None):
+    """
+    Function to create and return a unique temporary directory.
+
+    Parameters
+    ----------
+    dir : str
+        If ``dir`` is not None, the directory will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary directory
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary directories multiple times.
+    """
     dirname = tempfile.mkdtemp(dir=dir)
 
     try:
@@ -372,71 +426,67 @@ def is_integer(i):
     return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
-ONE_ARITY_BUILTINS = set(
-    [
-        abs,
-        all,
-        any,
-        ascii,
-        bool,
-        bytearray,
-        bytes,
-        callable,
-        chr,
-        classmethod,
-        complex,
-        dict,
-        dir,
-        enumerate,
-        eval,
-        float,
-        format,
-        frozenset,
-        hash,
-        hex,
-        id,
-        int,
-        iter,
-        len,
-        list,
-        max,
-        min,
-        next,
-        oct,
-        open,
-        ord,
-        range,
-        repr,
-        reversed,
-        round,
-        set,
-        slice,
-        sorted,
-        staticmethod,
-        str,
-        sum,
-        tuple,
-        type,
-        vars,
-        zip,
-        memoryview,
-    ]
-)
-MULTI_ARITY_BUILTINS = set(
-    [
-        compile,
-        delattr,
-        divmod,
-        filter,
-        getattr,
-        hasattr,
-        isinstance,
-        issubclass,
-        map,
-        pow,
-        setattr,
-    ]
-)
+ONE_ARITY_BUILTINS = {
+    abs,
+    all,
+    any,
+    ascii,
+    bool,
+    bytearray,
+    bytes,
+    callable,
+    chr,
+    classmethod,
+    complex,
+    dict,
+    dir,
+    enumerate,
+    eval,
+    float,
+    format,
+    frozenset,
+    hash,
+    hex,
+    id,
+    int,
+    iter,
+    len,
+    list,
+    max,
+    min,
+    next,
+    oct,
+    open,
+    ord,
+    range,
+    repr,
+    reversed,
+    round,
+    set,
+    slice,
+    sorted,
+    staticmethod,
+    str,
+    sum,
+    tuple,
+    type,
+    vars,
+    zip,
+    memoryview,
+}
+MULTI_ARITY_BUILTINS = {
+    compile,
+    delattr,
+    divmod,
+    filter,
+    getattr,
+    hasattr,
+    isinstance,
+    issubclass,
+    map,
+    pow,
+    setattr,
+}
 
 
 def getargspec(func):
@@ -544,29 +594,27 @@ class Dispatch:
 
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
-        # Fast path with direct lookup on cls
         lk = self._lookup
-        try:
-            impl = lk[cls]
-        except KeyError:
-            pass
-        else:
-            return impl
-        # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition(".")
-        try:
-            register = self._lazy.pop(toplevel)
-        except KeyError:
-            pass
-        else:
-            register()
-            return self.dispatch(cls)  # recurse
-        # Walk the MRO and cache the lookup result
-        for cls2 in inspect.getmro(cls)[1:]:
-            if cls2 in lk:
-                lk[cls] = lk[cls2]
-                return lk[cls2]
-        raise TypeError("No dispatch for {0}".format(cls))
+        for cls2 in cls.__mro__:
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
+            # Is a lazy registration function present?
+            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                register = self._lazy.pop(toplevel)
+            except KeyError:
+                pass
+            else:
+                register()
+                return self.dispatch(cls)  # recurse
+        raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
         """
@@ -640,13 +688,13 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s.\n\n" % (
+        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s.\n\n" % (cls.__name__, name)
+        l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -702,6 +750,14 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     doc = original_method.__doc__
     if doc is None:
         doc = ""
+
+    # pandas DataFrame/Series sometimes override methods without setting __doc__
+    if not doc and cls.__name__ in {"DataFrame", "Series"}:
+        for obj in cls.mro():
+            obj_method = getattr(obj, method.__name__, None)
+            if obj_method is not None and obj_method.__doc__:
+                doc = obj_method.__doc__
+                break
 
     # Insert disclaimer that this is a copied docstring
     if doc:
@@ -769,7 +825,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method.__name__)
+                msg = f"Base package doesn't support '{method.__name__}'."
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -865,8 +921,6 @@ def ensure_unicode(s):
 
     >>> ensure_unicode('123')
     '123'
-    >>> ensure_unicode('123')
-    '123'
     >>> ensure_unicode(b'123')
     '123'
     """
@@ -874,8 +928,7 @@ def ensure_unicode(s):
         return s
     if hasattr(s, "decode"):
         return s.decode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
 
 
 def digit(n, k, base):
@@ -921,7 +974,7 @@ def dependency_depth(dsk):
 def memory_repr(num):
     for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
-            return "%3.1f %s" % (num, x)
+            return f"{num:3.1f} {x}"
         num /= 1024.0
 
 
@@ -960,39 +1013,35 @@ class methodcaller:
     Return a callable object that calls the given method on its operand.
 
     Unlike the builtin `operator.methodcaller`, instances of this class are
-    serializable
+    cached and arguments are passed at call time instead of build time.
     """
 
     __slots__ = ("method",)
     func = property(lambda self: self.method)  # For `funcname` to work
 
-    def __new__(cls, method):
-        if method in _method_cache:
+    def __new__(cls, method: str):
+        try:
             return _method_cache[method]
-        self = object.__new__(cls)
-        self.method = method
-        _method_cache[method] = self
-        return self
+        except KeyError:
+            self = object.__new__(cls)
+            self.method = method
+            _method_cache[method] = self
+            return self
 
-    def __call__(self, obj, *args, **kwargs):
-        return getattr(obj, self.method)(*args, **kwargs)
+    def __call__(self, __obj, *args, **kwargs):
+        return getattr(__obj, self.method)(*args, **kwargs)
 
     def __reduce__(self):
         return (methodcaller, (self.method,))
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.method)
+        return f"<{self.__class__.__name__}: {self.method}>"
 
     __repr__ = __str__
 
 
 class itemgetter:
-    """
-    Return a callable object that gets an item from the operand
-
-    Unlike the builtin `operator.itemgetter`, instances of this class are
-    serializable
-    """
+    """Variant of operator.itemgetter that supports equality tests"""
 
     __slots__ = ("index",)
 
@@ -1086,7 +1135,7 @@ class SerializableLock:
         self.__init__(token)
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.token)
+        return f"<{self.__class__.__name__}: {self.token}>"
 
     __repr__ = __str__
 
@@ -1105,7 +1154,7 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
+def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     """Convert a generic Mapping into a dict.
     Optimize use case of :class:`~dask.highlevelgraph.HighLevelGraph`.
 
@@ -1123,9 +1172,8 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
     except AttributeError:
         return dict(d)
 
-    unique_layers = {id(layer): layer for layer in layers.values()}
     result = {}
-    for layer in unique_layers.values():
+    for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
 
@@ -1146,7 +1194,7 @@ class OperatorMethodMixin:
         elif name == "inv":
             name = "invert"
 
-        meth = "__{0}__".format(name)
+        meth = f"__{name}__"
 
         if name in ("abs", "invert", "neg", "pos"):
             setattr(cls, meth, cls._get_unary_operator(op))
@@ -1156,7 +1204,7 @@ class OperatorMethodMixin:
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
-            rmeth = "__r{0}__".format(name)
+            rmeth = f"__r{name}__"
             setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
@@ -1230,6 +1278,12 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """Looks like a Pandas DataFrame"""
+    if (df.__class__.__module__, df.__class__.__name__) == (
+        "pandas.core.frame",
+        "DataFrame",
+    ):
+        # fast exec for most likely input
+        return True
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
@@ -1462,7 +1516,7 @@ def format_time_ago(n: datetime) -> str:
         if dur > 0:
             if dur == 1:  # De-pluralize
                 unit = unit[:-1]
-            return "%s %s ago" % (dur, unit)
+            return f"{dur} {unit} ago"
     return "Just now"
 
 
@@ -1667,7 +1721,7 @@ def key_split(s):
         return "Other"
 
 
-def stringify(obj, exclusive: Optional[Iterable] = None):
+def stringify(obj, exclusive: Iterable | None = None):
     """Convert an object to a string
 
     If ``exclusive`` is specified, search through `obj` and convert
@@ -1823,3 +1877,62 @@ class cached_property(_cached_property):
     def __set__(self, instance, val):
         """Raise an error when attempting to set a cached property."""
         raise AttributeError("Can't set attribute")
+
+
+class _HashIdWrapper:
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+
+@functools.lru_cache()
+def _cumsum(seq, initial_zero):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    if initial_zero:
+        return tuple(toolz.accumulate(add, seq, 0))
+    else:
+        return tuple(toolz.accumulate(add, seq))
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`toolz.accumulate` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+
+    Returns
+    -------
+    tuple
+    """
+    if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
+        result = _cumsum(_HashIdWrapper(seq), initial_zero)
+    else:
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq), initial_zero)
+    return result

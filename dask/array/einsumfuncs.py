@@ -194,10 +194,14 @@ def parse_einsum_input(operands):
 
 
 @derived_from(np)
-def einsum(*operands, **kwargs):
-    dtype = kwargs.pop("dtype", None)
-    optimize = kwargs.pop("optimize", False)
-    split_every = kwargs.pop("split_every", None)
+def einsum(*operands, dtype=None, optimize=False, split_every=None, **kwargs):
+    """Dask added an additional keyword-only argument ``split_every``.
+
+    split_every: int >= 2 or dict(axis: int), optional
+        Determines the depth of the recursive aggregation.
+        Deafults to ``None`` which would let dask heuristically
+        decide a good default.
+    """
 
     einsum_dtype = dtype
 
@@ -218,7 +222,7 @@ def einsum(*operands, **kwargs):
     inputs = [tuple(i) for i in inputs.split(",")]
 
     # Set of all indices
-    all_inds = set(a for i in inputs for a in i)
+    all_inds = {a for i in inputs for a in i}
 
     # Which indices are contracted?
     contract_inds = all_inds - set(outputs)
@@ -238,7 +242,7 @@ def einsum(*operands, **kwargs):
         kernel_dtype=einsum_dtype,
         ncontract_inds=ncontract_inds,
         optimize=optimize,
-        **kwargs
+        **kwargs,
     )
 
     # Now reduce over any extra contraction dimensions

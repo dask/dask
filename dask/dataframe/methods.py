@@ -212,7 +212,7 @@ def describe_numeric_aggregate(
     else:
         part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
-    q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
+    q.index = [f"{l * 100:g}%" for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
@@ -420,3 +420,33 @@ def assign_index(df, ind):
     df = df.copy()
     df.index = ind
     return df
+
+
+def monotonic_increasing_chunk(x):
+    data = x if is_index_like(x) else x.iloc
+    return pd.DataFrame(
+        data=[[x.is_monotonic_increasing, data[0], data[-1]]],
+        columns=["monotonic", "first", "last"],
+    )
+
+
+def monotonic_increasing_aggregate(concatenated):
+    bounds_are_monotonic = pd.Series(
+        concatenated[["first", "last"]].to_numpy().ravel()
+    ).is_monotonic_increasing
+    return concatenated["monotonic"].all() and bounds_are_monotonic
+
+
+def monotonic_decreasing_chunk(x):
+    data = x if is_index_like(x) else x.iloc
+    return pd.DataFrame(
+        data=[[x.is_monotonic_decreasing, data[0], data[-1]]],
+        columns=["monotonic", "first", "last"],
+    )
+
+
+def monotonic_decreasing_aggregate(concatenated):
+    bounds_are_monotonic = pd.Series(
+        concatenated[["first", "last"]].to_numpy().ravel()
+    ).is_monotonic_decreasing
+    return concatenated["monotonic"].all() and bounds_are_monotonic

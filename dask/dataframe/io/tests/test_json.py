@@ -4,6 +4,7 @@ import os
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpdir, tmpfile
@@ -117,7 +118,7 @@ def test_read_chunked(block):
         fn = os.path.join(path, "1.json")
         df.to_json(fn, orient="records", lines=True)
         d = dd.read_json(fn, blocksize=block, sample=10)
-        assert (d.npartitions > 1) or (block > 50)
+        assert (d.npartitions > 1) or (block > 30)
         assert_eq(d, df, check_index=False)
 
 
@@ -135,3 +136,17 @@ def test_read_json_inferred_compression():
         dd.to_json(ddf, fn, compression="gzip")
         actual = dd.read_json(fn)
         assert_eq(df, actual.compute(), check_index=False)
+
+
+def test_to_json_results():
+    with tmpfile("json") as f:
+        paths = ddf.to_json(f)
+        assert paths == [os.path.join(f, f"{n}.part") for n in range(ddf.npartitions)]
+
+    with tmpfile("json") as f:
+        list_of_delayed = ddf.to_json(f, compute=False)
+        paths = dask.compute(*list_of_delayed)
+        # this is a tuple rather than a list since it's the output of dask.compute
+        assert paths == tuple(
+            os.path.join(f, f"{n}.part") for n in range(ddf.npartitions)
+        )

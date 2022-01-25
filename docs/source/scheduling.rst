@@ -9,23 +9,27 @@ and edges between nodes are normal Python objects
 that are created by one task as outputs and used as inputs in another task.
 After Dask generates these task graphs, it needs to execute them on parallel hardware.
 This is the job of a *task scheduler*.
-Different task schedulers exist, and each will consume a task graph and compute the 
+Different task schedulers exist, and each will consume a task graph and compute the
 same result, but with different performance characteristics.
-
-.. image:: images/collections-schedulers.png
-   :alt: Dask collections and schedulers
-   :width: 80%
-   :align: center
 
 Dask has two families of task schedulers:
 
-1.  **Single machine scheduler**: This scheduler provides basic features on a
+1.  **Single-machine scheduler**: This scheduler provides basic features on a
     local process or thread pool.  This scheduler was made first and is the
-    default.  It is simple and cheap to use, although it can only be used on 
+    default.  It is simple and cheap to use, although it can only be used on
     a single machine and does not scale
 2.  **Distributed scheduler**: This scheduler is more sophisticated, offers
     more features, but also requires a bit more effort to set up.  It can
     run locally or distributed across a cluster
+
+|
+
+.. image:: images/dask-overview-schedulers.svg
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
+   :align: center
+   :scale: 135%
+
+|
 
 For different computations you may find better performance with particular scheduler settings.
 This document helps you understand how to choose between and configure different schedulers,
@@ -62,14 +66,14 @@ then you may want to try one of the process-based schedulers below
 Local Processes
 ---------------
 
-.. note:: 
+.. note::
 
-   The distributed scheduler described a couple sections below is often a better choice today. 
+   The distributed scheduler described a couple sections below is often a better choice today.
    We encourage readers to continue reading after this section.
 
 .. code-block:: python
 
-   import dask.multiprocessing
+   import dask
    dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
@@ -119,7 +123,7 @@ This is particularly valuable for debugging and profiling,
 which are more difficult when using threads or processes.
 
 For example, when using IPython or Jupyter notebooks, the ``%debug``, ``%pdb``, or ``%prun`` magics
-will not work well when using the parallel Dask schedulers 
+will not work well when using the parallel Dask schedulers
 (they were not designed to be used in a parallel computing context).
 However, if you run into an exception and want to step into the debugger,
 you may wish to rerun your computation under the single-threaded scheduler
@@ -136,7 +140,7 @@ Dask Distributed (local)
    # or
    client = Client(processes=False)
 
-The Dask distributed scheduler can either be :doc:`setup on a cluster <setup>`
+The Dask distributed scheduler can either be :doc:`setup on a cluster <how-to/deploy-dask-clusters>`
 or run locally on a personal machine.  Despite having the name "distributed",
 it is often pragmatic on local machines for a few reasons:
 
@@ -148,7 +152,7 @@ it is often pragmatic on local machines for a few reasons:
     multiple processes
 
 You can read more about using the Dask distributed scheduler on a single machine in
-:doc:`these docs <setup/single-distributed>`.
+:doc:`these docs <how-to/deploy-dask/single-distributed>`.
 
 
 Dask Distributed (Cluster)
@@ -156,7 +160,7 @@ Dask Distributed (Cluster)
 
 You can also run Dask on a distributed cluster.
 There are a variety of ways to set this up depending on your cluster.
-We recommend referring to the :doc:`setup documentation <setup>` for more information.
+We recommend referring to :doc:`how to deploy Dask clusters <how-to/deploy-dask-clusters>` for more information.
 
 .. _scheduling-configuration:
 
