@@ -68,6 +68,20 @@ def _append_row_groups(metadata, md):
             raise err
 
 
+def _concatenate_file_metadata(md_list):
+    """Concateate a list of parquet metadata objects
+
+    Used by `ArrowDatasetEngine` and `ArrowLegacyEngine`.
+    """
+    metadata = None
+    for md in [_md for _md in md_list if _md is not None]:
+        if metadata is None:
+            metadata = md
+        else:
+            _append_row_groups(metadata, md)
+    return metadata
+
+
 def _write_partitioned(
     table,
     df,
@@ -762,8 +776,21 @@ class ArrowDatasetEngine(Engine):
         else:
             return []
 
-    @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+    @classmethod
+    def concatenate_metadata(cls, parts):
+        d = {
+            "schema": parts[0][0].get("schema", None),
+            "meta": None,
+        }
+        md_list = [p[0]["meta"] for p in parts if p[0]["meta"] is not None]
+        if md_list:
+            d["meta"] = _concatenate_file_metadata(md_list)
+
+        # Preserve list of lists structure of input `parts`
+        return [[d]]
+
+    @classmethod
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
         schema = parts[0][0].get("schema", None)
         parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
@@ -777,8 +804,8 @@ class ArrowDatasetEngine(Engine):
 
             # Aggregate metadata and write to _metadata file
             metadata_path = fs.sep.join([path, "_metadata"])
-            if append and fmd is not None:
-                _meta = fmd
+            if append and meta is not None:
+                _meta = meta
                 i_start = 0
             else:
                 _meta = parts[0][0]["meta"]
