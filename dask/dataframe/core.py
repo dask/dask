@@ -1500,10 +1500,12 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=None, regex=False):
+        # In PANDAS_GT_140 pandas starts using no_default instead of None
+        value_kwarg = {"value": value} if value is not None else {}
         return self.map_partitions(
             M.replace,
             to_replace=to_replace,
-            value=value,
+            **value_kwarg,
             regex=regex,
             enforce_metadata=False,
         )
@@ -1970,6 +1972,7 @@ Dask Name: {name}, {task} tasks"""
             chunk_kwargs={"dropna": dropna},
             aggregate_kwargs={"dropna": dropna},
         )
+        mode_series.name = self.name
         return mode_series
 
     @_numeric_only
@@ -5181,7 +5184,6 @@ class DataFrame(_Frame):
             mode_series = Series.mode(
                 col_series, dropna=dropna, split_every=split_every
             )
-            mode_series.name = col_series.name
             mode_series_list.append(mode_series)
 
         name = "concat-" + tokenize(*mode_series_list)
