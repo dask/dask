@@ -11,7 +11,6 @@ from dask import config
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
-    cached_cumsum,
     make_block_sorted_slices,
     new_blockdim,
     normalize_index,
@@ -975,29 +974,6 @@ def test_pathological_unsorted_slicing():
 
     assert "10" in str(info.list[0])
     assert "out-of-order" in str(info.list[0])
-
-
-def test_cached_cumsum():
-    a = (1, 2, 3, 4)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    assert x == (1, 3, 6, 10)
-    assert y == (0, 1, 3, 6, 10)
-
-
-def test_cached_cumsum_nan():
-    a = (1, np.nan, 3)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_equal(x, (1, np.nan, np.nan))
-    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
-
-
-def test_cached_cumsum_non_tuple():
-    a = [1, 2, 3]
-    assert cached_cumsum(a) == (1, 3, 6)
-    a[1] = 4
-    assert cached_cumsum(a) == (1, 5, 8)
 
 
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])

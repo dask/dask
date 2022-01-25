@@ -52,6 +52,7 @@ from ..utils import (
     IndexCallable,
     M,
     SerializableLock,
+    cached_cumsum,
     cached_property,
     concrete,
     derived_from,
@@ -77,7 +78,7 @@ from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _numpy_120, _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
+from .slicing import replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
