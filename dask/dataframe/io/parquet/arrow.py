@@ -785,12 +785,11 @@ class ArrowDatasetEngine(Engine):
         md_list = [p[0]["meta"] for p in parts if p[0]["meta"] is not None]
         if md_list:
             d["meta"] = _concatenate_file_metadata(md_list)
-
-        # Preserve list of lists structure of input `parts`
-        return [[d]]
+        return [d]
 
     @classmethod
     def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
+        parts = [parts] if isinstance(parts[0], dict) else parts
         schema = parts[0][0].get("schema", None)
         parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:

@@ -820,7 +820,10 @@ def to_parquet(
             name=meta_name,
             name_input=data_write._name,
             npartitions_input=data_write.npartitions,
-            concat_func=engine.concatenate_metadata,
+            concat_func=engine.concatenate_metadata
+            if write_metadata_file
+            else lambda x: x,
+            split_every=32 if write_metadata_file else data_write.npartitions,
             tree_node_func=lambda x: x,
             finalize_func=partial(
                 engine.write_metadata,
@@ -829,7 +832,9 @@ def to_parquet(
                 path=path,
                 append=append,
                 compression=compression,
-            ),
+            )
+            if write_metadata_file
+            else lambda x: None,
         )
     else:
         dsk = {
