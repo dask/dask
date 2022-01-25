@@ -78,7 +78,9 @@ These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+3.  The ``{prefix}/etc/dask`` directories with ``{prefix}`` in `site.PREFIXES
+    <https://docs.python.org/3/library/site.html#site.PREFIXES>`_
+4.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
     variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
@@ -90,9 +92,6 @@ variable, which takes precedence at the top of the list above.
 The contents of these YAML files are merged together, allowing different
 Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
-
-*Note: for historical reasons we also look in the ``~/.dask`` directory for
-config files.  This is deprecated and will soon be removed.*
 
 
 Environment Variables

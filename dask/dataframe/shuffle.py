@@ -128,6 +128,19 @@ def sort_values(
             sort_function, **sort_kwargs
         )
 
+    if not isinstance(ascending, bool):
+        # support [True] as input
+        if (
+            isinstance(ascending, list)
+            and len(ascending) == 1
+            and isinstance(ascending[0], bool)
+        ):
+            ascending = ascending[0]
+        else:
+            raise NotImplementedError(
+                f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
+            )
+
     if (
         all(not pd.isna(x) for x in divisions)
         and mins == sorted(mins, reverse=not ascending)

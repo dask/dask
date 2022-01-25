@@ -9,6 +9,7 @@ from tlz import merge
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from .core import Array
+from .numpy_compat import _numpy_122
 from .numpy_compat import percentile as np_percentile
 
 
@@ -117,11 +118,12 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
         internal_method = method
 
     if "interpolation" in kwargs:
-        warnings.warn(
-            "In Dask 2022.1.0, the `interpolation=` argument to percentile was renamed to "
-            "`method= ` ",
-            FutureWarning,
-        )
+        if _numpy_122:
+            warnings.warn(
+                "In Dask 2022.1.0, the `interpolation=` argument to percentile was renamed to "
+                "`method= ` ",
+                FutureWarning,
+            )
         method = kwargs.pop("interpolation")
 
     if kwargs:

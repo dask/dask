@@ -11,7 +11,6 @@ from dask import config
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
-    cached_cumsum,
     make_block_sorted_slices,
     new_blockdim,
     normalize_index,
@@ -977,29 +976,6 @@ def test_pathological_unsorted_slicing():
     assert "out-of-order" in str(info.list[0])
 
 
-def test_cached_cumsum():
-    a = (1, 2, 3, 4)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    assert x == (1, 3, 6, 10)
-    assert y == (0, 1, 3, 6, 10)
-
-
-def test_cached_cumsum_nan():
-    a = (1, np.nan, 3)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_equal(x, (1, np.nan, np.nan))
-    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
-
-
-def test_cached_cumsum_non_tuple():
-    a = [1, 2, 3]
-    assert cached_cumsum(a) == (1, 3, 6)
-    a[1] = 4
-    assert cached_cumsum(a) == (1, 5, 8)
-
-
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])
 def test_setitem_with_different_chunks_preserves_shape(params):
     """Reproducer for https://github.com/dask/dask/issues/3730.
@@ -1065,3 +1041,9 @@ def test_slice_array_3d_with_bool_numpy_array():
     actual = array[mask].compute()
     expected = np.arange(13, 24)
     assert_eq(actual, expected)
+
+
+def test_slice_array_null_dimension():
+    array = da.from_array(np.zeros((3, 0)))
+    expected = np.zeros((3, 0))[[0]]
+    assert_eq(array[[0]], expected)
