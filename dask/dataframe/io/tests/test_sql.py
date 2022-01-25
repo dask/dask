@@ -361,19 +361,19 @@ def test_datetimes():
         assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
 
 
-def test_extra_connection_engine_keywords(capsys, db):
+def test_extra_connection_engine_keywords(caplog, db):
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": False}
     ).compute()
     # no captured message from the stdout with the echo=False parameter (this is the default)
-    out, err = capsys.readouterr()
-    assert "SELECT" not in out
+    out = "\n".join(r.message for r in caplog.records)
+    assert out == ""
     assert_eq(data, df)
     # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": True}
     ).compute()
-    out, err = capsys.readouterr()
+    out = "\n".join(r.message for r in caplog.records)
     assert "WHERE" in out
     assert "FROM" in out
     assert "SELECT" in out
@@ -554,9 +554,9 @@ def test_to_sql_kwargs():
             ddf.to_sql("test", uri, unknown=None)
 
 
-def test_to_sql_engine_kwargs(capsys):
+def test_to_sql_engine_kwargs(caplog):
     ddf = dd.from_pandas(df, 1)
     with tmp_db_uri() as uri:
         ddf.to_sql("test", uri, engine_kwargs={"echo": True})
-        out, err = capsys.readouterr()
-        assert "CREATE" in out
+        logs = "\n".join(r.message for r in caplog.records)
+        assert "CREATE" in logs
