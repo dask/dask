@@ -335,9 +335,7 @@ def test_tensordot():
 
     assert same_keys(da.tensordot(a, b, axes=(1, 0)), da.tensordot(a, b, axes=(1, 0)))
 
-    # Increasing number of chunks warning
-    with pytest.warns(da.PerformanceWarning):
-        assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
+    assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
 
 
 @pytest.mark.parametrize(
@@ -379,7 +377,8 @@ def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
     dx = da.from_array(x, chunks=-1)
-    assert_eq(da.tensordot(dx, dx, ndim), np.array(2 ** ndim))
+    # Rechunking an array with more than 26 dimensions is very slow, do not rechunk
+    assert_eq(da.tensordot(dx, dx, ndim, rechunk=False), np.array(2 ** ndim))
 
 
 def test_dot_method():
