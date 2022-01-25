@@ -1288,23 +1288,9 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def concatenate_metadata(cls, parts):
-        rgs = []
-        if parts:
-            for rg in parts:
-                if rg is not None:
-                    if isinstance(rg, list):
-                        for r in rg:
-                            rgs.append(r)
-                    else:
-                        rgs.append(rg)
-        return rgs
-
-    @classmethod
     def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
         _meta = copy.copy(meta)
         rgs = meta.row_groups
-        parts = [[]] if parts == [] else parts
         if parts:
             for rg in parts:
                 if rg is not None:

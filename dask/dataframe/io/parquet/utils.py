@@ -177,19 +177,6 @@ class Engine:
         raise NotImplementedError
 
     @classmethod
-    def concatenate_metadata(cls, parts):
-        """
-        Concatenate a list of metadata-based elements.
-
-        Parameters
-        ----------
-        parts: List
-            Contains metadata objects to write, of the type undrestood by the
-            specific implementation
-        """
-        raise NotImplementedError()
-
-    @classmethod
     def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
         """
         Write the shared metadata file for a parquet dataset.

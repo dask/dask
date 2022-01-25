@@ -813,17 +813,16 @@ def to_parquet(
         align_dataframes=False,
     )
 
-    # Collect metadata and write _metadata.
+    # Convert data_write + metadata write to computable collection
     meta_name = "metadata-" + data_write._name
-    if write_metadata_file:
-        dsk = DataFrameTreeReduction(
+    graph = HighLevelGraph.from_collections(
+        meta_name,
+        DataFrameTreeReduction(
             name=meta_name,
             name_input=data_write._name,
             npartitions_input=data_write.npartitions,
-            concat_func=engine.concatenate_metadata
-            if write_metadata_file
-            else lambda x: x,
-            split_every=32 if write_metadata_file else data_write.npartitions,
+            concat_func=lambda x: x,
+            split_every=data_write.npartitions,
             tree_node_func=lambda x: x,
             finalize_func=partial(
                 engine.write_metadata,
@@ -835,17 +834,9 @@ def to_parquet(
             )
             if write_metadata_file
             else lambda x: None,
-        )
-    else:
-        dsk = {
-            (meta_name, 0): (
-                lambda x: None,
-                [(data_write._name, d) for d in range(df.npartitions)],
-            )
-        }
-
-    # Convert data_write + dsk to computable collection
-    graph = HighLevelGraph.from_collections(meta_name, dsk, dependencies=(data_write,))
+        ),
+        dependencies=(data_write,),
+    )
     if compute:
         return compute_as_if_collection(
             Scalar, graph, [(meta_name, 0)], **compute_kwargs
