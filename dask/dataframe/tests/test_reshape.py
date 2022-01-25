@@ -86,6 +86,9 @@ def test_get_dummies_kwargs():
     tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
 
 
+@pytest.mark.filterwarnings(
+    "ignore::FutureWarning"
+)  # https://github.com/pandas-dev/pandas/issues/45618
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
     ds = dd.from_pandas(s, 2)
@@ -103,6 +106,9 @@ def test_get_dummies_sparse():
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
+@pytest.mark.filterwarnings(
+    "ignore::FutureWarning"
+)  # https://github.com/pandas-dev/pandas/issues/45618
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {
