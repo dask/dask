@@ -19,7 +19,12 @@ def test_read_json_with_path_column(orient):
         df.to_json(f, orient=orient, lines=False)
         actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
-        actual_pd["path"] = pd.Series((str(f),) * len(actual_pd), dtype="category")
+        # The default column name when include_path_colum is True is "path"
+        # The paths on Windows are normalized somewhere in the file reading
+        # chain in Dask, so we have to do the same here.
+        actual_pd["path"] = pd.Series(
+            (os.path.normpath(f),) * len(actual_pd), dtype="category"
+        )
         assert actual.path.dtype == "category"
         out = actual.compute()
         assert_eq(out, actual_pd)
@@ -32,18 +37,21 @@ def test_read_json_path_column_with_duplicate_name_is_error():
             dd.read_json(f, orient="records", lines=False, include_path_column="x")
 
 
-def test_read_json_with_converter():
+def test_read_json_with_path_converter():
+    path_column_name = "filenames"
     with tmpfile("json") as f:
         df.to_json(f, orient="records", lines=False)
         actual = dd.read_json(
             f,
             orient="records",
             lines=False,
-            include_path_column="path",
+            include_path_column=path_column_name,
             path_converter=lambda x: "asdf.json",
         )
         actual_pd = pd.read_json(f, orient="records", lines=False)
-        actual_pd["path"] = pd.Series(("asdf.json",) * len(actual_pd), dtype="category")
+        actual_pd[path_column_name] = pd.Series(
+            ("asdf.json",) * len(actual_pd), dtype="category"
+        )
         out = actual.compute()
         assert_eq(out, actual_pd)
 
@@ -56,7 +64,7 @@ def test_read_orient_not_records_and_lines():
 def test_write_orient_not_records_and_lines():
     with tmpfile("json") as f:
         with pytest.raises(ValueError, match="Line-delimited JSON"):
-            dd.to_json(df, str(f), orient="split", lines=True)
+            dd.to_json(ddf, f, orient="split", lines=True)
 
 
 @pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])
