@@ -20,11 +20,12 @@ def test_read_json_with_path_column(orient):
         actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
         actual_pd["path"] = pd.Series((str(f),) * len(actual_pd), dtype="category")
+        assert actual.path.dtype == "category"
         out = actual.compute()
         assert_eq(out, actual_pd)
 
 
-def test_read_json_path_column_present():
+def test_read_json_path_column_with_duplicate_name_is_error():
     with tmpfile("json") as f:
         df.to_json(f, orient="records", lines=False)
         with pytest.raises(ValueError, match="Files already contain"):
@@ -53,8 +54,9 @@ def test_read_orient_not_records_and_lines():
 
 
 def test_write_orient_not_records_and_lines():
-    with pytest.raises(ValueError, match="Line-delimited JSON"):
-        dd.to_json(df, "nofile.json", orient="split", lines=True)
+    with tmpfile("json") as f:
+        with pytest.raises(ValueError, match="Line-delimited JSON"):
+            dd.to_json(df, str(f), orient="split", lines=True)
 
 
 @pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])

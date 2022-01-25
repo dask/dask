@@ -314,6 +314,6 @@ def add_path_column(df, column_name, path, dtype):
         raise ValueError(
             f"Files already contain the column name: '{column_name}', so the path "
             "column cannot use this name. Please set `include_path_column` to a "
-            "`include_path_column` to a unique name."
+            "unique name."
         )
     return df.assign(**{column_name: pd.Series([path] * len(df), dtype=dtype)})
