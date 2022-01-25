@@ -1,4 +1,5 @@
 import io
+import sys
 from contextlib import contextmanager
 
 import pytest
@@ -435,7 +436,8 @@ def test_query_with_meta(db):
         [sql.column("number"), sql.column("name"), sql.column("age")]
     ).select_from(sql.table("test"))
     out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
-    assert_eq(out, df[["name", "age"]])
+    # Don't check dtype for windows https://github.com/dask/dask/issues/8620
+    assert_eq(out, df[["name", "age"]], check_dtype=sys.platform != "win32")
 
 
 def test_no_character_index_without_divisions(db):
