@@ -87,7 +87,7 @@ def test_get_dummies_kwargs():
 
 
 @pytest.mark.filterwarnings(
-    "ignore::FutureWarning"
+    "ignore:In a future version, passing a SparseArray:FutureWarning"
 )  # https://github.com/pandas-dev/pandas/issues/45618
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
@@ -107,7 +107,7 @@ def test_get_dummies_sparse():
 
 
 @pytest.mark.filterwarnings(
-    "ignore::FutureWarning"
+    "ignore:In a future version, passing a SparseArray:FutureWarning"
 )  # https://github.com/pandas-dev/pandas/issues/45618
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
