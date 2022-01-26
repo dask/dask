@@ -20,10 +20,10 @@ def test_read_json_with_path_column(orient):
         actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
         # The default column name when include_path_colum is True is "path"
-        # The paths on Windows are normalized somewhere in the file reading
-        # chain in Dask, so we have to do the same here.
+        # The paths on Windows are converted to forward slash somewhere in the file
+        # reading chain in Dask, so we have to do the same here.
         actual_pd["path"] = pd.Series(
-            (os.path.normpath(f),) * len(actual_pd), dtype="category"
+            (f.replace(os.sep, "/"),) * len(actual_pd), dtype="category"
         )
         assert actual.path.dtype == "category"
         assert_eq(actual, actual_pd)
