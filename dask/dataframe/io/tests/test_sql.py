@@ -555,8 +555,17 @@ def test_to_sql_kwargs():
 
 
 def test_to_sql_engine_kwargs(caplog):
-    ddf = dd.from_pandas(df, 1)
+    ddf = dd.from_pandas(df, 2)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": False})
+        logs = "\n".join(r.message for r in caplog.records)
+        assert logs == ""
+        assert_eq(df, read_sql_table("test", uri, "number"))
+
     with tmp_db_uri() as uri:
         ddf.to_sql("test", uri, engine_kwargs={"echo": True})
         logs = "\n".join(r.message for r in caplog.records)
         assert "CREATE" in logs
+        assert "INSERT" in logs
+
+        assert_eq(df, read_sql_table("test", uri, "number"))
