@@ -1231,7 +1231,7 @@ class _GroupBy:
         cumpart_ext = cumpart_raw_frame.assign(
             **{
                 i: self.obj[i]
-                if np.isscalar(i) and i in self.obj.columns
+                if np.isscalar(i) and i in getattr(self.obj, "columns", [])
                 else self.obj.index
                 for i in by
             }
@@ -1282,9 +1282,12 @@ class _GroupBy:
                 aggregate,
                 initial,
             )
-        graph = HighLevelGraph.from_collections(
-            name, dask, dependencies=[cumpart_raw, cumpart_ext, cumlast]
-        )
+
+        dependencies = [cumpart_raw]
+        if self.obj.npartitions > 1:
+            dependencies += [cumpart_ext, cumlast]
+
+        graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
     def _shuffle(self, meta):
