@@ -1,6 +1,5 @@
 import math
 import warnings
-from functools import partial
 from typing import Tuple
 
 import tlz as toolz
@@ -12,8 +11,8 @@ from ....base import compute_as_if_collection, tokenize
 from ....blockwise import BlockIndex
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
-from ....layers import DataFrameIOLayer, DataFrameTreeReduction
-from ....utils import import_required, natural_sort_key, parse_bytes
+from ....layers import DataFrameIOLayer
+from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from ..utils import _is_local_fs
@@ -813,30 +812,28 @@ def to_parquet(
         align_dataframes=False,
     )
 
-    # Convert data_write + metadata write to computable collection
+    # Collect metadata and write _metadata.
+    # TODO: Use tree-reduction layer (when available)
+    dsk = {}
     meta_name = "metadata-" + data_write._name
-    graph = HighLevelGraph.from_collections(
-        meta_name,
-        DataFrameTreeReduction(
-            name=meta_name,
-            name_input=data_write._name,
-            npartitions_input=data_write.npartitions,
-            concat_func=lambda x: x,
-            split_every=data_write.npartitions,
-            tree_node_func=lambda x: x,
-            finalize_func=partial(
-                engine.write_metadata,
-                meta=meta,
-                fs=fs,
-                path=path,
-                append=append,
-                compression=compression,
-            )
-            if write_metadata_file
-            else lambda x: None,
-        ),
-        dependencies=(data_write,),
-    )
+    part_tasks = [(data_write._name, d) for d in range(df.npartitions)]
+    if write_metadata_file:
+        dsk[(meta_name, 0)] = (
+            apply,
+            engine.write_metadata,
+            [
+                part_tasks,
+                meta,
+                fs,
+                path,
+            ],
+            {"append": append, "compression": compression},
+        )
+    else:
+        dsk[(meta_name, 0)] = (lambda x: None, part_tasks)
+
+    # Convert data_write + dsk to computable collection
+    graph = HighLevelGraph.from_collections(meta_name, dsk, dependencies=(data_write,))
     if compute:
         return compute_as_if_collection(
             Scalar, graph, [(meta_name, 0)], **compute_kwargs
