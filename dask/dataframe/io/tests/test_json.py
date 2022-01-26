@@ -26,8 +26,7 @@ def test_read_json_with_path_column(orient):
             (os.path.normpath(f),) * len(actual_pd), dtype="category"
         )
         assert actual.path.dtype == "category"
-        out = actual.compute()
-        assert_eq(out, actual_pd)
+        assert_eq(actual, actual_pd)
 
 
 def test_read_json_path_column_with_duplicate_name_is_error():
@@ -39,6 +38,10 @@ def test_read_json_path_column_with_duplicate_name_is_error():
 
 def test_read_json_with_path_converter():
     path_column_name = "filenames"
+
+    def path_converter(x):
+        return "asdf.json"
+
     with tmpfile("json") as f:
         df.to_json(f, orient="records", lines=False)
         actual = dd.read_json(
@@ -46,14 +49,13 @@ def test_read_json_with_path_converter():
             orient="records",
             lines=False,
             include_path_column=path_column_name,
-            path_converter=lambda x: "asdf.json",
+            path_converter=path_converter,
         )
         actual_pd = pd.read_json(f, orient="records", lines=False)
         actual_pd[path_column_name] = pd.Series(
-            ("asdf.json",) * len(actual_pd), dtype="category"
+            (path_converter(f),) * len(actual_pd), dtype="category"
         )
-        out = actual.compute()
-        assert_eq(out, actual_pd)
+        assert_eq(actual, actual_pd)
 
 
 def test_read_orient_not_records_and_lines():
@@ -87,7 +89,7 @@ def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
         lines=lines,
         include_path_column=True,
         blocksize=blocksize,
-    ).compute()
+    )
     assert_eq(res, sol, check_index=False)
 
 
@@ -98,11 +100,10 @@ def test_read_json_basic(orient):
         actual = dd.read_json(f, orient=orient, lines=False)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
 
-        out = actual.compute()
-        assert_eq(out, actual_pd)
+        assert_eq(actual, actual_pd)
         if orient == "values":
-            out.columns = list(df.columns)
-        assert_eq(out, df)
+            actual.columns = list(df.columns)
+        assert_eq(actual, df)
 
 
 @pytest.mark.parametrize("fkeyword", ["pandas", "json"])
@@ -156,10 +157,9 @@ def test_write_json_basic(orient):
         fn = os.path.join(path, "1.json")
         df.to_json(fn, orient=orient, lines=False)
         actual = dd.read_json(fn, orient=orient, lines=False)
-        out = actual.compute()
         if orient == "values":
-            out.columns = list(df.columns)
-        assert_eq(out, df)
+            actual.columns = list(df.columns)
+        assert_eq(actual, df)
 
 
 def test_to_json_with_get():
@@ -205,7 +205,7 @@ def test_json_compressed(compression):
     with tmpdir() as path:
         dd.to_json(ddf, path, compression=compression)
         actual = dd.read_json(os.path.join(path, "*"), compression=compression)
-        assert_eq(df, actual.compute(), check_index=False)
+        assert_eq(df, actual, check_index=False)
 
 
 def test_read_json_inferred_compression():
@@ -213,7 +213,7 @@ def test_read_json_inferred_compression():
         fn = os.path.join(path, "*.json.gz")
         dd.to_json(ddf, fn, compression="gzip")
         actual = dd.read_json(fn)
-        assert_eq(df, actual.compute(), check_index=False)
+        assert_eq(df, actual, check_index=False)
 
 
 def test_to_json_results():
