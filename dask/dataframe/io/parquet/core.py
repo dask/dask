@@ -126,7 +126,7 @@ class ToParquetFunctionWrapper:
         self.name_function = name_function
         self.kwargs_pass = kwargs_pass
 
-        # NOTE: __name__ must begin with "to-parquet"
+        # NOTE: __name__ must be with "to-parquet"
         # for the name of the resulting `Blockwise`
         # layer to begin with "to-parquet"
         self.__name__ = "to-parquet"
@@ -814,23 +814,23 @@ def to_parquet(
 
     # Collect metadata and write _metadata.
     # TODO: Use tree-reduction layer (when available)
-    dsk = {}
     meta_name = "metadata-" + data_write._name
-    part_tasks = [(data_write._name, d) for d in range(df.npartitions)]
     if write_metadata_file:
-        dsk[(meta_name, 0)] = (
-            apply,
-            engine.write_metadata,
-            [
-                part_tasks,
-                meta,
-                fs,
-                path,
-            ],
-            {"append": append, "compression": compression},
-        )
+        dsk = {
+            (meta_name, 0): (
+                apply,
+                engine.write_metadata,
+                [
+                    data_write.__dask_keys__(),
+                    meta,
+                    fs,
+                    path,
+                ],
+                {"append": append, "compression": compression},
+            )
+        }
     else:
-        dsk[(meta_name, 0)] = (lambda x: None, part_tasks)
+        dsk = {(meta_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
     # Convert data_write + dsk to computable collection
     graph = HighLevelGraph.from_collections(meta_name, dsk, dependencies=(data_write,))
