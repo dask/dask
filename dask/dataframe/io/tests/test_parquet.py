@@ -1640,7 +1640,7 @@ def test_to_parquet_lazy(tmpdir, scheduler, engine):
 @FASTPARQUET_MARK
 def test_timestamp96(tmpdir):
     fn = str(tmpdir)
-    df = pd.DataFrame({"a": ["now"]}, dtype="M8[ns]")
+    df = pd.DataFrame({"a": [pd.to_datetime("now", utc=True)]})
     ddf = dd.from_pandas(df, 1)
     ddf.to_parquet(fn, write_index=False, times="int96")
     pf = fastparquet.ParquetFile(fn)
