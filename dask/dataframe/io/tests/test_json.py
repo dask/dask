@@ -71,8 +71,8 @@ def test_write_orient_not_records_and_lines():
 
 @pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])
 def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
-    fil1 = str(tmpdir.join("fil1.json"))
-    fil2 = str(tmpdir.join("fil2.json"))
+    fil1 = str(tmpdir.join("fil1.json")).replace(os.sep, "/")
+    fil2 = str(tmpdir.join("fil2.json")).replace(os.sep, "/")
     df = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
     df2 = df.assign(x=df.x + 0.5)
     orient = "records"
