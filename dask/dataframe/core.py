@@ -57,7 +57,7 @@ from .dispatch import (
     hash_object_dispatch,
     meta_nonempty,
 )
-from .optimize import optimize
+from .optimize import eager_predicate_pushdown, optimize
 from .utils import (
     PANDAS_GT_110,
     PANDAS_GT_120,
@@ -4225,7 +4225,10 @@ class DataFrame(_Frame):
                 self, key = _maybe_align_partitions([self, key])
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            return new_dd_object(graph, name, self, self.divisions)
+            # TODO: Add/Check predicate-pushdown config option
+            return eager_predicate_pushdown(
+                new_dd_object(graph, name, self, self.divisions)
+            )
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 

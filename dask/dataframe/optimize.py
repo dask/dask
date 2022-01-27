@@ -46,6 +46,118 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
+def _operator_lookup(op):
+    # Return str symbol for comparator op.
+    # If no match with supported options,
+    # return None
+    return {
+        operator.eq: "==",
+        operator.gt: ">",
+        operator.ge: ">=",
+        operator.lt: "<",
+        operator.le: "<=",
+    }.get(op, None)
+
+
+def eager_predicate_pushdown(ddf):
+    # This is a special optimization that must be called
+    # eagerly on a DataFrame collection when filters are
+    # applied. The "eager" requirement for this optimization
+    # is due to the fact that `npartitions` and `divisions`
+    # may change when this optimization is applied (invalidating
+    # npartition/divisions-specific logic in following Layers).
+
+    # This optimization looks for all `DataFrameIOLayer` instances,
+    # and checks if the only dependent layers correspond to a
+    # simple comparison operation (like df["x"] > 100)
+
+    from ..layers import DataFrameIOLayer
+
+    dsk = ddf.dask
+
+    # Quick return if we have more than four
+    # layers in our graph (one IO layer,
+    # two getitem layers, and a comparison layer)
+    if len(dsk.layers) > 4:
+        return ddf
+
+    # Quick return if we don't have a single
+    # DataFrameIO layer to optimize
+    io_layer_name = [
+        k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
+    ]
+    if len(io_layer_name) != 1:
+        return ddf
+    io_layer_name = io_layer_name[0]
+
+    layers = dsk.layers.copy()
+    dependencies = dsk.dependencies.copy()
+    dependents = dsk.dependents.copy()
+    old = layers[io_layer_name]
+    creation_info_kwargs = getattr(old, "creation_info", None).get(
+        "kwargs", {"filters": True}
+    ) or {"filters": True}
+    if creation_info_kwargs.get("filters", True) is not None:
+        # Current dataframe layer does not have a creation_info attribute,
+        # or the "filters" field is missing or populated
+        return ddf
+
+    # Find all dependents of io_layer_name.
+    # We can only apply predicate_pushdown if there
+    # are exactly two `GetItemLayer` dependents.
+    deps = dependents[io_layer_name]
+    good = len(deps) == 2 and all(
+        list(layers[d].dsk.values())[0][0] == operator.getitem for d in deps
+    )
+    if not good:
+        return ddf
+
+    # If the first check was successful,
+    # Now we need to check that the two
+    # dependents only depend on the input
+    # collection or eachother
+    okay_deps = {io_layer_name, *deps}
+    _key, _compare, _val = None, None, None
+    for dep in deps:
+        _deps = dependencies[dep]
+        good = _deps.issubset(okay_deps)
+        if len(_deps) == 1:
+            _dependents = dependents[dep]
+            if len(_dependents) == 1:
+                _compare_name = next(iter(dependents[dep]))
+                _compare = layers[_compare_name].dsk[_compare_name][0]
+                _compare_indices = layers[_compare_name].indices
+                if (
+                    len(_compare_indices) > 1
+                    and len(_compare_indices[1]) == 2
+                    and _compare_indices[1][1] is None
+                ):
+                    _val = _compare_indices[1][0]
+                _indices = layers[dep].indices
+                if (
+                    len(_indices) > 1
+                    and len(_indices[1]) == 2
+                    and _indices[1][1] is None
+                    and isinstance(_indices[1][0], str)
+                ):
+                    _key = _indices[1][0]
+
+    if None not in [_key, _compare, _val]:
+        _compare_str = _operator_lookup(_compare)
+        if _compare_str:
+            filters = [(_key, _compare_str, _val)]
+            new_kwargs = old.creation_info["kwargs"].copy()
+            new_kwargs["filters"] = filters
+            new = old.creation_info["func"](
+                *old.creation_info["args"],
+                **new_kwargs,
+            )
+            return new[_compare(new[_key], _val)]
+
+    # Fallback
+    return ddf
+
+
 def optimize_dataframe_getitem(dsk, keys):
     # This optimization looks for all `DataFrameIOLayer` instances,
     # and calls `project_columns` on any layers that directly precede

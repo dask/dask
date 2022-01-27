@@ -1,5 +1,6 @@
 import glob
 import math
+import operator
 import os
 import sys
 import warnings
@@ -16,10 +17,11 @@ import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
-from dask.dataframe.optimize import optimize_dataframe_getitem
+from dask.dataframe.optimize import eager_predicate_pushdown, optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
+from dask.utils_test import hlg_layer
 
 try:
     import fastparquet
@@ -2499,6 +2501,41 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a1, b1)
     assert_eq(a2, b2)
     assert_eq(a3, b3)
+
+
+@pytest.mark.parametrize("preserve_index", [True, False])
+@pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
+@pytest.mark.parametrize(
+    "op,op_name",
+    [
+        (operator.eq, "=="),
+        (operator.gt, ">"),
+        (operator.ge, ">="),
+        (operator.lt, "<"),
+        (operator.le, "<="),
+    ],
+)
+def test_eager_predicate_pushdown(tmpdir, engine, preserve_index, index, op, op_name):
+    df = pd.DataFrame(
+        {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
+    )
+    df.index.name = "my_index"
+    ddf = dd.from_pandas(df, 2, sort=False)
+    ddf.to_parquet(str(tmpdir), engine=engine, write_index=preserve_index)
+    ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    ddf = ddf[op(ddf["B"], 3)]
+    if op_name != "<":
+        # Will be a `MaterializedLayer` if everything gets filtered
+        ddf2 = eager_predicate_pushdown(ddf)
+        subgraph_rd = hlg_layer(ddf2.dask, "read-parquet")
+        assert subgraph_rd.creation_info["kwargs"]["filters"] == [("B", op_name, 3)]
+        assert isinstance(subgraph_rd, DataFrameIOLayer)
+
+    # NOTE: Index may be different when filters are
+    # applied in `read_parquet` if `preserve_index=False`
+    assert_eq(
+        ddf.compute(optimize_graph=False), ddf.compute(), check_index=preserve_index
+    )
 
 
 def test_layer_creation_info(tmpdir, engine):
