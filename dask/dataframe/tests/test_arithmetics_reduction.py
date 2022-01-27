@@ -4,6 +4,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_120, PANDAS_VERSION
@@ -1477,6 +1478,11 @@ def test_series_agg_with_min_count(method, min_count):
 
 # Default absolute tolerance of 2000 nanoseconds
 def assert_near_timedeltas(t1, t2, atol=2000):
+    if is_scalar(t1):
+        t1 = pd.Series([t1])
+    if is_scalar(t2):
+        t2 = pd.Series([t2])
+
     assert t1.dtype == t2.dtype
     assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
 
@@ -1484,7 +1490,8 @@ def assert_near_timedeltas(t1, t2, atol=2000):
 @pytest.mark.skipif(
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
-def test_datetime_std_creates_copy_cols():
+@pytest.mark.parametrize("axis", [0, 1])
+def test_datetime_std_creates_copy_cols(axis):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1498,19 +1505,21 @@ def test_datetime_std_creates_copy_cols():
 
     ddf = dd.from_pandas(pdf, 3)
 
-    # Series test
+    # Series test (same line twice to make sure data structure wasn't mutated)
     assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
     assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
 
-    # DataFrame test
-    assert_near_timedeltas(ddf.std().compute(), pdf.std())
-    assert_near_timedeltas(ddf.std().compute(), pdf.std())
+    # DataFrame test (same line twice to make sure data structure wasn't mutated)
+    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
+    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
 
 
 @pytest.mark.skipif(
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
-def test_datetime_std_with_larger_dataset():
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("skipna", [False, True])
+def test_datetime_std_with_larger_dataset(axis, skipna):
     num_rows = 250
 
     dt1 = pd.Series([pd.NaT] * 15, index=range(15)).append(
@@ -1529,45 +1538,31 @@ def test_datetime_std_with_larger_dataset():
         (1638290040706793300 + (i * 69527182702409)) for i in range(num_rows)
     ]
 
-    dt2 = pd.to_datetime(pd.Series(base_numbers))
-    dt3 = pd.to_datetime(pd.Series([int(x * 1.25) for x in base_numbers]))
-    dt4 = pd.to_datetime(pd.Series([int(x * 1.33) for x in base_numbers]))
-
     pdf = pd.DataFrame(
-        {"dt1": dt1, "dt2": dt2, "dt3": dt3, "dt4": dt4},
-        index=range(250),
+        {"dt1": dt1, "dt2": pd.to_datetime(pd.Series(base_numbers))}, index=range(250)
     )
+
+    for i in range(3, 8):
+        pdf[f"dt{i}"] = pd.to_datetime(
+            pd.Series([int(x + (0.12 * i)) for x in base_numbers])
+        )
 
     ddf = dd.from_pandas(pdf, 8)
 
-    # Do NaT checks (not skipped so should be NaTs)
-    assert_eq(ddf[["dt1"]].std(skipna=False), pdf[["dt1"]].std(skipna=False))
-
-    # Same thing but as Series
-    assert ddf["dt1"].std(skipna=False).compute() is pdf["dt1"].std(skipna=False)
-
-    assert_near_timedeltas(ddf.std(skipna=True).compute(), pdf.std(skipna=True))
-    assert_near_timedeltas(ddf.std(skipna=False).compute(), pdf.std(skipna=False))
-
-
-@pytest.mark.skipif(
-    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
-)
-def test_datetime_std_across_axis_1():
-    pdf = pd.DataFrame(
-        {
-            "dt1": [
-                datetime.fromtimestamp(1636426704 + (i * 250000)) for i in range(10)
-            ],
-            "dt2": [
-                datetime.fromtimestamp(1636426704 + (i * 217790)) for i in range(10)
-            ],
-        }
+    assert_near_timedeltas(
+        ddf[["dt1"]].std(axis=axis, skipna=skipna).compute(),
+        pdf[["dt1"]].std(axis=axis, skipna=skipna),
     )
 
-    ddf = dd.from_pandas(pdf, 3)
+    # Same thing but as Series. No axis, since axis=1 raises error
+    assert_near_timedeltas(
+        ddf["dt1"].std(skipna=skipna).compute(), pdf["dt1"].std(skipna=skipna)
+    )
 
-    assert_eq(ddf.std(axis=1), pdf.std(axis=1))
+    # Computation on full dataset
+    assert_near_timedeltas(
+        ddf.std(axis=axis, skipna=skipna).compute(), pdf.std(axis=axis, skipna=skipna)
+    )
 
 
 @pytest.mark.skipif(
@@ -1576,7 +1571,8 @@ def test_datetime_std_across_axis_1():
 @pytest.mark.filterwarnings(
     "ignore:Dropping of nuisance columns:FutureWarning"
 )  # https://github.com/dask/dask/issues/7714
-def test_datetime_std_across_axis1_null_results():
+@pytest.mark.parametrize("skipna", [False, True])
+def test_datetime_std_across_axis1_null_results(skipna):
     pdf = pd.DataFrame(
         {
             "dt1": [
@@ -1592,10 +1588,12 @@ def test_datetime_std_across_axis1_null_results():
     ddf = dd.from_pandas(pdf, 3)
 
     # Single column always results in NaT
-    assert_eq(ddf[["dt1"]].std(axis=1), pdf[["dt1"]].std(axis=1))
+    assert_eq(
+        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
+    )
 
     # Mix of datetimes with other numeric types produces NaNs
-    assert_eq(ddf.std(axis=1), pdf.std(axis=1))
+    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1614,5 +1612,4 @@ def test_datetime_std_across_axis1_null_results():
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    assert_eq(ddf2.std(axis=1, skipna=True), pdf2.std(axis=1, skipna=True))
-    assert_eq(ddf2.std(axis=1, skipna=False), pdf2.std(axis=1, skipna=False))
+    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))

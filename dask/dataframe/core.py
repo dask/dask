@@ -2180,61 +2180,28 @@ Dask Name: {name}, {task} tasks"""
         _raise_if_object_series(self, "std")
 
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
-        is_df_like = is_dataframe_like(self._meta_nonempty)
+        is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
 
         if PANDAS_GT_120:
-            from .io import from_pandas
-            from .numeric import to_numeric
-
-            def convert_to_numeric(s):
-                if skipna:
-                    return to_numeric(s.dropna())
-
-                # to_numeric(pd.NaT) => -9223372036854775808 is why we need to do this
-                return to_numeric(s).mask(s.isnull(), np.nan)
-
             if is_df_like:
-                time_cols = self._meta_nonempty.select_dtypes(
-                    include="datetime"
-                ).columns
+                time_cols = self._meta.select_dtypes(include="datetime").columns
                 if len(time_cols) > 0:
-                    needs_time_conversion = True
-
-                    # Ensure all columns are correct type. Need to shallow copy since cols will be modified
-                    if axis == 0:
-                        numeric_dd = self[meta.index].copy()
-                    else:
-                        numeric_dd = self.copy()
-
-                    # If there's different types, just convert everything to NaNs for the time columns
-                    if axis == 1 and len(time_cols) != len(self.columns):
-                        # This is faster that converting each columns to numeric when it's not necessary
-                        numeric_dd[time_cols.tolist()] = from_pandas(
-                            pd.DataFrame(
-                                {col: pd.Series([np.nan]) for col in time_cols},
-                                index=self.index,
-                            ),
-                            npartitions=self.npartitions,
-                        )
-                        needs_time_conversion = False
-                    else:
-                        # Convert timedelta and datetime columns to integer types so we can use var
-                        for col in time_cols:
-                            numeric_dd[col] = convert_to_numeric(numeric_dd[col])
+                    (
+                        numeric_dd,
+                        needs_time_conversion,
+                    ) = self._convert_time_cols_to_numeric(
+                        time_cols, axis, meta, skipna
+                    )
             else:
                 needs_time_conversion = is_datetime64_any_dtype(self._meta_nonempty)
                 if needs_time_conversion:
-                    numeric_dd = convert_to_numeric(self)
+                    numeric_dd = _convert_to_numeric(self, skipna)
 
         if axis == 1:
-
-            def std_and_convert_to_datetime(p, *args, **kwargs):
-                return pd.to_timedelta(M.std(p, *args, **kwargs))
-
             result = map_partitions(
-                M.std if not needs_time_conversion else std_and_convert_to_datetime,
+                M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
                 numeric_dd,
                 meta=meta,
                 token=self._token_prefix + "std",
@@ -2249,31 +2216,60 @@ Dask Name: {name}, {task} tasks"""
             v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
 
-            def sqrt_and_convert(p):
-                sqrt = np.sqrt(p)
-
-                if not is_df_like:
-                    return pd.to_timedelta(sqrt)
-
-                time_col_mask = sqrt.index.isin(time_cols)
-                matching_vals = sqrt[time_col_mask]
-                for time_col, matching_val in zip(time_cols, matching_vals):
-                    sqrt[time_col] = pd.to_timedelta(matching_val)
-
-                return sqrt
+            if needs_time_conversion:
+                sqrt_func_kwargs = {
+                    "is_df_like": is_df_like,
+                    "time_cols": time_cols if is_df_like else None,
+                    "axis": axis,
+                }
+                sqrt_func = _sqrt_and_convert_to_timedelta
+            else:
+                sqrt_func_kwargs = {}
+                sqrt_func = np.sqrt
 
             result = map_partitions(
-                np.sqrt if not needs_time_conversion else sqrt_and_convert,
+                sqrt_func,
                 v,
                 meta=meta,
                 token=name,
                 enforce_metadata=False,
                 parent_meta=self._meta,
+                **sqrt_func_kwargs,
             )
 
             if is_df_like:
                 result = result.astype(meta.dtype)
             return handle_out(out, result)
+
+    def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
+        from .io import from_pandas
+
+        needs_time_conversion = True
+
+        # Ensure all columns are correct type. Need to shallow copy since cols will be modified
+        if axis == 0:
+            numeric_dd = self[meta.index].copy()
+        else:
+            numeric_dd = self.copy()
+
+        # Mix of datetimes with other numeric types produces NaNs for each value in std() series
+        if axis == 1 and len(time_cols) != len(self.columns):
+            # This is faster than converting each column to numeric when it's not necessary
+            # since each standard deviation will just be NaN
+            needs_time_conversion = False
+            numeric_dd = from_pandas(
+                pd.DataFrame(
+                    {"_": pd.Series([np.nan])},
+                    index=self.index,
+                ),
+                npartitions=self.npartitions,
+            )
+        else:
+            # Convert timedelta and datetime columns to integer types so we can use var
+            for col in time_cols:
+                numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
+
+        return numeric_dd, needs_time_conversion
 
     @_numeric_only
     @derived_from(pd.DataFrame)
@@ -7564,3 +7560,30 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
+
+
+def _convert_to_numeric(series, skipna):
+    if skipna:
+        return series.dropna().view("i8")
+
+    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+    return series.view("i8").mask(series.isnull(), np.nan)
+
+
+def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+    if axis == 1:
+        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+
+    is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
+
+    sqrt = np.sqrt(partition)
+
+    if not is_df_like:
+        return pd.to_timedelta(sqrt)
+
+    time_col_mask = sqrt.index.isin(time_cols)
+    matching_vals = sqrt[time_col_mask]
+    for time_col, matching_val in zip(time_cols, matching_vals):
+        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    return sqrt
