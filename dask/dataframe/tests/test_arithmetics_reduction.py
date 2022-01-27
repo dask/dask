@@ -1522,16 +1522,20 @@ def test_datetime_std_creates_copy_cols(axis):
 def test_datetime_std_with_larger_dataset(axis, skipna):
     num_rows = 250
 
-    dt1 = pd.Series([pd.NaT] * 15, index=range(15)).append(
-        pd.to_datetime(
-            pd.Series(
-                [
-                    datetime.fromtimestamp(1636426704 + (i * 250000))
-                    for i in range(num_rows - 15)
-                ],
-                index=range(15, 250),
-            )
-        )
+    dt1 = pd.concat(
+        [
+            pd.Series([pd.NaT] * 15, index=range(15)),
+            pd.to_datetime(
+                pd.Series(
+                    [
+                        datetime.fromtimestamp(1636426704 + (i * 250000))
+                        for i in range(num_rows - 15)
+                    ],
+                    index=range(15, 250),
+                )
+            ),
+        ],
+        ignore_index=False,
     )
 
     base_numbers = [
