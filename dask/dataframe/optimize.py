@@ -94,7 +94,7 @@ def eager_predicate_pushdown(ddf):
     dependencies = dsk.dependencies.copy()
     dependents = dsk.dependents.copy()
     old = layers[io_layer_name]
-    creation_info_kwargs = getattr(old, "creation_info", None).get(
+    creation_info_kwargs = (getattr(old, "creation_info", None) or {}).get(
         "kwargs", {"filters": True}
     ) or {"filters": True}
     if creation_info_kwargs.get("filters", True) is not None:
