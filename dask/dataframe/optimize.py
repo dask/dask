@@ -90,13 +90,10 @@ def eager_predicate_pushdown(ddf):
         return ddf
     io_layer_name = io_layer_name[0]
 
-    layers = dsk.layers.copy()
-    dependencies = dsk.dependencies.copy()
-    dependents = dsk.dependents.copy()
-    old = layers[io_layer_name]
-    creation_info_kwargs = (getattr(old, "creation_info", None) or {}).get(
-        "kwargs", {"filters": True}
-    ) or {"filters": True}
+    # Quick return if creation_info does not contain filters
+    creation_info_kwargs = (
+        getattr(dsk.layers[io_layer_name], "creation_info", None) or {}
+    ).get("kwargs", {"filters": True}) or {"filters": True}
     if creation_info_kwargs.get("filters", True) is not None:
         # Current dataframe layer does not have a creation_info attribute,
         # or the "filters" field is missing or populated
@@ -104,36 +101,36 @@ def eager_predicate_pushdown(ddf):
 
     # Find all dependents of io_layer_name.
     # We can only apply predicate_pushdown if there
-    # are exactly two `GetItemLayer` dependents.
-    deps = dependents[io_layer_name]
+    # are exactly two blockwise getitem dependents.
+    deps = dsk.dependents[io_layer_name]
     good = len(deps) == 2 and all(
-        list(layers[d].dsk.values())[0][0] == operator.getitem for d in deps
+        list(dsk.layers[d].dsk.values())[0][0] == operator.getitem for d in deps
     )
     if not good:
         return ddf
 
     # If the first check was successful,
-    # Now we need to check that the two
+    # we now need to check that the two
     # dependents only depend on the input
     # collection or eachother
     okay_deps = {io_layer_name, *deps}
     _key, _compare, _val = None, None, None
     for dep in deps:
-        _deps = dependencies[dep]
+        _deps = dsk.dependencies[dep]
         good = _deps.issubset(okay_deps)
         if len(_deps) == 1:
-            _dependents = dependents[dep]
+            _dependents = dsk.dependents[dep]
             if len(_dependents) == 1:
-                _compare_name = next(iter(dependents[dep]))
-                _compare = layers[_compare_name].dsk[_compare_name][0]
-                _compare_indices = layers[_compare_name].indices
+                _compare_name = next(iter(dsk.dependents[dep]))
+                _compare = dsk.layers[_compare_name].dsk[_compare_name][0]
+                _compare_indices = dsk.layers[_compare_name].indices
                 if (
                     len(_compare_indices) > 1
                     and len(_compare_indices[1]) == 2
                     and _compare_indices[1][1] is None
                 ):
                     _val = _compare_indices[1][0]
-                _indices = layers[dep].indices
+                _indices = dsk.layers[dep].indices
                 if (
                     len(_indices) > 1
                     and len(_indices[1]) == 2
@@ -142,10 +139,15 @@ def eager_predicate_pushdown(ddf):
                 ):
                     _key = _indices[1][0]
 
+    # If we were able to define a key, comparison
+    # operator, and comparison value, we can
+    # reconstruct ddf with `filters` defined in
+    # the original DataFrameIOLayer
     if None not in [_key, _compare, _val]:
         _compare_str = _operator_lookup(_compare)
         if _compare_str:
             filters = [(_key, _compare_str, _val)]
+            old = dsk.layers[io_layer_name]
             new_kwargs = old.creation_info["kwargs"].copy()
             new_kwargs["filters"] = filters
             new = old.creation_info["func"](
