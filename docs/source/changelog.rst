@@ -1,6 +1,64 @@
 Changelog
 =========
 
+.. _v2022.01.1:
+
+2022.01.1
+---------
+
+Released on January 28, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``dask.dataframe.series.view()`` (:pr:`8533`) `Pavithra Eswaramoorthy`_
+
+Enhancements
+^^^^^^^^^^^^
+- Update ``tz`` for ``fastparquet`` + ``pandas`` 1.4.0 (:pr:`8626`) `Martin Durant`_
+- Cleaning up misc tests for ``pandas`` compat (:pr:`8623`) `Julia Signell`_
+- Moving to ``SQLAlchemy >= 1.4`` (:pr:`8158`) `McToel`_
+- Pandas compat: Filter sparse warnings (:pr:`8621`) `Julia Signell`_
+- Fail if ``meta`` is not a ``pandas`` object (:pr:`8563`) `Julia Signell`_
+- Use ``fsspec.parquet`` module for better remote-storage ``read_parquet`` performance (:pr:`8339`) `Richard (Rick) Zamora`_
+- Move DataFrame ACA aggregations to HLG (:pr:`8468`) `Richard (Rick) Zamora`_
+- Add optional information about originating function call in ``DataFrameIOLayer`` (:pr:`8453`) `Richard (Rick) Zamora`_
+- Blockwise array creation redux (:pr:`7417`) `Ian Rose`_
+- Refactor config default search path retrieval (:pr:`8573`) `James Bourbeau`_
+- Add ``optimize_graph`` flag to ``Bag.to_dataframe`` function (:pr:`8486`) `Maxim Lippeveld`_
+- Make sure that delayed output operations still return lists of paths (:pr:`8498`) `Julia Signell`_
+- Pandas compat: Fix ``to_frame`` ``name`` to not pass ``None`` (:pr:`8554`) `Julia Signell`_
+- Pandas compat: Fix ``axis=None`` warning (:pr:`8555`) `Julia Signell`_
+- Expand Dask YAML config search directories (:pr:`8531`) `abergou`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``groupby.cumsum`` with series grouped by index (:pr:`8588`) `Julia Signell`_
+- Fix ``derived_from`` for ``pandas`` methods (:pr:`8612`) `Thomas J. Fan`_
+- Enforce boolean ``ascending`` for ``sort_values`` (:pr:`8440`) `Charles Blackmon-Luca`_
+- Fix parsing of ``__setitem__`` indices (:pr:`8601`) `David Hassell`_
+- Avoid divide by zero in slicing  (:pr:`8597`) `Doug Davis`_
+
+Deprecations
+^^^^^^^^^^^^
+- Downgrade ``meta`` error in (:pr:`8563`) to warning (:pr:`8628`) `Julia Signell`_
+- Pandas compat: Deprecate ``append`` when ``pandas >= 1.4.0`` (:pr:`8617`) `Julia Signell`_
+
+Documentation
+^^^^^^^^^^^^^
+- Replace outdated ``columns`` argument with ``meta`` in DataFrame constructor (:pr:`8614`) `kori73`_
+- Refactor deploying docs (:pr:`8602`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Pin ``coverage`` in CI (:pr:`8631`) `James Bourbeau`_
+- Move ``cached_cumsum`` imports to be from ``dask.utils`` (:pr:`8606`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.04`` (:pr:`8600`)
+- Update cocstring for ``from_delayed`` function  (:pr:`8576`) `Kirito1397`_
+- Handle ``plot_width`` / ``plot_height`` deprecations (:pr:`8544`) `Bryan Van de Ven`_
+- Remove unnecessary ``pyyaml`` ``importorskip`` (:pr:`8562`) `James Bourbeau`_
+- Specify scheduler in DataFrame ``assert_eq`` (:pr:`8559`) `Gabe Joseph`_
+
+
 .. _v2022.01.0:
 
 2022.01.0
@@ -5039,3 +5097,7 @@ Other
 .. _`Deepyaman Datta`: https://github.com/deepyaman
 .. _`Maren Westermann`: https://github.com/marenwestermann
 .. _`Michael Delgado`: https://github.com/delgadom
+.. _`abergou`: https://github.com/abergou
+.. _`Pavithra Eswaramoorthy`: https://github.com/pavithraes
+.. _`Maxim Lippeveld`: https://github.com/MaximLippeveld
+.. _`Kirito1397`: https://github.com/Kirito1397
