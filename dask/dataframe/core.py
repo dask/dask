@@ -2184,20 +2184,17 @@ Dask Name: {name}, {task} tasks"""
         needs_time_conversion = False
         numeric_dd = self
 
-        if PANDAS_GT_120:
-            if is_df_like:
-                time_cols = self._meta.select_dtypes(include="datetime").columns
-                if len(time_cols) > 0:
-                    (
-                        numeric_dd,
-                        needs_time_conversion,
-                    ) = self._convert_time_cols_to_numeric(
-                        time_cols, axis, meta, skipna
-                    )
-            else:
-                needs_time_conversion = is_datetime64_any_dtype(self._meta_nonempty)
-                if needs_time_conversion:
-                    numeric_dd = _convert_to_numeric(self, skipna)
+        if PANDAS_GT_120 and is_df_like:
+            time_cols = self._meta.select_dtypes(include="datetime").columns
+            if len(time_cols) > 0:
+                (
+                    numeric_dd,
+                    needs_time_conversion,
+                ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
+        elif PANDAS_GT_120 and not is_df_like:
+            needs_time_conversion = is_datetime64_any_dtype(self._meta)
+            if needs_time_conversion:
+                numeric_dd = _convert_to_numeric(self, skipna)
 
         if axis == 1:
             result = map_partitions(
@@ -2212,34 +2209,37 @@ Dask Name: {name}, {task} tasks"""
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
+
+        # Case where axis=0 or axis=None
+        v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
+        name = self._token_prefix + "std"
+
+        if needs_time_conversion:
+            sqrt_func_kwargs = {
+                "is_df_like": is_df_like,
+                "time_cols": time_cols if is_df_like else None,
+                "axis": axis,
+            }
+            sqrt_func = _sqrt_and_convert_to_timedelta
         else:
-            v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            name = self._token_prefix + "std"
+            sqrt_func_kwargs = {}
+            sqrt_func = np.sqrt
 
-            if needs_time_conversion:
-                sqrt_func_kwargs = {
-                    "is_df_like": is_df_like,
-                    "time_cols": time_cols if is_df_like else None,
-                    "axis": axis,
-                }
-                sqrt_func = _sqrt_and_convert_to_timedelta
-            else:
-                sqrt_func_kwargs = {}
-                sqrt_func = np.sqrt
+        result = map_partitions(
+            sqrt_func,
+            v,
+            meta=meta,
+            token=name,
+            enforce_metadata=False,
+            parent_meta=self._meta,
+            **sqrt_func_kwargs,
+        )
 
-            result = map_partitions(
-                sqrt_func,
-                v,
-                meta=meta,
-                token=name,
-                enforce_metadata=False,
-                parent_meta=self._meta,
-                **sqrt_func_kwargs,
-            )
+        # Try to match the Pandas result dtype
+        if is_df_like and hasattr(meta, "dtype"):
+            result = result.astype(meta.dtype)
 
-            if is_df_like:
-                result = result.astype(meta.dtype)
-            return handle_out(out, result)
+        return handle_out(out, result)
 
     def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
         from .io import from_pandas
