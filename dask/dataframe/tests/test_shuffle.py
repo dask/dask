@@ -1226,13 +1226,28 @@ def test_set_index_nan_partition():
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
-@pytest.mark.parametrize("nparts", [1, 10])
 def test_sort_values(nelem, nparts, by, ascending):
     np.random.seed(0)
     df = pd.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
-    ddf = dd.from_pandas(df, npartitions=nparts)
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
+    dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
+@pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
+@pytest.mark.parametrize("nelem", [10, 500])
+def test_sort_values_single_partition(nelem, by, ascending):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=1)
 
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
