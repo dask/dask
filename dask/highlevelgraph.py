@@ -1195,7 +1195,6 @@ def to_graphviz(
             "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
             "Blockwise": ["#D9FFE6", False],  # green
             "BlockwiseLayer": ["#D9FFE6", False],  # green
-            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
             "MaterializedLayer": ["#DBDEE5", False],  # gray
         }
 

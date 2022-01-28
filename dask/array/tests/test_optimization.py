@@ -271,25 +271,6 @@ def test_dont_fuse_numpy_arrays():
         assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
 
 
-def test_minimize_data_transfer():
-    zarr = pytest.importorskip("zarr")
-    x = zarr.ones((100,))
-    y = da.from_array(x, chunks=25)
-    z = y + 1
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-
-    keys = list(dsk)
-    results = dask.get(dsk, keys)
-    big_key = [k for k, r in zip(keys, results) if r is x][0]
-    dependencies, dependents = dask.core.get_deps(dsk)
-    deps = dependents[big_key]
-
-    assert len(deps) == 4
-    for dep in deps:
-        assert dsk[dep][0] in (getitem, getter)
-        assert dsk[dep][1] == big_key
-
-
 def test_fuse_slices_with_alias():
     dsk = {
         "x": np.arange(16).reshape((4, 4)),
@@ -455,3 +436,16 @@ def test_fuse_roots_annotations():
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
+
+
+@pytest.mark.parametrize("optimize_graph", [True, False])
+def test_optimize_blockwise_duplicate_dependency(optimize_graph):
+    # Two blockwise operations in a row with duplicate name
+    # (See: https://github.com/dask/dask/issues/8535)
+    xx = da.from_array(np.array([[1, 1], [2, 2]]), chunks=1)
+    xx = xx * 2
+    z = da.matmul(xx, xx)
+
+    # Compare to known answer
+    result = z.compute(optimize_graph=optimize_graph)
+    assert assert_eq(result, [[12, 12], [24, 24]])
