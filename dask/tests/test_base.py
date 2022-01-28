@@ -430,27 +430,6 @@ def test_tokenize_dataclass():
     assert tokenize(SubA(1)) == tokenize(SubA(1))
     assert tokenize(SubA(1)) != tokenize(a1)
 
-    # Non-comparable fields are ignored in tokenization
-    NonCompField = dataclasses.make_dataclass(
-        "NonCompField",
-        [("a", int), ("ignore", str, dataclasses.field(compare=False))],
-    )
-    c1 = NonCompField(1, "foo")
-    c2 = NonCompField(1, "bar")
-
-    assert c1 == c2
-    assert tokenize(c1) == tokenize(c2)
-    assert tokenize(c1) != tokenize(a1)
-
-    NoCompFields = dataclasses.make_dataclass(
-        "NoCompFields", [("ignore", str, dataclasses.field(compare=False))]
-    )
-    e1 = NoCompFields(1)
-    e2 = NoCompFields(2)
-
-    assert tokenize(e1) == tokenize(e1)
-    assert tokenize(e1) == tokenize(e2)
-
 
 def test_tokenize_range():
     assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges

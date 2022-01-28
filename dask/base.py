@@ -992,9 +992,7 @@ def _normalize_function(func):
 
 def normalize_dataclass(obj):
     fields = [
-        (field.name, getattr(obj, field.name))
-        for field in dataclasses.fields(obj)
-        if field.compare
+        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
     ]
     return (
         normalize_function(type(obj)),
