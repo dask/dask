@@ -430,16 +430,10 @@ def test_tokenize_dataclass():
     assert tokenize(SubA(1)) == tokenize(SubA(1))
     assert tokenize(SubA(1)) != tokenize(a1)
 
-    # Same name, same values, the definition has not changed: tokenize the same
-    ADataClassRedefined = dataclasses.make_dataclass("ADataClass", [("a", int)])
-    assert tokenize(a1) == tokenize(ADataClassRedefined(1))
-    assert tokenize(a2) != tokenize(ADataClassRedefined(1))
-
     # Same name, same values, new definition: tokenize differently
     ADataClassRedefinedDifferently = dataclasses.make_dataclass(
         "ADataClass", [("a", Union[int, str])]
     )
-    assert ADataClass is not ADataClassRedefinedDifferently
     assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
 
 
