@@ -811,8 +811,7 @@ def test_nan_func_does_not_warn(func):
     assert not rec  # did not warn
 
 
-@pytest.mark.parametrize("chunks", [((3, 3), (2, 1, 2, 1)),
-                                    ((2, 1, 2, 1), (3, 3))])
+@pytest.mark.parametrize("chunks", [((3, 3), (2, 1, 2, 1)), ((2, 1, 2, 1), (3, 3))])
 def test_chunk_structure_dependence(chunks):
     # Reducing an array should not depend on its chunk-structure!!!
     # See Issue #8541: https://github.com/dask/dask/issues/8541
@@ -821,7 +820,7 @@ def test_chunk_structure_dependence(chunks):
         return da.core._concatenate2(x_chunks, axes=axis)
 
     a, b = 6, 6
-    array = np.arange(a*b).reshape(a, b)
+    array = np.arange(a * b).reshape(a, b)
     x = da.from_array(array, chunks=chunks)
     reduced_x = da.reduction(
         x,
@@ -831,7 +830,7 @@ def test_chunk_structure_dependence(chunks):
         concatenate=False,
         axis=(0, 1),
         dtype=x.dtype,
-        meta=np.array([[]])
+        meta=np.array([[]]),
     ).compute()
     expected = np.array(
         [
