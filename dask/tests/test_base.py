@@ -1299,6 +1299,21 @@ def test_normalize_function_limited_size():
     assert 50 < len(function_cache) < 600
 
 
+def test_normalize_function_dataclass_field_no_repr():
+    from dataclass import field, make_dataclass
+
+    A = make_dataclass(
+        "A",
+        [("param", float, field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
+
+
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
 
