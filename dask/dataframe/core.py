@@ -5893,6 +5893,14 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
+            # We are not generating a valid
+            # DataFrame object here, so we want
+            # to avoid emulation by passing
+            # `chunked._meta` explicitly.
+            # Emulation is also a problem for
+            # non-empty geopandas metadata. (See
+            # https://github.com/dask/dask/issues/8611)
+            meta=chunked._meta,
             enforce_metadata=False,
             transform_divisions=False,
             align_dataframes=False,
