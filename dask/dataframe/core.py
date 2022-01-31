@@ -5874,37 +5874,31 @@ def apply_concat_apply(
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
-    graph = HighLevelGraph.from_collections(
-        chunk_name,
-        partitionwise_graph(
-            chunk,
-            chunk_name,
-            *args,
-            **chunk_kwargs,
-        ),
-        dependencies=dfs,
+    chunked = map_partitions(
+        chunk,
+        *args,
+        token=chunk_name,
+        meta=dfs[0],
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **chunk_kwargs,
     )
-    layers = graph.layers.copy()
-    dependencies = graph.dependencies.copy()
-    last_name = chunk_name
 
     # Blockwise Split Layer
     if split_out and split_out > 1:
-        split_name = "split-%s" % token_key
-        layers[split_name] = blockwise(
+        chunked = chunked.map_partitions(
             hash_shard,
-            split_name,
-            "i",
-            *(last_name, "i"),
-            *(split_out, None),
-            numblocks={last_name: (npartitions,)},
-            concatenate=True,
-            split_out_setup=split_out_setup,
-            split_out_setup_kwargs=split_out_setup_kwargs,
-            ignore_index=ignore_index,
+            split_out,
+            split_out_setup,
+            split_out_setup_kwargs,
+            ignore_index,
+            token="split-%s" % token_key,
+            meta=dfs[0],
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
         )
-        dependencies[split_name] = {last_name}
-        last_name = split_name
 
     # Handle sort behavior
     if sort is not None:
@@ -5918,9 +5912,9 @@ def apply_concat_apply(
 
     # Tree-Reduction Layer
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
-    layers[final_name] = DataFrameTreeReduction(
+    layer = DataFrameTreeReduction(
         final_name,
-        last_name,
+        chunked._name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
@@ -5931,7 +5925,6 @@ def apply_concat_apply(
         split_out=split_out if (split_out and split_out > 1) else None,
         tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
     )
-    dependencies[final_name] = {last_name}
 
     if meta is no_default:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
@@ -5944,7 +5937,7 @@ def apply_concat_apply(
         parent_meta=dfs[0]._meta,
     )
 
-    graph = HighLevelGraph(layers, dependencies)
+    graph = HighLevelGraph.from_collections(final_name, layer, dependencies=(chunked,))
     divisions = [None] * ((split_out or 1) + 1)
     return new_dd_object(graph, final_name, meta, divisions, parent_meta=dfs[0]._meta)
 
