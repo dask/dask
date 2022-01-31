@@ -14,17 +14,96 @@ ddf = dd.from_pandas(df, npartitions=2)
 
 
 @pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
+def test_read_json_with_path_column(orient):
+    with tmpfile("json") as f:
+        df.to_json(f, orient=orient, lines=False)
+        actual = dd.read_json(f, orient=orient, lines=False, include_path_column=True)
+        actual_pd = pd.read_json(f, orient=orient, lines=False)
+        # The default column name when include_path_colum is True is "path"
+        # The paths on Windows are converted to forward slash somewhere in the file
+        # reading chain in Dask, so we have to do the same here.
+        actual_pd["path"] = pd.Series(
+            (f.replace(os.sep, "/"),) * len(actual_pd), dtype="category"
+        )
+        assert actual.path.dtype == "category"
+        assert_eq(actual, actual_pd)
+
+
+def test_read_json_path_column_with_duplicate_name_is_error():
+    with tmpfile("json") as f:
+        df.to_json(f, orient="records", lines=False)
+        with pytest.raises(ValueError, match="Files already contain"):
+            dd.read_json(f, orient="records", lines=False, include_path_column="x")
+
+
+def test_read_json_with_path_converter():
+    path_column_name = "filenames"
+
+    def path_converter(x):
+        return "asdf.json"
+
+    with tmpfile("json") as f:
+        df.to_json(f, orient="records", lines=False)
+        actual = dd.read_json(
+            f,
+            orient="records",
+            lines=False,
+            include_path_column=path_column_name,
+            path_converter=path_converter,
+        )
+        actual_pd = pd.read_json(f, orient="records", lines=False)
+        actual_pd[path_column_name] = pd.Series(
+            (path_converter(f),) * len(actual_pd), dtype="category"
+        )
+        assert_eq(actual, actual_pd)
+
+
+def test_read_orient_not_records_and_lines():
+    with pytest.raises(ValueError, match="Line-delimited JSON"):
+        dd.read_json("nofile.json", orient="split", lines=True)
+
+
+def test_write_orient_not_records_and_lines():
+    with tmpfile("json") as f:
+        with pytest.raises(ValueError, match="Line-delimited JSON"):
+            dd.to_json(ddf, f, orient="split", lines=True)
+
+
+@pytest.mark.parametrize("blocksize", [5, 15, 33, 200, 90000])
+def test_read_json_multiple_files_with_path_column(blocksize, tmpdir):
+    fil1 = str(tmpdir.join("fil1.json")).replace(os.sep, "/")
+    fil2 = str(tmpdir.join("fil2.json")).replace(os.sep, "/")
+    df = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
+    df2 = df.assign(x=df.x + 0.5)
+    orient = "records"
+    lines = True
+    df.to_json(fil1, orient=orient, lines=lines)
+    df2.to_json(fil2, orient=orient, lines=lines)
+    path_dtype = pd.CategoricalDtype((fil1, fil2))
+    df["path"] = pd.Series((fil1,) * len(df), dtype=path_dtype)
+    df2["path"] = pd.Series((fil2,) * len(df2), dtype=path_dtype)
+    sol = pd.concat([df, df2])
+    res = dd.read_json(
+        str(tmpdir.join("fil*.json")),
+        orient=orient,
+        lines=lines,
+        include_path_column=True,
+        blocksize=blocksize,
+    )
+    assert_eq(res, sol, check_index=False)
+
+
+@pytest.mark.parametrize("orient", ["split", "records", "index", "columns", "values"])
 def test_read_json_basic(orient):
     with tmpfile("json") as f:
         df.to_json(f, orient=orient, lines=False)
         actual = dd.read_json(f, orient=orient, lines=False)
         actual_pd = pd.read_json(f, orient=orient, lines=False)
 
-        out = actual.compute()
-        assert_eq(out, actual_pd)
+        assert_eq(actual, actual_pd)
         if orient == "values":
-            out.columns = list(df.columns)
-        assert_eq(out, df)
+            actual.columns = list(df.columns)
+        assert_eq(actual, df)
 
 
 @pytest.mark.parametrize("fkeyword", ["pandas", "json"])
@@ -78,10 +157,9 @@ def test_write_json_basic(orient):
         fn = os.path.join(path, "1.json")
         df.to_json(fn, orient=orient, lines=False)
         actual = dd.read_json(fn, orient=orient, lines=False)
-        out = actual.compute()
         if orient == "values":
-            out.columns = list(df.columns)
-        assert_eq(out, df)
+            actual.columns = list(df.columns)
+        assert_eq(actual, df)
 
 
 def test_to_json_with_get():
@@ -127,7 +205,7 @@ def test_json_compressed(compression):
     with tmpdir() as path:
         dd.to_json(ddf, path, compression=compression)
         actual = dd.read_json(os.path.join(path, "*"), compression=compression)
-        assert_eq(df, actual.compute(), check_index=False)
+        assert_eq(df, actual, check_index=False)
 
 
 def test_read_json_inferred_compression():
@@ -135,7 +213,7 @@ def test_read_json_inferred_compression():
         fn = os.path.join(path, "*.json.gz")
         dd.to_json(ddf, fn, compression="gzip")
         actual = dd.read_json(fn)
-        assert_eq(df, actual.compute(), check_index=False)
+        assert_eq(df, actual, check_index=False)
 
 
 def test_to_json_results():
