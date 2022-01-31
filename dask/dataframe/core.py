@@ -6054,16 +6054,16 @@ def map_partitions(
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
     elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        if meta_is_emulated:
-            # If `meta` is not a pandas object, the concatenated results will be a
-            # different type
-            meta = make_meta(_concat([meta]), index=meta_index)
-        else:
-            raise ValueError(
+        if not meta_is_emulated:
+            warnings.warn(
                 "Meta is not valid, `map_partitions` expects output to be a pandas object. "
                 "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns."
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
             )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]), index=meta_index)
 
     # Ensure meta is empty series
     meta = make_meta(meta, parent_meta=parent_meta)
