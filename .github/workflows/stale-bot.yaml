@@ -13,8 +13,16 @@ jobs:
           stale-pr-message: '' # no comment left if string is empty
           days-before-stale: 30
           days-before-close: -1
-          stale-issue-label: 'needs attention'
-          stale-pr-label: 'needs attention'
-          exempt-issue-labels: 'good intro to dask,good first issue,Good First Issue,good second issue,feature request'
+          stale-issue-label: 'Status:Needs Attention'
+          stale-pr-label: 'Status:Needs attention'
+          exempt-issue-labels: |
+            good intro to dask,
+            good first issue,
+            Good First Issue,
+            good second issue,
+            feature request,
+            Experience:Good first Dask issue,
+            Experience:Good second Dask issue,
+            Type:Feature
           exempt-draft-pr: true
           start-date: '2020-04-18T00:00:00Z' # ignore before this date, ISO 8601 or RFC 2822

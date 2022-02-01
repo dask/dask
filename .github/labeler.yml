@@ -1,20 +1,20 @@
-dataframe:
+"Area:Dataframe":
   - dask/dataframe/*
   - dask/dataframe/**/*
 
-array:
+"Area:Array":
   - dask/array/*
   - dask/array/**/*
 
-io:
+"Area:IO":
   - dask/dataframe/io/*
   - dask/dataframe/io/**/*
 
-documentation:
+"Area:Documentation":
   - dask/docs/*
   - dask/docs/**/*
 
-dispatch:
+"Area:Dispatch":
   - dask/array/backends.py
   - dask/array/dispatch.py
   - dask/dataframe/backends.py
