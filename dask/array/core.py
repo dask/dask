@@ -3396,6 +3396,7 @@ def to_zarr(
     component=None,
     storage_options=None,
     overwrite=False,
+    region=None,
     compute=True,
     return_stored=False,
     **kwargs,
@@ -3421,6 +3422,9 @@ def to_zarr(
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
         where overwrite=True will replace the existing data.
+    region: tuple of slices or None
+        The region of data that should be written if ``url`` is a zarr.Array.
+        Not to be used with other types of ``url``.
     compute: bool
         See :func:`~dask.array.store` for more details.
     return_stored: bool
@@ -3432,6 +3436,7 @@ def to_zarr(
     ------
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+        If ``region`` is specified and ``url`` is not a zarr.Array
 
     See Also
     --------
@@ -3456,8 +3461,27 @@ def to_zarr(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
             )
-        arr = arr.rechunk(z.chunks)
-        return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+
+        if region is None:
+            arr = arr.rechunk(z.chunks)
+            regions = None
+        else:
+            from .slicing import new_blockdim, normalize_index
+
+            old_chunks = normalize_chunks(z.chunks, z.shape)
+            index = normalize_index(region, z.shape)
+            chunks = tuple(
+                tuple(new_blockdim(s, c, r))
+                for s, c, r in zip(z.shape, old_chunks, index)
+            )
+            arr = arr.rechunk(chunks)
+            regions = [region]
+        return arr.store(
+            z, lock=False, regions=regions, compute=compute, return_stored=return_stored
+        )
+
+    if region is not None:
+        raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError(
