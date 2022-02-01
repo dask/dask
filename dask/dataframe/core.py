@@ -5881,8 +5881,14 @@ def apply_concat_apply(
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
+        output_bag_collection=True,
         **chunk_kwargs,
     )
+
+    # NOTE: `chunked` is now a Bag collection.
+    # We don't use a DataFrame collection, because
+    # the partitions may not contain dataframe-like
+    # objects anymore.
 
     # Blockwise Split Layer
     if split_out and split_out > 1:
@@ -5893,9 +5899,6 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
-            enforce_metadata=False,
-            transform_divisions=False,
-            align_dataframes=False,
         )
 
     # Handle sort behavior
@@ -5912,7 +5915,7 @@ def apply_concat_apply(
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
     layer = DataFrameTreeReduction(
         final_name,
-        chunked._name,
+        chunked.name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
@@ -5983,6 +5986,7 @@ def map_partitions(
     enforce_metadata=True,
     transform_divisions=True,
     align_dataframes=True,
+    output_bag_collection=False,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -6014,6 +6018,11 @@ def map_partitions(
         If False, all inputs must have either the same number of partitions
         or a single partition. Single-partition inputs will be broadcast to
         every partition of multi-partition inputs.
+    output_bag_collection : bool, default False
+        Whether to return a ``dask.bag.Bag`` collection instead of a
+        dataframe-like collection. Setting to ``True`` will skip any
+        metadata and/or divisions handling required for dataframe-like
+        output. Default is ``False``.
     $META
     """
     name = kwargs.pop("token", None)
@@ -6038,35 +6047,41 @@ def map_partitions(
     if parent_meta is None and dfs:
         parent_meta = dfs[0]._meta
 
-    if meta is no_default:
-        # Use non-normalized kwargs here, as we want the real values (not
-        # delayed values)
-        meta = _emulate(func, *args, udf=True, **kwargs)
-        meta_is_emulated = True
-    else:
-        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-        meta_is_emulated = False
+    if not output_bag_collection:
+        if meta is no_default:
+            # Use non-normalized kwargs here, as we want the real values (not
+            # delayed values)
+            meta = _emulate(func, *args, udf=True, **kwargs)
+            meta_is_emulated = True
+        else:
+            meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+            meta_is_emulated = False
 
-    if all(isinstance(arg, Scalar) for arg in args):
-        layer = {
-            (name, 0): (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)
-        }
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
-        return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        if not meta_is_emulated:
-            warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-                "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns. In the future the meta you passed will not work.",
-                FutureWarning,
-            )
-        # If `meta` is not a pandas object, the concatenated results will be a
-        # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
+        if all(isinstance(arg, Scalar) for arg in args):
+            layer = {
+                (name, 0): (
+                    apply,
+                    func,
+                    (tuple, [(arg._name, 0) for arg in args]),
+                    kwargs,
+                )
+            }
+            graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
+            return Scalar(graph, name, meta)
+        elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
+            if not meta_is_emulated:
+                warnings.warn(
+                    "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                    "Try passing a pandas object as meta or a dict or tuple representing the "
+                    "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                    FutureWarning,
+                )
+            # If `meta` is not a pandas object, the concatenated results will be a
+            # different type
+            meta = make_meta(_concat([meta]), index=meta_index)
 
-    # Ensure meta is empty series
-    meta = make_meta(meta, parent_meta=parent_meta)
+        # Ensure meta is empty series
+        meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -6094,7 +6109,12 @@ def map_partitions(
             simple = False
 
     divisions = dfs[0].divisions
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+    if (
+        transform_divisions
+        and isinstance(dfs[0], Index)
+        and len(dfs) == 1
+        and not output_bag_collection
+    ):
         try:
             divisions = func(
                 *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
@@ -6119,7 +6139,7 @@ def map_partitions(
             *args, **kwargs, partition_info=partition_info
         )
 
-    if enforce_metadata:
+    if enforce_metadata and not output_bag_collection:
         dsk = partitionwise_graph(
             apply_and_enforce,
             name,
@@ -6136,6 +6156,10 @@ def map_partitions(
         )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    if output_bag_collection:
+        from ..bag import Bag
+
+        return Bag(graph, name, len(divisions) - 1)
     return new_dd_object(graph, name, meta, divisions)
 
 
