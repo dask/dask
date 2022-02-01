@@ -1223,13 +1223,7 @@ class _GroupBy:
         levels = _determine_levels(self.by)
 
         return aca(
-<<<<<<< HEAD
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
-=======
-            [df, self.index] if not isinstance(self.index, list) else [df] + self.index,
->>>>>>> Add warning for case where divisions are duplicated
+            [df, self.by] if not isinstance(self.by, list) else [df] + self.by,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
