@@ -1300,7 +1300,7 @@ def test_normalize_function_limited_size():
 
 
 def test_normalize_function_dataclass_field_no_repr():
-    from dataclass import field, make_dataclass
+    from dataclasses import field, make_dataclass
 
     A = make_dataclass(
         "A",
