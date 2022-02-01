@@ -678,6 +678,7 @@ def to_sql(
     method=None,
     compute=True,
     parallel=False,
+    engine_kwargs=None,
 ):
     """Store Dask Dataframe to a SQL table
 
@@ -734,6 +735,8 @@ def to_sql(
         When true, have each block append itself to the DB table concurrently. This can result in DB rows being in a
         different order than the source DataFrame's corresponding rows. When false, load each block into the SQL DB in
         sequence.
+    engine_kwargs : dict or None
+        Specific db engine parameters for sqlalchemy
 
     Raises
     ------
@@ -786,13 +789,18 @@ def to_sql(
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
+    import sqlalchemy as sa
+
     if not isinstance(uri, str):
         raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
+
+    engine_kwargs = {} if engine_kwargs is None else engine_kwargs
+    engine = sa.create_engine(uri, **engine_kwargs)
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
         name=name,
-        con=uri,
+        con=engine,
         schema=schema,
         if_exists=if_exists,
         index=index,
