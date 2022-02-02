@@ -199,7 +199,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         column to be columns
     values : scalar or list(scalar)
         column(s) to aggregate
-    aggfunc : {'mean', 'sum', 'count'}, default 'mean'
+    aggfunc : {'mean', 'sum', 'count', 'first', 'last'}, default 'mean'
 
     Returns
     -------
@@ -228,8 +228,16 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         or is_scalar(values)
     ):
         raise ValueError("'values' must refer to an existing column or columns")
-    if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
-        raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
+    if not is_scalar(aggfunc) or aggfunc not in (
+        "mean",
+        "sum",
+        "count",
+        "first",
+        "last",
+    ):
+        raise ValueError(
+            "aggfunc must be either 'mean', 'sum', 'count', 'first' or 'last'"
+        )
 
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
@@ -268,12 +276,36 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
 
+    if aggfunc == "first":
+        pv_first = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_first,
+            aggregate=methods.pivot_agg_first,
+            meta=meta,
+            token="pivot_table_first",
+            chunk_kwargs=kwargs,
+        )
+
+    if aggfunc == "last":
+        pv_last = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_last,
+            aggregate=methods.pivot_agg_last,
+            meta=meta,
+            token="pivot_table_last",
+            chunk_kwargs=kwargs,
+        )
+
     if aggfunc == "sum":
         return pv_sum
     elif aggfunc == "count":
         return pv_count
     elif aggfunc == "mean":
         return pv_sum / pv_count
+    elif aggfunc == "first":
+        return pv_first
+    elif aggfunc == "last":
+        return pv_last
     else:
         raise ValueError
 
