@@ -1617,3 +1617,11 @@ def test_datetime_std_across_axis1_null_results(skipna):
     ddf2 = dd.from_pandas(pdf2, 3)
 
     assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+
+
+def test_std_raises_on_index():
+    with pytest.raises(
+        NotImplementedError,
+        match="`std` is only supported with objects that are Dataframes or Series",
+    ):
+        dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()

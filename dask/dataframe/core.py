@@ -2178,6 +2178,7 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
+        _raise_if_not_series_or_dataframe(self, "std")
 
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
         is_df_like = is_dataframe_like(self._meta)
@@ -7587,3 +7588,14 @@ def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
         sqrt[time_col] = pd.to_timedelta(matching_val)
 
     return sqrt
+
+
+def _raise_if_not_series_or_dataframe(x, funcname):
+    """
+    Utility function to raise an error if an object is not a Series or DataFrame
+    """
+    if not is_series_like(x) and not is_dataframe_like(x):
+        raise NotImplementedError(
+            "`%s` is only supported with objects that are Dataframes or Series"
+            % funcname
+        )
