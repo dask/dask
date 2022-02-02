@@ -47,6 +47,18 @@ extensions = [
     "IPython.sphinxext.ipython_directive",
 ]
 
+# Turn on sphinx.ext.autosummary
+autosummary_generate = True
+
+# Add __init__ doc (ie. params) to class summaries
+autoclass_content = "both"
+
+# If no docstring, inherit from base class
+autodoc_inherit_docstrings = True
+
+# Include namespaces from class/method signatures
+add_module_names = True
+
 numpydoc_show_class_members = False
 
 sphinx_tabs_disable_tab_closing = True
