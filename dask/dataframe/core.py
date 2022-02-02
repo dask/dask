@@ -5880,6 +5880,12 @@ def apply_concat_apply(
         chunk,
         *args,
         token=chunk_name,
+        # NOTE: We are NOT setting the correct
+        # `meta` here on purpose. We are using
+        # `map_partitions` as a convenient way
+        # to build a `Blockwise` layer, and need
+        # to avoid the metadata emulation step.
+        meta=dfs[0],
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
@@ -5895,6 +5901,12 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
+            # NOTE: We are NOT setting the correct
+            # `meta` here on purpose. We are using
+            # `map_partitions` as a convenient way
+            # to build a `Blockwise` layer, and need
+            # to avoid the metadata emulation step.
+            meta=dfs[0],
             enforce_metadata=False,
             transform_divisions=False,
             align_dataframes=False,
