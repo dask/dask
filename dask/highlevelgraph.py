@@ -19,7 +19,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import _deprecated, ensure_dict, key_split, stringify
+from .utils import ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 from .widgets import get_template
 
@@ -765,11 +765,6 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
-    @_deprecated(use_instead="HighLevelGraph.keys")
-    def keyset(self) -> AbstractSet:
-        # Backwards compatibility for now
-        return self.keys()
-
     def get_all_external_keys(self) -> set:
         """Get all output keys of all layers
 
@@ -821,12 +816,6 @@ class HighLevelGraph(Mapping):
     @property
     def dependents(self):
         return reverse_dict(self.dependencies)
-
-    @property
-    @_deprecated(use_instead="HighLevelGraph.layers")
-    def dicts(self):
-        # Backwards compatibility for now
-        return self.layers
 
     def copy(self):
         return HighLevelGraph(

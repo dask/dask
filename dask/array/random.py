@@ -8,7 +8,7 @@ import numpy as np
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import _deprecated, derived_from, random_state_data, skip_doctest
+from ..utils import derived_from, random_state_data
 from .core import (
     Array,
     asarray,
@@ -18,18 +18,6 @@ from .core import (
     slices_from_chunks,
 )
 from .creation import arange
-
-
-@_deprecated()
-def doc_wraps(func):
-    """Copy docstring from one function to another"""
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
 
 
 class RandomState:

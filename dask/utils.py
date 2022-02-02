@@ -154,15 +154,6 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
-@_deprecated(
-    version="2021.06.1", use_instead="contextlib.suppress from the standard library"
-)
-@contextmanager
-def ignoring(*exceptions):
-    with suppress(*exceptions):
-        yield
-
-
 def import_required(mod_name, error_msg):
     """Attempt to import a required dependency.
 
@@ -281,15 +272,6 @@ def tmp_cwd(dir=None):
     with tmpdir(dir) as dirname:
         with changed_cwd(dirname):
             yield dirname
-
-
-@_deprecated(
-    version="2021.06.1", use_instead="contextlib.nullcontext from the standard library"
-)
-@contextmanager
-def noop_context():
-    with nullcontext():
-        yield
 
 
 class IndexCallable:

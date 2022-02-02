@@ -49,20 +49,6 @@ def test_keys_values_items_to_dict_methods():
     assert hg.to_dict() == dict(hg)
 
 
-def test_keyset_deprecated():
-    a = {"x": 1, "y": (inc, "x")}
-    hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.warns(FutureWarning, match="HighLevelGraph.keys"):
-        assert hg.keyset() == hg.keys()
-
-
-def test_dicts_deprecated():
-    a = {"x": 1, "y": (inc, "x")}
-    hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.warns(FutureWarning, match="HighLevelGraph.layers"):
-        assert hg.dicts == hg.layers
-
-
 def test_getitem():
     hg = HighLevelGraph(
         {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}}, {"a": set(), "b": set()}
@@ -246,13 +232,6 @@ def test_blockwise_cull(flat):
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
         assert not layer.is_materialized()
-
-
-def test_highlevelgraph_dicts_deprecation():
-    with pytest.warns(FutureWarning):
-        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
-        hg = HighLevelGraph(layers, {"a": set()})
-        assert hg.dicts == layers
 
 
 def test_len_does_not_materialize():
