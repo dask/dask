@@ -1,5 +1,4 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev') + environ.get('VERSION_SUFFIX', '') %}
-{% set py_version=environ.get('CONDA_PY', 36) %}
 
 
 package:
@@ -12,7 +11,7 @@ source:
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
   noarch: python
-  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: py_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script: {{ PYTHON }} -m pip install . -vv
 
 requirements:

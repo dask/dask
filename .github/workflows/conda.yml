@@ -23,6 +23,12 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
+          path: dask
+          fetch-depth: 0
+      - uses: actions/checkout@v2
+        with:
+          repository: dask/distributed
+          path: distributed
           fetch-depth: 0
       - name: Set up Python
         uses: conda-incubator/setup-miniconda@v2
@@ -37,14 +43,30 @@ jobs:
           which python
           pip list
           mamba list
-      - name: Build conda package
+      - name: Build conda packages
         run: |
           # suffix for nightly package versions
           export VERSION_SUFFIX=a`date +%y%m%d`
 
-          conda mambabuild continuous_integration/recipe \
+          # compute dask-core pre-release version / build
+          IFS='-' read -r -a arr <<< `git -C dask describe --tags`
+          export DASK_VERSION=${arr[0]}$VERSION_SUFFIX
+          export DASK_BUILD=py_${arr[2]}_${arr[1]}
+
+          # dask-core pre-release build
+          conda mambabuild dask/continuous_integration/recipe \
                            --no-anaconda-upload \
-                           --output-folder .
+                           --output-folder build
+
+          # distributed pre-release build
+          conda mambabuild distributed/continuous_integration/recipes/distributed \
+                           --no-anaconda-upload \
+                           --output-folder build
+
+          # dask pre-release build
+          conda mambabuild distributed/continuous_integration/recipes/dask \
+                           --no-anaconda-upload \
+                           --output-folder build
       - name: Upload conda package
         if: |
           github.event_name == 'push'
@@ -53,7 +75,20 @@ jobs:
         env:
           ANACONDA_API_TOKEN: ${{ secrets.DASK_CONDA_TOKEN }}
         run: |
+          # convert distributed to other architectures
+          cd build && conda convert linux-64/*.tar.bz2 -p osx-64 \
+                                                       -p osx-arm64 \
+                                                       -p linux-ppc64le \
+                                                       -p linux-aarch64 \
+                                                       -p win-64
+
           # install anaconda for upload
           mamba install anaconda-client
 
           anaconda upload --label dev noarch/*.tar.bz2
+          anaconda upload --label dev linux-64/*.tar.bz2
+          anaconda upload --label dev linux-aarch64/*.tar.bz2
+          anaconda upload --label dev linux-ppc64le/*.tar.bz2
+          anaconda upload --label dev osx-64/*.tar.bz2
+          anaconda upload --label dev osx-arm64/*.tar.bz2
+          anaconda upload --label dev win-64/*.tar.bz2
