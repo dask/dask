@@ -234,13 +234,6 @@ def test_blockwise_cull(flat):
         assert not layer.is_materialized()
 
 
-def test_highlevelgraph_dicts_deprecation():
-    with pytest.warns(FutureWarning):
-        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
-        hg = HighLevelGraph(layers, {"a": set()})
-        assert hg.dicts == layers
-
-
 def test_len_does_not_materialize():
     a = {"x": 1}
     b = Blockwise(
