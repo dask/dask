@@ -806,6 +806,10 @@ def to_parquet(
             kwargs_pass,
         ),
         BlockIndex((df.npartitions,)),
+        # Pass in the original metadata to avoid
+        # metadata emulation in `map_partitions`.
+        # This is necessary, because we are not
+        # expecting a dataframe-like output.
         meta=df._meta,
         enforce_metadata=False,
         transform_divisions=False,
