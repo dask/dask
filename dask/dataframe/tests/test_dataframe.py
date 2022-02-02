@@ -16,7 +16,7 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_140, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -3005,6 +3005,16 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
+def test_apply_warns_with_invalid_meta():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    func = lambda row: row["x"] + row["y"]
+
+    with pytest.warns(FutureWarning, match="Meta is not valid"):
+        ddf.apply(func, axis=1, meta=int)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4164,7 +4174,8 @@ def test_dataframe_mode():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.mode(), df.mode())
-    assert_eq(ddf.Name.mode(), df.Name.mode())
+    # name is not preserved in older pandas
+    assert_eq(ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GT_140)
 
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
@@ -4883,12 +4894,13 @@ def test_dask_layers():
     assert dds.__dask_layers__() == (dds._name,)
     ddi = dds.min()
     assert ddi.key[1:] == (0,)
-    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
-    assert ddi.dask.dependencies == {
-        ddf._name: set(),
-        dds._name: {ddf._name},
-        ddi.key[0]: {dds._name},
-    }
+    # Note that the `min` operation will use two layers
+    # now that ACA uses uses HLG
+    assert {ddf._name, dds._name, ddi.key[0]}.issubset(ddi.dask.layers.keys())
+    assert len(ddi.dask.layers) == 4
+    assert ddi.dask.dependencies[ddf._name] == set()
+    assert ddi.dask.dependencies[dds._name] == {ddf._name}
+    assert len(ddi.dask.dependencies) == 4
     assert ddi.__dask_layers__() == (ddi.key[0],)
 
 
@@ -5040,3 +5052,34 @@ def test_index_is_monotonic_dt64():
     s_2 = pd.Series(1, index=list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_custom_map_reduce():
+    # Make sure custom map-reduce workflows can use
+    # the universal ACA code path with metadata
+    # that is not DataFrame-like.
+    # See: https://github.com/dask/dask/issues/8636
+
+    df = pd.DataFrame(columns=["a"], data=[[2], [4], [8]], index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def map_fn(x):
+        return {"x": x, "y": x}
+
+    def reduce_fn(series):
+        merged = None
+        for mapped in series:
+            if merged is None:
+                merged = mapped.copy()
+            else:
+                merged["x"] += mapped["x"]
+                merged["y"] *= mapped["y"]
+        return merged
+
+    result = (
+        ddf["a"]
+        .map(map_fn, meta=("data", "object"))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", "object"))
+        .compute()[0]
+    )
+    assert result == {"x": 14, "y": 64}

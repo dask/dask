@@ -47,18 +47,14 @@ def optimize(dsk, keys, **kwargs):
 
 
 def optimize_dataframe_getitem(dsk, keys):
-    # This optimization looks for all `DataFrameLayer` instances,
+    # This optimization looks for all `DataFrameIOLayer` instances,
     # and calls `project_columns` on any layers that directly precede
-    # a (qualified) `getitem` operation. In the future, we can
-    # search for `getitem` operations instead, and work backwards
-    # through multiple adjacent `DataFrameLayer`s. This approach
-    # may become beneficial once `DataFrameLayer` is made a base
-    # type for all relevant DataFrame operations.
+    # a (qualified) `getitem` operation.
 
-    from ..layers import DataFrameLayer
+    from ..layers import DataFrameIOLayer
 
     dataframe_blockwise = [
-        k for k, v in dsk.layers.items() if isinstance(v, DataFrameLayer)
+        k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
     ]
 
     layers = dsk.layers.copy()
@@ -108,7 +104,7 @@ def optimize_dataframe_getitem(dsk, keys):
         # Project columns and update blocks
         if column_projection:
             old = layers[k]
-            new = old.project_columns(columns)[0]
+            new = old.project_columns(columns)
             if new.name != old.name:
                 columns = list(columns)
                 assert len(update_blocks)
