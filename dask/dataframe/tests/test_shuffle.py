@@ -1281,3 +1281,12 @@ def test_sort_values_custom_function(by, nparts):
         )
     expect = df.sort_values(by=by)
     dd.assert_eq(got, expect, check_index=False)
+
+
+def test_sort_values_bool_ascending():
+    df = pd.DataFrame({"a": [1, 2, 3] * 20, "b": [4, 5, 6, 7] * 15})
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    # attempt to sort with list of ascending booleans
+    with pytest.raises(NotImplementedError):
+        ddf.sort_values(by="a", ascending=[True, False])

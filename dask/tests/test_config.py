@@ -506,11 +506,12 @@ def test_config_inheritance():
 
 
 def test__get_paths(monkeypatch):
-    # These environment variables are used by Dask's config system.
-    # We temporarily remove them to avoid interference from the
-    # machine where tests are being run.
+    # These settings are used by Dask's config system. We temporarily
+    # remove them to avoid interference from the machine where tests
+    # are being run.
     monkeypatch.delenv("DASK_CONFIG", raising=False)
     monkeypatch.delenv("DASK_ROOT_CONFIG", raising=False)
+    monkeypatch.setattr(site, "PREFIXES", [])
 
     expected = [
         "/etc/dask",
