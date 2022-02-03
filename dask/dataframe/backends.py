@@ -1,4 +1,5 @@
 import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -126,7 +127,7 @@ def make_meta_object(x, index=None):
         )
     if isinstance(x, tuple) and len(x) == 2:
         return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
+    elif isinstance(x, Iterable) and not isinstance(x, str):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(
