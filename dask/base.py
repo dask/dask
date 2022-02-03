@@ -850,10 +850,10 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    token = str(tuple(map(normalize_token, args)))
+    hasher = md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
-        token += str(tuple(map(normalize_token, (kwargs,))))
-    return md5(token.encode()).hexdigest()
+        hasher.update(str(normalize_token(kwargs)).encode())
+    return hasher.hexdigest()
 
 
 normalize_token = Dispatch()
