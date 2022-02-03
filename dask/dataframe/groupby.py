@@ -201,6 +201,19 @@ def _groupby_slice_shift(
     return g.shift(**kwargs)
 
 
+def _groupby_slice_rank(
+    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+):
+    # No need to use raise if unaligned here - this is only called after
+    # shuffling, which makes everything aligned already
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    observed = {"observed": observed} if observed is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
+    if key:
+        g = g[key]
+    return g.rank(**kwargs)
+
+
 def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
@@ -1898,6 +1911,97 @@ class _GroupBy:
             axis=axis,
             fill_value=fill_value,
             token="groupby-shift",
+            group_keys=self.group_keys,
+            meta=meta,
+            **self.observed,
+            **self.dropna,
+        )
+        return result
+    
+    @insert_meta_param_description(pad=12)
+    def rank(self, method='average', ascending=True, na_option='keep', pct=False, axis=0, meta=no_default):
+        """Parallel version of pandas GroupBy.rank
+
+        This mimics the pandas version except for the following:
+
+        If the grouper does not align with the index then this causes a full
+        shuffle.  The order of rows within each group may not be preserved.
+
+        Parameters
+        ----------
+        method : Delayed, Scalar or int, default 1
+            Number of periods to shift.
+        ascending : Delayed, Scalar or str, optional
+            Frequency string.
+        na_option:
+        pct:
+        axis : axis to shift, default 0
+            Shift direction.
+        $META
+
+        Returns
+        -------
+        ranked : Series or DataFrame with ranking of values within each group.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(freq="1H")
+        >>> result = ddf.rank("name").shift(1, meta={"id": int, "x": float, "y": float})
+        """
+        if meta is no_default:
+            with raise_on_meta_error("groupby.rank()", udf=False):
+                meta_kwargs = _extract_meta(
+                    {
+                        "method": method,
+                        "ascending": ascending,
+                        "na_option": na_option,
+                        "pct": pct,
+                        "axis": axis,
+                    },
+                    nonempty=True,
+                )
+                meta = self._meta_nonempty.rank(**meta_kwargs)
+
+            msg = (
+                "`meta` is not specified, inferred from partial data. "
+                "Please provide `meta` if the result is unexpected.\n"
+                "  Before: .rank(method='average')\n"
+                "  After:  .rank(method='average', meta={'x': 'f8', 'y': 'f8'}) for dataframe result\n"
+                "  or:     .rank(method='average', meta=('x', 'f8'))            for series result"
+            )
+            warnings.warn(msg, stacklevel=2)
+
+        meta = make_meta(meta, parent_meta=self._meta.obj)
+
+        # Validate self.by
+        if isinstance(self.by, list) and any(
+            isinstance(item, Series) for item in self.by
+        ):
+            raise NotImplementedError(
+                "groupby-rank with a multiple Series is currently not supported"
+            )
+        df = self.obj
+        should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
+
+        if should_shuffle:
+            df2, by = self._shuffle(meta)
+        else:
+            df2 = df
+            by = self.by
+
+        # Perform embarrassingly parallel groupby-rank
+        result = map_partitions(
+            _groupby_slice_rank,
+            df2,
+            by,
+            self._slice,
+            method=method,
+            ascending=ascending,
+            na_option=na_option,
+            pct=pct,
+            axis=axis,
+            token="groupby-rank",
             group_keys=self.group_keys,
             meta=meta,
             **self.observed,

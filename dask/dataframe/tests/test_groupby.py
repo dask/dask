@@ -2148,6 +2148,79 @@ def test_groupby_shift_with_freq():
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
 
 
+@pytest.mark.parametrize("npartitions", [1, 3])
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("ascending", [True, False])
+@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("pct", [False, True])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, axis):
+    pdf = pd.DataFrame(
+    {
+        "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+        "b": [4, 4, 6, 3, 2, 1, None, 0, 0],
+        "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
+    },
+)
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(["a", "c"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            ddf.groupby(["a", "c"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+        )
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(["a"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            ddf.groupby(["a"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+        )
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby(pdf.c).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            ddf.groupby(ddf.c).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+        )
+
+
+@pytest.mark.parametrize("npartitions", [1, 5])
+@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("pct", [False, True])
+def test_groupby_rank_series(npartitions, method, pct):
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+        },
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby("a")["b"].rank(method, pct=pct),
+            ddf.groupby("a")["b"].rank(method, pct=pct),
+        )
+
+
+@pytest.mark.parametrize("method", ["dense"])
+def test_groupby_rank_empty_partition(method):
+    pdf = pd.DataFrame(
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+        },
+    )
+    empty = pdf.iloc[:0]
+    ddf = dd.concat(
+        [dd.from_pandas(empty, npartitions=1)]
+        + [dd.from_pandas(pdf, npartitions=2)]
+        + [dd.from_pandas(pdf, npartitions=2)]
+    )
+
+    with pytest.warns(UserWarning):
+        assert_eq(
+            ddf.compute().groupby("a")["b"].rank(method),
+            ddf.groupby("a")["b"].rank(method),
+        )
+
+
 @pytest.mark.parametrize(
     "transformation", [lambda x: x.sum(), np.sum, "sum", pd.Series.rank]
 )
