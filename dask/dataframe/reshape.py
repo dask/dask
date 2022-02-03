@@ -273,26 +273,6 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
 
-    if aggfunc == "first":
-        pv_first = apply_concat_apply(
-            [df],
-            chunk=methods.pivot_first,
-            aggregate=methods.pivot_agg_first,
-            meta=meta,
-            token="pivot_table_first",
-            chunk_kwargs=kwargs,
-        )
-
-    if aggfunc == "last":
-        pv_last = apply_concat_apply(
-            [df],
-            chunk=methods.pivot_last,
-            aggregate=methods.pivot_agg_last,
-            meta=meta,
-            token="pivot_table_last",
-            chunk_kwargs=kwargs,
-        )
-
     if aggfunc == "sum":
         return pv_sum
     elif aggfunc == "count":
@@ -300,9 +280,23 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     elif aggfunc == "mean":
         return pv_sum / pv_count
     elif aggfunc == "first":
-        return pv_first
+        return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_first,
+            aggregate=methods.pivot_agg_first,
+            meta=meta,
+            token="pivot_table_first",
+            chunk_kwargs=kwargs,
+        )
     elif aggfunc == "last":
-        return pv_last
+        return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_last,
+            aggregate=methods.pivot_agg_last,
+            meta=meta,
+            token="pivot_table_last",
+            chunk_kwargs=kwargs,
+        )
     else:
         raise ValueError
 
