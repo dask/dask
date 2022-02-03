@@ -1929,14 +1929,11 @@ class _GroupBy:
 
         Parameters
         ----------
-        method : Delayed, Scalar or int, default 1
-            Number of periods to shift.
-        ascending : Delayed, Scalar or str, optional
-            Frequency string.
-        na_option:
-        pct:
-        axis : axis to shift, default 0
-            Shift direction.
+        method : {‘average’, ‘min’, ‘max’, ‘first’, ‘dense’}, default ‘average’
+        ascending : bool, default True
+        na_option: {‘keep’, ‘top’, ‘bottom’}, default ‘keep’
+        pct: bool, default False
+        axis : int, default 0
         $META
 
         Returns
@@ -1947,7 +1944,7 @@ class _GroupBy:
         --------
         >>> import dask
         >>> ddf = dask.datasets.timeseries(freq="1H")
-        >>> result = ddf.rank("name").shift(1, meta={"id": int, "x": float, "y": float})
+        >>> result = ddf.groupby("name").rank(method="average", meta={"id": int, "x": float, "y": float})
         """
         if meta is no_default:
             with raise_on_meta_error("groupby.rank()", udf=False):
