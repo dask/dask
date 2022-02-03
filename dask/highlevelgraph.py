@@ -562,23 +562,52 @@ class AbstractLayer(Layer):
             self._cached_output_keys = output_keys
         return self._cached_output_keys
 
+    def _keys_to_indices(self, keys):
+        """Convert keys to output chunk/partition indices
+
+        Currently works for keys of the form: `(name, index)`.
+        """
+        parts = set()
+        for key in keys:
+            try:
+                _name, _part = key
+            except ValueError:
+                continue
+            if _name != self.name:
+                continue
+            parts.add(_part)
+        return parts
+
     def __getitem__(self, key):
         return self._dict[key]
 
     def __iter__(self):
         return iter(self._dict)
 
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        from distributed.protocol.serialize import ToPickle
+    def __len__(self):
+        return iter(self._dict)
 
-        return ToPickle(self.required_kwargs)
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        import pickle
+
+        # from distributed.protocol.serialize import ToPickle
+        # TODO: Figure out why ToPickle sometimes fails...
+        # return ToPickle(self.required_kwargs)
+        return pickle.dumps(self.required_kwargs)
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        import pickle
+
+        from distributed.protocol.serialize import ToPickle
         from distributed.worker import dumps_task
 
         # Materialize the layer
-        raw = dict(cls(**state))
+        if isinstance(state, ToPickle):
+            state = state.data
+        elif isinstance(state, bytes):
+            state = pickle.loads(state)
+        raw = cls(**state).construct_graph()
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}

@@ -94,7 +94,7 @@ def _dataframe_broadcast_join(tmpdir):
     # Perform a computation using an HLG-based broadcast join
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
-    ddf2 = dd.from_pandas(df, npartitions=1)
+    ddf2 = dd.from_pandas(df, npartitions=2)
     return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
 
 
