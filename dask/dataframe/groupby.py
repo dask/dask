@@ -1918,7 +1918,7 @@ class _GroupBy:
         )
         return result
 
-    @insert_meta_param_description(pad=12)
+    @derived_from(pd.core.groupby.DataFrameGroupBy)
     def rank(
         self,
         method="average",
@@ -1928,26 +1928,7 @@ class _GroupBy:
         axis=0,
         meta=no_default,
     ):
-        """Parallel version of pandas GroupBy.rank
-
-        This mimics the pandas version except for the following:
-
-        If the grouper does not align with the index then this causes a full
-        shuffle.  The order of rows within each group may not be preserved.
-
-        Parameters
-        ----------
-        method : {‘average’, ‘min’, ‘max’, ‘first’, ‘dense’}, default ‘average’
-        ascending : bool, default True
-        na_option: {‘keep’, ‘top’, ‘bottom’}, default ‘keep’
-        pct: bool, default False
-        axis : int, default 0
-        $META
-
-        Returns
-        -------
-        ranked : Series or DataFrame with ranking of values within each group.
-
+        """
         Examples
         --------
         >>> import dask

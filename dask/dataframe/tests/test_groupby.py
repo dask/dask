@@ -2225,6 +2225,7 @@ def test_groupby_rank_series(npartitions, method, pct):
         {
             "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
             "b": [4, 5, 6, 3, 2, 1, 0, 0, 0],
+            "c": ["a", "a", "b", "b", "b", "c", "c", "b", "a"],
         },
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
@@ -2232,6 +2233,13 @@ def test_groupby_rank_series(npartitions, method, pct):
         assert_eq(
             pdf.groupby("a")["b"].rank(method, pct=pct),
             ddf.groupby("a")["b"].rank(method, pct=pct),
+        )
+
+    # string
+    with pytest.warns(UserWarning):
+        assert_eq(
+            pdf.groupby("a")["c"].rank(method, pct=pct),
+            ddf.groupby("a")["c"].rank(method, pct=pct),
         )
 
 
