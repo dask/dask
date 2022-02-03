@@ -13,7 +13,7 @@ from tlz.curried import map
 from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
-from .highlevelgraph import Layer
+from .highlevelgraph import AbstractLayer, Layer
 from .utils import (
     apply,
     cached_cumsum,
@@ -1234,7 +1234,7 @@ class DataFrameIOLayer(Blockwise):
         )
 
 
-class DataFrameTreeReduction(Layer):
+class DataFrameTreeReduction(AbstractLayer):
     """DataFrame Tree-Reduction Layer
 
     Parameters
@@ -1324,6 +1324,20 @@ class DataFrameTreeReduction(Layer):
             self.widths.append(parts)
         self.height = len(self.widths)
 
+    @property
+    def required_kwargs(self):
+        return {
+            "name": self.name,
+            "name_input": self.name_input,
+            "npartitions_input": self.npartitions_input,
+            "concat_func": self.concat_func,
+            "tree_node_func": self.tree_node_func,
+            "finalize_func": self.finalize_func,
+            "split_out": self.split_out,
+            "output_partitions": self.output_partitions,
+            "tree_node_name": self.tree_node_name,
+        }
+
     def _make_key(self, *name_parts, split=0):
         # Helper function construct a key
         # with a "split" element when
@@ -1338,7 +1352,7 @@ class DataFrameTreeReduction(Layer):
             outer_func = self.tree_node_func
         return (toolz.pipe, input_keys, self.concat_func, outer_func)
 
-    def _construct_graph(self):
+    def construct_graph(self):
         """Construct graph for a tree reduction."""
 
         dsk = {}
@@ -1417,35 +1431,8 @@ class DataFrameTreeReduction(Layer):
             self.name, self.name_input, self.split_out
         )
 
-    def _output_keys(self):
+    def output_keys(self):
         return {(self.name, s) for s in self.output_partitions}
-
-    def get_output_keys(self):
-        if hasattr(self, "_cached_output_keys"):
-            return self._cached_output_keys
-        else:
-            output_keys = self._output_keys()
-            self._cached_output_keys = output_keys
-        return self._cached_output_keys
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
 
     def __len__(self):
         # Start with "base" tree-reduction size
@@ -1468,21 +1455,6 @@ class DataFrameTreeReduction(Layer):
             splits.add(_split)
         return splits
 
-    def _cull(self, output_partitions):
-        return DataFrameTreeReduction(
-            self.name,
-            self.name_input,
-            self.npartitions_input,
-            self.concat_func,
-            self.tree_node_func,
-            finalize_func=self.finalize_func,
-            split_every=self.split_every,
-            split_out=self.split_out,
-            output_partitions=output_partitions,
-            tree_node_name=self.tree_node_name,
-            annotations=self.annotations,
-        )
-
     def cull(self, keys, all_keys):
         """Cull a DataFrameTreeReduction HighLevelGraph layer"""
         deps = {
@@ -1492,52 +1464,9 @@ class DataFrameTreeReduction(Layer):
         }
         output_partitions = self._keys_to_output_partitions(keys)
         if output_partitions != set(self.output_partitions):
-            culled_layer = self._cull(output_partitions)
+            new_state = self.required_kwargs.copy()
+            new_state["output_partitions"] = output_partitions
+            culled_layer = DataFrameTreeReduction(**new_state)
             return culled_layer, deps
         else:
             return self, deps
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        from distributed.protocol.serialize import to_serialize
-
-        # Pickle the (possibly) user-defined functions here
-        _concat_func = to_serialize(self.concat_func)
-        _tree_node_func = to_serialize(self.tree_node_func)
-        if self.finalize_func:
-            _finalize_func = to_serialize(self.finalize_func)
-        else:
-            _finalize_func = None
-
-        return {
-            "name": self.name,
-            "name_input": self.name_input,
-            "npartitions_input": self.npartitions_input,
-            "concat_func": _concat_func,
-            "tree_node_func": _tree_node_func,
-            "finalize_func": _finalize_func,
-            "split_out": self.split_out,
-            "output_partitions": self.output_partitions,
-            "tree_node_name": self.tree_node_name,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.protocol.serialize import to_serialize
-
-        # Materialize the layer
-        raw = cls(**state)._construct_graph()
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
-
-        # Must use `to_serialize` on the entire task.
-        # This is required because the task-tuples contain `Serialized`
-        # function objects instead of real functions. Using `dumps_task`
-        # may or may not correctly wrap the entire tuple in `to_serialize`.
-        # So we use `to_serialize` here to be explicit. When the task
-        # arrives at a worker, both the `Serialized` task-tuples and the
-        # `Serialized` functions nested within them should be deserialzed
-        # automatically by the comm.
-        return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}

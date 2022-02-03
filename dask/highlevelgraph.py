@@ -19,7 +19,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify
+from .utils import ensure_dict, key_split, stringify, stringify_collection_keys
 from .utils_test import add, inc  # noqa: F401
 from .widgets import get_template
 
@@ -521,6 +521,72 @@ class Layer(collections.abc.Mapping):
                 if key != "chunks":
                     info[key] = html.escape(str(val))
         return info
+
+
+class AbstractLayer(Layer):
+    """A non-materialized HighLevelGraph Layer"""
+
+    @property
+    def required_kwargs(self):
+        """Dictionary of key-word arguments required for
+        graph materialization on the scheduler. These arguments
+        will be used to initalize a new ``AbstractLayer`` on
+        the scheduler for the purpose of graph materialization.
+        """
+        raise NotImplementedError
+
+    def construct_graph(self):
+        raise NotImplementedError
+
+    def output_keys(self):
+        raise NotImplementedError
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self.construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def get_output_keys(self):
+        if hasattr(self, "_cached_output_keys"):
+            return self._cached_output_keys
+        else:
+            output_keys = self.output_keys()
+            self._cached_output_keys = output_keys
+        return self._cached_output_keys
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        from distributed.protocol.serialize import ToPickle
+
+        return ToPickle(self.required_kwargs)
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.worker import dumps_task
+
+        # Materialize the layer
+        raw = dict(cls(**state))
+
+        # Convert all keys to strings and dump tasks
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        keys = raw.keys() | dsk.keys()
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
+
+        # Must use `dumps_task` on the every task.
+        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
 
 
 class MaterializedLayer(Layer):
