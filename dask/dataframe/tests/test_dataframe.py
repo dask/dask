@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -16,7 +17,13 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_140, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    tm,
+)
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -5002,11 +5009,26 @@ def test_use_of_weakref_proxy():
     isinstance(res.compute(), pd.Series)
 
 
+@contextlib.contextmanager
+def check_is_monotonic_warning():
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    if not PANDAS_GT_150:
+        with contextlib.nullcontext() as ctx:
+            yield ctx
+    else:
+        with pytest.warns(FutureWarning, match="is_monotonic is deprecated") as ctx:
+            yield ctx
+
+
 def test_is_monotonic_numeric():
     s = pd.Series(range(20))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
-    assert_eq(s.is_monotonic, ds.is_monotonic)
+    with check_is_monotonic_warning():
+        expected = s.is_monotonic
+    with check_is_monotonic_warning():
+        result = ds.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
@@ -5032,7 +5054,11 @@ def test_index_is_monotonic_numeric():
     s = pd.Series(1, index=range(20))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+    with check_is_monotonic_warning():
+        expected = s.index.is_monotonic
+    with check_is_monotonic_warning():
+        result = ds.index.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(1, index=range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
