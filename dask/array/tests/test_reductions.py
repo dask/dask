@@ -811,7 +811,9 @@ def test_nan_func_does_not_warn(func):
     assert not rec  # did not warn
 
 
-@pytest.mark.parametrize("axes", [(0, 1), (1, 0), (1, 2), (2, 1), (2, 0), (0, 2), (0, 1, 2)])
+@pytest.mark.parametrize("axes", [
+    (0, 1), (1, 0), (1, 2), (2, 1), (2, 0), (0, 2), (0, 1, 2)]
+)
 @pytest.mark.parametrize("split_every", [2, 4, 8, 16])
 def test_chunk_structure_dependence(split_every, axes):
     # Reducing an array should not depend on its chunk-structure!!!
