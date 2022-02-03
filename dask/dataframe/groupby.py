@@ -1917,9 +1917,17 @@ class _GroupBy:
             **self.dropna,
         )
         return result
-    
+
     @insert_meta_param_description(pad=12)
-    def rank(self, method='average', ascending=True, na_option='keep', pct=False, axis=0, meta=no_default):
+    def rank(
+        self,
+        method="average",
+        ascending=True,
+        na_option="keep",
+        pct=False,
+        axis=0,
+        meta=no_default,
+    ):
         """Parallel version of pandas GroupBy.rank
 
         This mimics the pandas version except for the following:

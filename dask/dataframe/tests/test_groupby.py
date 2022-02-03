@@ -2156,28 +2156,64 @@ def test_groupby_shift_with_freq():
 @pytest.mark.parametrize("axis", [0, 1])
 def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, axis):
     pdf = pd.DataFrame(
-    {
-        "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
-        "b": [4, 4, 6, 3, 2, 1, None, 0, 0],
-        "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
-    },
-)
+        {
+            "a": [0, 0, 1, 1, 2, 2, 3, 3, 3],
+            "b": [4, 4, 6, 3, 2, 1, None, 0, 0],
+            "c": [0, 0, 0, 0, 0, 1, 1, 1, 1],
+        },
+    )
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
     with pytest.warns(UserWarning):
         assert_eq(
-            pdf.groupby(["a", "c"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
-            ddf.groupby(["a", "c"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            pdf.groupby(["a", "c"]).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
+            ddf.groupby(["a", "c"]).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
         )
     with pytest.warns(UserWarning):
         assert_eq(
-            pdf.groupby(["a"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
-            ddf.groupby(["a"]).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            pdf.groupby(["a"]).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
+            ddf.groupby(["a"]).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
         )
     with pytest.warns(UserWarning):
         assert_eq(
-            pdf.groupby(pdf.c).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
-            ddf.groupby(ddf.c).rank(method=method, ascending=ascending, na_option=na_option, pct=pct, axis=axis),
+            pdf.groupby(pdf.c).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
+            ddf.groupby(ddf.c).rank(
+                method=method,
+                ascending=ascending,
+                na_option=na_option,
+                pct=pct,
+                axis=axis,
+            ),
         )
 
 
