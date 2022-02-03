@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -78,9 +79,29 @@ def test_get_dummies_kwargs():
     assert_eq(res, exp)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:In a future version, passing a SparseArray:FutureWarning"
-)  # https://github.com/pandas-dev/pandas/issues/45618
+def check_pandas_issue_45618_warning(test_func):
+    # Check for FutureWarning raised in `pandas=1.4.0`-only.
+    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GT_140).
+    # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
+
+    def decorator():
+        with pytest.warns(None) as record:
+            test_func()
+
+        if PANDAS_VERSION == parse_version("1.4.0"):
+            assert len(record)
+            assert all(r.category is FutureWarning for r in record)
+            assert all(
+                "In a future version, passing a SparseArray" in str(r.message)
+                for r in record
+            )
+        else:
+            assert len(record) == 0
+
+    return decorator
+
+
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
     ds = dd.from_pandas(s, 2)
@@ -98,9 +119,7 @@ def test_get_dummies_sparse():
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
-@pytest.mark.filterwarnings(
-    "ignore:In a future version, passing a SparseArray:FutureWarning"
-)  # https://github.com/pandas-dev/pandas/issues/45618
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {
