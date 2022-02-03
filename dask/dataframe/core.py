@@ -48,7 +48,7 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import methods
-from ._compat import PANDAS_GT_140
+from ._compat import PANDAS_GT_140, PANDAS_GT_150
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
@@ -1572,6 +1572,7 @@ Dask Name: {name}, {task} tasks"""
         method=None,
         compute=True,
         parallel=False,
+        engine_kwargs=None,
     ):
         """See dd.to_sql docstring for more information"""
         from .io import to_sql
@@ -1589,6 +1590,7 @@ Dask Name: {name}, {task} tasks"""
             method=method,
             compute=compute,
             parallel=parallel,
+            engine_kwargs=engine_kwargs,
         )
 
     def to_json(self, filename, *args, **kwargs):
@@ -3827,6 +3829,12 @@ Dask Name: {name}, {task} tasks""".format(
     @property
     @derived_from(pd.Series)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return self.is_monotonic_increasing
 
     @property
@@ -4039,6 +4047,12 @@ class Index(Series):
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return super().is_monotonic_increasing
 
     @property
@@ -5878,6 +5892,12 @@ def apply_concat_apply(
         chunk,
         *args,
         token=chunk_name,
+        # NOTE: We are NOT setting the correct
+        # `meta` here on purpose. We are using
+        # `map_partitions` as a convenient way
+        # to build a `Blockwise` layer, and need
+        # to avoid the metadata emulation step.
+        meta=dfs[0],
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
@@ -5893,6 +5913,12 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
+            # NOTE: We are NOT setting the correct
+            # `meta` here on purpose. We are using
+            # `map_partitions` as a convenient way
+            # to build a `Blockwise` layer, and need
+            # to avoid the metadata emulation step.
+            meta=dfs[0],
             enforce_metadata=False,
             transform_divisions=False,
             align_dataframes=False,
