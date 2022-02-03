@@ -811,35 +811,26 @@ def test_nan_func_does_not_warn(func):
     assert not rec  # did not warn
 
 
-@pytest.mark.parametrize("chunks", [((3, 3), (2, 1, 2, 1)), ((2, 1, 2, 1), (3, 3))])
-def test_chunk_structure_dependence(chunks):
+@pytest.mark.parametrize("axes", [(0, 1), (1, 0), (1, 2), (2, 1), (2, 0), (0, 2), (0, 1, 2)])
+@pytest.mark.parametrize("split_every", [2, 4, 8, 16])
+def test_chunk_structure_dependence(split_every, axes):
     # Reducing an array should not depend on its chunk-structure!!!
     # See Issue #8541: https://github.com/dask/dask/issues/8541
 
-    def chunk_func(x_chunks, axis, keepdims):
-        return da.core._concatenate2(x_chunks, axes=axis)
-
-    a, b = 6, 6
-    array = np.arange(a * b).reshape(a, b)
-    x = da.from_array(array, chunks=chunks)
+    ndim = 3
+    chunks = ((2, 1)*8, (3,)*8, (6,)*4)
+    shape = tuple(np.sum(s) for s in chunks)
+    np_array = np.arange(np.prod(shape)).reshape(*shape)
+    x = da.from_array(np_array, chunks=chunks)
+    meta1 = np.array([])
     reduced_x = da.reduction(
         x,
         lambda x, axis, keepdims: x,
-        chunk_func,
+        lambda x, axis, keepdims: x,
         keepdims=True,
-        concatenate=False,
-        axis=(0, 1),
+        axis=axes,
+        split_every=split_every,
         dtype=x.dtype,
-        meta=np.array([[]]),
+        meta=meta1[(np.newaxis,)*(ndim - 1)],
     ).compute()
-    expected = np.array(
-        [
-            [0, 1, 2, 3, 4, 5],
-            [6, 7, 8, 9, 10, 11],
-            [12, 13, 14, 15, 16, 17],
-            [18, 19, 20, 21, 22, 23],
-            [24, 25, 26, 27, 28, 29],
-            [30, 31, 32, 33, 34, 35],
-        ]
-    )
-    np.testing.assert_equal(reduced_x, expected)
+    assert_eq(reduced_x, np_array)

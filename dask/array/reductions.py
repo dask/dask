@@ -230,7 +230,7 @@ def _tree_reduce(
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     for i in range(depth - 1):
         x = partial_reduce(
             func,
@@ -243,7 +243,7 @@ def _tree_reduce(
         )
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     return partial_reduce(
         func,
         x,
