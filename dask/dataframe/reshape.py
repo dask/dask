@@ -228,15 +228,12 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         or is_scalar(values)
     ):
         raise ValueError("'values' must refer to an existing column or columns")
-    if not is_scalar(aggfunc) or aggfunc not in (
-        "mean",
-        "sum",
-        "count",
-        "first",
-        "last",
-    ):
+
+    available_aggfuncs = ["mean", "sum", "count", "first", "last"]
+
+    if not is_scalar(aggfunc) or aggfunc not in available_aggfuncs:
         raise ValueError(
-            "aggfunc must be either 'mean', 'sum', 'count', 'first' or 'last'"
+            "aggfunc must be either " + ", ".join(f"'{x}'" for x in available_aggfuncs)
         )
 
     # _emulate can't work for empty data

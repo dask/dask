@@ -273,7 +273,7 @@ def test_pivot_table_errors():
         dd.pivot_table(ddf, index="A", columns="C", values=[["B"]])
     assert msg in str(err.value)
 
-    msg = "aggfunc must be either 'mean', 'sum', 'count', 'first' or 'last'"
+    msg = "aggfunc must be either 'mean', 'sum', 'count', 'first', 'last'"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values="B", aggfunc=["sum"])
     assert msg in str(err.value)
