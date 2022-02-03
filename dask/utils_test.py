@@ -4,8 +4,6 @@ import contextlib
 import importlib
 from typing import TYPE_CHECKING
 
-import pytest
-
 if TYPE_CHECKING:
     from .highlevelgraph import HighLevelGraph, Layer
 
@@ -153,6 +151,8 @@ def _check_warning(
 ):
     """Conditionally check is a warning is raised"""
     if condition:
+        import pytest
+
         with pytest.warns(category, match=message) as ctx:
             yield ctx
     else:
