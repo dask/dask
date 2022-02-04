@@ -541,6 +541,29 @@ class AbstractLayer(Layer):
     def output_keys(self):
         raise NotImplementedError
 
+    def cull_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`"""
+        raise NotImplementedError
+
+    def cull(self, keys, all_keys):
+        """Cull an AbstractLayer
+
+        The underlying graph will only include the necessary
+        tasks to produce the keys (indicies) included in `output_blocks`.
+        Therefore, "culling" the layer should only require us to reset
+        this parameter.
+        """
+        output_blocks = self._keys_to_indices(keys)
+        culled_deps = self.cull_dependencies(keys, output_blocks=output_blocks)
+        if output_blocks != set(self.output_blocks):
+            new_state = self.required_kwargs.copy()
+            new_state["output_blocks"] = output_blocks
+            new_state["annotations"] = self.annotations
+            culled_layer = self.__class__(**new_state)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 

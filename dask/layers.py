@@ -359,7 +359,7 @@ class SimpleShuffleLayer(AbstractLayer):
         Name of input collection.
     meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations
@@ -374,7 +374,7 @@ class SimpleShuffleLayer(AbstractLayer):
         ignore_index,
         name_input,
         meta_input,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
@@ -385,7 +385,7 @@ class SimpleShuffleLayer(AbstractLayer):
         self.ignore_index = ignore_index
         self.name_input = name_input
         self.meta_input = meta_input
-        self.parts_out = parts_out or range(npartitions)
+        self.output_blocks = output_blocks or range(npartitions)
         self.split_name = "split-" + self.name
 
         # The scheduling policy of Dask is generally depth-first,
@@ -417,7 +417,7 @@ class SimpleShuffleLayer(AbstractLayer):
             "ignore_index": self.ignore_index,
             "name_input": self.name_input,
             "meta_input": self.meta_input,
-            "parts_out": list(self.parts_out),
+            "output_blocks": list(self.output_blocks),
         }
 
     def get_split_keys(self):
@@ -425,18 +425,18 @@ class SimpleShuffleLayer(AbstractLayer):
         return [
             stringify((self.split_name, part_out, part_in))
             for part_in in range(self.npartitions_input)
-            for part_out in self.parts_out
+            for part_out in self.output_blocks
         ]
 
     def output_keys(self):
-        return {(self.name, part) for part in self.parts_out}
+        return {(self.name, part) for part in self.output_blocks}
 
     def __repr__(self):
         return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
             self.name, self.npartitions
         )
 
-    def _cull_dependencies(self, keys, parts_out=None):
+    def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For a simple shuffle, output partitions always depend on
@@ -444,31 +444,12 @@ class SimpleShuffleLayer(AbstractLayer):
         materialization.
         """
         deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_indices(keys)
-        for part in parts_out:
+        output_blocks = output_blocks or self._keys_to_indices(keys)
+        for part in output_blocks:
             deps[(self.name, part)] |= {
                 (self.name_input, i) for i in range(self.npartitions_input)
             }
         return deps
-
-    def cull(self, keys, all_keys):
-        """Cull a SimpleShuffleLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_indices(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != set(self.parts_out):
-            new_state = self.required_kwargs.copy()
-            new_state["parts_out"] = parts_out
-            new_state["annotations"] = self.annotations
-            culled_layer = self.__class__(**new_state)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
 
     def construct_graph(self):
         """Construct graph for a simple shuffle operation."""
@@ -481,7 +462,7 @@ class SimpleShuffleLayer(AbstractLayer):
         shuffle_group_func = CallableLazyImport("dask.dataframe.shuffle.shuffle_group")
 
         dsk = {}
-        for part_out in self.parts_out:
+        for part_out in self.output_blocks:
             _concat_list = [
                 (self.split_name, part_out, part_in)
                 for part_in in range(self.npartitions_input)
@@ -510,20 +491,6 @@ class SimpleShuffleLayer(AbstractLayer):
                     )
 
         return dsk
-
-    # def __reduce__(self):
-    #     attrs = [
-    #         "name",
-    #         "column",
-    #         "npartitions",
-    #         "npartitions_input",
-    #         "ignore_index",
-    #         "name_input",
-    #         "meta_input",
-    #         "parts_out",
-    #         "annotations",
-    #     ]
-    #     return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
 
 class ShuffleLayer(SimpleShuffleLayer):
@@ -557,7 +524,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         Name of input collection.
     meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations
@@ -575,7 +542,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         ignore_index,
         name_input,
         meta_input,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
     ):
         self.inputs = inputs
@@ -589,7 +556,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             ignore_index,
             name_input,
             meta_input,
-            parts_out=parts_out or range(len(inputs)),
+            output_blocks=output_blocks or range(len(inputs)),
             annotations=annotations,
         )
 
@@ -606,13 +573,13 @@ class ShuffleLayer(SimpleShuffleLayer):
             "ignore_index": self.ignore_index,
             "name_input": self.name_input,
             "meta_input": self.meta_input,
-            "parts_out": list(self.parts_out),
+            "output_blocks": list(self.output_blocks),
         }
 
     def get_split_keys(self):
         # Return ShuffleLayer "split" keys
         keys = []
-        for part in self.parts_out:
+        for part in self.output_blocks:
             out = self.inputs[part]
             for i in range(self.nsplits):
                 keys.append(
@@ -631,33 +598,15 @@ class ShuffleLayer(SimpleShuffleLayer):
             self.name, self.stage, self.nsplits, self.npartitions
         )
 
-    # def __reduce__(self):
-    #     attrs = [
-    #         "name",
-    #         "column",
-    #         "inputs",
-    #         "stage",
-    #         "npartitions",
-    #         "npartitions_input",
-    #         "nsplits",
-    #         "ignore_index",
-    #         "name_input",
-    #         "meta_input",
-    #         "parts_out",
-    #         "annotations",
-    #     ]
-
-    #     return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def _cull_dependencies(self, keys, parts_out=None):
+    def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         Does not require graph materialization.
         """
         deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_indices(keys)
+        output_blocks = output_blocks or self._keys_to_indices(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in parts_out:
+        for part in output_blocks:
             out = self.inputs[part]
             for k in range(self.nsplits):
                 _inp = insert(out, self.stage, k)
@@ -680,7 +629,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in self.parts_out:
+        for part in self.output_blocks:
 
             out = self.inputs[part]
 
@@ -754,7 +703,7 @@ class BroadcastJoinLayer(AbstractLayer):
         "Right" DataFrame collection to join.
     rhs_npartitions: int
         Number of partitions in "right" DataFrame collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations.
@@ -770,7 +719,7 @@ class BroadcastJoinLayer(AbstractLayer):
         lhs_npartitions,
         rhs_name,
         rhs_npartitions,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
         **merge_kwargs,
     ):
@@ -781,7 +730,7 @@ class BroadcastJoinLayer(AbstractLayer):
         self.lhs_npartitions = lhs_npartitions
         self.rhs_name = rhs_name
         self.rhs_npartitions = rhs_npartitions
-        self.parts_out = parts_out or set(range(self.npartitions))
+        self.output_blocks = output_blocks or set(range(self.npartitions))
         self.merge_kwargs = merge_kwargs
         self.how = self.merge_kwargs.get("how")
         self.left_on = self.merge_kwargs.get("left_on")
@@ -792,7 +741,7 @@ class BroadcastJoinLayer(AbstractLayer):
             self.right_on = (list, tuple(self.right_on))
 
     def output_keys(self):
-        return {(self.name, part) for part in self.parts_out}
+        return {(self.name, part) for part in self.output_blocks}
 
     @property
     def required_kwargs(self):
@@ -803,7 +752,7 @@ class BroadcastJoinLayer(AbstractLayer):
             "lhs_npartitions": self.lhs_npartitions,
             "rhs_name": self.rhs_name,
             "rhs_npartitions": self.rhs_npartitions,
-            "parts_out": self.parts_out,
+            "output_blocks": self.output_blocks,
             **self.merge_kwargs,
         }
 
@@ -838,7 +787,7 @@ class BroadcastJoinLayer(AbstractLayer):
                 self.left_on,
             )
 
-    def _cull_dependencies(self, keys, parts_out=None):
+    def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For a broadcast join, output partitions always depend on
@@ -849,32 +798,13 @@ class BroadcastJoinLayer(AbstractLayer):
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
 
         deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_indices(keys)
-        for part in parts_out:
+        output_blocks = output_blocks or self._keys_to_indices(keys)
+        for part in output_blocks:
             deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
             deps[(self.name, part)] |= {
                 (other_name, part),
             }
         return deps
-
-    def cull(self, keys, all_keys):
-        """Cull a BroadcastJoinLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_indices(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != set(self.parts_out):
-            new_state = self.required_kwargs.copy()
-            new_state["parts_out"] = parts_out
-            new_state["annotations"] = self.annotations
-            culled_layer = BroadcastJoinLayer(**new_state)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
 
     def construct_graph(self):
         """Construct graph for a broadcast join operation."""
@@ -899,9 +829,9 @@ class BroadcastJoinLayer(AbstractLayer):
         # Loop over output partitions, which should be a 1:1
         # mapping with the input partitions of "other".
         # Culling should allow us to avoid generating tasks for
-        # any output partitions that are not requested (via `parts_out`)
+        # any output partitions that are not requested (via `output_blocks`)
         dsk = {}
-        for i in self.parts_out:
+        for i in self.output_blocks:
 
             # Split each "other" partition by hash
             if self.how != "inner":
@@ -1087,7 +1017,7 @@ class DataFrameTreeReduction(AbstractLayer):
         reduction tree. If ``split_out`` is set to an integer >=1, the
         input tasks must contain data that can be indexed by a ``getitem``
         operation with a key in the range ``[0, split_out)``.
-    output_partitions : list, optional
+    output_blocks : list, optional
         List of required output partitions. This parameter is used
         internally by Dask for high-level culling.
     tree_node_name : str, optional
@@ -1102,7 +1032,7 @@ class DataFrameTreeReduction(AbstractLayer):
     finalize_func: callable | None
     split_every: int
     split_out: int
-    output_partitions: list[int]
+    output_blocks: list[int]
     tree_node_name: str
     widths: list[int]
     height: int
@@ -1117,7 +1047,7 @@ class DataFrameTreeReduction(AbstractLayer):
         finalize_func: callable | None = None,
         split_every: int = 32,
         split_out: int | None = None,
-        output_partitions: list[int] | None = None,
+        output_blocks: list[int] | None = None,
         tree_node_name: str | None = None,
         annotations: dict[str, Any] | None = None,
     ):
@@ -1130,10 +1060,8 @@ class DataFrameTreeReduction(AbstractLayer):
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out
-        self.output_partitions = (
-            list(range(self.split_out or 1))
-            if output_partitions is None
-            else output_partitions
+        self.output_blocks = (
+            list(range(self.split_out or 1)) if output_blocks is None else output_blocks
         )
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
@@ -1156,7 +1084,7 @@ class DataFrameTreeReduction(AbstractLayer):
             "tree_node_func": self.tree_node_func,
             "finalize_func": self.finalize_func,
             "split_out": self.split_out,
-            "output_partitions": self.output_partitions,
+            "output_blocks": self.output_blocks,
             "tree_node_name": self.tree_node_name,
         }
 
@@ -1178,7 +1106,7 @@ class DataFrameTreeReduction(AbstractLayer):
         """Construct graph for a tree reduction."""
 
         dsk = {}
-        if not self.output_partitions:
+        if not self.output_blocks:
             return dsk
 
         # Deal with `bool(split_out) == True`.
@@ -1190,7 +1118,7 @@ class DataFrameTreeReduction(AbstractLayer):
         name_input_use = self.name_input
         if self.split_out:
             name_input_use += "-split"
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 for p in range(self.npartitions_input):
                     dsk[self._make_key(name_input_use, p, split=s)] = (
                         operator.getitem,
@@ -1200,7 +1128,7 @@ class DataFrameTreeReduction(AbstractLayer):
 
         if self.height >= 2:
             # Loop over output splits
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 # Loop over reduction levels
                 for depth in range(1, self.height):
                     # Loop over reduction groups
@@ -1242,7 +1170,7 @@ class DataFrameTreeReduction(AbstractLayer):
                             ] = self._define_task(input_keys, final_task=False)
         else:
             # Deal with single-partition case
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 input_keys = [self._make_key(name_input_use, 0, split=s)]
                 dsk[(self.name, s)] = self._define_task(input_keys, final_task=True)
 
@@ -1254,29 +1182,25 @@ class DataFrameTreeReduction(AbstractLayer):
         )
 
     def output_keys(self):
-        return {(self.name, s) for s in self.output_partitions}
+        return {(self.name, s) for s in self.output_blocks}
 
     def __len__(self):
         # Start with "base" tree-reduction size
         tree_size = (sum(self.widths[1:]) or 1) * (self.split_out or 1)
         if self.split_out:
             # Add on "split-*" tasks used for `getitem` ops
-            return tree_size + self.npartitions_input * len(self.output_partitions)
+            return tree_size + self.npartitions_input * len(self.output_blocks)
         return tree_size
 
-    def cull(self, keys, all_keys):
-        """Cull a DataFrameTreeReduction HighLevelGraph layer"""
+    def cull_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`.
+
+        For a tree reduction, the dependencies are independent of the
+        output keys.
+        """
         deps = {
             (self.name, 0): {
                 (self.name_input, i) for i in range(self.npartitions_input)
             }
         }
-        output_partitions = self._keys_to_indices(keys)
-        if output_partitions != set(self.output_partitions):
-            new_state = self.required_kwargs.copy()
-            new_state["output_partitions"] = output_partitions
-            new_state["annotations"] = self.annotations
-            culled_layer = DataFrameTreeReduction(**new_state)
-            return culled_layer, deps
-        else:
-            return self, deps
+        return deps
