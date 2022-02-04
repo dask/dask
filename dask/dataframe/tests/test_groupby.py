@@ -2148,10 +2148,10 @@ def test_groupby_shift_with_freq():
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
 
 
-@pytest.mark.parametrize("npartitions", [1, 3])
-@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("npartitions", [3])
+@pytest.mark.parametrize("method", ["average", "dense"])
 @pytest.mark.parametrize("ascending", [True, False])
-@pytest.mark.parametrize("na_option", ["keep", "top", "bottom"])
+@pytest.mark.parametrize("na_option", ["keep"])
 @pytest.mark.parametrize("pct", [False, True])
 @pytest.mark.parametrize("axis", [0, 1])
 def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, axis):
@@ -2217,8 +2217,8 @@ def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, 
         )
 
 
-@pytest.mark.parametrize("npartitions", [1, 5])
-@pytest.mark.parametrize("method", ["average", "min", "max", "first", "dense"])
+@pytest.mark.parametrize("npartitions", [2])
+@pytest.mark.parametrize("method", ["average", "dense"])
 @pytest.mark.parametrize("pct", [False, True])
 def test_groupby_rank_series(npartitions, method, pct):
     pdf = pd.DataFrame(
