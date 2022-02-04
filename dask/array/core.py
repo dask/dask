@@ -1680,6 +1680,13 @@ class Array(DaskMethodsMixin):
 
         return da_func(*args, **kwargs)
 
+    def __array_namespace__(self, /, *, api_version=None):
+        if api_version is not None and not api_version.startswith("2021."):
+            raise ValueError("Unrecognized array API version")
+        import dask.array_api
+
+        return dask.array_api
+
     @property
     def _elemwise(self):
         return elemwise
@@ -2053,6 +2060,12 @@ class Array(DaskMethodsMixin):
             return self
         else:
             return transpose(self, axes=axes)
+
+    @property
+    def mT(self):
+        from dask.array_api import matrix_transpose
+
+        return matrix_transpose(self)
 
     @derived_from(np.ndarray)
     def ravel(self):
