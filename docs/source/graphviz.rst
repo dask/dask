@@ -79,7 +79,7 @@ in ``visualize``, then the tooltips wil only be preserved by the SVG image forma
 High level graph HTML representation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 Dask high level graphs also have their own HTML representation,
-which is useful if you like to work frequently with jupyter notebooks.
+which is useful if you like to work with Jupyter notebooks.
 
 .. code-block:: python
 
@@ -87,7 +87,7 @@ which is useful if you like to work frequently with jupyter notebooks.
    x = da.ones((15, 15), chunks=(5, 5))
    y = x + x.T
 
-   y.dask  # shows the HTML representation in a jupyter notebook
+   y.dask  # shows the HTML representation in a Jupyter notebook
 
 .. image:: images/transpose-hlg-html-repr.png
    :alt: Dask high level graph HTML representation
