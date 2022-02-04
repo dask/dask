@@ -448,6 +448,13 @@ class Blockwise(AbstractLayer):
         self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
+    @classmethod
+    def reconstructor(cls):
+        # Assume child classes want to down-cast to
+        # Blockwise after culling or construction
+        # on the scheduler
+        return Blockwise
+
     @property
     def layer_state(self):
         return {
@@ -585,7 +592,7 @@ class Blockwise(AbstractLayer):
             new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations
-            culled_layer = self.__class__(**new_state)
+            culled_layer = self.reconstructor()(**new_state)
             return culled_layer, deps
         else:
             return self, deps

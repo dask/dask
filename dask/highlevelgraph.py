@@ -556,6 +556,17 @@ class AbstractLayer(Layer):
         super().__init__(annotations=annotations)
         self.output_blocks = output_blocks
 
+    @classmethod
+    def reconstructor(cls):
+        """Specify the specific class to use with
+        ``layer_state`` for culling and materialization
+        on the scheduler. Some Layers may need to down-
+        cast after collection-sepcific optimizations
+        (e.g. ``DataFrameIOLayer``). However, the default
+        is to use the current class.
+        """
+        return cls
+
     @property
     def layer_state(self):
         """Dictionary of key-word arguments required to
@@ -591,7 +602,7 @@ class AbstractLayer(Layer):
             new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations
-            culled_layer = self.__class__(**new_state)
+            culled_layer = self.reconstructor()(**new_state)
         else:
             culled_layer = self
         return culled_layer, culled_layer.layer_dependencies(
@@ -648,7 +659,7 @@ class AbstractLayer(Layer):
         return iter(self._dict)
 
     def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
-        import pickle
+        import cloudpickle
 
         from distributed.protocol.serialize import ToPickle
 
@@ -659,26 +670,24 @@ class AbstractLayer(Layer):
 
         # TODO: Figure out why ToPickle sometimes fails...
         try:
-            return pickle.dumps(state)
+            return cloudpickle.dumps(state)
         except AttributeError:
-            # pickle.dumps fails on local objects anyway
+            # Probably shouldn't ever get here
             return ToPickle(state)
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        import pickle
+        import cloudpickle
 
-        # from distributed.client import Future
         from distributed.protocol.serialize import ToPickle
-
-        # from distributed.utils_comm import unpack_remotedata
+        from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_task
 
         # Unpickle the layer "state"
         if isinstance(state, ToPickle):
             state = state.data
         elif isinstance(state, bytes):
-            state = pickle.loads(state)
+            state = cloudpickle.loads(state)
 
         # Pull out the pre-stringified layer deps
         # We need to know these depenendencies to
@@ -686,18 +695,47 @@ class AbstractLayer(Layer):
         # Dask may mistake for collection keys
         external_deps = state.pop("layer_dependencies", {})
 
-        # Materialize the graph
-        raw = cls(**state).construct_graph()
+        # Materialize the raw graph
+        raw = cls.reconstructor()(**state).construct_graph()
 
-        # Convert all keys to strings and dump tasks
+        # Remove Future objects from the raw graph
+        # and note any future dependencies
+        raw2 = {}
+        fut_deps = {}
+        for k, v in raw.items():
+            raw2[k], futs = unpack_remotedata(v, byte_keys=True)
+            if futs:
+                fut_deps[k] = futs
+        raw = raw2
+
+        # Build Layer dependencies (deps).
+        # Start with set of known external dependencies
+        deps = external_deps.copy()
+
+        # Construct a set of all key used in this layer
         all_keys = set(raw.keys())
         for k, v in external_deps.items():
             all_keys.update(v)
-        raw = {stringify(k): stringify(v, exclusive=all_keys) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        # Must use `dumps_task` on the every task.
+        # Update deps with missing keys from raw
+        missing_keys = raw.keys() - deps.keys()
+        deps.update(
+            (k, keys_in_tasks(all_keys, [raw[k]], as_list=False)) for k in missing_keys
+        )
+
+        # Update deps and all_keys with futures
+        for k, futures in fut_deps.items():
+            all_keys.update(f.key for f in futures)
+            deps[k].update(f.key for f in futures)
+
+        # Add local dependencies to deps
+        deps.update({k: keys_in_tasks(all_keys, [v]) for k, v in raw.items()})
+
+        # Stringify all keys in raw and deps
+        deps = {stringify(k): {stringify(d) for d in v} for k, v in deps.items()}
+        raw = {stringify(k): stringify(v, exclusive=all_keys) for k, v in raw.items()}
+
+        # Must use `dumps_task` on the every task
         return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
 
 
