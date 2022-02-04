@@ -538,9 +538,6 @@ class AbstractLayer(Layer):
     def construct_graph(self):
         raise NotImplementedError
 
-    def output_keys(self):
-        raise NotImplementedError
-
     def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`"""
         raise NotImplementedError
@@ -581,7 +578,7 @@ class AbstractLayer(Layer):
         if hasattr(self, "_cached_output_keys"):
             return self._cached_output_keys
         else:
-            output_keys = self.output_keys()
+            output_keys = {(self.name, block) for block in self.output_blocks}
             self._cached_output_keys = output_keys
         return self._cached_output_keys
 

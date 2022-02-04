@@ -405,7 +405,9 @@ class SimpleShuffleLayer(AbstractLayer):
         if "priority" not in self.annotations:
             self.annotations["priority"] = {}
         self.annotations["priority"]["__expanded_annotations__"] = None
-        self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
+        self.annotations["priority"].update(
+            {_key: 1 for _key in self._get_split_keys()}
+        )
 
     @property
     def required_kwargs(self):
@@ -419,22 +421,6 @@ class SimpleShuffleLayer(AbstractLayer):
             "meta_input": self.meta_input,
             "output_blocks": list(self.output_blocks),
         }
-
-    def get_split_keys(self):
-        # Return SimpleShuffleLayer "split" keys
-        return [
-            stringify((self.split_name, part_out, part_in))
-            for part_in in range(self.npartitions_input)
-            for part_out in self.output_blocks
-        ]
-
-    def output_keys(self):
-        return {(self.name, part) for part in self.output_blocks}
-
-    def __repr__(self):
-        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
-            self.name, self.npartitions
-        )
 
     def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
@@ -491,6 +477,19 @@ class SimpleShuffleLayer(AbstractLayer):
                     )
 
         return dsk
+
+    def __repr__(self):
+        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
+            self.name, self.npartitions
+        )
+
+    def _get_split_keys(self):
+        # Return SimpleShuffleLayer "split" keys
+        return [
+            stringify((self.split_name, part_out, part_in))
+            for part_in in range(self.npartitions_input)
+            for part_out in self.output_blocks
+        ]
 
 
 class ShuffleLayer(SimpleShuffleLayer):
@@ -575,28 +574,6 @@ class ShuffleLayer(SimpleShuffleLayer):
             "meta_input": self.meta_input,
             "output_blocks": list(self.output_blocks),
         }
-
-    def get_split_keys(self):
-        # Return ShuffleLayer "split" keys
-        keys = []
-        for part in self.output_blocks:
-            out = self.inputs[part]
-            for i in range(self.nsplits):
-                keys.append(
-                    stringify(
-                        (
-                            self.split_name,
-                            out[self.stage],
-                            insert(out, self.stage, i),
-                        )
-                    )
-                )
-        return keys
-
-    def __repr__(self):
-        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
-            self.name, self.stage, self.nsplits, self.npartitions
-        )
 
     def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
@@ -683,6 +660,28 @@ class ShuffleLayer(SimpleShuffleLayer):
 
         return dsk
 
+    def __repr__(self):
+        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
+            self.name, self.stage, self.nsplits, self.npartitions
+        )
+
+    def _get_split_keys(self):
+        # Return ShuffleLayer "split" keys
+        keys = []
+        for part in self.output_blocks:
+            out = self.inputs[part]
+            for i in range(self.nsplits):
+                keys.append(
+                    stringify(
+                        (
+                            self.split_name,
+                            out[self.stage],
+                            insert(out, self.stage, i),
+                        )
+                    )
+                )
+        return keys
+
 
 class BroadcastJoinLayer(AbstractLayer):
     """Broadcast-based Join Layer
@@ -740,9 +739,6 @@ class BroadcastJoinLayer(AbstractLayer):
         if isinstance(self.right_on, list):
             self.right_on = (list, tuple(self.right_on))
 
-    def output_keys(self):
-        return {(self.name, part) for part in self.output_blocks}
-
     @property
     def required_kwargs(self):
         return {
@@ -755,37 +751,6 @@ class BroadcastJoinLayer(AbstractLayer):
             "output_blocks": self.output_blocks,
             **self.merge_kwargs,
         }
-
-    def __repr__(self):
-        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
-            self.name, self.how, self.lhs_name, self.rhs_name
-        )
-
-    @property
-    def _broadcast_plan(self):
-        # Return structure (tuple):
-        # (
-        #     <broadcasted-collection-name>,
-        #     <broadcasted-collection-npartitions>,
-        #     <other-collection-npartitions>,
-        #     <other-collection-on>,
-        # )
-        if self.lhs_npartitions < self.rhs_npartitions:
-            # Broadcasting the left
-            return (
-                self.lhs_name,
-                self.lhs_npartitions,
-                self.rhs_name,
-                self.right_on,
-            )
-        else:
-            # Broadcasting the right
-            return (
-                self.rhs_name,
-                self.rhs_npartitions,
-                self.lhs_name,
-                self.left_on,
-            )
 
     def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
@@ -879,6 +844,37 @@ class BroadcastJoinLayer(AbstractLayer):
             dsk[(self.name, i)] = (concat_func, _concat_list)
 
         return dsk
+
+    def __repr__(self):
+        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
+            self.name, self.how, self.lhs_name, self.rhs_name
+        )
+
+    @property
+    def _broadcast_plan(self):
+        # Return structure (tuple):
+        # (
+        #     <broadcasted-collection-name>,
+        #     <broadcasted-collection-npartitions>,
+        #     <other-collection-npartitions>,
+        #     <other-collection-on>,
+        # )
+        if self.lhs_npartitions < self.rhs_npartitions:
+            # Broadcasting the left
+            return (
+                self.lhs_name,
+                self.lhs_npartitions,
+                self.rhs_name,
+                self.right_on,
+            )
+        else:
+            # Broadcasting the right
+            return (
+                self.rhs_name,
+                self.rhs_npartitions,
+                self.lhs_name,
+                self.left_on,
+            )
 
 
 class DataFrameIOLayer(Blockwise):
@@ -1088,19 +1084,18 @@ class DataFrameTreeReduction(AbstractLayer):
             "tree_node_name": self.tree_node_name,
         }
 
-    def _make_key(self, *name_parts, split=0):
-        # Helper function construct a key
-        # with a "split" element when
-        # bool(split_out) is True
-        return name_parts + (split,) if self.split_out else name_parts
+    def cull_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`.
 
-    def _define_task(self, input_keys, final_task=False):
-        # Define nested concatenation and func task
-        if final_task and self.finalize_func:
-            outer_func = self.finalize_func
-        else:
-            outer_func = self.tree_node_func
-        return (toolz.pipe, input_keys, self.concat_func, outer_func)
+        For a tree reduction, the dependencies are independent of the
+        output keys.
+        """
+        deps = {
+            (self.name, 0): {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+        }
+        return deps
 
     def construct_graph(self):
         """Construct graph for a tree reduction."""
@@ -1181,9 +1176,6 @@ class DataFrameTreeReduction(AbstractLayer):
             self.name, self.name_input, self.split_out
         )
 
-    def output_keys(self):
-        return {(self.name, s) for s in self.output_blocks}
-
     def __len__(self):
         # Start with "base" tree-reduction size
         tree_size = (sum(self.widths[1:]) or 1) * (self.split_out or 1)
@@ -1192,15 +1184,16 @@ class DataFrameTreeReduction(AbstractLayer):
             return tree_size + self.npartitions_input * len(self.output_blocks)
         return tree_size
 
-    def cull_dependencies(self, keys, output_blocks=None):
-        """Determine the necessary dependencies to produce `keys`.
+    def _make_key(self, *name_parts, split=0):
+        # Helper function construct a key
+        # with a "split" element when
+        # bool(split_out) is True
+        return name_parts + (split,) if self.split_out else name_parts
 
-        For a tree reduction, the dependencies are independent of the
-        output keys.
-        """
-        deps = {
-            (self.name, 0): {
-                (self.name_input, i) for i in range(self.npartitions_input)
-            }
-        }
-        return deps
+    def _define_task(self, input_keys, final_task=False):
+        # Define nested concatenation and func task
+        if final_task and self.finalize_func:
+            outer_func = self.finalize_func
+        else:
+            outer_func = self.tree_node_func
+        return (toolz.pipe, input_keys, self.concat_func, outer_func)
