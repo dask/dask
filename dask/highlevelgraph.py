@@ -8,6 +8,7 @@ from typing import (
     Dict,
     Hashable,
     Iterable,
+    List,
     Mapping,
     MutableMapping,
     Optional,
@@ -524,22 +525,57 @@ class Layer(collections.abc.Mapping):
 
 
 class AbstractLayer(Layer):
-    """A non-materialized HighLevelGraph Layer"""
+    """HighLevelGraph-Layer Template
+
+    This abstract class is intended to isolate the typical
+    boilerplate code required for HLG-Layer implementation.
+    A typical inheriting class will only need to define
+    ``__init__``, ``layer_state``, ``cull_dependencies``,
+    and ``construct_graph``.
+
+    Parameters
+    ----------
+    output_blocks: List; Optional
+        The list of output indices required in the graph
+        after materialization. Culling an ``AbstractLayer``
+        is equivalent to setting this attribute.
+    """
+
+    annotations: Optional[Mapping[str, Any]]
+    output_blocks: Optional[List[int]]
+
+    def __init__(
+        self,
+        *args,
+        annotations: Optional[Mapping[str, Any]] = None,
+        output_blocks: Optional[List[int]] = None,
+        **kwargs,
+    ):
+        # NOTE: `AbstractLayer` assumes that an `output_blocks`
+        # attribute will be used for culling
+        super().__init__(annotations=annotations)
+        self.output_blocks = output_blocks
 
     @property
-    def required_kwargs(self):
-        """Dictionary of key-word arguments required for
-        graph materialization on the scheduler. These arguments
-        will be used to initalize a new ``AbstractLayer`` on
-        the scheduler for the purpose of graph materialization.
+    def layer_state(self):
+        """Dictionary of key-word arguments required to
+        to recreate this `AbstractLayer` on the scheduler.
+        These arguments must include the necessary state
+        to materialize a valid graph on the scheduler.
         """
-        raise NotImplementedError
-
-    def construct_graph(self):
         raise NotImplementedError
 
     def cull_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`"""
+        raise NotImplementedError
+
+    def construct_graph(self):
+        """Materialize a low-level (dictionary) task graph
+
+        This method should check the ``output_blocks`` attribute,
+        and only materialize the necessary low-level graph to
+        produce keys corresponding to these collection indices.
+        """
         raise NotImplementedError
 
     def cull(self, keys, all_keys):
@@ -553,7 +589,7 @@ class AbstractLayer(Layer):
         output_blocks = self._keys_to_indices(keys)
         culled_deps = self.cull_dependencies(keys, output_blocks=output_blocks)
         if output_blocks != set(self.output_blocks):
-            new_state = self.required_kwargs.copy()
+            new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations
             culled_layer = self.__class__(**new_state)
@@ -612,8 +648,8 @@ class AbstractLayer(Layer):
 
         # from distributed.protocol.serialize import ToPickle
         # TODO: Figure out why ToPickle sometimes fails...
-        # return ToPickle(self.required_kwargs)
-        return pickle.dumps(self.required_kwargs)
+        # return ToPickle(self.layer_state)
+        return pickle.dumps(self.layer_state)
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):

@@ -410,7 +410,7 @@ class SimpleShuffleLayer(AbstractLayer):
         )
 
     @property
-    def required_kwargs(self):
+    def layer_state(self):
         return {
             "name": self.name,
             "column": self.column,
@@ -560,7 +560,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         )
 
     @property
-    def required_kwargs(self):
+    def layer_state(self):
         return {
             "name": self.name,
             "column": self.column,
@@ -740,7 +740,7 @@ class BroadcastJoinLayer(AbstractLayer):
             self.right_on = (list, tuple(self.right_on))
 
     @property
-    def required_kwargs(self):
+    def layer_state(self):
         return {
             "name": self.name,
             "npartitions": self.npartitions,
@@ -1071,7 +1071,7 @@ class DataFrameTreeReduction(AbstractLayer):
         self.height = len(self.widths)
 
     @property
-    def required_kwargs(self):
+    def layer_state(self):
         return {
             "name": self.name,
             "name_input": self.name_input,
