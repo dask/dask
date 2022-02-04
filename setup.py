@@ -49,7 +49,7 @@ packages = [
     "dask.diagnostics",
 ]
 
-tests = [p + ".tests" for p in packages]
+tests = [p.replace("dask", "tests") for p in packages]
 
 # Only include pytest-runner in setup_requires if we're invoking tests
 if {"pytest", "test", "ptr"}.intersection(sys.argv):

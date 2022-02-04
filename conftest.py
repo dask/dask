@@ -23,11 +23,13 @@ try:
     import numpy  # noqa: F401
 except ImportError:
     collect_ignore_glob.append("dask/array/*")
+    collect_ignore_glob.append("tests/array/*")
 
 try:
     import pandas  # noqa: F401
 except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
+    collect_ignore_glob.append("tests/dataframe/*")
 
 try:
     import scipy  # noqa: F401
