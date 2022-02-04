@@ -1,6 +1,6 @@
 import os
 import warnings
-from itertools import zip_longest
+from itertools import permutations, zip_longest
 
 import pytest
 
@@ -811,16 +811,15 @@ def test_nan_func_does_not_warn(func):
     assert not rec  # did not warn
 
 
-@pytest.mark.parametrize(
-    "axes", [(0, 1), (1, 0), (1, 2), (2, 1), (2, 0), (0, 2), (0, 1, 2)]
-)
 @pytest.mark.parametrize("split_every", [2, 4, 8, 16])
-def test_chunk_structure_dependence(split_every, axes):
+@pytest.mark.parametrize(
+    "axes", list(permutations((0, 1, 2), 2)) + list(permutations((0, 1, 2)))
+)
+@pytest.mark.parametrize("chunks", list(permutations(((2, 1) * 8, (3,) * 8, (6,) * 4))))
+def test_chunk_structure_dependence(chunks, axes, split_every):
     # Reducing an array should not depend on its chunk-structure!!!
     # See Issue #8541: https://github.com/dask/dask/issues/8541
-
     ndim = 3
-    chunks = ((2, 1) * 8, (3,) * 8, (6,) * 4)
     shape = tuple(np.sum(s) for s in chunks)
     np_array = np.arange(np.prod(shape)).reshape(*shape)
     x = da.from_array(np_array, chunks=chunks)
