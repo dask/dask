@@ -126,14 +126,13 @@ Test
 Test Dask with ``py.test``::
 
     cd dask
-    py.test dask
+    py.test tests
 
 Please be aware that installing Dask naively may not install all
 requirements by default. Please read the ``pip`` section above which discusses
 requirements.  You may choose to install the ``dask[complete]`` version which includes
 all dependencies for all collections.  Alternatively, you may choose to test
 only certain submodules depending on the libraries within your environment.
-For example, to test only Dask core and Dask array we would run tests as
-follows::
+For example, to test only Dask array we would run tests as follows::
 
-    py.test dask/tests dask/array/tests
+    py.test tests/array

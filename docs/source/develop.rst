@@ -115,10 +115,10 @@ pip or conda_
 Run Tests
 ~~~~~~~~~
 
-Dask uses py.test_ for testing.  You can run tests from the main dask directory
+Dask uses py.test_ for testing.  You can run tests from the main tests directory
 as follows::
 
-   py.test dask --verbose --doctest-modules
+   py.test tests --verbose
 
 .. _py.test: https://docs.pytest.org/en/latest/
 
@@ -160,29 +160,29 @@ and running quickly (slow test suites get run less often).
 
 You can run tests locally by running ``py.test`` in the local dask directory::
 
-   py.test dask
+   py.test tests
 
 You can also test certain modules or individual tests for faster response::
 
-   py.test dask/dataframe
+   py.test tests/dataframe
 
-   py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
+   py.test tests/dataframe/test_dataframe.py::test_rename_index
 
 If you want the tests to run faster, you can run them in parallel using
 ``pytest-xdist``::
 
-   py.test dask -n auto
+   py.test tests -n auto
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
 
 Tests are organized within the various modules' subdirectories::
 
-    dask/array/tests/test_*.py
-    dask/bag/tests/test_*.py
-    dask/bytes/tests/test_*.py
-    dask/dataframe/tests/test_*.py
-    dask/diagnostics/tests/test_*.py
+    tests/array/test_*.py
+    tests/bag/test_*.py
+    tests/bytes/test_*.py
+    tests/dataframe/test_*.py
+    tests/diagnostics/test_*.py
 
 For the Dask collections like Dask Array and Dask DataFrame, behavior is
 typically tested directly against the NumPy or Pandas libraries using the
@@ -250,7 +250,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are tested under Python 3.8 on GitHub Actions. You can test
+Docstrings are tested under Python 3.9 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
