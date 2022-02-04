@@ -64,5 +64,4 @@ jobs:
         with:
           token: ${{ secrets.REPO_ACCESS_TOKEN }}
           repository: dask/distributed
-          event: trigger-build
-          github_pat: ${{ secrets.pat_with_access }}
+          event-type: trigger-build
