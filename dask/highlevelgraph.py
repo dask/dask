@@ -20,7 +20,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify, stringify_collection_keys
+from .utils import ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 from .widgets import get_template
 
@@ -530,7 +530,7 @@ class AbstractLayer(Layer):
     This abstract class is intended to isolate the typical
     boilerplate code required for HLG-Layer implementation.
     A typical inheriting class will only need to define
-    ``__init__``, ``layer_state``, ``cull_dependencies``,
+    ``__init__``, ``layer_state``, ``layer_dependencies``,
     and ``construct_graph``.
 
     Parameters
@@ -565,7 +565,7 @@ class AbstractLayer(Layer):
         """
         raise NotImplementedError
 
-    def cull_dependencies(self, keys, output_blocks=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`"""
         raise NotImplementedError
 
@@ -587,15 +587,16 @@ class AbstractLayer(Layer):
         this parameter.
         """
         output_blocks = self._keys_to_indices(keys)
-        culled_deps = self.cull_dependencies(keys, output_blocks=output_blocks)
         if output_blocks != set(self.output_blocks):
             new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations
             culled_layer = self.__class__(**new_state)
-            return culled_layer, culled_deps
         else:
-            return self, culled_deps
+            culled_layer = self
+        return culled_layer, culled_layer.layer_dependencies(
+            keys, output_blocks=output_blocks
+        )
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
@@ -614,7 +615,10 @@ class AbstractLayer(Layer):
         if hasattr(self, "_cached_output_keys"):
             return self._cached_output_keys
         else:
-            output_keys = {(self.name, block) for block in self.output_blocks}
+            if self.output_blocks is None:
+                output_keys = self.keys()  # Materializes the graph!
+            else:
+                output_keys = {(self.name, block) for block in self.output_blocks}
             self._cached_output_keys = output_keys
         return self._cached_output_keys
 
@@ -643,30 +647,53 @@ class AbstractLayer(Layer):
     def __len__(self):
         return iter(self._dict)
 
-    def __dask_distributed_pack__(self, *args, **kwargs):
+    def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
         import pickle
 
-        # from distributed.protocol.serialize import ToPickle
+        from distributed.protocol.serialize import ToPickle
+
+        # Save "pre-stringified" key dependencies
+        # TODO: Is there a better way to do this?
+        state = self.layer_state.copy()
+        state["layer_dependencies"] = self.layer_dependencies(all_hlg_keys)
+
         # TODO: Figure out why ToPickle sometimes fails...
-        # return ToPickle(self.layer_state)
-        return pickle.dumps(self.layer_state)
+        try:
+            return pickle.dumps(state)
+        except AttributeError:
+            # pickle.dumps fails on local objects anyway
+            return ToPickle(state)
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         import pickle
 
+        # from distributed.client import Future
         from distributed.protocol.serialize import ToPickle
+
+        # from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_task
 
-        # Materialize the layer
+        # Unpickle the layer "state"
         if isinstance(state, ToPickle):
             state = state.data
         elif isinstance(state, bytes):
             state = pickle.loads(state)
+
+        # Pull out the pre-stringified layer deps
+        # We need to know these depenendencies to
+        # ensure we don't stringify tuples that
+        # Dask may mistake for collection keys
+        external_deps = state.pop("layer_dependencies", {})
+
+        # Materialize the graph
         raw = cls(**state).construct_graph()
 
         # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        all_keys = set(raw.keys())
+        for k, v in external_deps.items():
+            all_keys.update(v)
+        raw = {stringify(k): stringify(v, exclusive=all_keys) for k, v in raw.items()}
         keys = raw.keys() | dsk.keys()
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 

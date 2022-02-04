@@ -422,7 +422,7 @@ class SimpleShuffleLayer(AbstractLayer):
             "output_blocks": list(self.output_blocks),
         }
 
-    def cull_dependencies(self, keys, output_blocks=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For a simple shuffle, output partitions always depend on
@@ -430,7 +430,9 @@ class SimpleShuffleLayer(AbstractLayer):
         materialization.
         """
         deps = defaultdict(set)
-        output_blocks = output_blocks or self._keys_to_indices(keys)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
         for part in output_blocks:
             deps[(self.name, part)] |= {
                 (self.name_input, i) for i in range(self.npartitions_input)
@@ -575,13 +577,15 @@ class ShuffleLayer(SimpleShuffleLayer):
             "output_blocks": list(self.output_blocks),
         }
 
-    def cull_dependencies(self, keys, output_blocks=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         Does not require graph materialization.
         """
         deps = defaultdict(set)
-        output_blocks = output_blocks or self._keys_to_indices(keys)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in output_blocks:
             out = self.inputs[part]
@@ -752,7 +756,7 @@ class BroadcastJoinLayer(AbstractLayer):
             **self.merge_kwargs,
         }
 
-    def cull_dependencies(self, keys, output_blocks=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For a broadcast join, output partitions always depend on
@@ -763,7 +767,9 @@ class BroadcastJoinLayer(AbstractLayer):
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
 
         deps = defaultdict(set)
-        output_blocks = output_blocks or self._keys_to_indices(keys)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
         for part in output_blocks:
             deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
             deps[(self.name, part)] |= {
@@ -1084,16 +1090,17 @@ class DataFrameTreeReduction(AbstractLayer):
             "tree_node_name": self.tree_node_name,
         }
 
-    def cull_dependencies(self, keys, output_blocks=None):
-        """Determine the necessary dependencies to produce `keys`.
+    def layer_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`."""
 
-        For a tree reduction, the dependencies are independent of the
-        output keys.
-        """
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
         deps = {
-            (self.name, 0): {
+            (self.name, b): {
                 (self.name_input, i) for i in range(self.npartitions_input)
             }
+            for b in output_blocks
         }
         return deps
 
