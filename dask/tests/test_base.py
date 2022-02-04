@@ -5,6 +5,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
+from dataclasses import dataclass
 from operator import add, mul
 
 import pytest
@@ -509,13 +510,9 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
-try:
-    import dataclasses
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-except ImportError:
-    dataclasses = None
+@dataclass
+class ADataClass:
+    a: int
 
 
 def test_unpack_collections():
@@ -539,9 +536,8 @@ def test_unpack_collections():
             iterator,
         )  # Iterator
 
-        if dataclasses is not None:
-            t[2]["f"] = ADataClass(a=a)
-            t[2]["g"] = (ADataClass, a)
+        t[2]["f"] = ADataClass(a=a)
+        t[2]["g"] = (ADataClass, a)
 
         return t
 

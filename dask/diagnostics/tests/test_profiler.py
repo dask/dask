@@ -1,7 +1,6 @@
 import contextlib
 import os
 from operator import add, mul
-from time import sleep
 
 import pytest
 
@@ -9,6 +8,7 @@ from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.diagnostics.profile_visualize import BOKEH_VERSION
 from dask.threaded import get
 from dask.utils import apply, tmpfile
+from dask.utils_test import slowadd
 
 try:
     import bokeh
@@ -22,10 +22,8 @@ except ImportError:
 
 prof = Profiler()
 
-
 dsk = {"a": 1, "b": 2, "c": (add, "a", "b"), "d": (mul, "a", "b"), "e": (mul, "c", "d")}
-
-dsk2 = {"a": 1, "b": 2, "c": (lambda a, b: sleep(0.1) or (a + b), "a", "b")}
+dsk2 = {"a": 1, "b": 2, "c": (slowadd, "a", "b")}
 
 
 def test_profiler():
