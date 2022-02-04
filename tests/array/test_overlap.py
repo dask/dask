@@ -7,6 +7,7 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
 from dask.array.lib.stride_tricks import sliding_window_view
+from dask.array.numpy_compat import sliding_window_view as np_sliding_window_view
 from dask.array.overlap import (
     boundaries,
     constant,
@@ -859,8 +860,6 @@ def test_ensure_minimum_chunksize_raises_error():
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
-    from ..numpy_compat import sliding_window_view as np_sliding_window_view
-
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
     expected = np_sliding_window_view(arr.compute(), window_shape, axis)
