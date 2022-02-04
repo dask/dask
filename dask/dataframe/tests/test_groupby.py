@@ -2164,7 +2164,7 @@ def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, 
     )
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
 
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert_eq(
             pdf.groupby(["a", "c"]).rank(
                 method=method,
@@ -2181,7 +2181,6 @@ def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, 
                 axis=axis,
             ),
         )
-    with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby(["a"]).rank(
                 method=method,
@@ -2198,7 +2197,6 @@ def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, 
                 axis=axis,
             ),
         )
-    with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby(pdf.c).rank(
                 method=method,
@@ -2229,14 +2227,13 @@ def test_groupby_rank_series(npartitions, method, pct):
         },
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert_eq(
             pdf.groupby("a")["b"].rank(method, pct=pct),
             ddf.groupby("a")["b"].rank(method, pct=pct),
         )
 
-    # string
-    with pytest.warns(UserWarning):
+        # string
         assert_eq(
             pdf.groupby("a")["c"].rank(method, pct=pct),
             ddf.groupby("a")["c"].rank(method, pct=pct),
@@ -2258,7 +2255,7 @@ def test_groupby_rank_empty_partition(method):
         + [dd.from_pandas(pdf, npartitions=2)]
     )
 
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning, match="`meta` is not specified"):
         assert_eq(
             ddf.compute().groupby("a")["b"].rank(method),
             ddf.groupby("a")["b"].rank(method),
