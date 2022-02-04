@@ -94,7 +94,7 @@ def test_shuffle_npartitions_lt_input_partitions(shuffle_method):
 
 
 def test_index_with_non_series(shuffle_method):
-    from dask.dataframe.tests.test_multi import list_eq
+    from .test_multi import list_eq
 
     list_eq(
         shuffle(d, d.b, shuffle=shuffle_method), shuffle(d, "b", shuffle=shuffle_method)
@@ -336,7 +336,7 @@ def test_rearrange_disk_cleanup_with_exception():
 
 
 def test_rearrange_by_column_with_narrow_divisions():
-    from dask.dataframe.tests.test_multi import list_eq
+    from .test_multi import list_eq
 
     A = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": [1, 1, 2, 2, 3, 4]})
     a = dd.repartition(A, [0, 4, 5])

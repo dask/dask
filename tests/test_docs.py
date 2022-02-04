@@ -3,7 +3,7 @@ from pathlib import Path
 
 def test_development_guidelines_matches_ci():
     """When the environment.yaml changes in CI, make sure to change it in the docs as well"""
-    root_dir = Path(__file__).parent.parent.parent
+    root_dir = Path(__file__).parent.parent
 
     development_doc_file = root_dir / "docs" / "source" / "develop.rst"
     additional_ci_file = root_dir / ".github" / "workflows" / "additional.yml"

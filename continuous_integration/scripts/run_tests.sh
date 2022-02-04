@@ -10,7 +10,7 @@ if [[ $COVERAGE == 'true' ]]; then
     export XTRATESTARGS="--cov=dask --cov-report=xml $XTRATESTARGS"
 fi
 
-echo "py.test dask --runslow $XTRATESTARGS"
-py.test dask --runslow $XTRATESTARGS
+echo "py.test tests --runslow $XTRATESTARGS"
+py.test tests --runslow $XTRATESTARGS
 
 set +e

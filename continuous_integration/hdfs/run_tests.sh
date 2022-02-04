@@ -1,3 +1,3 @@
 #!/bin/bash
 
-docker exec hdfs py.test dask/bytes/tests/test_hdfs.py -vv
+docker exec hdfs py.test tests/bytes/test_hdfs.py -vv

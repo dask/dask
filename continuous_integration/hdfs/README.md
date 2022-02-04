@@ -54,5 +54,5 @@ export CONTAINER_ID=$(docker ps -l -q)
 docker exec -it $CONTAINER_ID bash
 
 # Test just the hdfs tests
-py.test dask/bytes/tests/test_hdfs.py -s -vv
+py.test tests/bytes/test_hdfs.py -s -vv
 ```

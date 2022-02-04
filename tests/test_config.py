@@ -418,8 +418,10 @@ def test_core_file():
 def test_schema():
     jsonschema = pytest.importorskip("jsonschema")
 
-    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
-    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask", "dask.yaml")
+    schema_fn = os.path.join(
+        os.path.dirname(__file__), "..", "dask", "dask-schema.yaml"
+    )
 
     with open(config_fn) as f:
         config = yaml.safe_load(f)
@@ -431,8 +433,10 @@ def test_schema():
 
 
 def test_schema_is_complete():
-    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
-    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask", "dask.yaml")
+    schema_fn = os.path.join(
+        os.path.dirname(__file__), "..", "dask", "dask-schema.yaml"
+    )
 
     with open(config_fn) as f:
         config = yaml.safe_load(f)

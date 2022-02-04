@@ -11,8 +11,9 @@ from dask.base import clone_key
 from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
 from dask.highlevelgraph import HighLevelGraph
-from dask.tests.test_base import Tuple
 from dask.utils_test import import_or_none
+
+from .test_base import Tuple
 
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")

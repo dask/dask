@@ -225,9 +225,9 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"ctests.test_base\nf3\np0\n.",
+        (b"ctests.test_base\nf2\np0\n.",),
+        (("c", b"ctests.test_base\nf1\np0\n."),),
     )
     assert res == sol
 

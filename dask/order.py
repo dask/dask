@@ -39,7 +39,7 @@ which a sequential scheduler would visit each node.
 There are several ways in which we might order our keys.  This is a nuanced
 process that has to take into account many different kinds of workflows, and
 operate efficiently in linear time.  We strongly recommend that readers look at
-the docstrings of tests in dask/tests/test_order.py.  These tests usually have
+the docstrings of tests in tests/test_order.py.  These tests usually have
 graph types laid out very carefully to show the kinds of situations that often
 arise, and the order we would like to be determined.
 

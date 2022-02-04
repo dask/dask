@@ -23,6 +23,7 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
+from dask.array.chunk import getitem
 from dask.array.core import (
     Array,
     BlockView,
@@ -57,7 +58,6 @@ from dask.layers import Blockwise
 from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, hlg_layer_topological, inc
 
-from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 

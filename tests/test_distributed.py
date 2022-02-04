@@ -146,7 +146,7 @@ def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from ..dataframe.io.tests.test_hdf import test_to_hdf
+    from dataframe.io.test_hdf import test_to_hdf
 
     test_to_hdf()
 
@@ -169,7 +169,7 @@ def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+    from dataframe.io.test_hdf import test_to_hdf_schedulers
 
     test_to_hdf_schedulers(None, npartitions)
 
