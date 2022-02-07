@@ -4015,6 +4015,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
+    if axis is None:
+        seq = [a.flatten() for a in seq]
+        axis = 0
+
     seq_metas = [meta_from_array(s) for s in seq]
     _concatenate = concatenate_lookup.dispatch(
         type(max(seq_metas, key=lambda x: getattr(x, "__array_priority__", 0)))
