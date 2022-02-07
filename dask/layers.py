@@ -54,24 +54,13 @@ class ArrayBlockwiseDep(BlockwiseDep):
 
     chunks: tuple[tuple[int, ...], ...]
     numblocks: tuple[int, ...]
-    produces_tasks: bool = False
 
     def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
-        self.produces_tasks = False
 
     def __getitem__(self, idx: tuple[int, ...]):
         raise NotImplementedError("Subclasses must implement __getitem__")
-
-    def __dask_distributed_pack__(
-        self, required_indices: list[tuple[int, ...]] | None = None
-    ):
-        return {"chunks": self.chunks}
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 class ArrayChunkShapeDep(ArrayBlockwiseDep):
@@ -215,10 +204,6 @@ class ArrayOverlapLayer(Layer):
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)._construct_graph(deserializing=True)
 
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
@@ -904,11 +889,6 @@ class DataFrameIOLayer(Blockwise):
         String to use as a prefix in the place-holder collection
         name. If nothing is specified (default), "subset-" will
         be used.
-    produces_tasks : bool (optional)
-        Whether one or more elements of `inputs` is expected to
-        contain a nested task. This argument in only used for
-        serialization purposes, and will be deprecated in the
-        future. Default is False.
     creation_info: dict (optional)
         Dictionary containing the callable function ('func'),
         positional arguments ('args'), and key-word arguments
@@ -925,7 +905,6 @@ class DataFrameIOLayer(Blockwise):
         inputs,
         io_func,
         label=None,
-        produces_tasks=False,
         creation_info=None,
         annotations=None,
     ):
@@ -934,14 +913,12 @@ class DataFrameIOLayer(Blockwise):
         self.inputs = inputs
         self.io_func = io_func
         self.label = label
-        self.produces_tasks = produces_tasks
         self.annotations = annotations
         self.creation_info = creation_info
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
             {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
         )
 
         # Use Blockwise initializer
@@ -974,7 +951,6 @@ class DataFrameIOLayer(Blockwise):
                 self.inputs,
                 io_func,
                 label=self.label,
-                produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
             return layer

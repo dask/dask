@@ -5,7 +5,6 @@ from typing import (
     Any,
     Hashable,
     Iterable,
-    List,
     Mapping,
     Optional,
     Sequence,
@@ -43,9 +42,7 @@ class BlockwiseDep:
 
     All ``BlockwiseDep`` instances must define a ``numblocks``
     attribute to speficy the number of blocks/partitions the
-    object can support along each dimension. The object should
-    also define a ``produces_tasks`` attribute to specify if
-    any nested tasks will be passed to the Blockwise function.
+    object can support along each dimension.
 
     See Also
     --------
@@ -54,7 +51,6 @@ class BlockwiseDep:
     """
 
     numblocks: Tuple[int, ...]
-    produces_tasks: bool
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         """Return Blockwise-function arguments for a specific index"""
@@ -68,30 +64,6 @@ class BlockwiseDep:
             return self.__getitem__(idx)
         except KeyError:
             return default
-
-    def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
-    ):
-        """Client-side serialization for ``BlockwiseDep`` objects.
-
-        Should return a ``state`` dictionary, with msgpack-serializable
-        values, that can be used to initialize a new ``BlockwiseDep`` object
-        on a scheduler process.
-        """
-        raise NotImplementedError(
-            "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
-        )
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        """Scheduler-side deserialization for ``BlockwiseDep`` objects.
-
-        Should use an input ``state`` dictionary to initialize a new
-        ``BlockwiseDep`` object.
-        """
-        raise NotImplementedError(
-            "Must define `__dask_distributed_unpack__` for `BlockwiseDep` subclass."
-        )
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.numblocks}>"
@@ -157,34 +129,14 @@ class BlockwiseDepDict(BlockwiseDep):
         self,
         mapping: dict,
         numblocks: Optional[Tuple[int, ...]] = None,
-        produces_tasks: bool = False,
     ):
         self.mapping = mapping
-        self.produces_tasks = produces_tasks
 
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         return self.mapping[idx]
-
-    def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
-    ):
-        from distributed.protocol import to_serialize
-
-        if required_indices is None:
-            required_indices = self.mapping.keys()
-
-        return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
-            "numblocks": self.numblocks,
-            "produces_tasks": self.produces_tasks,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 class BlockIndex(BlockwiseDep):
@@ -195,8 +147,6 @@ class BlockIndex(BlockwiseDep):
     the current block index.
     """
 
-    produces_tasks: bool = False
-
     def __init__(self, numblocks: Tuple[int, ...]):
         # NOTE: Unused - Just needs to be set to
         # follow the `BlockwiseDep` interface
@@ -204,13 +154,6 @@ class BlockIndex(BlockwiseDep):
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Tuple[int, ...]:
         return idx
-
-    def __dask_distributed_pack__(self, **kwargs):
-        return {"numblocks": self.numblocks}
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 def subs(task, substitution):
