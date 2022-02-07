@@ -6,7 +6,7 @@ worker.  We might do this manually with functions like ``Client.run`` or
 ``Client.run_on_scheduler``, but this is error prone and difficult to automate.
 
 To resolve this, Dask includes a few mechanisms to run arbitrary code around
-the lifecycle of a Scheduler or Worker.
+the lifecycle of a Scheduler, Worker, Nanny, or Client.
 
 Preload Scripts
 ---------------
@@ -15,8 +15,9 @@ Both ``dask-scheduler`` and ``dask-worker`` support a ``--preload`` option that
 allows custom initialization of each scheduler/worker respectively. A module or
 Python file passed as a ``--preload`` value is guaranteed to be imported before
 establishing any connection. A ``dask_setup(service)`` function is called if
-found, with a ``Scheduler`` or ``Worker`` instance as the argument. As the
-service stops, ``dask_teardown(service)`` is called if present.
+found, with a ``Scheduler``, ``Worker``, ``Nanny``, or ``Client`` instance as
+the argument. As the service stops, ``dask_teardown(service)`` is called if
+present.
 
 To support additional configuration, a single ``--preload`` module may register
 additional command-line arguments by exposing ``dask_setup`` as a  Click_
@@ -91,6 +92,9 @@ Preloads can also be registered with configuration at the following values:
        preload: []
        preload_argv: []
      nanny:
+       preload: []
+       preload_argv: []
+     client:
        preload: []
        preload_argv: []
 
