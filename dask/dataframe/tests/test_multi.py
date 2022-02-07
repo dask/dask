@@ -2010,7 +2010,7 @@ def test_concat_datetimeindex():
 
 
 def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    with pytest.warns(None) as record:
+    with pytest.warns() as record:
         expected = pandas_obj.append(pandas_append)
         result = dask_obj.append(dask_append)
         assert_eq(result, expected)
