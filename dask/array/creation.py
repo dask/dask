@@ -539,6 +539,8 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
     eye = {}
     if M is None:
         M = N
+    if dtype is None:
+        dtype = float
 
     if not isinstance(chunks, (int, str)):
         raise ValueError("chunks must be an int or string")
