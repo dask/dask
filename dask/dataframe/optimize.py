@@ -7,7 +7,7 @@ from .. import config, core
 from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import cull, fuse
-from ..utils import ensure_dict
+from ..utils import M, apply, ensure_dict
 
 
 def optimize(dsk, keys, **kwargs):
@@ -75,10 +75,14 @@ def eager_predicate_pushdown(ddf):
 
     dsk = ddf.dask
 
-    # Quick return if we have more than four
-    # layers in our graph (one IO layer,
-    # two getitem layers, and a comparison layer)
-    if len(dsk.layers) > 4:
+    # Quick return if we have more than six
+    # layers in our graph. Most basic case is:
+    # One IO layer, two getitem layers, and a
+    # comparison layer.  However, there may
+    # also be a column selection immediately
+    # after the IO layer, and/or a fillna
+    # operation immediately before the comparison.
+    if len(dsk.layers) > 6:
         return ddf
 
     # Quick return if we don't have a single
@@ -101,23 +105,75 @@ def eager_predicate_pushdown(ddf):
 
     # Find all dependents of io_layer_name.
     # We can only apply predicate_pushdown if there
-    # are exactly two blockwise getitem dependents.
-    deps = dsk.dependents[io_layer_name]
-    good = len(deps) == 2 and all(
-        list(dsk.layers[d].dsk.values())[0][0] == operator.getitem for d in deps
-    )
+    # are exactly one or two blockwise getitem dependents.
+    # If there is one dependent, it must be a
+    # column projction after the read (and the column
+    # projection must have exactly two dependents)
+    def _check_deps(layer_name):
+        deps = dsk.dependents[layer_name]
+        ndeps = len(deps)
+        good = ndeps in (1, 2) and all(
+            list(dsk.layers[d].dsk.values())[0][0] == operator.getitem for d in deps
+        )
+        if good and ndeps == 1:
+            # This may be a column selection layer.
+            # Check if comparison comes immediately after
+            # the column selection
+            return _check_deps(list(deps)[0])
+        return good, deps, layer_name
+
+    good, deps, base_layer_name = _check_deps(io_layer_name)
     if not good:
         return ddf
 
+    # Check for column selection
+    selection = None
+    if io_layer_name != base_layer_name:
+        selection = [
+            ind[0] for ind in dsk.layers[base_layer_name].indices if ind[1] is None
+        ]
+        if len(selection) > 1 or not isinstance(selection[0], (list, str)):
+            return ddf
+        selection = selection[0]
+
     # If the first check was successful,
     # we now need to check that the two
-    # dependents only depend on the input
+    # dependents only depend on the base
     # collection or eachother
-    okay_deps = {io_layer_name, *deps}
+    okay_deps = {base_layer_name, *deps}
     _key, _compare, _val = None, None, None
+    fillna_op = {}
     for dep in deps:
         _deps = dsk.dependencies[dep]
-        good = _deps.issubset(okay_deps)
+
+        # Check fopr an extra fillna operation
+        extra_deps = _deps - okay_deps
+        if len(extra_deps) == 1:
+            extra_name = extra_deps.pop()
+            extra_layer = dsk.layers[extra_name]
+            extra_layer_task = extra_layer.dsk[extra_name]
+            if (
+                extra_layer_task
+                and extra_layer_task[0] == apply
+                and extra_layer_task[1] == M.fillna
+            ):
+                fillna_op["args"] = [
+                    extra_layer.indices[ind][0]
+                    for ind in range(1, len(extra_layer_task[2]))
+                ]
+                fillna_op["kwargs"] = extra_layer_task[3]
+                if (
+                    isinstance(fillna_op["kwargs"], tuple)
+                    and fillna_op["kwargs"]
+                    and callable(fillna_op["kwargs"][0])
+                ):
+                    fillna_op["kwargs"] = fillna_op["kwargs"][0](
+                        *fillna_op["kwargs"][1:]
+                    )
+                _deps = _deps - {
+                    extra_name,
+                }
+
         if len(_deps) == 1:
             _dependents = dsk.dependents[dep]
             if len(_dependents) == 1:
@@ -150,11 +206,22 @@ def eager_predicate_pushdown(ddf):
             old = dsk.layers[io_layer_name]
             new_kwargs = old.creation_info["kwargs"].copy()
             new_kwargs["filters"] = filters
+            if selection and new_kwargs.get("columns", None) is None:
+                new_kwargs["columns"] = selection
             new = old.creation_info["func"](
                 *old.creation_info["args"],
                 **new_kwargs,
             )
-            return new[_compare(new[_key], _val)]
+            if selection:
+                new = new[selection]
+            return new[
+                _compare(
+                    new[_key].fillna(*fillna_op["args"], **fillna_op["kwargs"])
+                    if fillna_op
+                    else new[_key],
+                    _val,
+                )
+            ]
 
     # Fallback
     return ddf
