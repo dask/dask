@@ -659,21 +659,18 @@ class AbstractLayer(Layer):
         return iter(self._dict)
 
     def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
+        # from distributed.protocol.serialize import ToPickle
         import cloudpickle
-
-        from distributed.protocol.serialize import ToPickle
 
         # Save "pre-stringified" key dependencies
         # TODO: Is there a better way to do this?
         state = self.layer_state.copy()
         state["layer_dependencies"] = self.layer_dependencies(all_hlg_keys)
 
-        # TODO: Figure out why ToPickle sometimes fails...
-        try:
-            return cloudpickle.dumps(state)
-        except AttributeError:
-            # Probably shouldn't ever get here
-            return ToPickle(state)
+        # TODO: Use ToPickle - The current implementation
+        # sometimes fails.
+        # return ToPickle(state)
+        return cloudpickle.dumps(state)
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
