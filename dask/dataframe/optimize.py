@@ -1,11 +1,8 @@
 """ Dataframe optimizations """
-import operator
-
-import numpy as np
-
 from .. import config, core
 from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
+from ..layers import SelectionLayer
 from ..optimization import cull, fuse
 from ..utils import ensure_dict
 
@@ -59,76 +56,125 @@ def optimize_dataframe_getitem(dsk, keys):
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
-    for k in dataframe_blockwise:
+    for io_layer_name in dataframe_blockwise:
         columns = set()
         update_blocks = {}
 
-        if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
+        if any(
+            layers[io_layer_name].name == x[0] for x in keys if isinstance(x, tuple)
+        ):
             # ... but bail on the optimization if the dataframe_blockwise layer is in
             # the requested keys, because we cannot change the name anymore.
             # These keys are structured like [('getitem-<token>', 0), ...]
             # so we check for the first item of the tuple.
             # See https://github.com/dask/dask/issues/5893
-            return dsk
+            # return dsk
+            continue
 
-        column_projection = True
-        for dep in dsk.dependents[k]:
-            block = dsk.layers[dep]
+        # Check that the only dependencies of the IO layer are
+        # Selection layers (either a single column selection,
+        # or a column selection and a row selection). The single
+        # column-selection case (CASE A) is simple. The other case
+        # (CASE B) is more complex, but will happen when a filter
+        # is applied prior to full column selection. We want to
+        # capture both cases, because CASE B is common in Dask-SQL
 
-            # Check if we're a dataframe_blockwise followed by a getitem
-            if not isinstance(block, Blockwise):
-                # getitem are Blockwise...
-                return dsk
+        deps = dsk.dependents[io_layer_name]
+        if len(deps) > 2 or not all(
+            isinstance(dsk.layers[k], SelectionLayer) for k in deps
+        ):
+            # Not case A or B
+            continue
 
-            if len(block.dsk) != 1:
-                # ... with a single item...
-                return dsk
+        if {dsk.layers[k].kind for k in deps} not in (
+            {"column-selection"},
+            {"column-selection", "row-selection"},
+        ):
+            # This IO layer does not match case A or B
+            continue
 
-            if list(block.dsk.values())[0][0] != operator.getitem:
-                # ... where this value is __getitem__...
-                return dsk
+        # Get name of target column-selection layer
+        col_select_layer = [
+            k for k in deps if dsk.layers[k].kind == "column-selection"
+        ][0]
 
-            block_columns = block.indices[1][0]
-            if isinstance(block_columns, str):
-                if block_columns in layers.keys():
-                    # Not a column selection if the getitem
-                    # key is a collection key
-                    column_projection = False
-                    break
-                block_columns = [block_columns]
-            elif np.issubdtype(type(block_columns), np.integer):
-                block_columns = [block_columns]
-            columns |= set(block_columns)
-            update_blocks[dep] = block
+        # For CASE B, check if compressed dependent of
+        # the column selection is the other row-selection
+        # dependency (typical for filtering), and that
+        # the only dependent of that row-selection is
+        # a new column selection.
+        if len(deps) == 2:
+            row_select_layer = (deps - {col_select_layer}).pop()
+
+            target_layer = dsk.dependents[row_select_layer]
+            if len(target_layer) > 1:
+                continue
+            target_layer = list(target_layer)[0]
+            _layer = dsk.layers[target_layer]
+
+            if isinstance(_layer, SelectionLayer) and _layer.kind == "column-selection":
+                selection = _layer.selection
+                if not isinstance(selection, list):
+                    selection = [selection]
+                columns |= set(selection)
+            else:
+                continue
+            columns |= set(selection)
+
+            # Add column selection to `columns`
+            selection = dsk.layers[col_select_layer].selection
+            if not isinstance(selection, list):
+                selection = [selection]
+            columns |= set(selection)
+            next_layers = list(dsk.dependents[col_select_layer])
+            col_select_layer = target_layer
+
+            # Compress everythin in the column-selection
+            # bnranch that leads up to the row-selection
+            while len(next_layers) == 1 and next_layers[0] != row_select_layer:
+                next_layers = list(dsk.dependents[next_layers[0]])
+
+            if next_layers[0] != row_select_layer:
+                continue
+
+        # Populate `columns` with initial selection
+        selection = dsk.layers[col_select_layer].selection
+        if not isinstance(selection, list):
+            selection = [selection]
+        columns |= set(selection)
+
+        # Column projection should be supported for
+        # this case - Add deps to update_blocks
+        for dep in deps:
+            update_blocks[dep] = dsk.layers[dep]
 
         # Project columns and update blocks
-        if column_projection:
-            old = layers[k]
-            new = old.project_columns(columns)
-            if new.name != old.name:
-                columns = list(columns)
-                assert len(update_blocks)
-                for block_key, block in update_blocks.items():
-                    # (('read-parquet-old', (.,)), ( ... )) ->
-                    # (('read-parquet-new', (.,)), ( ... ))
-                    new_indices = ((new.name, block.indices[0][1]), block.indices[1])
-                    numblocks = {new.name: block.numblocks[old.name]}
-                    new_block = Blockwise(
-                        block.output,
-                        block.output_indices,
-                        block.dsk,
-                        new_indices,
-                        numblocks,
-                        block.concatenate,
-                        block.new_axes,
-                    )
-                    layers[block_key] = new_block
-                    dependencies[block_key] = {new.name}
-                dependencies[new.name] = dependencies.pop(k)
+        old = layers[io_layer_name]
+        new = old.project_columns(columns)
+        if new.name != old.name:
+            columns = list(columns)
+            assert len(update_blocks)
+            for block_key, block in update_blocks.items():
+                # (('read-parquet-old', (.,)), ( ... )) ->
+                # (('read-parquet-new', (.,)), ( ... ))
+                new_indices = ((new.name, block.indices[0][1]), block.indices[1])
+                numblocks = {new.name: block.numblocks[old.name]}
+                new_block = Blockwise(
+                    block.output,
+                    block.output_indices,
+                    block.dsk,
+                    new_indices,
+                    numblocks,
+                    block.concatenate,
+                    block.new_axes,
+                )
+                layers[block_key] = new_block
+                dependencies[block_key] = {new.name}
+            dependencies[new.name] = dependencies.pop(io_layer_name)
 
-            layers[new.name] = new
-            if new.name != old.name:
-                del layers[old.name]
+        layers[new.name] = new
+        if new.name != old.name:
+            del layers[old.name]
 
     new_hlg = HighLevelGraph(layers, dependencies)
     return new_hlg

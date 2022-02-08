@@ -25,7 +25,7 @@ from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..layers import DataFrameTreeReduction
+from ..layers import DataFrameTreeReduction, SelectionLayer
 from ..utils import (
     IndexCallable,
     M,
@@ -4186,7 +4186,8 @@ class DataFrame(_Frame):
         )
 
     def __getitem__(self, key):
-        name = "getitem-%s" % tokenize(self, key)
+        token = tokenize(self, key)
+        name = "getitem-%s" % token
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
@@ -4203,7 +4204,8 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            name = "select-column-%s" % token
+            dsk = SelectionLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -4228,7 +4230,11 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            if isinstance(key, (np.ndarray, list)):
+                name = "select-columns-%s" % token
+                dsk = SelectionLayer(name, self, key)
+            else:
+                dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -4237,7 +4243,8 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            name = "select-rows-%s" % token
+            dsk = SelectionLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):
