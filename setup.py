@@ -92,5 +92,6 @@ setup(
     tests_require=["pytest"],
     extras_require=extras_require,
     include_package_data=True,
+    package_data={"dask": ["py.typed"]},
     zip_safe=False,
 )
