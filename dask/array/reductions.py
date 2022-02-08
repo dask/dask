@@ -293,9 +293,9 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
+        free = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every}
         dummy = dict(i for i in enumerate(p) if i[0] in split_every)
-        g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
+        g = lol_tuples((x.name,), range(x.ndim), free, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
