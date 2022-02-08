@@ -623,10 +623,14 @@ def diag(v, k=0):
             out_chunks = ()
             while kdiag_row_start < v.shape[0] and kdiag_col_start < v.shape[1]:
                 # locate intersecting chunk:
-                row_filter = (row_starts <= kdiag_row_start) & (kdiag_row_start < row_stops_)
-                col_filter = (col_starts <= kdiag_col_start) & (kdiag_col_start < col_stops_)
-                I, = row_blockid[row_filter]
-                J, = col_blockid[col_filter]
+                row_filter = (row_starts <= kdiag_row_start) & (
+                    kdiag_row_start < row_stops_
+                )
+                col_filter = (col_starts <= kdiag_col_start) & (
+                    kdiag_col_start < col_stops_
+                )
+                (I,) = row_blockid[row_filter]
+                (J,) = col_blockid[col_filter]
                 # localize block info:
                 nrows, ncols = v.chunks[0][I], v.chunks[1][J]
                 kdiag_row_start -= row_starts[I]
