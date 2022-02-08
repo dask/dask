@@ -20,6 +20,7 @@ from tlz import first, merge, partition_all, remove, unique
 from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
+from ..bag import map_partitions as map_bag_partitions
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from ..context import globalmethod
@@ -5879,15 +5880,16 @@ def apply_concat_apply(
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
-    chunked = map_partitions(
+    chunked = map_bag_partitions(
         chunk,
-        *args,
+        # Convert _Frame collections to Bag
+        *[
+            arg.to_bag(format="frame") if isinstance(arg, _Frame) else arg
+            for arg in args
+        ],
         token=chunk_name,
-        enforce_metadata=False,
-        transform_divisions=False,
-        align_dataframes=False,
         **chunk_kwargs,
-    ).to_bag(format="frame")
+    )
 
     # NOTE: `chunked` is now a Bag collection.
     # We don't use a DataFrame collection, because
