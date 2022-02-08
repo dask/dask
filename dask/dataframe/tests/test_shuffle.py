@@ -588,7 +588,7 @@ def test_set_index_sorts():
         dfs.append(pd.DataFrame({"timestamp": vals[lo:hi]}, index=range(lo, hi)))
 
     ddf = dd.concat(dfs).clear_divisions()
-    assert ddf.set_index("timestamp").index.compute().is_monotonic is True
+    assert ddf.set_index("timestamp").index.compute().is_monotonic_increasing is True
 
 
 @pytest.mark.parametrize(
