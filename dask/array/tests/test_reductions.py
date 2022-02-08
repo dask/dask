@@ -812,7 +812,7 @@ def test_nan_func_does_not_warn(func):
 
 
 @pytest.mark.parametrize("chunks", list(permutations(((2, 1) * 8, (3,) * 8, (6,) * 4))))
-@pytest.mark.parametrize("split_every", [2, 4, 8, 16])
+@pytest.mark.parametrize("split_every", [2, 4])
 @pytest.mark.parametrize(
     "axes", list(permutations((0, 1, 2), 2)) + list(permutations((0, 1, 2)))
 )
@@ -832,5 +832,4 @@ def test_chunk_structure_independence(axes, split_every, chunks):
         dtype=x.dtype,
         meta=x._meta,
     )
-    reduced_x.compute_chunk_sizes()
-    assert_eq(reduced_x, np_array)
+    _assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
