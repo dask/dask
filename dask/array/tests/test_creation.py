@@ -430,9 +430,11 @@ def test_diag():
 
     x = np.arange(64).reshape((8, 8))
     d = da.from_array(x, chunks=(4, 4))
+    d2 = da.from_array(x, chunks=((3, 2, 3), (4, 4)))
     for k in range(-8, 8):
         assert_eq(da.diag(x, k), np.diag(x, k))
         assert_eq(da.diag(d, k), np.diag(x, k))
+        assert_eq(da.diag(d2, k), np.diag(x, k))
 
 
 def test_diagonal():
