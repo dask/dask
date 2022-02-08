@@ -108,6 +108,7 @@ try:
         dstack,
         ediff1d,
         einsum,
+        expand_dims,
         extract,
         flatnonzero,
         flip,
