@@ -42,16 +42,6 @@ except ImportError as e:
     raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
 from scipy import special
 from scipy.stats import distributions
-from scipy.stats.stats import (
-    F_onewayResult,
-    KurtosistestResult,
-    NormaltestResult,
-    Power_divergenceResult,
-    SkewtestResult,
-    Ttest_1sampResult,
-    Ttest_indResult,
-    Ttest_relResult,
-)
 
 __all__ = [
     "ttest_ind",
