@@ -3977,7 +3977,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ----------
     seq: list of dask.arrays
     axis: int
-        Dimension along which to align all of the arrays
+        Dimension along which to align all of the arrays. If axis is None,
+        arrays are flattened before use.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
