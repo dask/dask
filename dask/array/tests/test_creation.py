@@ -429,10 +429,10 @@ def test_diag():
     assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
 
     x = np.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), np.diag(x))
-
     d = da.from_array(x, chunks=(4, 4))
-    assert_eq(da.diag(d), np.diag(x))
+    for k in range(-8, 8):
+        assert_eq(da.diag(x, k), np.diag(x, k))
+        assert_eq(da.diag(d, k), np.diag(x, k))
 
 
 def test_diagonal():

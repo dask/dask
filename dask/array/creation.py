@@ -565,8 +565,8 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
 
 @derived_from(np)
-def diag(v):
-    name = "diag-" + tokenize(v)
+def diag(v, k=0):
+    name = "diag-" + tokenize(v, k)
 
     meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
 
@@ -575,26 +575,80 @@ def diag(v):
     ):
         if v.ndim == 1:
             chunks = ((v.shape[0],), (v.shape[0],))
-            dsk = {(name, 0, 0): (np.diag, v)}
+            dsk = {(name, 0, 0): (np.diag, v, k)}
         elif v.ndim == 2:
-            chunks = ((min(v.shape),),)
-            dsk = {(name, 0): (np.diag, v)}
+            kdiag_row_start = max(0, -k)
+            kdiag_row_stop = min(v.shape[0], v.shape[1] - k)
+            len_kdiag = kdiag_row_stop - kdiag_row_start
+            chunks = ((0,),) if len_kdiag <= 0 else ((len_kdiag,),)
+            dsk = {(name, 0): (np.diag, v, k)}
         else:
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
     if not isinstance(v, Array):
         raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
     if v.ndim != 1:
-        if v.chunks[0] == v.chunks[1]:
+        if k == 0 and v.chunks[0] == v.chunks[1]:
             dsk = {
                 (name, i): (np.diag, row[i]) for i, row in enumerate(v.__dask_keys__())
             }
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
-            raise NotImplementedError(
-                "Extracting diagonals from non-square chunked arrays"
-            )
+            kdiag_row_start = max(0, -k)
+            kdiag_col_start = max(0, k)
+            kdiag_row_stop = min(v.shape[0], v.shape[1] - k)
+            len_kdiag = kdiag_row_stop - kdiag_row_start
+
+            if len_kdiag <= 0:
+                chunks = ((0,),)
+                dsk = {(name, 0): (np.diag, np.array([[]], dtype=v.dtype), k)}
+                return Array(dsk, name, chunks, meta=meta)
+
+            row_stops_ = np.cumsum(v.chunks[0])
+            row_starts = np.roll(row_stops_, 1)
+            row_starts[0] = 0
+
+            col_stops_ = np.cumsum(v.chunks[1])
+            col_starts = np.roll(col_stops_, 1)
+            col_starts[0] = 0
+
+            row_blockid = np.arange(v.numblocks[0])
+            col_blockid = np.arange(v.numblocks[1])
+
+            # follow k-diagonal through chunks while constructing dask graph:
+            # equation of diagonal: i = j - k
+            dsk = dict()
+            i = 0
+            out_chunks = ()
+            while kdiag_row_start < v.shape[0] and kdiag_col_start < v.shape[1]:
+                # locate intersecting chunk:
+                row_filter = (row_starts <= kdiag_row_start) & (kdiag_row_start < row_stops_)
+                col_filter = (col_starts <= kdiag_col_start) & (kdiag_col_start < col_stops_)
+                I, = row_blockid[row_filter]
+                J, = col_blockid[col_filter]
+                # localize block info:
+                nrows, ncols = v.chunks[0][I], v.chunks[1][J]
+                kdiag_row_start -= row_starts[I]
+                kdiag_col_start -= col_starts[J]
+                k = -kdiag_row_start if kdiag_row_start > 0 else kdiag_col_start
+                kdiag_row_end = min(nrows, ncols - k)
+                kdiag_len = kdiag_row_end - kdiag_row_start
+                # increment dask graph:
+                dsk[(name, i)] = (np.diag, (v.name,) + (I, J), k)
+                out_chunks += (kdiag_len,)
+                # prepare for next iteration:
+                kdiag_row_start = kdiag_row_end + row_starts[I]
+                kdiag_col_start = min(ncols, nrows + k) + col_starts[J]
+                i += 1
+
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
+            return Array(graph, name, (out_chunks,), meta=meta)
+
+    if k != 0:
+        raise NotImplementedError(
+            "Nonzero `k` is not supported when constructing a 2d diagonal array from a 1d array"
+        )
     chunks_1d = v.chunks[0]
     blocks = v.__dask_keys__()
     dsk = {}
