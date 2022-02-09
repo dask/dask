@@ -602,15 +602,12 @@ def test_get_collection_names():
     h1 = object()
     h2 = object()
     # __dask_keys__() returns a nested list
-    assert (
-        get_collection_names(
-            DummyCollection(
-                {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
-                [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
-            )
+    assert get_collection_names(
+        DummyCollection(
+            {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
+            [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
         )
-        == {"a-1", "b-2", "c"}
-    )
+    ) == {"a-1", "b-2", "c"}
 
 
 def test_get_name_from_key():

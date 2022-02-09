@@ -100,7 +100,6 @@ try:
     def _pack_traceback(tb):
         return tb
 
-
 except ImportError:
 
     def _pack_traceback(tb):

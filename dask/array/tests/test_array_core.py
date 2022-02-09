@@ -2294,7 +2294,7 @@ def test_arithmetic():
     assert_eq(b | b, y | y)
     assert_eq(b ^ b, y ^ y)
     assert_eq(a // b, x // y)
-    assert_eq(a ** b, x ** y)
+    assert_eq(a**b, x**y)
     assert_eq(a % b, x % y)
     assert_eq(a > b, x > y)
     assert_eq(a < b, x < y)
@@ -2311,7 +2311,7 @@ def test_arithmetic():
     assert_eq(b | True, y | True)
     assert_eq(b ^ True, y ^ True)
     assert_eq(a // 2, x // 2)
-    assert_eq(a ** 2, x ** 2)
+    assert_eq(a**2, x**2)
     assert_eq(a % 2, x % 2)
     assert_eq(a > 2, x > 2)
     assert_eq(a < 2, x < 2)
@@ -2328,7 +2328,7 @@ def test_arithmetic():
     assert_eq(True | b, True | y)
     assert_eq(True ^ b, True ^ y)
     assert_eq(2 // b, 2 // y)
-    assert_eq(2 ** b, 2 ** y)
+    assert_eq(2**b, 2**y)
     assert_eq(2 % b, 2 % y)
     assert_eq(2 > b, 2 > y)
     assert_eq(2 < b, 2 < y)
@@ -3838,11 +3838,11 @@ def test_index_array_with_array_2d():
 
 @pytest.mark.xfail(reason="Chunking does not align well")
 def test_index_array_with_array_3d_2d():
-    x = np.arange(4 ** 3).reshape((4, 4, 4))
+    x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
     ind = np.random.random((4, 4)) > 0.5
-    ind = np.arange(4 ** 2).reshape((4, 4)) % 2 == 0
+    ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
     assert_eq(x[ind], dx[dind])
