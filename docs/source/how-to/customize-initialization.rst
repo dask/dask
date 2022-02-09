@@ -84,19 +84,19 @@ Preloads can also be registered with configuration at the following values:
        - "import os; os.environ['A'] = 'b'"  # use Python text
        - /path/to/myfile.py                  # or a filename
        - my_module                           # or a module name
-       preload_argv:
+       preload-argv:
        - []                                  # Pass optional keywords
        - ["--option", "value"]
        - []
      worker:
        preload: []
-       preload_argv: []
+       preload-argv: []
      nanny:
        preload: []
-       preload_argv: []
+       preload-argv: []
      client:
        preload: []
-       preload_argv: []
+       preload-argv: []
 
 .. note::
 
