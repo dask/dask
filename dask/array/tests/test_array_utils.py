@@ -100,7 +100,7 @@ def test_assert_eq_checks_dtype(a, b):
     ],
 )
 def test_assert_eq_scheduler(a, b):
-    counter = 0
+    counter = 0  # Counts how many times `custom_scheduler` is executed.
 
     def custom_scheduler(*args, **kwargs):
         nonlocal counter
@@ -111,5 +111,6 @@ def test_assert_eq_scheduler(a, b):
     assert counter == 0
 
     assert_eq(a, b, scheduler=custom_scheduler)
+    # `custom_scheduler` should be executed twice if `a` and `b` are Arrays.
     n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)])
     assert counter == n_da_arrays
