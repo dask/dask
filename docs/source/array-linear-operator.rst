@@ -12,13 +12,13 @@ Example
    import dask.array as da
    x = da.random.random(size=(10000, 10000), chunks=(1000, 1000))
 
-   from scipy.sparse.linalg.interface import MatrixLinearOperator
+   from scipy.sparse import MatrixLinearOperator
    A = MatrixLinearOperator(x)
 
    import numpy as np
    b = np.random.random(10000)
 
-   from scipy.sparse.linalg import gmres
+   from scipy.sparse import gmres
    x = gmres(A, b)
 
 *Disclaimer: This is just a toy example and not necessarily the best way to
