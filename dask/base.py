@@ -4,6 +4,7 @@ import os
 import pickle
 import threading
 import uuid
+import warnings
 from collections import OrderedDict
 from concurrent.futures import Executor
 from contextlib import contextmanager
@@ -1248,7 +1249,13 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler.get
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
+
             if scheduler in named_schedulers:
+                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                    warnings.warn(
+                        "Passing a local execution scheduler in Dask.distributed might "
+                        "lead to unexpected results."
+                    )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
                 from distributed.worker import get_client

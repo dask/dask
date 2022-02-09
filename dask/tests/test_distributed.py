@@ -130,8 +130,20 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
+# with pytest.warns(UserWarning, match=warning_message) as user_warnings_b:
+#     get_scheduler(scheduler="dask.distributed")
+#     get_scheduler(scheduler="distributed")
+#     get_scheduler()
+# assert len(user_warnings_b) == 0
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Passing a local execution scheduler in Dask.distributed might "
+    "lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
+
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
@@ -151,6 +163,10 @@ def test_to_hdf_distributed(c):
     test_to_hdf()
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Passing a local execution scheduler in Dask.distributed might "
+    "lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -293,6 +309,10 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
         "full",
     ],
 )
+@pytest.mark.filterwarnings(
+    "ignore:Passing a local execution scheduler in Dask.distributed might "
+    "lead to unexpected results."
+)
 @pytest.mark.parametrize("fuse", [True, False, None])
 def test_blockwise_array_creation(c, io, fuse):
     np = pytest.importorskip("numpy")
@@ -318,9 +338,14 @@ def test_blockwise_array_creation(c, io, fuse):
         dsk = dask.array.optimize(darr.dask, darr.__dask_keys__())
         # dsk should be a dict unless fuse is explicitly False
         assert isinstance(dsk, dict) == (fuse is not False)
+
         da.assert_eq(darr, narr)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Passing a local execution scheduler in Dask.distributed might "
+    "lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "io",
     ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
@@ -365,6 +390,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
         # dsk should not be a dict unless fuse is explicitly True
         assert isinstance(dsk, dict) == bool(fuse)
+
         dd.assert_eq(ddf, df, check_index=False)
 
 
@@ -478,6 +504,10 @@ async def test_combo_of_layer_types(c, s, a, b):
     assert res == 21
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Passing a local execution scheduler in Dask.distributed might "
+    "lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_blockwise_concatenate(c, s, a, b):
     """Test a blockwise operation with concatenated axes"""
@@ -502,6 +532,7 @@ async def test_blockwise_concatenate(c, s, a, b):
     )
 
     await c.compute(z, optimize_graph=False)
+
     da.assert_eq(z, x)
 
 
