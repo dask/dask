@@ -49,7 +49,7 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import methods
-from ._compat import PANDAS_GT_140
+from ._compat import PANDAS_GT_140, PANDAS_GT_150
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
@@ -3830,6 +3830,12 @@ Dask Name: {name}, {task} tasks""".format(
     @property
     @derived_from(pd.Series)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return self.is_monotonic_increasing
 
     @property
@@ -4042,6 +4048,12 @@ class Index(Series):
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return super().is_monotonic_increasing
 
     @property
