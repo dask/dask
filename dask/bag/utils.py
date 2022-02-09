@@ -1,7 +1,7 @@
-def assert_eq(a, b):
+def assert_eq(a, b, scheduler="sync"):
     if hasattr(a, "compute"):
-        a = a.compute(scheduler="sync")
+        a = a.compute(scheduler=scheduler)
     if hasattr(b, "compute"):
-        b = b.compute(scheduler="sync")
+        b = b.compute(scheduler=scheduler)
 
     assert a == b
