@@ -574,7 +574,8 @@ def diag(v, k=0):
         hasattr(v, "__array_function__") and not isinstance(v, Array)
     ):
         if v.ndim == 1:
-            chunks = ((v.shape[0],), (v.shape[0],))
+            m = abs(k)
+            chunks = ((v.shape[0] + m,), (v.shape[0] + m,))
             dsk = {(name, 0, 0): (np.diag, v, k)}
         elif v.ndim == 2:
             kdiag_row_start = max(0, -k)
@@ -602,7 +603,7 @@ def diag(v, k=0):
 
             if len_kdiag <= 0:
                 chunks = ((0,),)
-                dsk = {(name, 0): (np.diag, np.array([[]], dtype=v.dtype), k)}
+                dsk = {(name, 0): (partial(np.empty, dtype=v.dtype), (0,))}
                 return Array(dsk, name, chunks, meta=meta)
 
             row_stops_ = np.cumsum(v.chunks[0])
@@ -616,7 +617,7 @@ def diag(v, k=0):
             row_blockid = np.arange(v.numblocks[0])
             col_blockid = np.arange(v.numblocks[1])
 
-            # locate first chunk containing diaagonal:
+            # locate first chunk containing diagonal:
             row_filter = (row_starts <= kdiag_row_start) & (
                 kdiag_row_start < row_stops_
             )
@@ -652,24 +653,26 @@ def diag(v, k=0):
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (out_chunks,), meta=meta)
 
-    if k != 0:
-        raise NotImplementedError(
-            "Nonzero `k` is not supported when constructing a 2d diagonal array from a 1d array"
-        )
-    chunks_1d = v.chunks[0]
-    blocks = v.__dask_keys__()
-    dsk = {}
-    for i, m in enumerate(chunks_1d):
-        for j, n in enumerate(chunks_1d):
-            key = (name, i, j)
-            if i == j:
-                dsk[key] = (np.diag, blocks[i])
-            else:
-                dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
+    if k == 0:
+        chunks_1d = v.chunks[0]
+        blocks = v.__dask_keys__()
+        dsk = {}
+        for i, m in enumerate(chunks_1d):
+            for j, n in enumerate(chunks_1d):
+                key = (name, i, j)
+                if i == j:
+                    dsk[key] = (np.diag, blocks[i])
+                else:
+                    dsk[key] = (np.zeros, (m, n))
+                    dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-    return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
+        return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
+
+    elif k > 0:
+        return pad(diag(v), [[0, k], [k, 0]], mode="constant")
+    elif k < 0:
+        return pad(diag(v), [[-k, 0], [0, -k]], mode="constant")
 
 
 @derived_from(np)
