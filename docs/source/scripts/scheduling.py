@@ -55,12 +55,12 @@ import numpy as np
 
 x = np.logspace(0, 4, 10)
 trivial_results = dict()
-for get in [dask.get, threaded.get, local.get_sync, multiprocessing.get]:
+for get in (dask.get, threaded.get, local.get_sync, multiprocessing.get):
     y = list()
     for n in x:
         dsk, keys = trivial(int(n), 5)
         start = time()
-        get(dsk, keys)
+        get(dsk, keys)  # type: ignore
         end = time()
         y.append(end - start)
     trivial_results[get] = np.array(y)
@@ -99,7 +99,7 @@ for get in [threaded.get, local.get_sync]:
     for n in x:
         dsk, keys = crosstalk(1000, 5, int(n))
         start = time()
-        get(dsk, keys)
+        get(dsk, keys)  # type: ignore
         end = time()
         y.append(end - start)
     crosstalk_results[get] = np.array(y)

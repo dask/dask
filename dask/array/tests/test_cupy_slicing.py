@@ -34,7 +34,7 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
-def test_index_with_int_dask_array(x_chunks, idx_chunks):
+def test_index_with_int_dask_array_nep35(x_chunks, idx_chunks):
     # test data is crafted to stress use cases:
     # - pick from different chunks of x out of order
     # - a chunk of x contains no matches

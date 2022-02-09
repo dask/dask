@@ -10,7 +10,7 @@ try:  # PyPy does not support sys.getsizeof
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
 
-    def getsizeof(x):
+    def getsizeof(x):  # type: ignore
         return 100
 
 

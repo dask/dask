@@ -453,14 +453,14 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
+@pytest.mark.parametrize("iterator", ["power", "QR"])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
-        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
+        x, k=2, iterator=iterator, n_power_iter=1, compute=True, seed=123
     )
     uu, ss, vv = da.linalg.svd_compressed(
-        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
+        x, k=2, iterator=iterator, n_power_iter=1, seed=123
     )
 
     assert len(v.dask) < len(vv.dask)
@@ -534,20 +534,6 @@ def test_svd_compressed_shapes(m, n, k, chunks):
     assert u.shape == (m, r)
     assert s.shape == (r,)
     assert v.shape == (r, n)
-
-
-@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
-def test_svd_compressed_compute(iterator):
-    x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(
-        x, 2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
-    )
-    uu, ss, vv = da.linalg.svd_compressed(
-        x, 2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
-    )
-
-    assert len(v.dask) < len(vv.dask)
-    assert_eq(v, vv)
 
 
 def _check_lu_result(p, l, u, A):

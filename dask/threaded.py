@@ -3,12 +3,14 @@ A threaded shared-memory scheduler
 
 See local.py
 """
+from __future__ import annotations
+
 import atexit
 import multiprocessing.pool
 import sys
 import threading
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from threading import Lock, current_thread
 
 from . import config
@@ -22,8 +24,8 @@ def _thread_get_id():
 
 
 main_thread = current_thread()
-default_pool = None
-pools = defaultdict(dict)
+default_pool: Executor | None = None
+pools: defaultdict[threading.Thread, dict[int, Executor]] = defaultdict(dict)
 pools_lock = Lock()
 
 

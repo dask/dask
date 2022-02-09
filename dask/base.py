@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import datetime
 import inspect
 import os
@@ -5,6 +7,7 @@ import pickle
 import threading
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
@@ -12,7 +15,6 @@ from functools import partial
 from hashlib import md5
 from numbers import Integral, Number
 from operator import getitem
-from typing import Iterator, Mapping, Set
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -938,11 +940,11 @@ def normalize_object(o):
     )
 
 
-function_cache = {}
+function_cache: dict[Callable, Callable] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func):
+def normalize_function(func: Callable) -> Callable:
     try:
         return function_cache[func]
     except KeyError:
@@ -958,7 +960,7 @@ def normalize_function(func):
         return _normalize_function(func)
 
 
-def _normalize_function(func):
+def _normalize_function(func: Callable) -> Callable:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
@@ -1317,7 +1319,7 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return x
 
 
-def get_collection_names(collection) -> Set[str]:
+def get_collection_names(collection) -> set[str]:
     """Infer the collection names from the dask keys, under the assumption that all keys
     are either tuples with matching first element, and that element is a string, or
     there is exactly one key and it is a string.

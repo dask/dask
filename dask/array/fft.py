@@ -193,7 +193,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if kind.endswith("fft"):
         _func = func
 
-        def func(a, n=None, axis=None):
+        def func(a, n=None, axis=None):  # type: ignore
             s = None
             if n is not None:
                 s = (n,)

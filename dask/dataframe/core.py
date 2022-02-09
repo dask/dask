@@ -404,7 +404,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.DataFrame)
     def attrs(self):
         return self._meta.attrs

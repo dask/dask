@@ -159,7 +159,7 @@ def test_interrupt():
     else:
         main_thread = threading.get_ident()
 
-        def interrupt_main():
+        def interrupt_main() -> None:
             signal.pthread_kill(main_thread, signal.SIGINT)
 
     # 7 seconds is is how long the test will take when you factor in teardown.

@@ -6,7 +6,7 @@ try:
     from math import prod
 except ImportError:
     # Python < 3.8
-    def prod(iterable, *, start=1):
+    def prod(iterable, *, start=1):  # type: ignore
         acc = start
         for el in iterable:
             acc *= el
