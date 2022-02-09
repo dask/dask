@@ -379,7 +379,7 @@ def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
     dx = da.from_array(x, chunks=-1)
-    assert_eq(da.tensordot(dx, dx, ndim), np.array(2 ** ndim))
+    assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
 
 
 def test_dot_method():

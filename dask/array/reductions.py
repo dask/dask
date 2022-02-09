@@ -719,11 +719,11 @@ def moment_chunk(
 
 def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
     M = Ms[..., order - 2].sum(axis=axis, **kwargs) + sum(
-        ns * inner_term ** order, axis=axis, **kwargs
+        ns * inner_term**order, axis=axis, **kwargs
     )
     for k in range(1, order - 1):
         coeff = factorial(order) / (factorial(k) * factorial(order - k))
-        M += coeff * sum(Ms[..., order - k - 2] * inner_term ** k, axis=axis, **kwargs)
+        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, axis=axis, **kwargs)
     return M
 
 
@@ -1358,7 +1358,7 @@ def cumreduction(
           This method may be faster or more memory efficient depending on workload,
           scheduler, and hardware.  More benchmarking is necessary.
     preop: callable, optional
-        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
+        Function used by 'blelloch' method like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------

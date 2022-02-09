@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import math
 import warnings
 from collections.abc import Iterable
 from functools import partial, reduce, wraps
 from numbers import Integral, Real
-from typing import List, Tuple
 
 import numpy as np
 from tlz import concat, interleave, sliding_window
@@ -2205,21 +2206,18 @@ def select(condlist, choicelist, default=0):
     )
 
 
-def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
-    """
-    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
-    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
-    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
-    `remainder` is empty.
+def _partition(total: int, divisor: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Given a total and a divisor, return two tuples: A tuple containing `divisor`
+    repeated the number of times it divides `total`, and length-1 or empty tuple
+    containing the remainder when `total` is divided by `divisor`. If `divisor` factors
+    `total`, i.e. if the remainder is 0, then `remainder` is empty.
     """
     multiples = (divisor,) * (total // divisor)
-    remainder = ()
-    if (total % divisor) > 0:
-        remainder = (total % divisor,)
-    return (multiples, remainder)
+    remainder = (total % divisor,) if total % divisor else ()
+    return multiples, remainder
 
 
-def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
+def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     """
     Returns a new chunking aligned with the coarsening multiple.
     Any excess is at the end of the array.

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
@@ -13,7 +15,11 @@ from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
-errs = requests.exceptions.RequestException, FileNotFoundError
+
+errs: tuple[type[Exception], ...] = (
+    requests.exceptions.RequestException,
+    FileNotFoundError,
+)
 if parse_version(fsspec.__version__) > parse_version("0.7.4"):
     aiohttp = pytest.importorskip("aiohttp")
     errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
