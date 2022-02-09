@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import copyreg
 import multiprocessing
 import multiprocessing.pool
@@ -69,10 +71,10 @@ class RemoteException(Exception):
             return getattr(self.exception, key)
 
 
-exceptions = dict()
+exceptions: dict[type[Exception], type[Exception]] = {}
 
 
-def remote_exception(exc, tb):
+def remote_exception(exc: Exception, tb) -> Exception:
     """Metaclass that wraps exception type in RemoteException"""
     if type(exc) in exceptions:
         typ = exceptions[type(exc)]
@@ -103,7 +105,7 @@ except ImportError:
     def _pack_traceback(tb):
         return "".join(traceback.format_tb(tb))
 
-    def reraise(exc, tb):
+    def reraise(exc, tb=None):
         exc = remote_exception(exc, tb)
         raise exc
 

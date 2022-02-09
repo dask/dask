@@ -2,7 +2,7 @@ import pickle
 import types
 from collections import namedtuple
 from functools import partial
-from operator import add, setitem
+from operator import add, matmul, setitem
 from random import random
 
 import cloudpickle
@@ -15,11 +15,6 @@ from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
-
-try:
-    from operator import matmul
-except ImportError:
-    matmul = None
 
 
 class Tuple:

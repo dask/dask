@@ -18,13 +18,14 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 from fsspec import get_mapper

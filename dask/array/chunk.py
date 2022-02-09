@@ -8,12 +8,6 @@ import numpy as np
 from tlz import concat
 
 from ..core import flatten
-from . import numpy_compat as npcompat
-
-try:
-    from numpy import take_along_axis
-except ImportError:  # pragma: no cover
-    take_along_axis = npcompat.take_along_axis
 
 
 def keepdims_wrapper(a_callable):
@@ -234,7 +228,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     idx2 = idx2[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
-    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+    return np.take_along_axis(a, idx2, axis), np.take_along_axis(idx, idx2, axis)
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
@@ -248,7 +242,7 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     axis = axis[0]
 
     idx2 = np.argsort(a, axis=axis)
-    idx = take_along_axis(idx, idx2, axis)
+    idx = np.take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
     return idx[
