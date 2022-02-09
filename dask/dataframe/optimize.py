@@ -2,7 +2,6 @@
 from .. import config, core
 from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
-from ..layers import SelectionLayer
 from ..optimization import cull, fuse
 from ..utils import ensure_dict
 
@@ -45,103 +44,139 @@ def optimize(dsk, keys, **kwargs):
 
 def optimize_dataframe_getitem(dsk, keys):
     # This optimization looks for all `DataFrameIOLayer` instances,
-    # and calls `project_columns` on any layers that directly precede
-    # a (qualified) `getitem` operation.
+    # and calls `project_columns` on any IO layers that precede
+    # a (qualified) `SelectionLayer`.
 
-    from ..layers import DataFrameIOLayer
+    from ..layers import DataFrameIOLayer, SelectionLayer
 
-    dataframe_blockwise = [
-        k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
-    ]
+    # Construct a list containg the names of all
+    # DataFrameIOLayer layers in the graph
+    io_layers = [k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)]
 
+    # Loop over each DataFrameIOLayer layer
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
-    for io_layer_name in dataframe_blockwise:
+    for io_layer_name in io_layers:
         columns = set()
         update_blocks = {}
 
+        # Bail on the optimization if the  IO layer is in the
+        # requested keys, because we cannot change the name
+        # anymore. These keys are structured like
+        # [('getitem-<token>', 0), ...] so we check for the
+        # first item of the tuple.
+        # (See https://github.com/dask/dask/issues/5893)
         if any(
             layers[io_layer_name].name == x[0] for x in keys if isinstance(x, tuple)
         ):
-            # ... but bail on the optimization if the dataframe_blockwise layer is in
-            # the requested keys, because we cannot change the name anymore.
-            # These keys are structured like [('getitem-<token>', 0), ...]
-            # so we check for the first item of the tuple.
-            # See https://github.com/dask/dask/issues/5893
-            # return dsk
             continue
 
-        # Check that the only dependencies of the IO layer are
-        # Selection layers (either a single column selection,
-        # or a column selection and a row selection). The single
-        # column-selection case (CASE A) is simple. The other case
-        # (CASE B) is more complex, but will happen when a filter
-        # is applied prior to full column selection. We want to
-        # capture both cases, because CASE B is common in Dask-SQL
-
+        # Inspect dependent of the curreont IO layer
         deps = dsk.dependents[io_layer_name]
-        if len(deps) > 2 or not all(
-            isinstance(dsk.layers[k], SelectionLayer) for k in deps
-        ):
-            # Not case A or B
-            continue
 
-        if {dsk.layers[k].kind for k in deps} not in (
+        # This optimization currently supports two variations
+        # of `io_layer_name` dependents (`deps`):
+        #
+        #  - CASE A
+        #    - 1 Dependent: A column-based SelectionLayer
+        #    - This corresponds to the simple case that a
+        #      column selection directly follows the IO layer
+        #
+        #  - CASE B
+        #    - 2 Dependents: An arbitrary number of column-
+        #      based SelectionLayer layers, and a single
+        #      row-selection SelectionLayer
+        #    - Usually corresponds to a filter operation that
+        #      may (or may not) precede a column selection
+        #    - This pattern is typical in Dask-SQL SELECT
+        #      queries that include a WHERE statement
+
+        # Bail if dependent layer type(s) do not agree with
+        # case A or case B
+        if not all(isinstance(dsk.layers[k], SelectionLayer) for k in deps) or {
+            dsk.layers[k].kind for k in deps
+        } not in (
             {"column-selection"},
             {"column-selection", "row-selection"},
         ):
-            # This IO layer does not match case A or B
             continue
 
-        # Get name of target column-selection layer
-        col_select_layer = [
-            k for k in deps if dsk.layers[k].kind == "column-selection"
-        ][0]
+        # Split the column- and row-selection layers.
+        # For case A, we will simply use information
+        # from col_select_layers to perform column
+        # projection in the root IO layer. For case B,
+        # these layers are not the final column selection
+        # (they are only part of a filtering operation).
+        row_select_layers = {k for k in deps if dsk.layers[k].kind == "row-selection"}
+        col_select_layers = deps - row_select_layers
 
-        # For CASE B, check if compressed dependent of
-        # the column selection is the other row-selection
-        # dependency (typical for filtering), and that
-        # the only dependent of that row-selection is
-        # a new column selection.
-        if len(deps) == 2:
-            row_select_layer = (deps - {col_select_layer}).pop()
+        # Can only handle single column-selection
+        # layer if there is no row selection (case A)
+        if len(row_select_layers) == 0 and len(col_select_layers) > 1:
+            continue
 
-            target_layer = dsk.dependents[row_select_layer]
-            if len(target_layer) > 1:
-                continue
-            target_layer = list(target_layer)[0]
-            _layer = dsk.layers[target_layer]
+        # Can only handle single row-selection dependent (case B)
+        if len(row_select_layers) > 1:
+            continue
 
+        # Define utility to walk the dependency graph
+        # and check that the graph terminates with
+        # the `success` key
+        def _walk_deps(dependents, key, success):
+            if key == success:
+                return True
+            deps = dependents[key]
+            if deps:
+                return all(_walk_deps(dependents, dep, success) for dep in deps)
+            else:
+                return False
+
+        # If this is not case A, we now need to check if
+        # we are dealing with case B (and should bail on
+        # the optimization if not).
+        #
+        # For case B, we should be able to start at
+        # col_select_layer, and follow the graph to
+        # row_select_layer. The subgraph between these
+        # layers must depend ONLY on col_select_layer,
+        # and be consumed ONLY by row_select_layer.
+        # If these conditions are met, then a column-
+        # selection layer directly following
+        # row_select_layer can be used for projection.
+        if row_select_layers:
+
+            # Before walking the subgraph, check that there
+            # is a column-selection layer directly following
+            # row_select_layer. Otherwise, we can bail now.
+            row_select_layer = row_select_layers.pop()
+            col_select_layer_2 = dsk.dependents[row_select_layer]
+            if len(col_select_layer_2) != 1:
+                continue  # Too many/few row_select_layer dependents
+            col_select_layer_2 = list(col_select_layer_2)[0]
+            _layer = dsk.layers[col_select_layer_2]
             if isinstance(_layer, SelectionLayer) and _layer.kind == "column-selection":
                 selection = _layer.selection
                 if not isinstance(selection, list):
                     selection = [selection]
+                # Include this column selection in our list of columns
                 columns |= set(selection)
             else:
-                continue
-            columns |= set(selection)
+                continue  # row_select_layer dependent not column selection
 
-            # Add column selection to `columns`
+            # Walk the subgraph to check that all dependencies flow
+            # from col_select_layers to the same col_select_layer
+            if not all(
+                _walk_deps(dsk.dependents, col_select_layer, col_select_layer)
+                for col_select_layer in col_select_layers
+            ):
+                continue
+
+        # Update `columns` with selections in col_select_layers
+        for col_select_layer in col_select_layers:
             selection = dsk.layers[col_select_layer].selection
             if not isinstance(selection, list):
                 selection = [selection]
             columns |= set(selection)
-            next_layers = list(dsk.dependents[col_select_layer])
-            col_select_layer = target_layer
-
-            # Compress everythin in the column-selection
-            # bnranch that leads up to the row-selection
-            while len(next_layers) == 1 and next_layers[0] != row_select_layer:
-                next_layers = list(dsk.dependents[next_layers[0]])
-
-            if next_layers[0] != row_select_layer:
-                continue
-
-        # Populate `columns` with initial selection
-        selection = dsk.layers[col_select_layer].selection
-        if not isinstance(selection, list):
-            selection = [selection]
-        columns |= set(selection)
 
         # Column projection should be supported for
         # this case - Add deps to update_blocks
