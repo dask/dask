@@ -1358,7 +1358,7 @@ def cumreduction(
           This method may be faster or more memory efficient depending on workload,
           scheduler, and hardware.  More benchmarking is necessary.
     preop: callable, optional
-        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
+        Function used by 'blelloch' method like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------
