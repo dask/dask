@@ -342,7 +342,7 @@ def _var_agg(g, levels, ddof, sort=False):
     n = g[g.columns[-nc // 3 :]].rename(columns=lambda c: c[0])
 
     # TODO: replace with _finalize_var?
-    result = x2 - x ** 2 / n
+    result = x2 - x**2 / n
     div = n - ddof
     div[div < 0] = 0
     result /= div
@@ -988,7 +988,7 @@ def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
     x = df[sum_column]
     x2 = df[sum2_column]
 
-    result = x2 - x ** 2 / n
+    result = x2 - x**2 / n
     div = n - ddof
     div[div < 0] = 0
     result /= div

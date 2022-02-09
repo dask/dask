@@ -14,7 +14,7 @@ from .utils import meta_from_array
 # See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
-_ARGUMENT = fr"\({_CORE_DIMENSION_LIST}\)"
+_ARGUMENT = rf"\({_CORE_DIMENSION_LIST}\)"
 _INPUT_ARGUMENTS = "(?:{0:}(?:,{0:})*,?)?".format(_ARGUMENT)
 _OUTPUT_ARGUMENTS = "{0:}(?:,{0:})*".format(
     _ARGUMENT

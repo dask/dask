@@ -437,7 +437,7 @@ def auto_blocksize(total_memory, cpu_count):
 
 
 def _infer_block_size():
-    default = 2 ** 25
+    default = 2**25
     if psutil is not None:
         with catch_warnings():
             simplefilter("ignore", RuntimeWarning)

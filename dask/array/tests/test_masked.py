@@ -51,7 +51,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x ** 2,
+    lambda x: x**2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],

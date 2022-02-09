@@ -679,7 +679,7 @@ def rearrange_by_column_tasks(
     else:
         k = n
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     npartitions_orig = df.npartitions
     token = tokenize(df, stages, column, n, k)
@@ -896,7 +896,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    np.floor_divide(c, k ** stage, out=c)
+    np.floor_divide(c, k**stage, out=c)
     np.mod(c, k, out=c)
 
     return group_split_dispatch(df, c, k, ignore_index=ignore_index)

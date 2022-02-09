@@ -75,6 +75,6 @@ def estimate_count(Ms, b):
         V = (M == 0).sum()
         if V:
             return m * np.log(m / V)
-    if E > 2 ** 32 / 30.0:
-        return -(2 ** 32) * np.log1p(-E / 2 ** 32)
+    if E > 2**32 / 30.0:
+        return -(2**32) * np.log1p(-E / 2**32)
     return E
