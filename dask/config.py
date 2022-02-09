@@ -418,7 +418,7 @@ def collect(paths: list[str] = paths, env: Mapping[str, str] = None) -> dict:
     paths : list[str]
         A list of paths to search for yaml config files
 
-    env : dict
+    env : Mapping[str, str]
         The system environment variables
 
     Returns

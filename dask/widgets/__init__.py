@@ -12,8 +12,8 @@ except ImportError as e:
     FILTERS = {}
     TEMPLATE_PATHS = []
 
-    def get_environment(*args, **kwargs):  # type: ignore
+    def get_environment():
         raise ImportError(msg) from exception
 
-    def get_template(*args, **kwargs):  # type: ignore
+    def get_template(name: str):
         raise ImportError(msg) from exception

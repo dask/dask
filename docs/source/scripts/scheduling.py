@@ -55,7 +55,7 @@ import numpy as np
 
 x = np.logspace(0, 4, 10)
 trivial_results = dict()
-for get in [dask.get, threaded.get, local.get_sync, multiprocessing.get]:
+for get in (dask.get, threaded.get, local.get_sync, multiprocessing.get):
     y = list()
     for n in x:
         dsk, keys = trivial(int(n), 5)
