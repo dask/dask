@@ -667,8 +667,7 @@ class AbstractLayer(Layer):
         state = self.layer_state.copy()
         state["layer_dependencies"] = self.layer_dependencies(all_hlg_keys)
 
-        # TODO: Use ToPickle - The current implementation
-        # sometimes fails.
+        # TODO: Switch to `ToPickle` when "available"
         # return ToPickle(state)
         return cloudpickle.dumps(state)
 
