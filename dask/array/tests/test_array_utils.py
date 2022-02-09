@@ -111,7 +111,5 @@ def test_assert_eq_scheduler(a, b):
     assert counter == 0
 
     assert_eq(a, b, scheduler=custom_scheduler)
-    if isinstance(a, Array) and isinstance(b, Array):
-        assert counter == 2
-    else:
-        assert counter == 0
+    n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)])
+    assert counter == n_da_arrays
