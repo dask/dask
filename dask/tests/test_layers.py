@@ -4,32 +4,13 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
-import sys
 from operator import getitem
 
-from distributed import Client, SchedulerPlugin
+from distributed import Client
 from distributed.utils_test import cluster, loop  # noqa F401
 
+from dask import config
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
-
-
-class SchedulerImportCheck(SchedulerPlugin):
-    """Plugin to help record which modules are imported on the scheduler"""
-
-    name = "import-check"
-
-    def __init__(self, pattern):
-        self.pattern = pattern
-
-    async def start(self, scheduler):
-        # Record the modules that have been imported when the scheduler starts
-        self.start_modules = set()
-        for mod in set(sys.modules):
-            if not mod.startswith(self.pattern):
-                self.start_modules.add(mod)
-            else:
-                # Maually remove the target library
-                sys.modules.pop(mod)
 
 
 def test_array_chunk_shape_dep():
@@ -185,44 +166,27 @@ def _read_csv(tmpdir):
 
 
 @pytest.mark.parametrize(
-    "op,lib",
+    "op",
     [
-        (_dataframe_shuffle, "pandas."),
-        (_dataframe_tree_reduction, "pandas."),
-        (_dataframe_broadcast_join, "pandas."),
-        (_pq_pyarrow, "pandas."),
-        (_pq_fastparquet, "pandas."),
-        (_read_csv, "pandas."),
-        (_array_creation, "numpy."),
-        (_array_map_overlap, "numpy."),
+        _dataframe_shuffle,
+        _dataframe_tree_reduction,
+        _dataframe_broadcast_join,
+        _pq_pyarrow,
+        _pq_fastparquet,
+        _read_csv,
+        _array_creation,
+        _array_map_overlap,
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
-def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, tmpdir):
-    # Test that array/dataframe-specific modules are not imported
-    # on the scheduler when an HLG layers are unpacked/materialized.
-
-    # with cluster(scheduler_kwargs={"plugins": [SchedulerImportCheck(lib)]}) as (
-    #     scheduler,
-    #     workers,
-    # ):
+@pytest.mark.parametrize("allow_pickle", [True, False])
+def test_scheduler_highlevel_graph_unpack_pickle(
+    op, optimize_graph, loop, tmpdir, allow_pickle
+):
+    # Test common HLG-Layer execution with both True and False
+    # settings for the "distributed.scheduler.pickle" config
     with cluster() as (scheduler, workers):
         with Client(scheduler["address"], loop=loop) as c:
-            # Perform a computation using a HighLevelGraph Layer
-            c.compute(op(tmpdir), optimize_graph=optimize_graph)
-
-            # # Get the new modules which were imported on the scheduler during the computation
-            # end_modules = c.run_on_scheduler(lambda: set(sys.modules))
-            # start_modules = c.run_on_scheduler(
-            #     lambda dask_scheduler: dask_scheduler.plugins[
-            #         SchedulerImportCheck.name
-            #     ].start_modules
-            # )
-            # new_modules = end_modules - start_modules
-
-            # # Check that the scheduler didn't start with `lib`
-            # # (otherwise we arent testing anything)
-            # assert not any(module.startswith(lib) for module in start_modules)
-
-            # # Check whether we imported `lib` on the scheduler
-            # assert not any(module.startswith(lib) for module in new_modules)
+            with config.set({"distributed.scheduler.pickle": allow_pickle}):
+                # Perform a computation using a HighLevelGraph Layer
+                c.compute(op(tmpdir), optimize_graph=optimize_graph)

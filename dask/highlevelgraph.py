@@ -1265,20 +1265,30 @@ class HighLevelGraph(Mapping):
         data: dict
             Packed high level graph layers
         """
+
+        # If pickle is disabled on the scheduler, all layers must
+        # be converted to `MaterializedLayer` objects before packing
+        materialize = not config.get("distributed.scheduler.pickle")
+
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
+            _layer = (
+                MaterializedLayer(dict(layer), annotations=layer.annotations)
+                if materialize and not isinstance(layer, MaterializedLayer)
+                else layer
+            )
             layers.append(
                 {
-                    "__module__": layer.__module__,
-                    "__name__": type(layer).__name__,
-                    "state": layer.__dask_distributed_pack__(
+                    "__module__": _layer.__module__,
+                    "__name__": type(_layer).__name__,
+                    "state": _layer.__dask_distributed_pack__(
                         self.get_all_external_keys(),
                         self.key_dependencies,
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_annotations_pack__(
+                    "annotations": _layer.__dask_distributed_annotations_pack__(
                         annotations
                     ),
                 }
