@@ -43,6 +43,9 @@ python -m pip install git+https://github.com/dask/distributed
 gpuci_logger "Install dask"
 python setup.py install
 
+gpuci_logger "Pin scipy"
+conda install -c conda-forge "scipy<1.8.0" -y
+
 gpuci_logger "Check Python version"
 python --version
 
