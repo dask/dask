@@ -17,7 +17,8 @@ def test_LinearOperator():
     dX = da.from_array(X, chunks=(2, 1))
 
     npLO = scipy.sparse.linalg.aslinearoperator(X)
-    daLO = scipy.sparse.linalg.interface.MatrixLinearOperator(dX)
+    # TODO: stop using private method https://github.com/dask/dask/issues/8682
+    daLO = scipy.sparse.linalg._interface.MatrixLinearOperator(dX)
 
     functions = [lambda x, y: x.matvec(y), lambda x, y: x * y, lambda x, y: x.dot(y)]
     for func in functions:
