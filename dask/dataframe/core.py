@@ -4204,7 +4204,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            name = "select-column-%s" % token
+            name = "getitem-column-%s" % token
             dsk = SelectionLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
@@ -4231,7 +4231,7 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
 
             if isinstance(key, (np.ndarray, list)):
-                name = "select-columns-%s" % token
+                name = "getitem-columns-%s" % token
                 dsk = SelectionLayer(name, self, key)
             else:
                 dsk = partitionwise_graph(operator.getitem, name, self, key)
@@ -4243,7 +4243,7 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            name = "select-rows-%s" % token
+            name = "getitem-rows-%s" % token
             dsk = SelectionLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
