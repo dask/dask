@@ -1377,7 +1377,7 @@ def broadcast_join(
     suffixes=("_x", "_y"),
     shuffle=None,
     indicator=False,
-    parts_out=None,
+    output_blocks=None,
 ):
     """Join two DataFrames on particular columns by broadcasting
 
@@ -1497,7 +1497,7 @@ def broadcast_join(
         lhs.npartitions,
         rhs_name,
         rhs.npartitions,
-        parts_out=parts_out,
+        output_blocks=output_blocks,
         **merge_kwargs,
     )
 

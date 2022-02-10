@@ -647,7 +647,11 @@ class AbstractLayer(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        return iter(self._dict)
+        return len(self._dict)
+
+    def __reduce__(self):
+        attrs = list(self.layer_state.keys()) + ["annotations"]
+        return (self.__class__, tuple(getattr(self, attr) for attr in attrs))
 
     def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
         from distributed.protocol.serialize import ToPickle
