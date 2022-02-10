@@ -58,7 +58,6 @@ def optimize_dataframe_getitem(dsk, keys):
     dependencies = dsk.dependencies.copy()
     for io_layer_name in io_layers:
         columns = set()
-        update_blocks = {}
 
         # Bail on the optimization if the  IO layer is in the
         # requested keys, because we cannot change the name
@@ -71,7 +70,7 @@ def optimize_dataframe_getitem(dsk, keys):
         ):
             continue
 
-        # Inspect dependent of the curreont IO layer
+        # Inspect dependents of the current IO layer
         deps = dsk.dependents[io_layer_name]
 
         # This optimization currently supports two variations
@@ -83,7 +82,7 @@ def optimize_dataframe_getitem(dsk, keys):
         #      column selection directly follows the IO layer
         #
         #  - CASE B
-        #    - 2 Dependents: An arbitrary number of column-
+        #    - >1 Dependents: An arbitrary number of column-
         #      based SelectionLayer layers, and a single
         #      row-selection SelectionLayer
         #    - Usually corresponds to a filter operation that
@@ -149,17 +148,15 @@ def optimize_dataframe_getitem(dsk, keys):
             # is a column-selection layer directly following
             # row_select_layer. Otherwise, we can bail now.
             row_select_layer = row_select_layers.pop()
-            col_select_layer_2 = dsk.dependents[row_select_layer]
-            if len(col_select_layer_2) != 1:
+            if len(dsk.dependents[row_select_layer]) != 1:
                 continue  # Too many/few row_select_layer dependents
-            col_select_layer_2 = list(col_select_layer_2)[0]
-            _layer = dsk.layers[col_select_layer_2]
+            _layer = dsk.layers[list(dsk.dependents[row_select_layer])[0]]
             if isinstance(_layer, SelectionLayer) and _layer.kind == "column-selection":
-                selection = _layer.selection
-                if not isinstance(selection, list):
-                    selection = [selection]
                 # Include this column selection in our list of columns
-                columns |= set(selection)
+                selection = _layer.selection
+                columns |= set(
+                    selection if isinstance(selection, list) else [selection]
+                )
             else:
                 continue  # row_select_layer dependent not column selection
 
@@ -171,17 +168,14 @@ def optimize_dataframe_getitem(dsk, keys):
             ):
                 continue
 
-        # Update `columns` with selections in col_select_layers
+        # Update columns with selections in col_select_layers
         for col_select_layer in col_select_layers:
             selection = dsk.layers[col_select_layer].selection
-            if not isinstance(selection, list):
-                selection = [selection]
-            columns |= set(selection)
+            columns |= set(selection if isinstance(selection, list) else [selection])
 
-        # Column projection should be supported for
-        # this case - Add deps to update_blocks
-        for dep in deps:
-            update_blocks[dep] = dsk.layers[dep]
+        # If we got here, column projection is supported.
+        # Add deps to update_blocks
+        update_blocks = {dep: dsk.layers[dep] for dep in deps}
 
         # Project columns and update blocks
         old = layers[io_layer_name]
