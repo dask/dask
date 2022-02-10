@@ -661,17 +661,15 @@ class AbstractLayer(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        import cloudpickle
-
         from distributed.protocol.serialize import ToPickle
         from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_task
 
-        # Unpickle the layer "state"
+        # Check if state is still a ToPickle object.
+        # This can happen when a LocalCluster is
+        # used with `processes=False`
         if isinstance(state, ToPickle):
             state = state.data
-        elif isinstance(state, bytes):
-            state = cloudpickle.loads(state)
 
         # Pull out the pre-stringified layer deps
         # We need to know these depenendencies to
