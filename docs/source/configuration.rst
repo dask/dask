@@ -178,7 +178,7 @@ This function can also be used as a context manager for consistent cleanup:
    ...     arr2, = dask.optimize(arr)
 
 Note that the ``set`` function treats underscores and hyphens identically.
-For example, ``dask.config.set({'optimization.fuse.ave_width': 4)`` is
+For example, ``dask.config.set({'optimization.fuse.ave_width': 4})`` is
 equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
 
 Finally, note that persistent objects may acquire configuration settings at init
