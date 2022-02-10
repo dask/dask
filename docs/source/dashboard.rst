@@ -6,15 +6,17 @@ provides live feedback via its interactive dashboard.
 
 ## Include dashboard picture status page
 
-To be able to to use the dashboard diagnostics `Bokeh <https://docs.bokeh.org>`_ needs to 
-be installed. A link that redirects to the dashboard will prompt whenever the scheduler is 
-created, and you can access the link when you create a client.
+A link that redirects to the dashboard will prompt in the terminal where the scheduler is
+created, and it is also shown when you create a ``Client`` and connect the scheduler.
 
 .. code-block:: python
 
    from dask.distributed import Client
    client = Client()  # start distributed scheduler locally. 
    client            
+
+In a Jupyter Notebook or Jupyter Lab session displaying the client object will show the dashboard address
+as following.
 
 .. figure:: images/dashboard_link.png
     :alt: NEEDS ALT TEXT
