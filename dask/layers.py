@@ -205,6 +205,10 @@ class ArrayOverlapLayer(Layer):
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
 
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)._construct_graph(deserializing=True)
+
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
     """Get all neighboring keys around center
