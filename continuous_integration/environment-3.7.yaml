@@ -67,4 +67,6 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    # TODO: Switch back to main when ToPickle is merged
+    # - git+https://github.com/dask/distributed
+    - git+https://github.com/madsbk/distributed/tree/to_pickle
