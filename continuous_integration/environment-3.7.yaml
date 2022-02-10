@@ -69,4 +69,4 @@ dependencies:
   - pip:
     # TODO: Switch back to main when ToPickle is merged
     # - git+https://github.com/dask/distributed
-    - git+https://github.com/madsbk/distributed/tree/to_pickle
+    - git+https://github.com/madsbk/distributed@to_pickle
