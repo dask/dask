@@ -1,0 +1,82 @@
+name: Array API
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.8"]
+
+    steps:
+      - name: Checkout Dask
+        uses: actions/checkout@v2
+        with:
+          path: dask
+      - name: Checkout Array API tests
+        uses: actions/checkout@v2
+        with:
+          repository: data-apis/array-api-tests
+          path: array-api-tests
+          ref: 2022.02.11
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v1
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          pushd array-api-tests
+          pip install -e '../dask[array]'
+          pip install -r requirements.txt
+      - name: Run Array API tests
+        env:
+          ARRAY_API_TESTS_MODULE: dask.array_api
+        run: |
+          pushd array-api-tests
+
+          # Skip testing functions with known issues
+          cat << EOF >> skips.txt
+
+          # sorting is not implemented in Dask (https://github.com/dask/dask/issues/4368)
+          array_api_tests/test_sorting_functions.py::test_argsort
+          array_api_tests/test_sorting_functions.py::test_sort
+          array_api_tests/test_signatures.py::test_has_names[argsort]
+          array_api_tests/test_signatures.py::test_has_names[sort]
+
+          # in-place array operations are not implemented in Dask (https://github.com/dask/dask/issues/5199)
+          array_api_tests/test_signatures.py::test_has_names[__iadd__]
+          array_api_tests/test_signatures.py::test_has_names[__iand__]
+          array_api_tests/test_signatures.py::test_has_names[__ifloordiv__]
+          array_api_tests/test_signatures.py::test_has_names[__ilshift__]
+          array_api_tests/test_signatures.py::test_has_names[__imatmul__]
+          array_api_tests/test_signatures.py::test_has_names[__imod__]
+          array_api_tests/test_signatures.py::test_has_names[__imul__]
+          array_api_tests/test_signatures.py::test_has_names[__ior__]
+          array_api_tests/test_signatures.py::test_has_names[__ipow__]
+          array_api_tests/test_signatures.py::test_has_names[__irshift__]
+          array_api_tests/test_signatures.py::test_has_names[__isub__]
+          array_api_tests/test_signatures.py::test_has_names[__itruediv__]
+          array_api_tests/test_signatures.py::test_has_names[__ixor__]
+
+          # DLPack is not implemented in Dask
+          array_api_tests/test_signatures.py::test_has_names[__dlpack__]
+          array_api_tests/test_signatures.py::test_has_names[__dlpack_device__]
+          array_api_tests/test_signatures.py::test_has_names[from_dlpack]
+
+          # device support is not implemented in Dask
+          array_api_tests/test_signatures.py::test_has_names[to_device]
+          array_api_tests/test_signatures.py::test_has_names[device]
+
+          # don't run special cases yet
+          array_api_tests/special_cases
+
+          # from numpy.array_api_tests
+          # https://github.com/numpy/numpy/issues/20870
+          array_api_tests/test_data_type_functions.py::test_can_cast
+          EOF
+
+          pytest -v -rxXfE --max-examples=2 --disable-data-dependent-shapes --ci
