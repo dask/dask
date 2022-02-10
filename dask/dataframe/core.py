@@ -4225,7 +4225,6 @@ class DataFrame(_Frame):
                 self, key = _maybe_align_partitions([self, key])
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            # TODO: Add/Check predicate-pushdown config option
             return eager_predicate_pushdown(
                 new_dd_object(graph, name, self, self.divisions)
             )

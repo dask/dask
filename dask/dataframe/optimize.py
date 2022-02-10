@@ -71,6 +71,12 @@ def eager_predicate_pushdown(ddf):
     # and checks if the only dependent layers correspond to a
     # simple comparison operation (like df["x"] > 100)
 
+    # Check for quick return
+    if not config.get("optimization.eager"):
+        # Eager optimizations are disabled.
+        # Return original DataFrame
+        return ddf
+
     from ..layers import DataFrameIOLayer
 
     dsk = ddf.dask

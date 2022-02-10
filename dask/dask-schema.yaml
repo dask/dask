@@ -80,6 +80,15 @@ properties:
     type: object
     properties:
 
+      eager: boolean
+        type: object
+        description: |
+          Allow eager graph optimizations at graph construction time. These
+          optimizations will be performed while the graph is being constructed
+          by the collection API (before other graph optimizations, like culling
+          and fusion, are performed). The only eager optimization currently
+          supported is "predicate pushdown" for DataFrame collections.
+
       fuse:
         type: object
         description: Options for Dask's task fusion optimizations
