@@ -181,9 +181,9 @@ Note that the ``set`` function treats underscores and hyphens identically.
 For example, ``dask.config.set({'optimization.fuse.ave_width': 4})`` is
 equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
 
-Finally, note that persistent objects may acquire configuration settings at init
-time and cache them for performance reasons. This is particularly true for
-``dask.distributed`` objects (Client, Scheduler, Worker, Nanny, etc.)
+Finally, note that persistent objects may acquire configuration settings when
+they are initialized. These settings may also be cached for performance reasons.
+This is particularly true for ``dask.distributed`` objects (Client, Scheduler, Worker, Nanny, etc.)
 
 
 Distributing configuration
