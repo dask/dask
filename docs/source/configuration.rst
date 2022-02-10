@@ -183,7 +183,8 @@ equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
 
 Finally, note that persistent objects may acquire configuration settings when
 they are initialized. These settings may also be cached for performance reasons.
-This is particularly true for ``dask.distributed`` objects (Client, Scheduler, Worker, Nanny, etc.)
+This is particularly true for ``dask.distributed`` objects such as Client, Scheduler,
+Worker, and Nanny.
 
 
 Distributing configuration
