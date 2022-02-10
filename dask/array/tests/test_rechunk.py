@@ -907,14 +907,18 @@ def test_balance_split_into_n_chunks():
             assert len(y.chunks[0]) == nchunks
 
 
-def test_rechunk_with_empty():
+def test_rechunk_with_zero():
     a = da.ones((8, 8), chunks=(4, 4))
     result = a.rechunk(((4, 4), (4, 0, 0, 4)))
     expected = da.ones((8, 8), chunks=((4, 4), (4, 0, 0, 4)))
+
+    # reverse:
+    a, expected = expected, a
+    result = a.rechunk((4, 4))
     assert_eq(result, expected)
 
 
-def test_intersect_chunks_nonempty():
+def test_intersect_chunks_with_nonzero():
     from dask.array.rechunk import intersect_chunks
 
     old = ((4, 4), (2,))
@@ -933,7 +937,7 @@ def test_intersect_chunks_nonempty():
     assert result == expected
 
 
-def test_intersect_chunks_empty():
+def test_intersect_chunks_with_zero():
     from dask.array.rechunk import intersect_chunks
 
     old = ((4, 4), (2,))
@@ -949,6 +953,23 @@ def test_intersect_chunks_empty():
         (((0, slice(4, 4, None)), (0, slice(1, 2, None))),),
         (((1, slice(0, 4, None)), (0, slice(0, 1, None))),),
         (((1, slice(0, 4, None)), (0, slice(1, 2, None))),),
+    ]
+
+    assert result == expected
+
+    old = ((4, 0, 0, 4), (1, 1))
+    new = ((4, 4), (2,))
+    result = list(intersect_chunks(old, new))
+
+    expected = [
+        (
+            ((0, slice(0, 4, None)), (0, slice(0, 1, None))),
+            ((0, slice(0, 4, None)), (1, slice(0, 1, None))),
+        ),
+        (
+            ((3, slice(0, 4, None)), (0, slice(0, 1, None))),
+            ((3, slice(0, 4, None)), (1, slice(0, 1, None))),
+        ),
     ]
 
     assert result == expected
@@ -988,7 +1009,7 @@ def test_intersect_chunks_empty():
     assert result == expected
 
 
-def test_old_to_new_empty():
+def test_old_to_new_with_zero():
     from dask.array.rechunk import _old_to_new
 
     old = ((4, 4),)
