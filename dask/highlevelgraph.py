@@ -1254,6 +1254,13 @@ class HighLevelGraph(Mapping):
         # If pickle is disabled on the scheduler, all layers must
         # be converted to `MaterializedLayer` objects before packing
         materialize = not config.get("distributed.scheduler.pickle")
+        if not materialize:
+            import distributed.protocol.serialize as s
+
+            if not hasattr(s, "ToPickle"):
+                # ToPickle not available in this version of
+                # distributed - Materialize layers even if pickle=True
+                materialize = True
 
         # Dump each layer (in topological order)
         layers = []
