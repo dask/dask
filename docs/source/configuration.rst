@@ -168,18 +168,23 @@ and interprets ``"."`` as nested access:
 
 .. code-block:: python
 
-   >>> dask.config.set({'scheduler.work-stealing': True})
+   >>> dask.config.set({'optimization.fuse.ave-width': 4})
 
 This function can also be used as a context manager for consistent cleanup:
 
 .. code-block:: python
 
-   with dask.config.set({'scheduler.work-stealing': True}):
-       ...
+   >>> with dask.config.set({'optimization.fuse.ave-width': 4}):
+   ...     arr2, = dask.optimize(arr)
 
 Note that the ``set`` function treats underscores and hyphens identically.
-For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
-equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
+For example, ``dask.config.set({'optimization.fuse.ave_width': 4)`` is
+equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
+
+Finally, note that persistent objects may acquire configuration settings at init
+time and cache them for performance reasons. This is particularly true for
+``dask.distributed`` objects (Client, Scheduler, Worker, Nanny, etc.)
+
 
 Distributing configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
