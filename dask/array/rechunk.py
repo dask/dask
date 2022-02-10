@@ -84,6 +84,7 @@ def _intersect_1d(breaks):
     last_end = 0
     old_idx = 0
     last_o_br = 0
+    last_o_end = 0
     ret = []
     ret_next = []
     for idx in range(1, len(breaks)):
@@ -103,14 +104,15 @@ def _intersect_1d(breaks):
             if label == "o":
                 old_idx += 1
             if label == "n" and last_label == "n":
-                if last_o_br == br:
-                    ret_next.append((old_idx - 1, slice(start, end)))
+                if last_o_br == br and old_idx > 0:
+                    ret_next.append((old_idx - 1, slice(last_o_end, last_o_end)))
                 else:
                     ret_next.append((old_idx, slice(start, end)))
             continue
         ret_next.append((old_idx, slice(start, end)))
         if label == "o":
             last_o_br = br
+            last_o_end = end
             old_idx += 1
             start = 0
 

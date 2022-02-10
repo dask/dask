@@ -939,13 +939,48 @@ def test_intersect_chunks_empty():
     old = ((4, 4), (2,))
     new = ((4, 0, 0, 4), (1, 1))
     result = list(intersect_chunks(old, new))
+
     expected = [
         (((0, slice(0, 4, None)), (0, slice(0, 1, None))),),
         (((0, slice(0, 4, None)), (0, slice(1, 2, None))),),
+        (((0, slice(4, 4, None)), (0, slice(0, 1, None))),),
+        (((0, slice(4, 4, None)), (0, slice(1, 2, None))),),
+        (((0, slice(4, 4, None)), (0, slice(0, 1, None))),),
+        (((0, slice(4, 4, None)), (0, slice(1, 2, None))),),
+        (((1, slice(0, 4, None)), (0, slice(0, 1, None))),),
+        (((1, slice(0, 4, None)), (0, slice(1, 2, None))),),
+    ]
+
+    assert result == expected
+
+    old = ((4, 4), (2,))
+    new = ((2, 0, 0, 2, 4), (1, 1))
+    result = list(intersect_chunks(old, new))
+    expected = [
+        (((0, slice(0, 2, None)), (0, slice(0, 1, None))),),
+        (((0, slice(0, 2, None)), (0, slice(1, 2, None))),),
+        (((0, slice(2, 2, None)), (0, slice(0, 1, None))),),
+        (((0, slice(2, 2, None)), (0, slice(1, 2, None))),),
+        (((0, slice(2, 2, None)), (0, slice(0, 1, None))),),
+        (((0, slice(2, 2, None)), (0, slice(1, 2, None))),),
+        (((0, slice(2, 4, None)), (0, slice(0, 1, None))),),
+        (((0, slice(2, 4, None)), (0, slice(1, 2, None))),),
+        (((1, slice(0, 4, None)), (0, slice(0, 1, None))),),
+        (((1, slice(0, 4, None)), (0, slice(1, 2, None))),),
+    ]
+
+    assert result == expected
+
+    old = ((4, 4), (2,))
+    new = ((0, 0, 4, 4), (1, 1))
+    result = list(intersect_chunks(old, new))
+    expected = [
         (((0, slice(0, 0, None)), (0, slice(0, 1, None))),),
         (((0, slice(0, 0, None)), (0, slice(1, 2, None))),),
         (((0, slice(0, 0, None)), (0, slice(0, 1, None))),),
         (((0, slice(0, 0, None)), (0, slice(1, 2, None))),),
+        (((0, slice(0, 4, None)), (0, slice(0, 1, None))),),
+        (((0, slice(0, 4, None)), (0, slice(1, 2, None))),),
         (((1, slice(0, 4, None)), (0, slice(0, 1, None))),),
         (((1, slice(0, 4, None)), (0, slice(1, 2, None))),),
     ]
@@ -959,5 +994,5 @@ def test_old_to_new_empty():
     old = ((4, 4),)
     new = ((4, 0, 4),)
     result = _old_to_new(old, new)
-    expected = [[[(0, slice(0, 4))], [(0, slice(0, 0))], [(1, slice(0, 4))]]]
+    expected = [[[(0, slice(0, 4))], [(0, slice(4, 4))], [(1, slice(0, 4))]]]
     assert result == expected
