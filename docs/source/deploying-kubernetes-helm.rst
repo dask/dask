@@ -13,7 +13,7 @@ on Cloud services like Amazon Web Services, Google Compute Engine, or
 Microsoft Azure.
 
 If you already have Python environments running in a pre-existing Kubernetes
-cluster, then you may prefer the :doc:`Kubernetes native<kubernetes-native>`
+cluster, then you may prefer the :doc:`Kubernetes native<deploying-kubernetes-native>`
 documentation, which is a bit lighter weight.
 
 Launch Kubernetes Cluster
