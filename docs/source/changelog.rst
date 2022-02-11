@@ -13,13 +13,13 @@ New Features
 - Add ``region`` to ``to_zarr`` when using existing array (:pr:`8590`) `Chris Roat`_
 - Add ``engine_kwargs`` support to ``dask.dataframe.to_sql`` (:pr:`8609`) `Amir Kadivar`_
 - Add ``include_path_column`` arg to ``read_json`` (:pr:`8603`) `Bryan W. Weber`_
-- Add ``expand_dims`` to Dask array (:pr:`8667) (:pr:`8687`) `Tom White`_
+- Add ``expand_dims`` to Dask array (:pr:`8687`) `Tom White`_
 
 Enhancements
 ^^^^^^^^^^^^
 - Add scheduler option to ``assert_eq`` utilities (:pr:`8610`) `Xinrong Meng`_
-- Fix eye inconsistency with NumPy for ``dtype=None`` (:pr:`8669) (:pr:`8685`) `Tom White`_
-- Fix concatenate inconsistency with NumPy for ``axis=None`` (:pr:`8668) (:pr:`8686`) `Tom White`_
+- Fix eye inconsistency with NumPy for ``dtype=None`` (:pr:`8685`) `Tom White`_
+- Fix concatenate inconsistency with NumPy for ``axis=None`` (:pr:`8686`) `Tom White`_
 - Type annotations, part 1 (:pr:`8295`) `Guido Imperiale`_
 - Really allow any iterable to be passed as a ``meta`` (:pr:`8629`) `Julia Signell`_
 - Use ``map_partitions`` (Blockwise) in ``to_parquet`` (:pr:`8487`) `Richard (Rick) Zamora`_
