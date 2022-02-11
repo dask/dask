@@ -299,7 +299,7 @@ def linspace(
 
     range_ = stop - start
 
-    div = (num - 1) if endpoint or num == 0 else num
+    div = (num - 1) if (endpoint and num != 1) or num == 0 else num
     step = float(range_) / div
 
     name = "linspace-" + tokenize((start, stop, num, endpoint, chunks, dtype))
