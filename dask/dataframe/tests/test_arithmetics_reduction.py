@@ -743,15 +743,15 @@ def test_reductions(split_every):
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore",RuntimeWarning)
+            warnings.simplefilter("ignore", RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.std(split_every=split_every), pds.std())
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore",RuntimeWarning)
+            warnings.simplefilter("ignore", RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.var(split_every=split_every), pds.var())
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore",RuntimeWarning)
+            warnings.simplefilter("ignore", RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.sem(split_every=split_every), pds.sem())
 

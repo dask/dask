@@ -281,7 +281,7 @@ def test_groupby_on_index(scheduler):
 
     with dask.config.set(scheduler=scheduler):
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore",UserWarning)
+            warnings.simplefilter("ignore", UserWarning)
             assert_eq(ddf.groupby("a").apply(func), pdf.groupby("a").apply(func))
 
             assert_eq(

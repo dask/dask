@@ -753,7 +753,7 @@ def test_merge_columns_dtypes(how, on_index):
         b = b.set_index("A")
         on = None
 
-    if on_index == True:
+    if on_index:
         with warnings.catch_warnings():
             result = dd.merge(
                 a, b, on=on, how=how, left_index=left_index, right_index=right_index
@@ -763,7 +763,7 @@ def test_merge_columns_dtypes(how, on_index):
         with pytest.warns() as record:
             result = dd.merge(
                 a, b, on=on, how=how, left_index=left_index, right_index=right_index
-            ) 
+            )
             warned = any("merge column data type mismatches" in str(r) for r in record)
 
     # result type depends on merge operation -> convert to pandas
