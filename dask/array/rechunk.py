@@ -5,12 +5,13 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
+from __future__ import annotations
+
 import heapq
 import math
 from functools import reduce
 from itertools import chain, count, product
 from operator import add, itemgetter, mul
-from typing import Tuple
 from warnings import warn
 
 import numpy as np
@@ -698,18 +699,18 @@ def _get_chunks(n, chunksize):
     return tuple(chunks)
 
 
-def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
+def _balance_chunksizes(chunks: tuple[int, ...]) -> tuple[int, ...]:
     """
     Balance the chunk sizes
 
     Parameters
     ----------
-    chunks : Tuple[int, ...]
+    chunks : tuple[int, ...]
         Chunk sizes for Dask array.
 
     Returns
     -------
-    new_chunks : Tuple[int, ...]
+    new_chunks : tuple[int, ...]
         New chunks for Dask array with balanced sizes.
     """
     median_len = np.median(chunks).astype(int)
