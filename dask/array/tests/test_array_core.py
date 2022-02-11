@@ -958,10 +958,10 @@ def test_operators():
     assert_eq(c, x + x.reshape((10, 1)))
 
     expr = (3 / a * b) ** 2 > 5
-    with pytest.warns(None):  # ZeroDivisionWarning
+    with pytest.warns(RuntimeWarning):  # ZeroDivisionWarning
         assert_eq(expr, (3 / x * y) ** 2 > 5)
 
-    with pytest.warns(None):  # OverflowWarning
+    with warnings.catch_warnings():  # OverflowWarning
         c = da.exp(a)
     assert_eq(c, np.exp(x))
 
@@ -2354,12 +2354,12 @@ def test_arithmetic():
 
     assert_eq(da.logaddexp(a, b), np.logaddexp(x, y))
     assert_eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
-    with pytest.warns(None):  # Overflow warning
+    with warnings.catch_warnings():  # Overflow warning
         assert_eq(da.exp(b), np.exp(y))
     assert_eq(da.log(a), np.log(x))
     assert_eq(da.log10(a), np.log10(x))
     assert_eq(da.log1p(a), np.log1p(x))
-    with pytest.warns(None):  # Overflow warning
+    with warnings.catch_warnings():  # Overflow warning
         assert_eq(da.expm1(b), np.expm1(y))
     assert_eq(da.sqrt(a), np.sqrt(x))
     assert_eq(da.square(a), np.square(x))
@@ -2373,7 +2373,7 @@ def test_arithmetic():
     assert_eq(da.arctan2(b * 10, a), np.arctan2(y * 10, x))
     assert_eq(da.hypot(b, a), np.hypot(y, x))
     assert_eq(da.sinh(a), np.sinh(x))
-    with pytest.warns(None):  # Overflow warning
+    with warnings.catch_warnings():  # Overflow warning
         assert_eq(da.cosh(b), np.cosh(y))
     assert_eq(da.tanh(a), np.tanh(x))
     assert_eq(da.arcsinh(b * 10), np.arcsinh(y * 10))
@@ -2399,7 +2399,7 @@ def test_arithmetic():
     assert_eq(da.signbit(a - 3), np.signbit(x - 3))
     assert_eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
     assert_eq(da.nextafter(a - 3, b), np.nextafter(x - 3, y))
-    with pytest.warns(None):  # overflow warning
+    with warnings.catch_warnings():  # overflow warning
         assert_eq(da.ldexp(c, c), np.ldexp(z, z))
     assert_eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
     assert_eq(da.floor(a * 0.5), np.floor(x * 0.5))
@@ -3761,7 +3761,7 @@ def test_no_chunks_2d():
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(None):  # zero division warning
+    with pytest.warns(RuntimeWarning):  # zero division warning
         assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
@@ -4987,20 +4987,17 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings():
         x = da.ones((3, 10, 10), chunks=(3, 2, 2))
         da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
-    assert not record
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings():
         x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
-    assert not record
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings():
         x = da.ones((1,), chunks=(1,))
         1 / x[0]
-    assert not record
 
 
 def test_from_array_meta():

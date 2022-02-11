@@ -280,7 +280,8 @@ def test_groupby_on_index(scheduler):
         return df.mean()
 
     with dask.config.set(scheduler=scheduler):
-        with pytest.warns(None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",UserWarning)
             assert_eq(ddf.groupby("a").apply(func), pdf.groupby("a").apply(func))
 
             assert_eq(

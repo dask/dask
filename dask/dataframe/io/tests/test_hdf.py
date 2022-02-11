@@ -1,5 +1,6 @@
 import os
 import pathlib
+import warnings
 from time import sleep
 
 import numpy as np
@@ -608,12 +609,12 @@ def test_to_fmt_warns():
 
     # testing warning when breaking order
     with tmpfile("h5") as fn:
-        with pytest.warns(None):
+        with warnings.catch_warnings():
             a.to_hdf(fn, "/data*", name_function=str)
 
     # testing warning when breaking order
     with tmpdir() as dn:
-        with pytest.warns(None):
+        with warnings.catch_warnings():
             fn = os.path.join(dn, "data_*.csv")
             a.to_csv(fn, name_function=str)
 

@@ -1,4 +1,5 @@
 import collections
+import warnings
 from operator import add
 
 import numpy as np
@@ -728,7 +729,8 @@ def test_dont_merge_before_reductions():
 
 def test_atop_legacy():
     x = da.ones(10, chunks=(5,))
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         y = da.atop(inc, "i", x, "i", dtype=x.dtype)
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)

@@ -742,13 +742,16 @@ def test_reductions(split_every):
             offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
             assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
-        with pytest.warns(None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.std(split_every=split_every), pds.std())
-        with pytest.warns(None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.var(split_every=split_every), pds.var())
-        with pytest.warns(None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore",RuntimeWarning)
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.sem(split_every=split_every), pds.sem())
 

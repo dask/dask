@@ -1,4 +1,5 @@
 import re
+import warnings
 from typing import Iterable
 
 import numpy as np
@@ -528,10 +529,8 @@ def test_apply_and_enforce_message():
 
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings():
         meta_nonempty(ser)
-
-    assert len(w) == 0
 
 
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
