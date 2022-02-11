@@ -34,7 +34,7 @@ following two ways:
     4.  Try out Dask for the first time on a cloud-based system
         like Amazon, Google, or Microsoft Azure where you already have
         a Kubernetes cluster. If you don't already have Kubernetes deployed,
-        see our :doc:`Cloud documentation <cloud>`.
+        see our :doc:`Cloud documentation <deploying-cloud>`.
 
     You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
     Helm Dask cluster from within your Python session.
@@ -48,7 +48,7 @@ following two ways:
 
     .. note::
 
-      For more information, see :doc:`Dask and Helm documentation <kubernetes-helm>`.
+      For more information, see :doc:`Dask and Helm documentation <deploying-kubernetes-helm>`.
 
 2.  **Native**:
     You can quickly deploy Dask workers on Kubernetes
@@ -76,7 +76,7 @@ following two ways:
       For more information, see Dask-Kubernetes_ documentation.
 
 You may also want to see the documentation on using
-:doc:`Dask with Docker containers <docker>`
+:doc:`Dask with Docker containers <deploying-docker>`
 to help you manage your software environments on Kubernetes.
 
 .. _Kubernetes: https://kubernetes.io/
