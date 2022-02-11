@@ -10,6 +10,7 @@ import pandas as pd
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M, _deprecated, derived_from, funcname, itemgetter
+from ._compat import PANDAS_GT_130
 from .core import (
     DataFrame,
     Series,
@@ -1935,6 +1936,10 @@ class _GroupBy:
         >>> ddf = dask.datasets.timeseries(freq="1H")
         >>> result = ddf.groupby("name").rank(method="average", meta={"id": int, "x": float, "y": float})
         """
+        # Requires pandas >= 1.3.0 due to https://github.com/pandas-dev/pandas/issues/40518
+        if not PANDAS_GT_130:
+            raise ImportError("groupby.rank only supported for pandas >= 1.3.0")
+
         if meta is no_default:
             with raise_on_meta_error("groupby.rank()", udf=False):
                 meta_kwargs = _extract_meta(

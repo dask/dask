@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_130, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -2148,6 +2148,9 @@ def test_groupby_shift_with_freq():
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_130, reason="groupby.rank only supported for pandas >= 1.3.0"
+)
 @pytest.mark.parametrize("npartitions", [3])
 @pytest.mark.parametrize("method", ["average", "dense"])
 @pytest.mark.parametrize("ascending", [True, False])
@@ -2215,6 +2218,9 @@ def test_groupby_rank_dataframe(npartitions, method, ascending, na_option, pct, 
         )
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_130, reason="groupby.rank only supported for pandas >= 1.3.0"
+)
 @pytest.mark.parametrize("npartitions", [2])
 @pytest.mark.parametrize("method", ["average", "dense"])
 @pytest.mark.parametrize("pct", [False, True])
@@ -2240,6 +2246,9 @@ def test_groupby_rank_series(npartitions, method, pct):
         )
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_130, reason="groupby.rank only supported for pandas >= 1.3.0"
+)
 @pytest.mark.parametrize("method", ["dense"])
 def test_groupby_rank_empty_partition(method):
     pdf = pd.DataFrame(
