@@ -586,7 +586,8 @@ def visualize(
     Parameters
     ----------
     args : object
-        Any number of objects. If it is a dask object, its associated graph
+        Any number of objects. If it is a dask collection - i.e Dataframe, Array, 
+        Bag, Delayed - object, its associated graph
         will be included in the output of visualize. By default, python builtin
         collections are also traversed to look for dask objects (for more
         information see the ``traverse`` keyword). Arguments lacking an
