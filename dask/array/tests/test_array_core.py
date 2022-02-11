@@ -577,6 +577,16 @@ def test_concatenate_unknown_axes():
     assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
 
 
+def test_concatenate_flatten():
+    x = np.array([1, 2])
+    y = np.array([[3, 4], [5, 6]])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2, 1))
+
+    assert_eq(np.concatenate([x, y], axis=None), da.concatenate([a, b], axis=None))
+
+
 def test_concatenate_rechunk():
     x = da.random.random((6, 6), chunks=(3, 3))
     y = da.random.random((6, 6), chunks=(2, 2))
