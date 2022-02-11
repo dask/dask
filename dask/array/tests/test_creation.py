@@ -167,6 +167,7 @@ def test_linspace(endpoint):
     darr = da.linspace(1, 5, 1, endpoint=endpoint)
     assert_eq(darr, nparr)
 
+
 def test_arange():
     darr = da.arange(77, chunks=13)
     nparr = np.arange(77)
