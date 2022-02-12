@@ -7,6 +7,8 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
+from dask.array.core import PerformanceWarning
+
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M, _deprecated, derived_from, funcname, itemgetter
@@ -26,6 +28,7 @@ from .utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
@@ -1151,6 +1154,47 @@ class _GroupBy:
         )
         return _maybe_slice(grouped, self._slice)
 
+    def _try_embarrassingly_parallel(self, func, token, meta=None, **kwargs):
+        if meta is None:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                meta = func(self._meta_nonempty)
+
+        df = self.obj
+        first_by = self.by if not isinstance(self.by, list) else self.by[0]
+        embarrassingly_parallel = df.known_divisions and df._contains_index_name(
+            first_by if not is_index_like(first_by) else first_by.name
+        )
+        if embarrassingly_parallel:
+            unique_divisions = tuple(dict.fromkeys(df.divisions[:-1]))
+
+            if len(unique_divisions) != len(df.divisions[:-1]):
+                warnings.warn(
+                    "This 'groupby' operation would be better optimized if all the "
+                    "rows for each group were contained in a single partition. For "
+                    "example: `df.divisions = (0, 1, 3, 4)` is better than "
+                    "`df.divisions = (0, 1, 1, 1, 2, 4)`. If you used a `set_index` "
+                    "before this `groupby`, consider explicitly passing "
+                    f"`divisions={(*unique_divisions, df.divisions[-1])}`.",
+                    PerformanceWarning,
+                )
+                return
+            return map_partitions(
+                _apply_chunk,
+                df,
+                self.by,
+                chunk=func,
+                meta=meta,
+                token=self._token_prefix + token,
+                columns=meta.name if is_series_like(meta) else meta.columns,
+                transform_divisions=False,
+                enforce_metadata=False,
+                align_dataframes=False,
+                **self.observed,
+                **self.dropna,
+                **kwargs,
+            )
+
     def _aca_agg(
         self,
         token,
@@ -1162,32 +1206,35 @@ class _GroupBy:
         chunk_kwargs={},
         aggregate_kwargs={},
     ):
+        df = self.obj
         if aggfunc is None:
             aggfunc = func
 
         if meta is None:
             meta = func(self._meta_nonempty)
 
-        columns = meta.name if is_series_like(meta) else meta.columns
+        result = self._try_embarrassingly_parallel(
+            func=func, meta=meta, token=token, **chunk_kwargs
+        )
 
-        token = self._token_prefix + token
+        if result is not None:
+            return result
+
         levels = _determine_levels(self.by)
 
         return aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            [df, self.by] if not isinstance(self.by, list) else [df] + self.by,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
-                columns=columns,
+                columns=meta.name if is_series_like(meta) else meta.columns,
                 **self.observed,
                 **chunk_kwargs,
                 **self.dropna,
             ),
             aggregate=_groupby_aggregate,
             meta=meta,
-            token=token,
+            token=self._token_prefix + token,
             split_every=split_every,
             aggregate_kwargs=dict(
                 aggfunc=aggfunc,
@@ -1204,6 +1251,10 @@ class _GroupBy:
     def _cum_agg(self, token, chunk, aggregate, initial):
         """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
+        result = self._try_embarrassingly_parallel(chunk, token=token, meta=meta)
+        if result is not None:
+            return result
+
         columns = meta.name if is_series_like(meta) else meta.columns
         by = self.by if isinstance(self.by, list) else [self.by]
 
@@ -1422,6 +1473,10 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def mean(self, split_every=None, split_out=1):
+        result = self._try_embarrassingly_parallel(func=M.mean, token="mean")
+        if result is not None:
+            return result
+
         s = self.sum(split_every=split_every, split_out=split_out)
         c = self.count(split_every=split_every, split_out=split_out)
         if is_dataframe_like(s):
@@ -1440,6 +1495,17 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None, split_out=1):
+        meta = M.var(self._meta_nonempty)
+
+        result = self._try_embarrassingly_parallel(
+            func=M.var,
+            meta=meta,
+            token="var",
+            ddof=ddof,
+        )
+        if result is not None:
+            return result
+
         levels = _determine_levels(self.by)
         result = aca(
             [self.obj, self.by]
@@ -1449,6 +1515,7 @@ class _GroupBy:
             aggregate=_var_agg,
             combine=_var_combine,
             token=self._token_prefix + "var",
+            meta=meta,
             aggregate_kwargs={"ddof": ddof, "levels": levels},
             combine_kwargs={"levels": levels},
             split_every=split_every,
@@ -1466,6 +1533,10 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def std(self, ddof=1, split_every=None, split_out=1):
+        result = self._try_embarrassingly_parallel(func=M.std, token="std", ddof=ddof)
+        if result is not None:
+            return result
+
         v = self.var(ddof, split_every=split_every, split_out=split_out)
         result = map_partitions(np.sqrt, v, meta=v)
         return result
@@ -1489,6 +1560,14 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        if std:
+            result = self._try_embarrassingly_parallel(func=M.corr, token="corr")
+        else:
+            result = self._try_embarrassingly_parallel(
+                func=M.cov, token="cov", ddof=ddof
+            )
+        if result is not None:
+            return result
 
         levels = _determine_levels(self.by)
 
@@ -1704,8 +1783,13 @@ class _GroupBy:
             )
 
         df = self.obj
-        should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
-
+        first_by = self.by[0] if isinstance(self.by, list) else self.by
+        should_shuffle = not (
+            df.known_divisions
+            and df._contains_index_name(
+                first_by if not is_index_like(first_by) else first_by.name
+            )
+        )
         if should_shuffle:
             df2, by = self._shuffle(meta)
         else:
@@ -1790,7 +1874,13 @@ class _GroupBy:
             )
 
         df = self.obj
-        should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
+        first_by = self.by[0] if isinstance(self.by, list) else self.by
+        should_shuffle = not (
+            df.known_divisions
+            and df._contains_index_name(
+                first_by if not is_index_like(first_by) else first_by.name
+            )
+        )
 
         if should_shuffle:
             df2, by = self._shuffle(meta)
@@ -2048,6 +2138,10 @@ class SeriesGroupBy(_GroupBy):
         >>> ddf = dd.from_pandas(df, 2)
         >>> ddf.groupby(['col1']).col2.nunique().compute()
         """
+        result = self._try_embarrassingly_parallel(func=M.nunique, token="nunique")
+        if result is not None:
+            return result
+
         name = self._meta.obj.name
         levels = _determine_levels(self.by)
 

@@ -30,12 +30,21 @@ AGG_FUNCS = [
     "last",
     "prod",
 ]
+GROUPBY_FUNCS = [*AGG_FUNCS, "cumprod", "cumsum", "cumcount"]
 
 
 @pytest.fixture(params=AGG_FUNCS)
 def agg_func(request):
     """
     Aggregations supported for groups
+    """
+    return request.param
+
+
+@pytest.fixture(params=GROUPBY_FUNCS)
+def groupby_func(request):
+    """
+    Methods supported for groupby
     """
     return request.param
 
@@ -2608,3 +2617,65 @@ def test_groupby_multi_index_with_row_operations(operation):
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
     assert_eq(expected, actual)
+
+
+def test_embarrassingly_parallel_groupby(groupby_func):
+    func = groupby_func
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 3, 3], "b": [4, 4, 16, 16], "c": [1, 1, 4, 4], "d": [1, 1, 3, 3]},
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    pdf = pdf.set_index("a")
+    ddf_parallel = dd.from_pandas(pdf, npartitions=2)
+
+    # dataframe groupby
+    if func == "nunique":
+        pass
+    else:
+        expected = getattr(pdf.groupby("a"), func)()
+        non_parallel = getattr(ddf.groupby("a"), func)()
+        parallel = getattr(ddf_parallel.groupby("a"), func)()
+
+        assert_eq(expected, parallel)
+        assert len(parallel.dask) < len(non_parallel.dask)
+
+    # series groupby
+    if func in {"corr", "cov"}:
+        pass
+    else:
+        expected = getattr(pdf.groupby("a").b, func)()
+        non_parallel = getattr(ddf.groupby("a").b, func)()
+        parallel = getattr(ddf_parallel.groupby("a").b, func)()
+
+        assert_eq(expected, parallel)
+        assert len(parallel.dask) < len(non_parallel.dask)
+
+
+@pytest.mark.parametrize(
+    "method,func",
+    [
+        ("apply", lambda df: df.assign(b=df.b - df.b.mean())),
+        ("transform", lambda s: s - s.mean()),
+    ],
+)
+def test_embarrassingly_parallel_groupby_custom(method, func):
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 3, 3], "b": [4, 4, 16, 16], "c": [1, 1, 4, 4], "d": [1, 1, 3, 3]},
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    pdf = pdf.set_index("a")
+    ddf_parallel = dd.from_pandas(pdf, npartitions=2)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
+
+        expected = getattr(pdf.groupby("a"), method)(func)
+        non_parallel = getattr(ddf.groupby("a"), method)(func)
+        parallel = getattr(ddf_parallel.groupby("a"), method)(func)
+
+        assert_eq(expected, parallel)
+        assert len(parallel.dask) < len(non_parallel.dask)
