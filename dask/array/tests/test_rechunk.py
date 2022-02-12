@@ -1017,3 +1017,11 @@ def test_old_to_new_with_zero():
     result = _old_to_new(old, new)
     expected = [[[(0, slice(0, 4))], [(0, slice(4, 4))], [(1, slice(0, 4))]]]
     assert result == expected
+
+    old = ((4, 0, 4),)
+    new = ((4, 0, 2, 2),)
+    result = _old_to_new(old, new)
+    expected = [
+        [[(0, slice(0, 4))], [(1, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
+    ]
+    assert result == expected

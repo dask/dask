@@ -102,6 +102,8 @@ def _intersect_1d(breaks):
         last_end = end
         if br == last_br:
             if label == "o":
+                last_o_br = br
+                last_o_end = end
                 old_idx += 1
             if label == "n" and last_label == "n":
                 if last_o_br == br and old_idx > 0:
