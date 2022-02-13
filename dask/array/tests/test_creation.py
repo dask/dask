@@ -407,7 +407,7 @@ def test_eye():
         assert 4 < x.npartitions < 32
 
 
-@pytest.mark.parametrize("k", [0, 3, -3])
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
 def test_diag(k):
     v = np.arange(11)
     assert_eq(da.diag(v, k), np.diag(v, k))

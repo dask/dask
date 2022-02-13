@@ -596,62 +596,7 @@ def diag(v, k=0):
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
             return Array(graph, name, (v.chunks[0],), meta=meta)
         else:
-            kdiag_row_start = max(0, -k)
-            kdiag_col_start = max(0, k)
-            kdiag_row_stop = min(v.shape[0], v.shape[1] - k)
-            len_kdiag = kdiag_row_stop - kdiag_row_start
-
-            if len_kdiag <= 0:
-                chunks = ((0,),)
-                dsk = {(name, 0): (partial(np.empty, dtype=v.dtype), (0,))}
-                return Array(dsk, name, chunks, meta=meta)
-
-            row_stops_ = np.cumsum(v.chunks[0])
-            row_starts = np.roll(row_stops_, 1)
-            row_starts[0] = 0
-
-            col_stops_ = np.cumsum(v.chunks[1])
-            col_starts = np.roll(col_stops_, 1)
-            col_starts[0] = 0
-
-            row_blockid = np.arange(v.numblocks[0])
-            col_blockid = np.arange(v.numblocks[1])
-
-            # locate first chunk containing diagonal:
-            row_filter = (row_starts <= kdiag_row_start) & (
-                kdiag_row_start < row_stops_
-            )
-            col_filter = (col_starts <= kdiag_col_start) & (
-                kdiag_col_start < col_stops_
-            )
-            (I,) = row_blockid[row_filter]
-            (J,) = col_blockid[col_filter]
-
-            # follow k-diagonal through chunks while constructing dask graph:
-            # equation of diagonal: i = j - k
-            dsk = dict()
-            i = 0
-            out_chunks = ()
-            while kdiag_row_start < v.shape[0] and kdiag_col_start < v.shape[1]:
-                # localize block info:
-                nrows, ncols = v.chunks[0][I], v.chunks[1][J]
-                kdiag_row_start -= row_starts[I]
-                kdiag_col_start -= col_starts[J]
-                k = -kdiag_row_start if kdiag_row_start > 0 else kdiag_col_start
-                kdiag_row_end = min(nrows, ncols - k)
-                kdiag_len = kdiag_row_end - kdiag_row_start
-                # increment dask graph:
-                dsk[(name, i)] = (np.diag, (v.name,) + (I, J), k)
-                out_chunks += (kdiag_len,)
-                # prepare for next iteration:
-                i += 1
-                kdiag_row_start = kdiag_row_end + row_starts[I]
-                kdiag_col_start = min(ncols, nrows + k) + col_starts[J]
-                I = I + 1 if kdiag_row_start == row_stops_[I] else I
-                J = J + 1 if kdiag_col_start == col_stops_[J] else J
-
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
-            return Array(graph, name, (out_chunks,), meta=meta)
+            return diagonal(v, k)
 
     if k == 0:
         chunks_1d = v.chunks[0]
@@ -692,6 +637,12 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
             axis = t
         return axis
 
+    def pop_axes(chunks, axis1, axis2):
+        chunks = list(chunks)
+        chunks.pop(axis2)
+        chunks.pop(axis1)
+        return tuple(chunks)
+
     axis1 = _axis_fmt(axis1, "axis1", a.ndim)
     axis2 = _axis_fmt(axis2, "axis2", a.ndim)
 
@@ -699,48 +650,87 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
         raise ValueError("axis1 and axis2 cannot be the same")
 
     a = asarray(a)
-
+    k = offset
     if axis1 > axis2:
         axis1, axis2 = axis2, axis1
-        offset = -offset
+        k = -offset
 
-    def _diag_len(dim1, dim2, offset):
-        return max(0, min(min(dim1, dim2), dim1 + offset, dim2 - offset))
+    free_axes = set(range(a.ndim)) - {axis1, axis2}
+    free_indices = list(product(*(range(a.numblocks[i]) for i in free_axes)))
+    ndims_free = len(free_axes)
 
-    diag_chunks = []
-    chunk_offsets = []
-    cum1 = cached_cumsum(a.chunks[axis1], initial_zero=True)[:-1]
-    cum2 = cached_cumsum(a.chunks[axis2], initial_zero=True)[:-1]
-    for co1, c1 in zip(cum1, a.chunks[axis1]):
-        chunk_offsets.append([])
-        for co2, c2 in zip(cum2, a.chunks[axis2]):
-            k = offset + co1 - co2
-            diag_chunks.append(_diag_len(c1, c2, k))
-            chunk_offsets[-1].append(k)
+    # equation of diagonal: i = j - k
+    kdiag_row_start = max(0, -k)
+    kdiag_col_start = max(0, k)
+    kdiag_row_stop = min(a.shape[axis1], a.shape[axis2] - k)
+    len_kdiag = kdiag_row_stop - kdiag_row_start
 
-    dsk = {}
-    idx_set = set(range(a.ndim)) - {axis1, axis2}
-    n1 = len(a.chunks[axis1])
-    n2 = len(a.chunks[axis2])
-    for idx in product(*(range(len(a.chunks[i])) for i in idx_set)):
-        for i, (i1, i2) in enumerate(product(range(n1), range(n2))):
-            tsk = reduce(getitem, idx[:axis1], a.__dask_keys__())[i1]
-            tsk = reduce(getitem, idx[axis1 : axis2 - 1], tsk)[i2]
-            tsk = reduce(getitem, idx[axis2 - 1 :], tsk)
-            k = chunk_offsets[i1][i2]
-            dsk[(name,) + idx + (i,)] = (np.diagonal, tsk, k, axis1, axis2)
+    if len_kdiag <= 0:
+        out_chunks = pop_axes(a.chunks, axis1, axis2) + ((0,),)
+        dsk = dict()
+        for free_idx in free_indices:
+            shape = tuple(out_chunks[axis][free_idx[axis]] for axis in range(ndims_free))
+            dsk[(name,) + free_idx + (0,)] = (partial(np.empty, dtype=a.dtype), shape + (0,))
 
-    left_shape = tuple(a.shape[i] for i in idx_set)
-    right_shape = (_diag_len(a.shape[axis1], a.shape[axis2], offset),)
-    shape = left_shape + right_shape
+        meta = meta_from_array(a, ndims_free + 1)
+        return Array(dsk, name, out_chunks, meta=meta)
 
-    left_chunks = tuple(a.chunks[i] for i in idx_set)
-    right_shape = (tuple(diag_chunks),)
-    chunks = left_chunks + right_shape
+    # compute row index ranges for chunks along axis1:
+    row_stops_ = np.cumsum(a.chunks[axis1])
+    row_starts = np.roll(row_stops_, 1)
+    row_starts[0] = 0
 
+    # compute column index ranges for chunks along axis2:
+    col_stops_ = np.cumsum(a.chunks[axis2])
+    col_starts = np.roll(col_stops_, 1)
+    col_starts[0] = 0
+
+    # locate first chunk containing diagonal:
+    row_blockid = np.arange(a.numblocks[axis1])
+    col_blockid = np.arange(a.numblocks[axis2])
+
+    row_filter = (row_starts <= kdiag_row_start) & (
+        kdiag_row_start < row_stops_
+    )
+    col_filter = (col_starts <= kdiag_col_start) & (
+        kdiag_col_start < col_stops_
+    )
+    (I,) = row_blockid[row_filter]
+    (J,) = col_blockid[col_filter]
+
+    # follow k-diagonal through chunks while constructing dask graph:
+    dsk = dict()
+    i = 0
+    kdiag_chunks = ()
+    while kdiag_row_start < a.shape[axis1] and kdiag_col_start < a.shape[axis2]:
+        # localize block info:
+        nrows, ncols = a.chunks[axis1][I], a.chunks[axis2][J]
+        kdiag_row_start -= row_starts[I]
+        kdiag_col_start -= col_starts[J]
+        k = -kdiag_row_start if kdiag_row_start > 0 else kdiag_col_start
+        kdiag_row_end = min(nrows, ncols - k)
+        kdiag_len = kdiag_row_end - kdiag_row_start
+
+        # increment dask graph:
+        for free_idx in free_indices:
+            input_idx = (
+                free_idx[: axis1] + (I,) + free_idx[axis1 : axis2 - 1] + (J,) + free_idx[axis2 - 1 :]
+            )
+            output_idx = free_idx + (i,)
+            dsk[(name,) + output_idx] = (np.diagonal, (a.name,) + input_idx, k, axis1, axis2)
+
+        kdiag_chunks += (kdiag_len,)
+        # prepare for next iteration:
+        i += 1
+        kdiag_row_start = kdiag_row_end + row_starts[I]
+        kdiag_col_start = min(ncols, nrows + k) + col_starts[J]
+        I = I + 1 if kdiag_row_start == row_stops_[I] else I
+        J = J + 1 if kdiag_col_start == col_stops_[J] else J
+
+    out_chunks = pop_axes(a.chunks, axis1, axis2) + (kdiag_chunks,)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    meta = meta_from_array(a, len(shape))
-    return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
+    meta = meta_from_array(a, ndims_free + 1)
+    return Array(graph, name, out_chunks, meta=meta)
 
 
 @derived_from(np)
