@@ -1,9 +1,8 @@
 import itertools
 from collections.abc import Sequence
-from functools import partial, reduce
+from functools import partial
 from itertools import product
 from numbers import Integral, Number
-from operator import getitem
 
 import numpy as np
 from tlz import sliding_window
@@ -669,8 +668,13 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
         out_chunks = pop_axes(a.chunks, axis1, axis2) + ((0,),)
         dsk = dict()
         for free_idx in free_indices:
-            shape = tuple(out_chunks[axis][free_idx[axis]] for axis in range(ndims_free))
-            dsk[(name,) + free_idx + (0,)] = (partial(np.empty, dtype=a.dtype), shape + (0,))
+            shape = tuple(
+                out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
+            )
+            dsk[(name,) + free_idx + (0,)] = (
+                partial(np.empty, dtype=a.dtype),
+                shape + (0,),
+            )
 
         meta = meta_from_array(a, ndims_free + 1)
         return Array(dsk, name, out_chunks, meta=meta)
@@ -689,12 +693,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     row_blockid = np.arange(a.numblocks[axis1])
     col_blockid = np.arange(a.numblocks[axis2])
 
-    row_filter = (row_starts <= kdiag_row_start) & (
-        kdiag_row_start < row_stops_
-    )
-    col_filter = (col_starts <= kdiag_col_start) & (
-        kdiag_col_start < col_stops_
-    )
+    row_filter = (row_starts <= kdiag_row_start) & (kdiag_row_start < row_stops_)
+    col_filter = (col_starts <= kdiag_col_start) & (kdiag_col_start < col_stops_)
     (I,) = row_blockid[row_filter]
     (J,) = col_blockid[col_filter]
 
@@ -714,10 +714,20 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
         # increment dask graph:
         for free_idx in free_indices:
             input_idx = (
-                free_idx[: axis1] + (I,) + free_idx[axis1 : axis2 - 1] + (J,) + free_idx[axis2 - 1 :]
+                free_idx[:axis1]
+                + (I,)
+                + free_idx[axis1 : axis2 - 1]
+                + (J,)
+                + free_idx[axis2 - 1 :]
             )
             output_idx = free_idx + (i,)
-            dsk[(name,) + output_idx] = (np.diagonal, (a.name,) + input_idx, k, axis1, axis2)
+            dsk[(name,) + output_idx] = (
+                np.diagonal,
+                (a.name,) + input_idx,
+                k,
+                axis1,
+                axis2,
+            )
 
         kdiag_chunks += (kdiag_len,)
         # prepare for next iteration:
