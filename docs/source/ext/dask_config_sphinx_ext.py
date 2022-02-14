@@ -1,7 +1,8 @@
 import requests
 import yaml
 from docutils import nodes
-from docutils.parsers.rst import Directive, directives
+from docutils.parsers.rst import directives  # type: ignore  # Not in type stubs
+from docutils.parsers.rst import Directive
 
 
 def get_remote_yaml(url):
