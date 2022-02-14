@@ -130,13 +130,6 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
-# with pytest.warns(UserWarning, match=warning_message) as user_warnings_b:
-#     get_scheduler(scheduler="dask.distributed")
-#     get_scheduler(scheduler="distributed")
-#     get_scheduler()
-# assert len(user_warnings_b) == 0
-
-
 @pytest.mark.filterwarnings(
     "ignore:Passing a local execution scheduler in Dask.distributed might "
     "lead to unexpected results."
