@@ -41,8 +41,8 @@ jobs:
         run: |
           # compute pre-release package versions (current dask version with patch version bumped)
           IFS='.' read -ra arr <<< `git describe --tags | awk '{split($0,a,"-"); print a[1]}'`
-          declare -i v=${arr[-1]}+1
-          export VERSION=${arr[0]}.${arr[1]}.$v
+          declare -i patch=${arr[-1]}+1
+          export VERSION=${arr[0]}.${arr[1]}.$patch
 
           # suffix for nightly package versions
           export VERSION_SUFFIX=a`date +%y%m%d`
