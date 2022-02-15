@@ -2372,7 +2372,7 @@ def test_groupby_large_ints_exception(backend):
     else:
         data_frame = dd.from_pandas
     max = np.iinfo(np.uint64).max
-    sqrt = max ** 0.5
+    sqrt = max**0.5
     series = data_source.Series(
         np.concatenate([sqrt * np.arange(5), np.arange(35)])
     ).astype("int64")
@@ -2608,3 +2608,18 @@ def test_groupby_multi_index_with_row_operations(operation):
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
     assert_eq(expected, actual)
+
+
+def test_groupby_iter_fails():
+    df = pd.DataFrame(
+        data=[
+            ["a0", "b1"],
+            ["a1", "b1"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+        ],
+        columns=["A", "B"],
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(NotImplementedError, match="computing the groups"):
+        list(ddf.groupby("A"))

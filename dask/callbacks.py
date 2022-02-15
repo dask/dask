@@ -1,4 +1,8 @@
+from __future__ import annotations
+
+from collections.abc import Callable
 from contextlib import contextmanager
+from typing import ClassVar
 
 __all__ = ["Callback", "add_callbacks"]
 
@@ -43,7 +47,7 @@ class Callback:
     ...     x.compute()
     """
 
-    active = set()
+    active: ClassVar[set[tuple[Callable | None, ...]]] = set()
 
     def __init__(
         self, start=None, start_state=None, pretask=None, posttask=None, finish=None
@@ -60,7 +64,7 @@ class Callback:
             self._finish = finish
 
     @property
-    def _callback(self):
+    def _callback(self) -> tuple[Callable | None, ...]:
         fields = ["_start", "_start_state", "_pretask", "_posttask", "_finish"]
         return tuple(getattr(self, i, None) for i in fields)
 
@@ -72,10 +76,10 @@ class Callback:
     def __exit__(self, *args):
         self._cm.__exit__(*args)
 
-    def register(self):
+    def register(self) -> None:
         Callback.active.add(self._callback)
 
-    def unregister(self):
+    def unregister(self) -> None:
         Callback.active.remove(self._callback)
 
 

@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import math
 import warnings
 from collections.abc import Iterable
 from functools import partial, reduce, wraps
 from numbers import Integral, Real
-from typing import List, Tuple
 
 import numpy as np
 from tlz import concat, interleave, sliding_window
@@ -1884,6 +1885,20 @@ def ravel(array_like):
 
 
 @derived_from(np)
+def expand_dims(a, axis):
+    if type(axis) not in (tuple, list):
+        axis = (axis,)
+
+    out_ndim = len(axis) + a.ndim
+    axis = validate_axis(axis, out_ndim)
+
+    shape_it = iter(a.shape)
+    shape = [1 if ax in axis else next(shape_it) for ax in range(out_ndim)]
+
+    return a.reshape(shape)
+
+
+@derived_from(np)
 def squeeze(a, axis=None):
     if axis is None:
         axis = tuple(i for i, d in enumerate(a.shape) if d == 1)
@@ -2205,21 +2220,18 @@ def select(condlist, choicelist, default=0):
     )
 
 
-def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
-    """
-    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
-    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
-    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
-    `remainder` is empty.
+def _partition(total: int, divisor: int) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Given a total and a divisor, return two tuples: A tuple containing `divisor`
+    repeated the number of times it divides `total`, and length-1 or empty tuple
+    containing the remainder when `total` is divided by `divisor`. If `divisor` factors
+    `total`, i.e. if the remainder is 0, then `remainder` is empty.
     """
     multiples = (divisor,) * (total // divisor)
-    remainder = ()
-    if (total % divisor) > 0:
-        remainder = (total % divisor,)
-    return (multiples, remainder)
+    remainder = (total % divisor,) if total % divisor else ()
+    return multiples, remainder
 
 
-def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
+def aligned_coarsen_chunks(chunks: list[int], multiple: int) -> tuple[int, ...]:
     """
     Returns a new chunking aligned with the coarsening multiple.
     Any excess is at the end of the array.

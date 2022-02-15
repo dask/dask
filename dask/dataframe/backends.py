@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -37,7 +40,6 @@ from .utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
-    is_categorical_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
@@ -61,16 +63,16 @@ def _(x):
 
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x, index=None):
+def _(x, index=None):
     return x.iloc[:0]
 
 
 @make_meta_dispatch.register(pd.Index)
-def make_meta_index(x, index=None):
+def _(x, index=None):
     return x[0:0]
 
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
@@ -126,7 +128,7 @@ def make_meta_object(x, index=None):
         )
     if isinstance(x, tuple) and len(x) == 2:
         return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
+    elif isinstance(x, Iterable) and not isinstance(x, str):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(

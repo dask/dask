@@ -134,9 +134,9 @@ def test_deterministic_arithmetic_names():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
     a = dd.from_pandas(df, npartitions=2)
 
-    assert sorted((a.x + a.y ** 2).dask) == sorted((a.x + a.y ** 2).dask)
-    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x + a.y ** 3).dask)
-    assert sorted((a.x + a.y ** 2).dask) != sorted((a.x - a.y ** 2).dask)
+    assert sorted((a.x + a.y**2).dask) == sorted((a.x + a.y**2).dask)
+    assert sorted((a.x + a.y**2).dask) != sorted((a.x + a.y**3).dask)
+    assert sorted((a.x + a.y**2).dask) != sorted((a.x - a.y**2).dask)
 
 
 @pytest.mark.slow
@@ -277,7 +277,7 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(l - r, el - er)
     assert_eq(l / r, el / er)
     assert_eq(l // r, el // er)
-    assert_eq(l ** r, el ** er)
+    assert_eq(l**r, el**er)
     assert_eq(l % r, el % er)
 
     if allow_comparison_ops:
@@ -306,7 +306,7 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(l | True, el | True)
     assert_eq(l ^ True, el ^ True)
     assert_eq(l // 2, el // 2)
-    assert_eq(l ** 2, el ** 2)
+    assert_eq(l**2, el**2)
     assert_eq(l % 2, el % 2)
     assert_eq(l > 2, el > 2)
     assert_eq(l < 2, el < 2)
@@ -323,7 +323,7 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(True | r, True | er)
     assert_eq(True ^ r, True ^ er)
     assert_eq(2 // r, 2 // er)
-    assert_eq(2 ** r, 2 ** er)
+    assert_eq(2**r, 2**er)
     assert_eq(2 % r, 2 % er)
     assert_eq(2 > r, 2 > er)
     assert_eq(2 < r, 2 < er)
@@ -361,7 +361,7 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(l - r, el - er)
     assert_eq(l / r, el / er)
     assert_eq(l // r, el // er)
-    assert_eq(l ** r, el ** er)
+    assert_eq(l**r, el**er)
     assert_eq(l % r, el % er)
 
     if allow_comparison_ops:
@@ -390,7 +390,7 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(l | True, el | True)
     assert_eq(l ^ True, el ^ True)
     assert_eq(l // 2, el // 2)
-    assert_eq(l ** 2, el ** 2)
+    assert_eq(l**2, el**2)
     assert_eq(l % 2, el % 2)
     assert_eq(l > 2, el > 2)
     assert_eq(l < 2, el < 2)
@@ -407,7 +407,7 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert_eq(True | l, True | el)
     assert_eq(True ^ l, True ^ el)
     assert_eq(2 // l, 2 // el)
-    assert_eq(2 ** l, 2 ** el)
+    assert_eq(2**l, 2**el)
     assert_eq(2 % l, 2 % el)
     assert_eq(2 > l, 2 > el)
     assert_eq(2 < l, 2 < el)
@@ -448,7 +448,7 @@ def test_scalar_arithmetics():
     assert_eq(l - r, el - er)
     assert_eq(l / r, el / er)
     assert_eq(l // r, el // er)
-    assert_eq(l ** r, el ** er)
+    assert_eq(l**r, el**er)
     assert_eq(l % r, el % er)
 
     assert_eq(l & r, el & er)
@@ -469,7 +469,7 @@ def test_scalar_arithmetics():
     assert_eq(l | True, el | True)
     assert_eq(l ^ True, el ^ True)
     assert_eq(l // 2, el // 2)
-    assert_eq(l ** 2, el ** 2)
+    assert_eq(l**2, el**2)
     assert_eq(l % 2, el % 2)
     assert_eq(l > 2, el > 2)
     assert_eq(l < 2, el < 2)
@@ -486,7 +486,7 @@ def test_scalar_arithmetics():
     assert_eq(True | r, True | er)
     assert_eq(True ^ r, True ^ er)
     assert_eq(2 // r, 2 // er)
-    assert_eq(2 ** r, 2 ** er)
+    assert_eq(2**r, 2**er)
     assert_eq(2 % r, 2 % er)
     assert_eq(2 > r, 2 > er)
     assert_eq(2 < r, 2 < er)

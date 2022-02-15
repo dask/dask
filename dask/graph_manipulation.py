@@ -2,20 +2,11 @@
 output collections produced by this module are typically not functionally equivalent to
 their inputs.
 """
+from __future__ import annotations
+
 import uuid
-from numbers import Number
-from typing import (
-    AbstractSet,
-    Callable,
-    Dict,
-    Hashable,
-    Literal,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from collections.abc import Callable, Hashable
+from typing import Callable, Hashable, Literal, TypeVar
 
 from .base import (
     clone_key,
@@ -33,10 +24,12 @@ from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
-SplitEvery = Union[Number, Literal[False], None]
 
 
-def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:
+def checkpoint(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
@@ -121,7 +114,7 @@ def _checkpoint_one(collection, split_every) -> Delayed:
     return Delayed(name, dsk)
 
 
-def _can_apply_blockwise(collection):
+def _can_apply_blockwise(collection) -> bool:
     """Return True if _map_blocks can be sped up via blockwise operations; False
     otherwise.
 
@@ -155,7 +148,7 @@ def _build_map_layer(
     prev_name: str,
     new_name: str,
     collection,
-    dependencies: Tuple[Delayed, ...] = (),
+    dependencies: tuple[Delayed, ...] = (),
 ) -> Layer:
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
     fall back to MaterializedLayer otherwise.
@@ -215,7 +208,7 @@ def bind(
     omit=None,
     seed: Hashable = None,
     assume_layers: bool = True,
-    split_every: SplitEvery = None,
+    split_every: float | Literal[False] | None = None,
 ) -> T:
     """
     Make ``children`` collection(s), optionally omitting sub-collections, dependent on
@@ -313,9 +306,9 @@ def bind(
 
 def _bind_one(
     child: T,
-    blocker: Optional[Delayed],
-    omit_layers: Set[str],
-    omit_keys: Set[Hashable],
+    blocker: Delayed | None,
+    omit_layers: set[str],
+    omit_keys: set[Hashable],
     seed: Hashable,
 ) -> T:
     prev_coll_names = get_collection_names(child)
@@ -325,8 +318,8 @@ def _bind_one(
         return child
 
     dsk = child.__dask_graph__()  # type: ignore
-    new_layers: Dict[str, Layer] = {}
-    new_deps: Dict[str, AbstractSet[str]] = {}
+    new_layers: dict[str, Layer] = {}
+    new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:
@@ -461,7 +454,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def wait_on(*collections, split_every: SplitEvery = None):
+def wait_on(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+):
     """Ensure that all chunks of all input collections have been computed before
     computing the dependents of any of the chunks.
 

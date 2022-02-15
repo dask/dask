@@ -1181,7 +1181,7 @@ class FastParquetEngine(Engine):
             elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(pf.dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(pf.dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
             else:
@@ -1288,9 +1288,9 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
-        _meta = copy.copy(fmd)
-        rgs = fmd.row_groups
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
+        _meta = copy.copy(meta)
+        rgs = meta.row_groups
         if parts:
             for rg in parts:
                 if rg is not None:

@@ -5,11 +5,11 @@ channels:
   - nodefaults
 dependencies:
   # required dependencies
-  - python=3.8
+  - python=3.7
   - setuptools<60.0
   - packaging
-  - numpy=1.19
-  - pandas=1.2
+  - numpy=1.18
+  - pandas=1.0
   # test dependencies
   - pre-commit
   - pytest
@@ -29,7 +29,7 @@ dependencies:
   - xarray
   - fsspec
   - sqlalchemy>=1.4.0
-  - pyarrow=4.0
+  - pyarrow=1.0
   - coverage
   - jsonschema
   # other -- IO
@@ -37,9 +37,9 @@ dependencies:
   - blosc
   - boto3
   - botocore
+  - aiohttp
   - bokeh
   - httpretty
-  - aiohttp
   # Need recent version of s3fs to support newer aiobotocore versions
   # https://github.com/dask/s3fs/issues/514
   - s3fs>=2021.8.0
@@ -51,6 +51,7 @@ dependencies:
   - lz4
   - numba
   - partd
+  - pickle5
   - psutil
   - requests
   - scikit-image
@@ -66,4 +67,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-      - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/distributed

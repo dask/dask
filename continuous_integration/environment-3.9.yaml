@@ -30,7 +30,7 @@ dependencies:
   - fsspec
   - sqlalchemy>=1.4.0
   - pyarrow
-  - coverage<6.3 # https://github.com/nedbat/coveragepy/issues/1310
+  - coverage
   - jsonschema
   # other -- IO
   # Not available for Python 3.9 on conda-forge
@@ -56,7 +56,7 @@ dependencies:
   - requests
   - scikit-image
   - scikit-learn
-  - scipy
+  - scipy<1.8.0 # See https://github.com/dask/dask/issues/8682
   - toolz
   - python-snappy
   - sparse

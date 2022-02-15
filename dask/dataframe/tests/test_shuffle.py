@@ -583,7 +583,7 @@ def test_set_index_sorts():
         dfs.append(pd.DataFrame({"timestamp": vals[lo:hi]}, index=range(lo, hi)))
 
     ddf = dd.concat(dfs).clear_divisions()
-    assert ddf.set_index("timestamp").index.compute().is_monotonic is True
+    assert ddf.set_index("timestamp").index.compute().is_monotonic_increasing is True
 
 
 @pytest.mark.parametrize(
@@ -1243,10 +1243,13 @@ def test_sort_values(nelem, nparts, by, ascending):
     "data",
     [
         {
-            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
-            "b": [None] * 100 + list(range(100, 150)),
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),  # type: ignore
+            "b": [None] * 100 + list(range(100, 150)),  # type: ignore
         },
-        {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
+        {
+            "a": list(range(15)) + [None] * 5,  # type: ignore
+            "b": list(reversed(range(20))),
+        },
     ],
 )
 def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
