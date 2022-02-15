@@ -22,15 +22,18 @@ as following.
     :alt: NEEDS ALT TEXT
 
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or it can be queried from ``client.dashboard_link``. By default, when starting a schduler 
-locally the dashboard will be served at ``http://localhost:8787/status``, but may be served 
-elsewhere if this is desired or if the port is taken.
+or it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
+n your local machine the dashboard will be served at ``http://localhost:8787/status``, you
+can type this address into your browser to access the dashboard but may be served 
+elsewhere if this port is taken. You can also configure the address by passing options to the 
+scheduler, see ``dashboard_address`` in `LocalCluster < https://docs.dask.org/en/stable/deploying-python.html#reference>`_
 
-The dashboard link redirects you to the `/status` page, which is the entry point of the 
-dashboard:
+The dashboard link redirects you to main dashboard page as shown below:
 
 .. figure:: images/dashboard_status.png
     :alt: NEEDS ALT TEXT
+
+In the entry point of the dashboard you can find multiple plots with information about your cluster:
 
 - Bytes stored: Cluster memory. 
 - Bytes per Worker: Memory per worker.
@@ -41,13 +44,13 @@ dashboard:
 
 Bytes Stored and Bytes per Worker
 ---------------------------------
+These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
+as well as the individual usage on each worker (Bytes per Worker).
 
 .. figure:: images/dashboard_memory.png
     :alt: NEEDS ALT TEXT
 
-These two plots show a summary of the overall memory usage on the cluster,
-as well as the individual usage on each worker. In these plots, the colors and 
-shades have different meanings:
+The colors and shades have different meanings:
     - Solid Blue: Managed memory under target (default 70% of memory)
     - Solid Orange: Managed memory is close to the spilling target (default 70% of memory)
 
@@ -57,8 +60,8 @@ For both blue and orange we have two more shades:
 
     - Grey: Spilled to disk memory 
 
-For a detailed explanation on the different types of memory refer to the Worker Memory management
-documentation `Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
+For a detailed explanation on the different types of memory refer to the
+`Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
 
 Processing/CPU/Occupancy
 ------------------------
@@ -94,7 +97,7 @@ worker 10s to execute all the tasks it has currently been assigned.
 Task Stream
 -----------
 
-The task stream is a view of all the tasks across threads. Each row represents a thread and each rectangle represent 
+The task stream is a view of all the tasks across threads. Each row represents a thread and each rectangle represents 
 an individual tasks. The color for each rectangle corresponds to the kind of task being performed and it matches the color 
 of the Progress plot (see Progress section). This means that all the individual tasks of kind `inc` for example will have 
 the same randomly assigned color. 
