@@ -4058,7 +4058,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
         except TypeError:
             return wrap.empty(shape, chunks=shape, dtype=meta.dtype)
     elif n == 1:
-        return seq2[0].copy()
+        return seq2[0]
 
     if not allow_unknown_chunksizes and not all(
         i == axis or all(x.shape[i] == seq2[0].shape[i] for x in seq2)
