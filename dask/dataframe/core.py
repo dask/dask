@@ -5263,7 +5263,10 @@ class DataFrame(_Frame):
 
         if len(self.columns) == 0:
             lines.append("Index: 0 entries")
-            lines.append(f"Empty {type(self).__name__}\n")
+            lines.append(f"Empty {type(self).__name__}")
+            if PANDAS_GT_150:
+                # pandas dataframe started adding a newline when info is called.
+                lines.append("")
             put_lines(buf, lines)
             return
 
