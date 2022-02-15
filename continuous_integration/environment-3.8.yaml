@@ -30,7 +30,7 @@ dependencies:
   - fsspec
   - sqlalchemy>=1.4.0
   - pyarrow=4.0
-  - coverage<6.3 # https://github.com/nedbat/coveragepy/issues/1310
+  - coverage
   - jsonschema
   # other -- IO
   - bcolz
