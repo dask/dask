@@ -524,7 +524,7 @@ def test_to_bag():
         {"index": 3.0, "x": "c", "y": 4},
         {"index": 4.0, "x": "d", "y": 5},
     ]
-    assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
+    assert ddf.x.to_bag(True).compute() == list(a.x.items())
     assert ddf.x.to_bag().compute() == list(a.x)
 
     assert ddf.x.to_bag(True, format="dict").compute() == [

@@ -650,7 +650,7 @@ class ArrowDatasetEngine(Engine):
                 # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
 
