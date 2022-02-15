@@ -33,7 +33,8 @@ The dashboard link redirects you to main dashboard page as shown below:
 .. figure:: images/dashboard_status.png
     :alt: NEEDS ALT TEXT
 
-In the entry point of the dashboard you can find multiple plots with information about your cluster:
+In the entry point of the dashboard you can find multiple plots with information about your cluster 
+as listed below:
 
 - Bytes stored: Cluster memory. 
 - Bytes per Worker: Memory per worker.
@@ -51,7 +52,7 @@ as well as the individual usage on each worker (Bytes per Worker).
     :alt: NEEDS ALT TEXT
 
 The colors and shades have different meanings:
-    - Solid Blue: Managed memory under target (default 70% of memory)
+    - Solid Blue: Managed memory under target (default 60% of memory)
     - Solid Orange: Managed memory is close to the spilling target (default 70% of memory)
 
 For both blue and orange we have two more shades:
