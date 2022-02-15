@@ -510,7 +510,7 @@ def _df_to_bag(df, index=False, format="tuple"):
                 return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
         if format == "tuple":
-            return list(df.iteritems()) if index else list(df)
+            return list(df.items()) if index else list(df)
         elif format == "dict":
             return df.to_frame().to_dict(orient="records")
 
