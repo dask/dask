@@ -37,8 +37,8 @@ from .utils import (
 #
 # Dask groupby supports reductions, i.e., mean, sum and alike, and apply. The
 # former do not shuffle the data and are efficiently implemented as tree
-# reductions. The latter is implemented by shuffling the underlying partiitons
-# such that all items of a group can be found in the same parititon.
+# reductions. The latter is implemented by shuffling the underlying partitions
+# such that all items of a group can be found in the same partition.
 #
 # The argument to ``.groupby`` (``by``), can be a ``str``, ``dd.DataFrame``,
 # ``dd.Series``, or a list thereof. In operations on the grouped object, the
@@ -1123,6 +1123,14 @@ class _GroupBy:
             "sort": self.sort,
             **self.observed,
         }
+
+    def __iter__(self):
+        raise NotImplementedError(
+            "Iteration of DataFrameGroupBy objects requires computing the groups which "
+            "may be slow. You probably want to use 'apply' to execute a function for "
+            "all the columns. To access individual groups, use 'get_group'. To list "
+            "all the group names, use 'df[<group column>].unique().compute()'."
+        )
 
     @property
     def _meta_nonempty(self):
