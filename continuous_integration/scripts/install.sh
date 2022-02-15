@@ -10,14 +10,16 @@ if [[ ${UPSTREAM_DEV} ]]; then
     mamba install -y -c arrow-nightlies "pyarrow>5.0"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force numpy pandas scipy fastparquet
-    conda uninstall --force numpy pandas scipy fastparquet
+    # mamba uninstall --force numpy pandas fastparquet
+
+    # TODO: Add development version of scipy once
+    # https://github.com/dask/dask/issues/8682 is resolved
+    conda uninstall --force numpy pandas fastparquet
 
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
-        pandas \
-        scipy
+        pandas
 
     python -m pip install \
         --upgrade \
