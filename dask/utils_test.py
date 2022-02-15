@@ -153,7 +153,7 @@ def hlg_layer_topological(hlg: HighLevelGraph, i: int) -> Layer:
 
 @contextlib.contextmanager
 def _check_warning(condition: bool, category: type[Warning], message: str):
-    """Conditionally check is a warning is raised"""
+    """Conditionally check if a warning is raised"""
     if condition:
         import pytest
 
