@@ -5263,7 +5263,7 @@ class DataFrame(_Frame):
 
         if len(self.columns) == 0:
             lines.append("Index: 0 entries")
-            lines.append("Empty %s" % type(self).__name__)
+            lines.append(f"Empty {type(self).__name__}\n")
             put_lines(buf, lines)
             return
 
