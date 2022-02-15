@@ -1865,6 +1865,7 @@ def roll(array, shift, axis=None):
         result = concatenate([result[sl1], result[sl2]], axis=i)
 
     result = result.reshape(array.shape)
+    # Ensure that the output is always a new array object
     result = result.copy() if result is array else result
 
     return result

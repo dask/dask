@@ -1329,12 +1329,10 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
-def test_roll_bug():
-    # This bug was exposed in GitHub Issue #8723
+def test_roll_always_results_in_a_new_array():
     x = da.arange(2, 3)
     y = da.roll(x, 1)
-    y[0] = 0
-    assert x[0].compute() == 2
+    assert y is not x
 
 
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
