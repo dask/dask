@@ -60,6 +60,37 @@ def test_rechunk_internals_1():
     ]
     assert i1d[1] == answer4
 
+    new = cumdims_label(((1, 1, 2), (1, 5, 1, 0)), "n")
+    breaks = tuple(_breakpoints(o, n) for o, n in zip(old, new))
+    answer5 = (
+        ("o", 0),
+        ("n", 0),
+        ("o", 1),
+        ("n", 1),
+        ("o", 2),
+        ("o", 3),
+        ("o", 4),
+        ("o", 5),
+        ("n", 6),
+        ("n", 7),
+        ("n", 7),
+    )
+    assert breaks[1] == answer5
+    i1d = [_intersect_1d(b) for b in breaks]
+    answer6 = [
+        [(0, slice(0, 1))],
+        [
+            (1, slice(0, 1)),
+            (2, slice(0, 1)),
+            (3, slice(0, 1)),
+            (4, slice(0, 1)),
+            (5, slice(0, 1)),
+        ],
+        [(5, slice(1, 2))],
+        [(5, slice(2, 2))],
+    ]
+    assert i1d[1] == answer6
+
 
 def test_intersect_1():
     """Convert 1 D chunks"""
@@ -947,10 +978,10 @@ def test_intersect_chunks_with_zero():
     expected = [
         (((0, slice(0, 4, None)), (0, slice(0, 1, None))),),
         (((0, slice(0, 4, None)), (0, slice(1, 2, None))),),
-        (((0, slice(4, 4, None)), (0, slice(0, 1, None))),),
-        (((0, slice(4, 4, None)), (0, slice(1, 2, None))),),
-        (((0, slice(4, 4, None)), (0, slice(0, 1, None))),),
-        (((0, slice(4, 4, None)), (0, slice(1, 2, None))),),
+        (((1, slice(0, 0, None)), (0, slice(0, 1, None))),),
+        (((1, slice(0, 0, None)), (0, slice(1, 2, None))),),
+        (((1, slice(0, 0, None)), (0, slice(0, 1, None))),),
+        (((1, slice(0, 0, None)), (0, slice(1, 2, None))),),
         (((1, slice(0, 4, None)), (0, slice(0, 1, None))),),
         (((1, slice(0, 4, None)), (0, slice(1, 2, None))),),
     ]
@@ -1015,13 +1046,19 @@ def test_old_to_new_with_zero():
     old = ((4, 4),)
     new = ((4, 0, 4),)
     result = _old_to_new(old, new)
-    expected = [[[(0, slice(0, 4))], [(0, slice(4, 4))], [(1, slice(0, 4))]]]
+    expected = [[[(0, slice(0, 4))], [(1, slice(0, 0))], [(1, slice(0, 4))]]]
+    assert result == expected
+
+    old = ((4,),)
+    new = ((4, 0),)
+    result = _old_to_new(old, new)
+    expected = [[[(0, slice(0, 4))], [(0, slice(4, 4))]]]
     assert result == expected
 
     old = ((4, 0, 4),)
     new = ((4, 0, 2, 2),)
     result = _old_to_new(old, new)
     expected = [
-        [[(0, slice(0, 4))], [(1, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
+        [[(0, slice(0, 4))], [(2, slice(0, 0))], [(2, slice(0, 2))], [(2, slice(2, 4))]]
     ]
     assert result == expected

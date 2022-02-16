@@ -799,3 +799,15 @@ def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
         assert 4 < x.npartitions < 32
+
+
+def test_diagonal_zero_chunks():
+    x = da.ones((8, 8), chunks=(4, 4))
+    dd = da.ones((8, 8), chunks=(4, 4))
+    d = da.diagonal(dd)
+
+    expected = np.ones((8,))
+    assert_eq(d, expected)
+    assert_eq(d + d, 2 * expected)
+    A = d + x
+    assert_eq(A, np.full((8, 8), 2.0))
