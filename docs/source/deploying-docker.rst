@@ -29,7 +29,7 @@ Here is a simple example on a dedicated virtual network
 
    docker network create dask
 
-   docker run --network dask --name scheduler daskdev/dask dask-scheduler  # start scheduler
+   docker run --network dask -p 8787:8787 --name scheduler daskdev/dask dask-scheduler  # start scheduler
 
    docker run --network dask daskdev/dask dask-worker scheduler:8786 # start worker
    docker run --network dask daskdev/dask dask-worker scheduler:8786 # start worker
