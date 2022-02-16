@@ -12,7 +12,7 @@ from .base import clone_key, get_name_from_key, tokenize
 from .compatibility import prod
 from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
-from .highlevelgraph import AbstractLayer, HighLevelGraph, Layer
+from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import (
     _deprecated,
@@ -273,7 +273,7 @@ def blockwise(
     return subgraph
 
 
-class Blockwise(AbstractLayer):
+class Blockwise(Layer):
     """Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
@@ -352,7 +352,7 @@ class Blockwise(AbstractLayer):
         super().__init__(annotations=annotations)
         self.output = output
         self.output_indices = tuple(output_indices)
-        self.output_blocks = output_blocks
+        self._output_blocks = output_blocks
         self.dsk = dsk
 
         # Remove `BlockwiseDep` arguments from input indices

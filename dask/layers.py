@@ -13,7 +13,7 @@ from tlz.curried import map
 from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten
-from .highlevelgraph import AbstractLayer, Layer
+from .highlevelgraph import Layer
 from .utils import apply, cached_cumsum, concrete, insert, stringify
 
 #
@@ -325,7 +325,7 @@ def fractional_slice(task, axes):
 #
 
 
-class SimpleShuffleLayer(AbstractLayer):
+class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -374,7 +374,7 @@ class SimpleShuffleLayer(AbstractLayer):
         self.ignore_index = ignore_index
         self.name_input = name_input
         self.meta_input = meta_input
-        self.output_blocks = output_blocks or range(npartitions)
+        self._output_blocks = output_blocks or range(npartitions)
         self.split_name = "split-" + self.name
 
         # The scheduling policy of Dask is generally depth-first,
@@ -676,7 +676,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return keys
 
 
-class BroadcastJoinLayer(AbstractLayer):
+class BroadcastJoinLayer(Layer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -722,7 +722,7 @@ class BroadcastJoinLayer(AbstractLayer):
         self.lhs_npartitions = lhs_npartitions
         self.rhs_name = rhs_name
         self.rhs_npartitions = rhs_npartitions
-        self.output_blocks = output_blocks or set(range(self.npartitions))
+        self._output_blocks = output_blocks or set(range(self.npartitions))
         self.merge_kwargs = merge_kwargs
         self.how = self.merge_kwargs.get("how")
         self.left_on = self.merge_kwargs.get("left_on")
@@ -968,7 +968,7 @@ class DataFrameIOLayer(Blockwise):
         )
 
 
-class DataFrameTreeReduction(AbstractLayer):
+class DataFrameTreeReduction(Layer):
     """DataFrame Tree-Reduction Layer
 
     Parameters
@@ -1042,7 +1042,7 @@ class DataFrameTreeReduction(AbstractLayer):
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out
-        self.output_blocks = (
+        self._output_blocks = (
             list(range(self.split_out or 1)) if output_blocks is None else output_blocks
         )
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
