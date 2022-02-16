@@ -785,8 +785,9 @@ def test_slicing_integer_no_warnings():
     # https://github.com/dask/dask/pull/2457/
     X = da.random.random((100, 2), (2, 2))
     idx = np.array([0, 0, 1, 1])
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         X[idx].compute()
+    assert not record
 
 
 @pytest.mark.slow
@@ -887,15 +888,17 @@ def test_getitem_avoids_large_chunks():
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": False}):
-            with warnings.catch_warnings():
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
             assert_eq(result, expected)
+            assert not record
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": True}):
-            with warnings.catch_warnings():
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
             assert_eq(result, expected)
+            assert not record
 
             assert result.chunks == ((1,) * 12, (128,), (128,))
 

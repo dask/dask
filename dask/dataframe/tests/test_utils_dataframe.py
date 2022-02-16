@@ -529,8 +529,9 @@ def test_apply_and_enforce_message():
 
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         meta_nonempty(ser)
+    assert not record
 
 
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")

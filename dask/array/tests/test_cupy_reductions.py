@@ -56,15 +56,15 @@ def test_nanarg_reductions(dfunc, func):
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a, 1).compute()
 
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a, 2).compute()
 
     x[:] = cupy.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a).compute()

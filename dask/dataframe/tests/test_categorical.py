@@ -335,8 +335,9 @@ def test_categorize_nan():
     df = dd.from_pandas(
         pd.DataFrame({"A": ["a", "b", "a", float("nan")]}), npartitions=2
     )
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         df.categorize().compute()
+    assert not record
 
 
 def get_cat(x):

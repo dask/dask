@@ -262,17 +262,17 @@ def test_nanarg_reductions(dfunc, func):
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a, 1).compute()
 
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a, 2).compute()
 
     x[:] = np.nan
     a = da.from_array(x, chunks=(3, 4, 5))
     with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning):  # All NaN axis
+        with pytest.warns():  # All NaN axis
             dfunc(a).compute()
 
 
@@ -343,9 +343,9 @@ def test_reductions_2D_nans():
         assert_eq(da.argmax(a), np.argmax(x))
         assert_eq(da.argmin(a), np.argmin(x))
 
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmax(a), np.nanargmax(x))
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmin(a), np.nanargmin(x))
 
     with warnings.catch_warnings():
@@ -354,9 +354,9 @@ def test_reductions_2D_nans():
         assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
         assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
 
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
 
     with warnings.catch_warnings():
@@ -365,9 +365,9 @@ def test_reductions_2D_nans():
         assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
         assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
 
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    with pytest.warns(RuntimeWarning):  # all NaN axis warning
+    with pytest.warns():  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
@@ -477,7 +477,7 @@ def test_reductions_with_empty_array():
     x2 = dx2.compute()
 
     for dx, x in [(dx1, x1), (dx2, x2)]:
-        with pytest.warns(RuntimeWarning):  # empty slice warning
+        with pytest.warns():  # empty slice warning
             assert_eq(dx.mean(), x.mean())
             assert_eq(dx.mean(axis=()), x.mean(axis=()))
             assert_eq(dx.mean(axis=0), x.mean(axis=0))

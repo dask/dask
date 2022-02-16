@@ -95,8 +95,9 @@ def check_pandas_issue_45618_warning(test_func):
                     for r in record
                 )
         else:
-            with warnings.catch_warnings():
+            with warnings.catch_warnings(record=True) as record:
                 test_func()
+            assert not record
 
     return decorator
 

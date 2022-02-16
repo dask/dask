@@ -1604,8 +1604,9 @@ def test_concat_unknown_divisions():
     with pytest.raises(ValueError):
         dd.concat([aa, cc], axis=1)
 
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
+    assert not record
 
 
 def test_concat_unknown_divisions_errors():
@@ -2221,8 +2222,9 @@ def test_dtype_equality_warning():
     df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
     df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
 
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+    assert not record
 
 
 @pytest.mark.parametrize(

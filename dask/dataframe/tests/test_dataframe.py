@@ -163,8 +163,9 @@ def test_head_npartitions_warn():
 
     # With default args, this means that a 1 partition dataframe won't warn
     d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         d2.head()
+    assert not record
 
 
 def test_index_head():
@@ -3003,8 +3004,9 @@ def test_apply_warns():
         ddf.apply(func, axis=1)
     assert len(w) == 1
 
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         ddf.apply(func, axis=1, meta=(None, int))
+    assert not record
 
     with pytest.warns(UserWarning) as w:
         ddf.apply(lambda x: x, axis=1)

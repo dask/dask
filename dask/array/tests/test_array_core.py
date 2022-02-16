@@ -958,7 +958,7 @@ def test_operators():
     assert_eq(c, x + x.reshape((10, 1)))
 
     expr = (3 / a * b) ** 2 > 5
-    with pytest.warns(RuntimeWarning):  # ZeroDivisionWarning
+    with pytest.warns():  # ZeroDivisionWarning
         assert_eq(expr, (3 / x * y) ** 2 > 5)
 
     with warnings.catch_warnings():  # OverflowWarning
@@ -3761,7 +3761,7 @@ def test_no_chunks_2d():
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(RuntimeWarning):  # zero division warning
+    with pytest.warns():  # zero division warning
         assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
@@ -4987,17 +4987,20 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((3, 10, 10), chunks=(3, 2, 2))
         da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
+    assert not record
 
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
+    assert not record
 
-    with warnings.catch_warnings():
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((1,), chunks=(1,))
         1 / x[0]
+    assert not record
 
 
 def test_from_array_meta():
