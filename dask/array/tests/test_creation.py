@@ -408,10 +408,30 @@ def test_eye():
 
 
 @pytest.mark.parametrize("k", [0, 3, -3, 8])
-def test_diag(k):
+def test_diag_bad_input(k):
+    # when input numpy array is neither 1d nor 2d:
+    v = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
+
+    # when input dask array is neither 1d nor 2d:
+    v = da.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
+
+    # when input is not an array:
+    v = 1
+    with pytest.raises(TypeError, match="v must be a dask array or numpy array"):
+        da.diag(v, k)
+
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_2d_array_creation(k):
+    # when input 1d-array is a numpy array:
     v = np.arange(11)
     assert_eq(da.diag(v, k), np.diag(v, k))
 
+    # when input 1d-array is a dask array:
     v = da.arange(11, chunks=3)
     darr = da.diag(v, k)
     nparr = np.diag(v, k)
@@ -429,12 +449,28 @@ def test_diag(k):
     assert_eq(darr, nparr)
     assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_extraction(k):
+    # when input 2d-array is a square numpy array:
     x = np.arange(64).reshape((8, 8))
     assert_eq(da.diag(x, k), np.diag(x, k))
+    # when input 2d-array is a square dask array:
     d = da.from_array(x, chunks=(4, 4))
     assert_eq(da.diag(d, k), np.diag(x, k))
-    d = da.from_array(x, chunks=((3, 2, 3), (4, 4)))
+    # heterogeneous chunks:
+    d = da.from_array(x, chunks=((3, 2, 3), (4, 1, 2, 1)))
     assert_eq(da.diag(d, k), np.diag(x, k))
+
+    # when input 2d-array is a rectangular numpy array:
+    y = np.arange(5 * 8).reshape((5, 8))
+    assert_eq(da.diag(y, k), np.diag(y, k))
+    # when input 2d-array is a rectangular dask array:
+    d = da.from_array(y, chunks=(4, 4))
+    assert_eq(da.diag(d, k), np.diag(y, k))
+    # heterogeneous chunks:
+    d = da.from_array(y, chunks=((3, 2), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(y, k))
 
 
 def test_diagonal():

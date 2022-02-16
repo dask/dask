@@ -565,6 +565,9 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
 @derived_from(np)
 def diag(v, k=0):
+    if not isinstance(v, np.ndarray) and not isinstance(v, Array):
+        raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
+
     name = "diag-" + tokenize(v, k)
 
     meta = meta_from_array(v, 2 if v.ndim == 1 else 1)
@@ -585,9 +588,10 @@ def diag(v, k=0):
         else:
             raise ValueError("Array must be 1d or 2d only")
         return Array(dsk, name, chunks, meta=meta)
-    if not isinstance(v, Array):
-        raise TypeError(f"v must be a dask array or numpy array, got {type(v)}")
+
     if v.ndim != 1:
+        if v.ndim != 2:
+            raise ValueError("Array must be 1d or 2d only")
         if k == 0 and v.chunks[0] == v.chunks[1]:
             dsk = {
                 (name, i): (np.diag, row[i]) for i, row in enumerate(v.__dask_keys__())
