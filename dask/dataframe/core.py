@@ -4199,8 +4199,7 @@ class DataFrame(_Frame):
         )
 
     def __getitem__(self, key):
-        token = tokenize(self, key)
-        name = "getitem-%s" % token
+        name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
