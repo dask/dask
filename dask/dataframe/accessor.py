@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from functools import partial
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -23,7 +26,7 @@ class Accessor:
     Subclasses should define ``_accessor_name``
     """
 
-    _not_implemented = set()
+    _not_implemented: ClassVar[set[str]] = set()
 
     def __init__(self, series):
         from .core import Series

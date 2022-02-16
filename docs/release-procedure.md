@@ -11,6 +11,9 @@ Release per project:
 
 *   Update release notes in docs/source/changelog.rst
 
+*   Update the distributed version in dask/setup.py and the dask version
+    in distributed/requirements.txt
+
 *   Commit
 
         git commit -a -m "bump version to x.x.x"

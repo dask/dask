@@ -12,7 +12,6 @@ from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
-import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress

@@ -9,8 +9,7 @@ import sys
 import tempfile
 import uuid
 import warnings
-from _thread import RLock
-from collections.abc import Iterable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -18,8 +17,8 @@ from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from operator import add
-from threading import Lock
-from typing import TypeVar
+from threading import Lock, RLock
+from typing import ClassVar, TypeVar
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -925,7 +924,7 @@ def digit(n, k, base):
     >>> digit(1234, 3, 10)
     1
     """
-    return n // base ** k % base
+    return n // base**k % base
 
 
 def insert(tup, loc, val):
@@ -987,7 +986,7 @@ def put_lines(buf, lines):
     buf.write("\n".join(lines))
 
 
-_method_cache = {}
+_method_cache: dict[str, methodcaller] = {}
 
 
 class methodcaller:
@@ -999,7 +998,12 @@ class methodcaller:
     """
 
     __slots__ = ("method",)
-    func = property(lambda self: self.method)  # For `funcname` to work
+    method: str
+
+    @property
+    def func(self) -> str:
+        # For `funcname` to work
+        return self.method
 
     def __new__(cls, method: str):
         try:
@@ -1051,16 +1055,18 @@ class MethodCache:
     True
     """
 
-    __getattr__ = staticmethod(methodcaller)
-    __dir__ = lambda self: list(_method_cache)
+    def __getattr__(self, item):
+        return methodcaller(item)
+
+    def __dir__(self):
+        return list(_method_cache)
 
 
 M = MethodCache()
 
 
 class SerializableLock:
-    _locks = WeakValueDictionary()
-    """ A Serializable per-process Lock
+    """A Serializable per-process Lock
 
     This wraps a normal ``threading.Lock`` object and satisfies the same
     interface.  However, this lock can also be serialized and sent to different
@@ -1087,7 +1093,11 @@ class SerializableLock:
     The creation of locks is itself not threadsafe.
     """
 
-    def __init__(self, token=None):
+    _locks: ClassVar[WeakValueDictionary[Hashable, Lock]] = WeakValueDictionary()
+    token: Hashable
+    lock: Lock
+
+    def __init__(self, token: Hashable | None = None):
         self.token = token or str(uuid.uuid4())
         if self.token in SerializableLock._locks:
             self.lock = SerializableLock._locks[self.token]
@@ -1394,16 +1404,16 @@ def parse_bytes(s):
 
 
 byte_sizes = {
-    "kB": 10 ** 3,
-    "MB": 10 ** 6,
-    "GB": 10 ** 9,
-    "TB": 10 ** 12,
-    "PB": 10 ** 15,
-    "KiB": 2 ** 10,
-    "MiB": 2 ** 20,
-    "GiB": 2 ** 30,
-    "TiB": 2 ** 40,
-    "PiB": 2 ** 50,
+    "kB": 10**3,
+    "MB": 10**6,
+    "GB": 10**9,
+    "TB": 10**12,
+    "PB": 10**15,
+    "KiB": 2**10,
+    "MiB": 2**20,
+    "GiB": 2**30,
+    "TiB": 2**40,
+    "PiB": 2**50,
     "B": 1,
     "": 1,
 }
@@ -1522,11 +1532,11 @@ def format_bytes(n: int) -> str:
     For all values < 2**60, the output is always <= 10 characters.
     """
     for prefix, k in (
-        ("Pi", 2 ** 50),
-        ("Ti", 2 ** 40),
-        ("Gi", 2 ** 30),
-        ("Mi", 2 ** 20),
-        ("ki", 2 ** 10),
+        ("Pi", 2**50),
+        ("Ti", 2**40),
+        ("Gi", 2**30),
+        ("Mi", 2**20),
+        ("ki", 2**10),
     ):
         if n >= k * 0.9:
             return f"{n / k:.2f} {prefix}B"
@@ -1800,11 +1810,11 @@ def stringify_collection_keys(obj):
 try:
     _cached_property = functools.cached_property
 except AttributeError:
-    # TODO: Copied from functools.cached_property in python 3.8. Remove when minimum
-    # supported python version is 3.8:
+    # TODO: Copied from functools.cached_property in python 3.8.
+    #       Remove when minimum supported python version is 3.8:
     _NOT_FOUND = object()
 
-    class _cached_property:
+    class _cached_property:  # type: ignore
         def __init__(self, func):
             self.func = func
             self.attrname = None
