@@ -339,6 +339,7 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_same_repr():

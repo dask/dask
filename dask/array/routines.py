@@ -1865,6 +1865,8 @@ def roll(array, shift, axis=None):
         result = concatenate([result[sl1], result[sl2]], axis=i)
 
     result = result.reshape(array.shape)
+    # Ensure that the output is always a new array object
+    result = result.copy() if result is array else result
 
     return result
 
@@ -1882,6 +1884,20 @@ def union1d(ar1, ar2):
 @derived_from(np)
 def ravel(array_like):
     return asanyarray(array_like).reshape((-1,))
+
+
+@derived_from(np)
+def expand_dims(a, axis):
+    if type(axis) not in (tuple, list):
+        axis = (axis,)
+
+    out_ndim = len(axis) + a.ndim
+    axis = validate_axis(axis, out_ndim)
+
+    shape_it = iter(a.shape)
+    shape = [1 if ax in axis else next(shape_it) for ax in range(out_ndim)]
+
+    return a.reshape(shape)
 
 
 @derived_from(np)

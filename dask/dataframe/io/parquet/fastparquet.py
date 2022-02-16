@@ -1181,7 +1181,7 @@ class FastParquetEngine(Engine):
             elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(pf.dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(pf.dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
             else:

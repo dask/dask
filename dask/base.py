@@ -586,7 +586,8 @@ def visualize(
     Parameters
     ----------
     args : object
-        Any number of objects. If it is a dask object, its associated graph
+        Any number of objects. If it is a dask collection (for example, a
+        dask DataFrame, Array, Bag, or Delayed), its associated graph
         will be included in the output of visualize. By default, python builtin
         collections are also traversed to look for dask objects (for more
         information see the ``traverse`` keyword). Arguments lacking an
@@ -852,9 +853,10 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
+    hasher = md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
-        args = args + (kwargs,)
-    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+        hasher.update(str(normalize_token(kwargs)).encode())
+    return hasher.hexdigest()
 
 
 normalize_token = Dispatch()

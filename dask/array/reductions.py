@@ -230,7 +230,7 @@ def _tree_reduce(
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     for i in range(depth - 1):
         x = partial_reduce(
             func,
@@ -243,7 +243,7 @@ def _tree_reduce(
         )
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     return partial_reduce(
         func,
         x,
@@ -293,9 +293,11 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
-        dummy = dict(i for i in enumerate(p) if i[0] not in decided)
-        g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
+        free = {
+            i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every
+        }
+        dummy = dict(i for i in enumerate(p) if i[0] in split_every)
+        g = lol_tuples((x.name,), range(x.ndim), free, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 

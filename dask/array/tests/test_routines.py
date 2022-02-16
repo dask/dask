@@ -4,6 +4,7 @@ import sys
 from numbers import Number
 
 import pytest
+from numpy import AxisError
 
 from dask.delayed import delayed
 
@@ -1328,6 +1329,12 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+def test_roll_always_results_in_a_new_array():
+    x = da.arange(2, 3)
+    y = da.roll(x, 1)
+    assert y is not x
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
 def test_shape_and_ndim(shape):
     x = da.random.random(shape)
@@ -1411,6 +1418,25 @@ def test_ravel_with_array_like():
     # nested i.e. tuples in list
     assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
     assert isinstance(da.ravel([(0,), (0,)]), da.core.Array)
+
+
+@pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (0, 2), (1, 2), 2])
+def test_expand_dims(axis):
+    a = np.arange(10)
+    d = da.from_array(a, chunks=(3,))
+
+    if axis is None:
+        with pytest.raises(TypeError):
+            da.expand_dims(d, axis=axis)
+    elif axis == 2:
+        with pytest.raises(AxisError):
+            da.expand_dims(d, axis=axis)
+    else:
+        a_e = np.expand_dims(a, axis=axis)
+        d_e = da.expand_dims(d, axis=axis)
+
+        assert_eq(d_e, a_e)
+        assert same_keys(d_e, da.expand_dims(d, axis=axis))
 
 
 @pytest.mark.parametrize("is_func", [True, False])

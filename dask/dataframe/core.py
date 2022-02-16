@@ -3425,9 +3425,22 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def iteritems(self):
-        for i in range(self.npartitions):
-            s = self.get_partition(i).compute()
-            yield from s.iteritems()
+        if PANDAS_GT_150:
+            warnings.warn(
+                "iteritems is deprecated and will be removed in a future version. "
+                "Use .items instead.",
+                FutureWarning,
+            )
+        # We use the `_` generator below to ensure the deprecation warning above
+        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+        # iteration happens
+
+        def _(self):
+            for i in range(self.npartitions):
+                s = self.get_partition(i).compute()
+                yield from s.items()
+
+        return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -5250,7 +5263,10 @@ class DataFrame(_Frame):
 
         if len(self.columns) == 0:
             lines.append("Index: 0 entries")
-            lines.append("Empty %s" % type(self).__name__)
+            lines.append(f"Empty {type(self).__name__}")
+            if PANDAS_GT_150:
+                # pandas dataframe started adding a newline when info is called.
+                lines.append("")
             put_lines(buf, lines)
             return
 
@@ -5312,8 +5328,7 @@ class DataFrame(_Frame):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k
-            for k in sorted(self.dtypes.value_counts().iteritems(), key=str)
+            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
@@ -5438,7 +5453,7 @@ class DataFrame(_Frame):
             series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
         else:
             series_df = pd.concat(
-                [_repr_data_series(s, index=index) for _, s in meta.iteritems()], axis=1
+                [_repr_data_series(s, index=index) for _, s in meta.items()], axis=1
             )
         return series_df
 
