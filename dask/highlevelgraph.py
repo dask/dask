@@ -1266,29 +1266,42 @@ class HighLevelGraph(Mapping):
                 # distributed - Materialize layers even if pickle=True
                 materialize = True
 
+        # Materialize layers first (if necessary).
+        # We must loop through the layers before packing so
+        # that all materialized dependencies are known
+        _original = {}
+        if materialize:
+            for name in self.layers.keys():
+                layer = self.layers[name]
+                if materialize and not isinstance(layer, MaterializedLayer):
+                    _original[name] = layer  # Save original layer
+                    self.layers[name] = MaterializedLayer(
+                        dict(_original[name]), annotations=layer.annotations
+                    )
+
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
-            _layer = (
-                MaterializedLayer(dict(layer), annotations=layer.annotations)
-                if materialize and not isinstance(layer, MaterializedLayer)
-                else layer
-            )
             layers.append(
                 {
-                    "__module__": _layer.__module__,
-                    "__name__": type(_layer).__name__,
-                    "state": _layer.__dask_distributed_pack__(
+                    "__module__": layer.__module__,
+                    "__name__": type(layer).__name__,
+                    "state": layer.__dask_distributed_pack__(
                         self.get_all_external_keys(),
                         self.key_dependencies,
                         client,
                         client_keys,
                     ),
-                    "annotations": _layer.__dask_distributed_annotations_pack__(
+                    "annotations": layer.__dask_distributed_annotations_pack__(
                         annotations
                     ),
                 }
             )
+
+        # Reset the original (unmaterialized) HLG
+        for k, v in _original.items():
+            self.layers[k] = v
+
         return {"layers": layers}
 
     @staticmethod
