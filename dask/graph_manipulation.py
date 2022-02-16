@@ -5,8 +5,8 @@ their inputs.
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable, Hashable, Set
-from typing import TYPE_CHECKING, TypeVar
+from collections.abc import Callable, Hashable
+from typing import Callable, Hashable, Literal, TypeVar
 
 from .base import (
     clone_key,
@@ -20,9 +20,6 @@ from .blockwise import blockwise
 from .core import flatten
 from .delayed import Delayed, delayed
 from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
-
-if TYPE_CHECKING:
-    from typing_extensions import Literal
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -322,7 +319,7 @@ def _bind_one(
 
     dsk = child.__dask_graph__()  # type: ignore
     new_layers: dict[str, Layer] = {}
-    new_deps: dict[str, Set[str]] = {}
+    new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:

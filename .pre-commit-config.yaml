@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: pyupgrade
         args:
-          - --py37-plus
+          - --py38-plus
   -   repo: https://github.com/psf/black
       rev: 22.1.0
       hooks:
@@ -17,7 +17,7 @@ repos:
         language_version: python3
         exclude: versioneer.py
         args:
-          - --target-version=py37
+          - --target-version=py38
   -   repo: https://gitlab.com/pycqa/flake8
       rev: 3.9.2
       hooks:
