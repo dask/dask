@@ -376,7 +376,8 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
 
 
 @pytest.mark.parametrize(
-    "fmt,blocksize", [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
+    "fmt,blocksize",
+    [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr],  # type: ignore
 )
 def test_compression(s3, fmt, blocksize, s3so):
     if fmt not in compress:
@@ -619,8 +620,8 @@ def test_parquet_wstoragepars(s3, s3so):
     assert s3.current().default_fill_cache is True
 
     dd.read_parquet(
-        url, storage_options=dict(**s3so, **{"default_block_size": 2 ** 20})
+        url, storage_options=dict(**s3so, **{"default_block_size": 2**20})
     )
-    assert s3.current().default_block_size == 2 ** 20
+    assert s3.current().default_block_size == 2**20
     with s3.current().open(url + "/_metadata") as f:
-        assert f.blocksize == 2 ** 20
+        assert f.blocksize == 2**20
