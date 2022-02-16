@@ -1,4 +1,8 @@
 """ Dataframe optimizations """
+import operator
+
+import numpy as np
+
 from .. import config, core
 from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
@@ -45,13 +49,36 @@ def optimize(dsk, keys, **kwargs):
 def optimize_dataframe_getitem(dsk, keys):
     # This optimization looks for all `DataFrameIOLayer` instances,
     # and calls `project_columns` on any IO layers that precede
-    # a (qualified) `SelectionLayer`.
+    # a (qualified) `getitem` operation.
 
-    from ..layers import DataFrameIOLayer, SelectionLayer
+    from ..layers import DataFrameIOLayer
 
     # Construct a list containg the names of all
     # DataFrameIOLayer layers in the graph
     io_layers = [k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)]
+
+    def _is_selection(layer):
+        # Utility to check if layer is a getitem selection
+
+        # Must be Blockwise
+        if not isinstance(layer, Blockwise):
+            return False
+
+        # Callable must be `getitem`
+        if layer.dsk[layer.output][0] != operator.getitem:
+            return False
+
+        return True
+
+    def _kind(layer):
+        # Utility to check type of getitem selection
+
+        # Selection is second indice
+        key, ind = layer.indices[1]
+        if ind is None:
+            if isinstance(key, (tuple, str, list, np.ndarray)) or np.isscalar(key):
+                return "column-selection"
+        return "row-selection"
 
     # Loop over each DataFrameIOLayer layer
     layers = dsk.layers.copy()
@@ -77,14 +104,13 @@ def optimize_dataframe_getitem(dsk, keys):
         # of `io_layer_name` dependents (`deps`):
         #
         #  - CASE A
-        #    - 1 Dependent: A column-based SelectionLayer
+        #    - 1 Dependent: A column-based getitem layer
         #    - This corresponds to the simple case that a
         #      column selection directly follows the IO layer
         #
         #  - CASE B
         #    - >1 Dependents: An arbitrary number of column-
-        #      based SelectionLayer layers, and a single
-        #      row-selection SelectionLayer
+        #      based getitem layers, and a single row selection
         #    - Usually corresponds to a filter operation that
         #      may (or may not) precede a column selection
         #    - This pattern is typical in Dask-SQL SELECT
@@ -92,8 +118,9 @@ def optimize_dataframe_getitem(dsk, keys):
 
         # Bail if dependent layer type(s) do not agree with
         # case A or case B
-        if not all(isinstance(dsk.layers[k], SelectionLayer) for k in deps) or {
-            dsk.layers[k].kind for k in deps
+
+        if not all(_is_selection(dsk.layers[k]) for k in deps) or {
+            _kind(dsk.layers[k]) for k in deps
         } not in (
             {"column-selection"},
             {"column-selection", "row-selection"},
@@ -106,7 +133,7 @@ def optimize_dataframe_getitem(dsk, keys):
         # projection in the root IO layer. For case B,
         # these layers are not the final column selection
         # (they are only part of a filtering operation).
-        row_select_layers = {k for k in deps if dsk.layers[k].kind == "row-selection"}
+        row_select_layers = {k for k in deps if _kind(dsk.layers[k]) == "row-selection"}
         col_select_layers = deps - row_select_layers
 
         # Can only handle single column-selection
@@ -151,9 +178,9 @@ def optimize_dataframe_getitem(dsk, keys):
             if len(dsk.dependents[row_select_layer]) != 1:
                 continue  # Too many/few row_select_layer dependents
             _layer = dsk.layers[list(dsk.dependents[row_select_layer])[0]]
-            if isinstance(_layer, SelectionLayer) and _layer.kind == "column-selection":
+            if _is_selection(_layer) and _kind(_layer) == "column-selection":
                 # Include this column selection in our list of columns
-                selection = _layer.selection
+                selection = _layer.indices[1][0]
                 columns |= set(
                     selection if isinstance(selection, list) else [selection]
                 )
@@ -170,7 +197,7 @@ def optimize_dataframe_getitem(dsk, keys):
 
         # Update columns with selections in col_select_layers
         for col_select_layer in col_select_layers:
-            selection = dsk.layers[col_select_layer].selection
+            selection = dsk.layers[col_select_layer].indices[1][0]
             columns |= set(selection if isinstance(selection, list) else [selection])
 
         # If we got here, column projection is supported.
