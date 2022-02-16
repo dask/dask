@@ -23,18 +23,27 @@ These images are large, around 1GB.
 Example
 -------
 
-Here is a simple example on the local host network
+Here is a simple example on a dedicated virtual network
 
 .. code-block:: bash
 
-   docker run -it --network host daskdev/dask dask-scheduler  # start scheduler
+   docker network create dask
 
-   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
-   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
-   docker run -it --network host daskdev/dask dask-worker localhost:8786 # start worker
+   docker run --network dask --name scheduler daskdev/dask dask-scheduler  # start scheduler
 
-   docker run -it --network host daskdev/dask-notebook  # start Jupyter server
+   docker run --network dask daskdev/dask dask-worker scheduler:8786 # start worker
+   docker run --network dask daskdev/dask dask-worker scheduler:8786 # start worker
+   docker run --network dask daskdev/dask dask-worker scheduler:8786 # start worker
 
+   docker run --network dask -p 8888:8888 daskdev/dask-notebook  # start Jupyter server
+
+Then from within the notebook environment you can connect to the Dask cluster like this:
+
+.. code-block:: python
+
+   from dask.distributed import Client
+   client = Client("scheduler:8786")
+   client
 
 Extensibility
 -------------
@@ -53,7 +62,7 @@ the Dask worker software environment:
 
 .. code-block:: bash
 
-   docker run -it -e EXTRA_CONDA_PACKAGES="joblib" daskdev/dask dask-worker localhost:8786
+   docker run --network dask -e EXTRA_CONDA_PACKAGES="joblib" daskdev/dask dask-worker scheduler:8786
 
 Note that using these can significantly delay the container from starting,
 especially when using ``apt``, or ``conda`` (``pip`` is relatively fast).
