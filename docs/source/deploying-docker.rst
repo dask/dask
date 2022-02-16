@@ -35,6 +35,7 @@ Here is a simple example on the local host network
 
    docker run -it --network host daskdev/dask-notebook  # start Jupyter server
 
+Note : The host networking driver only works on Linux hosts, and is not supported on Docker Desktop for Mac, Docker Desktop for Windows, or Docker EE for Windows Server.
 
 Extensibility
 -------------
