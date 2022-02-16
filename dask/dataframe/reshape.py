@@ -247,9 +247,26 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             (sorted(values), columns_contents), names=[None, columns]
         )
 
-    meta = pd.DataFrame(
-        columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
-    )
+    if aggfunc in ["first", "last"]:
+        # Infer datatype as non-numeric values are allowed
+        if is_scalar(values):
+            meta = pd.DataFrame(
+                columns=new_columns,
+                dtype=df[values].dtype,
+                index=pd.Index(df._meta[index]),
+            )
+        else:
+            meta = pd.DataFrame(
+                columns=new_columns,
+                index=pd.Index(df._meta[index]),
+            )
+            for value_col in values:
+                meta[value_col] = meta[value_col].astype(df[values].dtypes[value_col])
+    else:
+        # Use float64 as other aggregate functions require numerical data
+        meta = pd.DataFrame(
+            columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
+        )
 
     kwargs = {"index": index, "columns": columns, "values": values}
 
