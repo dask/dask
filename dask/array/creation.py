@@ -9,7 +9,7 @@ from tlz import sliding_window
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import cached_cumsum, derived_from
+from ..utils import cached_cumsum, derived_from, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -669,6 +669,13 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     len_kdiag = kdiag_row_stop - kdiag_row_start
 
     if len_kdiag <= 0:
+        xp = np
+
+        if is_cupy_type(a._meta):
+            import cupy
+
+            xp = cupy
+
         out_chunks = pop_axes(a.chunks, axis1, axis2) + ((0,),)
         dsk = dict()
         for free_idx in free_indices:
@@ -676,7 +683,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
                 out_chunks[axis][free_idx[axis]] for axis in range(ndims_free)
             )
             dsk[(name,) + free_idx + (0,)] = (
-                partial(np.empty, dtype=a.dtype),
+                partial(xp.empty, dtype=a.dtype),
                 shape + (0,),
             )
 
