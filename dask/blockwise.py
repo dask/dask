@@ -349,10 +349,12 @@ class Blockwise(Layer):
         annotations: Mapping[str, Any] | None = None,
         io_deps: Mapping[str, BlockwiseDep] | None = None,
     ):
-        super().__init__(annotations=annotations)
+        super().__init__(
+            annotations=annotations,
+            output_blocks=output_blocks,
+        )
         self.output = output
         self.output_indices = tuple(output_indices)
-        self._output_blocks = output_blocks
         self.dsk = dsk
 
         # Remove `BlockwiseDep` arguments from input indices

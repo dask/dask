@@ -42,11 +42,16 @@ class Layer(Mapping):
     symbolically in order to speedup a series of operations significantly.
     Ideally, a layer should stay in this symbolic state until execution
     but in practice some operations will force the layer to generate all
-    its internal tasks. We say that the layer has been materialized.
+    its internal tasks. When this happens, we say that the layer has been
+    materialized.
 
-    Most of the default implementations in this class will materialize the
-    layer. It is up to derived classes to implement non-materializing
-    implementations.
+    Implementing a new ``Layer`` subclass requires the definition of
+    new ``layer_state`` and ``construct_graph`` methods. The subclass
+    must also define the ``layer_dependencies`` method (and set a
+    default value for ``self._output_blocks``), or override the
+    ``cull`` method altogether.  Failure to set a default value for
+    ``self._output_blocks`` (and use it in  ``construct_graph``) will
+    result in materialization in the default ``cull`` method.
 
     Parameters
     ----------
@@ -75,7 +80,7 @@ class Layer(Mapping):
     def __init__(
         self,
         annotations: Mapping[str, Any] | None = None,
-        collection_annotations: Mapping[str, Any] = None,
+        collection_annotations: Mapping[str, Any] | None = None,
         output_blocks: list[int | tuple[int]] | None = None,
     ):
         self.annotations = annotations or copy.copy(config.get("annotations", None))
@@ -86,18 +91,8 @@ class Layer(Mapping):
 
     @property
     def output_blocks(self):
+        """List of required output indices for this layer"""
         return self._output_blocks
-
-    @classmethod
-    def reconstructor(cls):
-        """Specify the specific class to use with
-        ``layer_state`` for culling and materialization
-        on the scheduler. Some Layers may need to down-
-        cast after collection-sepcific optimizations
-        (e.g. ``DataFrameIOLayer``). However, the default
-        is to use the current class.
-        """
-        return cls
 
     @property
     def layer_state(self):
@@ -108,18 +103,86 @@ class Layer(Mapping):
         """
         raise NotImplementedError
 
-    def layer_dependencies(self, keys, output_blocks=None):
-        """Determine the necessary dependencies to produce `keys`"""
-        raise NotImplementedError
-
     def construct_graph(self):
         """Materialize a low-level (dictionary) task graph
 
-        This method should check the ``output_blocks`` attribute,
+        This method should check the ``output_blocks`` property,
         and only materialize the necessary low-level graph to
         produce keys corresponding to these collection indices.
         """
         raise NotImplementedError
+
+    def layer_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`"""
+        raise NotImplementedError
+
+    @classmethod
+    def reconstructor(cls):
+        """Specify the specific class to use with
+        ``layer_state`` for culling and materialization
+        on the scheduler. Some Layers may need to down-
+        cast after collection-specific optimizations
+        (e.g. ``DataFrameIOLayer``). However, the default
+        is to use the current class.
+        """
+        return cls
+
+    def is_materialized(self) -> bool:
+        """Return whether the layer is materialized or not"""
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self.construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def get_output_keys(self) -> Set:
+        """Return a set of all output keys
+
+        Returns
+        -------
+        keys: Set
+            All output keys
+        """
+        if hasattr(self, "_cached_output_keys"):
+            return self._cached_output_keys
+        else:
+            if self.output_blocks is None:
+                output_keys = self.keys()  # Materializes the graph!
+            else:
+                output_keys = {(self.name, block) for block in self.output_blocks}
+            self._cached_output_keys = output_keys
+        return self._cached_output_keys
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def _keys_to_indices(self, keys):
+        """Convert keys to output chunk/partition indices
+
+        Intended for keys of the form: `(name, index)`.
+        """
+        parts = set()
+        for key in keys:
+            try:
+                _name, _part = key
+            except ValueError:
+                continue
+            if _name != self.name:
+                continue
+            parts.add(_part)
+        return parts
 
     def cull(self, keys, all_keys):
         """Cull an AbstractLayer
@@ -165,82 +228,6 @@ class Layer(Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
-
-    def __dask_distributed_annotations_pack__(
-        self, annotations: Mapping[str, Any] | None = None
-    ) -> Mapping[str, Any] | None:
-        """Packs Layer annotations for transmission to scheduler
-
-        Callables annotations are fully expanded over Layer keys, while
-        other values are simply transmitted as is
-
-        Parameters
-        ----------
-        annotations : Mapping[str, Any], optional
-            A top-level annotations.
-
-        Returns
-        -------
-        packed_annotations : dict
-            Packed annotations.
-        """
-        annotations = toolz.merge(self.annotations or {}, annotations or {})
-        packed = {}
-        for a, v in annotations.items():
-            if callable(v):
-                packed[a] = {stringify(k): v(k) for k in self}
-                packed[a]["__expanded_annotations__"] = True
-            else:
-                packed[a] = v
-        return packed
-
-    @staticmethod
-    def __dask_distributed_annotations_unpack__(
-        annotations: MutableMapping[str, Any],
-        new_annotations: Mapping[str, Any] | None,
-        keys: Iterable[Hashable],
-    ) -> None:
-        """
-        Unpack a set of layer annotations across a set of keys, then merge those
-        expanded annotations for the layer into an existing annotations mapping.
-
-        This is not a simple shallow merge because some annotations like retries,
-        priority, workers, etc need to be able to retain keys from different layers.
-
-        Parameters
-        ----------
-        annotations: MutableMapping[str, Any], input/output
-            Already unpacked annotations, which are to be updated with the new
-            unpacked annotations
-        new_annotations: Mapping[str, Any], optional
-            New annotations to be unpacked into `annotations`
-        keys: Iterable
-            All keys in the layer.
-        """
-        if new_annotations is None:
-            return
-
-        expanded = {}
-        keys_stringified = False
-
-        # Expand the new annotations across the keyset
-        for a, v in new_annotations.items():
-            if type(v) is dict and "__expanded_annotations__" in v:
-                # Maybe do a destructive update for efficiency?
-                v = v.copy()
-                del v["__expanded_annotations__"]
-                expanded[a] = v
-            else:
-                if not keys_stringified:
-                    keys = [stringify(k) for k in keys]
-                    keys_stringified = True
-
-                expanded[a] = dict.fromkeys(keys, v)
-
-        # Merge the expanded annotations with the existing annotations mapping
-        for k, v in expanded.items():
-            v.update(annotations.get(k, {}))
-        annotations.update(expanded)
 
     def clone(
         self,
@@ -323,109 +310,110 @@ class Layer(Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
-        if highlevelgraph_key != "":
-            shortname = key_split(highlevelgraph_key)
-        elif hasattr(self, "name"):
-            shortname = key_split(self.name)
-        else:
-            shortname = self.__class__.__name__
+    def __dask_distributed_annotations_pack__(
+        self, annotations: Mapping[str, Any] | None = None
+    ) -> Mapping[str, Any] | None:
+        """Packs Layer annotations for transmission to scheduler
 
-        svg_repr = ""
-        if (
-            self.collection_annotations
-            and self.collection_annotations.get("type") == "dask.array.core.Array"
-        ):
-            chunks = self.collection_annotations.get("chunks")
-            if chunks:
-                from .array.svg import svg
+        Callables annotations are fully expanded over Layer keys, while
+        other values are simply transmitted as is
 
-                svg_repr = svg(chunks)
+        Parameters
+        ----------
+        annotations : Mapping[str, Any], optional
+            A top-level annotations.
 
-        return get_template("highlevelgraph_layer.html.j2").render(
-            materialized=self.is_materialized(),
-            shortname=shortname,
-            layer_index=layer_index,
-            highlevelgraph_key=highlevelgraph_key,
-            info=self.layer_info_dict(),
-            svg_repr=svg_repr,
-        )
-
-    def layer_info_dict(self):
-        info = {
-            "layer_type": type(self).__name__,
-            "is_materialized": self.is_materialized(),
-        }
-        if self.annotations is not None:
-            for key, val in self.annotations.items():
-                info[key] = html.escape(str(val))
-        if self.collection_annotations is not None:
-            for key, val in self.collection_annotations.items():
-                # Hide verbose chunk details from the HTML table
-                if key != "chunks":
-                    info[key] = html.escape(str(val))
-        return info
-
-    def is_materialized(self) -> bool:
-        return hasattr(self, "_cached_dict")
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self.construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def get_output_keys(self) -> Set:
-        if hasattr(self, "_cached_output_keys"):
-            return self._cached_output_keys
-        else:
-            if self.output_blocks is None:
-                output_keys = self.keys()  # Materializes the graph!
-            else:
-                output_keys = {(self.name, block) for block in self.output_blocks}
-            self._cached_output_keys = output_keys
-        return self._cached_output_keys
-
-    def _keys_to_indices(self, keys):
-        """Convert keys to output chunk/partition indices
-
-        Currently works for keys of the form: `(name, index)`.
+        Returns
+        -------
+        packed_annotations : dict
+            Packed annotations.
         """
-        parts = set()
-        for key in keys:
-            try:
-                _name, _part = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            parts.add(_part)
-        return parts
+        annotations = toolz.merge(self.annotations or {}, annotations or {})
+        packed = {}
+        for a, v in annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
+        return packed
 
-    def __getitem__(self, key):
-        return self._dict[key]
+    @staticmethod
+    def __dask_distributed_annotations_unpack__(
+        annotations: MutableMapping[str, Any],
+        new_annotations: Mapping[str, Any] | None,
+        keys: Iterable[Hashable],
+    ) -> None:
+        """
+        Unpack a set of layer annotations across a set of keys, then merge those
+        expanded annotations for the layer into an existing annotations mapping.
 
-    def __iter__(self):
-        return iter(self._dict)
+        This is not a simple shallow merge because some annotations like retries,
+        priority, workers, etc need to be able to retain keys from different layers.
 
-    def __len__(self):
-        return len(self._dict)
+        Parameters
+        ----------
+        annotations: MutableMapping[str, Any], input/output
+            Already unpacked annotations, which are to be updated with the new
+            unpacked annotations
+        new_annotations: Mapping[str, Any], optional
+            New annotations to be unpacked into `annotations`
+        keys: Iterable
+            All keys in the layer.
+        """
+        if new_annotations is None:
+            return
 
-    def __reduce__(self):
-        # Assume Layer should be initialized with
-        # key-word arguments only
-        state = self.layer_state.copy()
-        state["annotations"] = self.annotations
-        return (
-            partial(self.reconstructor(), **state),
-            tuple(),
-        )
+        expanded = {}
+        keys_stringified = False
+
+        # Expand the new annotations across the keyset
+        for a, v in new_annotations.items():
+            if type(v) is dict and "__expanded_annotations__" in v:
+                # Maybe do a destructive update for efficiency?
+                v = v.copy()
+                del v["__expanded_annotations__"]
+                expanded[a] = v
+            else:
+                if not keys_stringified:
+                    keys = [stringify(k) for k in keys]
+                    keys_stringified = True
+
+                expanded[a] = dict.fromkeys(keys, v)
+
+        # Merge the expanded annotations with the existing annotations mapping
+        for k, v in expanded.items():
+            v.update(annotations.get(k, {}))
+        annotations.update(expanded)
 
     def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
+        """Pack the layer for scheduler communication in Distributed
+
+        This method should pack its current state and is called by the Client when
+        communicating with the Scheduler.
+        The Scheduler will then use .__dask_distributed_unpack__(data, ...) to unpack
+        the state, materialize the layer, and merge it into the global task graph.
+
+        The default implementation uses `ToPickle`, and requires that
+        ``pickle.loads`` is enabled on the scheduler.
+
+        Parameters
+        ----------
+        all_hlg_keys: Iterable[Hashable]
+            All keys in the high level graph
+        known_key_dependencies: Mapping[Hashable, set]
+            Already known dependencies
+        client: distributed.Client
+            The client calling this function.
+        client_keys : Iterable[Hashable]
+            List of keys requested by the client.
+
+        Returns
+        -------
+        state: Object serializable by msgpack
+            Scheduler compatible state of the layer
+        """
+
         from distributed.protocol.serialize import ToPickle
 
         # Save "pre-stringified" key dependencies
@@ -437,6 +425,33 @@ class Layer(Mapping):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        """Unpack the state of a layer previously packed by __dask_distributed_pack__()
+
+        This method is called by the scheduler in Distributed in order to unpack
+        the state of a layer and merge it into its global task graph. The method
+        can use `dsk` and `dependencies`, which are the already materialized
+        state of the preceding layers in the high level graph. The layers of the
+        high level graph are unpacked in topological order.
+
+        See Layer.__dask_distributed_pack__() for packing detail.
+
+        Parameters
+        ----------
+        state: Any
+            The state returned by Layer.__dask_distributed_pack__()
+        dsk: Mapping, read-only
+            The materialized low level graph of the already unpacked layers
+        dependencies: Mapping, read-only
+            The dependencies of each key in `dsk`
+
+        Returns
+        -------
+        unpacked-layer: dict
+            layer_dsk: Mapping[str, Any]
+                Materialized (stringified) graph of the layer
+            layer_deps: Mapping[str, set]
+                Dependencies of each key in `layer_dsk`
+        """
         from distributed.protocol.serialize import ToPickle
         from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_task
@@ -496,6 +511,60 @@ class Layer(Mapping):
         # Must use `dumps_task` on the every task
         return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
 
+    def __reduce__(self):
+        """Default serialization"""
+        # Assume Layer should be initialized with
+        # key-word arguments only
+        state = self.layer_state.copy()
+        state["annotations"] = self.annotations
+        return (
+            partial(self.reconstructor(), **state),
+            tuple(),
+        )
+
+    def layer_info_dict(self):
+        info = {
+            "layer_type": type(self).__name__,
+            "is_materialized": self.is_materialized(),
+        }
+        if self.annotations is not None:
+            for key, val in self.annotations.items():
+                info[key] = html.escape(str(val))
+        if self.collection_annotations is not None:
+            for key, val in self.collection_annotations.items():
+                # Hide verbose chunk details from the HTML table
+                if key != "chunks":
+                    info[key] = html.escape(str(val))
+        return info
+
+    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+        if highlevelgraph_key != "":
+            shortname = key_split(highlevelgraph_key)
+        elif hasattr(self, "name"):
+            shortname = key_split(self.name)
+        else:
+            shortname = self.__class__.__name__
+
+        svg_repr = ""
+        if (
+            self.collection_annotations
+            and self.collection_annotations.get("type") == "dask.array.core.Array"
+        ):
+            chunks = self.collection_annotations.get("chunks")
+            if chunks:
+                from .array.svg import svg
+
+                svg_repr = svg(chunks)
+
+        return get_template("highlevelgraph_layer.html.j2").render(
+            materialized=self.is_materialized(),
+            shortname=shortname,
+            layer_index=layer_index,
+            highlevelgraph_key=highlevelgraph_key,
+            info=self.layer_info_dict(),
+            svg_repr=svg_repr,
+        )
+
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`
@@ -513,9 +582,6 @@ class MaterializedLayer(Layer):
     @property
     def layer_state(self):
         return {"mapping": self.mapping}
-
-    def construct_graph(self):
-        return self.mapping
 
     def __contains__(self, k):
         return k in self.mapping
@@ -557,7 +623,6 @@ class MaterializedLayer(Layer):
         deps: Map
             Map of external key dependencies
         """
-
         if len(keys) == len(self):
             # Nothing to cull if preserving all existing keys
             return (
@@ -588,39 +653,14 @@ class MaterializedLayer(Layer):
         client,
         client_keys: Iterable[Hashable],
     ) -> Any:
-        """Pack the layer for scheduler communication in Distributed
+        """Pack a ``MaterializedLayer`` for scheduler communication in Distributed
 
-        This method should pack its current state and is called by the Client when
-        communicating with the Scheduler.
-        The Scheduler will then use .__dask_distributed_unpack__(data, ...) to unpack
-        the state, materialize the layer, and merge it into the global task graph.
-
-        The returned state must be compatible with Distributed's scheduler, which
-        means it must obey the following:
+        The returned state must be compatible with Distributed's scheduler
+        with ``pickle.loads disabled``. This means it must obey the following:
           - Serializable by msgpack (notice, msgpack converts lists to tuples)
           - All remote data must be unpacked (see unpack_remotedata())
           - All keys must be converted to strings now or when unpacking
           - All tasks must be serialized (see dumps_task())
-
-        The default implementation materialize the layer thus layers such as Blockwise
-        and ShuffleLayer should implement a specialized pack and unpack function in
-        order to avoid materialization.
-
-        Parameters
-        ----------
-        all_hlg_keys: Iterable[Hashable]
-            All keys in the high level graph
-        known_key_dependencies: Mapping[Hashable, set]
-            Already known dependencies
-        client: distributed.Client
-            The client calling this function.
-        client_keys : Iterable[Hashable]
-            List of keys requested by the client.
-
-        Returns
-        -------
-        state: Object serializable by msgpack
-            Scheduler compatible state of the layer
         """
         from distributed.client import Future
         from distributed.utils import CancelledError
@@ -699,33 +739,6 @@ class MaterializedLayer(Layer):
         dsk: Mapping[str, Any],
         dependencies: Mapping[str, set],
     ) -> dict:
-        """Unpack the state of a layer previously packed by __dask_distributed_pack__()
-
-        This method is called by the scheduler in Distributed in order to unpack
-        the state of a layer and merge it into its global task graph. The method
-        can use `dsk` and `dependencies`, which are the already materialized
-        state of the preceding layers in the high level graph. The layers of the
-        high level graph are unpacked in topological order.
-
-        See Layer.__dask_distributed_pack__() for packing detail.
-
-        Parameters
-        ----------
-        state: Any
-            The state returned by Layer.__dask_distributed_pack__()
-        dsk: Mapping, read-only
-            The materialized low level graph of the already unpacked layers
-        dependencies: Mapping, read-only
-            The dependencies of each key in `dsk`
-
-        Returns
-        -------
-        unpacked-layer: dict
-            layer_dsk: Mapping[str, Any]
-                Materialized (stringified) graph of the layer
-            layer_deps: Mapping[str, set]
-                Dependencies of each key in `layer_dsk`
-        """
         return {"dsk": state["dsk"], "deps": state["dependencies"]}
 
 

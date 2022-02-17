@@ -165,7 +165,6 @@ def _read_csv(tmpdir):
     return dd.read_csv(os.path.join(str(tmpdir), "*"))
 
 
-@pytest.mark.xfail(reason="#8480")
 @pytest.mark.parametrize(
     "op",
     [

@@ -366,7 +366,10 @@ class SimpleShuffleLayer(Layer):
         output_blocks=None,
         annotations=None,
     ):
-        super().__init__(annotations=annotations)
+        super().__init__(
+            annotations=annotations,
+            output_blocks=output_blocks or range(npartitions),
+        )
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -374,7 +377,6 @@ class SimpleShuffleLayer(Layer):
         self.ignore_index = ignore_index
         self.name_input = name_input
         self.meta_input = meta_input
-        self._output_blocks = output_blocks or range(npartitions)
         self.split_name = "split-" + self.name
 
         # The scheduling policy of Dask is generally depth-first,
@@ -715,14 +717,16 @@ class BroadcastJoinLayer(Layer):
         annotations=None,
         **merge_kwargs,
     ):
-        super().__init__(annotations=annotations)
+        super().__init__(
+            annotations=annotations,
+            output_blocks=output_blocks or set(range(npartitions)),
+        )
         self.name = name
         self.npartitions = npartitions
         self.lhs_name = lhs_name
         self.lhs_npartitions = lhs_npartitions
         self.rhs_name = rhs_name
         self.rhs_npartitions = rhs_npartitions
-        self._output_blocks = output_blocks or set(range(self.npartitions))
         self.merge_kwargs = merge_kwargs
         self.how = self.merge_kwargs.get("how")
         self.left_on = self.merge_kwargs.get("left_on")
@@ -1033,7 +1037,12 @@ class DataFrameTreeReduction(Layer):
         tree_node_name: str | None = None,
         annotations: dict[str, Any] | None = None,
     ):
-        super().__init__(annotations=annotations)
+        super().__init__(
+            annotations=annotations,
+            output_blocks=(
+                list(range(split_out or 1)) if output_blocks is None else output_blocks
+            ),
+        )
         self.name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
@@ -1042,9 +1051,6 @@ class DataFrameTreeReduction(Layer):
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out
-        self._output_blocks = (
-            list(range(self.split_out or 1)) if output_blocks is None else output_blocks
-        )
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
         # Calculate tree widths and height
