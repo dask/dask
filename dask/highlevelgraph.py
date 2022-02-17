@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 import html
 from collections.abc import Hashable, Iterable, Mapping, MutableMapping, Set
+from functools import partial
 from typing import Any
 
 import tlz as toolz
@@ -415,8 +416,14 @@ class Layer(Mapping):
         return len(self._dict)
 
     def __reduce__(self):
-        attrs = list(self.layer_state.keys()) + ["annotations"]
-        return (self.__class__, tuple(getattr(self, attr) for attr in attrs))
+        # Assume Layer should be initialized with
+        # key-word arguments only
+        state = self.layer_state.copy()
+        state["annotations"] = self.annotations
+        return (
+            partial(self.reconstructor(), **state),
+            tuple(),
+        )
 
     def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
         from distributed.protocol.serialize import ToPickle
