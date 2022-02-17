@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 import math
 import warnings
-from typing import Tuple
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -16,7 +17,7 @@ from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from ..utils import _is_local_fs
-from .utils import _sort_and_analyze_paths
+from .utils import Engine, _sort_and_analyze_paths
 
 try:
     import snappy
@@ -143,7 +144,7 @@ class ToParquetFunctionWrapper:
             self.kwargs_pass,
         )
 
-    def __call__(self, df, block_index: Tuple[int]):
+    def __call__(self, df, block_index: tuple[int]):
         # Get partition index from block index tuple
         part_i = block_index[0]
         filename = (
@@ -988,7 +989,7 @@ def create_metadata_file(
     return out
 
 
-_ENGINES = {}
+_ENGINES: dict[str, Engine] = {}
 
 
 def get_engine(engine):

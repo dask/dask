@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import sys
 from os.path import exists
 
@@ -9,11 +11,11 @@ import versioneer
 
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
-extras_require = {
+extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2022.01.1"],
+    "distributed": ["distributed == 2022.02.0"],
     "diagnostics": [
         "bokeh >= 2.1.1",
         "jinja2",
@@ -69,14 +71,13 @@ setup(
     keywords="task-scheduling parallel numpy pandas pydata",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: BSD License",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=["pytest"],

@@ -747,7 +747,7 @@ def test_from_empty_sequence():
 
 def test_product():
     b2 = b.product(b)
-    assert b2.npartitions == b.npartitions ** 2
+    assert b2.npartitions == b.npartitions**2
     assert set(b2) == {(i, j) for i in L for j in L}
 
     x = db.from_sequence([1, 2, 3, 4])
@@ -1172,15 +1172,12 @@ def test_from_delayed_iterator():
 
     delayed_records = delayed(lazy_records, pure=False)
     bag = db.from_delayed([delayed_records(5) for _ in range(5)])
-    assert (
-        db.compute(
-            bag.count(),
-            bag.pluck("operations").count(),
-            bag.pluck("operations").flatten().count(),
-            scheduler="sync",
-        )
-        == (25, 25, 50)
-    )
+    assert db.compute(
+        bag.count(),
+        bag.pluck("operations").count(),
+        bag.pluck("operations").flatten().count(),
+        scheduler="sync",
+    ) == (25, 25, 50)
 
 
 def test_range():
@@ -1304,7 +1301,7 @@ def test_groupby_tasks():
 
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, shuffle="tasks")
-    assert len(out.dask) < 100 ** 2
+    assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:

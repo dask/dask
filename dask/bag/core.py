@@ -1475,7 +1475,7 @@ class Bag(DaskMethodsMixin):
         grouper,
         method=None,
         npartitions=None,
-        blocksize=2 ** 20,
+        blocksize=2**20,
         max_branch=None,
         shuffle=None,
     ):
@@ -1717,7 +1717,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
     return res[1:], res[-1]
 
 
-def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
@@ -2335,7 +2335,7 @@ def _reduce(binop, sequence, initial=no_default):
 
 def make_group(k, stage):
     def h(x):
-        return x[0] // k ** stage % k
+        return x[0] // k**stage % k
 
     return h
 
@@ -2354,7 +2354,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     splits = []
     joins = []
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
@@ -2430,7 +2430,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     return type(b)(graph, name, len(inputs))
 
 
-def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     if npartitions is None:
         npartitions = b.npartitions
     token = tokenize(b, grouper, npartitions, blocksize)

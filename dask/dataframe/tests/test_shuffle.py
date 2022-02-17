@@ -4,7 +4,6 @@ import os
 import pickle
 import random
 import string
-import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
@@ -436,10 +435,6 @@ def test_set_index_divisions_sorted():
         ddf.set_index("y", divisions=["a", "b", "d", "c"], sorted=True)
 
 
-@pytest.mark.xfail(
-    sys.platform == "win32" and sys.version_info[:2] == (3, 7),
-    reason="https://github.com/dask/dask/issues/8549",
-)
 @pytest.mark.slow
 def test_set_index_consistent_divisions():
     # See https://github.com/dask/dask/issues/3867
@@ -1248,10 +1243,13 @@ def test_sort_values(nelem, nparts, by, ascending):
     "data",
     [
         {
-            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
-            "b": [None] * 100 + list(range(100, 150)),
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),  # type: ignore
+            "b": [None] * 100 + list(range(100, 150)),  # type: ignore
         },
-        {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
+        {
+            "a": list(range(15)) + [None] * 5,  # type: ignore
+            "b": list(reversed(range(20))),
+        },
     ],
 )
 def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):

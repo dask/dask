@@ -1,6 +1,64 @@
 Changelog
 =========
 
+.. _v2022.02.0:
+
+2022.02.0
+---------
+
+Released on February 11, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``region`` to ``to_zarr`` when using existing array (:pr:`8590`) `Chris Roat`_
+- Add ``engine_kwargs`` support to ``dask.dataframe.to_sql`` (:pr:`8609`) `Amir Kadivar`_
+- Add ``include_path_column`` arg to ``read_json`` (:pr:`8603`) `Bryan W. Weber`_
+- Add ``expand_dims`` to Dask array (:pr:`8687`) `Tom White`_
+
+Enhancements
+^^^^^^^^^^^^
+- Add scheduler option to ``assert_eq`` utilities (:pr:`8610`) `Xinrong Meng`_
+- Fix eye inconsistency with NumPy for ``dtype=None`` (:pr:`8685`) `Tom White`_
+- Fix concatenate inconsistency with NumPy for ``axis=None`` (:pr:`8686`) `Tom White`_
+- Type annotations, part 1 (:pr:`8295`) `Guido Imperiale`_
+- Really allow any iterable to be passed as a ``meta`` (:pr:`8629`) `Julia Signell`_
+- Use ``map_partitions`` (Blockwise) in ``to_parquet`` (:pr:`8487`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Result of reducing an array should not depend on its chunk-structure (:pr:`8637`) `ParticularMiner`_
+- Pass place-holder metadata to ``map_partitions`` in ACA code path (:pr:`8643`) `Richard (Rick) Zamora`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``is_monotonic`` (:pr:`8653`) `James Bourbeau`_
+- Remove some deprecations (:pr:`8605`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add Domino Data Lab to Hosted / managed Dask clusters (:pr:`8675`) `Ray Bell`_
+- Fix inter-linking and remove deprecated function (:pr:`8715`) `Julia Signell`_
+- Fix imbalanced backticks. (:pr:`8693`) `Matthias Bussonnier`_
+- Add documentation for high level graph visualization (:pr:`8483`) `Genevieve Buckley`_
+- Update documentation of ``ProgressBar`` ``out`` parameter (:pr:`8604`) `Pedro Silva`_
+- Improve documentation of ``dask.config.set`` (:pr:`8705`) `Guido Imperiale`_
+- Revert mention to ``mypy`` among type checkers (:pr:`8699`) `Guido Imperiale`_
+
+Maintenance
+^^^^^^^^^^^
+- Update warning handling in ``get_dummies`` tests (:pr:`8651`) `James Bourbeau`_
+- Add a github changelog template (:pr:`8714`) `Julia Signell`_
+- Update year in LICENSE.txt (:pr:`8665`) `David Hoese`_
+- Update ``pre-commit`` version  (:pr:`8691`) `James Bourbeau`_
+- Include ``scipy`` in upstream CI build (:pr:`8681`) `James Bourbeau`_
+- Temporarily pin ``scipy < 1.8.0`` in CI (:pr:`8683`) `James Bourbeau`_
+- Pin ``scipy`` to less than 1.8.0 in GPU CI (:pr:`8698`) `Julia Signell`_
+- Avoid ``pytest.warns(None)`` in ``test_multi.py`` (:pr:`8678`) `James Bourbeau`_
+- Update GHA concurrent job cancellation (:pr:`8652`) `James Bourbeau`_
+- Make ``test__get_paths`` robust to ``site.PREFIXES`` being set (:pr:`8644`) `James Bourbeau`_
+- Bump gpuCI PYTHON_VER to 3.9 (:pr:`8642`) `Charles Blackmon-Luca`_
+
+
 .. _v2022.01.1:
 
 2022.01.1
@@ -5101,3 +5159,8 @@ Other
 .. _`Pavithra Eswaramoorthy`: https://github.com/pavithraes
 .. _`Maxim Lippeveld`: https://github.com/MaximLippeveld
 .. _`Kirito1397`: https://github.com/Kirito1397
+.. _`Xinrong Meng`: https://github.com/xinrong-databricks
+.. _`Bryan W. Weber`: https://github.com/bryanwweber
+.. _`Amir Kadivar`: https://github.com/amirkdv
+.. _`Pedro Silva`: https://github.com/ppsbs
+.. _`neel iyer`: https://github.com/spiyer99
