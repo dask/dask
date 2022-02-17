@@ -194,7 +194,13 @@ def _nonempty_index(idx):
     elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
-        return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
+        if idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # braking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
