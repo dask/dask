@@ -1233,6 +1233,7 @@ def test_sort_values(nelem, by, ascending):
     df["b"] = np.arange(100, nelem + 100)
     ddf = dd.from_pandas(df, npartitions=10)
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
@@ -1249,6 +1250,7 @@ def test_sort_values_single_partition(nelem, by, ascending):
     df["b"] = np.arange(100, nelem + 100)
     ddf = dd.from_pandas(df, npartitions=1)
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
@@ -1273,6 +1275,7 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
@@ -1290,6 +1293,7 @@ def test_sort_values_custom_function(by, nparts):
             by_columns, ascending=ascending, na_position=na_position
         )
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(
             by=by[0], sort_function=f, sort_function_kwargs={"by_columns": by}
