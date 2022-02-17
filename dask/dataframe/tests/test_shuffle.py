@@ -1226,7 +1226,7 @@ def test_set_index_nan_partition():
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
-def test_sort_values(nelem, nparts, by, ascending):
+def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
     df = pd.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
