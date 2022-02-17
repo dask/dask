@@ -108,40 +108,25 @@ class ArrayOverlapLayer(Layer):
         token,
     ):
         super().__init__()
-        self.name = name
+        self._name = name
         self.axes = axes
         self.chunks = chunks
         self.numblocks = numblocks
         self.token = token
         self._cached_keys = None
 
+    @property
+    def layer_state(self):
+        return {
+            "name": self.name,
+            "axes": self.axes,
+            "chunks": self.chunks,
+            "numblocks": self.numblocks,
+            "token": self.token,
+        }
+
     def __repr__(self):
         return f"ArrayOverlapLayer<name='{self.name}'"
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
 
     def _dask_keys(self):
         if self._cached_keys is not None:
@@ -162,7 +147,7 @@ class ArrayOverlapLayer(Layer):
         self._cached_keys = result = keys()
         return result
 
-    def _construct_graph(self, deserializing=False):
+    def construct_graph(self):
         """Construct graph for a simple overlap operation."""
         axes = self.axes
         chunks = self.chunks
@@ -172,13 +157,9 @@ class ArrayOverlapLayer(Layer):
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
 
-        if deserializing:
-            # Use CallableLazyImport objects to avoid importing dataframe
-            # module on the scheduler
-            concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
-        else:
-            # Not running on distributed scheduler - Use explicit functions
-            from dask.array.core import concatenate3
+        # Use CallableLazyImport objects to avoid importing dataframe
+        # module on the scheduler
+        concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
 
         dims = list(map(len, chunks))
         expand_key2 = functools.partial(
@@ -204,10 +185,6 @@ class ArrayOverlapLayer(Layer):
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)._construct_graph(deserializing=True)
 
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
@@ -370,7 +347,7 @@ class SimpleShuffleLayer(Layer):
             annotations=annotations,
             output_blocks=output_blocks or range(npartitions),
         )
-        self.name = name
+        self._name = name
         self.column = column
         self.npartitions = npartitions
         self.npartitions_input = npartitions_input
@@ -721,7 +698,7 @@ class BroadcastJoinLayer(Layer):
             annotations=annotations,
             output_blocks=output_blocks or set(range(npartitions)),
         )
-        self.name = name
+        self._name = name
         self.npartitions = npartitions
         self.lhs_name = lhs_name
         self.lhs_npartitions = lhs_npartitions
@@ -916,7 +893,7 @@ class DataFrameIOLayer(Blockwise):
         creation_info=None,
         annotations=None,
     ):
-        self.name = name
+        self._name = name
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
@@ -1043,7 +1020,7 @@ class DataFrameTreeReduction(Layer):
                 list(range(split_out or 1)) if output_blocks is None else output_blocks
             ),
         )
-        self.name = name
+        self._name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
         self.concat_func = concat_func

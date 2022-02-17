@@ -45,13 +45,15 @@ class Layer(Mapping):
     its internal tasks. When this happens, we say that the layer has been
     materialized.
 
-    Implementing a new ``Layer`` subclass requires the definition of
-    new ``layer_state`` and ``construct_graph`` methods. The subclass
-    must also define the ``layer_dependencies`` method (and set a
-    default value for ``self._output_blocks``), or override the
-    ``cull`` method altogether.  Failure to set a default value for
-    ``self._output_blocks`` (and use it in  ``construct_graph``) will
-    result in materialization in the default ``cull`` method.
+    Implementing a new ``Layer`` subclass requires the implementation
+    of new ``layer_state`` and ``construct_graph`` methods, as well as
+    a ``self._name`` attribute or ``name`` property (the layer name).
+
+    To avoid early materialization during culling, new subclasses must
+    also define the ``layer_dependencies`` method (and set a default
+    value for ``output_blocks``), or override the ``cull`` method
+    altogether. Premature materialization will also occur if the layer
+    name is not defined.
 
     Parameters
     ----------
@@ -93,6 +95,11 @@ class Layer(Mapping):
     def output_blocks(self):
         """List of required output indices for this layer"""
         return self._output_blocks
+
+    @property
+    def name(self):
+        """Name of the layer"""
+        return self._name if hasattr(self, "_name") else None
 
     @property
     def layer_state(self):
@@ -152,7 +159,7 @@ class Layer(Mapping):
         if hasattr(self, "_cached_output_keys"):
             return self._cached_output_keys
         else:
-            if self.output_blocks is None:
+            if self.output_blocks is None or not self.name:
                 output_keys = self.keys()  # Materializes the graph!
             else:
                 output_keys = {(self.name, block) for block in self.output_blocks}
@@ -192,7 +199,7 @@ class Layer(Mapping):
         Therefore, "culling" the layer should only require us to reset
         this parameter.
         """
-        if self.output_blocks is None:
+        if self.output_blocks is None or self.name is None:
             # If output_blocks is None, we must
             # materialize the layer for culling
             return MaterializedLayer(
@@ -540,7 +547,7 @@ class Layer(Mapping):
     def _repr_html_(self, layer_index="", highlevelgraph_key=""):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
-        elif hasattr(self, "name"):
+        elif self.name:
             shortname = key_split(self.name)
         else:
             shortname = self.__class__.__name__

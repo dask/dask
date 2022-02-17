@@ -353,7 +353,7 @@ class Blockwise(Layer):
             annotations=annotations,
             output_blocks=output_blocks,
         )
-        self.output = output
+        self._name = output
         self.output_indices = tuple(output_indices)
         self.dsk = dsk
 
@@ -392,6 +392,10 @@ class Blockwise(Layer):
         # Blockwise after culling or construction
         # on the scheduler
         return Blockwise
+
+    @property
+    def output(self):
+        return self.name
 
     @property
     def layer_state(self):
