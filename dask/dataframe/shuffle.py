@@ -87,10 +87,11 @@ def sort_values(
         raise ValueError("na_position must be either 'first' or 'last'")
     if not isinstance(by, list):
         by = [by]
-    if len(by) > 1 and df.npartitions > 1:
+    if len(by) > 1 and df.npartitions > 1 or any(not isinstance(b, str) for b in by):
         raise NotImplementedError(
-            "Single-partition dataframes only support sorting by a single column which must "
-            "be passed as a string or a list of a single string.\n"
+            "Dataframes only support sorting by named columns which must be passed as a "
+            "string or a list of strings; multi-partition dataframes only support sorting "
+            "by a single column.\n"
             "You passed %s" % str(by)
         )
 
