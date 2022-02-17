@@ -1290,6 +1290,11 @@ class _GroupBy:
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
+    def _compute(self):
+        raise NotImplementedError(" DataFrameGroupBy does not allow computing.
+        Please chain it with an aggregation method or use a getter like ``get_group``
+        ")
+
     def _shuffle(self, meta):
         df = self.obj
 
