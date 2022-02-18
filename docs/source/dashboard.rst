@@ -22,11 +22,11 @@ as following.
     :alt: NEEDS ALT TEXT
 
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
+or, if you are in a terminal or IPython, it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
 n your local machine the dashboard will be served at ``http://localhost:8787/status``, you
 can type this address into your browser to access the dashboard but may be served 
-elsewhere if this port is taken. You can also configure the address by passing options to the 
-scheduler, see ``dashboard_address`` in `LocalCluster < https://docs.dask.org/en/stable/deploying-python.html#reference>`_
+elsewhere if port 8787 is taken. You can also configure the address by passing options to the 
+scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/stable/deploying-python.html#reference>`__
 
 The dashboard link redirects you to main dashboard page as shown below:
 
@@ -46,70 +46,133 @@ as listed below:
 Bytes Stored and Bytes per Worker
 ---------------------------------
 These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
-as well as the individual usage on each worker (Bytes per Worker).
+as well as the individual usage on each worker (Bytes per Worker). The colors on these plots 
+indicate the following.  
 
 .. figure:: images/dashboard_memory.png
     :alt: NEEDS ALT TEXT
 
-The colors and shades have different meanings:
-    - Solid Blue: Managed memory under target (default 60% of memory)
-    - Solid Orange: Managed memory is close to the spilling target (default 70% of memory)
+.. raw:: html
 
-For both blue and orange we have two more shades:
-    - Lighter shade: Unamanged memory
-    - Even lighter shade: Unmanaged recent memory. 
+    <table>
+        <tr>
+            <td>
+                <div style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Memory under target (default 60% of memory available) </td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(255,165,0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td> Memory is close to the spilling to disk target (default 70% of memory available)</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(128,128,128, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Memory spilled to disk</td>
+        </tr>
+    </table>
 
-    - Grey: Spilled to disk memory 
-
-For a detailed explanation on the different types of memory refer to the
+The different levels of transparency on these plot is related to the type of memory 
+(Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
 `Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
+
 
 Processing/CPU/Occupancy
 ------------------------
 
 **Task Processing** 
 
+The *Processing* tab in the figure shows the number of tasks being processed by each worker with the blue bar. The scheduler will
+try to ensure that the workers are processing the same number of tasks. If one of the bars is completely white it means that 
+worker has no tasks and its waiting for them. This usually happens when the computations are close to finished (nothing 
+to worry about), but it can also mean that the distribution of the task across workers is not optimized. 
+
 .. figure:: images/dashboard_task_processing.png
     :alt: NEEDS ALT TEXT
 
-The Processing plot, shows the tasks being processed across each worker. Ideally you want, each worker to 
-process an equally amount of tasks. If one of the bars is completely white it means that 
-worker is idle and waiting for tasks. This usually happens when the computations are close to finish (nothing 
-to worry about), but it can also mean that the distribution of the task across workers is not optimized and you
-will want to revisit your code. 
+There are three different colors that can appear in this plot (NEEDS TO FIGURE OUT HOW TO ADD ALT TEXT TO THIS TABLE):
 
-In this plot you can also find the colors red and green: **(PENDING)**
+.. raw:: html
 
-- Green : 
-- Red :
+    <table>
+        <tr>
+            <td>
+                <div style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Processing tasks.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(0, 128, 0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Saturated: It has enough work to stay busy.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Idle: Does not have enough work to stay busy.</td>
+        </tr>
+    </table>
 
 In this plot on the dashboard we have two extra tabs with the following information:
 
 **CPU Utilization**
 
-CPU usage per-worker (this needs some love, haven't found a nice way of describing this) 
+The *CPU* tab shows the usage per-worker (this needs some love, haven't found a nice way of describing this) 
 
 **Occupancy**
 
-This tab shows the occupancy, in time, per worker. The total occupancy for a worker is the total expected runtime
-for all tasks currently on a worker. For example, an occupancy of 10s means (it's an estimation) that it will take the 
-worker 10s to execute all the tasks it has currently been assigned.
+The *Occupancy* tab shows the occupancy, in time, per worker. The total occupancy for a worker is the total expected runtime
+for all tasks currently on a worker. For example, an occupancy of 10s means an occupancy of 10s means that the worker 
+estimates it will take 10s to execute all the tasks it has currently been assigned.
+
 
 Task Stream
 -----------
 
-The task stream is a view of all the tasks across threads. Each row represents a thread and each rectangle represents 
-an individual tasks. The color for each rectangle corresponds to the kind of task being performed and it matches the color 
-of the Progress plot (see Progress section). This means that all the individual tasks of kind `inc` for example will have 
-the same randomly assigned color. 
+The task stream is a view of all the tasks across worker-threads. Each row represents a thread and each rectangle represents 
+an individual tasks. The color for each rectangle corresponds to the task-prefix of the task being performed and it matches the color 
+of the *Progress* plot (see Progress section). This means that all the individual tasks part of the `inc` task-prefix for example, will have 
+the same randomly assigned color from the viridis color map. 
 
 There are certain colors that are reserved for a specific kinds of tasks:
 
-- Red: Transfer / communication 
-- Orange: Disk spilling
-- Black: Erred tasks
-- Grey: Serialization and deserialization
-- White: Idle thread
+.. raw:: html
+
+    <table>
+        <tr>
+            <td><b>Color</b></td><td><b>Meaning</b></td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(255, 0, 0, 0.4); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Transferring data between workers tasks.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color: rgba(255,165,0, 0.4); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Reading from or writing to disk.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Serializing/deserializing data.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(0, 0, 0, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Erred tasks.</td>
+        </tr>
+    </table>
+
 
 .. figure:: images/dashboard_taskstream_healthy.png
     :alt: NEEDS ALT TEXT
@@ -117,10 +180,8 @@ There are certain colors that are reserved for a specific kinds of tasks:
 .. figure:: images/dashboard_task_stream_unhealthy.png
     :alt: NEEDS ALT TEXT
 
-In some scenarios the dashboard will have white spaces between each rectangles, this means that the during that time the thread
-is idle. Having to much white and red is an indication of not optimal use of resources, and you will want to revisit your 
-computations and/or the resources allocated. 
-
+In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
+is idle. Having too much white and red is an indication of not optimal use of resources.
 
 Progress
 --------
@@ -128,9 +189,28 @@ Progress
 .. figure:: images/dashboard_progress.png
     :alt: NEEDS ALT TEXT
 
-The progress bars plot shows the progress of each individual kind of task. The color of the of each bar matches the color of the 
-individual tasks on the task stream that correspond to the same kind. Each horizontal bar has three different components:
+The progress bars plot shows the progress of each individual task-prefix. The color of the of each bar matches the color of the 
+individual tasks on the task stream that correspond to the same task-prefix. Each horizontal bar has three different components:
 
-- Grey : Tasks that are ready to run.
-- Solid color : Tasks that have been completed and are in memory.
-- Transparent color: Tasks that have been completed, been in memory and have been released.
+.. raw:: html
+
+    <table>
+        <tr>
+            <td>
+                <div style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Tasks that are ready to run.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(30,151,138, 1); font-size: 25px ">&#9632;</div>
+            </td>
+            <td> Tasks that have been completed and are in memory.</td>
+        </tr>
+        <tr>
+            <td>
+                <div style="color:rgba(30,151,138, 0.6); font-size: 25px ">&#9632;</div>
+            </td>
+            <td>Tasks that have been completed, been in memory and have been released.</td>
+        </tr>
+    </table>
