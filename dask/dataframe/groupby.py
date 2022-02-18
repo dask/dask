@@ -1293,7 +1293,8 @@ class _GroupBy:
     def _compute(self):
         raise NotImplementedError(
             "DataFrameGroupBy does not allow compute method."
-            "Please chain it with an aggregation method or use a getter like 'get_group'"
+            "Please chain it with an aggregation method (like ``.mean()``) or get a " 
+            "specific group using ``.get_group()`` before calling ``compute()``
         )
 
     def _shuffle(self, meta):
