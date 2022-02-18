@@ -1,6 +1,14 @@
 from __future__ import annotations
 
-from typing import Any, Callable, Mapping, MutableMapping, Protocol, runtime_checkable
+from typing import (
+    Any,
+    Callable,
+    Hashable,
+    Mapping,
+    MutableMapping,
+    Protocol,
+    runtime_checkable,
+)
 
 try:
     from IPython.display import DisplayObject
