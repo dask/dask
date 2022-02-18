@@ -13,7 +13,7 @@ class DaskCollection(Protocol):
     def __dask_graph__(self) -> Mapping | None:
         pass
 
-    def __dask_keys__(self) -> list:
+    def __dask_keys__(self) -> list[Hashable]:
         pass
 
     def __dask_postcompute__(self) -> tuple[Callable, tuple]:
