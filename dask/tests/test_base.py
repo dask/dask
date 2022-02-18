@@ -5,6 +5,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
+from dataclasses import dataclass
 from operator import add, mul
 
 import pytest
@@ -338,6 +339,7 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_same_repr():
@@ -509,13 +511,9 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
-try:
-    import dataclasses
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-except ImportError:
-    dataclasses = None
+@dataclass
+class ADataClass:
+    a: int
 
 
 def test_unpack_collections():
@@ -539,9 +537,8 @@ def test_unpack_collections():
             iterator,
         )  # Iterator
 
-        if dataclasses is not None:
-            t[2]["f"] = ADataClass(a=a)
-            t[2]["g"] = (ADataClass, a)
+        t[2]["f"] = ADataClass(a=a)
+        t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -606,15 +603,12 @@ def test_get_collection_names():
     h1 = object()
     h2 = object()
     # __dask_keys__() returns a nested list
-    assert (
-        get_collection_names(
-            DummyCollection(
-                {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
-                [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
-            )
+    assert get_collection_names(
+        DummyCollection(
+            {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
+            [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
         )
-        == {"a-1", "b-2", "c"}
-    )
+    ) == {"a-1", "b-2", "c"}
 
 
 def test_get_name_from_key():

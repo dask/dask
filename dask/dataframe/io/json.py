@@ -110,7 +110,7 @@ def read_json(
     lines=None,
     storage_options=None,
     blocksize=None,
-    sample=2 ** 20,
+    sample=2**20,
     encoding="utf-8",
     errors="strict",
     compression="infer",

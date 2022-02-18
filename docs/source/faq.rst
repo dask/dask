@@ -169,7 +169,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - `Dask MPI <https://mpi.dask.org>`_ which uses MPI for deployment in
       batch settings
 
-    For more information see :doc:`how-to/deploy-dask/hpc`
+    For more information see :doc:`deploying-hpc`
 
 3.  **Kubernetes/Cloud**: Newer clusters may employ Kubernetes for deployment.
     This is particularly commonly used today on major cloud providers,
@@ -182,7 +182,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     - **Dask-Kubernetes**: for native Kubernetes integration for fast moving
       or ephemeral deployments.
 
-    For more information see :doc:`how-to/deploy-dask/kubernetes`
+    For more information see :doc:`deploying-kubernetes`
 
 
 Is Dask secure?

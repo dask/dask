@@ -650,7 +650,7 @@ class ArrowDatasetEngine(Engine):
                 # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
 
@@ -762,8 +762,8 @@ class ArrowDatasetEngine(Engine):
         else:
             return []
 
-    @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+    @classmethod
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
         schema = parts[0][0].get("schema", None)
         parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
@@ -777,8 +777,8 @@ class ArrowDatasetEngine(Engine):
 
             # Aggregate metadata and write to _metadata file
             metadata_path = fs.sep.join([path, "_metadata"])
-            if append and fmd is not None:
-                _meta = fmd
+            if append and meta is not None:
+                _meta = meta
                 i_start = 0
             else:
                 _meta = parts[0][0]["meta"]

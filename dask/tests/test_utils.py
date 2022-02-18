@@ -23,14 +23,12 @@ from dask.utils import (
     funcname,
     getargspec,
     has_keyword,
-    ignoring,
     is_arraylike,
     itemgetter,
     iter_chunks,
     memory_repr,
     methodcaller,
     ndeepmap,
-    noop_context,
     parse_bytes,
     parse_timedelta,
     partial_by_order,
@@ -220,7 +218,7 @@ def test_random_state_data():
 
 def test_memory_repr():
     for power, mem_repr in enumerate(["1.0 bytes", "1.0 KB", "1.0 MB", "1.0 GB"]):
-        assert memory_repr(1024 ** power) == mem_repr
+        assert memory_repr(1024**power) == mem_repr
 
 
 def test_method_caller():
@@ -569,7 +567,7 @@ def test_parse_bytes():
     assert parse_bytes("5kB") == 5000
     assert parse_bytes("5.4 kB") == 5400
     assert parse_bytes("1kiB") == 1024
-    assert parse_bytes("1Mi") == 2 ** 20
+    assert parse_bytes("1Mi") == 2**20
     assert parse_bytes("1e6") == 1000000
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
@@ -689,15 +687,15 @@ def test_stringify_collection_keys():
         (0, "0 B"),
         (920, "920 B"),
         (930, "0.91 kiB"),
-        (921.23 * 2 ** 10, "921.23 kiB"),
-        (931.23 * 2 ** 10, "0.91 MiB"),
-        (921.23 * 2 ** 20, "921.23 MiB"),
-        (931.23 * 2 ** 20, "0.91 GiB"),
-        (921.23 * 2 ** 30, "921.23 GiB"),
-        (931.23 * 2 ** 30, "0.91 TiB"),
-        (921.23 * 2 ** 40, "921.23 TiB"),
-        (931.23 * 2 ** 40, "0.91 PiB"),
-        (2 ** 60, "1024.00 PiB"),
+        (921.23 * 2**10, "921.23 kiB"),
+        (931.23 * 2**10, "0.91 MiB"),
+        (921.23 * 2**20, "921.23 MiB"),
+        (931.23 * 2**20, "0.91 GiB"),
+        (921.23 * 2**30, "921.23 GiB"),
+        (931.23 * 2**30, "0.91 TiB"),
+        (921.23 * 2**40, "921.23 TiB"),
+        (931.23 * 2**40, "0.91 PiB"),
+        (2**60, "1024.00 PiB"),
     ],
 )
 def test_format_bytes(n, expect):
@@ -755,18 +753,6 @@ def test_deprecated_message():
 
     assert len(record) == 1
     assert str(record[0].message) == "woohoo"
-
-
-def test_ignoring_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.suppress"):
-        with ignoring(ValueError):
-            pass
-
-
-def test_noop_context_deprecated():
-    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
-        with noop_context():
-            pass
 
 
 def test_typename():
