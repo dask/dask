@@ -85,16 +85,29 @@ def sort_values(
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
-    if not isinstance(by, str):
-        # support ["a"] as input
-        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
-            by = by[0]
-        else:
-            raise NotImplementedError(
-                "Dataframe only supports sorting by a single column which must "
-                "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(by)
-            )
+    if not isinstance(by, list):
+        by = [by]
+    if len(by) > 1 and df.npartitions > 1 or any(not isinstance(b, str) for b in by):
+        raise NotImplementedError(
+            "Dataframes only support sorting by named columns which must be passed as a "
+            "string or a list of strings; multi-partition dataframes only support sorting "
+            "by a single column.\n"
+            "You passed %s" % str(by)
+        )
+
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    if df.npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
+
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
@@ -103,7 +116,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[by]
+    sort_by_col = df[by[0]]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
@@ -111,7 +124,7 @@ def sort_values(
 
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
-            sort_function, **sort_function_kwargs
+            sort_function, **sort_kwargs
         )
 
     if not isinstance(ascending, bool):
@@ -141,7 +154,7 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(sort_function, **sort_function_kwargs)
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     df = rearrange_by_divisions(
         df,
@@ -151,7 +164,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(sort_function, **sort_function_kwargs)
+    df = df.map_partitions(sort_function, **sort_kwargs)
     return df
 
 
