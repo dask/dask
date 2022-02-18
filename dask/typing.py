@@ -30,7 +30,7 @@ class DaskCollection(Protocol):
     def __dask_postpersist__(self) -> tuple[Callable, tuple]:
         pass
 
-    def __dask_tokenize__(self) -> Any:
+    def __dask_tokenize__(self) -> Hashable:
         pass
 
     @staticmethod
