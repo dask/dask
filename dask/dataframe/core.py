@@ -4400,18 +4400,6 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
-        sort_kwargs = {
-            "by": by,
-            "ascending": ascending,
-            "na_position": na_position,
-        }
-        if sort_function is None:
-            sort_function = M.sort_values
-        if sort_function_kwargs is not None:
-            sort_kwargs.update(sort_function_kwargs)
-
-        if self.npartitions == 1:
-            return self.map_partitions(sort_function, **sort_kwargs)
         return sort_values(
             self,
             by,
@@ -4419,7 +4407,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             na_position=na_position,
             sort_function=sort_function,
-            sort_function_kwargs=sort_kwargs,
+            sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
 

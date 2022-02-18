@@ -1221,14 +1221,31 @@ def test_set_index_nan_partition():
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
-@pytest.mark.parametrize("nparts", [1, 10])
-def test_sort_values(nelem, nparts, by, ascending):
+def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
     df = pd.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
-    ddf = dd.from_pandas(df, npartitions=nparts)
+    ddf = dd.from_pandas(df, npartitions=10)
 
+    # run on single-threaded scheduler for debugging purposes
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
+    dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
+@pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
+@pytest.mark.parametrize("nelem", [10, 500])
+def test_sort_values_single_partition(nelem, by, ascending):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
@@ -1256,6 +1273,7 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
@@ -1273,6 +1291,7 @@ def test_sort_values_custom_function(by, nparts):
             by_columns, ascending=ascending, na_position=na_position
         )
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(
             by=by[0], sort_function=f, sort_function_kwargs={"by_columns": by}
