@@ -102,15 +102,15 @@ class Layer(Mapping):
         return self._name if hasattr(self, "_name") else None
 
     @property
-    def layer_state(self):
+    def layer_state(self) -> dict:
         """Dictionary of key-word arguments required to
-        to recreate this `AbstractLayer` on the scheduler.
+        to recreate this `Layer` on the scheduler.
         These arguments must include the necessary state
         to materialize a valid graph on the scheduler.
         """
         raise NotImplementedError
 
-    def construct_graph(self):
+    def construct_graph(self) -> dict:
         """Materialize a low-level (dictionary) task graph
 
         This method should check the ``output_blocks`` property,
@@ -119,7 +119,7 @@ class Layer(Mapping):
         """
         raise NotImplementedError
 
-    def layer_dependencies(self, keys, output_blocks=None):
+    def layer_dependencies(self, keys: set, output_blocks: Iterable = None) -> set:
         """Determine the necessary dependencies to produce `keys`"""
         raise NotImplementedError
 
@@ -191,8 +191,8 @@ class Layer(Mapping):
             parts.add(_part)
         return parts
 
-    def cull(self, keys, all_keys):
-        """Cull an AbstractLayer
+    def cull(self, requested_keys: set, input_layers: set):
+        """Cull unnecessary tasks from the Layer
 
         The underlying graph will only include the necessary
         tasks to produce the keys (indicies) included in `output_blocks`.
@@ -205,8 +205,20 @@ class Layer(Mapping):
             return MaterializedLayer(
                 dict(self),
                 annotations=self.annotations,
-            ).cull(keys, all_keys)
+            ).cull(requested_keys, input_layers)
 
+        # Determine which keys in `requested_keys` can be output
+        # by this layer
+        keys = {
+            key
+            for key in requested_keys
+            if isinstance(key, tuple) and key and key[0] == self.name
+        }
+        if not keys:
+            # Entire Layer was culled
+            return None
+
+        # Cull the layer by resetting utput_blocks
         output_blocks = self._keys_to_indices(keys)
         if output_blocks != set(self.output_blocks):
             new_state = self.layer_state.copy()
@@ -609,13 +621,11 @@ class MaterializedLayer(Layer):
     def get_output_keys(self):
         return self.keys()
 
-    def cull(
-        self, keys: set, all_hlg_keys: Iterable
-    ) -> tuple[Layer, Mapping[Hashable, set]]:
+    def cull(self, requested_keys: set, input_layers: set):
         """Remove unnecessary tasks from the layer
 
         In other words, return a new Layer with only the tasks required to
-        calculate `keys` and a map of external key dependencies.
+        calculate `keys` and a set of external key dependencies.
 
         Examples
         --------
@@ -628,25 +638,31 @@ class MaterializedLayer(Layer):
         -------
         layer: Layer
             Culled layer
-        deps: Map
-            Map of external key dependencies
+        deps: Set
+            Set external key dependencies
         """
+        # Determine which keys in `requested_keys` can be output
+        # by this layer
+        keys = requested_keys.intersection(self.get_output_keys())
+        if not keys:
+            # Entire Layer was culled
+            return None, None
+
         if len(keys) == len(self):
             # Nothing to cull if preserving all existing keys
-            return (
-                self,
-                {k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()},
-            )
+            deps = keys_in_tasks(input_layers, self.values(), layer_keys=True)
+            return self, deps
 
-        ret_deps = {}
+        ret_deps = set()
         seen = set()
         out = {}
         work = keys.copy()
         while work:
             k = work.pop()
             out[k] = self[k]
-            ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
-            for d in ret_deps[k]:
+            deps = self.get_dependencies(k, self.keys())
+            ret_deps |= keys_in_tasks(input_layers, [self[k]], layer_keys=True)
+            for d in deps:
                 if d not in seen:
                     if d in self:
                         seen.add(d)
@@ -1125,43 +1141,40 @@ class HighLevelGraph(Mapping):
         hlg: HighLevelGraph
             Culled high level graph
         """
+        # Set of requested keys
         keys_set = set(flatten(keys))
 
-        all_ext_keys = self.get_all_external_keys()
+        # Loop through layers in topological order
         ret_layers = {}
-        ret_key_deps = {}
         for layer_name in reversed(self._toposort_layers()):
+
+            # Get layer dependencies (used for MaterializedLayers)
+            input_layers = self.dependencies[layer_name]
+            for k in input_layers.copy():
+                if isinstance(self.layers[k], MaterializedLayer):
+                    input_layers |= set(self.layers[k].get_output_keys())
+
+            # Cull layer (passing in all desired external keys).
+            # The `layer.cull` implementation is responsible for
+            # ignoring elements of `keys_set` that it cannot
+            # produce. If `None` is returned for `culled_layer`,
+            # the entire layer has been culled from the graph.
             layer = self.layers[layer_name]
-            # Let's cull the layer to produce its part of `keys`.
-            # Note: use .intersection rather than & because the RHS is
-            # a collections.abc.Set rather than a real set, and using &
-            # would take time proportional to the size of the LHS, which
-            # if there is no culling can be much bigger than the RHS.
-            output_keys = keys_set.intersection(layer.get_output_keys())
-            if output_keys:
-                culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
-                # Update `keys` with all layer's external key dependencies, which
-                # are all the layer's dependencies (`culled_deps`) excluding
-                # the layer's output keys.
-                external_deps = set()
-                for d in culled_deps.values():
-                    external_deps |= d
-                external_deps -= culled_layer.get_output_keys()
-                keys_set |= external_deps
-
-                # Save the culled layer and its key dependencies
+            culled_layer, culled_deps = layer.cull(
+                keys_set,  # All required keys
+                input_layers,  # Layer dependencies
+            )
+            if culled_layer:
+                # Update keys_set and ret_layers
+                keys_set |= culled_deps
                 ret_layers[layer_name] = culled_layer
-                ret_key_deps.update(culled_deps)
 
-        # Converting dict_keys to a real set lets Python optimise the set
-        # intersection to iterate over the smaller of the two sets.
-        ret_layers_keys = set(ret_layers.keys())
-        ret_dependencies = {
-            layer_name: self.dependencies[layer_name] & ret_layers_keys
-            for layer_name in ret_layers
-        }
+        # Remove layers that have been culled entirely
+        ret_dependencies = {}
+        for k in ret_layers:
+            ret_dependencies[k] = self.dependencies[k].intersection(ret_layers)
 
-        return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
     def cull_layers(self, layers: Iterable[str]) -> HighLevelGraph:
         """Return a new HighLevelGraph with only the given layers and their
