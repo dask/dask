@@ -577,6 +577,16 @@ def test_concatenate_unknown_axes():
     assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
 
 
+def test_concatenate_flatten():
+    x = np.array([1, 2])
+    y = np.array([[3, 4], [5, 6]])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2, 1))
+
+    assert_eq(np.concatenate([x, y], axis=None), da.concatenate([a, b], axis=None))
+
+
 def test_concatenate_rechunk():
     x = da.random.random((6, 6), chunks=(3, 3))
     y = da.random.random((6, 6), chunks=(2, 2))
@@ -2294,7 +2304,7 @@ def test_arithmetic():
     assert_eq(b | b, y | y)
     assert_eq(b ^ b, y ^ y)
     assert_eq(a // b, x // y)
-    assert_eq(a ** b, x ** y)
+    assert_eq(a**b, x**y)
     assert_eq(a % b, x % y)
     assert_eq(a > b, x > y)
     assert_eq(a < b, x < y)
@@ -2311,7 +2321,7 @@ def test_arithmetic():
     assert_eq(b | True, y | True)
     assert_eq(b ^ True, y ^ True)
     assert_eq(a // 2, x // 2)
-    assert_eq(a ** 2, x ** 2)
+    assert_eq(a**2, x**2)
     assert_eq(a % 2, x % 2)
     assert_eq(a > 2, x > 2)
     assert_eq(a < 2, x < 2)
@@ -2328,7 +2338,7 @@ def test_arithmetic():
     assert_eq(True | b, True | y)
     assert_eq(True ^ b, True ^ y)
     assert_eq(2 // b, 2 // y)
-    assert_eq(2 ** b, 2 ** y)
+    assert_eq(2**b, 2**y)
     assert_eq(2 % b, 2 % y)
     assert_eq(2 > b, 2 > y)
     assert_eq(2 < b, 2 < y)
@@ -3838,11 +3848,11 @@ def test_index_array_with_array_2d():
 
 @pytest.mark.xfail(reason="Chunking does not align well")
 def test_index_array_with_array_3d_2d():
-    x = np.arange(4 ** 3).reshape((4, 4, 4))
+    x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
     ind = np.random.random((4, 4)) > 0.5
-    ind = np.arange(4 ** 2).reshape((4, 4)) % 2 == 0
+    ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
     assert_eq(x[ind], dx[dind])

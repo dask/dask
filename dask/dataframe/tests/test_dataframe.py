@@ -16,7 +16,13 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_140, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    tm,
+)
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -30,7 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -355,8 +361,8 @@ def test_rename_series_method_2():
     ds = dd.from_pandas(s, 2)
 
     for is_sorted in [True, False]:
-        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
-        assert_eq(res, s.rename(lambda x: x ** 2))
+        res = ds.rename(lambda x: x**2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x**2))
         assert res.known_divisions == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
@@ -372,13 +378,13 @@ def test_rename_series_method_2():
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x ** 2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x ** 2))
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x ** 2, inplace=True, sorted_index=True)
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
-    s.rename(lambda x: x ** 2, inplace=True)
+    s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
 
 
@@ -3362,7 +3368,16 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
+    # `iteritems` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        pd_items = df["x"].iteritems()
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        dd_items = ddf["x"].iteritems()
+    for (a, b) in zip(pd_items, dd_items):
         assert a == b
 
 
@@ -3709,8 +3724,8 @@ def test_inplace_operators():
 
     ddf.y **= 0.5
 
-    assert_eq(ddf.y, df.y ** 0.5)
-    assert_eq(ddf, df.assign(y=df.y ** 0.5))
+    assert_eq(ddf.y, df.y**0.5)
+    assert_eq(ddf, df.assign(y=df.y**0.5))
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -5006,7 +5021,16 @@ def test_is_monotonic_numeric():
     s = pd.Series(range(20))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
-    assert_eq(s.is_monotonic, ds.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
@@ -5032,7 +5056,16 @@ def test_index_is_monotonic_numeric():
     s = pd.Series(1, index=range(20))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.index.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.index.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(1, index=range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)

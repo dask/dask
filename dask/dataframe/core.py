@@ -48,7 +48,7 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import methods
-from ._compat import PANDAS_GT_140
+from ._compat import PANDAS_GT_140, PANDAS_GT_150
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
@@ -404,7 +404,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.DataFrame)
     def attrs(self):
         return self._meta.attrs
@@ -3425,9 +3425,22 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def iteritems(self):
-        for i in range(self.npartitions):
-            s = self.get_partition(i).compute()
-            yield from s.iteritems()
+        if PANDAS_GT_150:
+            warnings.warn(
+                "iteritems is deprecated and will be removed in a future version. "
+                "Use .items instead.",
+                FutureWarning,
+            )
+        # We use the `_` generator below to ensure the deprecation warning above
+        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+        # iteration happens
+
+        def _(self):
+            for i in range(self.npartitions):
+                s = self.get_partition(i).compute()
+                yield from s.items()
+
+        return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -3829,6 +3842,12 @@ Dask Name: {name}, {task} tasks""".format(
     @property
     @derived_from(pd.Series)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return self.is_monotonic_increasing
 
     @property
@@ -4041,6 +4060,12 @@ class Index(Series):
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
         return super().is_monotonic_increasing
 
     @property
@@ -4375,18 +4400,6 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
-        sort_kwargs = {
-            "by": by,
-            "ascending": ascending,
-            "na_position": na_position,
-        }
-        if sort_function is None:
-            sort_function = M.sort_values
-        if sort_function_kwargs is not None:
-            sort_kwargs.update(sort_function_kwargs)
-
-        if self.npartitions == 1:
-            return self.map_partitions(sort_function, **sort_kwargs)
         return sort_values(
             self,
             by,
@@ -4394,7 +4407,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             na_position=na_position,
             sort_function=sort_function,
-            sort_function_kwargs=sort_kwargs,
+            sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
 
@@ -5238,7 +5251,10 @@ class DataFrame(_Frame):
 
         if len(self.columns) == 0:
             lines.append("Index: 0 entries")
-            lines.append("Empty %s" % type(self).__name__)
+            lines.append(f"Empty {type(self).__name__}")
+            if PANDAS_GT_150:
+                # pandas dataframe started adding a newline when info is called.
+                lines.append("")
             put_lines(buf, lines)
             return
 
@@ -5300,8 +5316,7 @@ class DataFrame(_Frame):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k
-            for k in sorted(self.dtypes.value_counts().iteritems(), key=str)
+            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
@@ -5426,7 +5441,7 @@ class DataFrame(_Frame):
             series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
         else:
             series_df = pd.concat(
-                [_repr_data_series(s, index=index) for _, s in meta.iteritems()], axis=1
+                [_repr_data_series(s, index=index) for _, s in meta.items()], axis=1
             )
         return series_df
 

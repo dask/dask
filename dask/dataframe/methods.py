@@ -101,7 +101,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
         kind = kind or "loc"
         kind_opts = {"kind": kind}
 
-    if kind == "loc" and not df.index.is_monotonic:
+    if kind == "loc" and not df.index.is_monotonic_increasing:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
