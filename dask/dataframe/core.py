@@ -4943,8 +4943,8 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
+            return _recursive_pairwise_outer_join(
+                [self] + other,
                 on=on,
                 lsuffix=lsuffix,
                 rsuffix=rsuffix,
