@@ -33,12 +33,12 @@ The dashboard link redirects you to main dashboard page as shown below:
 In the entry point of the dashboard you can find multiple plots with information about your cluster 
 as listed below:
 
-- Bytes stored: Cluster memory. 
-- Bytes per Worker: Memory per worker.
-- Task Processing/CPU Utilization/Occupancy: Tasks being processed by each worker/ NEEDS INFO/ NEEDS INFO
-- Task Stream: Individual task across threads.
-- Progress: Progress of a set of tasks.
+- :ref:`dashboard.memory`: Cluster memory and Memory per worker
+- :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ NEEDS INFO/ NEEDS INFO
+- :ref:`dashboard.task-stream`: Individual task across threads.
+- :ref:`dashboard.progress`: Progress of a set of tasks.
 
+.. _dashboard.memory: 
 
 Bytes Stored and Bytes per Worker
 ---------------------------------
@@ -77,8 +77,10 @@ The different levels of transparency on these plot is related to the type of mem
 `Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
 
 
-Processing/CPU/Occupancy
-------------------------
+.. _dashboard.proc-cpu-occ:
+
+Task Processing/CPU Utilization/Occupancy
+-----------------------------------------
 
 **Task Processing** 
 
@@ -127,6 +129,7 @@ The *Occupancy* tab shows the occupancy, in time, per worker. The total occupanc
 for all tasks currently on a worker. For example, an occupancy of 10s means an occupancy of 10s means that the worker 
 estimates it will take 10s to execute all the tasks it has currently been assigned.
 
+.. _dashboard.task-stream:
 
 Task Stream
 -----------
@@ -179,6 +182,8 @@ There are certain colors that are reserved for a specific kinds of tasks:
 
 In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
 is idle. Having too much white and red is an indication of not optimal use of resources.
+
+.. _dashboard.progress:
 
 Progress
 --------
