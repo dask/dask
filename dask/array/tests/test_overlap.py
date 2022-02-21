@@ -780,7 +780,7 @@ def test_overlap_few_dimensions():
 
 
 @pytest.mark.parametrize("boundary", ["reflect", "periodic", "nearest", "none"])
-def test_trim_boundry(boundary):
+def test_trim_boundary(boundary):
     x = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
     x_overlaped = da.overlap.overlap(x, 2, boundary={0: "reflect", 1: boundary})
     x_trimmed = da.overlap.trim_overlap(
