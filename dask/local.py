@@ -127,7 +127,6 @@ if os.name == "nt":
             except Empty:
                 pass
 
-
 else:
 
     def queue_get(q):

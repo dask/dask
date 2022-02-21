@@ -1,11 +1,13 @@
+from __future__ import annotations
+
 import math
-import numbers
 import re
 import sys
 import textwrap
 import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from numbers import Number
 
 import numpy as np
 import pandas as pd
@@ -27,7 +29,7 @@ from .dispatch import make_meta  # noqa : F401
 from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
 from .extensions import make_scalar
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
@@ -698,11 +700,11 @@ def valid_divisions(divisions):
     for i, x in enumerate(divisions[:-2]):
         if x >= divisions[i + 1]:
             return False
-        if isinstance(x, numbers.Number) and math.isnan(x):
+        if isinstance(x, Number) and math.isnan(x):
             return False
 
     for x in divisions[-2:]:
-        if isinstance(x, numbers.Number) and math.isnan(x):
+        if isinstance(x, Number) and math.isnan(x):
             return False
 
     if divisions[-2] > divisions[-1]:

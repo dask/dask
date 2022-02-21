@@ -247,7 +247,7 @@ def test_npartitions(db):
         "test",
         db,
         columns=list(df.columns),
-        bytes_per_chunk=2 ** 30,
+        bytes_per_chunk=2**30,
         index_col="number",
         head_rows=1,
     )
@@ -361,19 +361,19 @@ def test_datetimes():
         assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
 
 
-def test_extra_connection_engine_keywords(capsys, db):
+def test_extra_connection_engine_keywords(caplog, db):
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": False}
     ).compute()
     # no captured message from the stdout with the echo=False parameter (this is the default)
-    out, err = capsys.readouterr()
-    assert "SELECT" not in out
+    out = "\n".join(r.message for r in caplog.records)
+    assert out == ""
     assert_eq(data, df)
     # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": True}
     ).compute()
-    out, err = capsys.readouterr()
+    out = "\n".join(r.message for r in caplog.records)
     assert "WHERE" in out
     assert "FROM" in out
     assert "SELECT" in out
@@ -552,3 +552,20 @@ def test_to_sql_kwargs():
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
         ):
             ddf.to_sql("test", uri, unknown=None)
+
+
+def test_to_sql_engine_kwargs(caplog):
+    ddf = dd.from_pandas(df, 2)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": False})
+        logs = "\n".join(r.message for r in caplog.records)
+        assert logs == ""
+        assert_eq(df, read_sql_table("test", uri, "number"))
+
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": True})
+        logs = "\n".join(r.message for r in caplog.records)
+        assert "CREATE" in logs
+        assert "INSERT" in logs
+
+        assert_eq(df, read_sql_table("test", uri, "number"))
