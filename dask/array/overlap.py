@@ -741,7 +741,7 @@ def coerce_depth_type(ndim, depth):
 def coerce_boundary(ndim, boundary):
     default = "none"
     if boundary is None:
-        boundary = default
+        pass
     if not isinstance(boundary, (tuple, dict)):
         boundary = (boundary,) * ndim
     if isinstance(boundary, tuple):

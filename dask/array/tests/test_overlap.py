@@ -332,15 +332,8 @@ def test_map_overlap_escapes_to_map_blocks_when_depth_is_zero():
 )
 def test_map_overlap_no_depth(boundary):
     x = da.arange(10, chunks=5)
-    if boundary is None:
-        # Can be removed after boundary default argument is changed to "none"
-        # See https://github.com/dask/dask/issues/8391
-        with pytest.raises(FutureWarning):
-            y = x.map_overlap(lambda i: i, depth=0, boundary=boundary, dtype=x.dtype)
-            assert_eq(y, x)
-    else:
-        y = x.map_overlap(lambda i: i, depth=0, boundary=boundary, dtype=x.dtype)
-        assert_eq(y, x)
+    y = x.map_overlap(lambda i: i, depth=0, boundary=boundary, dtype=x.dtype)
+    assert_eq(y, x)
 
 
 def test_map_overlap_multiarray():
