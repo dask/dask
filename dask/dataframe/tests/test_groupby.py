@@ -122,6 +122,16 @@ def test_groupby_error():
         dp[["x", "A"]]
     assert msg in str(err.value)
 
+    msg = (
+        "DataFrameGroupBy does not allow compute method."
+        "Please chain it with an aggregation method (like ``.mean()``) or get a "
+        "specific group using ``.get_group()`` before calling ``compute()``"
+    )
+
+    with pytest.raises(NotImplementedError) as err:
+        dp.compute()
+    assert msg in str(err.value)
+
 
 def test_full_groupby():
     df = pd.DataFrame(

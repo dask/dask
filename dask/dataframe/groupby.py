@@ -1298,6 +1298,13 @@ class _GroupBy:
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
+    def compute(self, **kwargs):
+        raise NotImplementedError(
+            "DataFrameGroupBy does not allow compute method."
+            "Please chain it with an aggregation method (like ``.mean()``) or get a "
+            "specific group using ``.get_group()`` before calling ``compute()``"
+        )
+
     def _shuffle(self, meta):
         df = self.obj
 
