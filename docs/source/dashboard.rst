@@ -2,12 +2,9 @@ Dashboard Diagnostics
 =====================
 
 Profiling parallel code can be challenging, but the :doc:`Dask distributed scheduler <scheduling>` 
-provides live feedback via its interactive dashboard. 
-
-## Include dashboard picture status page
-
-A link that redirects to the dashboard will prompt in the terminal where the scheduler is
-created, and it is also shown when you create a ``Client`` and connect the scheduler.
+provides live feedback via its interactive dashboard. A link that redirects to the dashboard will prompt 
+in the terminal where the scheduler is created, and it is also shown when you create a ``Client`` and connect 
+the scheduler.
 
 .. code-block:: python
 
@@ -214,3 +211,17 @@ individual tasks on the task stream that correspond to the same task-prefix. Eac
             <td>Tasks that have been completed, been in memory and have been released.</td>
         </tr>
     </table>
+
+
+Dask JupyterLab Extension
+--------------------------
+
+The `JupyterLab Dask extension <https://github.com/dask/dask-labextension#dask-jupyterlab-extension>`__  
+allows you to embed Dask's dashboard plots directly into JupyterLab panes. 
+
+Once the JupyterLab Dask extension is installed you can choose any of the individual plots available and 
+integrated as a pane in your JupyterLab session. For example, in the figure below we selected the *Task Stream*, 
+the *Progress*, *Workers Memory*, and *Graph* plots. 
+
+.. figure:: images/dashboard_jupyterlab.png
+    :alt: NEEDS ALT TEXT
