@@ -199,7 +199,7 @@ def _nonempty_index(idx):
             return pd.Index([True, False], name=idx.name)
         else:
             # for pd 1.5 in the case of bool index this would be cast as [True, True]
-            # braking uniqueness
+            # breaking uniqueness
             return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
