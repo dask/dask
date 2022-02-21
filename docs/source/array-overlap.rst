@@ -25,6 +25,7 @@ below:
    map_overlap
 
 .. autofunction:: map_overlap
+   :noindex:
 
 
 Explanation
@@ -120,7 +121,7 @@ that is not stored locally in each block:
 
    >>> filt = g.map_blocks(func)
 
-While in this case we used a SciPy function, any arbitrary function could have been 
+While in this case we used a SciPy function, any arbitrary function could have been
 used instead. This is a good interaction point with Numba_.
 
 If your function does not preserve the shape of the block, then you will need to
