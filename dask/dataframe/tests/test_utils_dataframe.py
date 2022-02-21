@@ -1,4 +1,5 @@
 import re
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -69,7 +70,7 @@ def test_make_meta():
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
-    # Iterable
+    # List
     meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
@@ -82,6 +83,31 @@ def test_make_meta():
     assert len(meta) == 0
     assert meta.dtype == "i8"
     assert meta.name == "a"
+
+    # Iterable
+    class CustomMetadata(Iterable):
+        """Custom class iterator returning pandas types."""
+
+        def __init__(self, max=0):
+            self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
+
+        def __iter__(self):
+            self.n = 0
+            return self
+
+        def __next__(self):
+            if self.n < len(self.types):
+                ret = self.types[self.n]
+                self.n += 1
+                return ret
+            else:
+                raise StopIteration
+
+    meta = make_meta(CustomMetadata())
+    assert (meta.columns == ["a", "c", "b"]).all()
+    assert len(meta) == 0
+    assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
+    assert isinstance(meta.index, pd.RangeIndex)
 
     # With index
     idx = pd.Index([1, 2], name="foo")

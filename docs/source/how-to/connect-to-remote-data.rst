@@ -298,9 +298,9 @@ Internals
 ---------
 
 Dask contains internal tools for extensible data ingestion in the
-``dask.bytes`` package and using `fsspec`_.
+``dask.bytes`` package and uses external tools like ``open_files`` from `fsspec`_.
 .  *These functions are developer-focused rather than for
-direct consumption by users.  These functions power user facing functions like*
+direct consumption by users.  These functions power user-facing functions like*
 ``dd.read_csv`` *and* ``db.read_text`` *which are probably more useful for most
 users.*
 
@@ -309,20 +309,18 @@ users.*
 
 .. autosummary::
    read_bytes
-   open_files
 
-These functions are extensible in their output formats (bytes, file objects),
-their input locations (file system, S3, HDFS), line delimiters, and compression
+This function is extensible in its output format (bytes),
+its input locations (file system, S3, HDFS), line delimiters, and compression
 formats.
 
-Both functions are *lazy*, returning either
-pointers to blocks of bytes (``read_bytes``) or open file objects
-(``open_files``).  They can handle different storage backends by prepending
-protocols like ``s3://`` or ``hdfs://`` (see below). They handle compression formats
+This function is *lazy*, returning pointers to blocks of bytes (``read_bytes``).  
+It handles different storage backends by prepending
+protocols like ``s3://`` or ``hdfs://`` (see below). It handles compression formats
 listed in ``fsspec.compression``, some of which may require additional packages
 to be installed.
 
-These functions are not used for all data sources.  Some data sources like HDF5
+This function is not used for all data sources.  Some data sources like HDF5
 are quite particular and receive custom treatment.
 
 Delimiters
@@ -351,11 +349,10 @@ added by inserting functions into dictionaries available in the
 added directly to the codebase.
 
 However, most compression technologies like ``gzip`` do not support efficient
-random access, and so are useful for streaming ``open_files`` but not useful for
+random access, and so are useful for streaming ``fsspec.open_files`` but not useful for
 ``read_bytes`` which splits files at various points.
 
 API
 ^^^
 
 .. autofunction:: read_bytes
-.. autofunction:: open_files

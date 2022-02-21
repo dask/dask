@@ -4,15 +4,15 @@ import math
 import warnings
 from itertools import product
 from numbers import Integral, Number
-from operator import add, itemgetter
+from operator import itemgetter
 
 import numpy as np
-from tlz import accumulate, concat, memoize, merge, pluck
+from tlz import concat, memoize, merge, pluck
 
 from .. import config, core, utils
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import is_arraylike
+from ..utils import cached_cumsum, is_arraylike
 from .chunk import getitem
 
 colon = slice(None, None, None)
@@ -1288,65 +1288,6 @@ def shuffle_slice(x, index):
         return x[index2].rechunk(chunks2)[index3]
 
 
-class _HashIdWrapper:
-    """Hash and compare a wrapped object by identity instead of value"""
-
-    def __init__(self, wrapped):
-        self.wrapped = wrapped
-
-    def __eq__(self, other):
-        if not isinstance(other, _HashIdWrapper):
-            return NotImplemented
-        return self.wrapped is other.wrapped
-
-    def __ne__(self, other):
-        if not isinstance(other, _HashIdWrapper):
-            return NotImplemented
-        return self.wrapped is not other.wrapped
-
-    def __hash__(self):
-        return id(self.wrapped)
-
-
-@functools.lru_cache()
-def _cumsum(seq, initial_zero):
-    if isinstance(seq, _HashIdWrapper):
-        seq = seq.wrapped
-    if initial_zero:
-        return tuple(accumulate(add, seq, 0))
-    else:
-        return tuple(accumulate(add, seq))
-
-
-def cached_cumsum(seq, initial_zero=False):
-    """Compute :meth:`toolz.accumulate` with caching.
-
-    Caching is by the identify of `seq` rather than the value. It is thus
-    important that `seq` is a tuple of immutable objects, and this function
-    is intended for use where `seq` is a value that will persist (generally
-    block sizes).
-
-    Parameters
-    ----------
-    seq : tuple
-        Values to cumulatively sum.
-    initial_zero : bool, optional
-        If true, the return value is prefixed with a zero.
-
-    Returns
-    -------
-    tuple
-    """
-    if isinstance(seq, tuple):
-        # Look up by identity first, to avoid a linear-time __hash__
-        # if we've seen this tuple object before.
-        result = _cumsum(_HashIdWrapper(seq), initial_zero)
-    else:
-        # Construct a temporary tuple, and look up by value.
-        result = _cumsum(tuple(seq), initial_zero)
-    return result
-
-
 def parse_assignment_indices(indices, shape):
     """Reformat the indices for assignment.
 
@@ -1401,6 +1342,12 @@ def parse_assignment_indices(indices, shape):
 
     >>> parse_assignment_indices((slice(-1, 2, -1), 3, [1, 2]), (7, 8, 9))
     ([slice(3, 7, 1), 3, array([1, 2])], [4, 2], [0], [0, 2])
+
+    >>> parse_assignment_indices((slice(0, 5), slice(3, None, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 4, 2)], [5, 1], [], [0, 1])
+
+    >>> parse_assignment_indices((slice(0, 5), slice(3, 3, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 3, 2)], [5, 0], [], [0])
 
     """
     if not isinstance(indices, tuple):
@@ -1469,8 +1416,13 @@ def parse_assignment_indices(indices, shape):
                 reverse.append(i)
 
             start, stop, step = index.indices(size)
+
+            # Note: We now have stop >= start and step >= 0
+
             div, mod = divmod(stop - start, step)
-            if div <= 0:
+            if not div and not mod:
+                # stop equals start => zero-sized slice for this
+                # dimension
                 implied_shape.append(0)
             else:
                 if mod != 0:
@@ -1622,7 +1574,7 @@ def setitem_array(out_name, array, indices, value):
 
     """
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The positions of index elements in the range values loc0 and loc1.
 
@@ -1687,7 +1639,7 @@ def setitem_array(out_name, array, indices, value):
 
         return i
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
         """Number of True index elements between positions loc0 and loc1.
 
@@ -1715,7 +1667,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[loc0:loc1])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def n_preceeding_from_1d_bool_index(dim, loc0):
         """Number of True index elements preceeding position loc0.
 
@@ -1741,7 +1693,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[:loc0])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
         """Value indices for index elements between loc0 and loc1.
 
@@ -1970,11 +1922,7 @@ def setitem_array(out_name, array, indices, value):
         dim_1d_int_index = None
 
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
-            zip(
-                indices,
-                array_shape,
-                locations,
-            )
+            zip(indices, array_shape, locations)
         ):
 
             integer_index = isinstance(index, int)
@@ -2078,9 +2026,7 @@ def setitem_array(out_name, array, indices, value):
                 index = indices[j]
 
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index,
-                    value_shape[i + value_offset],
-                    *loc0_loc1,
+                    dim_1d_int_index, value_shape[i + value_offset], *loc0_loc1
                 )
             else:
                 # Index is a slice or 1-d boolean array

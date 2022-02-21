@@ -20,6 +20,7 @@ from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
+from dask.utils_test import hlg_layer
 
 try:
     import fastparquet
@@ -1639,7 +1640,7 @@ def test_to_parquet_lazy(tmpdir, scheduler, engine):
 @FASTPARQUET_MARK
 def test_timestamp96(tmpdir):
     fn = str(tmpdir)
-    df = pd.DataFrame({"a": ["now"]}, dtype="M8[ns]")
+    df = pd.DataFrame({"a": [pd.to_datetime("now", utc=True)]})
     ddf = dd.from_pandas(df, 1)
     ddf.to_parquet(fn, write_index=False, times="int96")
     pf = fastparquet.ParquetFile(fn)
@@ -2460,11 +2461,13 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
     dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
 
-    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
-    subgraph = dsk.layers[read]
-    assert isinstance(subgraph, DataFrameIOLayer)
-    assert subgraph.columns == ["B"]
-    assert next(iter(subgraph.dsk.values()))[0].columns == ["B"]
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert subgraph_rd.columns == ["B"]
+    assert next(iter(subgraph_rd.dsk.values()))[0].columns == ["B"]
+
+    subgraph_wt = hlg_layer(dsk, "to-parquet")
+    assert isinstance(subgraph_wt, Blockwise)
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
@@ -2499,6 +2502,32 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a1, b1)
     assert_eq(a2, b2)
     assert_eq(a3, b3)
+
+
+def test_layer_creation_info(tmpdir, engine):
+    df = pd.DataFrame({"a": range(10), "b": ["cat", "dog"] * 5})
+    dd.from_pandas(df, npartitions=1).to_parquet(
+        tmpdir, engine=engine, partition_on=["b"]
+    )
+
+    # Apply filters directly in dd.read_parquet
+    filters = [("b", "==", "cat")]
+    ddf1 = dd.read_parquet(tmpdir, engine=engine, filters=filters)
+    assert "dog" not in ddf1["b"].compute()
+
+    # Results will not match if we use dd.read_parquet
+    # without filters
+    ddf2 = dd.read_parquet(tmpdir, engine=engine)
+    with pytest.raises(AssertionError):
+        assert_eq(ddf1, ddf2)
+
+    # However, we can use `creation_info` to regenerate
+    # the same collection with `filters` defined
+    info = ddf2.dask.layers[ddf2._name].creation_info
+    kwargs = info.get("kwargs", {})
+    kwargs["filters"] = filters
+    ddf3 = info["func"](*info.get("args", []), **kwargs)
+    assert_eq(ddf1, ddf3)
 
 
 @ANY_ENGINE_MARK

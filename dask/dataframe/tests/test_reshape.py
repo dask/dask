@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -59,14 +60,10 @@ def test_get_dummies_kwargs():
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, prefix="X", prefix_sep="-")
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, pd.Index(["X-1", "X-2", "X-3", "X-4"]))
 
     exp = pd.get_dummies(s, drop_first=True)
-
-    ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, drop_first=True)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, exp.columns)
 
     # nan
     s = pd.Series([1, 1, 1, 2, np.nan, 3, np.nan, 5], dtype="category")
@@ -75,17 +72,36 @@ def test_get_dummies_kwargs():
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, exp.columns)
 
     # dummy_na
     exp = pd.get_dummies(s, dummy_na=True)
-
-    ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, dummy_na=True)
     assert_eq(res, exp)
-    tm.assert_index_equal(res.columns, pd.Index([1, 2, 3, 5, np.nan]))
 
 
+def check_pandas_issue_45618_warning(test_func):
+    # Check for FutureWarning raised in `pandas=1.4.0`-only.
+    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GT_140).
+    # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
+
+    def decorator():
+        with pytest.warns(None) as record:
+            test_func()
+
+        if PANDAS_VERSION == parse_version("1.4.0"):
+            assert len(record)
+            assert all(r.category is FutureWarning for r in record)
+            assert all(
+                "In a future version, passing a SparseArray" in str(r.message)
+                for r in record
+            )
+        else:
+            assert len(record) == 0
+
+    return decorator
+
+
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
     ds = dd.from_pandas(s, 2)
@@ -103,6 +119,7 @@ def test_get_dummies_sparse():
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {

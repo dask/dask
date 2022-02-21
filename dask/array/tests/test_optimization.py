@@ -271,25 +271,6 @@ def test_dont_fuse_numpy_arrays():
         assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
 
 
-def test_minimize_data_transfer():
-    zarr = pytest.importorskip("zarr")
-    x = zarr.ones((100,))
-    y = da.from_array(x, chunks=25)
-    z = y + 1
-    dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
-
-    keys = list(dsk)
-    results = dask.get(dsk, keys)
-    big_key = [k for k, r in zip(keys, results) if r is x][0]
-    dependencies, dependents = dask.core.get_deps(dsk)
-    deps = dependents[big_key]
-
-    assert len(deps) == 4
-    for dep in deps:
-        assert dsk[dep][0] in (getitem, getter)
-        assert dsk[dep][1] == big_key
-
-
 def test_fuse_slices_with_alias():
     dsk = {
         "x": np.arange(16).reshape((4, 4)),
@@ -435,7 +416,7 @@ def test_double_dependencies():
 def test_fuse_roots():
     x = da.ones(10, chunks=(2,))
     y = da.zeros(10, chunks=(2,))
-    z = (x + 1) + (2 * y ** 2)
+    z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
@@ -447,7 +428,7 @@ def test_fuse_roots_annotations():
     y = da.zeros(10, chunks=(2,))
 
     with dask.annotate(foo="bar"):
-        y = y ** 2
+        y = y**2
 
     z = (x + 1) + (2 * y)
     hlg = dask.blockwise.optimize_blockwise(z.dask)

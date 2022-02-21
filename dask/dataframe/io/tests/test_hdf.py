@@ -241,7 +241,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with a single partition
     a = dd.from_pandas(df, 1)
@@ -257,7 +257,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -274,7 +274,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a", append=False)
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
 
 def test_to_hdf_modes_multiple_files():
@@ -290,7 +290,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data2"), "/data")
         a.to_hdf(fn, "/data", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # appending two partitions to existing data
     a = dd.from_pandas(df, 2)
@@ -299,7 +299,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data2"), "/data")
         a.to_hdf(fn, "/data", mode="a")
         out = dd.read_hdf(fn, "/data")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -317,7 +317,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data1"), "/data")
         a.to_hdf(fn, "/data", mode="a", append=False)
         out = dd.read_hdf(fn, "/data")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
 
 def test_to_hdf_link_optimizations():

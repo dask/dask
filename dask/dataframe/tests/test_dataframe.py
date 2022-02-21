@@ -16,7 +16,13 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    tm,
+)
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -30,7 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -355,8 +361,8 @@ def test_rename_series_method_2():
     ds = dd.from_pandas(s, 2)
 
     for is_sorted in [True, False]:
-        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
-        assert_eq(res, s.rename(lambda x: x ** 2))
+        res = ds.rename(lambda x: x**2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x**2))
         assert res.known_divisions == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
@@ -372,13 +378,13 @@ def test_rename_series_method_2():
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x ** 2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x ** 2))
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x ** 2, inplace=True, sorted_index=True)
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
-    s.rename(lambda x: x ** 2, inplace=True)
+    s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
 
 
@@ -3005,6 +3011,16 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
+def test_apply_warns_with_invalid_meta():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    func = lambda row: row["x"] + row["y"]
+
+    with pytest.warns(FutureWarning, match="Meta is not valid"):
+        ddf.apply(func, axis=1, meta=int)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3352,7 +3368,16 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
+    # `iteritems` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        pd_items = df["x"].iteritems()
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        dd_items = ddf["x"].iteritems()
+    for (a, b) in zip(pd_items, dd_items):
         assert a == b
 
 
@@ -3699,8 +3724,8 @@ def test_inplace_operators():
 
     ddf.y **= 0.5
 
-    assert_eq(ddf.y, df.y ** 0.5)
-    assert_eq(ddf, df.assign(y=df.y ** 0.5))
+    assert_eq(ddf.y, df.y**0.5)
+    assert_eq(ddf, df.assign(y=df.y**0.5))
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -4164,7 +4189,8 @@ def test_dataframe_mode():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.mode(), df.mode())
-    assert_eq(ddf.Name.mode(), df.Name.mode())
+    # name is not preserved in older pandas
+    assert_eq(ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GT_140)
 
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
@@ -4883,12 +4909,13 @@ def test_dask_layers():
     assert dds.__dask_layers__() == (dds._name,)
     ddi = dds.min()
     assert ddi.key[1:] == (0,)
-    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
-    assert ddi.dask.dependencies == {
-        ddf._name: set(),
-        dds._name: {ddf._name},
-        ddi.key[0]: {dds._name},
-    }
+    # Note that the `min` operation will use two layers
+    # now that ACA uses uses HLG
+    assert {ddf._name, dds._name, ddi.key[0]}.issubset(ddi.dask.layers.keys())
+    assert len(ddi.dask.layers) == 4
+    assert ddi.dask.dependencies[ddf._name] == set()
+    assert ddi.dask.dependencies[dds._name] == {ddf._name}
+    assert len(ddi.dask.dependencies) == 4
     assert ddi.__dask_layers__() == (ddi.key[0],)
 
 
@@ -4994,7 +5021,16 @@ def test_is_monotonic_numeric():
     s = pd.Series(range(20))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
-    assert_eq(s.is_monotonic, ds.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
@@ -5020,7 +5056,16 @@ def test_index_is_monotonic_numeric():
     s = pd.Series(1, index=range(20))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.index.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.index.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(1, index=range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
@@ -5040,3 +5085,34 @@ def test_index_is_monotonic_dt64():
     s_2 = pd.Series(1, index=list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_custom_map_reduce():
+    # Make sure custom map-reduce workflows can use
+    # the universal ACA code path with metadata
+    # that is not DataFrame-like.
+    # See: https://github.com/dask/dask/issues/8636
+
+    df = pd.DataFrame(columns=["a"], data=[[2], [4], [8]], index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def map_fn(x):
+        return {"x": x, "y": x}
+
+    def reduce_fn(series):
+        merged = None
+        for mapped in series:
+            if merged is None:
+                merged = mapped.copy()
+            else:
+                merged["x"] += mapped["x"]
+                merged["y"] *= mapped["y"]
+        return merged
+
+    result = (
+        ddf["a"]
+        .map(map_fn, meta=("data", "object"))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", "object"))
+        .compute()[0]
+    )
+    assert result == {"x": 14, "y": 64}

@@ -1,5 +1,6 @@
 import collections
 import operator
+import pickle
 import warnings
 
 import numpy as np
@@ -119,6 +120,16 @@ def test_groupby_error():
     msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
+    assert msg in str(err.value)
+
+    msg = (
+        "DataFrameGroupBy does not allow compute method."
+        "Please chain it with an aggregation method (like ``.mean()``) or get a "
+        "specific group using ``.get_group()`` before calling ``compute()``"
+    )
+
+    with pytest.raises(NotImplementedError) as err:
+        dp.compute()
     assert msg in str(err.value)
 
 
@@ -427,6 +438,19 @@ def test_series_groupby_propagates_names():
     with pytest.warns(UserWarning):  # meta inference
         result = ddf.groupby("x").apply(func)
     expected = df.groupby("x").apply(func)
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize("npartitions", (1, 2))
+@pytest.mark.parametrize("func", ("cumsum", "cumprod", "cumcount"))
+def test_series_groupby_cumfunc_with_named_index(npartitions, func):
+    df = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 5, 6, 7], "y": [8, 9, 6, 2, 3, 5, 6]}
+    ).set_index("x")
+    ddf = dd.from_pandas(df, npartitions)
+    assert ddf.npartitions == npartitions
+    expected = getattr(df["y"].groupby("x"), func)()
+    result = getattr(ddf["y"].groupby("x"), func)()
     assert_eq(result, expected)
 
 
@@ -986,7 +1010,14 @@ def test_aggregate_build_agg_args__reuse_of_intermediates():
 def test_aggregate_dask():
     dask_holder = collections.namedtuple("dask_holder", ["dask"])
     get_agg_dask = lambda obj: dask_holder(
-        {k: v for (k, v) in obj.dask.items() if k[0].startswith("aggregate")}
+        {
+            k: v
+            for (k, v) in obj.dask.items()
+            # Skip "chunk" tasks, because they include
+            # SubgraphCallable object with non-deterministic
+            # (uuid-based) function names
+            if (k[0].startswith("aggregate") and "-chunk-" not in k[0])
+        }
     )
 
     specs = [
@@ -999,6 +1030,8 @@ def test_aggregate_dask():
             "max",
             "count",
             "size",
+        ],
+        [
             "std",
             "var",
             "first",
@@ -1041,14 +1074,20 @@ def test_aggregate_dask():
         assert_max_deps(agg_dask1, 2)
         assert_max_deps(agg_dask2, 2)
 
-        # check for deterministic key names and values
-        assert agg_dask1 == agg_dask2
+        # check for deterministic key names and values.
+        # Require pickle since "partial" concat functions
+        # used in tree-reduction cannot be compared
+        assert pickle.dumps(agg_dask1[0]) == pickle.dumps(agg_dask2[0])
 
         # the length of the dask does not depend on the passed spec
         for other_spec in specs:
-            other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
-            assert len(other.dask) == len(result1.dask)
-            assert len(other.dask) == len(result2.dask)
+            # Note: List-based aggregation specs may result in
+            # an extra delayed layer. This is because a "long" list
+            # arg will be detected in `dask.array.core.normalize_arg`.
+            if isinstance(spec, list) == isinstance(other_spec, list):
+                other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
+                assert len(other.dask) == len(result1.dask)
+                assert len(other.dask) == len(result2.dask)
 
 
 @pytest.mark.parametrize(
@@ -2343,7 +2382,7 @@ def test_groupby_large_ints_exception(backend):
     else:
         data_frame = dd.from_pandas
     max = np.iinfo(np.uint64).max
-    sqrt = max ** 0.5
+    sqrt = max**0.5
     series = data_source.Series(
         np.concatenate([sqrt * np.arange(5), np.arange(35)])
     ).astype("int64")
@@ -2579,3 +2618,18 @@ def test_groupby_multi_index_with_row_operations(operation):
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
     assert_eq(expected, actual)
+
+
+def test_groupby_iter_fails():
+    df = pd.DataFrame(
+        data=[
+            ["a0", "b1"],
+            ["a1", "b1"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+        ],
+        columns=["A", "B"],
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.raises(NotImplementedError, match="computing the groups"):
+        list(ddf.groupby("A"))
