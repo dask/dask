@@ -4943,14 +4943,29 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
-                on=on,
-                lsuffix=lsuffix,
-                rsuffix=rsuffix,
-                npartitions=npartitions,
-                shuffle=shuffle,
-            )
+            # If its an outer join we can use the full recursive pairwise join.
+            if how == "outer":
+                full = [self] + other
+
+                return _recursive_pairwise_outer_join(
+                    full,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
+            else:
+                # Do recursive pairwise join on everything _except_ the last join
+                # where we need to do a left join.
+                other = _recursive_pairwise_outer_join(
+                    other,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
 
         from .multi import merge
 
