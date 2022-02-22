@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -1198,7 +1198,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
         pytest.param(
             lambda df: [df["a"] > 2, df["b"] > 1],
             marks=pytest.mark.xfail(
-                reason="index dtype does not coincide: boolean != empty"
+                not PANDAS_GT_150,
+                reason="index dtype does not coincide: boolean != empty",
             ),
         ),
     ],
