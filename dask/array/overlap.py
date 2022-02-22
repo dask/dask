@@ -82,8 +82,7 @@ def trim_overlap(x, depth, boundary=None):
 
     # parameter to be passed to trim_internal
     axes = coerce_depth(x.ndim, depth)
-    boundary2 = coerce_boundary(x.ndim, boundary)
-    return trim_internal(x, axes=axes, boundary=boundary2)
+    return trim_internal(x, axes=axes, boundary=boundary)
 
 
 def trim_internal(x, axes, boundary=None):
