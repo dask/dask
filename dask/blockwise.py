@@ -488,12 +488,15 @@ class Blockwise(Layer):
         )
 
         # Gather constant dependencies (for all output keys)
+        collection_deps = {arg for (arg, ind) in self.indices if ind is not None}
         const_deps = set()
         input_layers = input_layers or set()
         for (arg, ind) in self.indices:
             if ind is None:
                 try:
-                    if arg in keys or arg in input_layers:
+                    if arg in keys or (
+                        arg in input_layers and arg not in collection_deps
+                    ):
                         const_deps.add(arg)
                 except TypeError:
                     pass  # unhashable

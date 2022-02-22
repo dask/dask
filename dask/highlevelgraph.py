@@ -218,7 +218,7 @@ class Layer(Mapping):
             # Entire Layer was culled
             return None
 
-        # Cull the layer by resetting utput_blocks
+        # Cull the layer by resetting output_blocks
         output_blocks = self._keys_to_indices(keys)
         if output_blocks != set(self.output_blocks):
             new_state = self.layer_state.copy()
@@ -1164,8 +1164,11 @@ class HighLevelGraph(Mapping):
                 keys_set,  # All required keys
                 input_layers,  # Layer dependencies
             )
-            if culled_layer:
-                # Update keys_set and ret_layers
+            if culled_layer is not None:
+                # Update keys_set and ret_layers.
+                # Note that we cannot call `if culled_layer:`
+                # above without materializing the layer
+                # (must compare to None).
                 keys_set |= culled_deps
                 ret_layers[layer_name] = culled_layer
 
