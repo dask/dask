@@ -1146,7 +1146,6 @@ class HighLevelGraph(Mapping):
 
         # Loop through layers in topological order
         ret_layers = {}
-        ret_deps = {}
         for layer_name in reversed(self._toposort_layers()):
 
             # Get layer dependencies (used for MaterializedLayers)
@@ -1169,17 +1168,13 @@ class HighLevelGraph(Mapping):
                 # Update keys_set and ret_layers
                 keys_set |= culled_deps
                 ret_layers[layer_name] = culled_layer
-                ret_deps[layer_name] = culled_deps | {
-                    k[0] for k in culled_deps if isinstance(k, tuple) and k
-                }
-            else:
-                ret_deps[layer_name] = self.dependencies[layer_name]
 
         # Remove layers that have been culled entirely
+        ret_dependencies = {}
         for k in ret_layers:
-            ret_deps[k] = ret_deps[k].intersection(ret_layers)
+            ret_dependencies[k] = self.dependencies[k].intersection(ret_layers)
 
-        return HighLevelGraph(ret_layers, ret_deps)
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
     def cull_layers(self, layers: Iterable[str]) -> HighLevelGraph:
         """Return a new HighLevelGraph with only the given layers and their
