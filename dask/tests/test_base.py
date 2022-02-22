@@ -5,7 +5,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass
+from dataclasses import dataclass, field, make_dataclass
 from operator import add, mul
 
 import pytest
@@ -1301,8 +1301,6 @@ def test_normalize_function_limited_size():
 
 
 def test_normalize_function_dataclass_field_no_repr():
-    from dataclasses import field, make_dataclass
-
     A = make_dataclass(
         "A",
         [("param", float, field(repr=False))],
