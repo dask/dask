@@ -258,7 +258,12 @@ provided by the adlfs_ back-end.
 Authentication for ``adl`` requires ``tenant_id``, ``client_id`` and ``client_secret``
 in the ``storage_options`` dictionary.
 
-Authentication for ``abfs`` requires ``account_name`` and ``account_key`` in ``storage_options``.
+Authentication for ``abfs`` requires ``storage_options`` to contain ``account_name``,
+``tenant_id``, ``client_id`` and ``client_secret`` for the `RBAC and ACL`_ access models,
+or ``account_name`` and ``account_key`` for the `shared key`_ access model.
+
+.. _RBAC and ACL: https://docs.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-access-control-model/
+.. _shared key: https://docs.microsoft.com/en-us/azure/storage/blobs/data-lake-storage-access-control-model#shared-key-and-shared-access-signature-sas-authorization
 
 HTTP(S)
 -------
