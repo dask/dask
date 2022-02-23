@@ -628,12 +628,7 @@ Dask Name: {name}, {task} tasks"""
 
         from .shuffle import compute_divisions
 
-        try:
-            return compute_divisions(self, col=col)
-        except ValueError as err:
-            raise ValueError(
-                "compute_current_divisions is only implemented for sorted indexes."
-            ) from err
+        return compute_divisions(self, col=col)
 
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
