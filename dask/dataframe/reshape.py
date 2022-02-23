@@ -199,7 +199,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         column to be columns
     values : scalar or list(scalar)
         column(s) to aggregate
-    aggfunc : {'mean', 'sum', 'count'}, default 'mean'
+    aggfunc : {'mean', 'sum', 'count', 'first', 'last'}, default 'mean'
 
     Returns
     -------
@@ -228,8 +228,13 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         or is_scalar(values)
     ):
         raise ValueError("'values' must refer to an existing column or columns")
-    if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
-        raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
+
+    available_aggfuncs = ["mean", "sum", "count", "first", "last"]
+
+    if not is_scalar(aggfunc) or aggfunc not in available_aggfuncs:
+        raise ValueError(
+            "aggfunc must be either " + ", ".join(f"'{x}'" for x in available_aggfuncs)
+        )
 
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
@@ -242,9 +247,26 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             (sorted(values), columns_contents), names=[None, columns]
         )
 
-    meta = pd.DataFrame(
-        columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
-    )
+    if aggfunc in ["first", "last"]:
+        # Infer datatype as non-numeric values are allowed
+        if is_scalar(values):
+            meta = pd.DataFrame(
+                columns=new_columns,
+                dtype=df[values].dtype,
+                index=pd.Index(df._meta[index]),
+            )
+        else:
+            meta = pd.DataFrame(
+                columns=new_columns,
+                index=pd.Index(df._meta[index]),
+            )
+            for value_col in values:
+                meta[value_col] = meta[value_col].astype(df[values].dtypes[value_col])
+    else:
+        # Use float64 as other aggregate functions require numerical data
+        meta = pd.DataFrame(
+            columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
+        )
 
     kwargs = {"index": index, "columns": columns, "values": values}
 
@@ -274,6 +296,24 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         return pv_count
     elif aggfunc == "mean":
         return pv_sum / pv_count
+    elif aggfunc == "first":
+        return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_first,
+            aggregate=methods.pivot_agg_first,
+            meta=meta,
+            token="pivot_table_first",
+            chunk_kwargs=kwargs,
+        )
+    elif aggfunc == "last":
+        return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_last,
+            aggregate=methods.pivot_agg_last,
+            meta=meta,
+            token="pivot_table_last",
+            chunk_kwargs=kwargs,
+        )
     else:
         raise ValueError
 
