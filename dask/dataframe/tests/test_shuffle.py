@@ -1144,6 +1144,23 @@ def test_set_index_overlap_2():
     assert ddf2.npartitions == 8
 
 
+def test_compute_current_divisions_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.clear_divisions().repartition(8)
+    divisions = ddf2.compute_current_divisions()
+    assert divisions == ("A", "A", "A", "A", "B", "B", "B", "C", "C")
+
+    ddf2.divisions = divisions
+    assert_eq(ddf1, ddf2, check_divisions=False)
+    assert ddf2.npartitions == 8
+
+
 def test_shuffle_hlg_layer():
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.

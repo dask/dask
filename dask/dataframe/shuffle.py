@@ -994,23 +994,44 @@ def fix_overlap(ddf, overlap):
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
-def compute_and_set_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
+def _compute_mins_and_maxes(column, **kwargs) -> tuple:
+    """For a given column, compute the min, max, and len of each partition.
+
+    And make sure that the partitions are sorted relative to each other.
+    NOTE: this does not guarantee that every partition is internally sorted.
+    """
+    mins = column.map_partitions(M.min, meta=column)
+    maxes = column.map_partitions(M.max, meta=column)
+    lens = column.map_partitions(len, meta=column)
+    mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
     mins = remove_nans(mins)
     maxes = remove_nans(maxes)
-
+    non_empty_mins = [m for m, l in zip(mins, lens) if l != 0]
+    non_empty_maxes = [m for m, l in zip(maxes, lens) if l != 0]
     if (
-        sorted(mins) != list(mins)
-        or sorted(maxes) != list(maxes)
-        or any(a > b for a, b in zip(mins, maxes))
+        sorted(non_empty_mins) != non_empty_mins
+        or sorted(non_empty_maxes) != non_empty_maxes
+        or any(a < b for a, b in zip(non_empty_mins[1:], non_empty_maxes[:-1]))
     ):
         raise ValueError(
-            "Partitions must be sorted ascending with the index", mins, maxes
+            f"Partitions must be sorted ascending by {column.name}",
+            f"In your dataset the mins of the partitions are: {mins}"
+            f"and the maxes are: {maxes}",
         )
+    return (mins, maxes)
 
-    df.divisions = tuple(mins) + (list(maxes)[-1],)
+
+def compute_divisions(df, col=None, **kwargs) -> tuple:
+    column = df.index if col is None else df[col]
+    mins, maxes = _compute_mins_and_maxes(column, **kwargs)
+
+    return tuple(mins) + (maxes[-1],)
+
+
+def compute_and_set_divisions(df, **kwargs):
+    mins, maxes = _compute_mins_and_maxes(df.index, **kwargs)
+
+    df.divisions = tuple(mins) + (maxes[-1],)
 
     overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
     return fix_overlap(df, overlap) if overlap else df
