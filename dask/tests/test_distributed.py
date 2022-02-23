@@ -666,9 +666,10 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    sql = pytest.importorskip("dask.dataframe.io.sql")
+    pytest.importorskip("sqlalchemy")
 
     df = pd.DataFrame({"a": range(10), "b": range(10)})
+    df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=1)
     with tmpfile() as f:
         uri = f"sqlite:///{f}"
@@ -679,7 +680,6 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
 
         dd.utils.assert_eq(
             ddf,
-            sql.read_sql_table("test", uri, "index"),
+            dd.read_sql_table("test", uri, "index"),
             check_divisions=False,
-            check_index=False,
         )
