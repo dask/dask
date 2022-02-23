@@ -16,7 +16,7 @@ In a Jupyter Notebook or Jupyter Lab session displaying the client object will s
 as following.
 
 .. figure:: images/dashboard_link.png
-    :alt: NEEDS ALT TEXT
+    :alt: Client html repr displaying the dashboard link on a JupyterLab session. 
 
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
 or, if you are in a terminal or IPython, it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
@@ -28,7 +28,11 @@ scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/
 The dashboard link redirects you to main dashboard page as shown below:
 
 .. figure:: images/dashboard_status.png
-    :alt: NEEDS ALT TEXT
+    :alt: Local host dashboard status page displaying the five panes that compose it. The Byte stored pane showing blue horizontal bar of 
+    the cluster memory stored up to 593.80 MiB, the Bytes stored per worker pane with four blue horizontal bars of approximately 150 MiB
+    each, the Task Processing pane with four blue bars up to 350 tasks per worker, the Task Stream pane showing eight horizontal bars with 
+    different shades of greens and blues and some red, and the Progress pane showing horizontal bars for each task-prefix matching the 
+    blue and green colors of the task stream pane. 
 
 In the entry point of the dashboard you can find multiple plots with information about your cluster 
 as listed below:
@@ -47,7 +51,12 @@ as well as the individual usage on each worker (Bytes per Worker). The colors on
 indicate the following.  
 
 .. figure:: images/dashboard_memory.png
-    :alt: NEEDS ALT TEXT
+    :alt: The Byte stored pane showing blue and grey horizontal bar of the cluster memory, the blue portion 
+    corresponds to 12.6 GiB of memory while the grey portion represents the 750 MiB spilled to disc. The Bytes 
+    stored per worker pane showing 16 workers each of them with a horizontal bar. The first one from the top is 
+    orange and grey, the following three are orange, and the remaining twelve are blue. The orange and blue bars 
+    also have different levels of transparency. 
+
 
 .. raw:: html
 
@@ -90,7 +99,8 @@ worker has no tasks and its waiting for them. This usually happens when the comp
 to worry about), but it can also mean that the distribution of the task across workers is not optimized. 
 
 .. figure:: images/dashboard_task_processing.png
-    :alt: NEEDS ALT TEXT
+    :alt: Task Processing pane with four blue horizontal bars, one per worker, three of them go up to 6 while one of 
+    the four goes up to 5.
 
 There are three different colors that can appear in this plot (NEEDS TO FIGURE OUT HOW TO ADD ALT TEXT TO THIS TABLE):
 
@@ -175,10 +185,13 @@ There are certain colors that are reserved for a specific kinds of tasks:
 
 
 .. figure:: images/dashboard_taskstream_healthy.png
-    :alt: NEEDS ALT TEXT
+    :alt: Task Stream pane showing eight horizontal bars, one per worker-thread, with different shades of 
+    greens and blues and some red. 
 
 .. figure:: images/dashboard_task_stream_unhealthy.png
-    :alt: NEEDS ALT TEXT
+    :alt:  Task Stream pane showing twelve horizontal bars, one per worker-thread, with majority of white space
+    in each bar, and displaying some purple, red and orange rectangles.   
+
 
 In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
 is idle. Having too much white and red is an indication of not optimal use of resources.
@@ -189,8 +202,11 @@ Progress
 --------
 
 .. figure:: images/dashboard_progress.png
-    :alt: NEEDS ALT TEXT
-
+    :alt: Progress pane showing horizontal bars for each task-prefix matching with the names "add", "double", "inc",
+    and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed 
+    in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and  
+    the "sum" bar is empty.
+ 
 The progress bars plot shows the progress of each individual task-prefix. The color of the of each bar matches the color of the 
 individual tasks on the task stream that correspond to the same task-prefix. Each horizontal bar has three different components:
 
@@ -229,4 +245,5 @@ integrated as a pane in your JupyterLab session. For example, in the figure belo
 the *Progress*, *Workers Memory*, and *Graph* plots. 
 
 .. figure:: images/dashboard_jupyterlab.png
-    :alt: NEEDS ALT TEXT
+    :alt: Dask JupyterLab extension showing an arrangement of four panes selected from a display of plot options. The panes
+    displayed are the Task stream, Bytes per worker, Progress and the Task Graph. 
