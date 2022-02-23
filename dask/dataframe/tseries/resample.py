@@ -4,12 +4,13 @@ from pandas.core.resample import Resampler as pd_Resampler
 
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
-from ...utils import derived_from
+from ...utils import _deprecated, derived_from
 from .. import methods
 from .._compat import PANDAS_GT_140
 from ..core import DataFrame, Series
 
 
+@_deprecated()
 def getnanos(rule):
     try:
         return getattr(rule, "nanos", None)
