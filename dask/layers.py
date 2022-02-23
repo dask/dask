@@ -17,29 +17,6 @@ from .utils import apply, cached_cumsum, concrete, insert, stringify
 
 #
 ##
-###  General Utilities
-##
-#
-
-
-class CallableLazyImport:
-    """Function Wrapper for Lazy Importing.
-
-    This Class should only be used when materializing a graph
-    on a distributed scheduler.
-    """
-
-    def __init__(self, function_path):
-        self.function_path = function_path
-
-    def __call__(self, *args, **kwargs):
-        from distributed.utils import import_term
-
-        return import_term(self.function_path)(*args, **kwargs)
-
-
-#
-##
 ###  Array Layers & Utilities
 ##
 #
@@ -148,6 +125,9 @@ class ArrayOverlapLayer(Layer):
 
     def construct_graph(self):
         """Construct graph for a simple overlap operation."""
+
+        from dask.array.core import concatenate3
+
         axes = self.axes
         chunks = self.chunks
         name = self.name
@@ -155,10 +135,6 @@ class ArrayOverlapLayer(Layer):
 
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
-
-        # Use CallableLazyImport objects to avoid importing dataframe
-        # module on the scheduler
-        concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
 
         dims = list(map(len, chunks))
         expand_key2 = functools.partial(
@@ -401,12 +377,10 @@ class SimpleShuffleLayer(Layer):
     def construct_graph(self):
         """Construct graph for a simple shuffle operation."""
 
-        shuffle_group_name = "group-" + self.name
+        from dask.dataframe.core import _concat
+        from dask.dataframe.shuffle import shuffle_group
 
-        # Use CallableLazyImport objects to avoid importing dataframe
-        # module on the scheduler
-        concat_func = CallableLazyImport("dask.dataframe.core._concat")
-        shuffle_group_func = CallableLazyImport("dask.dataframe.shuffle.shuffle_group")
+        shuffle_group_name = "group-" + self.name
 
         dsk = {}
         for part_out in self.output_blocks:
@@ -415,7 +389,7 @@ class SimpleShuffleLayer(Layer):
                 for part_in in range(self.npartitions_input)
             ]
             dsk[(self.name, part_out)] = (
-                concat_func,
+                _concat,
                 _concat_list,
                 self.ignore_index,
             )
@@ -427,7 +401,7 @@ class SimpleShuffleLayer(Layer):
                 )
                 if (shuffle_group_name, _part_in) not in dsk:
                     dsk[(shuffle_group_name, _part_in)] = (
-                        shuffle_group_func,
+                        shuffle_group,
                         (self.name_input, _part_in),
                         self.column,
                         0,
@@ -559,13 +533,10 @@ class ShuffleLayer(SimpleShuffleLayer):
 
     def construct_graph(self):
         """Construct graph for a "rearrange-by-column" stage."""
+        from dask.dataframe.core import _concat
+        from dask.dataframe.shuffle import shuffle_group
 
         shuffle_group_name = "group-" + self.name
-
-        # Use CallableLazyImport objects to avoid importing dataframe
-        # module on the scheduler
-        concat_func = CallableLazyImport("dask.dataframe.core._concat")
-        shuffle_group_func = CallableLazyImport("dask.dataframe.shuffle.shuffle_group")
 
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
@@ -582,7 +553,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             # concatenate those pieces together, with their friends
             dsk[(self.name, part)] = (
-                concat_func,
+                _concat,
                 _concat_list,
                 self.ignore_index,
             )
@@ -611,7 +582,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
-                        shuffle_group_func,
+                        shuffle_group,
                         input_key,
                         self.column,
                         self.stage,
@@ -738,18 +709,14 @@ class BroadcastJoinLayer(Layer):
     def construct_graph(self):
         """Construct graph for a broadcast join operation."""
 
+        from dask.dataframe.multi import (
+            _concat_wrapper,
+            _merge_chunk_wrapper,
+            _split_partition,
+        )
+
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
-
-        # Use CallableLazyImport objects to avoid importing dataframe
-        # module on the scheduler
-        split_partition_func = CallableLazyImport(
-            "dask.dataframe.multi._split_partition"
-        )
-        concat_func = CallableLazyImport("dask.dataframe.multi._concat_wrapper")
-        merge_chunk_func = CallableLazyImport(
-            "dask.dataframe.multi._merge_chunk_wrapper"
-        )
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
@@ -765,7 +732,7 @@ class BroadcastJoinLayer(Layer):
             # Split each "other" partition by hash
             if self.how != "inner":
                 dsk[(split_name, i)] = (
-                    split_partition_func,
+                    _split_partition,
                     (other_name, i),
                     other_on,
                     bcast_size,
@@ -798,14 +765,14 @@ class BroadcastJoinLayer(Layer):
                 inter_key = (inter_name, i, j)
                 dsk[inter_key] = (
                     apply,
-                    merge_chunk_func,
+                    _merge_chunk_wrapper,
                     _merge_args,
                     self.merge_kwargs,
                 )
                 _concat_list.append(inter_key)
 
             # Concatenate the merged results for each output partition
-            dsk[(self.name, i)] = (concat_func, _concat_list)
+            dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
 
         return dsk
 
