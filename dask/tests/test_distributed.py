@@ -18,7 +18,7 @@ from dask import compute, delayed, persist
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.utils import get_named_args, tmpdir
+from dask.utils import get_named_args, tmpdir, tmpfile
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -659,3 +659,27 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     packed = hlg.__dask_distributed_pack__(c, ["z"], {})
     unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
+
+
+@gen_cluster(client=True)
+async def test_to_sql_engine_kwargs(c, s, a, b):
+    # https://github.com/dask/dask/issues/8738
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("sqlalchemy")
+
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=1)
+    with tmpfile() as f:
+        uri = f"sqlite:///{f}"
+        result = ddf.to_sql(
+            "test", uri, index=True, engine_kwargs={"echo": False}, compute=False
+        )
+        await c.compute(result)
+
+        dd.utils.assert_eq(
+            ddf,
+            dd.read_sql_table("test", uri, "index"),
+            check_divisions=False,
+        )
