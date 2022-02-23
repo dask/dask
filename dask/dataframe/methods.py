@@ -402,6 +402,14 @@ def pivot_agg(df):
     return df.groupby(level=0).sum()
 
 
+def pivot_agg_first(df):
+    return df.groupby(level=0).first()
+
+
+def pivot_agg_last(df):
+    return df.groupby(level=0).last()
+
+
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
@@ -414,6 +422,18 @@ def pivot_count(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
     ).astype(np.float64)
+
+
+def pivot_first(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+    )
+
+
+def pivot_last(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+    )
 
 
 def assign_index(df, ind):
