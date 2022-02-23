@@ -5,7 +5,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass
+from dataclasses import dataclass, field, make_dataclass
 from operator import add, mul
 
 import pytest
@@ -226,9 +226,16 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f3\x94\x93\x94.",
+        (
+            b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f2\x94\x93\x94.",
+        ),
+        (
+            (
+                "c",
+                b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f1\x94\x93\x94.",
+            ),
+        ),
     )
     assert res == sol
 
@@ -1291,6 +1298,19 @@ def test_normalize_function_limited_size():
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
+
+
+def test_normalize_function_dataclass_field_no_repr():
+    A = make_dataclass(
+        "A",
+        [("param", float, field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
 
 
 def test_optimize_globals():
