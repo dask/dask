@@ -1,7 +1,6 @@
 name: Array API
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:
