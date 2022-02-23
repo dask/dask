@@ -217,5 +217,5 @@ def test_common_aggs(agg):
 
 
 def test_getnanos_deprecated():
-    with pytest.warns(FutureWarning, match="getnanos is deprecated"):
+    with pytest.warns(FutureWarning, match="getnanos was deprecated"):
         getnanos(None)

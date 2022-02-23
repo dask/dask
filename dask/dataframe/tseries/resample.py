@@ -10,7 +10,7 @@ from .._compat import PANDAS_GT_140
 from ..core import DataFrame, Series
 
 
-@_deprecated()
+@_deprecated(after_version="2022.02.0")
 def getnanos(rule):
     try:
         return getattr(rule, "nanos", None)
