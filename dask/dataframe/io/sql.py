@@ -860,5 +860,4 @@ def to_sql(
 
 @delayed
 def _extra_deps(func, *args, extras=None, **kwargs):
-    print(kwargs)
     return func(*args, **kwargs)

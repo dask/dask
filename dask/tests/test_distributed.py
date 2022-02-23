@@ -663,10 +663,23 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
 
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
+    # https://github.com/dask/dask/issues/8738
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+    sql = pytest.importorskip("dask.dataframe.io.sql")
 
-    ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=1)
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    ddf = dd.from_pandas(df, npartitions=1)
     with tmpfile() as f:
         uri = f"sqlite:///{f}"
-        ddf.to_sql("test", uri, engine_kwargs={"echo": False})
+        result = ddf.to_sql(
+            "test", uri, index=True, engine_kwargs={"echo": False}, compute=False
+        )
+        await c.compute(result)
+
+        dd.utils.assert_eq(
+            ddf,
+            sql.read_sql_table("test", uri, "index"),
+            check_divisions=False,
+            check_index=False,
+        )
