@@ -543,8 +543,11 @@ class Blockwise(Layer):
             input_layers=input_layers,
             output_blocks=output_blocks,
         )
-        out_size_iter = (self.dims[i] for i in self.output_indices)
-        if prod(out_size_iter) != len(deps):
+        if prod(self.dims[i] for i in self.output_indices) != len(keys):
+            # The number of output keys produced by the
+            # existing layer does not match the number
+            # of requrested keys. We must cull the layer
+            # by setting `output_blocks`.
             new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations
