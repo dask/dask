@@ -76,37 +76,77 @@ def _intersect_1d(breaks):
     breaks: list of tuples
         Each tuple is ('o', 8) or ('n', 8)
         These are pairs of 'o' old or new 'n'
-        indicator with a corresponding cumulative sum.
-
+        indicator with a corresponding cumulative sum,
+        or breakpoint (a position along the chunking axis).
+        The list of pairs is already ordered by breakpoint.
+        Note that an 'o' pair always occurs BEFORE
+        an 'n' pair if both share the same breakpoint.
     Uses 'o' and 'n' to make new tuples of slices for
     the new block crosswalk to old blocks.
     """
-    start = 0
+    # EXPLANATION:
+    # We know each new chunk is obtained from the old chunks, but
+    # from which ones and how? This function provides the answer.
+    # On return, each new chunk is represented as a list of slices
+    # of the old chunks. Therefore,  paired with each slice is the
+    # index of the old chunk to which that slice refers.
+    # NOTE: if any nonzero-size new chunks extend beyond the total
+    #    span of the old chunks, then those new chunks are assumed
+    #    to be obtained from an imaginary old chunk that extends
+    #    from the end of that total span to infinity. The chunk-
+    #    index of this imaginary chunk follows in consecutive order
+    #    from the chunk-indices of the actual old chunks.
+
+    # First, let us determine the index of the last old_chunk:
+    o_pairs = [pair for pair in breaks if pair[0] == "o"]
+    last_old_chunk_idx = len(o_pairs) - 2
+    last_o_br = o_pairs[-1][1]  # end of range spanning all old chunks
+
+    start = 0  # start of a slice of an old chunk
     last_end = 0
-    old_idx = 0
-    ret = []
-    ret_next = []
-    for idx in range(1, len(breaks)):
+    old_idx = 0  # index of old chunk
+    last_o_end = 0
+    ret = []  # will hold the list of new chunks
+    ret_next = []  # will hold the list of slices comprising one new chunk
+    for idx in range(1, len(breaks)):  # Note start from the 2nd pair
+        # the interval between any two consecutive breakpoints is a potential
+        # new chunk:
         label, br = breaks[idx]
         last_label, last_br = breaks[idx - 1]
         if last_label == "n":
+            # This always denotes the end of a new chunk or the start
+            # of the next new chunk or both
+            start = last_end
             if ret_next:
                 ret.append(ret_next)
                 ret_next = []
-        if last_label == "o":
-            start = 0
         else:
-            start = last_end
-        end = br - last_br + start
+            start = 0
+        end = br - last_br + start  # end of a slice of an old chunk
         last_end = end
         if br == last_br:
+            # Here we have a zero-size interval between the previous and
+            # current breakpoints. This should not result in a slice unless
+            # this interval's end-points (`last_label` and `label`) are both
+            # equal to 'n'
             if label == "o":
                 old_idx += 1
-            continue
+                last_o_end = end
+            if label == "n" and last_label == "n":
+                if br == last_o_br:
+                    # zero-size new chunks located at the edge of the range
+                    # spanning all the old chunks are assumed to come from the
+                    # end of the last old chunk:
+                    slc = slice(last_o_end, last_o_end)
+                    ret_next.append((last_old_chunk_idx, slc))
+                    continue
+            else:
+                continue
         ret_next.append((old_idx, slice(start, end)))
         if label == "o":
             old_idx += 1
             start = 0
+            last_o_end = end
 
     if ret_next:
         ret.append(ret_next)
