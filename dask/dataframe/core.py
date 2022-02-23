@@ -4596,6 +4596,13 @@ class DataFrame(_Frame):
 
         if divisions is not None:
             check_divisions(divisions)
+        # mismatched sizes of indivual partitions = user error. how to fail gracefully?
+        elif (
+            getattr(other, "known_divisions", False)
+            and other.npartitions == self.npartitions
+        ):
+            pre_sorted = True
+            divisions = other.divisions
 
         if pre_sorted:
             from .shuffle import set_sorted_index

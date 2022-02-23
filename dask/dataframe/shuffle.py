@@ -223,7 +223,7 @@ def set_index(
             and npartitions == df.npartitions
         ):
             divisions = mins + [maxes[-1]]
-            result = set_sorted_index(df, index, drop=drop, divisions=divisions)
+            result = set_sorted_index(df, index2, drop=drop, divisions=divisions)
             return result.map_partitions(M.sort_index)
 
     return set_partition(
@@ -1017,10 +1017,18 @@ def compute_and_set_divisions(df, **kwargs):
 
 
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
+    # TODO check whether pandas supports DataFrames as the new index; error/succeed appropriately
+    if isinstance(index, DataFrame):
+        raise TypeError("TBD - Dataframe")
+    elif isinstance(index, Series):
         meta = df._meta.set_index(index._meta, drop=drop)
+    elif isinstance(index, (str, pd.Index, pd.Series)):
+        meta = df._meta.set_index(index, drop=drop)
+    # elif isinstance(index, str):
+    #     meta = df[index]
+    else:
+
+        raise TypeError("TBD -- other")
 
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 

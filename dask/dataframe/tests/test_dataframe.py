@@ -2834,6 +2834,7 @@ def test_gh580():
 
 
 def test_gh6305():
+    # breakpoint()
     df = pd.DataFrame({"x": np.arange(3, dtype=float)})
     ddf = dd.from_pandas(df, 1)
     ddf_index_only = ddf.set_index("x")
@@ -5116,3 +5117,62 @@ def test_custom_map_reduce():
         .compute()[0]
     )
     assert result == {"x": 14, "y": 64}
+
+
+def test_set_index_with_dask_dt_index():
+    ## was failing, now works
+    # https://github.com/dask/dask/issues/8359
+
+    _values = {
+        "x": [1, 2, 3, 4] * 3,
+        "y": [10, 20, 30] * 4,
+        "name": ["Alice", "Bob"] * 6,
+    }
+    _dates = pd.date_range(start="2022-02-22", freq="16h", periods=12)
+    _df = pd.DataFrame(_values, index=_dates)
+    one_day = pd.Timedelta(days=1)
+
+    demo_ts = dd.from_pandas(_df, npartitions=3)
+    no_dates = dd.from_pandas(pd.DataFrame(_values), npartitions=3)
+
+    # specify a different date index entirely
+    day_index = demo_ts.index.dt.floor("D")
+    day_df = demo_ts.set_index(day_index)
+    expected = dd.from_pandas(
+        pd.DataFrame(_values, index=_dates.floor("D")), npartitions=3
+    )
+    assert_eq(day_df, expected)
+
+    # specify an index with shifted dates
+    next_day_df = demo_ts.set_index(demo_ts.index + one_day)
+    expected = dd.from_pandas(
+        pd.DataFrame(_values, index=_dates + one_day), npartitions=3
+    )
+    assert_eq(next_day_df, expected)
+
+    # try a different index type
+    range_df = demo_ts.set_index(no_dates.index)
+    expected = dd.from_pandas(pd.DataFrame(_values), npartitions=3)
+    assert_eq(range_df, expected)
+
+
+def test_set_index_with_series_uses_fastpath():
+    _dates = pd.date_range(start="2022-02-22", freq="16h", periods=12)
+    one_day = pd.Timedelta(days=1)
+    _values = {
+        "x": [1, 2, 3, 4] * 3,
+        "y": [10, 20, 30] * 4,
+        "name": ["Alice", "Bob"] * 6,
+        "d1": _dates + one_day,
+        "d2": _dates + one_day * 5,
+    }
+
+    _df = pd.DataFrame(_values, index=_dates)
+    demo_ts = dd.from_pandas(_df, npartitions=3)
+
+    new_dates = demo_ts["d2"] + one_day
+    new_df = demo_ts.set_index(new_dates).compute()
+    expected = dd.from_pandas(
+        pd.DataFrame(_values, index=new_dates), npartitions=3
+    ).compute()
+    assert_eq(new_df, expected, check_names=False)
