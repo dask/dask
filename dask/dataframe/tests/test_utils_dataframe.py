@@ -1,9 +1,11 @@
 import re
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
@@ -21,6 +23,7 @@ from dask.dataframe.utils import (
     raise_on_meta_error,
     shard_df_on_index,
 )
+from dask.local import get_sync
 
 
 def test_shard_df_on_index():
@@ -67,7 +70,7 @@ def test_make_meta():
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
-    # Iterable
+    # List
     meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
@@ -80,6 +83,31 @@ def test_make_meta():
     assert len(meta) == 0
     assert meta.dtype == "i8"
     assert meta.name == "a"
+
+    # Iterable
+    class CustomMetadata(Iterable):
+        """Custom class iterator returning pandas types."""
+
+        def __init__(self, max=0):
+            self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
+
+        def __iter__(self):
+            self.n = 0
+            return self
+
+        def __next__(self):
+            if self.n < len(self.types):
+                ret = self.types[self.n]
+                self.n += 1
+                return ret
+            else:
+                raise StopIteration
+
+    meta = make_meta(CustomMetadata())
+    assert (meta.columns == ["a", "c", "b"]).all()
+    assert len(meta) == 0
+    assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
+    assert isinstance(meta.index, pd.RangeIndex)
 
     # With index
     idx = pd.Index([1, 2], name="foo")
@@ -521,3 +549,31 @@ def test_assert_eq_sorts():
     assert_eq(df1, df2_r, check_index=False)
     with pytest.raises(AssertionError):
         assert_eq(df1, df2_r)
+
+
+def test_assert_eq_scheduler():
+    using_custom_scheduler = False
+
+    def custom_scheduler(*args, **kwargs):
+        nonlocal using_custom_scheduler
+        try:
+            using_custom_scheduler = True
+            return get_sync(*args, **kwargs)
+        finally:
+            using_custom_scheduler = False
+
+    def check_custom_scheduler(part: pd.DataFrame) -> pd.DataFrame:
+        assert using_custom_scheduler, "not using custom scheduler"
+        return part + 1
+
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.map_partitions(check_custom_scheduler, meta=ddf)
+
+    with pytest.raises(AssertionError, match="not using custom scheduler"):
+        # NOTE: we compare `ddf2` to itself in order to test both sides of the `assert_eq` logic.
+        assert_eq(ddf2, ddf2)
+
+    assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
+    with dask.config.set(scheduler=custom_scheduler):
+        assert_eq(ddf2, ddf2, scheduler=None)

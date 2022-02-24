@@ -1,6 +1,189 @@
 Changelog
 =========
 
+.. _v2022.02.0:
+
+2022.02.0
+---------
+
+Released on February 11, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``region`` to ``to_zarr`` when using existing array (:pr:`8590`) `Chris Roat`_
+- Add ``engine_kwargs`` support to ``dask.dataframe.to_sql`` (:pr:`8609`) `Amir Kadivar`_
+- Add ``include_path_column`` arg to ``read_json`` (:pr:`8603`) `Bryan W. Weber`_
+- Add ``expand_dims`` to Dask array (:pr:`8687`) `Tom White`_
+
+Enhancements
+^^^^^^^^^^^^
+- Add scheduler option to ``assert_eq`` utilities (:pr:`8610`) `Xinrong Meng`_
+- Fix eye inconsistency with NumPy for ``dtype=None`` (:pr:`8685`) `Tom White`_
+- Fix concatenate inconsistency with NumPy for ``axis=None`` (:pr:`8686`) `Tom White`_
+- Type annotations, part 1 (:pr:`8295`) `Guido Imperiale`_
+- Really allow any iterable to be passed as a ``meta`` (:pr:`8629`) `Julia Signell`_
+- Use ``map_partitions`` (Blockwise) in ``to_parquet`` (:pr:`8487`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Result of reducing an array should not depend on its chunk-structure (:pr:`8637`) `ParticularMiner`_
+- Pass place-holder metadata to ``map_partitions`` in ACA code path (:pr:`8643`) `Richard (Rick) Zamora`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``is_monotonic`` (:pr:`8653`) `James Bourbeau`_
+- Remove some deprecations (:pr:`8605`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add Domino Data Lab to Hosted / managed Dask clusters (:pr:`8675`) `Ray Bell`_
+- Fix inter-linking and remove deprecated function (:pr:`8715`) `Julia Signell`_
+- Fix imbalanced backticks. (:pr:`8693`) `Matthias Bussonnier`_
+- Add documentation for high level graph visualization (:pr:`8483`) `Genevieve Buckley`_
+- Update documentation of ``ProgressBar`` ``out`` parameter (:pr:`8604`) `Pedro Silva`_
+- Improve documentation of ``dask.config.set`` (:pr:`8705`) `Guido Imperiale`_
+- Revert mention to ``mypy`` among type checkers (:pr:`8699`) `Guido Imperiale`_
+
+Maintenance
+^^^^^^^^^^^
+- Update warning handling in ``get_dummies`` tests (:pr:`8651`) `James Bourbeau`_
+- Add a github changelog template (:pr:`8714`) `Julia Signell`_
+- Update year in LICENSE.txt (:pr:`8665`) `David Hoese`_
+- Update ``pre-commit`` version  (:pr:`8691`) `James Bourbeau`_
+- Include ``scipy`` in upstream CI build (:pr:`8681`) `James Bourbeau`_
+- Temporarily pin ``scipy < 1.8.0`` in CI (:pr:`8683`) `James Bourbeau`_
+- Pin ``scipy`` to less than 1.8.0 in GPU CI (:pr:`8698`) `Julia Signell`_
+- Avoid ``pytest.warns(None)`` in ``test_multi.py`` (:pr:`8678`) `James Bourbeau`_
+- Update GHA concurrent job cancellation (:pr:`8652`) `James Bourbeau`_
+- Make ``test__get_paths`` robust to ``site.PREFIXES`` being set (:pr:`8644`) `James Bourbeau`_
+- Bump gpuCI PYTHON_VER to 3.9 (:pr:`8642`) `Charles Blackmon-Luca`_
+
+
+.. _v2022.01.1:
+
+2022.01.1
+---------
+
+Released on January 28, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``dask.dataframe.series.view()`` (:pr:`8533`) `Pavithra Eswaramoorthy`_
+
+Enhancements
+^^^^^^^^^^^^
+- Update ``tz`` for ``fastparquet`` + ``pandas`` 1.4.0 (:pr:`8626`) `Martin Durant`_
+- Cleaning up misc tests for ``pandas`` compat (:pr:`8623`) `Julia Signell`_
+- Moving to ``SQLAlchemy >= 1.4`` (:pr:`8158`) `McToel`_
+- Pandas compat: Filter sparse warnings (:pr:`8621`) `Julia Signell`_
+- Fail if ``meta`` is not a ``pandas`` object (:pr:`8563`) `Julia Signell`_
+- Use ``fsspec.parquet`` module for better remote-storage ``read_parquet`` performance (:pr:`8339`) `Richard (Rick) Zamora`_
+- Move DataFrame ACA aggregations to HLG (:pr:`8468`) `Richard (Rick) Zamora`_
+- Add optional information about originating function call in ``DataFrameIOLayer`` (:pr:`8453`) `Richard (Rick) Zamora`_
+- Blockwise array creation redux (:pr:`7417`) `Ian Rose`_
+- Refactor config default search path retrieval (:pr:`8573`) `James Bourbeau`_
+- Add ``optimize_graph`` flag to ``Bag.to_dataframe`` function (:pr:`8486`) `Maxim Lippeveld`_
+- Make sure that delayed output operations still return lists of paths (:pr:`8498`) `Julia Signell`_
+- Pandas compat: Fix ``to_frame`` ``name`` to not pass ``None`` (:pr:`8554`) `Julia Signell`_
+- Pandas compat: Fix ``axis=None`` warning (:pr:`8555`) `Julia Signell`_
+- Expand Dask YAML config search directories (:pr:`8531`) `abergou`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``groupby.cumsum`` with series grouped by index (:pr:`8588`) `Julia Signell`_
+- Fix ``derived_from`` for ``pandas`` methods (:pr:`8612`) `Thomas J. Fan`_
+- Enforce boolean ``ascending`` for ``sort_values`` (:pr:`8440`) `Charles Blackmon-Luca`_
+- Fix parsing of ``__setitem__`` indices (:pr:`8601`) `David Hassell`_
+- Avoid divide by zero in slicing  (:pr:`8597`) `Doug Davis`_
+
+Deprecations
+^^^^^^^^^^^^
+- Downgrade ``meta`` error in (:pr:`8563`) to warning (:pr:`8628`) `Julia Signell`_
+- Pandas compat: Deprecate ``append`` when ``pandas >= 1.4.0`` (:pr:`8617`) `Julia Signell`_
+
+Documentation
+^^^^^^^^^^^^^
+- Replace outdated ``columns`` argument with ``meta`` in DataFrame constructor (:pr:`8614`) `kori73`_
+- Refactor deploying docs (:pr:`8602`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Pin ``coverage`` in CI (:pr:`8631`) `James Bourbeau`_
+- Move ``cached_cumsum`` imports to be from ``dask.utils`` (:pr:`8606`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.04`` (:pr:`8600`)
+- Update cocstring for ``from_delayed`` function  (:pr:`8576`) `Kirito1397`_
+- Handle ``plot_width`` / ``plot_height`` deprecations (:pr:`8544`) `Bryan Van de Ven`_
+- Remove unnecessary ``pyyaml`` ``importorskip`` (:pr:`8562`) `James Bourbeau`_
+- Specify scheduler in DataFrame ``assert_eq`` (:pr:`8559`) `Gabe Joseph`_
+
+
+.. _v2022.01.0:
+
+2022.01.0
+---------
+
+Released on January 14, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``groupby.shift`` method (:pr:`8522`) `kori73`_
+- Add ``DataFrame.nunique`` (:pr:`8479`) `Sarah Charlotte Johnson`_
+- Add ``da.ndim`` to match ``np.ndim`` (:pr:`8502`) `Julia Signell`_
+
+Enhancements
+^^^^^^^^^^^^
+- Only show ``percentile`` ``interpolation=`` keyword warning if NumPy version >= 1.22 (:pr:`8564`) `Julia Signell`_
+- Raise ``PerformanceWarning`` when ``limit`` and ``"array.slicing.split-large-chunks"`` are ``None`` (:pr:`8511`) `Julia Signell`_
+- Define ``normalize_seq`` function at import time (:pr:`8521`) `Illviljan`_
+- Ensure that divisions are alway tuples (:pr:`8393`) `Charles Blackmon-Luca`_
+- Allow a callable scheduler for ``bag.groupby`` (:pr:`8492`) `Julia Signell`_
+- Save Zarr arrays with dask-on-ray scheduler (:pr:`8472`) `TnTo`_
+- Make byte blocks more even in ``read_bytes`` (:pr:`8459`) `Martin Durant`_
+- Improved the efficiency of ``matmul()`` by completely removing concatenation (:pr:`8423`) `ParticularMiner`_
+- Limit max chunk size when reshaping dask arrays (:pr:`8124`) `Genevieve Buckley`_
+- Changes for fastparquet superthrift (:pr:`8470`) `Martin Durant`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix boolean indices in array assignment (:pr:`8538`) `David Hassell`_
+- Detect default ``dtype`` on array-likes (:pr:`8501`) `aeisenbarth`_
+- Fix ``optimize_blockwise`` bug for duplicate dependency names (:pr:`8542`) `Richard (Rick) Zamora`_
+- Update warnings for ``DataFrame.GroupBy.apply`` and transform (:pr:`8507`) `Sarah Charlotte Johnson`_
+- Track HLG layer name in ``Delayed`` (:pr:`8452`) `Gabe Joseph`_
+- Fix single item ``nanmin`` and ``nanmax`` reductions (:pr:`8484`) `Julia Signell`_
+- Make ``read_csv`` with ``comment`` ``kwarg`` work even if there is a comment in the header (:pr:`8433`) `Julia Signell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Replace ``interpolation`` with ``method`` and ``method`` with ``internal_method`` (:pr:`8525`) `Julia Signell`_
+- Remove daily stock demo utility (:pr:`8477`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add a join example in docs that be run with copy/paste (:pr:`8520`) `kori73`_
+- Mention dashboard link in config (:pr:`8510`) `Ray Bell`_
+- Fix changelog section hyperlinks (:pr:`8534`) `Aneesh Nema`_
+- Hyphenate "single-machine scheduler" for consistency (:pr:`8519`) `Deepyaman Datta`_
+- Normalize whitespace in doctests in ``slicing.py`` (:pr:`8512`) `Maren Westermann`_
+- Best practices storage line typo (:pr:`8529`) `Michael Delgado`_
+- Update figures (:pr:`8401`) `Sarah Charlotte Johnson`_
+- Remove ``pyarrow``-only reference from ``split_row_groups`` in ``read_parquet`` docstring (:pr:`8490`) `Naty Clementi`_
+
+Maintenance
+^^^^^^^^^^^
+- Remove obsolete ``LocalFileSystem`` tests that fail for ``fsspec>=2022.1.0`` (:pr:`8565`) `Richard (Rick) Zamora`_
+- Tweak: "RuntimeWarning: invalid value encountered in reciprocal" (:pr:`8561`) `Guido Imperiale`_
+- Fix ``skipna=None`` for ``DataFrame.sem`` (:pr:`8556`) `Julia Signell`_
+- Fix ``PANDAS_GT_140`` (:pr:`8552`) `Julia Signell`_
+- Collections with HLG must always implement ``__dask_layers__`` (:pr:`8548`) `Guido Imperiale`_
+- Work around race condition in ``import llvmlite`` (:pr:`8550`) `Guido Imperiale`_
+- Set a minimum version for ``pyyaml`` (:pr:`8545`) `Gaurav Sheni`_
+- Adding ``nodefaults`` to environments to fix ``tiledb`` + mac issue (:pr:`8505`) `Julia Signell`_
+- Set ceiling for ``setuptools`` (:pr:`8509`) `Julia Signell`_
+- Add workflow / recipe to generate Dask nightlies (:pr:`8469`) `Charles Blackmon-Luca`_
+- Bump gpuCI ``CUDA_VER`` to 11.5 (:pr:`8489`) `Charles Blackmon-Luca`_
+
+
 .. _v2021.12.0:
 
 2021.12.0
@@ -4946,6 +5129,7 @@ Other
 .. _`Martin Fleischmann`: https://github.com/martinfleis
 .. _`Robert Hales`: https://github.com/robalar
 .. _`João Paulo Lacerda`: https://github.com/jopasdev
+.. _`neel iyer`: https://github.com/spiyer99
 .. _`SnkSynthesis`: https://github.com/SnkSynthesis
 .. _`JoranDox`: https://github.com/JoranDox
 .. _`Kinshuk Dua`: https://github.com/kinshukdua
@@ -4964,3 +5148,20 @@ Other
 .. _`mihir`: https://github.com/ek234
 .. _`Sarah Charlotte Johnson`: https://github.com/scharlottej13
 .. _`ofirr`: https://github.com/ofirr
+.. _`kori73`: https://github.com/kori73
+.. _`TnTo`: https://github.com/TnTo
+.. _`ParticularMiner`: https://github.com/ParticularMiner
+.. _`aeisenbarth`: https://github.com/aeisenbarth
+.. _`Aneesh Nema`: https://github.com/aneeshnema
+.. _`Deepyaman Datta`: https://github.com/deepyaman
+.. _`Maren Westermann`: https://github.com/marenwestermann
+.. _`Michael Delgado`: https://github.com/delgadom
+.. _`abergou`: https://github.com/abergou
+.. _`Pavithra Eswaramoorthy`: https://github.com/pavithraes
+.. _`Maxim Lippeveld`: https://github.com/MaximLippeveld
+.. _`Kirito1397`: https://github.com/Kirito1397
+.. _`Xinrong Meng`: https://github.com/xinrong-databricks
+.. _`Bryan W. Weber`: https://github.com/bryanwweber
+.. _`Amir Kadivar`: https://github.com/amirkdv
+.. _`Pedro Silva`: https://github.com/ppsbs
+.. _`neel iyer`: https://github.com/spiyer99

@@ -1,3 +1,4 @@
+import os
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -436,7 +437,7 @@ def auto_blocksize(total_memory, cpu_count):
 
 
 def _infer_block_size():
-    default = 2 ** 25
+    default = 2**25
     if psutil is not None:
         with catch_warnings():
             simplefilter("ignore", RuntimeWarning)
@@ -766,7 +767,7 @@ read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
     with fil as f:
         df.to_csv(f, **kwargs)
-    return None
+    return os.path.normpath(fil.path)
 
 
 def to_csv(
@@ -953,8 +954,7 @@ def to_csv(
 
         import dask
 
-        dask.compute(*values, **compute_kwargs)
-        return [f.path for f in files]
+        return list(dask.compute(*values, **compute_kwargs))
     else:
         return values
 

@@ -1474,7 +1474,7 @@ class Bag(DaskMethodsMixin):
         grouper,
         method=None,
         npartitions=None,
-        blocksize=2 ** 20,
+        blocksize=2**20,
         max_branch=None,
         shuffle=None,
     ):
@@ -1531,7 +1531,7 @@ class Bag(DaskMethodsMixin):
             msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
-    def to_dataframe(self, meta=None, columns=None):
+    def to_dataframe(self, meta=None, columns=None, optimize_graph=True):
         """Create Dask Dataframe from a Dask Bag.
 
         Bag should contain tuples, dict records, or scalars.
@@ -1559,6 +1559,10 @@ class Bag(DaskMethodsMixin):
             result (any names not found in the data will become all-NA
             columns).  Note that if ``meta`` is provided, column names will be
             taken from there and this parameter is invalid.
+        optimize_graph : bool, optional
+            If True [default], the graph is optimized before converting into
+            :class:`dask.dataframe.DataFrame`.
+
 
         Examples
         --------
@@ -1596,14 +1600,15 @@ class Bag(DaskMethodsMixin):
         # the empty frame
         cols = list(meta.columns)
         dtypes = meta.dtypes.to_dict()
-        name = "to_dataframe-" + tokenize(self, cols, dtypes)
-        dsk = self.__dask_optimize__(self.dask, self.__dask_keys__())
 
-        for i in range(self.npartitions):
-            dsk[(name, i)] = (to_dataframe, (self.name, i), cols, dtypes)
+        dfs = self.map_partitions(to_dataframe, cols, dtypes)
+        if optimize_graph:
+            dsk = self.__dask_optimize__(dfs.dask, dfs.__dask_keys__())
+        else:
+            dsk = dfs.dask
 
         divisions = [None] * (self.npartitions + 1)
-        return dd.DataFrame(dsk, name, meta, divisions)
+        return dd.DataFrame(dsk, dfs.name, meta, divisions)
 
     def to_delayed(self, optimize_graph=True):
         """Convert into a list of ``dask.delayed`` objects, one per partition.
@@ -1711,7 +1716,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
     return res[1:], res[-1]
 
 
-def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
+def partition(grouper, sequence, npartitions, p, nelements=2**20):
     """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
@@ -2304,7 +2309,7 @@ def _reduce(binop, sequence, initial=no_default):
 
 def make_group(k, stage):
     def h(x):
-        return x[0] // k ** stage % k
+        return x[0] // k**stage % k
 
     return h
 
@@ -2323,7 +2328,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     splits = []
     joins = []
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     b2 = b.map(partial(chunk.groupby_tasks_group_hash, hash=hash, grouper=grouper))
 
@@ -2399,7 +2404,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     return type(b)(graph, name, len(inputs))
 
 
-def groupby_disk(b, grouper, npartitions=None, blocksize=2 ** 20):
+def groupby_disk(b, grouper, npartitions=None, blocksize=2**20):
     if npartitions is None:
         npartitions = b.npartitions
     token = tokenize(b, grouper, npartitions, blocksize)

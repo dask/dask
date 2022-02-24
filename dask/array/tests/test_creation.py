@@ -143,6 +143,30 @@ def test_linspace(endpoint):
     darr = da.linspace(da.argmin(x), da.argmax(x) + 1, 8, endpoint=endpoint)
     assert_eq(darr, nparr)
 
+    nparr = np.linspace(0, 0, 0, endpoint=endpoint)
+    darr = da.linspace(0, 0, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 0, endpoint=endpoint)
+    darr = da.linspace(1, 1, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 0, endpoint=endpoint)
+    darr = da.linspace(1, 5, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(0, 0, 1, endpoint=endpoint)
+    darr = da.linspace(0, 0, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 1, endpoint=endpoint)
+    darr = da.linspace(1, 1, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 1, endpoint=endpoint)
+    darr = da.linspace(1, 5, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
 
 def test_arange():
     darr = da.arange(77, chunks=13)
@@ -401,38 +425,77 @@ def test_eye():
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
     assert_eq(da.eye(10, chunks=-1, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(9, chunks=3, dtype=None), np.eye(9, dtype=None))
 
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.eye(10000, "auto")
         assert 4 < x.npartitions < 32
 
 
-def test_diag():
-    v = np.arange(11)
-    assert_eq(da.diag(v), np.diag(v))
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_bad_input(k):
+    # when input numpy array is neither 1d nor 2d:
+    v = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
 
+    # when input dask array is neither 1d nor 2d:
+    v = da.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
+
+    # when input is not an array:
+    v = 1
+    with pytest.raises(TypeError, match="v must be a dask array or numpy array"):
+        da.diag(v, k)
+
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_2d_array_creation(k):
+    # when input 1d-array is a numpy array:
+    v = np.arange(11)
+    assert_eq(da.diag(v, k), np.diag(v, k))
+
+    # when input 1d-array is a dask array:
     v = da.arange(11, chunks=3)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
     v = v + v + 3
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
 
     v = da.arange(11, chunks=11)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_extraction(k):
+    # when input 2d-array is a square numpy array:
     x = np.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), np.diag(x))
-
+    assert_eq(da.diag(x, k), np.diag(x, k))
+    # when input 2d-array is a square dask array:
     d = da.from_array(x, chunks=(4, 4))
-    assert_eq(da.diag(d), np.diag(x))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+    # heterogeneous chunks:
+    d = da.from_array(x, chunks=((3, 2, 3), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+
+    # when input 2d-array is a rectangular numpy array:
+    y = np.arange(5 * 8).reshape((5, 8))
+    assert_eq(da.diag(y, k), np.diag(y, k))
+    # when input 2d-array is a rectangular dask array:
+    d = da.from_array(y, chunks=(4, 4))
+    assert_eq(da.diag(d, k), np.diag(y, k))
+    # heterogeneous chunks:
+    d = da.from_array(y, chunks=((3, 2), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(y, k))
 
 
 def test_diagonal():
@@ -799,3 +862,15 @@ def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
         assert 4 < x.npartitions < 32
+
+
+def test_diagonal_zero_chunks():
+    x = da.ones((8, 8), chunks=(4, 4))
+    dd = da.ones((8, 8), chunks=(4, 4))
+    d = da.diagonal(dd)
+
+    expected = np.ones((8,))
+    assert_eq(d, expected)
+    assert_eq(d + d, 2 * expected)
+    A = d + x
+    assert_eq(A, np.full((8, 8), 2.0))

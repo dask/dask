@@ -31,7 +31,7 @@ from dask.bag.core import (
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, inc
+from dask.utils_test import add, hlg_layer_topological, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -736,7 +736,7 @@ def test_from_empty_sequence():
 
 def test_product():
     b2 = b.product(b)
-    assert b2.npartitions == b.npartitions ** 2
+    assert b2.npartitions == b.npartitions**2
     assert set(b2) == {(i, j) for i in L for j in L}
 
     x = db.from_sequence([1, 2, 3, 4])
@@ -1161,15 +1161,12 @@ def test_from_delayed_iterator():
 
     delayed_records = delayed(lazy_records, pure=False)
     bag = db.from_delayed([delayed_records(5) for _ in range(5)])
-    assert (
-        db.compute(
-            bag.count(),
-            bag.pluck("operations").count(),
-            bag.pluck("operations").flatten().count(),
-            scheduler="sync",
-        )
-        == (25, 25, 50)
-    )
+    assert db.compute(
+        bag.count(),
+        bag.pluck("operations").count(),
+        bag.pluck("operations").flatten().count(),
+        scheduler="sync",
+    ) == (25, 25, 50)
 
 
 def test_range():
@@ -1293,7 +1290,7 @@ def test_groupby_tasks():
 
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, shuffle="tasks")
-    assert len(out.dask) < 100 ** 2
+    assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:
@@ -1587,6 +1584,13 @@ def test_dask_layers_to_delayed(optimize):
     # `da.Array.to_delayed` causes the layer name to not match the key.
     # Ensure the layer name is propagated between `Delayed` and `Item`.
     da = pytest.importorskip("dask.array")
+    i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
+    name = i.key[0]
+    assert i.key[1:] == (0,)
+    assert i.dask.layers.keys() == {"delayed-" + name}
+    assert i.dask.dependencies == {"delayed-" + name: set()}
+    assert i.__dask_layers__() == ("delayed-" + name,)
+
     arr = da.ones(1) + 1
     delayed = arr.to_delayed(optimize_graph=optimize)[0]
     i = db.Item.from_delayed(delayed)
@@ -1605,3 +1609,39 @@ def test_dask_layers_to_delayed(optimize):
 
     with pytest.raises(ValueError, match="not in"):
         db.Item(arr.dask, (arr.name,), layer="foo")
+
+
+def test_to_dataframe_optimize_graph():
+    pytest.importorskip("dask.dataframe")
+    from dask.dataframe.utils import assert_eq as assert_eq_df
+
+    x = db.from_sequence(
+        [{"name": "test1", "v1": 1}, {"name": "test2", "v1": 2}], npartitions=2
+    )
+
+    # linear `map` tasks will be fused by graph optimization
+    with dask.annotate(foo=True):
+        y = x.map(lambda a: dict(**a, v2=a["v1"] + 1))
+        y = y.map(lambda a: dict(**a, v3=a["v2"] + 1))
+        y = y.map(lambda a: dict(**a, v4=a["v3"] + 1))
+
+    # verifying the maps are not fused yet
+    assert len(y.dask) == y.npartitions * 4
+
+    # with optimizations
+    d = y.to_dataframe()
+
+    # All the `map` tasks have been fused
+    assert len(d.dask) < len(y.dask)
+
+    # no optimizations
+    d2 = y.to_dataframe(optimize_graph=False)
+
+    # Graph hasn't been fused. It contains all the original tasks,
+    # plus one extra layer converting to DataFrame
+    assert len(d2.dask) == len(y.dask) + d.npartitions
+
+    # Annotations are still there
+    assert hlg_layer_topological(d2.dask, 1).annotations == {"foo": True}
+
+    assert_eq_df(d, d2)

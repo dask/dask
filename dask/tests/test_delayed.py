@@ -2,7 +2,7 @@ import pickle
 import types
 from collections import namedtuple
 from functools import partial
-from operator import add, setitem
+from operator import add, matmul, setitem
 from random import random
 
 import cloudpickle
@@ -15,11 +15,6 @@ from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
-
-try:
-    from operator import matmul
-except ImportError:
-    matmul = None
 
 
 class Tuple:
@@ -128,7 +123,7 @@ def test_operators():
     assert (1 + a).compute() == 11
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
-    assert (a ** 2).compute() == 100
+    assert (a**2).compute() == 100
 
     if matmul:
 
@@ -543,11 +538,11 @@ def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
+    assert func(data)._key == "identity-4f318f3c27b869239e97c3ac07f7201a"
 
     data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-ca2fae46a3b938016331acac1908ae45"
+    assert func(1)._key == "identity-7258833899272585e16d0ec36b21a3de"
 
 
 def test_sensitive_to_partials():

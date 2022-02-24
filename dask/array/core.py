@@ -18,13 +18,14 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 from fsspec import get_mapper
@@ -40,17 +41,19 @@ from ..base import (
     persist,
     tokenize,
 )
+from ..blockwise import blockwise as core_blockwise
 from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph
-from ..layers import reshapelist
+from ..highlevelgraph import HighLevelGraph, MaterializedLayer
+from ..layers import ArraySliceDep, reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
     M,
     SerializableLock,
+    cached_cumsum,
     cached_property,
     concrete,
     derived_from,
@@ -76,7 +79,7 @@ from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _numpy_120, _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
+from .slicing import replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -232,46 +235,88 @@ def slices_from_chunks(chunks):
     return list(product(*slices))
 
 
-def getem(
-    arr,
+def graph_from_arraylike(
+    arr,  # Any array-like which supports slicing
     chunks,
+    shape,
+    name,
     getitem=getter,
-    shape=None,
-    out_name=None,
     lock=False,
     asarray=True,
     dtype=None,
-):
-    """Dask getting various chunks from an array-like
-
-    >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
-
-    >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+    inline_array=False,
+) -> HighLevelGraph:
     """
-    out_name = out_name or arr
+    HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
+
+    If ``inline_array`` is True, this make a Blockwise layer of slicing tasks where the
+    array-like is embedded into every task.,
+
+    If ``inline_array`` is False, this inserts the array-like as a standalone value in
+    a MaterializedLayer, then generates a Blockwise layer of slicing tasks that refer
+    to it.
+
+    >>> dict(graph_from_arraylike(arr, chunks=(2, 3), shape=(4, 6), name="X", inline_array=True))  # doctest: +SKIP
+    {(arr, 0, 0): (getter, arr, (slice(0, 2), slice(0, 3))),
+     (arr, 1, 0): (getter, arr, (slice(2, 4), slice(0, 3))),
+     (arr, 1, 1): (getter, arr, (slice(2, 4), slice(3, 6))),
+     (arr, 0, 1): (getter, arr, (slice(0, 2), slice(3, 6)))}
+
+    >>> dict(  # doctest: +SKIP
+            graph_from_arraylike(arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False)
+        )
+    {"original-X": arr,
+     ('X', 0, 0): (getter, 'original-X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'original-X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'original-X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'original-X', (slice(0, 2), slice(3, 6)))}
+    """
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *(range(len(bds)) for bds in chunks))
-    slices = slices_from_chunks(chunks)
+    out_ind = tuple(range(len(shape)))
 
     if (
         has_keyword(getitem, "asarray")
         and has_keyword(getitem, "lock")
         and (not asarray or lock)
     ):
-        values = [(getitem, arr, x, asarray, lock) for x in slices]
+        getter = partial(getitem, asarray=asarray, lock=lock)
     else:
         # Common case, drop extra parameters
-        values = [(getitem, arr, x) for x in slices]
+        getter = getitem
 
-    return dict(zip(keys, values))
+    if inline_array:
+        layer = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            arr,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+        return HighLevelGraph.from_collections(name, layer)
+    else:
+        original_name = "original-" + name
+
+        layers = {}
+        layers[original_name] = MaterializedLayer({original_name: arr})
+        layers[name] = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            original_name,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+
+        deps = {
+            original_name: set(),
+            name: {original_name},
+        }
+        return HighLevelGraph(layers, deps)
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -2024,18 +2069,18 @@ class Array(DaskMethodsMixin):
         return choose(self, choices)
 
     @derived_from(np.ndarray)
-    def reshape(self, *shape, merge_chunks=True):
+    def reshape(self, *shape, merge_chunks=True, limit=None):
         """
         .. note::
 
            See :meth:`dask.array.reshape` for an explanation of
-           the ``merge_chunks`` keyword.
+           the ``merge_chunks`` and `limit` keywords.
         """
         from .reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape, merge_chunks=merge_chunks)
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
@@ -3233,13 +3278,10 @@ def from_array(
     )
 
     if name in (None, True):
-        token = tokenize(x, chunks)
-        original_name = "array-original-" + token
+        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or "array-" + token
     elif name is False:
-        original_name = name = "array-" + str(uuid.uuid1())
-    else:
-        original_name = name
+        name = "array-" + str(uuid.uuid1())
 
     if lock is True:
         lock = SerializableLock()
@@ -3266,23 +3308,17 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        if inline_array:
-            get_from = x
-        else:
-            get_from = original_name
-
-        dsk = getem(
-            get_from,
+        dsk = graph_from_arraylike(
+            x,
             chunks,
+            x.shape,
+            name,
             getitem=getitem,
-            shape=x.shape,
-            out_name=name,
             lock=lock,
             asarray=asarray,
             dtype=x.dtype,
+            inline_array=inline_array,
         )
-        if not inline_array:
-            dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
@@ -3361,6 +3397,7 @@ def to_zarr(
     component=None,
     storage_options=None,
     overwrite=False,
+    region=None,
     compute=True,
     return_stored=False,
     **kwargs,
@@ -3386,6 +3423,9 @@ def to_zarr(
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
         where overwrite=True will replace the existing data.
+    region: tuple of slices or None
+        The region of data that should be written if ``url`` is a zarr.Array.
+        Not to be used with other types of ``url``.
     compute: bool
         See :func:`~dask.array.store` for more details.
     return_stored: bool
@@ -3397,6 +3437,7 @@ def to_zarr(
     ------
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+        If ``region`` is specified and ``url`` is not a zarr.Array
 
     See Also
     --------
@@ -3421,8 +3462,27 @@ def to_zarr(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
             )
-        arr = arr.rechunk(z.chunks)
-        return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+
+        if region is None:
+            arr = arr.rechunk(z.chunks)
+            regions = None
+        else:
+            from .slicing import new_blockdim, normalize_index
+
+            old_chunks = normalize_chunks(z.chunks, z.shape)
+            index = normalize_index(region, z.shape)
+            chunks = tuple(
+                tuple(new_blockdim(s, c, r))
+                for s, c, r in zip(z.shape, old_chunks, index)
+            )
+            arr = arr.rechunk(chunks)
+            regions = [region]
+        return arr.store(
+            z, lock=False, regions=regions, compute=compute, return_stored=return_stored
+        )
+
+    if region is not None:
+        raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError(
@@ -3918,7 +3978,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ----------
     seq: list of dask.arrays
     axis: int
-        Dimension along which to align all of the arrays
+        Dimension along which to align all of the arrays. If axis is None,
+        arrays are flattened before use.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
@@ -3955,6 +4016,10 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
+
+    if axis is None:
+        seq = [a.flatten() for a in seq]
+        axis = 0
 
     seq_metas = [meta_from_array(s) for s in seq]
     _concatenate = concatenate_lookup.dispatch(
@@ -4278,7 +4343,7 @@ def asarray(
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, dtype=None, order=None, *, like=None):
+def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4305,6 +4370,9 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
         Requires NumPy 1.20.0 or higher.
+    inline_array:
+        Whether to inline the array in the resulting dask graph. For more information,
+        see the documentation for ``dask.array.from_array()``.
 
     Returns
     -------
@@ -4343,7 +4411,13 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
+    return from_array(
+        a,
+        chunks=a.shape,
+        getitem=getter_inline,
+        asarray=False,
+        inline_array=inline_array,
+    )
 
 
 def is_scalar_for_elemwise(arg):

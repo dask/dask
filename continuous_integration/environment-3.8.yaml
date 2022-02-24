@@ -28,9 +28,7 @@ dependencies:
   - tiledb>=2.5.0
   - xarray
   - fsspec
-  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
-  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  - sqlalchemy<1.4.0
+  - sqlalchemy>=1.4.0
   - pyarrow=4.0
   - coverage
   - jsonschema
@@ -57,7 +55,7 @@ dependencies:
   - requests
   - scikit-image
   - scikit-learn
-  - scipy
+  - scipy<1.8.0 # See https://github.com/dask/dask/issues/8682
   - toolz
   - python-snappy
   - sparse
