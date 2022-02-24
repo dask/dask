@@ -14,13 +14,7 @@ from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
-from .utils import (
-    _deprecated,
-    apply,
-    ensure_dict,
-    homogeneous_deepmap,
-    stringify_collection_keys,
-)
+from .utils import _deprecated, apply, ensure_dict, homogeneous_deepmap
 
 
 class BlockwiseDep:
@@ -704,7 +698,6 @@ def make_blockwise_graph(
     new_axes=None,
     output_blocks=None,
     dims=None,
-    deserializing=False,
     func_future_args=None,
     return_key_deps=False,
     io_deps=None,
@@ -823,9 +816,6 @@ def make_blockwise_graph(
     if return_key_deps:
         key_deps = {}
 
-    if deserializing:
-        from distributed.protocol.serialize import to_serialize
-
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -866,10 +856,7 @@ def make_blockwise_graph(
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
-                if deserializing:
-                    args.append(stringify_collection_keys(arg))
-                else:
-                    args.append(arg)
+                args.append(arg)
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
@@ -889,38 +876,15 @@ def make_blockwise_graph(
                     # we are replacing here
                     idx = tups[1:]
                     args.append(io_deps[arg].get(idx, idx))
-                elif deserializing:
-                    args.append(stringify_collection_keys(tups))
                 else:
                     args.append(tups)
         out_key = (output,) + out_coords
 
-        if deserializing:
-            deps.update(func_future_args)
-            args += list(func_future_args)
-
-        if deserializing and isinstance(func, bytes):
-            # Construct a function/args/kwargs dict if we
-            # do not have a nested task (i.e. concatenate=False).
-            # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
-            # Serialized/Serialize objects in args and/or kwargs.
-            if kwargs:
-                dsk[out_key] = {
-                    "function": func,
-                    "args": to_serialize(args),
-                    "kwargs": to_serialize(kwargs2),
-                }
-            else:
-                dsk[out_key] = {"function": func, "args": to_serialize(args)}
+        if kwargs:
+            dsk[out_key] = (apply, func, args, kwargs2)
         else:
-            if kwargs:
-                val = (apply, func, args, kwargs2)
-            else:
-                args.insert(0, func)
-                val = tuple(args)
-            # May still need to serialize (if concatenate=True)
-            dsk[out_key] = to_serialize(val) if deserializing else val
+            args.insert(0, func)
+            dsk[out_key] = tuple(args)
 
         if return_key_deps:
             key_deps[out_key] = deps
