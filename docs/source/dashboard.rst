@@ -38,7 +38,8 @@ In the entry point of the dashboard you can find multiple plots with information
 as listed below:
 
 - :ref:`dashboard.memory`: Cluster memory and Memory per worker
-- :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ NEEDS INFO/ NEEDS INFO
+- :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ CPU Utilization per worker/ Expected runtime
+for all tasks currently on a worker.
 - :ref:`dashboard.task-stream`: Individual task across threads.
 - :ref:`dashboard.progress`: Progress of a set of tasks.
 
@@ -63,19 +64,19 @@ indicate the following.
     <table>
         <tr>
             <td>
-                <div style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="blue square" style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Memory under target (default 60% of memory available) </td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(255,165,0, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="orange square" style="color:rgba(255, 165, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td> Memory is close to the spilling to disk target (default 70% of memory available)</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(128,128,128, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label=" grey square" style="color:rgba(128, 128, 128, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Memory spilled to disk</td>
         </tr>
@@ -102,26 +103,26 @@ to worry about), but it can also mean that the distribution of the task across w
     :alt: Task Processing pane with four blue horizontal bars, one per worker, three of them go up to 6 while one of 
     the four goes up to 5.
 
-There are three different colors that can appear in this plot (NEEDS TO FIGURE OUT HOW TO ADD ALT TEXT TO THIS TABLE):
+There are three different colors that can appear in this plot:
 
 .. raw:: html
 
     <table>
         <tr>
             <td>
-                <div style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="blue square" style="color:rgba(0, 0, 255, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Processing tasks.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(0, 128, 0, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="green square" style="color:rgba(0, 128, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Saturated: It has enough work to stay busy.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="red square" style="color:rgba(255, 0, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Idle: Does not have enough work to stay busy.</td>
         </tr>
@@ -131,7 +132,7 @@ In this plot on the dashboard we have two extra tabs with the following informat
 
 **CPU Utilization**
 
-The *CPU* tab shows the usage per-worker (this needs some love, haven't found a nice way of describing this) 
+The *CPU* tab shows the cpu usage per-worker as reported by ``psutils`` metrics. 
 
 **Occupancy**
 
@@ -159,25 +160,25 @@ There are certain colors that are reserved for a specific kinds of tasks:
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(255, 0, 0, 0.4); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="light red square" style="color:rgba(255, 0, 0, 0.4); font-size: 25px ">&#9632;</div>
             </td>
             <td>Transferring data between workers tasks.</td>
         </tr>
         <tr>
             <td>
-                <div style="color: rgba(255,165,0, 0.4); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="light orange square" style="color: rgba(255,165,0, 0.4); font-size: 25px ">&#9632;</div>
             </td>
             <td>Reading from or writing to disk.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="light grey square" style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
             </td>
             <td>Serializing/deserializing data.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(0, 0, 0, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="black square" style="color:rgba(0, 0, 0, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td>Erred tasks.</td>
         </tr>
@@ -215,19 +216,19 @@ individual tasks on the task stream that correspond to the same task-prefix. Eac
     <table>
         <tr>
             <td>
-                <div style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="light grey square" style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
             </td>
             <td>Tasks that are ready to run.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(30,151,138, 1); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="teal square" style="color:rgba(30,151,138, 1); font-size: 25px ">&#9632;</div>
             </td>
             <td> Tasks that have been completed and are in memory.</td>
         </tr>
         <tr>
             <td>
-                <div style="color:rgba(30,151,138, 0.6); font-size: 25px ">&#9632;</div>
+                <div role="img" aria-label="light teal square" style="color:rgba(30,151,138, 0.6); font-size: 25px ">&#9632;</div>
             </td>
             <td>Tasks that have been completed, been in memory and have been released.</td>
         </tr>
