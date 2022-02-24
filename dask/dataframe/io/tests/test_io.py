@@ -119,13 +119,18 @@ def test_from_bcolz_multiple_threads():
         t = bcolz.ctable(
             [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
         )
-        d = dd.from_bcolz(t, chunksize=2)
+
+        with pytest.warns(FutureWarning):
+            d = dd.from_bcolz(t, chunksize=2)
+
         assert d.npartitions == 2
         assert is_categorical_dtype(d.dtypes["a"])
         assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
         assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
 
-        d = dd.from_bcolz(t, chunksize=2, index="x")
+        with pytest.warns(FutureWarning):
+            d = dd.from_bcolz(t, chunksize=2, index="x")
+
         L = list(d.index.compute(scheduler="sync"))
         assert L == [1, 2, 3] or L == [1, 3, 2]
 
@@ -147,32 +152,34 @@ def test_from_bcolz():
     t = bcolz.ctable(
         [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
     )
-    d = dd.from_bcolz(t, chunksize=2)
-    assert d.npartitions == 2
-    assert is_categorical_dtype(d.dtypes["a"])
-    assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
-    assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
-    L = list(d.index.compute(scheduler="sync"))
-    assert L == [0, 1, 2]
 
-    d = dd.from_bcolz(t, chunksize=2, index="x")
-    L = list(d.index.compute(scheduler="sync"))
-    assert L == [1, 2, 3] or L == [1, 3, 2]
+    with pytest.warns(FutureWarning):
+        d = dd.from_bcolz(t, chunksize=2)
+        assert d.npartitions == 2
+        assert is_categorical_dtype(d.dtypes["a"])
+        assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
+        assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
+        L = list(d.index.compute(scheduler="sync"))
+        assert L == [0, 1, 2]
 
-    # Names
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
-        dd.from_bcolz(t, chunksize=2).dask
-    )
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
-        dd.from_bcolz(t, chunksize=3).dask
-    )
+        d = dd.from_bcolz(t, chunksize=2, index="x")
+        L = list(d.index.compute(scheduler="sync"))
+        assert L == [1, 2, 3] or L == [1, 3, 2]
 
-    dsk = dd.from_bcolz(t, chunksize=3).dask
+        # Names
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
+            dd.from_bcolz(t, chunksize=2).dask
+        )
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
+            dd.from_bcolz(t, chunksize=3).dask
+        )
 
-    t.append((4, 4.0, "b"))
-    t.flush()
+        dsk = dd.from_bcolz(t, chunksize=3).dask
 
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(dsk)
+        t.append((4, 4.0, "b"))
+        t.flush()
+
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(dsk)
 
 
 def test_from_bcolz_no_lock():
@@ -182,9 +189,12 @@ def test_from_bcolz_no_lock():
     t = bcolz.ctable(
         [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"], chunklen=2
     )
-    a = dd.from_bcolz(t, chunksize=2)
-    b = dd.from_bcolz(t, chunksize=2, lock=True)
-    c = dd.from_bcolz(t, chunksize=2, lock=False)
+
+    with pytest.warns(FutureWarning):
+        a = dd.from_bcolz(t, chunksize=2)
+        b = dd.from_bcolz(t, chunksize=2, lock=True)
+        c = dd.from_bcolz(t, chunksize=2, lock=False)
+
     assert_eq(a, b)
     assert_eq(a, c)
 
@@ -202,7 +212,9 @@ def test_from_bcolz_filename():
         )
         t.flush()
 
-        d = dd.from_bcolz(fn, chunksize=2)
+        with pytest.warns(FutureWarning):
+            d = dd.from_bcolz(fn, chunksize=2)
+
         assert list(d.x.compute()) == [1, 2, 3]
 
 
@@ -212,7 +224,10 @@ def test_from_bcolz_column_order():
     t = bcolz.ctable(
         [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
     )
-    df = dd.from_bcolz(t, chunksize=2)
+
+    with pytest.warns(FutureWarning):
+        df = dd.from_bcolz(t, chunksize=2)
+
     assert list(df.loc[0].compute().columns) == ["x", "y", "a"]
 
 

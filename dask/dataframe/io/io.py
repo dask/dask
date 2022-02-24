@@ -12,7 +12,7 @@ from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
-from ...utils import M, ensure_dict
+from ...utils import M, ensure_dict, _deprecated
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
 from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
@@ -232,6 +232,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     return new_dd_object(dsk, name, data, divisions)
 
 
+@_deprecated()
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
     """Read BColz CTable into a Dask Dataframe
 
