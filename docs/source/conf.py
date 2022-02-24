@@ -18,6 +18,8 @@ import os
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
 
+import sphinx_autosummary_accessors
+
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -38,6 +40,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx_autosummary_accessors",
     "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "numpydoc",
@@ -58,7 +61,7 @@ sphinx_tabs_disable_tab_closing = True
 remove_from_toctrees = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 # The suffix of source filenames.
 source_suffix = ".rst"

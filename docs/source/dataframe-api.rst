@@ -258,6 +258,26 @@ Series
    Series.var
    Series.visualize
    Series.where
+
+
+Accessors
+~~~~~~~~~
+Similar to pandas, Dask provides dtype-specific methods under various accessors.
+These are separate namespaces within :class:`Series` that only apply to specific data types.
+
+=========================== =================================
+Data Type                   Accessor
+=========================== =================================
+Datetime, Timedelta, Period :ref:`dt <generated.dask.dataframe.Series.dt>`
+String                      :ref:`str <generated.dask.dataframe.Series.str>`
+=========================== =================================
+
+.. currentmodule:: dask.dataframe.accessor
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
    Series.dt.ceil
    Series.dt.date
    Series.dt.day
@@ -336,7 +356,6 @@ Series
    Series.str.upper
    Series.str.wrap
    Series.str.zfill
-
 
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~
