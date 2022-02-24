@@ -453,9 +453,17 @@ class Layer(Mapping):
 
         # Save "pre-stringified" key dependencies
         # TODO: Is there a better way to do this?
-        state = self.layer_state.copy()
-        state["layer_dependencies"] = self.layer_dependencies(all_hlg_keys)
+        try:
+            pre_stringified_deps = self.layer_dependencies(all_hlg_keys)
+        except NotImplementedError:
+            # Materialize Layer (for now) if we cannot
+            # get the pre-stringified key dependencies
+            return MaterializedLayer(
+                dict(self), annotations=self.annotations
+            ).__dask_distributed_pack__(all_hlg_keys, *args, **kwargs)
 
+        state = self.layer_state.copy()
+        state["layer_dependencies"] = pre_stringified_deps
         return ToPickle(state)
 
     @classmethod
@@ -1262,9 +1270,12 @@ class HighLevelGraph(Mapping):
         # be converted to `MaterializedLayer` objects before packing
         materialize = not config.get("distributed.scheduler.pickle")
         if not materialize:
-            import distributed.protocol.serialize as s
+            try:
+                from distributed.protocol.serialize import ToPickle
+            except ImportError:
+                ToPickle = None
 
-            if not hasattr(s, "ToPickle"):
+            if ToPickle is None:
                 # ToPickle not available in this version of
                 # distributed - Materialize layers even if pickle=True
                 materialize = True
