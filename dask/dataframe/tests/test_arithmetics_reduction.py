@@ -1185,28 +1185,19 @@ def test_reductions_frame_dtypes():
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
-    if PANDAS_GT_120:
-        assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-        assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
-    else:
-        assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-
-    df2 = df.drop("timedelta", axis=1)
-    ddf2 = ddf.drop("timedelta", axis=1)
-
-    assert_eq(df2.var(skipna=False), ddf2.var(skipna=False))
     assert_eq(df.sem(), ddf.sem())
-    if PANDAS_GT_120:
-        assert_eq(
-            df_no_timedelta.std(ddof=0),
-            ddf_no_timedelta.std(ddof=0),
-        )
-    else:
-        assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df2.var(ddof=0), ddf2.var(ddof=0))
-    assert_eq(df2.var(ddof=0, skipna=False), ddf2.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
+
+    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
+    assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
+    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
+    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
+    assert_eq(df_no_timedelta.var(skipna=False), ddf_no_timedelta.var(skipna=False))
+    assert_eq(df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0))
+    assert_eq(
+        df_no_timedelta.var(ddof=0, skipna=False),
+        ddf_no_timedelta.var(ddof=0, skipna=False),
+    )
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
