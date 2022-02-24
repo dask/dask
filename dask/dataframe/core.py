@@ -4400,18 +4400,6 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
-        sort_kwargs = {
-            "by": by,
-            "ascending": ascending,
-            "na_position": na_position,
-        }
-        if sort_function is None:
-            sort_function = M.sort_values
-        if sort_function_kwargs is not None:
-            sort_kwargs.update(sort_function_kwargs)
-
-        if self.npartitions == 1:
-            return self.map_partitions(sort_function, **sort_kwargs)
         return sort_values(
             self,
             by,
@@ -4419,7 +4407,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             na_position=na_position,
             sort_function=sort_function,
-            sort_function_kwargs=sort_kwargs,
+            sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
 
@@ -4955,14 +4943,29 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
-                on=on,
-                lsuffix=lsuffix,
-                rsuffix=rsuffix,
-                npartitions=npartitions,
-                shuffle=shuffle,
-            )
+            # If its an outer join we can use the full recursive pairwise join.
+            if how == "outer":
+                full = [self] + other
+
+                return _recursive_pairwise_outer_join(
+                    full,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
+            else:
+                # Do recursive pairwise join on everything _except_ the last join
+                # where we need to do a left join.
+                other = _recursive_pairwise_outer_join(
+                    other,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
 
         from .multi import merge
 

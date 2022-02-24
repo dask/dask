@@ -3072,9 +3072,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
                     original_type = col.type
 
-                    series: pd.Series = col.cast(pa.int64()).to_pandas(
-                        types_mapper={pa.int64(): pd.Int64Dtype}
-                    )
+                    series: pd.Series = col.cast(pa.int64()).to_pandas()
                     info = np.iinfo(np.dtype("int64"))
                     # constrain data to be within valid ranges
                     series.clip(
