@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import Iterable
 
 import numpy as np
@@ -43,6 +45,48 @@ from .utils import (
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+
+# NOTE: This default could depend on context info from
+# `dask` and/or `distributed` (For example, is the
+# "cuda" switch turned on? If so, use "cudf" as default).
+_default_df_backend = ContextVar("_default_df_backend", default=None)
+_supported_df_backends = {"pandas", "cudf"}
+__active_backend_default = ["pandas"]
+
+
+def get_backend():
+    """Get default DataFrame backend to use for input IO"""
+    backend = _default_df_backend.get()
+    if backend is None:
+        return __active_backend_default[0]
+    return backend
+
+
+def set_backend(df_backend):
+    """Set the default DataFrame backend to use for input IO"""
+    if df_backend not in _supported_df_backends:
+        raise ValueError(
+            f"{df_backend} not a supported backend for dask.dataframe. "
+            f"Supported options are: {_supported_df_backends}. "
+        )
+    __active_backend_default[0] = df_backend
+    _default_df_backend.set(df_backend)
+
+
+@contextmanager
+def backend(df_backend):
+    """Context manager for the default DataFrame backend library"""
+    if df_backend not in _supported_df_backends:
+        raise ValueError(
+            f"{df_backend} not a supported backend for dask.dataframe. "
+            f"Supported options are: {_supported_df_backends}. "
+        )
+    orig = _default_df_backend.set(df_backend)
+    try:
+        yield
+    finally:
+        _default_df_backend.reset(orig)
+
 
 ##########
 # Pandas #

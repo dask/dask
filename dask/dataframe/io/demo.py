@@ -6,8 +6,8 @@ import pandas as pd
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
+from ..backends import get_backend
 from ..core import new_dd_object, tokenize
-from ..dispatch import get_df_backend
 
 __all__ = ["make_timeseries"]
 
@@ -188,7 +188,7 @@ def make_timeseries(
         parts.append((divisions[i : i + 2], state_data[i]))
 
     # Construct Layer and Collection
-    df_backend = get_df_backend()
+    df_backend = get_backend()
     layer = DataFrameIOLayer(
         name=name,
         columns=None,

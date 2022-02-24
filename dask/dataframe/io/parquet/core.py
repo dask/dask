@@ -14,8 +14,8 @@ from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
+from ...backends import get_backend
 from ...core import DataFrame, Scalar, new_dd_object
-from ...dispatch import get_df_backend
 from ...methods import concat
 from ..utils import _is_local_fs
 from .utils import Engine, _sort_and_analyze_paths
@@ -367,7 +367,7 @@ def read_parquet(
 
     # Change engine to CudfEngine if backend or engine
     # is set to "cudf"
-    if engine == "cudf" or get_df_backend() == "cudf":
+    if engine == "cudf" or get_backend() == "cudf":
         # TODO: Perhaps we could filter engine-specific
         # kwargs if the user has specified a specific
         # engine other than cudf?
