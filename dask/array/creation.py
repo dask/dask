@@ -299,6 +299,9 @@ def linspace(
     range_ = stop - start
 
     div = (num - 1) if endpoint else num
+    if div == 0:
+        div = 1
+
     step = float(range_) / div
 
     name = "linspace-" + tokenize((start, stop, num, endpoint, chunks, dtype))
