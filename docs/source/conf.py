@@ -29,9 +29,6 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../../"))
 
-source_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(source_dir, "ext"))
-
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
@@ -42,7 +39,7 @@ extensions = [
     "sphinx.ext.viewcode",
     "numpydoc",
     "sphinx_click.ext",
-    "dask_config_sphinx_ext",
+    "dask_sphinx_theme.ext.dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
     "sphinx_remove_toctrees",
     "IPython.sphinxext.ipython_console_highlighting",
