@@ -1,6 +1,7 @@
 name: Array API
 
 on:
+  push:
   workflow_dispatch:
 
 jobs:
@@ -21,7 +22,7 @@ jobs:
         with:
           repository: data-apis/array-api-tests
           path: array-api-tests
-          ref: 2022.02.11
+          ref: 2022.02.24
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v1
         with:
