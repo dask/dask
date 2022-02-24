@@ -4,12 +4,57 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+from contextlib import contextmanager
+from contextvars import ContextVar
+
 import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
 
 from ..utils import Dispatch
+
+# NOTE: This default could depend on context info from
+# `dask` and/or `distributed` (For example, is the
+# "cuda" switch turned on? If so, use "cudf" as default).
+_default_df_backend = ContextVar("_default_df_backend", default=None)
+_supported_df_backends = {"pandas", "cudf"}
+__active_backend_default = ["pandas"]
+
+
+def get_df_backend():
+    """Get default DataFrame backend to use for input IO"""
+    backend = _default_df_backend.get()
+    if backend is None:
+        return __active_backend_default[0]
+    return backend
+
+
+def set_df_backend(df_backend):
+    """Set the default DataFrame backend to use for input IO"""
+    if df_backend not in _supported_df_backends:
+        raise ValueError(
+            f"{df_backend} not a supported backend for dask.dataframe. "
+            f"Supported options are: {_supported_df_backends}. "
+        )
+    __active_backend_default[0] = df_backend
+    _default_df_backend.set(df_backend)
+
+
+@contextmanager
+def df_backend(df_backend):
+    """Context manager for the default DataFrame backend library"""
+    if df_backend not in _supported_df_backends:
+        raise ValueError(
+            f"{df_backend} not a supported backend for dask.dataframe. "
+            f"Supported options are: {_supported_df_backends}. "
+        )
+    orig = _default_df_backend.set(df_backend)
+    try:
+        yield
+    finally:
+        _default_df_backend.reset(orig)
+
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")

@@ -1,10 +1,13 @@
+import importlib
+
 import numpy as np
 import pandas as pd
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
-from ..core import DataFrame, tokenize
+from ..core import new_dd_object, tokenize
+from ..dispatch import get_df_backend
 
 __all__ = ["make_timeseries"]
 
@@ -70,10 +73,11 @@ class MakeTimeseriesPart:
     Makes a timeseries partition.
     """
 
-    def __init__(self, dtypes, freq, kwargs, columns=None):
+    def __init__(self, dtypes, freq, df_backend, kwargs, columns=None):
         self.columns = columns or list(dtypes.keys())
         self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
+        self.df_backend = df_backend
         self.kwargs = kwargs
 
     def project_columns(self, columns):
@@ -85,6 +89,7 @@ class MakeTimeseriesPart:
         return MakeTimeseriesPart(
             self.dtypes,
             self.freq,
+            self.df_backend,
             self.kwargs,
             columns=columns,
         )
@@ -94,11 +99,18 @@ class MakeTimeseriesPart:
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
         return make_timeseries_part(
-            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
+            divisions[0],
+            divisions[1],
+            self.dtypes,
+            self.freq,
+            state_data,
+            self.df_backend,
+            self.kwargs,
         )
 
 
-def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
+def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwargs):
+    dflib = importlib.import_module(df_backend)
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     state = np.random.RandomState(state_data)
     columns = {}
@@ -109,7 +121,7 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
             if kk.rsplit("_", 1)[0] == k
         }
         columns[k] = make[dt](len(index), state, **kws)
-    df = pd.DataFrame(columns, index=index, columns=sorted(columns))
+    df = dflib.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return df
@@ -176,13 +188,16 @@ def make_timeseries(
         parts.append((divisions[i : i + 2], state_data[i]))
 
     # Construct Layer and Collection
+    df_backend = get_df_backend()
     layer = DataFrameIOLayer(
         name=name,
         columns=None,
         inputs=parts,
-        io_func=MakeTimeseriesPart(dtypes, freq, kwargs),
+        io_func=MakeTimeseriesPart(dtypes, freq, df_backend, kwargs),
         label=label,
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
-    head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(graph, name, head, divisions)
+    head = make_timeseries_part(
+        "2000", "2000", dtypes, "1H", state_data[0], df_backend, kwargs
+    )
+    return new_dd_object(graph, name, head, divisions)
