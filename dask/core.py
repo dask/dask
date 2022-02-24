@@ -154,7 +154,7 @@ def get(dsk, out, cache=None):
     return result
 
 
-def keys_in_tasks(keys, tasks, as_list=False, layer_keys=False):
+def keys_in_tasks(keys, tasks, as_list=False):
     """Returns the keys in `keys` that are also in `tasks`
 
     Examples
@@ -183,12 +183,6 @@ def keys_in_tasks(keys, tasks, as_list=False, layer_keys=False):
                 try:
                     if w in keys:
                         ret.append(w)
-                    elif layer_keys and typ is tuple and w:
-                        # `keys` is includes layer keys (not task keys).
-                        # So we should chould check for a match in the
-                        # first element of tuples.
-                        if w[0] in keys:
-                            ret.append(w)
                 except TypeError:  # not hashable
                     pass
         tasks = work

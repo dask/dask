@@ -462,7 +462,7 @@ class Blockwise(Layer):
             else prod(self.dims[i] for i in self.output_indices)
         )
 
-    def layer_dependencies(self, keys, input_layers=None, output_blocks=None):
+    def layer_dependencies(self, keys, output_blocks=None):
 
         # Make sure `output_blocks is populated`
         output_blocks = output_blocks or self.output_blocks
@@ -488,22 +488,19 @@ class Blockwise(Layer):
         )
 
         # Gather constant dependencies (for all output keys)
-        collection_deps = {arg for (arg, ind) in self.indices if ind is not None}
         const_deps = set()
-        input_layers = input_layers or set()
         for (arg, ind) in self.indices:
             if ind is None:
                 try:
-                    if arg in keys or (
-                        arg in input_layers and arg not in collection_deps
-                    ):
+                    if arg in keys:
                         const_deps.add(arg)
                 except TypeError:
                     pass  # unhashable
 
         # Get dependencies for each output block
-        deps = set()
+        key_deps = {}
         for out_coords in output_blocks:
+            deps = set()
             coords = out_coords + dummies
             for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
                 if ind is not None and arg not in self.io_deps:
@@ -516,38 +513,24 @@ class Blockwise(Layer):
                     else:
                         tups = (arg,) + arg_coords
                         deps.add(tups)
+            key_deps[(self.output,) + out_coords] = deps | const_deps
 
-        return deps | const_deps
+        return key_deps
 
-    def cull(self, requested_keys: set, input_layers: set):
-        # Determine which keys in `requested_keys` can be output
-        # by this layer
-        keys = {
-            key
-            for key in requested_keys
-            if isinstance(key, tuple) and key and key[0] == self.name
-        }
-        if not keys:
-            # Entire Layer was culled
-            return None, None
-
+    def cull(
+        self, keys: set, all_hlg_keys: Iterable
+    ) -> tuple[Layer, Mapping[Hashable, set]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
+
         output_blocks = set()
         for key in keys:
             if key[0] == self.output:
                 output_blocks.add(key[1:])
-        deps = self.layer_dependencies(
-            requested_keys,
-            input_layers=input_layers,
-            output_blocks=output_blocks,
-        )
-        if prod(self.dims[i] for i in self.output_indices) != len(keys):
-            # The number of output keys produced by the
-            # existing layer does not match the number
-            # of requrested keys. We must cull the layer
-            # by setting `output_blocks`.
+        deps = self.layer_dependencies(all_hlg_keys, output_blocks)
+        out_size_iter = (self.dims[i] for i in self.output_indices)
+        if prod(out_size_iter) != len(keys):
             new_state = self.layer_state.copy()
             new_state["output_blocks"] = output_blocks
             new_state["annotations"] = self.annotations

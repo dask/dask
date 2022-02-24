@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
+from collections import defaultdict
 from itertools import product
 from typing import Any
 
@@ -372,7 +373,15 @@ class SimpleShuffleLayer(Layer):
         all input partitions. This method does not require graph
         materialization.
         """
-        return {(self.name_input, i) for i in range(self.npartitions_input)}
+        deps = defaultdict(set)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
+        for part in output_blocks:
+            deps[(self.name, part)] |= {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+        return deps
 
     def construct_graph(self):
         """Construct graph for a simple shuffle operation."""
@@ -515,7 +524,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
         Does not require graph materialization.
         """
-        deps = set()
+        deps = defaultdict(set)
         output_blocks = output_blocks or self.output_blocks
         if output_blocks is None:
             output_blocks = self._keys_to_indices(keys)
@@ -526,9 +535,9 @@ class ShuffleLayer(SimpleShuffleLayer):
                 _inp = insert(out, self.stage, k)
                 _part = inp_part_map[_inp]
                 if self.stage == 0 and _part >= self.npartitions_input:
-                    deps.add(("group-" + self.name, _inp, "empty"))
+                    deps[(self.name, part)].add(("group-" + self.name, _inp, "empty"))
                 else:
-                    deps.add((self.name_input, _part))
+                    deps[(self.name, part)].add((self.name_input, _part))
         return deps
 
     def construct_graph(self):
@@ -698,12 +707,15 @@ class BroadcastJoinLayer(Layer):
         # Get broadcast info
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
 
-        deps = set()
+        deps = defaultdict(set)
         output_blocks = output_blocks or self.output_blocks
         if output_blocks is None:
             output_blocks = self._keys_to_indices(keys)
-        deps |= {(bcast_name, i) for i in range(bcast_size)}
-        deps |= {(other_name, part) for part in output_blocks}
+        for part in output_blocks:
+            deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
+            deps[(self.name, part)] |= {
+                (other_name, part),
+            }
         return deps
 
     def construct_graph(self):
@@ -1010,13 +1022,18 @@ class DataFrameTreeReduction(Layer):
         }
 
     def layer_dependencies(self, keys, output_blocks=None):
-        """Determine the necessary dependencies to produce `keys`.
+        """Determine the necessary dependencies to produce `keys`."""
 
-        For a tree reduction, output partitions always depend on
-        all input partitions. This method does not require graph
-        materialization.
-        """
-        return {(self.name_input, i) for i in range(self.npartitions_input)}
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
+        deps = {
+            (self.name, b): {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+            for b in output_blocks
+        }
+        return deps
 
     def construct_graph(self):
         """Construct graph for a tree reduction."""
