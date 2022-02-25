@@ -65,7 +65,7 @@ SKIP_PYARROW_LE = SKIP_PYARROW
 SKIP_PYARROW_LE_REASON = "pyarrow not found"
 SKIP_PYARROW_DS = SKIP_PYARROW
 SKIP_PYARROW_DS_REASON = "pyarrow not found"
-if pa_version.major >= 5 and not SKIP_PYARROW:
+if not SKIP_PYARROW_LE:
     # NOTE: We should use PYARROW_LE_MARK to skip
     # pyarrow-legacy tests once pyarrow officially
     # removes ParquetDataset support in the future.
