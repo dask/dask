@@ -2180,11 +2180,29 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
+        _raise_if_not_series_or_dataframe(self, "std")
+
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        is_df_like = is_dataframe_like(self._meta)
+        needs_time_conversion = False
+        numeric_dd = self
+
+        if PANDAS_GT_120 and is_df_like:
+            time_cols = self._meta.select_dtypes(include="datetime").columns
+            if len(time_cols) > 0:
+                (
+                    numeric_dd,
+                    needs_time_conversion,
+                ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
+        elif PANDAS_GT_120 and not is_df_like:
+            needs_time_conversion = is_datetime64_any_dtype(self._meta)
+            if needs_time_conversion:
+                numeric_dd = _convert_to_numeric(self, skipna)
+
         if axis == 1:
             result = map_partitions(
-                M.std,
-                self,
+                M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
+                numeric_dd,
                 meta=meta,
                 token=self._token_prefix + "std",
                 axis=axis,
@@ -2194,18 +2212,67 @@ Dask Name: {name}, {task} tasks"""
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
+
+        # Case where axis=0 or axis=None
+        v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
+        name = self._token_prefix + "std"
+
+        if needs_time_conversion:
+            sqrt_func_kwargs = {
+                "is_df_like": is_df_like,
+                "time_cols": time_cols if is_df_like else None,
+                "axis": axis,
+            }
+            sqrt_func = _sqrt_and_convert_to_timedelta
         else:
-            v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            name = self._token_prefix + "std"
-            result = map_partitions(
-                np.sqrt,
-                v,
-                meta=meta,
-                token=name,
-                enforce_metadata=False,
-                parent_meta=self._meta,
+            sqrt_func_kwargs = {}
+            sqrt_func = np.sqrt
+
+        result = map_partitions(
+            sqrt_func,
+            v,
+            meta=meta,
+            token=name,
+            enforce_metadata=False,
+            parent_meta=self._meta,
+            **sqrt_func_kwargs,
+        )
+
+        # Try to match the Pandas result dtype
+        if is_df_like and hasattr(meta, "dtype"):
+            result = result.astype(meta.dtype)
+
+        return handle_out(out, result)
+
+    def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
+        from .io import from_pandas
+
+        needs_time_conversion = True
+
+        # Ensure all columns are correct type. Need to shallow copy since cols will be modified
+        if axis == 0:
+            numeric_dd = self[meta.index].copy()
+        else:
+            numeric_dd = self.copy()
+
+        # Mix of datetimes with other numeric types produces NaNs for each value in std() series
+        if axis == 1 and len(time_cols) != len(self.columns):
+            # This is faster than converting each column to numeric when it's not necessary
+            # since each standard deviation will just be NaN
+            needs_time_conversion = False
+            numeric_dd = from_pandas(
+                pd.DataFrame(
+                    {"_": pd.Series([np.nan])},
+                    index=self.index,
+                ),
+                npartitions=self.npartitions,
             )
-            return handle_out(out, result)
+        else:
+            # Convert timedelta and datetime columns to integer types so we can use var
+            for col in time_cols:
+                numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
+
+        return numeric_dd, needs_time_conversion
 
     @_numeric_only
     @derived_from(pd.DataFrame)
@@ -4943,14 +5010,29 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
-                on=on,
-                lsuffix=lsuffix,
-                rsuffix=rsuffix,
-                npartitions=npartitions,
-                shuffle=shuffle,
-            )
+            # If its an outer join we can use the full recursive pairwise join.
+            if how == "outer":
+                full = [self] + other
+
+                return _recursive_pairwise_outer_join(
+                    full,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
+            else:
+                # Do recursive pairwise join on everything _except_ the last join
+                # where we need to do a left join.
+                other = _recursive_pairwise_outer_join(
+                    other,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
 
         from .multi import merge
 
@@ -7523,3 +7605,41 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
+
+
+def _convert_to_numeric(series, skipna):
+    if skipna:
+        return series.dropna().view("i8")
+
+    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+    return series.view("i8").mask(series.isnull(), np.nan)
+
+
+def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+    if axis == 1:
+        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+
+    is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
+
+    sqrt = np.sqrt(partition)
+
+    if not is_df_like:
+        return pd.to_timedelta(sqrt)
+
+    time_col_mask = sqrt.index.isin(time_cols)
+    matching_vals = sqrt[time_col_mask]
+    for time_col, matching_val in zip(time_cols, matching_vals):
+        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    return sqrt
+
+
+def _raise_if_not_series_or_dataframe(x, funcname):
+    """
+    Utility function to raise an error if an object is not a Series or DataFrame
+    """
+    if not is_series_like(x) and not is_dataframe_like(x):
+        raise NotImplementedError(
+            "`%s` is only supported with objects that are Dataframes or Series"
+            % funcname
+        )

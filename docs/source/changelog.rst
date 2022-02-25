@@ -5129,6 +5129,7 @@ Other
 .. _`Martin Fleischmann`: https://github.com/martinfleis
 .. _`Robert Hales`: https://github.com/robalar
 .. _`João Paulo Lacerda`: https://github.com/jopasdev
+.. _`neel iyer`: https://github.com/spiyer99
 .. _`SnkSynthesis`: https://github.com/SnkSynthesis
 .. _`JoranDox`: https://github.com/JoranDox
 .. _`Kinshuk Dua`: https://github.com/kinshukdua

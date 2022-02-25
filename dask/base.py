@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
 import inspect
 import os
@@ -10,7 +11,6 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
-from dataclasses import fields, is_dataclass
 from functools import partial
 from hashlib import md5
 from numbers import Integral, Number
@@ -425,7 +425,7 @@ def unpack_collections(*args, traverse=True):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr) and not isinstance(expr, type):
+            elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -434,7 +434,7 @@ def unpack_collections(*args, traverse=True):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in fields(expr)
+                            for f in dataclasses.fields(expr)
                         ],
                     ),
                 )
@@ -932,6 +932,9 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
 
+    if dataclasses.is_dataclass(o):
+        return normalize_dataclass(o)
+
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
 
@@ -978,7 +981,7 @@ def _normalize_function(func: Callable) -> Callable:
         return (normalize_function(func.func), args, kws)
     else:
         try:
-            result = pickle.dumps(func, protocol=0)
+            result = pickle.dumps(func, protocol=4)
             if b"__main__" not in result:  # abort on dynamic functions
                 return result
         except Exception:
@@ -986,9 +989,19 @@ def _normalize_function(func: Callable) -> Callable:
         try:
             import cloudpickle
 
-            return cloudpickle.dumps(func, protocol=0)
+            return cloudpickle.dumps(func, protocol=4)
         except Exception:
             return str(func)
+
+
+def normalize_dataclass(obj):
+    fields = [
+        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
+    ]
+    return (
+        normalize_function(type(obj)),
+        _normalize_seq_func(fields),
+    )
 
 
 @normalize_token.register_lazy("pandas")
