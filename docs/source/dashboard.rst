@@ -12,16 +12,16 @@ the scheduler.
    client = Client()  # start distributed scheduler locally. 
    client            
 
-In a Jupyter Notebook or Jupyter Lab session displaying the client object will show the dashboard address
-as following.
+In a Jupyter Notebook or JupyterLab session displaying the client object will show the dashboard address
+as following:
 
 .. figure:: images/dashboard_link.png
     :alt: Client html repr displaying the dashboard link on a JupyterLab session. 
 
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
 or, if you are in a terminal or IPython, it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
-n your local machine the dashboard will be served at ``http://localhost:8787/status``, you
-can type this address into your browser to access the dashboard but may be served 
+on your local machine the dashboard will be served at ``http://localhost:8787/status``. You
+can type this address into your browser to access the dashboard, but may be directed 
 elsewhere if port 8787 is taken. You can also configure the address by passing options to the 
 scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/stable/deploying-python.html#reference>`__
 
@@ -100,8 +100,7 @@ worker has no tasks and its waiting for them. This usually happens when the comp
 to worry about), but it can also mean that the distribution of the task across workers is not optimized. 
 
 .. figure:: images/dashboard_task_processing.png
-    :alt: Task Processing pane with four blue horizontal bars, one per worker, three of them go up to 6 while one of 
-    the four goes up to 5.
+    :alt: Task Processing bar chart, showing a relatively even number of tasks on each worker.
 
 There are three different colors that can appear in this plot:
 
@@ -203,7 +202,7 @@ Progress
 --------
 
 .. figure:: images/dashboard_progress.png
-    :alt: Progress pane showing horizontal bars for each task-prefix matching with the names "add", "double", "inc",
+    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc",
     and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed 
     in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and  
     the "sum" bar is empty.
@@ -243,7 +242,7 @@ allows you to embed Dask's dashboard plots directly into JupyterLab panes.
 
 Once the JupyterLab Dask extension is installed you can choose any of the individual plots available and 
 integrated as a pane in your JupyterLab session. For example, in the figure below we selected the *Task Stream*, 
-the *Progress*, *Workers Memory*, and *Graph* plots. 
+ *Progress*, *Workers Memory*, and *Graph* plots. 
 
 .. figure:: images/dashboard_jupyterlab.png
     :alt: Dask JupyterLab extension showing an arrangement of four panes selected from a display of plot options. The panes
