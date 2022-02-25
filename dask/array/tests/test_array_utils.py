@@ -111,6 +111,7 @@ def test_assert_eq_scheduler(a, b):
     assert counter == 0
 
     assert_eq(a, b, scheduler=custom_scheduler)
-    # `custom_scheduler` should be executed twice if `a` and `b` are Arrays.
-    n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)])
+    # `custom_scheduler` should be executed 2x the number of arrays.
+    # Once in `persist` and once in `compute`
+    n_da_arrays = len([x for x in [a, b] if isinstance(x, Array)]) * 2
     assert counter == n_da_arrays
