@@ -1025,8 +1025,8 @@ def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
     ):
         raise ValueError(
             f"Partitions must be sorted ascending by {column.name}",
-            f"In your dataset the mins of the partitions are: {mins}"
-            f"and the maxes are: {maxes}",
+            f"In your dataset the (min, max) value of {column.name or 'the index'} for each partition is: "
+            f"{list(zip(mins, maxes))}",
         )
     if not allow_overlap and any(
         a <= b for a, b in zip(non_empty_mins[1:], non_empty_maxes[:-1])
