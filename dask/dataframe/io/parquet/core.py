@@ -179,6 +179,7 @@ def read_parquet(
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
+    require_extension=(".parquet", ".parq", ".pq"),
     **kwargs,
 ):
     """
@@ -308,6 +309,10 @@ def read_parquet(
                 └── └── 04.parquet
 
         Note that the default behavior of ``aggregate_files`` is False.
+    require_extension: str or tuple(str), default (".parq", ".parquet". ".pq")
+        Required file extension for all parquet data files. Other file
+        extensions will be ignored. Note that ``require_extension=False``
+        will skip the file-extension check altogether.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -355,6 +360,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
+        "require_extension": require_extension,
     }
     engine_options = kwargs.copy()
 
