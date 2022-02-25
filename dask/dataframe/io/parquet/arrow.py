@@ -348,6 +348,14 @@ class ArrowDatasetEngine(Engine):
     #
 
     @classmethod
+    def validate_engine_options(cls, core_options: dict, **engine_options):
+
+        # TODO: Check and rewrite engine_options here
+        _, paths, fs = super().validate_engine_options(core_options)
+
+        return fs, paths, engine_options
+
+    @classmethod
     def read_metadata(
         cls,
         fs,

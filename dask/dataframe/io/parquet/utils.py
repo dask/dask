@@ -1,6 +1,7 @@
 import re
 
 import pandas as pd
+from fsspec.core import get_fs_token_paths
 
 from .... import config
 from ....core import flatten
@@ -10,6 +11,22 @@ from ..utils import _is_local_fs
 
 class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
+
+    @classmethod
+    def validate_engine_options(cls, core_options: dict, **engine_options):
+
+        # Base class doesnt support any engine options
+        if engine_options:
+            raise ValueError(f"{engine_options.keys()} not supported for {cls}")
+
+        # Use fsspec for filesystem and path handling
+        fs, _, paths = get_fs_token_paths(
+            core_options.get("path"),
+            mode="rb",
+            storage_options=core_options.get("storage_options"),
+        )
+        paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
+        return fs, paths, {}
 
     @classmethod
     def read_metadata(

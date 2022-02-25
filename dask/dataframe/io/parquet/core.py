@@ -13,7 +13,7 @@ from ....blockwise import BlockIndex
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
-from ....utils import apply, import_required, natural_sort_key, parse_bytes
+from ....utils import apply, import_required, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from ..utils import _is_local_fs
@@ -377,8 +377,11 @@ def read_parquet(
     core_options.update({"columns": columns, "engine": engine})
     output_name = label + tokenize(path, **core_options, **engine_options)
 
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
+    # Check that all user-specified engine options are supported
+    # and return a paths and fs that is consistent with the options
+    fs, paths, valid_engine_options = engine.validate_engine_options(
+        core_options, **engine_options
+    )
 
     auto_index_allowed = False
     if index is None:
@@ -408,7 +411,7 @@ def read_parquet(
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
-        **kwargs,
+        **valid_engine_options,
     )
 
     # In the future, we may want to give the engine the
