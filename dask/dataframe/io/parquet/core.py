@@ -339,8 +339,10 @@ def read_parquet(
             FutureWarning,
         )
 
-    # Store initial function arguments
-    input_kwargs = {
+    # Store initial function arguments.
+    # Start with just the "core" arguments
+    core_options = {
+        "path": path,
         "columns": columns,
         "filters": filters,
         "categories": categories,
@@ -351,14 +353,14 @@ def read_parquet(
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
-        "chunksize=": chunksize,
+        "chunksize": chunksize,
         "aggregate_files": aggregate_files,
-        **kwargs,
     }
+    engine_options = kwargs.copy()
 
     if isinstance(columns, str):
-        input_kwargs["columns"] = [columns]
-        df = read_parquet(path, **input_kwargs)
+        core_options["columns"] = [columns]
+        df = read_parquet(**core_options, **engine_options)
         return df[columns]
 
     if columns is not None:
@@ -370,10 +372,10 @@ def read_parquet(
     if hasattr(path, "name"):
         path = stringify_path(path)
 
-    # Update input_kwargs and tokenize inputs
+    # Update core_options and tokenize inputs
     label = "read-parquet-"
-    input_kwargs.update({"columns": columns, "engine": engine})
-    output_name = label + tokenize(path, **input_kwargs)
+    core_options.update({"columns": columns, "engine": engine})
+    output_name = label + tokenize(path, **core_options, **engine_options)
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -472,8 +474,7 @@ def read_parquet(
             label=label,
             creation_info={
                 "func": read_parquet,
-                "args": (path,),
-                "kwargs": input_kwargs,
+                "kwargs": {**core_options, **engine_options},
             },
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
