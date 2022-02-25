@@ -443,7 +443,6 @@ def read_parquet(
         index,
         chunksize,
         split_row_groups,
-        fs,
         aggregation_depth,
     )
 
@@ -1206,7 +1205,6 @@ def process_statistics(
     index,
     chunksize,
     split_row_groups,
-    fs,
     aggregation_depth,
 ):
     """Process row-group column statistics in metadata
@@ -1244,7 +1242,7 @@ def process_statistics(
         # Aggregate parts/statistics if we are splitting by row-group
         if chunksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
+                parts, statistics, chunksize, split_row_groups, aggregation_depth
             )
 
         out = sorted_columns(statistics)
@@ -1350,9 +1348,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
-):
+def aggregate_row_groups(parts, stats, chunksize, split_row_groups, aggregation_depth):
     if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
 
@@ -1388,10 +1384,8 @@ def aggregate_row_groups(
                     multi_path_allowed = True
                 elif isinstance(aggregation_depth, int):
                     # Make sure files share the same directory
-                    root = stat["file_path_0"].split(fs.sep)[:-aggregation_depth]
-                    next_root = next_stat["file_path_0"].split(fs.sep)[
-                        :-aggregation_depth
-                    ]
+                    root = stat["file_path_0"].split("/")[:-aggregation_depth]
+                    next_root = next_stat["file_path_0"].split("/")[:-aggregation_depth]
                     multi_path_allowed = root == next_root
                 else:
                     raise ValueError(

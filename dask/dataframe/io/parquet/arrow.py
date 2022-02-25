@@ -211,25 +211,36 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
+    from pyarrow.fs import FileSystem as PaFileSystem
 
-    # Define file-opening options
     read_kwargs = kwargs.get("read", {}).copy()
-    precache_options, open_file_options = _process_open_file_options(
-        read_kwargs.pop("open_file_options", {}),
-        **(
-            {
-                "allow_precache": False,
-                "default_cache": "none",
-            }
-            if _is_local_fs(fs)
-            else {
-                "columns": columns,
-                "row_groups": row_groups if row_groups == [None] else [row_groups],
-                "default_engine": "pyarrow",
-                "default_cache": "none",
-            }
-        ),
-    )
+    open_file_options = read_kwargs.pop("open_file_options", {})
+    if isinstance(fs, PaFileSystem):
+        # Cannot use optimized pre-caching with PaFileSystem
+        precache_options = {}
+        open_file_options = {
+            "open_file_func": open_file_options.get(
+                "open_file_func", fs.open_input_file
+            )
+        }
+    else:
+        # Define file-opening options
+        precache_options, open_file_options = _process_open_file_options(
+            open_file_options,
+            **(
+                {
+                    "allow_precache": False,
+                    "default_cache": "none",
+                }
+                if _is_local_fs(fs)
+                else {
+                    "columns": columns,
+                    "row_groups": row_groups if row_groups == [None] else [row_groups],
+                    "default_engine": "pyarrow",
+                    "default_cache": "none",
+                }
+            ),
+        )
 
     if partition_keys:
         tables = []
@@ -393,6 +404,7 @@ class ArrowDatasetEngine(Engine):
 
         path = core_options.get("path")
         filesystem = valid_dataset_options["filesystem"]
+        has_metadata_file = False
         if filesystem:
             from pyarrow.fs import FileSystem as PaFileSystem
 
@@ -430,6 +442,7 @@ class ArrowDatasetEngine(Engine):
                     path + "/" + "_metadata",
                     **valid_dataset_options,
                 )
+                has_metadata_file = True
             else:
                 ds = pa_ds.dataset(path, **valid_dataset_options)
 
@@ -440,6 +453,7 @@ class ArrowDatasetEngine(Engine):
         # Add missing entries to valid_dataset_options
         valid_dataset_options["_ds"] = ds
         valid_dataset_options["_require_extension"] = require_extension
+        valid_dataset_options["_has_metadata_file"] = has_metadata_file
         valid_dataset_options["filesystem"] = fs
 
         # TODO: Check/rewrite read_options as well
@@ -925,10 +939,10 @@ class ArrowDatasetEngine(Engine):
 
         # Use pyarrow.dataset API
         ds = _dataset_kwargs.pop("_ds", None)
+        has_metadata_file = _dataset_kwargs.pop("_has_metadata_file", False)
         valid_paths = None  # Only used if `paths` is a list containing _metadata
         if ds is None:
             # Case-dependent pyarrow.dataset creation
-            has_metadata_file = False
             if len(paths) == 1 and fs.isdir(paths[0]):
 
                 # Use _analyze_paths to avoid relative-path
@@ -977,6 +991,13 @@ class ArrowDatasetEngine(Engine):
 
             # Check if we are intializing a dataset from _metadata
             if isinstance(ds, tuple):
+                if _dataset_kwargs["format"] == "parquet":
+                    raise ValueError(
+                        "Please pass a ParquetFileFormat object for the "
+                        "`format` pyarrow.dataset option. Passing a string "
+                        "is not supported when reading from a _metadata file."
+                    )
+
                 if {"exclude_invalid_files", "ignore_prefixes"}.intersection(
                     _dataset_kwargs
                 ):
@@ -1050,9 +1071,7 @@ class ArrowDatasetEngine(Engine):
             #        dict_keys(['c', 'b'])
             #
             cat_keys = [
-                part.split("=")[0]
-                for part in file_frag.path.split(fs.sep)
-                if "=" in part
+                part.split("=")[0] for part in file_frag.path.split("/") if "=" in part
             ]
             if set(hive_categories) == set(cat_keys):
                 hive_categories = {
