@@ -204,16 +204,15 @@ def test_futures_in_graph(c):
     assert xxyy3.compute(scheduler="dask.distributed") == ((1 + 1) + (2 + 2)) + 10
 
 
-def test_zarr_distributed_roundtrip():
+def test_zarr_distributed_roundtrip(c):
     da = pytest.importorskip("dask.array")
     pytest.importorskip("zarr")
-    assert_eq = da.utils.assert_eq
 
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d)
         a2 = da.from_zarr(d)
-        assert_eq(a, a2)
+        da.assert_eq(a, a2, scheduler=c)
         assert a2.chunks == a.chunks
 
 
@@ -318,7 +317,7 @@ def test_blockwise_array_creation(c, io, fuse):
         dsk = dask.array.optimize(darr.dask, darr.__dask_keys__())
         # dsk should be a dict unless fuse is explicitly False
         assert isinstance(dsk, dict) == (fuse is not False)
-        da.assert_eq(darr, narr)
+        da.assert_eq(darr, narr, scheduler=c)
 
 
 @pytest.mark.parametrize(
@@ -478,8 +477,7 @@ async def test_combo_of_layer_types(c, s, a, b):
     assert res == 21
 
 
-@gen_cluster(client=True)
-async def test_blockwise_concatenate(c, s, a, b):
+def test_blockwise_concatenate(c):
     """Test a blockwise operation with concatenated axes"""
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
@@ -501,8 +499,8 @@ async def test_blockwise_concatenate(c, s, a, b):
         concatenate=True,
     )
 
-    await c.compute(z, optimize_graph=False)
-    da.assert_eq(z, x)
+    c.compute(z, optimize_graph=False)
+    da.assert_eq(z, x, scheduler=c)
 
 
 @gen_cluster(client=True)
