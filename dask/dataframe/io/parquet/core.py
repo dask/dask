@@ -1036,7 +1036,7 @@ def get_engine(engine):
         if engine == "pyarrow-dataset":
             if pa_version.major < 1:
                 raise ImportError(
-                    f"pyarrow-{pa_version.major} does not suppot the "
+                    f"pyarrow-{pa_version.major} does not support the "
                     f"pyarrow.dataset API. Please install pyarrow>=1."
                 )
 
@@ -1051,6 +1051,7 @@ def get_engine(engine):
                 "and will be removed in the near future. Please use "
                 "`engine='pyarrow'` instead.",
                 FutureWarning,
+                stacklevel=3,
             )
             _ENGINES[engine] = eng = ArrowLegacyEngine
         return eng
