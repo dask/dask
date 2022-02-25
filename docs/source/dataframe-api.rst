@@ -268,11 +268,9 @@ These are separate namespaces within :class:`Series` that only apply to specific
 =========================== =================================
 Data Type                   Accessor
 =========================== =================================
-Datetime, Timedelta, Period :ref:`dt <generated.dask.dataframe.Series.dt>`
-String                      :ref:`str <generated.dask.dataframe.Series.str>`
+Datetime, Timedelta, Period :func:`Series.dt`
+String                      :func:`Series.str`
 =========================== =================================
-
-.. currentmodule:: dask.dataframe.accessor
 
 .. autosummary::
    :toctree: generated/
