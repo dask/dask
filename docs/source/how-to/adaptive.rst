@@ -16,8 +16,18 @@ two situations:
 Particularly efficient users may learn to manually add and remove workers
 during their session, but this is rare.  Instead, we would like the size of a
 Dask cluster to match the computational needs at any given time.  This is the
-goal of the *adaptive deployments* discussed in this document.  These are
-particularly helpful for interactive workloads, which are characterized by long
+goal of the *adaptive deployments* discussed in this document.
+
+|
+
+.. image:: ../images/dask-adaptive.svg
+   :alt: Dask adaptive scaling
+   :align: center
+   :scale: 40%
+
+|
+
+These are particularly helpful for interactive workloads, which are characterized by long
 periods of inactivity interrupted with short bursts of heavy activity.
 Adaptive deployments can result in both faster analyses that give users much
 more power, but with much less pressure on computational resources.
@@ -62,10 +72,10 @@ Dependence on a Resource Manager
 The Dask scheduler does not know how to launch workers on its own. Instead, it
 relies on an external resource scheduler like Kubernetes above, or
 Yarn, SGE, SLURM, Mesos, or some other in-house system (see :doc:`how to deploy Dask
-clusters <../how-to/deploy-dask-clusters>` for options).  In order to use adaptive deployments, you
+clusters <../deploying>` for options).  In order to use adaptive deployments, you
 must provide some mechanism for the scheduler to launch new workers.  Typically,
 this is done by using one of the solutions listed in the :doc:`how to deploy Dask
-clusters <../how-to/deploy-dask-clusters>`, or by subclassing from the Cluster superclass and
+clusters <../deploying>`, or by subclassing from the Cluster superclass and
 implementing that API.
 
 .. autosummary::

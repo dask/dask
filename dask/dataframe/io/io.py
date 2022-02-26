@@ -510,7 +510,7 @@ def _df_to_bag(df, index=False, format="tuple"):
                 return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
         if format == "tuple":
-            return list(df.iteritems()) if index else list(df)
+            return list(df.items()) if index else list(df)
         elif format == "dict":
             return df.to_frame().to_dict(orient="records")
 
@@ -570,10 +570,11 @@ def from_delayed(
 
     Parameters
     ----------
-    dfs : list of Delayed
+    dfs : list of Delayed or Future
         An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` These comprise the individual partitions of the
-        resulting dataframe.
+        ``dask.delayed`` or an iterable of ``distributed.Future`` objects,
+        such as come from ``client.submit`` interface. These comprise the individual
+        partitions of the resulting dataframe.
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.

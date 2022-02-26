@@ -5,7 +5,8 @@ import numpy as np
 from tlz import curry
 
 from ..base import tokenize
-from ..layers import BlockwiseCreateArray
+from ..blockwise import blockwise as core_blockwise
+from ..layers import ArrayChunkShapeDep
 from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import meta_from_array
@@ -64,12 +65,16 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     kwargs = parsed["kwargs"]
     func = partial(func, dtype=dtype, **kwargs)
 
-    graph = BlockwiseCreateArray(
-        name,
+    out_ind = dep_ind = tuple(range(len(shape)))
+    graph = core_blockwise(
         func,
-        shape,
-        chunks,
+        name,
+        out_ind,
+        ArrayChunkShapeDep(chunks),
+        dep_ind,
+        numblocks={},
     )
+
     return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
@@ -102,8 +107,7 @@ def wrap_func_like(func, *args, **kwargs):
 
 
 @curry
-def wrap(wrap_func, func, **kwargs):
-    func_like = kwargs.pop("func_like", None)
+def wrap(wrap_func, func, func_like=None, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:
@@ -189,7 +193,10 @@ def full(shape, fill_value, *args, **kwargs):
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
     if "dtype" not in kwargs:
-        kwargs["dtype"] = type(fill_value)
+        if hasattr(fill_value, "dtype"):
+            kwargs["dtype"] = fill_value.dtype
+        else:
+            kwargs["dtype"] = type(fill_value)
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 

@@ -78,21 +78,36 @@ def sort_values(
     na_position="last",
     upsample=1.0,
     partition_size=128e6,
+    sort_function=None,
+    sort_function_kwargs=None,
     **kwargs,
 ):
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
-    if not isinstance(by, str):
-        # support ["a"] as input
-        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
-            by = by[0]
-        else:
-            raise NotImplementedError(
-                "Dataframe only supports sorting by a single column which must "
-                "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(by)
-            )
+    if not isinstance(by, list):
+        by = [by]
+    if len(by) > 1 and df.npartitions > 1 or any(not isinstance(b, str) for b in by):
+        raise NotImplementedError(
+            "Dataframes only support sorting by named columns which must be passed as a "
+            "string or a list of strings; multi-partition dataframes only support sorting "
+            "by a single column.\n"
+            "You passed %s" % str(by)
+        )
+
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    if df.npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
+
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
@@ -101,7 +116,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[by]
+    sort_by_col = df[by[0]]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
@@ -109,8 +124,21 @@ def sort_values(
 
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
+            sort_function, **sort_kwargs
         )
+
+    if not isinstance(ascending, bool):
+        # support [True] as input
+        if (
+            isinstance(ascending, list)
+            and len(ascending) == 1
+            and isinstance(ascending[0], bool)
+        ):
+            ascending = ascending[0]
+        else:
+            raise NotImplementedError(
+                f"Dask currently only supports a single boolean for ascending. You passed {str(ascending)}"
+            )
 
     if (
         all(not pd.isna(x) for x in divisions)
@@ -126,9 +154,7 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(
-            M.sort_values, by, ascending=ascending, na_position=na_position
-        )
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     df = rearrange_by_divisions(
         df,
@@ -138,9 +164,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df = df.map_partitions(sort_function, **sort_kwargs)
     return df
 
 
@@ -322,7 +346,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = methods.tolist(divisions)
+    df4.divisions = tuple(methods.tolist(divisions))
 
     return df4.map_partitions(M.sort_index)
 
@@ -374,6 +398,9 @@ def shuffle(
             )
 
     if not isinstance(index, _Frame):
+        if list_like:
+            # Make sure we don't try to select with pd.Series/pd.Index
+            index = list(index)
         index = df._select_columns_or_index(index)
     elif hasattr(index, "to_frame"):
         # If this is an index, we should still convert to a
@@ -665,7 +692,7 @@ def rearrange_by_column_tasks(
     else:
         k = n
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     npartitions_orig = df.npartitions
     token = tokenize(df, stages, column, n, k)
@@ -882,7 +909,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    np.floor_divide(c, k ** stage, out=c)
+    np.floor_divide(c, k**stage, out=c)
     np.mod(c, k, out=c)
 
     return group_split_dispatch(df, c, k, ignore_index=ignore_index)

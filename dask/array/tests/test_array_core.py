@@ -12,6 +12,7 @@ import operator
 import os
 import time
 import warnings
+from functools import reduce
 from io import StringIO
 from operator import add, sub
 from threading import Lock
@@ -24,6 +25,8 @@ import dask
 import dask.array as da
 from dask.array.core import (
     Array,
+    BlockView,
+    PerformanceWarning,
     blockdims_from_blockshape,
     broadcast_chunks,
     broadcast_shapes,
@@ -36,8 +39,8 @@ from dask.array.core import (
     from_array,
     from_delayed,
     from_func,
-    getem,
     getter,
+    graph_from_arraylike,
     normalize_chunks,
     optimize,
     stack,
@@ -49,21 +52,38 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
-from dask.utils_test import dec, inc
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.layers import Blockwise
+from dask.utils import SerializableLock, apply, key_split, parse_bytes, tmpdir, tmpfile
+from dask.utils_test import dec, hlg_layer_topological, inc
 
 from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 
-def test_getem():
-    sol = {
-        ("X", 0, 0): (getter, "X", (slice(0, 2), slice(0, 3))),
-        ("X", 1, 0): (getter, "X", (slice(2, 4), slice(0, 3))),
-        ("X", 1, 1): (getter, "X", (slice(2, 4), slice(3, 6))),
-        ("X", 0, 1): (getter, "X", (slice(0, 2), slice(3, 6))),
-    }
-    assert getem("X", (2, 3), shape=(4, 6)) == sol
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_graph_from_arraylike(inline_array):
+    d = 2
+    chunk = (2, 3)
+    shape = tuple(d * n for n in chunk)
+    arr = np.ones(shape)
+
+    dsk = graph_from_arraylike(
+        arr, chunk, shape=shape, name="X", inline_array=inline_array
+    )
+
+    assert isinstance(dsk, HighLevelGraph)
+    if inline_array:
+        assert len(dsk.layers) == 1
+        assert isinstance(hlg_layer_topological(dsk, 0), Blockwise)
+    else:
+        assert len(dsk.layers) == 2
+        assert isinstance(hlg_layer_topological(dsk, 0), MaterializedLayer)
+        assert isinstance(hlg_layer_topological(dsk, 1), Blockwise)
+    dsk = dict(dsk)
+
+    # Somewhat odd membership check to avoid numpy elemwise __in__ overload
+    assert any(arr is v for v in dsk.values()) is not inline_array
 
 
 def test_top():
@@ -197,16 +217,14 @@ def test_chunked_dot_product():
     x = np.arange(400).reshape((20, 20))
     o = np.ones((20, 20))
 
-    d = {"x": x, "o": o}
-
-    getx = getem("x", (5, 5), shape=(20, 20))
-    geto = getem("o", (5, 5), shape=(20, 20))
+    getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
+    geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), name="o")
 
     result = top(
         dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
     )
 
-    dsk = merge(d, getx, geto, result)
+    dsk = merge(getx, geto, result)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
 
     assert_eq(np.dot(x, o), concatenate3(out))
@@ -215,14 +233,12 @@ def test_chunked_dot_product():
 def test_chunked_transpose_plus_one():
     x = np.arange(400).reshape((20, 20))
 
-    d = {"x": x}
-
-    getx = getem("x", (5, 5), shape=(20, 20))
+    getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), name="x")
 
     f = lambda x: x.T + 1
     comp = top(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
 
-    dsk = merge(d, getx, comp)
+    dsk = merge(getx, comp)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
 
     assert_eq(concatenate3(out), x.T + 1)
@@ -241,10 +257,11 @@ def test_broadcast_dimensions():
 
 
 def test_Array():
+    arr = object()  # arraylike is unimportant since we never compute
     shape = (1000, 1000)
     chunks = (100, 100)
     name = "x"
-    dsk = merge({name: "some-array"}, getem(name, chunks, shape=shape))
+    dsk = graph_from_arraylike(arr, chunks, shape, name)
     a = Array(dsk, name, chunks, shape=shape, dtype="f8")
 
     assert a.numblocks == (10, 10)
@@ -269,10 +286,11 @@ def test_uneven_chunks():
 
 
 def test_numblocks_suppoorts_singleton_block_dims():
+    arr = object()  # arraylike is unimportant since we never compute
     shape = (100, 10)
     chunks = (10, 10)
     name = "x"
-    dsk = merge({name: "some-array"}, getem(name, shape=shape, chunks=chunks))
+    dsk = graph_from_arraylike(arr, chunks, shape, name)
     a = Array(dsk, name, chunks, shape=shape, dtype="f8")
 
     assert set(concat(a.__dask_keys__())) == {("x", i, 0) for i in range(10)}
@@ -321,7 +339,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__02():
 def test_stack():
     a, b, c = (
         Array(
-            getem(name, chunks=(2, 3), shape=(4, 6)),
+            graph_from_arraylike(object(), chunks=(2, 3), shape=(4, 6), name=name),
             name,
             chunks=(2, 3),
             dtype="f8",
@@ -474,7 +492,7 @@ def test_stack_unknown_chunksizes():
 def test_concatenate():
     a, b, c = (
         Array(
-            getem(name, chunks=(2, 3), shape=(4, 6)),
+            graph_from_arraylike(object(), chunks=(2, 3), shape=(4, 6), name=name),
             name,
             chunks=(2, 3),
             dtype="f8",
@@ -557,6 +575,16 @@ def test_concatenate_unknown_axes():
     )  # unknown chunks
 
     assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
+
+
+def test_concatenate_flatten():
+    x = np.array([1, 2])
+    y = np.array([[3, 4], [5, 6]])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2, 1))
+
+    assert_eq(np.concatenate([x, y], axis=None), da.concatenate([a, b], axis=None))
 
 
 def test_concatenate_rechunk():
@@ -1208,6 +1236,66 @@ def test_reshape_unknown_dimensions():
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
 
 
+@pytest.mark.parametrize(
+    "limit",  # in bytes
+    [
+        None,  # Default value: dask.config.get("array.chunk-size")
+        134217728,  # 128 MiB (default value size on a typical laptop)
+        67108864,  # 64 MiB (half the typical default value size)
+    ],
+)
+@pytest.mark.parametrize(
+    "shape, chunks, reshape_size",
+    [
+        # Test reshape where output chunks would otherwise be too large
+        ((300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)),
+        # Test reshape where multiple chunks match between input and output
+        ((300, 300, 4, 18483), (-1, -1, 1, 183), (300, 300, -1)),
+    ],
+)
+def test_reshape_avoids_large_chunks(limit, shape, chunks, reshape_size):
+    array = da.random.random(shape, chunks=chunks)
+    if limit is None:
+        with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+            result = array.reshape(*reshape_size, limit=limit)
+    else:
+        result = array.reshape(*reshape_size, limit=limit)
+    nbytes = array.dtype.itemsize
+    max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+    if limit is None:
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+    assert max_chunksize_in_bytes < limit
+
+
+def test_reshape_warns_by_default_if_it_is_producing_large_chunks():
+    # Test reshape where output chunks would otherwise be too large
+    shape, chunks, reshape_size = (300, 180, 4, 18483), (-1, -1, 1, 183), (300, 180, -1)
+    array = da.random.random(shape, chunks=chunks)
+
+    with pytest.warns(PerformanceWarning) as record:
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    assert len(record) == 1
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": False}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes > limit
+
+    with dask.config.set(**{"array.slicing.split_large_chunks": True}):
+        result = array.reshape(*reshape_size)
+        nbytes = array.dtype.itemsize
+        max_chunksize_in_bytes = reduce(operator.mul, result.chunksize) * nbytes
+        limit = parse_bytes(dask.config.get("array.chunk-size"))
+        assert max_chunksize_in_bytes < limit
+
+
 def test_full():
     d = da.full((3, 4), 2, chunks=((2, 1), (2, 2)))
     assert d.chunks == ((2, 1), (2, 2))
@@ -1538,6 +1626,64 @@ def test_map_blocks_no_array_args():
     x = da.map_blocks(func, np.float32, chunks=((5, 3),), dtype=np.float32)
     assert x.chunks == ((5, 3),)
     assert_eq(x, np.arange(8, dtype=np.float32))
+
+
+def test_map_blocks_unique_name_chunks_dtype():
+    def func(block_info=None):
+        loc = block_info[None]["array-location"]
+        dtype = block_info[None]["dtype"]
+        return np.arange(loc[0][0], loc[0][1], dtype=dtype)
+
+    x = da.map_blocks(func, chunks=((5, 3),), dtype=np.float32)
+    assert x.chunks == ((5, 3),)
+    assert_eq(x, np.arange(8, dtype=np.float32))
+
+    y = da.map_blocks(func, chunks=((2, 2, 1, 3),), dtype=np.float32)
+    assert y.chunks == ((2, 2, 1, 3),)
+    assert_eq(y, np.arange(8, dtype=np.float32))
+    assert x.name != y.name
+
+    z = da.map_blocks(func, chunks=((5, 3),), dtype=np.float64)
+    assert z.chunks == ((5, 3),)
+    assert_eq(z, np.arange(8, dtype=np.float64))
+    assert x.name != z.name
+    assert y.name != z.name
+
+
+def test_map_blocks_unique_name_drop_axis():
+    def func(some_3d, block_info=None):
+        if not block_info:
+            return some_3d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4, 5), chunks=((3,), (4,), (5,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, drop_axis=[0], dtype=np.float32)
+    assert x.chunks == ((4,), (5,))
+    assert_eq(x, np.zeros((4, 5), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, drop_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,))
+    assert_eq(y, np.zeros((3, 4), dtype=np.float32))
+    assert x.name != y.name
+
+
+def test_map_blocks_unique_name_new_axis():
+    def func(some_2d, block_info=None):
+        if not block_info:
+            return some_2d
+        dtype = block_info[None]["dtype"]
+        return np.zeros(block_info[None]["shape"], dtype=dtype)
+
+    input_arr = da.zeros((3, 4), chunks=((3,), (4,)), dtype=np.float32)
+    x = da.map_blocks(func, input_arr, new_axis=[0], dtype=np.float32)
+    assert x.chunks == ((1,), (3,), (4,))
+    assert_eq(x, np.zeros((1, 3, 4), dtype=np.float32))
+
+    y = da.map_blocks(func, input_arr, new_axis=[2], dtype=np.float32)
+    assert y.chunks == ((3,), (4,), (1,))
+    assert_eq(y, np.zeros((3, 4, 1), dtype=np.float32))
+    assert x.name != y.name
 
 
 @pytest.mark.parametrize("func", [lambda x, y: x + y, lambda x, y, block_info: x + y])
@@ -2158,7 +2304,7 @@ def test_arithmetic():
     assert_eq(b | b, y | y)
     assert_eq(b ^ b, y ^ y)
     assert_eq(a // b, x // y)
-    assert_eq(a ** b, x ** y)
+    assert_eq(a**b, x**y)
     assert_eq(a % b, x % y)
     assert_eq(a > b, x > y)
     assert_eq(a < b, x < y)
@@ -2175,7 +2321,7 @@ def test_arithmetic():
     assert_eq(b | True, y | True)
     assert_eq(b ^ True, y ^ True)
     assert_eq(a // 2, x // 2)
-    assert_eq(a ** 2, x ** 2)
+    assert_eq(a**2, x**2)
     assert_eq(a % 2, x % 2)
     assert_eq(a > 2, x > 2)
     assert_eq(a < 2, x < 2)
@@ -2192,7 +2338,7 @@ def test_arithmetic():
     assert_eq(True | b, True | y)
     assert_eq(True ^ b, True ^ y)
     assert_eq(2 // b, 2 // y)
-    assert_eq(2 ** b, 2 ** y)
+    assert_eq(2**b, 2**y)
     assert_eq(2 % b, 2 % y)
     assert_eq(2 > b, 2 > y)
     assert_eq(2 < b, 2 < y)
@@ -2374,22 +2520,36 @@ def test_Array_normalizes_dtype():
     assert isinstance(x.dtype, np.dtype)
 
 
-def test_from_array_with_lock():
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_with_lock(inline_array):
     x = np.arange(10)
-    d = da.from_array(x, chunks=5, lock=True)
 
-    tasks = [v for k, v in d.dask.items() if k[0] == d.name]
+    class FussyLock(SerializableLock):
+        def acquire(self, blocking=True, timeout=-1):
+            if self.locked():
+                raise RuntimeError("I am locked")
+            return super().acquire(blocking, timeout)
 
-    assert hasattr(tasks[0][4], "acquire")
-    assert len({task[4] for task in tasks}) == 1
+    lock = FussyLock()
+    d = da.from_array(x, chunks=5, lock=lock, inline_array=inline_array)
 
+    lock.acquire()
+    with pytest.raises(RuntimeError):
+        d.compute()
+
+    lock.release()
     assert_eq(d, x)
 
-    lock = Lock()
-    e = da.from_array(x, chunks=5, lock=lock)
-    f = da.from_array(x, chunks=5, lock=lock)
+    lock = CounterLock()
+    e = da.from_array(x, chunks=5, lock=lock, inline_array=inline_array)
 
-    assert_eq(e + f, x + x)
+    assert_eq(e, x)
+    # Note: the specific counts for composite arithmetic operations can vary
+    # significantly based on the complexity of the computation, whether we are inlining,
+    # and optimization fusion settings. But for this simple comparison it seems pretty
+    # stable.
+    assert lock.release_count == 2
+    assert lock.acquire_count == 2
 
 
 class MyArray:
@@ -2412,8 +2572,11 @@ class MyArray:
         (np.array(1), 1),
     ],
 )
-def test_from_array_tasks_always_call_getter(x, chunks):
-    dx = da.from_array(MyArray(x), chunks=chunks, asarray=False)
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_tasks_always_call_getter(x, chunks, inline_array):
+    dx = da.from_array(
+        MyArray(x), chunks=chunks, asarray=False, inline_array=inline_array
+    )
     assert_eq(x, dx)
 
 
@@ -2471,15 +2634,18 @@ def test_from_array_scalar(type_):
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
+@pytest.mark.parametrize("inline_array", [True, False])
 @pytest.mark.filterwarnings("ignore:the matrix subclass")
-def test_from_array_no_asarray(asarray, cls):
+def test_from_array_no_asarray(asarray, cls, inline_array):
     def assert_chunks_are_of_type(x):
         chunks = compute_as_if_collection(Array, x.dask, x.__dask_keys__())
-        for c in concat(chunks):
+        # If it's a tuple of tuples we want to concat, but if it's a tuple
+        # of 1d arrays, we just want to iterate directly
+        for c in concat(chunks) if isinstance(chunks[0], tuple) else chunks:
             assert type(c) is cls
 
     x = np.matrix(np.arange(100).reshape((10, 10)))
-    dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
+    dx = da.from_array(x, chunks=(5, 5), asarray=asarray, inline_array=inline_array)
     assert_chunks_are_of_type(dx)
     assert_chunks_are_of_type(dx[0:5])
     assert_chunks_are_of_type(dx[0:5][:, 0])
@@ -2543,12 +2709,11 @@ def test_from_array_inline():
         pass
 
     a = np.array([1, 2, 3]).view(MyArray)
-    dsk = dict(da.from_array(a, name="my-array").dask)
-    assert dsk["my-array"] is a
+    dsk = dict(da.from_array(a, name="my-array", inline_array=False).dask)
+    assert dsk["original-my-array"] is a
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
-    assert "my-array" not in dsk
-    assert a is dsk[("my-array", 0)][1]
+    assert "original-my-array" not in dsk
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
@@ -2580,15 +2745,19 @@ def test_asarray_dask_dataframe(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
-def test_asarray_h5py(asarray):
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_asarray_h5py(asarray, inline_array):
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
         with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = asarray(d)
-            assert d in x.dask.values()
-            assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+            x = asarray(d, inline_array=inline_array)
+
+            # Check for the array in the dsk
+            dsk = dict(x.dask)
+            assert (d in dsk.values()) is not inline_array
+            assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
 def test_asarray_chunks():
@@ -3276,10 +3445,16 @@ def test_to_delayed_optimize_graph():
     # optimizations
     d = y.to_delayed().flatten().tolist()[0]
     assert len([k for k in d.dask if k[0].startswith("getitem")]) == 1
+    assert d.key == (y.name, 0, 0)
+    assert d.dask.layers.keys() == {"delayed-" + y.name}
+    assert d.dask.dependencies == {"delayed-" + y.name: set()}
+    assert d.__dask_layers__() == ("delayed-" + y.name,)
 
     # no optimizations
     d2 = y.to_delayed(optimize_graph=False).flatten().tolist()[0]
-    assert dict(d2.dask) == dict(y.dask)
+    assert d2.dask is y.dask
+    assert d2.key == (y.name, 0, 0)
+    assert d2.__dask_layers__() == y.__dask_layers__()
 
     assert (d.compute() == d2.compute()).all()
 
@@ -3398,6 +3573,12 @@ def test_map_blocks_name():
     assert da.ones(5, chunks=2).map_blocks(inc).name.startswith("inc-")
 
 
+def test_map_blocks_token_deprecated():
+    with pytest.warns(FutureWarning, match="use `name=` instead"):
+        x = da.ones(5, chunks=2).map_blocks(inc, token="foo")
+    assert x.name.startswith("foo-")
+
+
 def test_from_array_names():
     pytest.importorskip("distributed")
 
@@ -3409,11 +3590,7 @@ def test_from_array_names():
 
 
 @pytest.mark.parametrize(
-    "array",
-    [
-        da.arange(100, chunks=25),
-        da.ones((10, 10), chunks=25),
-    ],
+    "array", [da.arange(100, chunks=25), da.ones((10, 10), chunks=25)]
 )
 def test_array_picklable(array):
     from pickle import dumps, loads
@@ -3671,11 +3848,11 @@ def test_index_array_with_array_2d():
 
 @pytest.mark.xfail(reason="Chunking does not align well")
 def test_index_array_with_array_3d_2d():
-    x = np.arange(4 ** 3).reshape((4, 4, 4))
+    x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
     ind = np.random.random((4, 4)) > 0.5
-    ind = np.arange(4 ** 2).reshape((4, 4)) % 2 == 0
+    ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
     assert_eq(x[ind], dx[dind])
@@ -3722,17 +3899,29 @@ def test_setitem_extended_API_0d():
     assert_eq(x, dx.compute())
 
 
-def test_setitem_extended_API_1d():
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [Ellipsis, -1],
+        [slice(2, 8, 2), -2],
+        [slice(8, None, 2), -3],
+        [slice(8, None, 2), [-30]],
+        [slice(1, None, -2), -4],
+        [slice(1, None, -2), [-40]],
+        [slice(3, None, 2), -5],
+        [slice(-3, None, -2), -6],
+        [slice(1, None, -2), -4],
+        [slice(3, None, 2), -5],
+        [slice(3, None, 2), [10, 11, 12, 13]],
+        [slice(-4, None, -2), [14, 15, 16, 17]],
+    ],
+)
+def test_setitem_extended_API_1d(index, value):
     # 1-d array
     x = np.arange(10)
-    dx = da.from_array(x.copy(), chunks=(4, 6))
-
-    x[2:8:2] = -1
-    dx[2:8:2] = -1
-    assert_eq(x, dx.compute())
-
-    x[...] = -11
-    dx[...] = -11
+    dx = da.from_array(x, chunks=(4, 6))
+    dx[index] = value
+    x[index] = value
     assert_eq(x, dx.compute())
 
 
@@ -3765,6 +3954,19 @@ def test_setitem_extended_API_1d():
             ),
             -1,
         ],
+        [
+            (
+                slice(2, 4),
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            [[-100, -101, -102, -103], [-200, -201, -202, -203]],
+        ],
+        [slice(5, None, 2), -99],
+        [slice(5, None, 2), range(1, 11)],
+        [slice(1, None, -2), -98],
+        [slice(1, None, -2), range(11, 21)],
     ],
 )
 def test_setitem_extended_API_2d(index, value):
@@ -3934,17 +4136,23 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[[True, True, True, False], 0] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [2, 3]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+        x[0, [True, True, True, False]] = [1, 2, 3, 4, 5]
 
-    x = da.ones((4, 4), chunks=(2, 2))
     with pytest.raises(ValueError):
-        x[da.from_array([True, True, True, False]), 0] = [2, 3]
+        x[da.from_array([True, True, True, False]), 0] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, False, False, True])] = [1, 2, 3, 4, 5]
+
+    with pytest.raises(ValueError):
+        x[:, 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[0, :] = [1, 2, 3, 4, 5]
 
     x = da.ones((4, 4), chunks=(2, 2))
 
@@ -4315,12 +4523,13 @@ def test_zarr_return_stored(compute):
         assert a2.chunks == a.chunks
 
 
-def test_zarr_inline_array():
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_zarr_inline_array(inline_array):
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
-    dsk = dict(da.from_zarr(a, inline_array=True).dask)
-    assert len(dsk) == 1
-    assert a in list(dsk.values())[0]
+    dsk = dict(da.from_zarr(a, inline_array=inline_array).dask)
+    assert len(dsk) == (0 if inline_array else 1) + 1
+    assert (a in dsk.values()) is not inline_array
 
 
 def test_zarr_existing_array():
@@ -4415,6 +4624,35 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_regions():
+    zarr = pytest.importorskip("zarr")
+
+    a = da.arange(16).reshape((4, 4)).rechunk(2)
+    z = zarr.zeros_like(a, chunks=2)
+
+    a[:2, :2].to_zarr(z, region=(slice(2), slice(2)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    with pytest.raises(ValueError):
+        with tmpdir() as d:
+            a.to_zarr(d, region=(slice(2), slice(2)))
+
+
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
@@ -4474,6 +4712,58 @@ def test_tiledb_multiattr():
         # smoke-test computation directly on the TileDB view
         d = da.from_tiledb(uri, attribute="attr2")
         assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
+
+
+def test_blockview():
+    x = da.arange(10, chunks=2)
+    blockview = BlockView(x)
+    assert x.blocks == blockview
+    assert isinstance(blockview[0], da.Array)
+
+    assert_eq(blockview[0], x[:2])
+    assert_eq(blockview[-1], x[-2:])
+    assert_eq(blockview[:3], x[:6])
+    assert_eq(blockview[[0, 1, 2]], x[:6])
+    assert_eq(blockview[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.random.random((20, 20), chunks=(4, 5))
+    blockview = BlockView(x)
+    assert_eq(blockview[0], x[:4])
+    assert_eq(blockview[0, :3], x[:4, :15])
+    assert_eq(blockview[:, :3], x[:, :15])
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.ones((40, 40, 40), chunks=(10, 10, 10))
+    blockview = BlockView(x)
+    assert_eq(blockview[0, :, 0], np.ones((10, 40, 10)))
+    assert_eq(blockview.shape, tuple(map(len, x.chunks)))
+    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(
+        blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
+    )
+
+    x = da.ones((2, 2), chunks=1)
+    with pytest.raises(ValueError):
+        blockview[[0, 1], [0, 1]]
+    with pytest.raises(ValueError):
+        blockview[np.array([0, 1]), [0, 1]]
+    with pytest.raises(ValueError) as info:
+        blockview[np.array([0, 1]), np.array([0, 1])]
+    assert "list" in str(info.value)
+    with pytest.raises(ValueError) as info:
+        blockview[None, :, :]
+    assert "newaxis" in str(info.value) and "not supported" in str(info.value)
+    with pytest.raises(IndexError) as info:
+        blockview[100, 100]
 
 
 def test_blocks_indexer():
@@ -4908,3 +5198,10 @@ def test_dask_layers():
     assert b.dask.layers.keys() == {a.name, b.name}
     assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
     assert b.__dask_layers__() == (b.name,)
+
+
+def test_len_object_with_unknown_size():
+    a = da.random.random(size=(20, 2))
+    b = a[a < 0.5]
+    with pytest.raises(ValueError, match="on object with unknown chunk size"):
+        assert len(b)

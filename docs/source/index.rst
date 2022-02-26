@@ -28,11 +28,15 @@ Dask emphasizes the following virtues:
 *  **Responsive**: Designed with interactive computing in mind, it provides rapid
    feedback and diagnostics to aid humans
 
+|
 
-.. image:: images/dask-overview.svg
-   :alt: Dask collections and schedulers
-   :width: 100%
+.. figure:: images/dask-overview.svg
+   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
    :align: center
+
+   High level collections are used to generate task graphs which can be executed by schedulers on a single machine or a cluster.
+
+|
 
 See the `dask.distributed documentation (separate website)
 <https://distributed.dask.org/en/latest/>`_ for more technical information
@@ -149,6 +153,7 @@ messy situations in everyday problems.
    futures.rst
    scheduling.rst
    graphs.rst
+   deploying.rst
    internals.rst
 
 .. toctree::
@@ -166,7 +171,6 @@ messy situations in everyday problems.
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
-.. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel

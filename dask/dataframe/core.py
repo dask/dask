@@ -1,4 +1,3 @@
-import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -22,11 +21,11 @@ from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
-from ..blockwise import Blockwise, blockwise, subs
+from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..optimization import SubgraphCallable
+from ..layers import DataFrameTreeReduction
 from ..utils import (
     IndexCallable,
     M,
@@ -49,6 +48,7 @@ from ..utils import (
 )
 from ..widgets import get_template
 from . import methods
+from ._compat import PANDAS_GT_140, PANDAS_GT_150
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
@@ -190,7 +190,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def divisions(self):
         """Dummy divisions to be compat with Series and DataFrame"""
-        return [None, None]
+        return (None, None)
 
     def __repr__(self):
         name = self._name if len(self._name) < 10 else self._name[:7] + "..."
@@ -253,11 +253,12 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             ``dask.delayed`` objects.
         """
         dsk = self.__dask_graph__()
+        layer = self.__dask_layers__()[0]
         if optimize_graph:
             dsk = self.__dask_optimize__(dsk, self.__dask_keys__())
-            name = "delayed-" + self._name
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=())
-        return Delayed(self.key, dsk)
+            layer = "delayed-" + self._name
+            dsk = HighLevelGraph.from_collections(layer, dsk, dependencies=())
+        return Delayed(self.key, dsk, layer=layer)
 
 
 def _scalar_binary(op, self, other, inv=False):
@@ -322,7 +323,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(meta))}"
             )
         self._meta = meta
-        self.divisions = tuple(divisions)
+        self._divisions = tuple(divisions)
 
     def __dask_graph__(self):
         return self.dask
@@ -358,11 +359,52 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return new_dd_object
 
     @property
+    def divisions(self):
+        """
+        Tuple of ``npartitions + 1`` values, in ascending order, marking the
+        lower/upper bounds of each partition's index. Divisions allow Dask
+        to know which partition will contain a given value, significantly
+        speeding up operations like `loc`, `merge`, and `groupby` by not
+        having to search the full dataset.
+
+        Example: for ``divisions = (0, 10, 50, 100)``, there are three partitions,
+        where the index in each partition contains values [0, 10), [10, 50),
+        and [50, 100], respectively. Dask therefore knows ``df.loc[45]``
+        will be in the second partition.
+
+        When every item in ``divisions`` is ``None``, the divisions are unknown.
+        Most operations can still be performed, but some will be much slower,
+        and a few may fail.
+
+        It is uncommon to set ``divisions`` directly. Instead, use ``set_index``,
+        which sorts and splits the data as needed.
+        See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+        """
+        return self._divisions
+
+    @divisions.setter
+    def divisions(self, value):
+        if None in value:
+            if any(v is not None for v in value):
+                warnings.warn(
+                    "recieved `divisions` with mix of nulls and non-nulls, future versions will only accept "
+                    "`divisions` that are all null or all non-null",
+                    PendingDeprecationWarning,
+                )
+        if not isinstance(value, tuple):
+            warnings.warn(
+                f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
+                "tuple",
+                PendingDeprecationWarning,
+            )
+        self._divisions = value
+
+    @property
     def npartitions(self):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.DataFrame)
     def attrs(self):
         return self._meta.attrs
@@ -397,7 +439,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+        self.dask, self._name, self._meta, self._divisions = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -627,8 +669,25 @@ Dask Name: {name}, {task} tasks"""
             be the first argument, and these will be passed *after*. Arguments
             and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
             or regular python objects. DataFrame-like args (both dask and
-            pandas) will be repartitioned to align (if necessary) before
-            applying the function.
+            pandas) will be repartitioned to align  (if necessary) before
+            applying the function (see ``align_dataframes`` to control).
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Examples
@@ -1442,10 +1501,12 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.DataFrame)
     def replace(self, to_replace=None, value=None, regex=False):
+        # In PANDAS_GT_140 pandas starts using no_default instead of None
+        value_kwarg = {"value": value} if value is not None else {}
         return self.map_partitions(
             M.replace,
             to_replace=to_replace,
-            value=value,
+            **value_kwarg,
             regex=regex,
             enforce_metadata=False,
         )
@@ -1511,6 +1572,7 @@ Dask Name: {name}, {task} tasks"""
         method=None,
         compute=True,
         parallel=False,
+        engine_kwargs=None,
     ):
         """See dd.to_sql docstring for more information"""
         from .io import to_sql
@@ -1528,6 +1590,7 @@ Dask Name: {name}, {task} tasks"""
             method=method,
             compute=compute,
             parallel=parallel,
+            engine_kwargs=engine_kwargs,
         )
 
     def to_json(self, filename, *args, **kwargs):
@@ -1555,11 +1618,12 @@ Dask Name: {name}, {task} tasks"""
         """
         keys = self.__dask_keys__()
         graph = self.__dask_graph__()
+        layer = self.__dask_layers__()[0]
         if optimize_graph:
             graph = self.__dask_optimize__(graph, self.__dask_keys__())
-            name = "delayed-" + self._name
-            graph = HighLevelGraph.from_collections(name, graph, dependencies=())
-        return [Delayed(k, graph) for k in keys]
+            layer = "delayed-" + self._name
+            graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
+        return [Delayed(k, graph, layer=layer) for k in keys]
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -1911,6 +1975,7 @@ Dask Name: {name}, {task} tasks"""
             chunk_kwargs={"dropna": dropna},
             aggregate_kwargs={"dropna": dropna},
         )
+        mode_series.name = self.name
         return mode_series
 
     @_numeric_only
@@ -2115,11 +2180,29 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
+        _raise_if_not_series_or_dataframe(self, "std")
+
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        is_df_like = is_dataframe_like(self._meta)
+        needs_time_conversion = False
+        numeric_dd = self
+
+        if PANDAS_GT_120 and is_df_like:
+            time_cols = self._meta.select_dtypes(include="datetime").columns
+            if len(time_cols) > 0:
+                (
+                    numeric_dd,
+                    needs_time_conversion,
+                ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
+        elif PANDAS_GT_120 and not is_df_like:
+            needs_time_conversion = is_datetime64_any_dtype(self._meta)
+            if needs_time_conversion:
+                numeric_dd = _convert_to_numeric(self, skipna)
+
         if axis == 1:
             result = map_partitions(
-                M.std,
-                self,
+                M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
+                numeric_dd,
                 meta=meta,
                 token=self._token_prefix + "std",
                 axis=axis,
@@ -2129,18 +2212,67 @@ Dask Name: {name}, {task} tasks"""
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
+
+        # Case where axis=0 or axis=None
+        v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
+        name = self._token_prefix + "std"
+
+        if needs_time_conversion:
+            sqrt_func_kwargs = {
+                "is_df_like": is_df_like,
+                "time_cols": time_cols if is_df_like else None,
+                "axis": axis,
+            }
+            sqrt_func = _sqrt_and_convert_to_timedelta
         else:
-            v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            name = self._token_prefix + "std"
-            result = map_partitions(
-                np.sqrt,
-                v,
-                meta=meta,
-                token=name,
-                enforce_metadata=False,
-                parent_meta=self._meta,
+            sqrt_func_kwargs = {}
+            sqrt_func = np.sqrt
+
+        result = map_partitions(
+            sqrt_func,
+            v,
+            meta=meta,
+            token=name,
+            enforce_metadata=False,
+            parent_meta=self._meta,
+            **sqrt_func_kwargs,
+        )
+
+        # Try to match the Pandas result dtype
+        if is_df_like and hasattr(meta, "dtype"):
+            result = result.astype(meta.dtype)
+
+        return handle_out(out, result)
+
+    def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
+        from .io import from_pandas
+
+        needs_time_conversion = True
+
+        # Ensure all columns are correct type. Need to shallow copy since cols will be modified
+        if axis == 0:
+            numeric_dd = self[meta.index].copy()
+        else:
+            numeric_dd = self.copy()
+
+        # Mix of datetimes with other numeric types produces NaNs for each value in std() series
+        if axis == 1 and len(time_cols) != len(self.columns):
+            # This is faster than converting each column to numeric when it's not necessary
+            # since each standard deviation will just be NaN
+            needs_time_conversion = False
+            numeric_dd = from_pandas(
+                pd.DataFrame(
+                    {"_": pd.Series([np.nan])},
+                    index=self.index,
+                ),
+                npartitions=self.npartitions,
             )
-            return handle_out(out, result)
+        else:
+            # Convert timedelta and datetime columns to integer types so we can use var
+            for col in time_cols:
+                numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
+
+        return numeric_dd, needs_time_conversion
 
     @_numeric_only
     @derived_from(pd.DataFrame)
@@ -2367,7 +2499,7 @@ Dask Name: {name}, {task} tasks"""
 
     @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=None, ddof=1, split_every=False, numeric_only=None):
+    def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
@@ -2852,6 +2984,12 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.Series)
     def append(self, other, interleave_partitions=False):
+        if PANDAS_GT_140:
+            warnings.warn(
+                "The frame.append method is deprecated and will be removed from"
+                "dask in a future version. Use dask.dataframe.concat instead.",
+                FutureWarning,
+            )
         # because DataFrame.append will override the method,
         # wrap by pd.Series.append docstring
         from .multi import concat
@@ -3354,9 +3492,22 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def iteritems(self):
-        for i in range(self.npartitions):
-            s = self.get_partition(i).compute()
-            yield from s.iteritems()
+        if PANDAS_GT_150:
+            warnings.warn(
+                "iteritems is deprecated and will be removed in a future version. "
+                "Use .items instead.",
+                FutureWarning,
+            )
+        # We use the `_` generator below to ensure the deprecation warning above
+        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+        # iteration happens
+
+        def _(self):
+            for i in range(self.npartitions):
+                s = self.get_partition(i).compute()
+                yield from s.items()
+
+        return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -3431,8 +3582,13 @@ Dask Name: {name}, {task} tasks""".format(
         )
 
     @derived_from(pd.Series)
-    def nunique(self, split_every=None):
-        return self.drop_duplicates(split_every=split_every).count()
+    def nunique(self, split_every=None, dropna=True):
+        uniqs = self.drop_duplicates(split_every=split_every)
+        if dropna:
+            # count mimics pandas behavior and excludes NA values
+            return uniqs.count()
+        else:
+            return uniqs.size
 
     @derived_from(pd.Series)
     def value_counts(
@@ -3593,7 +3749,8 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
-        return self.map_partitions(M.to_frame, name, meta=self._meta.to_frame(name))
+        args = [] if name is None else [name]
+        return self.map_partitions(M.to_frame, *args, meta=self._meta.to_frame(*args))
 
     @derived_from(pd.Series)
     def to_string(self, max_rows=5):
@@ -3749,9 +3906,46 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
+        return self.is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_increasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_increasing_chunk,
+            aggregate=methods.monotonic_increasing_aggregate,
+            meta=bool,
+            token="monotonic_increasing",
+        )
+
+    @property
+    @derived_from(pd.Series)
+    def is_monotonic_decreasing(self):
+        return aca(
+            self,
+            chunk=methods.monotonic_decreasing_chunk,
+            aggregate=methods.monotonic_decreasing_aggregate,
+            meta=bool,
+            token="monotonic_decreasing",
+        )
+
+    @derived_from(pd.Series)
+    def view(self, dtype):
+        meta = self._meta.view(dtype)
+        return self.map_partitions(M.view, dtype, meta=meta)
+
 
 class Index(Series):
-
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
@@ -3792,11 +3986,19 @@ class Index(Series):
         "rename_categories",
     }
 
+    _monotonic_attributes = {
+        "is_monotonic",
+        "is_monotonic_increasing",
+        "is_monotonic_decreasing",
+    }
+
     def __getattr__(self, key):
         if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
+        elif key in self._monotonic_attributes:
+            return getattr(self, key)
         raise AttributeError("'Index' object has no attribute %r" % key)
 
     def __dir__(self):
@@ -3893,12 +4095,12 @@ class Index(Series):
     def to_frame(self, index=True, name=None):
         if not index:
             raise NotImplementedError()
+        args = [index] if name is None else [index, name]
 
         return self.map_partitions(
             M.to_frame,
-            index,
-            name,
-            meta=self._meta.to_frame(index, name),
+            *args,
+            meta=self._meta.to_frame(*args),
             transform_divisions=False,
         )
 
@@ -3921,6 +4123,27 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic(self):
+        if PANDAS_GT_150:
+            warnings.warn(
+                "is_monotonic is deprecated and will be removed in a future version. "
+                "Use is_monotonic_increasing instead.",
+                FutureWarning,
+            )
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_increasing(self):
+        return super().is_monotonic_increasing
+
+    @property
+    @derived_from(pd.Index)
+    def is_monotonic_decreasing(self):
+        return super().is_monotonic_decreasing
 
 
 class DataFrame(_Frame):
@@ -4204,7 +4427,14 @@ class DataFrame(_Frame):
         return self[list(cs)]
 
     def sort_values(
-        self, by, npartitions=None, ascending=True, na_position="last", **kwargs
+        self,
+        by,
+        npartitions=None,
+        ascending=True,
+        na_position="last",
+        sort_function=None,
+        sort_function_kwargs=None,
+        **kwargs,
     ):
         """Sort the dataset by a single column.
 
@@ -4223,6 +4453,13 @@ class DataFrame(_Frame):
         na_position: {'last', 'first'}, optional
             Puts NaNs at the beginning if 'first', puts NaN at the end if 'last'.
             Defaults to 'last'.
+        sort_function: function, optional
+            Sorting function to use when sorting underlying partitions.
+            If None, defaults to ``M.sort_values`` (the partition library's
+            implementation of ``sort_values``).
+        sort_function_kwargs: dict, optional
+            Additional keyword arguments to pass to the partition sorting function.
+            By default, ``by``, ``ascending``, and ``na_position`` are provided.
 
         Examples
         --------
@@ -4230,16 +4467,14 @@ class DataFrame(_Frame):
         """
         from .shuffle import sort_values
 
-        if self.npartitions == 1:
-            return self.map_partitions(
-                M.sort_values, by, ascending=ascending, na_position=na_position
-            )
         return sort_values(
             self,
             by,
             ascending=ascending,
             npartitions=npartitions,
             na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_function_kwargs,
             **kwargs,
         )
 
@@ -4288,12 +4523,18 @@ class DataFrame(_Frame):
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
+            Only used when ``divisions`` is not given. If ``divisions`` is given,
+            the number of output partitions will be ``len(divisions) - 1``.
         divisions: list, optional
-            Known values on which to separate index values of the partitions.
-            See https://docs.dask.org/en/latest/dataframe-design.html#partitions
-            Defaults to computing this with a single pass over the data. Note
-            that if ``sorted=True``, specified divisions are assumed to match
-            the existing partitions in the data. If ``sorted=False``, you should
+            The "dividing lines" used to split the new index into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+            If not given (default), good divisions are calculated by immediately computing
+            the data and looking at the distribution of its values. For large datasets,
+            this can be expensive.
+            Note that if ``sorted=True``, specified divisions are assumed to match
+            the existing partitions in the data; if this is untrue you should
             leave divisions empty and call ``repartition`` after ``set_index``.
         inplace: bool, optional
             Modifying the DataFrame in place is not supported by Dask.
@@ -4307,13 +4548,15 @@ class DataFrame(_Frame):
             will still be triggered if ``divisions`` is ``None``.
         partition_size: int, optional
             Desired size of each partitions in bytes.
-            Only used when ``npartition='auto'``
+            Only used when ``npartitions='auto'``
 
         Examples
         --------
-        >>> df2 = df.set_index('x')  # doctest: +SKIP
-        >>> df2 = df.set_index(d.x)  # doctest: +SKIP
-        >>> df2 = df.set_index(d.timestamp, sorted=True)  # doctest: +SKIP
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").reset_index()
+        >>> ddf2 = ddf.set_index("x")
+        >>> ddf2 = ddf.set_index(ddf.x)
+        >>> ddf2 = ddf.set_index(ddf.timestamp, sorted=True)
 
         A common case is when we have a datetime column that we know to be
         sorted and is cleanly divided by day.  We can set this index for free
@@ -4321,8 +4564,30 @@ class DataFrame(_Frame):
         divisions along which is is separated
 
         >>> import pandas as pd
-        >>> divisions = pd.date_range('2000', '2010', freq='1D')
-        >>> df2 = df.set_index('timestamp', sorted=True, divisions=divisions)  # doctest: +SKIP
+        >>> divisions = pd.date_range(start="2021-01-01", end="2021-01-07", freq='1D')
+        >>> divisions
+        DatetimeIndex(['2021-01-01', '2021-01-02', '2021-01-03', '2021-01-04',
+                       '2021-01-05', '2021-01-06', '2021-01-07'],
+                      dtype='datetime64[ns]', freq='D')
+
+        Note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
+
+        >>> ddf2 = ddf.set_index("timestamp", sorted=True, divisions=divisions.tolist())
+
+        If you'll be running `set_index` on the same (or similar) datasets repeatedly,
+        you could save time by letting Dask calculate good divisions once, then copy-pasting
+        them to reuse. This is especially helpful running in a Jupyter notebook:
+
+        >>> ddf2 = ddf.set_index("name")  # slow, calculates data distribution
+        >>> ddf2.divisions  # doctest: +SKIP
+        ["Alice", "Laura", "Ursula", "Zelda"]
+        >>> # ^ Now copy-paste this and edit the line above to:
+        >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
@@ -4745,14 +5010,29 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
-                on=on,
-                lsuffix=lsuffix,
-                rsuffix=rsuffix,
-                npartitions=npartitions,
-                shuffle=shuffle,
-            )
+            # If its an outer join we can use the full recursive pairwise join.
+            if how == "outer":
+                full = [self] + other
+
+                return _recursive_pairwise_outer_join(
+                    full,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
+            else:
+                # Do recursive pairwise join on everything _except_ the last join
+                # where we need to do a left join.
+                other = _recursive_pairwise_outer_join(
+                    other,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
 
         from .multi import merge
 
@@ -4969,6 +5249,38 @@ class DataFrame(_Frame):
         return elemwise(M.round, self, decimals)
 
     @derived_from(pd.DataFrame)
+    def nunique(self, split_every=False, dropna=True, axis=0):
+        if axis == 1:
+            # split_every not used for axis=1
+            meta = self._meta_nonempty.nunique(axis=axis)
+            return self.map_partitions(
+                M.nunique,
+                meta=meta,
+                token="series-nunique",
+                axis=axis,
+                dropna=dropna,
+                enforce_metadata=False,
+            )
+        else:
+            nunique_list = [
+                self[col].nunique(split_every=split_every, dropna=dropna)
+                for col in self.columns
+            ]
+            name = "series-" + tokenize(*nunique_list)
+            dsk = {
+                (name, 0): (
+                    apply,
+                    pd.Series,
+                    [[(s._name, 0) for s in nunique_list]],
+                    {"index": self.columns},
+                )
+            }
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=nunique_list
+            )
+            return Series(graph, name, self._meta.nunique(), (None, None))
+
+    @derived_from(pd.DataFrame)
     def mode(self, dropna=True, split_every=False):
         mode_series_list = []
         for col_index in range(len(self.columns)):
@@ -4976,7 +5288,6 @@ class DataFrame(_Frame):
             mode_series = Series.mode(
                 col_series, dropna=dropna, split_every=split_every
             )
-            mode_series.name = col_series.name
             mode_series_list.append(mode_series)
 
         name = "concat-" + tokenize(*mode_series_list)
@@ -5022,7 +5333,10 @@ class DataFrame(_Frame):
 
         if len(self.columns) == 0:
             lines.append("Index: 0 entries")
-            lines.append("Empty %s" % type(self).__name__)
+            lines.append(f"Empty {type(self).__name__}")
+            if PANDAS_GT_150:
+                # pandas dataframe started adding a newline when info is called.
+                lines.append("")
             put_lines(buf, lines)
             return
 
@@ -5084,8 +5398,7 @@ class DataFrame(_Frame):
 
         lines.extend(column_info)
         dtype_counts = [
-            "%s(%d)" % k
-            for k in sorted(self.dtypes.value_counts().iteritems(), key=str)
+            "%s(%d)" % k for k in sorted(self.dtypes.value_counts().items(), key=str)
         ]
         lines.append("dtypes: {}".format(", ".join(dtype_counts)))
 
@@ -5210,7 +5523,7 @@ class DataFrame(_Frame):
             series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
         else:
             series_df = pd.concat(
-                [_repr_data_series(s, index=index) for _, s in meta.iteritems()], axis=1
+                [_repr_data_series(s, index=index) for _, s in meta.items()], axis=1
             )
         return series_df
 
@@ -5343,7 +5656,7 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(op, *args, **kwargs):
+def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5352,7 +5665,6 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -5361,15 +5673,15 @@ def elemwise(op, *args, **kwargs):
         the function onto the divisions and apply those transformed divisions
         to the output.  You can pass ``transform_divisions=False`` to override
         this behavior
+    out : ``dask.array`` or ``None``
+        If out is a dask.DataFrame, dask.Series or dask.Scalar then
+        this overwrites the contents of it with the result
+    **kwargs: scalars
 
     Examples
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
-
     _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
     args = _maybe_from_pandas(args)
@@ -5659,63 +5971,45 @@ def apply_concat_apply(
         split_out_setup_kwargs,
     )
 
-    # Chunk
-    a = f"{token or funcname(chunk)}-chunk-{token_key}"
-    if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {
-            (a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())
-        }
-    else:
-        dsk = {
-            (a, 0, i, 0): (
-                apply,
-                chunk,
-                [(x._name, i) if isinstance(x, _Frame) else x for x in args],
-                chunk_kwargs,
-            )
-            for i in range(npartitions)
-        }
+    # Blockwise Chunk Layer
+    chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
+    chunked = map_partitions(
+        chunk,
+        *args,
+        token=chunk_name,
+        # NOTE: We are NOT setting the correct
+        # `meta` here on purpose. We are using
+        # `map_partitions` as a convenient way
+        # to build a `Blockwise` layer, and need
+        # to avoid the metadata emulation step.
+        meta=dfs[0],
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **chunk_kwargs,
+    )
 
-    # Split
+    # Blockwise Split Layer
     if split_out and split_out > 1:
-        split_prefix = "split-%s" % token_key
-        shard_prefix = "shard-%s" % token_key
-        for i in range(npartitions):
-            dsk[(split_prefix, i)] = (
-                hash_shard,
-                (a, 0, i, 0),
-                split_out,
-                split_out_setup,
-                split_out_setup_kwargs,
-                ignore_index,
-            )
-            for j in range(split_out):
-                dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
-        a = shard_prefix
-    else:
-        split_out = 1
+        chunked = chunked.map_partitions(
+            hash_shard,
+            split_out,
+            split_out_setup,
+            split_out_setup_kwargs,
+            ignore_index,
+            token="split-%s" % token_key,
+            # NOTE: We are NOT setting the correct
+            # `meta` here on purpose. We are using
+            # `map_partitions` as a convenient way
+            # to build a `Blockwise` layer, and need
+            # to avoid the metadata emulation step.
+            meta=dfs[0],
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
+        )
 
-    # Combine
-    b = f"{token or funcname(combine)}-combine-{token_key}"
-    k = npartitions
-    depth = 0
-    while k > split_every:
-        for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            for j in range(split_out):
-                conc = (_concat, [(a, depth, i, j) for i in inds], ignore_index)
-                if combine_kwargs:
-                    dsk[(b, depth + 1, part_i, j)] = (
-                        apply,
-                        combine,
-                        [conc],
-                        combine_kwargs,
-                    )
-                else:
-                    dsk[(b, depth + 1, part_i, j)] = (combine, conc)
-        k = part_i + 1
-        a = b
-        depth += 1
-
+    # Handle sort behavior
     if sort is not None:
         if sort and split_out > 1:
             raise NotImplementedError(
@@ -5725,14 +6019,21 @@ def apply_concat_apply(
         aggregate_kwargs = aggregate_kwargs or {}
         aggregate_kwargs["sort"] = sort
 
-    # Aggregate
-    for j in range(split_out):
-        b = f"{token or funcname(aggregate)}-agg-{token_key}"
-        conc = (_concat, [(a, depth, i, j) for i in range(k)], ignore_index)
-        if aggregate_kwargs:
-            dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
-        else:
-            dsk[(b, j)] = (aggregate, conc)
+    # Tree-Reduction Layer
+    final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
+    layer = DataFrameTreeReduction(
+        final_name,
+        chunked._name,
+        npartitions,
+        partial(_concat, ignore_index=ignore_index),
+        partial(combine, **combine_kwargs) if combine_kwargs else combine,
+        finalize_func=partial(aggregate, **aggregate_kwargs)
+        if aggregate_kwargs
+        else aggregate,
+        split_every=split_every,
+        split_out=split_out if (split_out and split_out > 1) else None,
+        tree_node_name=f"{token or funcname(combine)}-combine-{token_key}",
+    )
 
     if meta is no_default:
         meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
@@ -5745,11 +6046,9 @@ def apply_concat_apply(
         parent_meta=dfs[0]._meta,
     )
 
-    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
-
-    divisions = [None] * (split_out + 1)
-
-    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
+    graph = HighLevelGraph.from_collections(final_name, layer, dependencies=(chunked,))
+    divisions = [None] * ((split_out or 1) + 1)
+    return new_dd_object(graph, final_name, meta, divisions, parent_meta=dfs[0]._meta)
 
 
 aca = apply_concat_apply
@@ -5778,12 +6077,12 @@ def _extract_meta(x, nonempty=False):
         return x
 
 
-def _emulate(func, *args, **kwargs):
+def _emulate(func, *args, udf=False, **kwargs):
     """
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=kwargs.pop("udf", False)):
+    with raise_on_meta_error(funcname(func), udf=udf):
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
@@ -5794,6 +6093,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    align_dataframes=True,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5807,18 +6107,28 @@ def map_partitions(
         args should be a Dask.dataframe. Arguments and keywords may contain
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
-        before applying the function.
-    enforce_metadata : bool
-        Whether or not to enforce the structure of the metadata at runtime.
+        before applying the function (see ``align_dataframes`` to control).
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
+
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
     $META
     """
     name = kwargs.pop("token", None)
     parent_meta = kwargs.pop("parent_meta", None)
-
-    if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = {"number": -1, "divisions": None}
 
     assert callable(func)
     if name is not None:
@@ -5830,8 +6140,10 @@ def map_partitions(
 
     from .multi import _maybe_align_partitions
 
-    args = _maybe_from_pandas(args)
-    args = _maybe_align_partitions(args)
+    if align_dataframes:
+        args = _maybe_from_pandas(args)
+        args = _maybe_align_partitions(args)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
     if parent_meta is None and dfs:
@@ -5841,11 +6153,10 @@ def map_partitions(
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
+        meta_is_emulated = True
     else:
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-
-    if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = "__dummy__"
+        meta_is_emulated = False
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -5854,6 +6165,13 @@ def map_partitions(
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
     elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
         meta = make_meta(_concat([meta]), index=meta_index)
@@ -5886,22 +6204,6 @@ def map_partitions(
         if collections:
             simple = False
 
-    if enforce_metadata:
-        dsk = partitionwise_graph(
-            apply_and_enforce,
-            name,
-            *args2,
-            dependencies=dependencies,
-            _func=func,
-            _meta=meta,
-            **kwargs3,
-        )
-    else:
-        kwargs4 = kwargs if simple else kwargs3
-        dsk = partitionwise_graph(
-            func, name, *args2, **kwargs4, dependencies=dependencies
-        )
-
     divisions = dfs[0].divisions
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
@@ -5917,25 +6219,32 @@ def map_partitions(
                 divisions = [None] * (dfs[0].npartitions + 1)
 
     if has_keyword(func, "partition_info"):
-        dsk = dict(dsk)
+        partition_info = {
+            (i,): {"number": i, "division": division}
+            for i, division in enumerate(divisions[:-1])
+        }
 
-        for k, v in dsk.items():
-            subgraph = v[0]
-            number = k[-1]
-            assert isinstance(number, int)
-            info = {"number": number, "division": divisions[number]}
-            # Replace the __dummy__ keyword argument with `info`
-            subgraph_dsk = copy.copy(subgraph.dsk)
-            [(key, task)] = subgraph_dsk.items()
-            subgraph_dsk[key] = subs(task, {"__dummy__": info})
-            dsk[k] = (
-                SubgraphCallable(
-                    dsk=subgraph_dsk,
-                    outkey=subgraph.outkey,
-                    inkeys=subgraph.inkeys,
-                    name=f"{subgraph.name}-info-{tokenize(info)}",
-                ),
-            ) + v[1:]
+        args2.insert(0, BlockwiseDepDict(partition_info))
+        orig_func = func
+        func = lambda partition_info, *args, **kwargs: orig_func(
+            *args, **kwargs, partition_info=partition_info
+        )
+
+    if enforce_metadata:
+        dsk = partitionwise_graph(
+            apply_and_enforce,
+            name,
+            *args2,
+            dependencies=dependencies,
+            _func=func,
+            _meta=meta,
+            **kwargs3,
+        )
+    else:
+        kwargs4 = kwargs if simple else kwargs3
+        dsk = partitionwise_graph(
+            func, name, *args2, **kwargs4, dependencies=dependencies
+        )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
@@ -6270,7 +6579,6 @@ def cov_corr_chunk(df, corr=False):
 
 
 def cov_corr_combine(data_in, corr=False):
-
     data = {"sum": None, "count": None, "cov": None}
     if corr:
         data["m"] = None
@@ -7006,7 +7314,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-def partitionwise_graph(func, name, *args, **kwargs):
+def partitionwise_graph(func, layer_name, *args, **kwargs):
     """
     Apply a function partition-wise across arguments to create layer of a graph
 
@@ -7021,8 +7329,9 @@ def partitionwise_graph(func, name, *args, **kwargs):
     Parameters
     ----------
     func: callable
-    name: str
-        descriptive name for the operation
+    layer_name: str
+        Descriptive name for the operation. Used as the output name
+        in the resulting ``Blockwise`` graph layer.
     *args:
     **kwargs:
 
@@ -7060,10 +7369,19 @@ def partitionwise_graph(func, name, *args, **kwargs):
             else:
                 raise ValueError("Can't add multi-dimensional array to dataframes")
             numblocks[arg._name] = arg.numblocks
+        elif isinstance(arg, BlockwiseDep):
+            if len(arg.numblocks) == 1:
+                pairs.extend([arg, "i"])
+            elif len(arg.numblocks) == 2:
+                pairs.extend([arg, "ij"])
+            else:
+                raise ValueError(
+                    f"BlockwiseDep arg {arg!r} has {len(arg.numblocks)} dimensions; only 1 or 2 are supported."
+                )
         else:
             pairs.extend([arg, None])
     return blockwise(
-        func, name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
+        func, layer_name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
     )
 
 
@@ -7287,3 +7605,41 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
+
+
+def _convert_to_numeric(series, skipna):
+    if skipna:
+        return series.dropna().view("i8")
+
+    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+    return series.view("i8").mask(series.isnull(), np.nan)
+
+
+def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+    if axis == 1:
+        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+
+    is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
+
+    sqrt = np.sqrt(partition)
+
+    if not is_df_like:
+        return pd.to_timedelta(sqrt)
+
+    time_col_mask = sqrt.index.isin(time_cols)
+    matching_vals = sqrt[time_col_mask]
+    for time_col, matching_val in zip(time_cols, matching_vals):
+        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    return sqrt
+
+
+def _raise_if_not_series_or_dataframe(x, funcname):
+    """
+    Utility function to raise an error if an object is not a Series or DataFrame
+    """
+    if not is_series_like(x) and not is_dataframe_like(x):
+        raise NotImplementedError(
+            "`%s` is only supported with objects that are Dataframes or Series"
+            % funcname
+        )

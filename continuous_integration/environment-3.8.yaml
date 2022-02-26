@@ -2,9 +2,11 @@
 name: test-environment
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # required dependencies
   - python=3.8
+  - setuptools<60.0
   - packaging
   - numpy=1.19
   - pandas=1.2
@@ -21,11 +23,12 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  # resolver was pulling in old versions, so hard-coding floor
+  # https://github.com/dask/dask/pull/8505
+  - tiledb>=2.5.0
   - xarray
   - fsspec
-  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
-  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  - sqlalchemy<1.4.0
+  - sqlalchemy>=1.4.0
   - pyarrow=4.0
   - coverage
   - jsonschema
@@ -37,12 +40,13 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs>=2021.8.0
   - cloudpickle
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
   - lz4
   - numba
@@ -51,13 +55,12 @@ dependencies:
   - requests
   - scikit-image
   - scikit-learn
-  - scipy
+  - scipy<1.8.0 # See https://github.com/dask/dask/issues/8682
   - toolz
   - python-snappy
   - sparse
   - cachey
   - python-graphviz
-  - pandas-datareader
   - python-xxhash
   - mmh3
   - jinja2

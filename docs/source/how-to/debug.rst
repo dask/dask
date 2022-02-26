@@ -81,7 +81,7 @@ If a remote task fails, we can collect the function and all inputs, bring them
 to the local thread, and then rerun the function in hopes of triggering the
 same exception locally where normal debugging tools can be used.
 
-With the single machine schedulers, use the ``rerun_exceptions_locally=True``
+With the single-machine schedulers, use the ``rerun_exceptions_locally=True``
 keyword:
 
 .. code-block:: python

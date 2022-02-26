@@ -194,7 +194,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = m2 == 0
-    vals = da.where(~zero, m3 / m2 ** 1.5, 0.0)
+    vals = da.where(~zero, m3 / m2**1.5, 0.0)
     # vals = da.where(~zero, (m2, m3),
     #                 lambda m2, m3: m3 / m2**1.5,
     #                 0.)
@@ -226,7 +226,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
     beta2 = (
         3.0
-        * (n ** 2 + 27 * n - 70)
+        * (n**2 + 27 * n - 70)
         * (n + 1)
         * (n + 3)
         / ((n - 2.0) * (n + 5) * (n + 7) * (n + 9))
@@ -252,7 +252,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     zero = m2 == 0
     olderr = np.seterr(all="ignore")
     try:
-        vals = da.where(zero, 0, m4 / m2 ** 2.0)
+        vals = da.where(zero, 0, m4 / m2**2.0)
     finally:
         np.seterr(**olderr)
 
@@ -293,7 +293,7 @@ def kurtosistest(a, axis=0, nan_policy="propagate"):
         * np.sqrt((6.0 * (n + 3) * (n + 5)) / (n * (n - 2) * (n - 3)))
     )
     # [1]_ Eq. 3:
-    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1 ** 2)))
+    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1**2)))
     term1 = 1 - 2 / (9.0 * A)
     denom = 1 + x * np.sqrt(2 / (A - 4.0))
     denom = np.where(denom < 0, 99, denom)
@@ -384,7 +384,7 @@ def _unequal_var_ttest_denom(v1, n1, v2, n2):
     vn1 = v1 / n1
     vn2 = v2 / n2
     with np.errstate(divide="ignore", invalid="ignore"):
-        df = (vn1 + vn2) ** 2 / (vn1 ** 2 / (n1 - 1) + vn2 ** 2 / (n2 - 1))
+        df = (vn1 + vn2) ** 2 / (vn1**2 / (n1 - 1) + vn2**2 / (n2 - 1))
 
     # If df is undefined, variances are zero (assumes n1 > 0 & n2 > 0).
     # Hence it doesn't matter what df is as long as it's not NaN.

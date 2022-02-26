@@ -101,7 +101,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
         kind = kind or "loc"
         kind_opts = {"kind": kind}
 
-    if kind == "loc" and not df.index.is_monotonic:
+    if kind == "loc" and not df.index.is_monotonic_increasing:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -402,6 +402,14 @@ def pivot_agg(df):
     return df.groupby(level=0).sum()
 
 
+def pivot_agg_first(df):
+    return df.groupby(level=0).first()
+
+
+def pivot_agg_last(df):
+    return df.groupby(level=0).last()
+
+
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
@@ -416,7 +424,49 @@ def pivot_count(df, index, columns, values):
     ).astype(np.float64)
 
 
+def pivot_first(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="first", dropna=False
+    )
+
+
+def pivot_last(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="last", dropna=False
+    )
+
+
 def assign_index(df, ind):
     df = df.copy()
     df.index = ind
     return df
+
+
+def monotonic_increasing_chunk(x):
+    data = x if is_index_like(x) else x.iloc
+    return pd.DataFrame(
+        data=[[x.is_monotonic_increasing, data[0], data[-1]]],
+        columns=["monotonic", "first", "last"],
+    )
+
+
+def monotonic_increasing_aggregate(concatenated):
+    bounds_are_monotonic = pd.Series(
+        concatenated[["first", "last"]].to_numpy().ravel()
+    ).is_monotonic_increasing
+    return concatenated["monotonic"].all() and bounds_are_monotonic
+
+
+def monotonic_decreasing_chunk(x):
+    data = x if is_index_like(x) else x.iloc
+    return pd.DataFrame(
+        data=[[x.is_monotonic_decreasing, data[0], data[-1]]],
+        columns=["monotonic", "first", "last"],
+    )
+
+
+def monotonic_decreasing_aggregate(concatenated):
+    bounds_are_monotonic = pd.Series(
+        concatenated[["first", "last"]].to_numpy().ravel()
+    ).is_monotonic_decreasing
+    return concatenated["monotonic"].all() and bounds_are_monotonic

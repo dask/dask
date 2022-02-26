@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import subprocess
@@ -6,6 +7,7 @@ import time
 from collections import OrderedDict
 from concurrent.futures import Executor
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -225,9 +227,16 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f3\x94\x93\x94.",
+        (
+            b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f2\x94\x93\x94.",
+        ),
+        (
+            (
+                "c",
+                b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f1\x94\x93\x94.",
+            ),
+        ),
     )
     assert res == sol
 
@@ -338,6 +347,7 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_same_repr():
@@ -403,6 +413,36 @@ def test_tokenize_ordered_dict():
 
     assert tokenize(a) == tokenize(b)
     assert tokenize(a) != tokenize(c)
+
+
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+
+
+def test_tokenize_dataclass():
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Same name, same values, new definition: tokenize differently
+    ADataClassRedefinedDifferently = dataclasses.make_dataclass(
+        "ADataClass", [("a", Union[int, str])]
+    )
+    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
 
 
 def test_tokenize_range():
@@ -509,15 +549,6 @@ def test_is_dask_collection():
     assert not is_dask_collection(DummyCollection)
 
 
-try:
-    import dataclasses
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-except ImportError:
-    dataclasses = None
-
-
 def test_unpack_collections():
     a = delayed(1) + 5
     b = a + 1
@@ -539,9 +570,8 @@ def test_unpack_collections():
             iterator,
         )  # Iterator
 
-        if dataclasses is not None:
-            t[2]["f"] = ADataClass(a=a)
-            t[2]["g"] = (ADataClass, a)
+        t[2]["f"] = ADataClass(a=a)
+        t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -606,15 +636,12 @@ def test_get_collection_names():
     h1 = object()
     h2 = object()
     # __dask_keys__() returns a nested list
-    assert (
-        get_collection_names(
-            DummyCollection(
-                {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
-                [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
-            )
+    assert get_collection_names(
+        DummyCollection(
+            {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
+            [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
         )
-        == {"a-1", "b-2", "c"}
-    )
+    ) == {"a-1", "b-2", "c"}
 
 
 def test_get_name_from_key():
@@ -1018,19 +1045,7 @@ def test_visualize_highlevelgraph():
         x = da.arange(5, chunks=2)
         viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
         # check visualization will automatically render in the jupyter notebook
-        assert isinstance(viz, graphviz.dot.Digraph)
-
-
-@pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
-)
-def test_visualize_lists(tmpdir):
-    pytest.importorskip("graphviz")
-    fn = os.path.join(str(tmpdir), "myfile.dot")
-    dask.visualize([{"abc-xyz": (add, 1, 2)}], filename=fn)
-    with open(fn) as f:
-        text = f.read()
-    assert "abc-xyz" in text
+        assert isinstance(viz, graphviz.Digraph)
 
 
 @pytest.mark.skipif("not da")
@@ -1309,6 +1324,19 @@ def test_normalize_function_limited_size():
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
+
+
+def test_normalize_function_dataclass_field_no_repr():
+    A = dataclasses.make_dataclass(
+        "A",
+        [("param", float, dataclasses.field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
 
 
 def test_optimize_globals():

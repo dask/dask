@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+import dataclasses
 import datetime
 import inspect
 import os
@@ -5,14 +8,13 @@ import pickle
 import threading
 import uuid
 from collections import OrderedDict
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
-from dataclasses import fields, is_dataclass
 from functools import partial
 from hashlib import md5
 from numbers import Integral, Number
 from operator import getitem
-from typing import Iterator, Mapping, Set
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -373,7 +375,7 @@ def _extract_graph_and_keys(vals):
     return graph, keys
 
 
-def unpack_collections(*args, **kwargs):
+def unpack_collections(*args, traverse=True):
     """Extract collections in preparation for compute/persist/etc...
 
     Intended use is to find all collections in a set of (possibly nested)
@@ -399,7 +401,6 @@ def unpack_collections(*args, **kwargs):
         A function to call on the transformed collections to repackage them as
         they were in the original ``args``.
     """
-    traverse = kwargs.pop("traverse", True)
 
     collections = []
     repack_dsk = {}
@@ -424,7 +425,7 @@ def unpack_collections(*args, **kwargs):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr) and not isinstance(expr, type):
+            elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -433,7 +434,7 @@ def unpack_collections(*args, **kwargs):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in fields(expr)
+                            for f in dataclasses.fields(expr)
                         ],
                     ),
                 )
@@ -454,7 +455,7 @@ def unpack_collections(*args, **kwargs):
     return collections, repack
 
 
-def optimize(*args, **kwargs):
+def optimize(*args, traverse=True, **kwargs):
     """Optimize several dask collections at once.
 
     Returns equivalent dask collections that all share the same merged and
@@ -494,7 +495,7 @@ def optimize(*args, **kwargs):
     >>> b2.compute() == b.compute()
     True
     """
-    collections, repack = unpack_collections(*args, **kwargs)
+    collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
@@ -508,7 +509,9 @@ def optimize(*args, **kwargs):
     return repack(postpersists)
 
 
-def compute(*args, **kwargs):
+def compute(
+    *args, traverse=True, optimize_graph=True, scheduler=None, get=None, **kwargs
+):
     """Compute several dask collections at once.
 
     Parameters
@@ -531,6 +534,8 @@ def compute(*args, **kwargs):
         If True [default], the optimizations for each collection are applied
         before computation. Otherwise the graph is run as is. This can be
         useful for debugging.
+    get : ``None``
+        Should be left to ``None`` The get= keyword has been removed.
     kwargs
         Extra keywords to forward to the scheduler function.
 
@@ -548,17 +553,15 @@ def compute(*args, **kwargs):
     >>> d.compute({'a': a, 'b': b, 'c': 1})
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
-    traverse = kwargs.pop("traverse", True)
-    optimize_graph = kwargs.pop("optimize_graph", True)
 
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
     schedule = get_scheduler(
-        scheduler=kwargs.pop("scheduler", None),
+        scheduler=scheduler,
         collections=collections,
-        get=kwargs.pop("get", None),
+        get=get,
     )
 
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
@@ -571,17 +574,24 @@ def compute(*args, **kwargs):
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
-def visualize(*args, **kwargs):
+def visualize(
+    *args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs
+):
     """
-    Visualize several low level dask graphs at once.
+    Visualize several dask graphs simultaneously.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    args : dict(s) or collection(s)
-        The low level dask graph(s) to visualize.
+    args : object
+        Any number of objects. If it is a dask collection (for example, a
+        dask DataFrame, Array, Bag, or Delayed), its associated graph
+        will be included in the output of visualize. By default, python builtin
+        collections are also traversed to look for dask objects (for more
+        information see the ``traverse`` keyword). Arguments lacking an
+        associated graph will be ignored.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -589,14 +599,30 @@ def visualize(*args, **kwargs):
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
+    traverse : bool, optional
+        By default, dask traverses builtin python collections looking for dask
+        objects passed to ``visualize``. For large collections this can be
+        expensive. If none of the arguments contain any dask objects, set
+        ``traverse=False`` to avoid doing this traversal.
     optimize_graph : bool, optional
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
-    color : {None, 'order'}, optional
-        Options to color nodes.
-        colormap
+    color : {None, 'order', 'ages', 'freed', 'memoryincreases', 'memorydecreases', 'memorypressure'}, optional
+        Options to color nodes. colormap:
+
         - None, the default, no colors.
-        - 'order', colors the nodes' border based on the order they appear in the graph
+        - 'order', colors the nodes' border based on the order they appear in the graph.
+        - 'ages', how long the data of a node is held.
+        - 'freed', the number of dependencies released after running a node.
+        - 'memoryincreases', how many more outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run later.
+        - 'memorydecreases', how many fewer outputs are held after the lifetime of a node.
+          Large values may indicate nodes that should have run sooner.
+        - 'memorypressure', the number of data held when the node is run (circle), or
+          the data is released (rectangle).
+    maxval : {int, float}, optional
+        Maximum value for colormap to normalize form 0 to 1.0. Default is ``None``
+        will make it the max number of values
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -628,34 +654,28 @@ def visualize(*args, **kwargs):
     """
     from dask.dot import dot_graph
 
-    filename = kwargs.pop("filename", "mydask")
-    optimize_graph = kwargs.pop("optimize_graph", False)
+    args, _ = unpack_collections(*args, traverse=traverse)
 
-    dsks = []
-    args3 = []
-    for arg in args:
-        if isinstance(arg, (list, tuple, set)):
-            for a in arg:
-                if isinstance(a, Mapping):
-                    dsks.append(a)
-                if is_dask_collection(a):
-                    args3.append(a)
-        else:
-            if isinstance(arg, Mapping):
-                dsks.append(arg)
-            if is_dask_collection(arg):
-                args3.append(arg)
-
-    dsk = dict(collections_to_dsk(args3, optimize_graph=optimize_graph))
-    for d in dsks:
-        dsk.update(d)
+    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
-    if color == "order":
+    if color in {
+        "order",
+        "order-age",
+        "order-freed",
+        "order-memoryincreases",
+        "order-memorydecreases",
+        "order-memorypressure",
+        "age",
+        "freed",
+        "memoryincreases",
+        "memorydecreases",
+        "memorypressure",
+    }:
         import matplotlib.pyplot as plt
 
-        from .order import order
+        from .order import diagnostics, order
 
         o = order(dsk)
         try:
@@ -666,20 +686,63 @@ def visualize(*args, **kwargs):
             import matplotlib.pyplot as plt
 
             cmap = getattr(plt.cm, cmap)
-        mx = max(o.values()) + 1
-        colors = {k: _colorize(cmap(v / mx, bytes=True)) for k, v in o.items()}
+
+        def label(x):
+            return str(values[x])
+
+        data_values = None
+        if color != "order":
+            info = diagnostics(dsk, o)[0]
+            if color.endswith("age"):
+                values = {key: val.age for key, val in info.items()}
+            elif color.endswith("freed"):
+                values = {key: val.num_dependencies_freed for key, val in info.items()}
+            elif color.endswith("memorypressure"):
+                values = {key: val.num_data_when_run for key, val in info.items()}
+                data_values = {
+                    key: val.num_data_when_released for key, val in info.items()
+                }
+            elif color.endswith("memoryincreases"):
+                values = {
+                    key: max(0, val.num_data_when_released - val.num_data_when_run)
+                    for key, val in info.items()
+                }
+            else:  # memorydecreases
+                values = {
+                    key: max(0, val.num_data_when_run - val.num_data_when_released)
+                    for key, val in info.items()
+                }
+
+            if color.startswith("order-"):
+
+                def label(x):
+                    return str(o[x]) + "-" + str(values[x])
+
+        else:
+            values = o
+        if maxval is None:
+            maxval = max(1, max(values.values()))
+        colors = {k: _colorize(cmap(v / maxval, bytes=True)) for k, v in values.items()}
+        if data_values is None:
+            data_values = values
+            data_colors = colors
+        else:
+            data_colors = {
+                k: _colorize(cmap(v / maxval, bytes=True))
+                for k, v in data_values.items()
+            }
 
         kwargs["function_attributes"] = {
-            k: {"color": v, "label": str(o[k])} for k, v in colors.items()
+            k: {"color": v, "label": label(k)} for k, v in colors.items()
         }
-        kwargs["data_attributes"] = {k: {"color": v} for k, v in colors.items()}
+        kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
     return dot_graph(dsk, filename=filename, **kwargs)
 
 
-def persist(*args, **kwargs):
+def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):
     """Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
@@ -739,16 +802,11 @@ def persist(*args, **kwargs):
     -------
     New dask collections backed by in-memory data
     """
-    traverse = kwargs.pop("traverse", True)
-    optimize_graph = kwargs.pop("optimize_graph", True)
-
     collections, repack = unpack_collections(*args, traverse=traverse)
     if not collections:
         return args
 
-    schedule = get_scheduler(
-        scheduler=kwargs.pop("scheduler", None), collections=collections
-    )
+    schedule = get_scheduler(scheduler=scheduler, collections=collections)
 
     if inspect.ismethod(schedule):
         try:
@@ -795,9 +853,10 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
+    hasher = md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
-        args = args + (kwargs,)
-    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+        hasher.update(str(normalize_token(kwargs)).encode())
+    return hasher.hexdigest()
 
 
 normalize_token = Dispatch()
@@ -833,22 +892,25 @@ def normalize_set(s):
     return normalize_token(sorted(s, key=str))
 
 
+def _normalize_seq_func(seq):
+    # Defined outside normalize_seq to avoid unneccessary redefinitions and
+    # therefore improving computation times.
+    try:
+        return list(map(normalize_token, seq))
+    except RecursionError:
+        if not config.get("tokenize.ensure-deterministic"):
+            return uuid.uuid4().hex
+
+        raise RuntimeError(
+            f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
+            "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+            "for more information"
+        )
+
+
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
-    def func(seq):
-        try:
-            return list(map(normalize_token, seq))
-        except RecursionError:
-            if not config.get("tokenize.ensure-deterministic"):
-                return uuid.uuid4().hex
-
-            raise RuntimeError(
-                f"Sequence {str(seq)} cannot be deterministically hashed. Please, see "
-                "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
-                "for more information"
-            )
-
-    return type(seq).__name__, func(seq)
+    return type(seq).__name__, _normalize_seq_func(seq)
 
 
 @normalize_token.register(literal)
@@ -870,6 +932,9 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
 
+    if dataclasses.is_dataclass(o):
+        return normalize_dataclass(o)
+
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
 
@@ -880,11 +945,11 @@ def normalize_object(o):
     )
 
 
-function_cache = {}
+function_cache: dict[Callable, Callable] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func):
+def normalize_function(func: Callable) -> Callable:
     try:
         return function_cache[func]
     except KeyError:
@@ -900,7 +965,7 @@ def normalize_function(func):
         return _normalize_function(func)
 
 
-def _normalize_function(func):
+def _normalize_function(func: Callable) -> Callable:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
@@ -916,7 +981,7 @@ def _normalize_function(func):
         return (normalize_function(func.func), args, kws)
     else:
         try:
-            result = pickle.dumps(func, protocol=0)
+            result = pickle.dumps(func, protocol=4)
             if b"__main__" not in result:  # abort on dynamic functions
                 return result
         except Exception:
@@ -924,9 +989,19 @@ def _normalize_function(func):
         try:
             import cloudpickle
 
-            return cloudpickle.dumps(func, protocol=0)
+            return cloudpickle.dumps(func, protocol=4)
         except Exception:
             return str(func)
+
+
+def normalize_dataclass(obj):
+    fields = [
+        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
+    ]
+    return (
+        normalize_function(type(obj)),
+        _normalize_seq_func(fields),
+    )
 
 
 @normalize_token.register_lazy("pandas")
@@ -1259,7 +1334,7 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return x
 
 
-def get_collection_names(collection) -> Set[str]:
+def get_collection_names(collection) -> set[str]:
     """Infer the collection names from the dask keys, under the assumption that all keys
     are either tuples with matching first element, and that element is a string, or
     there is exactly one key and it is a string.

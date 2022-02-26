@@ -16,7 +16,13 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    tm,
+)
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -30,6 +36,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
+from dask.utils_test import _check_warning, hlg_layer
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -354,8 +361,8 @@ def test_rename_series_method_2():
     ds = dd.from_pandas(s, 2)
 
     for is_sorted in [True, False]:
-        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
-        assert_eq(res, s.rename(lambda x: x ** 2))
+        res = ds.rename(lambda x: x**2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x**2))
         assert res.known_divisions == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
@@ -371,13 +378,13 @@ def test_rename_series_method_2():
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x ** 2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x ** 2))
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x ** 2, inplace=True, sorted_index=True)
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
-    s.rename(lambda x: x ** 2, inplace=True)
+    s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
 
 
@@ -907,6 +914,8 @@ def test_map_partitions():
     assert_eq(d.map_partitions(lambda df: df, meta=d), full)
     assert_eq(d.map_partitions(lambda df: df), full)
     result = d.map_partitions(lambda df: df.sum(axis=1))
+    layer = hlg_layer(result.dask, "lambda-")
+    assert not layer.is_materialized(), layer
     assert_eq(result, full.sum(axis=1))
 
     assert_eq(
@@ -936,7 +945,11 @@ def test_map_partitions_partition_info():
         assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
         return df
 
-    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    df = d.map_partitions(f, meta=d)
+    layer = hlg_layer(df.dask, "f-")
+    assert not layer.is_materialized()
+    df.dask.validate()
+    result = df.compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
 
@@ -1058,6 +1071,22 @@ def test_metadata_inference_single_partition_aligned_args():
 
     res = dd.map_partitions(check, ddf, ddf.x)
     assert_eq(res, ddf)
+
+
+def test_align_dataframes():
+    df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
+
+    def merge(a, b):
+        res = pd.merge(a, b, left_on="A", right_on="A", how="left")
+        return res
+
+    expected = merge(df1, df2)
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    actual = ddf1.map_partitions(merge, df2, align_dataframes=False)
+
+    assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
 def test_drop_duplicates():
@@ -2299,6 +2328,34 @@ def test_fillna():
     assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
 
 
+@pytest.mark.parametrize("optimize", [True, False])
+def test_delayed_roundtrip(optimize: bool):
+    df1 = d + 1 + 1
+    delayed = df1.to_delayed(optimize_graph=optimize)
+
+    for x in delayed:
+        assert x.__dask_layers__() == (
+            "delayed-" + df1._name if optimize else df1._name,
+        )
+        x.dask.validate()
+
+    assert len(delayed) == df1.npartitions
+    assert len(delayed[0].dask.layers) == (1 if optimize else 3)
+
+    dm = d.a.mean().to_delayed(optimize_graph=optimize)
+
+    delayed2 = [x * 2 - dm for x in delayed]
+
+    for x in delayed2:
+        x.dask.validate()
+
+    df3 = dd.from_delayed(delayed2, meta=df1, divisions=df1.divisions)
+    df4 = df3 - 1 - 1
+
+    df4.dask.validate()
+    assert_eq(df4, (full + 2) * 2 - full.a.mean() - 2)
+
+
 def test_from_delayed_lazy_if_meta_provided():
     """Ensure that the graph is 100% lazily evaluted if meta is provided"""
 
@@ -2954,6 +3011,16 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
+def test_apply_warns_with_invalid_meta():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    func = lambda row: row["x"] + row["y"]
+
+    with pytest.warns(FutureWarning, match="Meta is not valid"):
+        ddf.apply(func, axis=1, meta=int)
+
+
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -3301,7 +3368,16 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
+    # `iteritems` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        pd_items = df["x"].iteritems()
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        dd_items = ddf["x"].iteritems()
+    for (a, b) in zip(pd_items, dd_items):
         assert a == b
 
 
@@ -3648,8 +3724,8 @@ def test_inplace_operators():
 
     ddf.y **= 0.5
 
-    assert_eq(ddf.y, df.y ** 0.5)
-    assert_eq(ddf, df.assign(y=df.y ** 0.5))
+    assert_eq(ddf.y, df.y**0.5)
+    assert_eq(ddf, df.assign(y=df.y**0.5))
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -4113,7 +4189,8 @@ def test_dataframe_mode():
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.mode(), df.mode())
-    assert_eq(ddf.Name.mode(), df.Name.mode())
+    # name is not preserved in older pandas
+    assert_eq(ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GT_140)
 
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
@@ -4701,6 +4778,40 @@ def test_pop():
     assert_eq(ddf, df[["x"]])
 
 
+@pytest.mark.parametrize("dropna", [True, False])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_nunique(dropna, axis):
+    df = pd.DataFrame(
+        {"x": ["a", "a", "c"], "y": [None, 1, 2], "c": np.arange(0, 1, 0.4)}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf["y"].nunique(dropna=dropna), df["y"].nunique(dropna=dropna))
+    assert_eq(
+        ddf.nunique(dropna=dropna, axis=axis), df.nunique(dropna=dropna, axis=axis)
+    )
+
+
+def test_view():
+    data = {
+        "x": pd.Series(range(5), dtype="int8"),
+        "y": pd.Series(
+            [
+                "2021-11-27 00:05:02.175274",
+                "2021-11-27 00:05:05.205596",
+                "2021-11-27 00:05:29.212572",
+                "2021-11-27 00:05:25.708343",
+                "2021-11-27 00:05:47.714958",
+            ],
+            dtype="datetime64[ns]",
+        ),
+    }
+
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
+    assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
+
+
 def test_simple_map_partitions():
     data = {"col_0": [9, -3, 0, -1, 5], "col_1": [-2, -7, 6, 8, -5]}
     df = pd.DataFrame(data)
@@ -4798,12 +4909,13 @@ def test_dask_layers():
     assert dds.__dask_layers__() == (dds._name,)
     ddi = dds.min()
     assert ddi.key[1:] == (0,)
-    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
-    assert ddi.dask.dependencies == {
-        ddf._name: set(),
-        dds._name: {ddf._name},
-        ddi.key[0]: {dds._name},
-    }
+    # Note that the `min` operation will use two layers
+    # now that ACA uses uses HLG
+    assert {ddf._name, dds._name, ddi.key[0]}.issubset(ddi.dask.layers.keys())
+    assert len(ddi.dask.layers) == 4
+    assert ddi.dask.dependencies[ddf._name] == set()
+    assert ddi.dask.dependencies[dds._name] == {ddf._name}
+    assert len(ddi.dask.dependencies) == 4
     assert ddi.__dask_layers__() == (ddi.key[0],)
 
 
@@ -4903,3 +5015,104 @@ def test_use_of_weakref_proxy():
     pxy = weakref.proxy(a)
     res = pxy["b"].groupby(pxy["g"]).sum()
     isinstance(res.compute(), pd.Series)
+
+
+def test_is_monotonic_numeric():
+    s = pd.Series(range(20))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.is_monotonic
+    assert_eq(expected, result)
+
+    s_2 = pd.Series(range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+    s_3 = pd.Series(list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5)
+    assert_eq(s_3.is_monotonic_increasing, ds_3.is_monotonic_increasing)
+    assert_eq(s_3.is_monotonic_decreasing, ds_3.is_monotonic_decreasing)
+
+
+def test_is_monotonic_dt64():
+    s = pd.Series(pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5)
+    assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
+
+    s_2 = pd.Series(list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5)
+    assert_eq(s_2.is_monotonic_decreasing, ds_2.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_numeric():
+    s = pd.Series(1, index=range(20))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.index.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.index.is_monotonic
+    assert_eq(expected, result)
+
+    s_2 = pd.Series(1, index=range(20, 0, -1))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+    s_3 = pd.Series(1, index=list(range(0, 5)) + list(range(0, 20)))
+    ds_3 = dd.from_pandas(s_3, npartitions=5, sort=False)
+    assert_eq(s_3.index.is_monotonic_increasing, ds_3.index.is_monotonic_increasing)
+    assert_eq(s_3.index.is_monotonic_decreasing, ds_3.index.is_monotonic_decreasing)
+
+
+def test_index_is_monotonic_dt64():
+    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
+    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
+
+    s_2 = pd.Series(1, index=list(reversed(s)))
+    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_custom_map_reduce():
+    # Make sure custom map-reduce workflows can use
+    # the universal ACA code path with metadata
+    # that is not DataFrame-like.
+    # See: https://github.com/dask/dask/issues/8636
+
+    df = pd.DataFrame(columns=["a"], data=[[2], [4], [8]], index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def map_fn(x):
+        return {"x": x, "y": x}
+
+    def reduce_fn(series):
+        merged = None
+        for mapped in series:
+            if merged is None:
+                merged = mapped.copy()
+            else:
+                merged["x"] += mapped["x"]
+                merged["y"] *= mapped["y"]
+        return merged
+
+    result = (
+        ddf["a"]
+        .map(map_fn, meta=("data", "object"))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", "object"))
+        .compute()[0]
+    )
+    assert result == {"x": 14, "y": 64}

@@ -17,7 +17,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements
+from .core import Array, _concatenate2, handle_out, implements, unknown_chunk_message
 from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
@@ -230,7 +230,7 @@ def _tree_reduce(
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     for i in range(depth - 1):
         x = partial_reduce(
             func,
@@ -243,7 +243,7 @@ def _tree_reduce(
         )
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     return partial_reduce(
         func,
         x,
@@ -293,9 +293,11 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = {i: j[0] for (i, j) in enumerate(p) if len(j) == 1}
-        dummy = dict(i for i in enumerate(p) if i[0] not in decided)
-        g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
+        free = {
+            i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every
+        }
+        dummy = dict(i for i in enumerate(p) if i[0] in split_every)
+        g = lol_tuples((x.name,), range(x.ndim), free, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
@@ -515,30 +517,60 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 
 @derived_from(np)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmin which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmin,
-        chunk.nanmin,
+        _nanmin_skip,
+        _nanmin_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmin_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmax which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmax,
-        chunk.nanmax,
+        _nanmax_skip,
+        _nanmax_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmax_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 def numel(x, **kwargs):
@@ -689,11 +721,11 @@ def moment_chunk(
 
 def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
     M = Ms[..., order - 2].sum(axis=axis, **kwargs) + sum(
-        ns * inner_term ** order, axis=axis, **kwargs
+        ns * inner_term**order, axis=axis, **kwargs
     )
     for k in range(1, order - 1):
         coeff = factorial(order) / (factorial(k) * factorial(order - k))
-        M += coeff * sum(Ms[..., order - k - 2] * inner_term ** k, axis=axis, **kwargs)
+        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, axis=axis, **kwargs)
     return M
 
 
@@ -1328,7 +1360,7 @@ def cumreduction(
           This method may be faster or more memory efficient depending on workload,
           scheduler, and hardware.  More benchmarking is necessary.
     preop: callable, optional
-        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
+        Function used by 'blelloch' method like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------
