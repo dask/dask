@@ -211,36 +211,24 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
-    from pyarrow.fs import FileSystem as PaFileSystem
-
+    # Define file-opening options
     read_kwargs = kwargs.get("read", {}).copy()
-    open_file_options = read_kwargs.pop("open_file_options", {})
-    if isinstance(fs, PaFileSystem):
-        # Cannot use optimized pre-caching with PaFileSystem
-        precache_options = {}
-        open_file_options = {
-            "open_file_func": open_file_options.get(
-                "open_file_func", fs.open_input_file
-            )
-        }
-    else:
-        # Define file-opening options
-        precache_options, open_file_options = _process_open_file_options(
-            open_file_options,
-            **(
-                {
-                    "allow_precache": False,
-                    "default_cache": "none",
-                }
-                if _is_local_fs(fs)
-                else {
-                    "columns": columns,
-                    "row_groups": row_groups if row_groups == [None] else [row_groups],
-                    "default_engine": "pyarrow",
-                    "default_cache": "none",
-                }
-            ),
-        )
+    precache_options, open_file_options = _process_open_file_options(
+        read_kwargs.pop("open_file_options", {}),
+        **(
+            {
+                "allow_precache": False,
+                "default_cache": "none",
+            }
+            if _is_local_fs(fs)
+            else {
+                "columns": columns,
+                "row_groups": row_groups if row_groups == [None] else [row_groups],
+                "default_engine": "pyarrow",
+                "default_cache": "none",
+            }
+        ),
+    )
 
     if partition_keys:
         tables = []
@@ -1634,17 +1622,27 @@ class ArrowDatasetEngine(Engine):
             frag = path_or_frag
 
         else:
+            from pyarrow.dataset import ParquetFileFormat
+            from pyarrow.fs import FileSystem as PaFileSystem
+
             frag = None
 
             # Check if we have partitioning information.
             # Will only have this if the engine="pyarrow-dataset"
             partitioning = kwargs.pop("partitioning", None)
+            dataset_options = kwargs.get("dataset", {})
 
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
+            # We also need to generate a fragment if the user-specified
+            # dataset options include a custom filesystem or a non-default
+            # format option (which may have custom read options)
+            if (
+                (partitions and partition_keys is None)
+                or (partitioning and _need_fragments(filters, partition_keys))
+                or isinstance(fs, PaFileSystem)
+                or not ParquetFileFormat().equals(dataset_options["format"])
             ):
 
                 # We are filtering with "pyarrow-dataset".
