@@ -28,18 +28,13 @@ scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/
 The dashboard link redirects you to main dashboard page as shown below:
 
 .. figure:: images/dashboard_status.png
-    :alt: Local host dashboard status page displaying the five panes that compose it. The Byte stored pane showing blue horizontal bar of 
-    the cluster memory stored up to 593.80 MiB, the Bytes stored per worker pane with four blue horizontal bars of approximately 150 MiB
-    each, the Task Processing pane with four blue bars up to 350 tasks per worker, the Task Stream pane showing eight horizontal bars with 
-    different shades of greens and blues and some red, and the Progress pane showing horizontal bars for each task-prefix matching the 
-    blue and green colors of the task stream pane. 
+    :alt: Local host dashboard status page displaying the five panes that compose it. The Byte stored pane showing blue horizontal bar of the cluster memory stored up to 593.80 MiB, the Bytes stored per worker pane with four blue horizontal bars of approximately 150 MiB each, the Task Processing pane with four blue bars up to 350 tasks per worker, the Task Stream pane showing eight horizontal bars with different shades of greens and blues and some red, and the Progress pane showing horizontal bars for each task-prefix matching the blue and green colors of the task stream pane.
 
 In the entry point of the dashboard you can find multiple plots with information about your cluster 
 as listed below:
 
 - :ref:`dashboard.memory`: Cluster memory and Memory per worker
-- :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ CPU Utilization per worker/ Expected runtime
-for all tasks currently on a worker.
+- :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ CPU Utilization per worker/ Expected runtime for all tasks currently on a worker.
 - :ref:`dashboard.task-stream`: Individual task across threads.
 - :ref:`dashboard.progress`: Progress of a set of tasks.
 
@@ -52,11 +47,7 @@ as well as the individual usage on each worker (Bytes per Worker). The colors on
 indicate the following.  
 
 .. figure:: images/dashboard_memory.png
-    :alt: The Byte stored pane showing blue and grey horizontal bar of the cluster memory, the blue portion 
-    corresponds to 12.6 GiB of memory while the grey portion represents the 750 MiB spilled to disc. The Bytes 
-    stored per worker pane showing 16 workers each of them with a horizontal bar. The first one from the top is 
-    orange and grey, the following three are orange, and the remaining twelve are blue. The orange and blue bars 
-    also have different levels of transparency. 
+    :alt: The Byte stored pane showing blue and grey horizontal bar of the cluster memory, the blue portion corresponds to 12.6 GiB of memory while the grey portion represents the 750 MiB spilled to disc. The Bytes stored per worker pane showing 16 workers each of them with a horizontal bar. The first one from the top is orange and grey, the following three are orange, and the remaining twelve are blue. The orange and blue bars also have different levels of transparency. 
 
 
 .. raw:: html
@@ -185,12 +176,10 @@ There are certain colors that are reserved for a specific kinds of tasks:
 
 
 .. figure:: images/dashboard_taskstream_healthy.png
-    :alt: Task Stream pane showing eight horizontal bars, one per worker-thread, with different shades of 
-    greens and blues and some red. 
+    :alt: Task Stream pane showing eight horizontal bars, one per worker-thread, with different shades of greens and blues and some red. 
 
 .. figure:: images/dashboard_task_stream_unhealthy.png
-    :alt:  Task Stream pane showing twelve horizontal bars, one per worker-thread, with majority of white space
-    in each bar, and displaying some purple, red and orange rectangles.   
+    :alt:  Task Stream pane showing twelve horizontal bars, one per worker-thread, with majority of white space in each bar, and displaying some purple, red and orange rectangles.   
 
 
 In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
@@ -202,10 +191,7 @@ Progress
 --------
 
 .. figure:: images/dashboard_progress.png
-    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc",
-    and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed 
-    in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and  
-    the "sum" bar is empty.
+    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and the "sum" bar is empty.
  
 The progress bars plot shows the progress of each individual task-prefix. The color of the of each bar matches the color of the 
 individual tasks on the task stream that correspond to the same task-prefix. Each horizontal bar has three different components:
@@ -242,8 +228,7 @@ allows you to embed Dask's dashboard plots directly into JupyterLab panes.
 
 Once the JupyterLab Dask extension is installed you can choose any of the individual plots available and 
 integrated as a pane in your JupyterLab session. For example, in the figure below we selected the *Task Stream*, 
- *Progress*, *Workers Memory*, and *Graph* plots. 
+*Progress*, *Workers Memory*, and *Graph* plots. 
 
 .. figure:: images/dashboard_jupyterlab.png
-    :alt: Dask JupyterLab extension showing an arrangement of four panes selected from a display of plot options. The panes
-    displayed are the Task stream, Bytes per worker, Progress and the Task Graph. 
+    :alt: Dask JupyterLab extension showing an arrangement of four panes selected from a display of plot options. The panes displayed are the Task stream, Bytes per worker, Progress and the Task Graph. 
