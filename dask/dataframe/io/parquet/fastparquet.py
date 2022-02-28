@@ -387,7 +387,7 @@ class FastParquetEngine(Engine):
 
         # Extract "supported" key-word arguments from `kwargs`.
         # Split items into `dataset_kwargs` and `read_kwargs`
-        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
+        dataset_kwargs, read_kwargs, other_kwargs = _split_user_options(**kwargs)
 
         parts = []
         _metadata_exists = False
@@ -516,7 +516,7 @@ class FastParquetEngine(Engine):
             "kwargs": {
                 "dataset": dataset_kwargs,
                 "read": read_kwargs,
-                **user_kwargs,
+                **other_kwargs,
             },
         }
 
@@ -845,7 +845,7 @@ class FastParquetEngine(Engine):
     def validate_engine_options(cls, core_options: dict, **engine_options):
 
         # TODO: Check and rewrite engine_options here
-        _, paths, fs = super().validate_engine_options(core_options)
+        fs, paths, _ = super().validate_engine_options(core_options)
 
         return fs, paths, engine_options
 

@@ -1,4 +1,5 @@
 import re
+import warnings
 
 import pandas as pd
 from fsspec.core import get_fs_token_paths
@@ -749,14 +750,26 @@ def _split_user_options(**kwargs):
     # Check user-defined options.
     # Split into "file" and "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
+
+    # Warn the user if they are still using a deprecated key-word.
+    # TODO: Uncomment these warnings after tests are modified.
+    # NOTE: We don't "need" to explicity deprecate these key-words.
+    if False:  # "file" or "dataset" in user_kwargs:
+        warnings.warn(
+            "Please use the `dataset_options` key-word to specify "
+            "engine-specific options for datset initialization. "
+            "Using `dataset` and `file` is now deprecated.",
+            FutureWarning,
+        )
+
+    # Extract all "dataset" arguments
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
         **user_kwargs.pop("dataset", {}).copy(),
+        **user_kwargs.pop("dataset_options", {}).copy(),
     }
+
+    # Extract all "read" arguments
     read_options = user_kwargs.pop("read", {}).copy()
-    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
-    return (
-        dataset_options,
-        read_options,
-        user_kwargs,
-    )
+
+    return (dataset_options, read_options, user_kwargs)

@@ -231,6 +231,7 @@ def _read_table_from_path(
     )
 
     if partition_keys:
+        # TODO: Remove this when parquet-legacy is removed
         tables = []
         with _open_input_files(
             [path],
@@ -352,12 +353,10 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
 
-        # Extract "supported" key-word arguments from `engine_options`
-        (
-            dataset_options,
-            read_options,
-            user_options,
-        ) = _split_user_options(**engine_options)
+        # Split `engine_options` into dataset/read/other kwargs
+        dataset_options, read_options, other_options = _split_user_options(
+            **engine_options
+        )
 
         # Check if require_extension was included in the dataset options
         require_extension = dataset_options.pop(
@@ -375,12 +374,13 @@ class ArrowDatasetEngine(Engine):
             "partitioning": dataset_options.pop("partitioning", "hive"),
             "partition_base_dir": dataset_options.pop("partition_base_dir", None),
         }
+        inconsistent_options = {}
         if dataset_options.get("exclude_invalid_files", None) is not None:
-            valid_dataset_options["exclude_invalid_files"] = dataset_options.pop(
+            inconsistent_options["exclude_invalid_files"] = dataset_options.pop(
                 "exclude_invalid_files"
             )
         if dataset_options.get("ignore_prefixes", None) is not None:
-            valid_dataset_options["ignore_prefixes"] = dataset_options.pop(
+            inconsistent_options["ignore_prefixes"] = dataset_options.pop(
                 "ignore_prefixes"
             )
         if dataset_options:
@@ -406,7 +406,7 @@ class ArrowDatasetEngine(Engine):
             if require_extension:
                 raise ValueError(
                     "`require_extension` not supported when the `filesystem` "
-                    "option is used."
+                    "option is passed to `pyarrow.dataset.Dataset`."
                 )
 
             if (
@@ -414,16 +414,13 @@ class ArrowDatasetEngine(Engine):
                 and isinstance(path, str)
                 and filesystem.get_file_info(path + "/" + "_metadata").is_file
             ):
-                # This is a `parquet_dataset` case.
-                # Some options are not supported
-                if {"exclude_invalid_files", "ignore_prefixes"}.intersection(
-                    valid_dataset_options
-                ):
-                    raise ValueError(
+                # Drop unsupported options for now if we are reading from _metadata
+                if inconsistent_options:
+                    warnings.warn(
                         "The `exclude_invalid_files` and `ignore_prefixes` arguments "
                         "for `pyarrow.dataset` are not supported when reading from a "
-                        "`_metadata` file. Please use `ignore_metadata_file=True` or "
-                        "remove the unsupported arguments."
+                        "`_metadata` file. Since a `_metadata` file is present, and "
+                        " `ignore_metadata_file=False` these arguments will be ignored."
                     )
 
                 ds = pa_ds.parquet_dataset(
@@ -432,7 +429,9 @@ class ArrowDatasetEngine(Engine):
                 )
                 has_metadata_file = True
             else:
-                ds = pa_ds.dataset(path, **valid_dataset_options)
+                ds = pa_ds.dataset(
+                    path, **valid_dataset_options, **inconsistent_options
+                )
 
             paths, fs = ds.files, filesystem
         else:
@@ -442,10 +441,26 @@ class ArrowDatasetEngine(Engine):
         valid_dataset_options["_ds"] = ds
         valid_dataset_options["_require_extension"] = require_extension
         valid_dataset_options["_has_metadata_file"] = has_metadata_file
+        valid_dataset_options["_inconsistent_options"] = inconsistent_options
         valid_dataset_options["filesystem"] = fs
 
-        # TODO: Check/rewrite read_options as well
-        return fs, paths, {"dataset": valid_dataset_options, "read": read_options}
+        # Warn the user if any "other_options" are not recognized
+        unrecognized = set(other_options) - {"arrow_to_pandas"}
+        if unrecognized:
+            warnings.warn(
+                f"Unrecognized key-word arguments: {unrecognized}. "
+                f"These options might be silently ignored!"
+            )
+
+        return (
+            fs,
+            paths,
+            {
+                "dataset": valid_dataset_options,
+                "read": read_options,
+                **other_options,
+            },
+        )
 
     @classmethod
     def read_metadata(
@@ -914,16 +929,16 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Extract "supported" key-word arguments from `kwargs`
-        (
-            _dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
+        _dataset_kwargs, read_kwargs, other_kwargs = _split_user_options(**kwargs)
 
         # Set require_extension option
         require_extension = _dataset_kwargs.pop(
             "_require_extension", (".parq", ".parquet", ".pq")
         )
+
+        # Extract dataset options that are not allowed when
+        # reading from a _metadata file
+        _inconsistent_options = _dataset_kwargs.pop("_inconsistent_options", {})
 
         # Use pyarrow.dataset API
         ds = _dataset_kwargs.pop("_ds", None)
@@ -979,25 +994,25 @@ class ArrowDatasetEngine(Engine):
 
             # Check if we are intializing a dataset from _metadata
             if isinstance(ds, tuple):
+                # Check "tricky" dataset options
                 if _dataset_kwargs["format"] == "parquet":
                     raise ValueError(
                         "Please pass a ParquetFileFormat object for the "
                         "`format` pyarrow.dataset option. Passing a string "
-                        "is not supported when reading from a _metadata file."
+                        "is not supported when reading from a `_metadata` file."
                     )
-
-                if {"exclude_invalid_files", "ignore_prefixes"}.intersection(
-                    _dataset_kwargs
-                ):
-                    raise ValueError(
+                # Drop unsupported options for now if we are reading from _metadata
+                if _inconsistent_options:
+                    warnings.warn(
                         "The `exclude_invalid_files` and `ignore_prefixes` arguments "
                         "for `pyarrow.dataset` are not supported when reading from a "
-                        "`_metadata` file. Please use `ignore_metadata_file=True` or "
-                        "remove the unsupported arguments."
+                        "`_metadata` file. Since a `_metadata` file is present, and "
+                        " `ignore_metadata_file=False` these arguments will be ignored."
                     )
                 ds = pa_ds.parquet_dataset(*ds, **_dataset_kwargs)
 
         # Final "catch-all" pyarrow.dataset call
+        _dataset_kwargs.update(**_inconsistent_options)
         if ds is None:
             ds = pa_ds.dataset(paths, **_dataset_kwargs)
 
@@ -1112,7 +1127,7 @@ class ArrowDatasetEngine(Engine):
             "kwargs": {
                 "dataset": _dataset_kwargs,
                 "read": read_kwargs,
-                **user_kwargs,
+                **other_kwargs,
             },
         }
 
@@ -1859,11 +1874,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
         # Extract "supported" key-word arguments from `kwargs`
-        (
-            dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
+        dataset_kwargs, read_kwargs, other_kwargs = _split_user_options(**kwargs)
 
         (
             schema,
@@ -1907,7 +1918,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             "kwargs": {
                 "dataset": dataset_kwargs,
                 "read": read_kwargs,
-                **user_kwargs,
+                **other_kwargs,
             },
         }
 
