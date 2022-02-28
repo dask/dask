@@ -582,14 +582,14 @@ Dask Name: {name}, {task} tasks"""
 
     def compute_current_divisions(self, col=None):
         """Compute the current divisions of the DataFrame.
-        
+
         This method triggers immediate computation. If you find yourself running this command
         repeatedly for the same dataframe, we recommend storing the result
         so you don't have to rerun it.
 
         If the column or index values overlap between partitions, raises ``ValueError``.
         To prevent this, make sure the data are sorted by the column or index.
-        
+
         Parameters
         ----------
         col : string, optional
@@ -597,6 +597,7 @@ Dask Name: {name}, {task} tasks"""
             If col is not specified, the index will be used to calculate divisions.
             In this case, if the divisions are already known, they will be returned
             immediately without computing.
+
         Examples
         --------
         >>> import dask
