@@ -4,6 +4,7 @@ import math
 import shutil
 import tempfile
 import uuid
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -1024,16 +1025,19 @@ def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
         or sorted(non_empty_maxes) != non_empty_maxes
     ):
         raise ValueError(
-            f"Partitions must be sorted ascending by {column.name}",
-            f"In your dataset the (min, max) value of {column.name or 'the index'} for each partition is: "
-            f"{list(zip(mins, maxes))}",
+            f"Partitions are not sorted ascending by {column.name or 'the index'}",
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are : {list(zip(mins, maxes, lens))}",
         )
     if not allow_overlap and any(
         a <= b for a, b in zip(non_empty_mins[1:], non_empty_maxes[:-1])
     ):
-        raise ValueError(
+        warnings.warn(
             "Partitions have overlapping values, so divisions are non-unique."
-            "Use `set_index(sorted=True)` with no `divisions` to allow dask to fix the overlap."
+            "Use `set_index(sorted=True)` with no `divisions` to allow dask to fix the overlap. "
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are : {list(zip(mins, maxes, lens))}",
+            UserWarning,
         )
     if not allow_overlap:
         return (mins, maxes, lens)

@@ -1180,8 +1180,11 @@ def test_compute_current_divisions_nan_partition():
 def test_compute_current_divisions_overlap():
     A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
     a = dd.from_pandas(A, npartitions=2)
-    with pytest.raises(ValueError, match="Partitions have overlapping values"):
-        a.compute_current_divisions("key")
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        divisions = a.compute_current_divisions("key")
+        b = a.set_index("key", divisions=divisions)
+        assert b.divisions == (1, 4, 7)
+        assert [len(p) for p in b.partitions] == [3, 5]
 
 
 def test_compute_current_divisions_overlap_2():
@@ -1193,7 +1196,7 @@ def test_compute_current_divisions_overlap_2():
     )
     ddf1 = dd.from_pandas(data, npartitions=2)
     ddf2 = ddf1.clear_divisions().repartition(8)
-    with pytest.raises(ValueError, match="Partitions have overlapping values"):
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
         ddf2.compute_current_divisions()
 
 
