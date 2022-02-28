@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import dataclasses
 import datetime
+import hashlib
 import inspect
 import os
 import pickle
+import sys
 import threading
 import uuid
 from collections import OrderedDict
@@ -12,7 +14,6 @@ from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from functools import partial
-from hashlib import md5
 from numbers import Integral, Number
 from operator import getitem
 
@@ -843,6 +844,15 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
+# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
+if sys.version_info[:2] >= (3, 9):
+
+    def _md5(x, _hashlib_md5=hashlib.md5):
+        return _hashlib_md5(x, usedforsecurity=False)
+
+else:
+    _md5 = hashlib.md5
+
 
 def tokenize(*args, **kwargs):
     """Deterministic token
@@ -853,7 +863,7 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    hasher = md5(str(tuple(map(normalize_token, args))).encode())
+    hasher = _md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
         hasher.update(str(normalize_token(kwargs)).encode())
     return hasher.hexdigest()
