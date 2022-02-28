@@ -179,7 +179,6 @@ def read_parquet(
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
-    require_extension=(".parquet", ".parq", ".pq"),
     **kwargs,
 ):
     """
@@ -372,7 +371,6 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
-        "require_extension": require_extension,
     }
     engine_options = kwargs.copy()
 

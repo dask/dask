@@ -358,13 +358,14 @@ class ArrowDatasetEngine(Engine):
             **engine_options
         )
 
-        # Check if require_extension was included in the dataset options
-        require_extension = dataset_options.pop(
-            "require_extension",
-            core_options.get("require_extension")
-            if dataset_options.get("filesystem", None) is None
-            else None,
-        )
+        # Extract require_extension
+        require_extension = dataset_options.pop("require_extension")
+        if require_extension is None:
+            require_extension = (
+                (".parquet", ".parq", ".pq")
+                if dataset_options.get("filesystem", None) is None
+                else False
+            )
 
         # Pop supported dataset options
         valid_dataset_options = {
@@ -928,8 +929,8 @@ class ArrowDatasetEngine(Engine):
         This method is overriden by `ArrowLegacyEngine`.
         """
 
-        # Extract "supported" key-word arguments from `kwargs`
-        _dataset_kwargs, read_kwargs, other_kwargs = _split_user_options(**kwargs)
+        # Extract dataset kwargs
+        _dataset_kwargs = kwargs["dataset"]
 
         # Set require_extension option
         require_extension = _dataset_kwargs.pop(
@@ -1124,11 +1125,7 @@ class ArrowDatasetEngine(Engine):
             "partition_names": partition_names,
             "partitioning": _dataset_kwargs["partitioning"],
             "metadata_task_size": metadata_task_size,
-            "kwargs": {
-                "dataset": _dataset_kwargs,
-                "read": read_kwargs,
-                **other_kwargs,
-            },
+            "kwargs": kwargs,
         }
 
     @classmethod
@@ -1836,9 +1833,28 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 class ArrowLegacyEngine(ArrowDatasetEngine):
     @classmethod
     def validate_engine_options(cls, core_options: dict, **engine_options):
+
+        # Split `engine_options` into dataset/read/other kwargs
+        dataset_options, read_options, other_options = _split_user_options(
+            **engine_options
+        )
+
+        # Drop require_extension
+        require_extension = dataset_options.pop("require_extension")
+        if require_extension is not None:
+            raise ValueError("require_extension not supported for pyarrow-legacy.")
+
         # No option validation for legacy engine (deprecated anyway)
         fs, paths, _ = super().validate_engine_options(core_options)
-        return fs, paths, engine_options
+        return (
+            fs,
+            paths,
+            {
+                "dataset": dataset_options,
+                "read": read_options,
+                **other_options,
+            },
+        )
 
     #
     # Private Class Methods
@@ -1873,8 +1889,8 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if metadata_task_size:
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
-        # Extract "supported" key-word arguments from `kwargs`
-        dataset_kwargs, read_kwargs, other_kwargs = _split_user_options(**kwargs)
+        # Extract "dataset" kwargs
+        dataset_kwargs = kwargs["dataset"]
 
         (
             schema,
@@ -1915,11 +1931,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             "partition_keys": partition_info["partition_keys"],
             "partition_names": partition_info["partition_names"],
             "partitions": partition_info["partitions"],
-            "kwargs": {
-                "dataset": dataset_kwargs,
-                "read": read_kwargs,
-                **other_kwargs,
-            },
+            "kwargs": kwargs,
         }
 
     @classmethod

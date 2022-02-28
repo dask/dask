@@ -1,5 +1,4 @@
 import re
-import warnings
 
 import pandas as pd
 from fsspec.core import get_fs_token_paths
@@ -15,6 +14,9 @@ class Engine:
 
     @classmethod
     def validate_engine_options(cls, core_options: dict, **engine_options):
+        """Validate engine-specific options and return a compatible
+        filesystem and path list.
+        """
 
         # Base class doesnt support any engine options
         if engine_options:
@@ -751,17 +753,6 @@ def _split_user_options(**kwargs):
     # Split into "file" and "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
 
-    # Warn the user if they are still using a deprecated key-word.
-    # TODO: Uncomment these warnings after tests are modified.
-    # NOTE: We don't "need" to explicity deprecate these key-words.
-    if False:  # "file" or "dataset" in user_kwargs:
-        warnings.warn(
-            "Please use the `dataset_options` key-word to specify "
-            "engine-specific options for datset initialization. "
-            "Using `dataset` and `file` is now deprecated.",
-            FutureWarning,
-        )
-
     # Extract all "dataset" arguments
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
@@ -770,6 +761,15 @@ def _split_user_options(**kwargs):
     }
 
     # Extract all "read" arguments
-    read_options = user_kwargs.pop("read", {}).copy()
+    read_options = {
+        **user_kwargs.pop("read", {}).copy(),
+        **user_kwargs.pop("read_options", {}).copy(),
+    }
+
+    # Make sure `require_extension` is included in `dataset_options`
+    if "require_extension" not in dataset_options:
+        dataset_options["require_extension"] = user_kwargs.pop(
+            "require_extension", None
+        )
 
     return (dataset_options, read_options, user_kwargs)
