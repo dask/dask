@@ -6,7 +6,6 @@ import hashlib
 import inspect
 import os
 import pickle
-import sys
 import threading
 import uuid
 from collections import OrderedDict
@@ -22,6 +21,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from . import config, local, threaded
+from .compatibility import _PY_VERSION
 from .context import thread_state
 from .core import flatten
 from .core import get as simple_get
@@ -845,7 +845,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 ############
 
 # Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
-if sys.version_info[:2] >= (3, 9):
+if _PY_VERSION >= parse_version("3.9"):
 
     def _md5(x, _hashlib_md5=hashlib.md5):
         return _hashlib_md5(x, usedforsecurity=False)
