@@ -223,7 +223,7 @@ def set_index(
             and npartitions == df.npartitions
         ):
             divisions = mins + [maxes[-1]]
-            result = set_sorted_index(df, index2, drop=drop, divisions=divisions)
+            result = set_sorted_index(df, index, drop=drop, divisions=divisions)
             return result.map_partitions(M.sort_index)
 
     return set_partition(
