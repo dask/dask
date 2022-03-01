@@ -1333,8 +1333,7 @@ class FastparquetOptions(EngineOptions):
             require_extension = (".parquet", ".parq", ".pq")
 
         #  Check if we the user has specified the filesystem
-        if "fs" in dataset_options:
-            fs = dataset_options["fs"]
+        if fs:
             path = self.core_options["path"]
             if isinstance(path, (list, tuple, set)):
                 paths = expand_paths_if_needed(path, "rb", 1, fs, None)
@@ -1345,13 +1344,15 @@ class FastparquetOptions(EngineOptions):
                     paths = [path]
             self._fs = fs
             self._paths = sorted(paths, key=natural_sort_key)
+        else:
+            self._fs, self._paths = self.get_fs_and_paths()
 
         # Pop supported dataset options
         valid_dataset_options = {
             "verify": verify,
             "open_with": open_with,
             "sep": sep,
-            "fs": fs or self.get_fs_and_paths()[0],
+            "fs": self._fs,
             "pandas_nulls": pandas_nulls,
             # TODO: Support `root` argument
         }
