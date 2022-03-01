@@ -30,6 +30,7 @@ from ..utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 #########################
 from .utils import (
     Engine,
+    EngineOptions,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
@@ -38,7 +39,6 @@ from .utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 
 # Thread lock required to reset row-groups
@@ -387,7 +387,7 @@ class FastParquetEngine(Engine):
         # (if `gather_statistics=None`).
 
         # Extract "dataset" kwargs
-        dataset_kwargs = kwargs["dataset"]
+        dataset_kwargs = kwargs.get("dataset", {})
 
         parts = []
         _metadata_exists = False
@@ -829,68 +829,8 @@ class FastParquetEngine(Engine):
         return parts, stats
 
     @classmethod
-    def validate_engine_options(cls, core_options: dict, **engine_options):
-
-        # Split `engine_options` into dataset/read/other kwargs
-        dataset_options, read_options, other_options = _split_user_options(
-            **engine_options
-        )
-
-        # Extract require_extension
-        require_extension = dataset_options.pop("require_extension", None)
-        if require_extension is None:
-            require_extension = (".parquet", ".parq", ".pq")
-
-        #  Check if we the user has specified the filesystem
-        if "fs" in dataset_options:
-            fs = dataset_options["fs"]
-            path = core_options["path"]
-            if isinstance(path, (list, tuple, set)):
-                paths = expand_paths_if_needed(path, "rb", 1, fs, None)
-            else:
-                if "*" in path:
-                    paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]
-                else:
-                    paths = [path]
-            paths = sorted(paths, key=natural_sort_key)
-        else:
-            fs, paths, _ = super().validate_engine_options(core_options)
-
-        # Pop supported dataset options
-        valid_dataset_options = {
-            "verify": dataset_options.pop("verify", False),
-            "open_with": dataset_options.pop("open_with", None),
-            "sep": dataset_options.pop("sep", None),
-            "fs": dataset_options.pop("fs", fs),
-            "pandas_nulls": dataset_options.pop("pandas_nulls", True),
-            # TODO: Support `root` argument
-        }
-        if dataset_options:
-            # There are more options that are not explicitly supported
-            raise ValueError(
-                f"{dataset_options} ParquetFile options are not "
-                f"currently compatible with read_parquet."
-            )
-
-        # Warn the user if any "other_options" are not recognized
-        if set(other_options):
-            warnings.warn(
-                f"Unrecognized key-word arguments: {set(other_options)}. "
-                f"These options might be silently ignored!"
-            )
-
-        # Add missing entries to valid_dataset_options
-        valid_dataset_options["require_extension"] = require_extension
-
-        return (
-            fs,
-            paths,
-            {
-                "dataset": valid_dataset_options,
-                "read": read_options,
-                **other_options,
-            },
-        )
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return FastparquetOptions(core_options, **engine_options)
 
     @classmethod
     def read_metadata(
@@ -1357,3 +1297,90 @@ class FastParquetEngine(Engine):
         # if appending, could skip this, but would need to check existence
         fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
+
+
+class FastparquetOptions(EngineOptions):
+    def validate_dataset_options(
+        self,
+        verify=False,
+        open_with=None,
+        sep=None,
+        fs=None,
+        pandas_nulls=True,
+        **dataset_options,
+    ):
+        """Return valid dataset options for FastparquetEngine
+
+        Parameters
+        ----------
+        verify : bool; optional
+        open_with : callable; optional
+        sep : str; optional
+        fs : fsspec-compatible filesystem; optional
+        pandas_nulls : bool; optional
+
+        Examples
+        --------
+        Supported parameters can be passed to ``read_parquet``
+        using the ``dataset_options`` argument. For example::
+
+        >>> df = dd.read_parquet(path, dataset_options={pandas_nulls: False})  # doctest: +SKIP
+        """
+
+        # Extract require_extension
+        require_extension = dataset_options.pop("require_extension", None)
+        if require_extension is None:
+            require_extension = (".parquet", ".parq", ".pq")
+
+        #  Check if we the user has specified the filesystem
+        if "fs" in dataset_options:
+            fs = dataset_options["fs"]
+            path = self.core_options["path"]
+            if isinstance(path, (list, tuple, set)):
+                paths = expand_paths_if_needed(path, "rb", 1, fs, None)
+            else:
+                if "*" in path:
+                    paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]
+                else:
+                    paths = [path]
+            self._fs = fs
+            self._paths = sorted(paths, key=natural_sort_key)
+
+        # Pop supported dataset options
+        valid_dataset_options = {
+            "verify": verify,
+            "open_with": open_with,
+            "sep": sep,
+            "fs": fs or self.get_fs_and_paths()[0],
+            "pandas_nulls": pandas_nulls,
+            # TODO: Support `root` argument
+        }
+        if dataset_options:
+            # There are more options that are not explicitly supported
+            raise ValueError(
+                f"{dataset_options} ParquetFile options are not "
+                f"currently compatible with read_parquet."
+            )
+
+        # Add missing entries to valid_dataset_options
+        valid_dataset_options["require_extension"] = require_extension
+
+        return valid_dataset_options
+
+    def validate_read_options(self, **read_options):
+        # Warn if the user is passing in read options
+        if read_options:
+            warnings.warn(
+                f"Unrecognized read arguments: {set(read_options)}. "
+                f"These options might be silently ignored!"
+            )
+        return read_options
+
+    def validate_other_options(self, **other_options):
+        # Warn the user if any "other_options" are not recognized
+        if set(other_options):
+            warnings.warn(
+                f"Unrecognized key-word arguments: {set(other_options)}. "
+                f"These options might be silently ignored!"
+            )
+        return other_options

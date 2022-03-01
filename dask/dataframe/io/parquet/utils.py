@@ -9,27 +9,96 @@ from ....utils import natural_sort_key
 from ..utils import _is_local_fs
 
 
+class EngineOptions:
+    """Store and Validate Engine-Specific read_parquet Options"""
+
+    def __init__(self, core_options: dict, **engine_options):
+        self.core_options = core_options
+        self._fs = None
+        self._paths = None
+        (
+            dataset_options,
+            read_options,
+            other_options,
+        ) = self._split_user_options(**engine_options)
+        self.dataset_options = self.validate_dataset_options(**dataset_options)
+        self.read_options = self.validate_read_options(**read_options)
+        self.other_options = self.validate_other_options(**other_options)
+
+    def _split_user_options(self, **kwargs):
+        """Split combined engine options into distinct dicts"""
+
+        # Check user-defined options.
+        # Split into "file" and "dataset"-specific kwargs
+        user_kwargs = kwargs.copy()
+
+        # Extract all "dataset" arguments
+        dataset_options = {
+            **user_kwargs.pop("file", {}).copy(),
+            **user_kwargs.pop("dataset", {}).copy(),
+            **user_kwargs.pop("dataset_options", {}).copy(),
+        }
+
+        # Extract all "read" arguments
+        read_options = {
+            **user_kwargs.pop("read", {}).copy(),
+            **user_kwargs.pop("read_options", {}).copy(),
+        }
+
+        # Make sure `require_extension` is included in
+        # `dataset_options` rather than user_kwargs
+        if (
+            "require_extension" not in dataset_options
+            and "require_extension" in user_kwargs
+        ):
+            dataset_options["require_extension"] = user_kwargs.pop("require_extension")
+
+        return (dataset_options, read_options, user_kwargs)
+
+    def get_fs_and_paths(self):
+        """Return a compatible filesystem and path-list"""
+        if self._fs is None or self._paths is None:
+            # Use fsspec for filesystem and path handling
+            self._fs, _, paths = get_fs_token_paths(
+                self.core_options.get("path"),
+                mode="rb",
+                storage_options=self.core_options.get("storage_options"),
+            )
+            self._paths = sorted(
+                paths, key=natural_sort_key
+            )  # numeric rather than glob ordering
+        return self._fs, self._paths
+
+    def validate_dataset_options(self, **dataset_options):
+        """Return valid dataset options"""
+        # Extract require_extension
+        # Pop
+        dataset_options.pop("require_extension", None)
+        return dataset_options
+
+    def validate_read_options(self, **read_options):
+        """Return valid read options"""
+        return read_options
+
+    def validate_other_options(self, **other_options):
+        """Return other valid options"""
+        return other_options
+
+    def to_dict(self):
+        """Return dictionary of engine options"""
+        return {
+            **({"dataset": self.dataset_options} if self.dataset_options else {}),
+            **({"read": self.read_options} if self.read_options else {}),
+            **self.other_options,
+        }
+
+
 class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
-    def validate_engine_options(cls, core_options: dict, **engine_options):
-        """Validate engine-specific options and return a compatible
-        filesystem and path list.
-        """
-
-        # Base class doesnt support any engine options
-        if engine_options:
-            raise ValueError(f"{engine_options.keys()} not supported for {cls}")
-
-        # Use fsspec for filesystem and path handling
-        fs, _, paths = get_fs_token_paths(
-            core_options.get("path"),
-            mode="rb",
-            storage_options=core_options.get("storage_options"),
-        )
-        paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
-        return fs, paths, {}
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return EngineOptions(core_options, **engine_options)
 
     @classmethod
     def read_metadata(
@@ -746,30 +815,3 @@ def _process_open_file_options(
             )
             open_file_options["mode"] = open_file_options.get("mode", "rb")
     return precache_options, open_file_options
-
-
-def _split_user_options(**kwargs):
-    # Check user-defined options.
-    # Split into "file" and "dataset"-specific kwargs
-    user_kwargs = kwargs.copy()
-
-    # Extract all "dataset" arguments
-    dataset_options = {
-        **user_kwargs.pop("file", {}).copy(),
-        **user_kwargs.pop("dataset", {}).copy(),
-        **user_kwargs.pop("dataset_options", {}).copy(),
-    }
-
-    # Extract all "read" arguments
-    read_options = {
-        **user_kwargs.pop("read", {}).copy(),
-        **user_kwargs.pop("read_options", {}).copy(),
-    }
-
-    # Make sure `require_extension` is included in `dataset_options`
-    if "require_extension" not in dataset_options:
-        dataset_options["require_extension"] = user_kwargs.pop(
-            "require_extension", None
-        )
-
-    return (dataset_options, read_options, user_kwargs)

@@ -313,29 +313,33 @@ def read_parquet(
         extensions will be ignored. Note that ``require_extension=False``
         will skip the file-extension check altogether.
     dataset_options: dict, default None
-        Dictionary of engine-specific key-work arguments for initializing a
+        Dictionary of engine-specific key-word arguments for initializing a
         "dataset" object for metadata processing and possibly for reading data.
         For the "pyarrow" engine, these arguments will be used to initialize a
         ``pyarrow.dataset.Dataset`` object using the ``pyarrow.dataset.dataset``
         function (or ``pyarrow.dataset.parquet_dataset`` if a ``_metadata`` file
         is detected). For "fastparquet", these arguments will be used with the
-        ``fastparquet.ParquetFile`` constructor. See ``arrow.ArrowDatasetEngine``
-        and ``fastparquet.FastParquetEngine`` for more details.
+        ``fastparquet.ParquetFile`` constructor. See ``validate_dataset_options``
+        in ``arrow.ArrowDatasetOptions``  and ``fastparquet.FastParquetOptions``
+        for more details.
     read_options: dict, default None
-        Dictionary of engine-specific key-work arguments to be passed through
+        Dictionary of engine-specific key-word arguments to be passed through
         to the backend-IO function when reading data. Since the specific IO
         function may vary (depending on dataset properties and other options),
         passing options in this way is NOT typically recommended. However,
-        specific read options with explicit support may be documented in the
-        engine's docstsring.
+        specific read options with explicit support may be documented in
+        ``validate_read_options`` in ``arrow.ArrowDatasetOptions`` and
+        ``fastparquet.FastParquetOptions``.
     **kwargs: dict, default None
-        Dictionary of key-work arguments to be be passed through to the engine
+        Dictionary of key-word arguments to be be passed through to the engine
         backend. For example, 'arrow_to_pandas' can be used with the "pyarrow"
         engine to control the arguments used to convert from ``pyarrow.Table``
         to pandas (with ``pyarrow.Table.to_pandas()``). By default, these
         arguments will be passed through to the ``engine.read_partition``
-        classmethod, but will not be passed through to the backend IO funciton.
-        Options with known support will be documented in engine's docstsring.
+        classmethod, but will not be passed through to the backend IO function.
+        Options with known support will be documented in
+        ``validate_other_options`` in ``arrow.ArrowDatasetOptions``
+        and ``fastparquet.FastParquetOptions``.
 
     Examples
     --------
@@ -393,11 +397,9 @@ def read_parquet(
     core_options.update({"columns": columns, "engine": engine})
     output_name = label + tokenize(path, **core_options, **engine_options)
 
-    # Check that all user-specified engine options are supported
-    # and return a paths and fs that is consistent with the options
-    fs, paths, valid_engine_options = engine.validate_engine_options(
-        core_options, **engine_options
-    )
+    # Extract EngineOptions and compatible filesystem and paths
+    valid_engine_options = engine.get_engine_options(core_options, **engine_options)
+    fs, paths = valid_engine_options.get_fs_and_paths()
 
     auto_index_allowed = False
     if index is None:
@@ -427,7 +429,7 @@ def read_parquet(
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
-        **valid_engine_options,
+        **valid_engine_options.to_dict(),
     )
 
     # In the future, we may want to give the engine the

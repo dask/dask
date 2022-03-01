@@ -25,6 +25,7 @@ from ..utils import (
 from .core import create_metadata_file
 from .utils import (
     Engine,
+    EngineOptions,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
@@ -33,7 +34,6 @@ from .utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 
 # Check PyArrow version for feature support
@@ -348,120 +348,8 @@ class ArrowDatasetEngine(Engine):
     #
 
     @classmethod
-    def validate_engine_options(cls, core_options: dict, **engine_options):
-
-        # Use pyarrow.dataset API
-        ds = None
-
-        # Split `engine_options` into dataset/read/other kwargs
-        dataset_options, read_options, other_options = _split_user_options(
-            **engine_options
-        )
-
-        # Extract require_extension
-        require_extension = dataset_options.pop("require_extension")
-        if require_extension is None:
-            require_extension = (
-                (".parquet", ".parq", ".pq")
-                if dataset_options.get("filesystem", None) is None
-                else False
-            )
-
-        # Pop supported dataset options
-        valid_dataset_options = {
-            "schema": dataset_options.pop("schema", None),
-            "filesystem": dataset_options.pop("filesystem", None),
-            "format": dataset_options.pop("format", pa_ds.ParquetFileFormat()),
-            "partitioning": dataset_options.pop("partitioning", "hive"),
-            "partition_base_dir": dataset_options.pop("partition_base_dir", None),
-        }
-        inconsistent_options = {}
-        if dataset_options.get("exclude_invalid_files", None) is not None:
-            inconsistent_options["exclude_invalid_files"] = dataset_options.pop(
-                "exclude_invalid_files"
-            )
-        if dataset_options.get("ignore_prefixes", None) is not None:
-            inconsistent_options["ignore_prefixes"] = dataset_options.pop(
-                "ignore_prefixes"
-            )
-        if dataset_options:
-            # There are more options that are not explicitly supported
-            raise ValueError(
-                f"{dataset_options} pyarrow.dataset options are not "
-                f"currently compatible with read_parquet."
-            )
-
-        path = core_options.get("path")
-        filesystem = valid_dataset_options["filesystem"]
-        has_metadata_file = False
-        if filesystem:
-            from pyarrow.fs import FileSystem as PaFileSystem
-
-            if not isinstance(filesystem, PaFileSystem):
-                raise ValueError(
-                    "When specifying a `filesystem` argument for the "
-                    "pyarrow.dataset API, it must be a `FileSystem` object. "
-                    "Filesystem inference from a URI is not supported."
-                )
-
-            if require_extension:
-                raise ValueError(
-                    "`require_extension` not supported when the `filesystem` "
-                    "option is passed to `pyarrow.dataset.Dataset`."
-                )
-
-            if (
-                not core_options.get("ignore_metadata_file")
-                and isinstance(path, str)
-                and filesystem.get_file_info(path + "/" + "_metadata").is_file
-            ):
-                # Drop unsupported options for now if we are reading from _metadata
-                if inconsistent_options:
-                    warnings.warn(
-                        "The `exclude_invalid_files` and `ignore_prefixes` arguments "
-                        "for `pyarrow.dataset` are not supported when reading from a "
-                        "`_metadata` file. Since a `_metadata` file is present, and "
-                        " `ignore_metadata_file=False` these arguments will be ignored."
-                    )
-
-                ds = pa_ds.parquet_dataset(
-                    path + "/" + "_metadata",
-                    **valid_dataset_options,
-                )
-                has_metadata_file = True
-            else:
-                ds = pa_ds.dataset(
-                    path, **valid_dataset_options, **inconsistent_options
-                )
-
-            paths, fs = ds.files, filesystem
-        else:
-            fs, paths, _ = super().validate_engine_options(core_options)
-
-        # Add missing entries to valid_dataset_options
-        valid_dataset_options["_ds"] = ds
-        valid_dataset_options["_require_extension"] = require_extension
-        valid_dataset_options["_has_metadata_file"] = has_metadata_file
-        valid_dataset_options["_inconsistent_options"] = inconsistent_options
-        valid_dataset_options["filesystem"] = fs
-
-        # Warn the user if any "other_options" are not recognized
-        unrecognized = set(other_options) - {"arrow_to_pandas"}
-        if unrecognized:
-            warnings.warn(
-                f"Unrecognized key-word arguments: {unrecognized}. "
-                f"These options might be silently ignored!"
-            )
-
-        return (
-            fs,
-            paths,
-            {
-                "dataset": valid_dataset_options,
-                "read": read_options,
-                **other_options,
-            },
-        )
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return ArrowDatasetOptions(core_options, **engine_options)
 
     @classmethod
     def read_metadata(
@@ -930,7 +818,7 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Extract dataset kwargs
-        _dataset_kwargs = kwargs["dataset"]
+        _dataset_kwargs = kwargs.get("dataset", {})
 
         # Set require_extension option
         require_extension = _dataset_kwargs.pop(
@@ -1832,29 +1720,8 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 
 class ArrowLegacyEngine(ArrowDatasetEngine):
     @classmethod
-    def validate_engine_options(cls, core_options: dict, **engine_options):
-
-        # Split `engine_options` into dataset/read/other kwargs
-        dataset_options, read_options, other_options = _split_user_options(
-            **engine_options
-        )
-
-        # Drop require_extension
-        require_extension = dataset_options.pop("require_extension")
-        if require_extension is not None:
-            raise ValueError("require_extension not supported for pyarrow-legacy.")
-
-        # No option validation for legacy engine (deprecated anyway)
-        fs, paths, _ = super().validate_engine_options(core_options)
-        return (
-            fs,
-            paths,
-            {
-                "dataset": dataset_options,
-                "read": read_options,
-                **other_options,
-            },
-        )
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return EngineOptions(core_options, **engine_options)
 
     #
     # Private Class Methods
@@ -1890,7 +1757,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
         # Extract "dataset" kwargs
-        dataset_kwargs = kwargs["dataset"]
+        dataset_kwargs = kwargs.get("dataset", {})
 
         (
             schema,
@@ -2521,3 +2388,143 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 # Compatibility access to legacy ArrowEngine
 # (now called `ArrowLegacyEngine`)
 ArrowEngine = ArrowLegacyEngine
+
+
+class ArrowDatasetOptions(EngineOptions):
+    def validate_dataset_options(
+        self,
+        schema=None,
+        filesystem=None,
+        format=None,
+        partitioning=None,
+        partition_base_dir=None,
+        exclude_invalid_files=None,
+        ignore_prefixes=None,
+        **dataset_options,
+    ):
+        """Return valid dataset options for ArrowDatasetEngine
+
+        Parameters
+        ----------
+        schema : pyarrow.Schema; optional
+        filesystem : pyarrow.fs.FileSystem; optional
+        format : pyarrow.dataset.ParquetFileFormat; optional
+        partitioning : pyarrow.dataset.Partitioning or str; optional
+        partition_base_dir : str; optional
+        exclude_invalid_files : bool; optional
+            Not supported when reading from a _metadata file.
+        ignore_prefixes : list; optional
+            Not supported when reading from a _metadata file.
+
+        Examples
+        --------
+        Supported parameters can be passed to ``read_parquet``
+        using the ``dataset_options`` argument. For example::
+
+        >>> df = dd.read_parquet(path, dataset_options={exclude_invalid_files: True})  # doctest: +SKIP
+        """
+
+        # Use pyarrow.dataset API
+        ds = None
+
+        # Extract require_extension
+        require_extension = dataset_options.pop("require_extension", None)
+        if require_extension is None:
+            require_extension = (
+                (".parquet", ".parq", ".pq")
+                if dataset_options.get("filesystem", None) is None
+                else False
+            )
+
+        # Pop supported dataset options
+        valid_dataset_options = {
+            "schema": schema,
+            "filesystem": filesystem,
+            "format": format or pa_ds.ParquetFileFormat(),
+            "partitioning": partitioning or "hive",
+            "partition_base_dir": partition_base_dir,
+        }
+        inconsistent_options = {}
+        if exclude_invalid_files is not None:
+            inconsistent_options["exclude_invalid_files"] = exclude_invalid_files
+        if ignore_prefixes is not None:
+            inconsistent_options["ignore_prefixes"] = ignore_prefixes
+        if dataset_options:
+            # There are more options that are not explicitly supported
+            raise ValueError(
+                f"{dataset_options} pyarrow.dataset options are not "
+                f"currently compatible with read_parquet."
+            )
+
+        path = self.core_options.get("path")
+        filesystem = valid_dataset_options["filesystem"]
+        has_metadata_file = False
+        if filesystem:
+            from pyarrow.fs import FileSystem as PaFileSystem
+
+            if not isinstance(filesystem, PaFileSystem):
+                raise ValueError(
+                    "When specifying a `filesystem` argument for the "
+                    "pyarrow.dataset API, it must be a `FileSystem` object. "
+                    "Filesystem inference from a URI is not supported."
+                )
+
+            if require_extension:
+                raise ValueError(
+                    "`require_extension` not supported when the `filesystem` "
+                    "option is passed to `pyarrow.dataset.Dataset`."
+                )
+
+            if (
+                not self.core_options.get("ignore_metadata_file")
+                and isinstance(path, str)
+                and filesystem.get_file_info(path + "/" + "_metadata").is_file
+            ):
+                # Drop unsupported options for now if we are reading from _metadata
+                if inconsistent_options:
+                    warnings.warn(
+                        "The `exclude_invalid_files` and `ignore_prefixes` arguments "
+                        "for `pyarrow.dataset` are not supported when reading from a "
+                        "`_metadata` file. Since a `_metadata` file is present, and "
+                        " `ignore_metadata_file=False` these arguments will be ignored."
+                    )
+
+                ds = pa_ds.parquet_dataset(
+                    path + "/" + "_metadata",
+                    **valid_dataset_options,
+                )
+                has_metadata_file = True
+            else:
+                ds = pa_ds.dataset(
+                    path, **valid_dataset_options, **inconsistent_options
+                )
+
+            self._paths, self._fs = ds.files, filesystem
+            valid_dataset_options["filesystem"] = self._fs
+
+        # Add missing entries to valid_dataset_options
+        valid_dataset_options["_ds"] = ds
+        valid_dataset_options["_require_extension"] = require_extension
+        valid_dataset_options["_has_metadata_file"] = has_metadata_file
+        valid_dataset_options["_inconsistent_options"] = inconsistent_options
+
+        return valid_dataset_options
+
+    def validate_read_options(self, **read_options):
+        # Warn if the user is passing in read options
+        if read_options:
+            warnings.warn(
+                f"Unrecognized read arguments: {set(read_options)}. "
+                f"These options might be silently ignored!"
+            )
+        return read_options
+
+    def validate_other_options(self, **other_options):
+        # Warn the user if any "other_options" are not recognized
+        unrecognized = set(other_options) - {"arrow_to_pandas"}
+        if unrecognized:
+            warnings.warn(
+                f"Unrecognized key-word arguments: {unrecognized}. "
+                f"These options might be silently ignored!"
+            )
+        return other_options
