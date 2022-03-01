@@ -8,6 +8,7 @@ from ....base import compute_as_if_collection, tokenize
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
+from ...backends import get_backend
 from ...core import DataFrame, Scalar, new_dd_object
 from .utils import ORCEngine
 
@@ -71,6 +72,7 @@ def read_orc(
     split_stripes=1,
     aggregate_files=None,
     storage_options=None,
+    **kwargs,
 ):
     """Read dataframe from ORC file(s)
 
@@ -96,6 +98,8 @@ def read_orc(
         inter-file aggregation is prohibited.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
+    **kwargs :
+        Other key-word arguments to pass through to the ORC backend.
 
     Returns
     -------
@@ -106,6 +110,30 @@ def read_orc(
     >>> df = dd.read_orc('https://github.com/apache/orc/raw/'
     ...                  'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
+
+    # Check the backend and dispatch to dask_cudf if necessary
+    backend = get_backend()
+    if backend not in ("pandas", "cudf"):
+        raise ValueError(f"{backend} not a supported backend library for dd.read_orc")
+    if backend == "cudf":
+        try:
+            import dask_cudf
+
+            # TODO: dask_cudf doesn't support index, split_stripes,
+            # or aggregate_files. We should warn the user if these
+            # arguments are set to non-default values.
+            return dask_cudf.read_orc(
+                path, columns=columns, storage_options=None, **kwargs
+            )
+        except ImportError:
+            raise ImportError(
+                "Failed to import a required dependency for the cudf backend. "
+                "Please ensure dask_cudf is installed."
+            )
+    elif kwargs:
+        raise ValueError(
+            f"{set(kwargs)} arguments not supported for pandas-backed read_orc"
+        )
 
     # Get engine
     engine = _get_engine(engine)

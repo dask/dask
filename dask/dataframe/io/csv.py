@@ -5,6 +5,7 @@ from warnings import catch_warnings, simplefilter, warn
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
+from ..backends import get_backend
 
 try:
     import psutil
@@ -759,9 +760,39 @@ def make_reader(reader, reader_name, file_type):
     return read
 
 
-read_csv = make_reader(pd.read_csv, "read_csv", "CSV")
 read_table = make_reader(pd.read_table, "read_table", "delimited")
 read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
+
+
+def read_csv(*args, **kwargs):
+
+    # Check the backend and dispatch to dask_cudf if necessary
+    backend = get_backend()
+    if backend not in ("pandas", "cudf"):
+        raise ValueError(f"{backend} not a supported backend library for dd.read_csv")
+    if backend == "cudf":
+        try:
+            import dask_cudf
+
+            chunksize = kwargs.pop("chunksize", None)
+            blocksize = kwargs.pop("blocksize", "default")
+            if chunksize is None and blocksize != "default":
+                chunksize = blocksize
+            return dask_cudf.read_csv(
+                *args,
+                chunksize=chunksize,
+                **kwargs,
+            )
+        except ImportError:
+            raise ImportError(
+                "Failed to import a required dependency for the cudf backend. "
+                "Please ensure dask_cudf is installed."
+            )
+    return make_reader(pd.read_csv, "read_csv", "CSV")(*args, **kwargs)
+
+
+read_csv.__doc__ = READ_DOC_TEMPLATE.format(reader="read_csv", file_type="CSV")
+read_csv.__name__ = "read_csv"
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):

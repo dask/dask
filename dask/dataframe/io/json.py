@@ -9,6 +9,7 @@ from ...base import compute as dask_compute
 from ...bytes import read_bytes
 from ...core import flatten
 from ...delayed import delayed
+from ..backends import get_backend
 from ..utils import insert_meta_param_description, make_meta
 from .io import from_delayed
 
@@ -191,6 +192,19 @@ def read_json(
 
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
+
+    # Check the backend and change the engine if necessary
+    backend = get_backend()
+    if backend not in ("pandas", "cudf"):
+        raise ValueError(f"{backend} not a supported backend library for dd.read_json")
+    if backend == "cudf":
+        try:
+            import cudf
+
+            engine = cudf.read_json
+        except ImportError:
+            raise ImportError("Failed to import the cudf backend.")
+
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
