@@ -71,9 +71,6 @@ class EngineOptions:
 
     def validate_dataset_options(self, **dataset_options):
         """Return valid dataset options"""
-        # Extract require_extension
-        # Pop
-        dataset_options.pop("require_extension", None)
         return dataset_options
 
     def validate_read_options(self, **read_options):
