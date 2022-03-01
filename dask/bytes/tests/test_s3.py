@@ -480,7 +480,12 @@ def test_parquet(s3, engine, s3so, metadata_file):
     assert "part.0.parquet" in files
 
     df2 = dd.read_parquet(
-        url, index="foo", gather_statistics=True, engine=engine, storage_options=s3so
+        url,
+        index="foo",
+        gather_statistics=True,
+        engine=engine,
+        storage_options=s3so,
+        metadata_task_size=0,
     )
     assert len(df2.divisions) > 1
 

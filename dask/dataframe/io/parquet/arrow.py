@@ -38,7 +38,10 @@ from .utils import (
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
+
 from pyarrow import dataset as pa_ds
+from pyarrow.dataset import ParquetFileFormat
+from pyarrow.fs import FileSystem as PaFileSystem
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 del _pa_version
@@ -1522,9 +1525,6 @@ class ArrowDatasetEngine(Engine):
             frag = path_or_frag
 
         else:
-            from pyarrow.dataset import ParquetFileFormat
-            from pyarrow.fs import FileSystem as PaFileSystem
-
             frag = None
 
             # Check if we have partitioning information.
@@ -2458,7 +2458,6 @@ class ArrowDatasetOptions(EngineOptions):
         filesystem = valid_dataset_options["filesystem"]
         has_metadata_file = False
         if filesystem:
-            from pyarrow.fs import FileSystem as PaFileSystem
 
             if not isinstance(filesystem, PaFileSystem):
                 raise ValueError(

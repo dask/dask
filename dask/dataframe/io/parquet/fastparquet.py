@@ -706,6 +706,7 @@ class FastParquetEngine(Engine):
             "root_file_scheme": pf.file_scheme,
             "base_path": "" if base_path is None else base_path,
             "has_metadata_file": has_metadata_file,
+            "dataset_options": kwargs.get("dataset", {}),
         }
 
         if (
@@ -772,6 +773,7 @@ class FastParquetEngine(Engine):
         root_cats = dataset_info_kwargs.get("root_cats", None)
         root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
         has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+        dataset_options = dataset_info_kwargs["dataset_options"]
 
         # Get ParquetFile
         if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
@@ -779,6 +781,7 @@ class FastParquetEngine(Engine):
             pf = ParquetFile(
                 pf_or_files,
                 root=base_path,
+                **dataset_options,
             )
             # Update hive-partitioning to match global cats/scheme
             pf.cats = root_cats or {}
