@@ -2497,8 +2497,10 @@ class ArrowDatasetOptions(EngineOptions):
                     path, **valid_dataset_options, **inconsistent_options
                 )
 
-            self._paths, self._fs = ds.files, filesystem
-            valid_dataset_options["filesystem"] = self._fs
+            self._fs, self._paths = filesystem, ds.files
+        else:
+            self._fs, self._paths = self.get_fs_and_paths()
+        valid_dataset_options["filesystem"] = self._fs
 
         # Add missing entries to valid_dataset_options
         valid_dataset_options["_ds"] = ds
@@ -2510,9 +2512,10 @@ class ArrowDatasetOptions(EngineOptions):
 
     def validate_read_options(self, **read_options):
         # Warn if the user is passing in read options
-        if read_options:
+        unrecognized = set(read_options) - {"open_file_options"}
+        if unrecognized:
             warnings.warn(
-                f"Unrecognized read arguments: {set(read_options)}. "
+                f"Unrecognized read arguments: {set(unrecognized)}. "
                 f"These options might be silently ignored!"
             )
         return read_options

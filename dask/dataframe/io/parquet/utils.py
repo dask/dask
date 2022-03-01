@@ -44,6 +44,9 @@ class EngineOptions:
             **user_kwargs.pop("read", {}).copy(),
             **user_kwargs.pop("read_options", {}).copy(),
         }
+        read_options["open_file_options"] = user_kwargs.pop(
+            "open_file_options", {}
+        ).copy()
 
         # Make sure `require_extension` is included in
         # `dataset_options` rather than user_kwargs
