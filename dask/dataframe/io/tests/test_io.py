@@ -127,29 +127,29 @@ def test_from_bcolz_multiple_threads():
             [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
         )
 
-        with check_bcolz_deprecation_warning():
-            d = dd.from_bcolz(t, chunksize=2)
+        d = dd.from_bcolz(t, chunksize=2)
 
-            assert d.npartitions == 2
-            assert is_categorical_dtype(d.dtypes["a"])
-            assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
-            assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
+        assert d.npartitions == 2
+        assert is_categorical_dtype(d.dtypes["a"])
+        assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
+        assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
 
-            d = dd.from_bcolz(t, chunksize=2, index="x")
+        d = dd.from_bcolz(t, chunksize=2, index="x")
 
-            L = list(d.index.compute(scheduler="sync"))
-            assert L == [1, 2, 3] or L == [1, 3, 2]
+        L = list(d.index.compute(scheduler="sync"))
+        assert L == [1, 2, 3] or L == [1, 3, 2]
 
-            # Names
-            assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
-                dd.from_bcolz(t, chunksize=2).dask
-            )
-            assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
-                dd.from_bcolz(t, chunksize=3).dask
-            )
+        # Names
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
+            dd.from_bcolz(t, chunksize=2).dask
+        )
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
+            dd.from_bcolz(t, chunksize=3).dask
+        )
 
-    with ThreadPoolExecutor(5) as pool:
-        list(pool.map(check, range(5)))
+    with check_bcolz_deprecation_warning():
+        with ThreadPoolExecutor(5) as pool:
+            list(pool.map(check, range(5)))
 
 
 def test_from_bcolz():
