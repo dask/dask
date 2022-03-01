@@ -196,8 +196,11 @@ def test_set_index_general_pmh(npartitions, column, shuffle_method):
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
-    expected = df.set_index(column(df))
-    result = ddf.set_index(column(ddf), shuffle=shuffle_method)
+    pd_index = column(df)
+    expected = df.set_index(pd_index)
+
+    da_index = column(ddf)
+    result = ddf.set_index(da_index, shuffle=shuffle_method)
     assert_eq(expected, result)
 
 
