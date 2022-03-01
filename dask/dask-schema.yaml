@@ -25,6 +25,14 @@ properties:
     type: object
     properties:
 
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend dataframe library to use for data creation and input IO.
+          Available options include "pandas" and "cudf". Default is "pandas".
+
       shuffle-compression:
         type:
         - string
