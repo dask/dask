@@ -3941,3 +3941,65 @@ def test_custom_filename_with_partition(tmpdir, engine):
     assert_eq(
         pdf, actual, check_index=False, check_dtype=False, check_categorical=False
     )
+
+
+@PYARROW_DS_MARK
+@pytest.mark.parametrize("partition_on", [None, "b"])
+def test_read_dataset_options_pyarrow(tmpdir, partition_on):
+    from pyarrow.fs import FileSystem
+
+    engine = "pyarrow"
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df, npartitions=4)
+    ddf1.to_parquet(tmpdir, engine=engine, partition_on=partition_on)
+
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        dataset={
+            "filesystem": FileSystem.from_uri(tmpdir)[0],
+            "exclude_invalid_files": True,
+            "partitioning": "hive" if partition_on else None,
+        },
+        ignore_metadata_file=True,
+        gather_statistics=True,
+    )
+    if partition_on is None:
+        assert_eq(ddf1, ddf2)
+    else:
+        # Simpler check for partitioned data
+        assert set(ddf2.compute().columns).issubset({"a", "b"})
+
+    with pytest.raises(ValueError):
+        dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            dataset={"foo": True},
+        )
+
+
+@PYARROW_DS_MARK
+@pytest.mark.parametrize("partition_on", [None, "b"])
+def test_read_dataset_options_fastparquet(tmpdir, partition_on):
+    engine = "fastparquet"
+    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df, npartitions=4)
+    ddf1.to_parquet(tmpdir, engine=engine, partition_on=partition_on)
+
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        dataset={"pandas_nulls": False},
+    )
+    if partition_on is None:
+        assert_eq(ddf1, ddf2)
+    else:
+        # Simpler check for partitioned data
+        assert set(ddf2.compute().columns).issubset({"a", "b"})
+
+    with pytest.raises(ValueError):
+        dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            dataset={"foo": True},
+        )

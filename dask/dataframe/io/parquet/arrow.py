@@ -1493,7 +1493,7 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Get full path (empty strings should be ignored)
-        full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
+        full_path = "/".join([p for p in [data_path, filename] if p != ""])
 
         pkeys = partition_keys.get(full_path, None)
         if partition_obj and pkeys is None:
