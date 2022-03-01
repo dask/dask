@@ -232,7 +232,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     return new_dd_object(dsk, name, data, divisions)
 
 
-@_deprecated(after_version="2022.02.0")
+@_deprecated(after_version="2022.02.1")
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
     """Read BColz CTable into a Dask Dataframe
 
