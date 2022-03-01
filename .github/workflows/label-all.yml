@@ -1,6 +1,6 @@
 name: "Issue and PR Labeler"
 on:
-  pull_request_target:
+  pull_request:
     types: [opened]
   issues:
     types: [opened, reopened]
@@ -8,7 +8,7 @@ jobs:
   label-all-on-open:
     runs-on: ubuntu-latest
     steps:
-      - uses: andymckay/labeler@main
+      - uses: andymckay/labeler@1.0.4
         with:
           add-labels: "needs triage"
           ignore-if-labeled: false
