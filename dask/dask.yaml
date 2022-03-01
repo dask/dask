@@ -1,3 +1,5 @@
+device: null # Hardware device preference for data creation and cluster deployment
+
 temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /local
 
 tokenize:

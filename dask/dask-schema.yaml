@@ -1,4 +1,13 @@
 properties:
+
+  device:
+    type:
+    - string
+    - "null"
+    description: |
+        Hardware device preference for data creation and cluster deployment.
+        Available options include "cpu" and "cuda". Default is "cpu".
+
   temporary-directory:
     type:
     - string
