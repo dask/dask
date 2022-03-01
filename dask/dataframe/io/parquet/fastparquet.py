@@ -1324,7 +1324,7 @@ class FastparquetOptions(EngineOptions):
         Supported parameters can be passed to ``read_parquet``
         using the ``dataset_options`` argument. For example::
 
-        >>> df = dd.read_parquet(path, dataset_options={pandas_nulls: False})  # doctest: +SKIP
+        >>> df = dd.read_parquet(...,dataset_options={"pandas_nulls": False})  # doctest: +SKIP
         """
 
         # Extract require_extension

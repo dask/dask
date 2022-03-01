@@ -2421,7 +2421,7 @@ class ArrowDatasetOptions(EngineOptions):
         Supported parameters can be passed to ``read_parquet``
         using the ``dataset_options`` argument. For example::
 
-        >>> df = dd.read_parquet(path, dataset_options={exclude_invalid_files: True})  # doctest: +SKIP
+        >>> df = dd.read_parquet(...,dataset_options={"exclude_invalid_files": True})  # doctest: +SKIP
         """
 
         # Use pyarrow.dataset API
@@ -2431,9 +2431,7 @@ class ArrowDatasetOptions(EngineOptions):
         require_extension = dataset_options.pop("require_extension", None)
         if require_extension is None:
             require_extension = (
-                (".parquet", ".parq", ".pq")
-                if dataset_options.get("filesystem", None) is None
-                else False
+                (".parquet", ".parq", ".pq") if filesystem is None else False
             )
 
         # Pop supported dataset options
