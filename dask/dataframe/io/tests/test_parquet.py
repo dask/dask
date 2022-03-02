@@ -3955,11 +3955,11 @@ def test_custom_filename_with_partition(tmpdir, engine):
 def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/8650
 
-    from pyarrow.dataset import write_dataset, HivePartitioning
     import pyarrow.parquet as pq
+    from pyarrow.dataset import HivePartitioning, write_dataset
 
     # Sample data
-    df = pd.DataFrame({'col1': [1, 2], 'col2': ['a', 'b']})
+    df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
 
     # Write partitioned dataset with dask
     dask_path = tmpdir.mkdir("foo-dask")
@@ -3982,14 +3982,12 @@ def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     def _prep(x):
         return x.sort_values("col2")[["col1", "col2"]]
 
-    # Check that reading dask-written data is the same
-    # for pyarrow and dask
+    # Check that reading dask-written data is the same for pyarrow and dask
     df_read_dask = dd.read_parquet(dask_path, engine=engine)
     df_read_pa = pq.read_table(dask_path).to_pandas()
     assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
 
-    # Check that reading pyarrow-written data is the same
-    # for pyarrow and dask
+    # Check that reading pyarrow-written data is the same for pyarrow and dask
     df_read_dask = dd.read_parquet(pa_path, engine=engine)
     df_read_pa = pq.read_table(pa_path).to_pandas()
     assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)

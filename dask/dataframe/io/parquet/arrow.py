@@ -1046,12 +1046,12 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         partition_obj = dataset_info["partitions"]
         partitions = dataset_info["partition_names"]
+        physical_column_names = dataset_info.get("physical_schema", schema).names
         columns = None
 
         # Set index and column names using
         # pandas metadata (when available)
         pandas_metadata = _get_pandas_metadata(schema)
-        physical_column_names = dataset_info.get("physical_schema", schema).names
         if pandas_metadata:
             (
                 index_names,
