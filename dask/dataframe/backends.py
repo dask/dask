@@ -46,16 +46,6 @@ from .utils import (
 )
 
 
-# NOTE: This default could depend on context info from
-# `dask` and/or `distributed` (For example, is the
-# "cuda" switch turned on? If so, use "cudf" as default).
-def get_backend():
-    """Get default DataFrame backend to use for input IO"""
-    return config.get("dataframe.backend") or (
-        "cudf" if config.get("device") in ("cuda", "gpu") else "pandas"
-    )
-
-
 def set_backend(df_backend):
     """Set the default DataFrame backend to use for input IO"""
     return config.set({"dataframe.backend": df_backend})
