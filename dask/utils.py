@@ -613,6 +613,71 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
+class CreationDispatch:
+    """Simple dispatch for collection creation"""
+
+    def __init__(self, name=None):
+        self._lookup = {}
+        if name:
+            self.__name__ = name
+
+    def set_info(self, doc=None, name=None):
+        if doc:
+            self.__doc__ = doc
+        if name:
+            self.__name__ = name
+        return self
+
+    def register(self, backend, func=None):
+        """Register dispatch of `func` on arguments of type `type`"""
+
+        def wrapper(func):
+            if isinstance(backend, tuple):
+                for b in backend:
+                    self.register(b, func)
+            else:
+                self._lookup[backend] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
+
+    def dispatch(self, backend):
+        """Return the function implementation for the given backend"""
+        try:
+            impl = self._lookup[backend]
+        except KeyError:
+            pass
+        else:
+            return impl
+        raise ValueError(f"No backend dispatch registered for {backend}")
+
+    @property
+    def default(self):
+        raise NotImplementedError
+
+    def get_backend(self):
+        raise NotImplementedError
+
+    def __call__(self, *args, **kwargs):
+        """
+        Call the corresponding method based on type of argument.
+        """
+        backend = self.get_backend()
+        try:
+            func = self.dispatch(backend)
+        except ValueError as err:
+            # Try falling back to the default
+            if self.default and backend != self.default:
+                warnings.warn(
+                    f"Dispatching {self.__name__} to {backend} backend failed."
+                    f" Falling back to {self.default}. "
+                )
+                func = self.dispatch(self.default)
+            else:
+                raise err
+        return func(*args, **kwargs)
+
+
 def ensure_not_exists(filename):
     """
     Ensure that a file does not exist.
