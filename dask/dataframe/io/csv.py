@@ -5,7 +5,7 @@ from warnings import catch_warnings, simplefilter, warn
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ..backends import get_backend
+from ..dispatch import read_csv_dispatch, read_fwf_dispatch, read_table_dispatch
 
 try:
     import psutil
@@ -760,39 +760,28 @@ def make_reader(reader, reader_name, file_type):
     return read
 
 
-read_table = make_reader(pd.read_table, "read_table", "delimited")
-read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
+read_csv_pandas = make_reader(pd.read_csv, "read_csv", "CSV")
+read_csv_dispatch.register("pandas", func=read_csv_pandas)
+read_csv = read_csv_dispatch.set_info(
+    doc=read_csv_pandas.__doc__,
+    name="read_csv",
+)
 
 
-def read_csv(*args, **kwargs):
-
-    # Check the backend and dispatch to dask_cudf if necessary
-    backend = get_backend()
-    if backend not in ("pandas", "cudf"):
-        raise ValueError(f"{backend} not a supported backend library for dd.read_csv")
-    if backend == "cudf":
-        try:
-            import dask_cudf
-
-            chunksize = kwargs.pop("chunksize", None)
-            blocksize = kwargs.pop("blocksize", "default")
-            if chunksize is None and blocksize != "default":
-                chunksize = blocksize
-            return dask_cudf.read_csv(
-                *args,
-                chunksize=chunksize,
-                **kwargs,
-            )
-        except ImportError:
-            raise ImportError(
-                "Failed to import a required dependency for the cudf backend. "
-                "Please ensure dask_cudf is installed."
-            )
-    return make_reader(pd.read_csv, "read_csv", "CSV")(*args, **kwargs)
+read_table_pandas = make_reader(pd.read_table, "read_table", "delimited")
+read_table_dispatch.register("pandas", func=read_table_pandas)
+read_table = read_table_dispatch.set_info(
+    doc=read_table_pandas.__doc__,
+    name="read_table",
+)
 
 
-read_csv.__doc__ = READ_DOC_TEMPLATE.format(reader="read_csv", file_type="CSV")
-read_csv.__name__ = "read_csv"
+read_fwf_pandas = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
+read_fwf_dispatch.register("pandas", func=read_fwf_pandas)
+read_fwf = read_fwf_dispatch.set_info(
+    doc=read_fwf_pandas.__doc__,
+    name="read_fwf",
+)
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):

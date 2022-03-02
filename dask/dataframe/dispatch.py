@@ -3,14 +3,17 @@ Dispatch in dask.dataframe.
 
 Also see extension.py
 """
+import warnings
 
 import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
+from dask import config
 
 from ..utils import Dispatch
 
+# Compute Dispatch Funcitons
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
@@ -139,3 +142,78 @@ def make_meta(x, index=None, parent_meta=None):
 def union_categoricals(to_union, sort_categories=False, ignore_order=False):
     func = union_categoricals_dispatch.dispatch(type(to_union[0]))
     return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
+
+
+class BackendIODispatch:
+    """Simple backend-IO dispatch"""
+
+    def __init__(self, name=None, default="pandas"):
+        self._lookup = {}
+        self.default = default
+        if name:
+            self.__name__ = name
+
+    def set_info(self, doc=None, name=None):
+        if doc:
+            self.__doc__ = doc
+        if name:
+            self.__name__ = name
+        return self
+
+    def register(self, backend, func=None):
+        """Register dispatch of `func` on arguments of type `type`"""
+
+        def wrapper(func):
+            if isinstance(backend, tuple):
+                for b in backend:
+                    self.register(b, func)
+            else:
+                self._lookup[backend] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
+
+    def dispatch(self, backend):
+        """Return the function implementation for the given backend"""
+        try:
+            impl = self._lookup[backend]
+        except KeyError:
+            pass
+        else:
+            return impl
+        raise ValueError(f"No backend dispatch registered for {backend}")
+
+    def __call__(self, *args, **kwargs):
+        """
+        Call the corresponding method based on type of argument.
+        """
+        backend = config.get("dataframe.backend") or (
+            "cudf" if config.get("device") in ("cuda", "gpu") else "pandas"
+        )
+        try:
+            func = self.dispatch(backend)
+        except ValueError as err:
+            # Try falling back to pandas
+            if self.default and backend != self.default:
+                warnings.warn(
+                    f"Dispatching {self.__name__} to {backend} backend failed."
+                    f" Falling back to {self.default}. "
+                )
+                func = self.dispatch(self.default)
+            else:
+                raise err
+        return func(*args, **kwargs)
+
+
+# IO-Backend Disaptch Functions
+make_timeseries_dispatch = BackendIODispatch("make_timeseries_dispatch")
+read_csv_dispatch = BackendIODispatch("read_csv_dispatch")
+read_fwf_dispatch = BackendIODispatch("read_fwf_dispatch")
+read_hdf_dispatch = BackendIODispatch("read_hdf_dispatch")
+read_json_dispatch = BackendIODispatch("read_json_dispatch")
+read_sql_dispatch = BackendIODispatch("read_sql_dispatch")
+read_sql_query_dispatch = BackendIODispatch("read_sql_query_dispatch")
+read_sql_table_dispatch = BackendIODispatch("read_sql_table_dispatch")
+read_table_dispatch = BackendIODispatch("read_table_dispatch")
+read_parquet_dispatch = BackendIODispatch("read_parquet_dispatch")
+read_orc_dispatch = BackendIODispatch("read_orc_dispatch")

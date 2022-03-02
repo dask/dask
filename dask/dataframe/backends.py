@@ -573,3 +573,73 @@ def percentile(a, q, interpolation="linear"):
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+## cudf "Backend IO" Dispatching
+
+from .dispatch import (
+    make_timeseries_dispatch,
+    read_csv_dispatch,
+    read_orc_dispatch,
+    read_parquet_dispatch,
+)
+
+# TODO: Fall back to pandas but use map_partitions
+# for remaining IO functions without cudf support:
+# read_table_dispatch,
+# read_fwf_dispatch,
+# read_hdf_dispatch,
+# read_json_dispatch,
+# read_sql_dispatch,
+# read_sql_query_dispatch,
+# read_sql_table_dispatch,
+#
+# Also - How to deal with `from_*`, where * is a
+# cpu- or gpu-specific structure (e.g. `from_pandas`
+# or `from_cudf`). Should we move data in these cases?
+
+
+def _dask_cudf():
+    try:
+        import dask_cudf
+
+        return dask_cudf
+    except ImportError:
+        raise ImportError(
+            "Dask-Dataframe backend is set to cudf, but dask_cudf is not installed."
+        )
+
+
+@make_timeseries_dispatch.register("cudf")
+def make_timeseries_cudf(*args, df_backend=None, **kwargs):
+    return make_timeseries_dispatch.dispatch("pandas")(
+        *args, df_backend="cudf", **kwargs
+    )
+
+
+@read_parquet_dispatch.register("cudf")
+def read_parquet_cudf(*args, engine=None, **kwargs):
+    dask_cudf = _dask_cudf()
+    return read_parquet_dispatch.dispatch("pandas")(
+        *args,
+        engine=dask_cudf.io.parquet.CudfEngine,
+        **kwargs,
+    )
+
+
+@read_orc_dispatch.register("cudf")
+def read_orc_cudf(*args, **kwargs):
+    return _dask_cudf().read_orc(*args, **kwargs)
+
+
+@read_csv_dispatch.register("cudf")
+def read_csv_cudf(*args, **kwargs):
+    chunksize = kwargs.pop("chunksize", None)
+    blocksize = kwargs.pop("blocksize", "default")
+    if chunksize is None and blocksize != "default":
+        chunksize = blocksize
+    return _dask_cudf().read_csv(
+        *args,
+        chunksize=chunksize,
+        **kwargs,
+    )

@@ -14,8 +14,8 @@ from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...backends import get_backend
 from ...core import DataFrame, Scalar, new_dd_object
+from ...dispatch import read_parquet_dispatch
 from ...methods import concat
 from ..utils import _is_local_fs
 from .utils import Engine, _sort_and_analyze_paths
@@ -166,7 +166,8 @@ class ToParquetFunctionWrapper:
         )
 
 
-def read_parquet(
+@read_parquet_dispatch.register("pandas")
+def read_parquet_pandas(
     path,
     columns=None,
     filters=None,
@@ -365,23 +366,6 @@ def read_parquet(
         df = read_parquet(path, **input_kwargs)
         return df[columns]
 
-    # Change engine to CudfEngine if backend or engine
-    # is set to "cudf"
-    if engine == "cudf" or get_backend() == "cudf":
-        # TODO: Perhaps we could filter engine-specific
-        # kwargs if the user has specified a specific
-        # engine other than cudf?
-        try:
-            from dask_cudf.io.parquet import CudfEngine
-
-            engine = CudfEngine
-        except ImportError:
-            warnings.warn(
-                "Default df_backend is set to cudf, but "
-                "dask_cudf is not installed. Using Pandas "
-                "(on CPU) instead."
-            )
-
     if columns is not None:
         columns = list(columns)
 
@@ -500,6 +484,12 @@ def read_parquet(
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
     return new_dd_object(graph, output_name, meta, divisions)
+
+
+read_parquet = read_parquet_dispatch.set_info(
+    doc=read_parquet_pandas.__doc__,
+    name="read_parquet",
+)
 
 
 def check_multi_support(engine):
