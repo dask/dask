@@ -568,6 +568,8 @@ def _register_cudf():
 ## cudf "Backend IO" Dispatching
 
 from .dispatch import (
+    from_array_dispatch,
+    from_pandas_dispatch,
     make_timeseries_dispatch,
     read_csv_dispatch,
     read_json_dispatch,
@@ -652,3 +654,25 @@ def read_json_cudf(*args, engine=None, **kwargs):
     return read_json_dispatch.dispatch("pandas")(
         *args, engine=_cudf().read_json, **kwargs
     )
+
+
+@from_pandas_dispatch.register("cudf")
+def from_pandas_cudf(*args, engine=None, **kwargs):
+    ddf = from_pandas_dispatch.dispatch("pandas")(*args, **kwargs)
+    if isinstance(ddf._meta, (pd.DataFrame, pd.Series, pd.Index)):
+        warnings.warn("Converting pandas data to cudf in from_pandas")
+
+        return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+    return ddf
+
+
+@from_array_dispatch.register("cudf")
+def from_array_cudf(*args, engine=None, **kwargs):
+    ddf = from_array_dispatch.dispatch("pandas")(*args, **kwargs)
+    if isinstance(ddf._meta, pd.DataFrame):
+        warnings.warn("Converting pandas data to cudf in from_pandas")
+        return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+    elif isinstance(ddf._meta, (pd.Series, pd.Index)):
+        warnings.warn("Converting pandas data to cudf in from_pandas")
+        return ddf.map_partitions(_cudf().Series.from_pandas)
+    return ddf

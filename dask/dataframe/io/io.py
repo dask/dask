@@ -14,6 +14,7 @@ from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
+from ..dispatch import from_array_dispatch, from_pandas_dispatch
 from ..shuffle import set_partition
 from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
 
@@ -76,7 +77,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None, meta=None):
+@from_array_dispatch.register("pandas")
+def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     """Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
@@ -129,7 +131,14 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
+from_array = from_array_dispatch.set_info(
+    doc=from_array_pandas.__doc__,
+    name="from_array",
+)
+
+
+@from_pandas_dispatch.register("pandas")
+def from_pandas_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -230,6 +239,12 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
     return new_dd_object(dsk, name, data, divisions)
+
+
+from_pandas = from_pandas_dispatch.set_info(
+    doc=from_pandas_pandas.__doc__,
+    name="from_pandas",
+)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
