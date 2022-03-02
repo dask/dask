@@ -580,16 +580,17 @@ def _register_cudf():
 from .dispatch import (
     make_timeseries_dispatch,
     read_csv_dispatch,
+    read_json_dispatch,
     read_orc_dispatch,
     read_parquet_dispatch,
 )
 
 # TODO: Fall back to pandas but use map_partitions
 # for remaining IO functions without cudf support:
+#
 # read_table_dispatch,
 # read_fwf_dispatch,
 # read_hdf_dispatch,
-# read_json_dispatch,
 # read_sql_dispatch,
 # read_sql_query_dispatch,
 # read_sql_table_dispatch,
@@ -607,6 +608,17 @@ def _dask_cudf():
     except ImportError:
         raise ImportError(
             "Dask-Dataframe backend is set to cudf, but dask_cudf is not installed."
+        )
+
+
+def _cudf():
+    try:
+        import cudf
+
+        return cudf
+    except ImportError:
+        raise ImportError(
+            "Dask-Dataframe backend is set to cudf, but cudf is not installed."
         )
 
 
@@ -642,4 +654,11 @@ def read_csv_cudf(*args, **kwargs):
         *args,
         chunksize=chunksize,
         **kwargs,
+    )
+
+
+@read_json_dispatch.register("cudf")
+def read_json_cudf(*args, engine=None, **kwargs):
+    return read_json_dispatch.dispatch("pandas")(
+        *args, engine=_cudf().read_json, **kwargs
     )

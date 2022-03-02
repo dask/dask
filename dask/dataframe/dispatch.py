@@ -207,13 +207,13 @@ class BackendIODispatch:
 
 # IO-Backend Disaptch Functions
 make_timeseries_dispatch = BackendIODispatch("make_timeseries_dispatch")
+read_parquet_dispatch = BackendIODispatch("read_parquet_dispatch")
+read_json_dispatch = BackendIODispatch("read_json_dispatch")
+read_orc_dispatch = BackendIODispatch("read_orc_dispatch")
 read_csv_dispatch = BackendIODispatch("read_csv_dispatch")
+read_table_dispatch = BackendIODispatch("read_table_dispatch")
 read_fwf_dispatch = BackendIODispatch("read_fwf_dispatch")
 read_hdf_dispatch = BackendIODispatch("read_hdf_dispatch")
-read_json_dispatch = BackendIODispatch("read_json_dispatch")
 read_sql_dispatch = BackendIODispatch("read_sql_dispatch")
 read_sql_query_dispatch = BackendIODispatch("read_sql_query_dispatch")
 read_sql_table_dispatch = BackendIODispatch("read_sql_table_dispatch")
-read_table_dispatch = BackendIODispatch("read_table_dispatch")
-read_parquet_dispatch = BackendIODispatch("read_parquet_dispatch")
-read_orc_dispatch = BackendIODispatch("read_orc_dispatch")

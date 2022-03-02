@@ -9,7 +9,7 @@ from ...base import compute as dask_compute
 from ...bytes import read_bytes
 from ...core import flatten
 from ...delayed import delayed
-from ..backends import get_backend
+from ..dispatch import read_json_dispatch
 from ..utils import insert_meta_param_description, make_meta
 from .io import from_delayed
 
@@ -104,8 +104,9 @@ def write_json_partition(df, openfile, kwargs):
     return os.path.normpath(openfile.path)
 
 
+@read_json_dispatch.register("pandas")
 @insert_meta_param_description
-def read_json(
+def read_json_pandas(
     url_path,
     orient="records",
     lines=None,
@@ -192,18 +193,6 @@ def read_json(
 
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
-
-    # Check the backend and change the engine if necessary
-    backend = get_backend()
-    if backend not in ("pandas", "cudf"):
-        raise ValueError(f"{backend} not a supported backend library for dd.read_json")
-    if backend == "cudf":
-        try:
-            import cudf
-
-            engine = cudf.read_json
-        except ImportError:
-            raise ImportError("Failed to import the cudf backend.")
 
     if lines is None:
         lines = orient == "records"
@@ -298,6 +287,12 @@ def read_json(
         ]
 
     return from_delayed(parts, meta=meta)
+
+
+read_json = read_json_dispatch.set_info(
+    doc=read_json_pandas.__doc__,
+    name="read_json",
+)
 
 
 def read_json_chunk(

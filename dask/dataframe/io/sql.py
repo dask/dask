@@ -8,10 +8,16 @@ from dask.delayed import tokenize
 
 from ... import delayed
 from .. import methods
+from ..dispatch import (
+    read_sql_dispatch,
+    read_sql_query_dispatch,
+    read_sql_table_dispatch,
+)
 from .io import from_delayed, from_pandas
 
 
-def read_sql_query(
+@read_sql_query_dispatch.register("pandas")
+def read_sql_query_pandas(
     sql,
     con,
     index_col,
@@ -185,7 +191,14 @@ def read_sql_query(
     return from_delayed(parts, meta, divisions=divisions)
 
 
-def read_sql_table(
+read_sql_query = read_sql_query_dispatch.set_info(
+    doc=read_sql_query_pandas.__doc__,
+    name="read_sql_query",
+)
+
+
+@read_sql_table_dispatch.register("pandas")
+def read_sql_table_pandas(
     table_name,
     con,
     index_col,
@@ -382,7 +395,14 @@ def read_sql_table(
     )
 
 
-def read_sql(sql, con, index_col, **kwargs):
+read_sql_table = read_sql_table_dispatch.set_info(
+    doc=read_sql_table_pandas.__doc__,
+    name="read_sql_table",
+)
+
+
+@read_sql_dispatch.register("pandas")
+def read_sql_pandas(sql, con, index_col, **kwargs):
     """
     Read SQL query or database table into a DataFrame.
 
@@ -419,6 +439,12 @@ def read_sql(sql, con, index_col, **kwargs):
         return read_sql_table(sql, con, index_col, **kwargs)
     else:
         return read_sql_query(sql, con, index_col, **kwargs)
+
+
+read_sql = read_sql_dispatch.set_info(
+    doc=read_sql_pandas.__doc__,
+    name="read_sql",
+)
 
 
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
