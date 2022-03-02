@@ -1051,6 +1051,7 @@ class ArrowDatasetEngine(Engine):
         # Set index and column names using
         # pandas metadata (when available)
         pandas_metadata = _get_pandas_metadata(schema)
+        physical_column_names = dataset_info.get("physical_schema", schema).names
         if pandas_metadata:
             (
                 index_names,
@@ -1068,7 +1069,7 @@ class ArrowDatasetEngine(Engine):
         else:
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
-            column_names = dataset_info.get("physical_schema", schema).names
+            column_names = physical_column_names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
@@ -1078,7 +1079,7 @@ class ArrowDatasetEngine(Engine):
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
         if partitions:
-            _partitions = [p for p in partitions if p not in column_names]
+            _partitions = [p for p in partitions if p not in physical_column_names]
             if not _partitions:
                 partitions = []
                 dataset_info["partitions"] = None
@@ -1088,7 +1089,9 @@ class ArrowDatasetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
-                    "columns: {} | partitions: {}".format(column_names, partitions)
+                    "physical columns: {} | partitions: {}".format(
+                        physical_column_names, partitions
+                    )
                 )
 
         column_names, index_names = _normalize_index_columns(
