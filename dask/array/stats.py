@@ -28,6 +28,7 @@ Some differences
 # out of the use of this software, even if advised of the possibility of
 # such damage.
 import math
+from collections import namedtuple
 
 import numpy as np
 
@@ -42,16 +43,27 @@ except ImportError as e:
     raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
 from scipy import special
 from scipy.stats import distributions
-from scipy.stats.stats import (
-    F_onewayResult,
-    KurtosistestResult,
-    NormaltestResult,
-    Power_divergenceResult,
-    SkewtestResult,
-    Ttest_1sampResult,
-    Ttest_indResult,
-    Ttest_relResult,
-)
+
+# copied from https://github.com/scipy/scipy/blob/v1.8.0/scipy/stats/_stats_py.py since
+# these are all private after v1.8.0
+F_onewayResult = namedtuple("F_onewayResult", ("statistic", "pvalue"))
+KurtosistestResult = namedtuple("KurtosistestResult", ("statistic", "pvalue"))
+NormaltestResult = namedtuple("NormaltestResult", ("statistic", "pvalue"))
+Power_divergenceResult = namedtuple("Power_divergenceResult", ("statistic", "pvalue"))
+SkewtestResult = namedtuple("SkewtestResult", ("statistic", "pvalue"))
+Ttest_1sampResult = namedtuple("Ttest_1sampResult", ("statistic", "pvalue"))
+Ttest_indResult = namedtuple("Ttest_indResult", ("statistic", "pvalue"))
+Ttest_relResult = namedtuple("Ttest_relResult", ("statistic", "pvalue"))
+
+# Map from names to lambda_ values used in power_divergence().
+_power_div_lambda_names = {
+    "pearson": 1,
+    "log-likelihood": 0,
+    "freeman-tukey": -0.5,
+    "mod-log-likelihood": -1,
+    "neyman": -2,
+    "cressie-read": 2 / 3,
+}
 
 __all__ = [
     "ttest_ind",
@@ -140,14 +152,13 @@ def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
 def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
     if isinstance(lambda_, str):
-        # TODO: public api
-        if lambda_ not in scipy.stats.stats._power_div_lambda_names:
-            names = repr(list(scipy.stats.stats._power_div_lambda_names.keys()))[1:-1]
+        if lambda_ not in _power_div_lambda_names:
+            names = repr(list(_power_div_lambda_names.keys()))[1:-1]
             raise ValueError(
                 f"invalid string for lambda_: {lambda_!r}. "
                 f"Valid strings are {names}"
             )
-        lambda_ = scipy.stats.stats._power_div_lambda_names[lambda_]
+        lambda_ = _power_div_lambda_names[lambda_]
     elif lambda_ is None:
         lambda_ = 1
 

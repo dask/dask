@@ -115,7 +115,7 @@ that is not stored locally in each block:
 
 .. code-block:: python
 
-   >>> from scipy.ndimage.filters import gaussian_filter
+   >>> from scipy.ndimage import gaussian_filter
    >>> def func(block):
    ...    return gaussian_filter(block, sigma=1)
 

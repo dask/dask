@@ -12,7 +12,6 @@ Array
    array-design.rst
    array-sparse.rst
    array-stats.rst
-   array-linear-operator.rst
    array-slicing.rst
    array-assignment.rst
    array-stack.rst
