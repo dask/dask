@@ -8,6 +8,7 @@ import os
 import pickle
 import threading
 import uuid
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
@@ -1275,7 +1276,13 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler.get
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
+
             if scheduler in named_schedulers:
+                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                    warnings.warn(
+                        "Running on a single-machine scheduler when a distributed client "
+                        "is active might lead to unexpected results."
+                    )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
                 from distributed.worker import get_client
