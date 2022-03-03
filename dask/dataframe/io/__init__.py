@@ -5,6 +5,7 @@ from .io import (
     dataframe_from_ctable,
     from_array,
     from_bcolz,
+    from_cudf,
     from_dask_array,
     from_delayed,
     from_pandas,

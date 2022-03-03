@@ -571,6 +571,7 @@ def _register_cudf():
 from .dispatch import (
     from_array_dispatch,
     from_bcolz_dispatch,
+    from_cudf_dispatch,
     from_pandas_dispatch,
     make_timeseries_dispatch,
     read_csv_dispatch,
@@ -675,11 +676,22 @@ def read_json_cudf(*args, engine=None, **kwargs):
 @from_pandas_dispatch.register("cudf")
 def from_pandas_cudf(*args, engine=None, **kwargs):
     ddf = from_pandas_dispatch.dispatch("pandas")(*args, **kwargs)
-    if isinstance(ddf._meta, (pd.DataFrame, pd.Series, pd.Index)):
+    if isinstance(ddf._meta, pd.DataFrame):
         warnings.warn("Converting pandas data to cudf in from_pandas")
 
         return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+    elif isinstance(ddf._meta, pd.Series):
+        warnings.warn("Converting pandas data to cudf in from_pandas")
+
+        return ddf.map_partitions(_cudf().Series.from_pandas)
+    # Note: We allow the input to be cudf already for
+    # backwards compat
     return ddf
+
+
+@from_cudf_dispatch.register("cudf")
+def from_cudf_cudf(*args, **kwargs):
+    return _dask_cudf().from_cudf(*args, **kwargs)
 
 
 @from_array_dispatch.register("cudf")
@@ -688,7 +700,7 @@ def from_array_cudf(*args, engine=None, **kwargs):
     if isinstance(ddf._meta, pd.DataFrame):
         warnings.warn("Converting pandas data to cudf in from_array")
         return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-    elif isinstance(ddf._meta, (pd.Series, pd.Index)):
+    elif isinstance(ddf._meta, pd.Series):
         warnings.warn("Converting pandas data to cudf in from_array")
         return ddf.map_partitions(_cudf().Series.from_pandas)
     return ddf
