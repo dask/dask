@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from functools import partial
 from typing import Iterable
 
 import numpy as np
@@ -569,27 +570,20 @@ def _register_cudf():
 
 from .dispatch import (
     from_array_dispatch,
+    from_bcolz_dispatch,
     from_pandas_dispatch,
     make_timeseries_dispatch,
     read_csv_dispatch,
+    read_fwf_dispatch,
+    read_hdf_dispatch,
     read_json_dispatch,
     read_orc_dispatch,
     read_parquet_dispatch,
+    read_sql_dispatch,
+    read_sql_query_dispatch,
+    read_sql_table_dispatch,
+    read_table_dispatch,
 )
-
-# TODO: Fall back to pandas but use map_partitions
-# for remaining IO functions without cudf support:
-#
-# read_table_dispatch,
-# read_fwf_dispatch,
-# read_hdf_dispatch,
-# read_sql_dispatch,
-# read_sql_query_dispatch,
-# read_sql_table_dispatch,
-#
-# Also - How to deal with `from_*`, where * is a
-# cpu- or gpu-specific structure (e.g. `from_pandas`
-# or `from_cudf`). Should we move data in these cases?
 
 
 def _dask_cudf():
@@ -612,6 +606,28 @@ def _cudf():
         raise ImportError(
             "Dask-Dataframe backend is set to cudf, but cudf is not installed."
         )
+
+
+_no_cudf_support = (
+    read_table_dispatch,
+    read_fwf_dispatch,
+    read_hdf_dispatch,
+    read_sql_dispatch,
+    read_sql_query_dispatch,
+    read_sql_table_dispatch,
+    from_bcolz_dispatch,
+)
+
+
+def _move_data(dispatch_func, *args, **kwargs):
+    ddf = dispatch_func.dispatch("pandas")(*args, **kwargs)
+    warnings.warn(f"Converting pandas data to cudf in {dispatch_func}")
+
+    return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+
+
+for dispatch_func in _no_cudf_support:
+    dispatch_func.register("cudf", func=partial(_move_data, dispatch_func))
 
 
 @make_timeseries_dispatch.register("cudf")
@@ -670,9 +686,9 @@ def from_pandas_cudf(*args, engine=None, **kwargs):
 def from_array_cudf(*args, engine=None, **kwargs):
     ddf = from_array_dispatch.dispatch("pandas")(*args, **kwargs)
     if isinstance(ddf._meta, pd.DataFrame):
-        warnings.warn("Converting pandas data to cudf in from_pandas")
+        warnings.warn("Converting pandas data to cudf in from_array")
         return ddf.map_partitions(_cudf().DataFrame.from_pandas)
     elif isinstance(ddf._meta, (pd.Series, pd.Index)):
-        warnings.warn("Converting pandas data to cudf in from_pandas")
+        warnings.warn("Converting pandas data to cudf in from_array")
         return ddf.map_partitions(_cudf().Series.from_pandas)
     return ddf

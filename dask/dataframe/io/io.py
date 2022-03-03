@@ -1,4 +1,5 @@
 import os
+import warnings
 from math import ceil
 from operator import getitem
 from threading import Lock
@@ -14,7 +15,12 @@ from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
-from ..dispatch import from_array_dispatch, from_pandas_dispatch
+from ..dispatch import (
+    from_array_dispatch,
+    from_bcolz_dispatch,
+    from_cudf_dispatch,
+    from_pandas_dispatch,
+)
 from ..shuffle import set_partition
 from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
 
@@ -247,7 +253,27 @@ from_pandas = from_pandas_dispatch.set_info(
 )
 
 
-def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
+@from_cudf_dispatch.register("pandas")
+def from_cudf_pandas(df, *args, nullable=False, **kwargs):
+    """TODO: Add docstring"""
+    # Convert cudf.DataFrame to pandas, and then call usual from_pandas
+    if hasattr(df, "to_pandas"):
+        warnings.warn("Converting cudf data to pandas in from_cudf")
+
+        return from_pandas(df.to_pandas(nullable=nullable), *args, **kwargs)
+    return from_pandas(df, *args, **kwargs)
+
+
+from_cudf = from_cudf_dispatch.set_info(
+    doc=from_cudf_pandas.__doc__,
+    name="from_cudf",
+)
+
+
+@from_bcolz_dispatch.register("pandas")
+def from_bcolz_pandas(
+    x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs
+):
     """Read BColz CTable into a Dask Dataframe
 
     BColz is a fast on-disk compressed column store with careful attention
@@ -333,6 +359,12 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
         return set_partition(result, index, divisions, **kwargs)
     else:
         return result
+
+
+from_bcolz = from_bcolz_dispatch.set_info(
+    doc=from_bcolz_pandas.__doc__,
+    name="from_bcolz",
+)
 
 
 def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
