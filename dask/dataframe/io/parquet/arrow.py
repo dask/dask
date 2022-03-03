@@ -75,6 +75,7 @@ def _write_partitioned(
     filename,
     partition_cols,
     fs,
+    pandas_to_arrow_table,
     preserve_index,
     index_cols=(),
     **kwargs,
@@ -120,12 +121,8 @@ def _write_partitioned(
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
-        subtable = pa.Table.from_pandas(
-            subgroup,
-            nthreads=1,
-            preserve_index=preserve_index,
-            schema=subschema,
-            safe=False,
+        subtable = pandas_to_arrow_table(
+            subgroup, preserve_index=preserve_index, schema=subschema
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -650,7 +647,7 @@ class ArrowDatasetEngine(Engine):
                 # TODO Coerce values for compatible but different dtypes
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
 
@@ -730,6 +727,7 @@ class ArrowDatasetEngine(Engine):
                 filename,
                 partition_on,
                 fs,
+                cls._pandas_to_arrow_table,
                 preserve_index,
                 index_cols=index_cols,
                 compression=compression,

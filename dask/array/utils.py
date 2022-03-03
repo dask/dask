@@ -214,15 +214,19 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def _check_chunks(x):
-    x = x.persist(scheduler="sync")
+def _check_chunks(x, scheduler=None):
+    x = x.persist(scheduler=scheduler)
     for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
         chunk = x.dask[(x.name,) + idx]
+        if hasattr(chunk, "result"):  # it's a future
+            chunk = chunk.result()
         if not hasattr(chunk, "dtype"):
             chunk = np.array(chunk, dtype="O")
         expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
         assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
-        assert chunk.dtype == x.dtype
+        assert (
+            chunk.dtype == x.dtype
+        ), "maybe you forgot to pass the scheduler to `assert_eq`?"
     return x
 
 
@@ -241,7 +245,7 @@ def _get_dt_meta_computed(
         x_meta = getattr(x, "_meta", None)
         if check_chunks:
             # Replace x with persisted version to avoid computing it twice.
-            x = _check_chunks(x)
+            x = _check_chunks(x, scheduler=scheduler)
         x = x.compute(scheduler=scheduler)
         x_computed = x
         if hasattr(x, "todense"):

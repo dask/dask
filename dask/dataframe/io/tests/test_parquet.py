@@ -65,7 +65,7 @@ SKIP_PYARROW_LE = SKIP_PYARROW
 SKIP_PYARROW_LE_REASON = "pyarrow not found"
 SKIP_PYARROW_DS = SKIP_PYARROW
 SKIP_PYARROW_DS_REASON = "pyarrow not found"
-if pa_version.major >= 5 and not SKIP_PYARROW:
+if not SKIP_PYARROW_LE:
     # NOTE: We should use PYARROW_LE_MARK to skip
     # pyarrow-legacy tests once pyarrow officially
     # removes ParquetDataset support in the future.
@@ -3072,9 +3072,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
                     original_type = col.type
 
-                    series: pd.Series = col.cast(pa.int64()).to_pandas(
-                        types_mapper={pa.int64(): pd.Int64Dtype}
-                    )
+                    series: pd.Series = col.cast(pa.int64()).to_pandas()
                     info = np.iinfo(np.dtype("int64"))
                     # constrain data to be within valid ranges
                     series.clip(

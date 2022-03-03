@@ -1329,6 +1329,12 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+def test_roll_always_results_in_a_new_array():
+    x = da.arange(2, 3)
+    y = da.roll(x, 1)
+    assert y is not x
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
 def test_shape_and_ndim(shape):
     x = da.random.random(shape)

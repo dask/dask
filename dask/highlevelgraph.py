@@ -503,6 +503,7 @@ class Layer(Mapping):
         info = {
             "layer_type": type(self).__name__,
             "is_materialized": self.is_materialized(),
+            "number of outputs": f"{len(self.get_output_keys())}",
         }
         if self.annotations is not None:
             for key, val in self.annotations.items():
@@ -1127,6 +1128,7 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            n_outputs=len(self.get_all_external_keys()),
         )
 
 

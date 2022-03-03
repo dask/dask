@@ -4,7 +4,6 @@ import os
 import pickle
 import random
 import string
-import sys
 import tempfile
 from concurrent.futures import ProcessPoolExecutor
 from copy import copy
@@ -21,6 +20,7 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
+    _noop,
     maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
@@ -345,7 +345,7 @@ def test_rearrange_by_column_with_narrow_divisions():
     list_eq(df, a)
 
 
-def test_maybe_buffered_partd():
+def test_maybe_buffered_partd(tmp_path):
     import partd
 
     f = maybe_buffered_partd()
@@ -355,6 +355,17 @@ def test_maybe_buffered_partd():
     assert not f2.buffer
     p2 = f2()
     assert isinstance(p2.partd, partd.File)
+
+    f3 = maybe_buffered_partd(tempdir=tmp_path)
+    p3 = f3()
+    assert isinstance(p3.partd, partd.Buffer)
+    contents = list(tmp_path.iterdir())
+    assert len(contents) == 1
+    assert contents[0].suffix == ".partd"
+    assert contents[0].parent == tmp_path
+    f4 = pickle.loads(pickle.dumps(f3))
+    assert not f4.buffer
+    assert f4.tempdir == tmp_path
 
 
 def test_set_index_with_explicit_divisions():
@@ -436,10 +447,6 @@ def test_set_index_divisions_sorted():
         ddf.set_index("y", divisions=["a", "b", "d", "c"], sorted=True)
 
 
-@pytest.mark.xfail(
-    sys.platform == "win32" and sys.version_info[:2] == (3, 7),
-    reason="https://github.com/dask/dask/issues/8549",
-)
 @pytest.mark.slow
 def test_set_index_consistent_divisions():
     # See https://github.com/dask/dask/issues/3867
@@ -1226,14 +1233,31 @@ def test_set_index_nan_partition():
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
-@pytest.mark.parametrize("nparts", [1, 10])
-def test_sort_values(nelem, nparts, by, ascending):
+def test_sort_values(nelem, by, ascending):
     np.random.seed(0)
     df = pd.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
     df["b"] = np.arange(100, nelem + 100)
-    ddf = dd.from_pandas(df, npartitions=nparts)
+    ddf = dd.from_pandas(df, npartitions=10)
 
+    # run on single-threaded scheduler for debugging purposes
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
+    dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
+@pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
+@pytest.mark.parametrize("nelem", [10, 500])
+def test_sort_values_single_partition(nelem, by, ascending):
+    np.random.seed(0)
+    df = pd.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
@@ -1261,10 +1285,34 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=nparts)
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
+
+
+def test_shuffle_values_raises():
+    df = pd.DataFrame({"a": [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(
+        ValueError, match="na_position must be either 'first' or 'last'"
+    ):
+        ddf.sort_values(by="a", na_position="invalid")
+
+
+def test_shuffle_by_as_list():
+    df = pd.DataFrame({"a": [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=["a"], npartitions="auto", ascending=True)
+    expect = pd.DataFrame({"a": [1, 2, 3]})
+    dd.assert_eq(got, expect, check_index=False)
+
+
+def test_noop():
+    assert _noop(1, None) == 1
+    assert _noop("test", None) == "test"
 
 
 @pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
@@ -1278,6 +1326,7 @@ def test_sort_values_custom_function(by, nparts):
             by_columns, ascending=ascending, na_position=na_position
         )
 
+    # run on single-threaded scheduler for debugging purposes
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(
             by=by[0], sort_function=f, sort_function_kwargs={"by_columns": by}

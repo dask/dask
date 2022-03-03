@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import subprocess
@@ -5,8 +6,8 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -226,9 +227,16 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f3\x94\x93\x94.",
+        (
+            b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f2\x94\x93\x94.",
+        ),
+        (
+            (
+                "c",
+                b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f1\x94\x93\x94.",
+            ),
+        ),
     )
     assert res == sol
 
@@ -339,6 +347,7 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_same_repr():
@@ -404,6 +413,36 @@ def test_tokenize_ordered_dict():
 
     assert tokenize(a) == tokenize(b)
     assert tokenize(a) != tokenize(c)
+
+
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+
+
+def test_tokenize_dataclass():
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Same name, same values, new definition: tokenize differently
+    ADataClassRedefinedDifferently = dataclasses.make_dataclass(
+        "ADataClass", [("a", Union[int, str])]
+    )
+    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
 
 
 def test_tokenize_range():
@@ -508,11 +547,6 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
-
-
-@dataclass
-class ADataClass:
-    a: int
 
 
 def test_unpack_collections():
@@ -1292,6 +1326,19 @@ def test_normalize_function_limited_size():
     assert 50 < len(function_cache) < 600
 
 
+def test_normalize_function_dataclass_field_no_repr():
+    A = dataclasses.make_dataclass(
+        "A",
+        [("param", float, dataclasses.field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
+
+
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
 
@@ -1381,8 +1428,8 @@ def test_get_scheduler_with_distributed_active():
 
     with dask.config.set(scheduler="dask.distributed"):
         warning_message = (
-            "Passing a local execution scheduler in Dask.distributed might "
-            "lead to unexpected results."
+            "Running on a single-machine scheduler when a distributed client "
+            "is active might lead to unexpected results."
         )
         with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
             get_scheduler(scheduler="threads")

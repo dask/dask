@@ -478,10 +478,6 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, "/data_*_*")
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Passing a local execution scheduler in Dask.distributed might "
-    "lead to unexpected results."
-)
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
 @pytest.mark.parametrize("npartitions", [1, 4, 10])
 def test_to_hdf_schedulers(scheduler, npartitions):
