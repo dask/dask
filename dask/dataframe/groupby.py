@@ -189,12 +189,14 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
+    if shuffled:
+        df = df.sort_index()
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
@@ -1908,6 +1910,7 @@ class _GroupBy:
             df2,
             by,
             self._slice,
+            should_shuffle,
             periods=periods,
             freq=freq,
             axis=axis,
