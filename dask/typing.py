@@ -121,7 +121,7 @@ class DaskCollection(Protocol):
         """Given a graph and keys, return a new optimized graph."""
 
     @staticmethod
-    def __dask_scheduler__(dsk: Mapping, keys: Any, **kwargs) -> Any:
+    def __dask_scheduler__(dsk: Mapping, keys: Sequence[Hashable], **kwargs) -> Any:
         """The default scheduler get to use for this object."""
 
     def compute(self, **kwargs) -> Any:
