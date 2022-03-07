@@ -127,7 +127,7 @@ class DaskCollection(Protocol):
     def compute(self, **kwargs) -> Any:
         """TODO"""
 
-    def persist(self, **kwargs) -> CollectionType:
+    def persist(self: CollectionType, **kwargs) -> CollectionType:
         """TODO"""
 
     def visualize(self, **kwargs) -> DisplayObject:
