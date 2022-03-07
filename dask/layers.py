@@ -1515,6 +1515,7 @@ class DataFrameTreeReduction(Layer):
             "concat_func": _concat_func,
             "tree_node_func": _tree_node_func,
             "finalize_func": _finalize_func,
+            "split_every": self.split_every,
             "split_out": self.split_out,
             "output_partitions": self.output_partitions,
             "tree_node_name": self.tree_node_name,

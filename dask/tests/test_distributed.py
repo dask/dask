@@ -130,8 +130,13 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
+
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
@@ -151,6 +156,10 @@ def test_to_hdf_distributed(c):
     test_to_hdf()
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -320,6 +329,10 @@ def test_blockwise_array_creation(c, io, fuse):
         da.assert_eq(darr, narr, scheduler=c)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "io",
     ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
@@ -364,6 +377,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
         # dsk should not be a dict unless fuse is explicitly True
         assert isinstance(dsk, dict) == bool(fuse)
+
         dd.assert_eq(ddf, df, check_index=False)
 
 
@@ -498,7 +512,6 @@ def test_blockwise_concatenate(c):
         dtype=x.dtype,
         concatenate=True,
     )
-
     c.compute(z, optimize_graph=False)
     da.assert_eq(z, x, scheduler=c)
 
@@ -659,6 +672,10 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_to_sql_engine_kwargs(c, s, a, b):
     # https://github.com/dask/dask/issues/8738
@@ -681,3 +698,28 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
             dd.read_sql_table("test", uri, "index"),
             check_divisions=False,
         )
+
+
+@gen_cluster(client=True)
+async def test_non_recursive_df_reduce(c, s, a, b):
+    # See https://github.com/dask/dask/issues/8773
+
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    class SomeObject:
+        def __init__(self, val):
+            self.val = val
+
+    N = 170
+    series = pd.Series(data=[1] * N, index=range(2, N + 2))
+    dask_series = dd.from_pandas(series, npartitions=34)
+    result = dask_series.reduction(
+        chunk=lambda x: x,
+        aggregate=lambda x: SomeObject(x.sum().sum()),
+        split_every=False,
+        token="commit-dataset",
+        meta=object,
+    )
+
+    assert (await c.compute(result)).val == 170
