@@ -4,7 +4,9 @@ import numpy as np
 
 from ..base import normalize_token
 from ..utils import derived_from
+from . import chunk
 from .core import asanyarray, blockwise, map_blocks
+from .reductions import reduction
 from .routines import _average
 
 
@@ -170,3 +172,18 @@ def set_fill_value(a, fill_value):
 @derived_from(np.ma)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=True)
+
+
+@derived_from(np.ma)
+def count(a, axis=None, keepdims=False, split_every=None):
+    result = reduction(
+        a,
+        chunk.count,
+        chunk.sum,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=np.dtype(int),
+        split_every=split_every,
+        out=None,
+    )
+    return result

@@ -65,6 +65,8 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
+count = np.ma.count
+
 with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
