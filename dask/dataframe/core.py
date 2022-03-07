@@ -1254,8 +1254,11 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         divisions : list, optional
-            List of partitions to be used. Only used if npartitions and
-            partition_size isn't specified.
+            The "dividing lines" used to split the dataframe into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+            Only used if npartitions and partition_size isn't specified.
             For convenience if given an integer this will defer to npartitions
             and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
@@ -1284,6 +1287,13 @@ Dask Name: {name}, {task} tasks"""
         Exactly one of `divisions`, `npartitions`, `partition_size`, or `freq`
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
+
+        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
 
         Examples
         --------
