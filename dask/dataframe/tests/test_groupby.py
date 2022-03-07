@@ -2143,24 +2143,25 @@ def test_groupby_shift_lazy_input():
         )
 
 
+@pytest.mark.filterwarnings("ignore:`meta` is not specified")
 def test_groupby_shift_within_partition_sorting():
     # Result is non-deterministic. We run the assertion a few times to keep
     # the probability of false pass low.
     for _ in range(10):
         df = pd.DataFrame(
             {
-                "a": [1, 2, 3, 4, 5, 6],
-                "b": [2, 1, 2, 1, 2, 1],
-                "c": [None, None, 10, 20, 30, 40],
+                "a": range(60),
+                "b": [2, 4, 3, 1] * 15,
+                "c": [None, 10, 20, None, 30, 40] * 10,
             }
         )
         df = df.set_index("a").sort_index()
         ddf = dd.from_pandas(df, npartitions=6)
-        with pytest.warns(UserWarning):
-            assert_eq(
-                df.groupby("b")["c"].shift(1),
-                ddf.groupby("b")["c"].shift(1).compute().sort_index(),
-            )
+        assert_eq(
+            df.groupby("b")["c"].shift(1),
+            ddf.groupby("b")["c"].shift(1),
+            scheduler="threads",
+        )
 
 
 def test_groupby_shift_with_freq():
