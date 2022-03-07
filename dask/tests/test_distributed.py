@@ -698,3 +698,28 @@ async def test_to_sql_engine_kwargs(c, s, a, b):
             dd.read_sql_table("test", uri, "index"),
             check_divisions=False,
         )
+
+
+@gen_cluster(client=True)
+async def test_non_recursive_df_reduce(c, s, a, b):
+    # See https://github.com/dask/dask/issues/8773
+
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    class SomeObject:
+        def __init__(self, val):
+            self.val = val
+
+    N = 170
+    series = pd.Series(data=[1] * N, index=range(2, N + 2))
+    dask_series = dd.from_pandas(series, npartitions=34)
+    result = dask_series.reduction(
+        chunk=lambda x: x,
+        aggregate=lambda x: SomeObject(x.sum().sum()),
+        split_every=False,
+        token="commit-dataset",
+        meta=object,
+    )
+
+    assert (await c.compute(result)).val == 170
