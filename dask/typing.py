@@ -51,7 +51,7 @@ class DaskCollection(Protocol):
         Returns
         -------
         Mapping or None
-            The Dask tash graph. If the task graph is ``None`` then
+            The Dask task graph. If the task graph is ``None`` then
             the instance will not be interpreted as a Dask collection.
             If the instance returns a
             :py:class:`dask.highlevelgraph.HighLevelGraph` then the
