@@ -135,5 +135,5 @@ class DaskCollection(Protocol):
 
 
 class HLGDaskCollection(DaskCollection):
-    def __dask_layers__(self) -> list[str]:
+    def __dask_layers__(self) -> Sequence[str]:
         """TODO"""
