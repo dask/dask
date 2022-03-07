@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import assert_eq, assert_eq_shape
+from dask.array.utils import assert_eq
 from dask.base import tokenize
 
 pytest.importorskip("dask.array.ma")
@@ -396,24 +396,29 @@ def test_arithmetic_results_in_masked():
 
 
 def test_count():
-    a = np.ma.arange(12).reshape(3, 4)
-    a[1, 2] = np.ma.masked
-    a[[1, 2], 3] = np.ma.masked
-    dx = da.from_array(a, chunks=(2, 2))
+    data = np.arange(120).reshape((12, 10))
+    mask = (data % 3 == 0) | (data % 4 == 0)
+    x = np.ma.masked_where(mask, data)
+    dx = da.from_array(x, chunks=(2, 3))
 
     for axis in (None, 0, 1):
-        ac = np.ma.count(a, axis=axis)
-        dxc = da.ma.count(dx, axis=axis)
-        assert_eq(ac, dxc)
-        assert_eq_shape(ac.shape, dxc.shape)
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol)
 
-    ac = np.ma.count(a, keepdims=True)
-    dxc = da.ma.count(dx, keepdims=True)
-    assert_eq(ac, dxc)
-    assert_eq_shape(ac.shape, dxc.shape)
+    res = da.ma.count(dx, keepdims=True)
+    sol = np.ma.count(x, keepdims=True)
+    assert_eq(res, sol)
 
     # Test all masked
-    a[...] = np.ma.masked
-    ac = np.ma.count(a)
-    dxc = da.ma.count(dx)
-    assert_eq(ac, dxc)
+    x = np.ma.masked_all((12, 10))
+    dx = da.from_array(x, chunks=(2, 3))
+    assert_eq(da.ma.count(dx), np.ma.count(x))
+
+    # Test on non-masked array
+    x = np.arange(120).reshape((12, 10))
+    dx = da.from_array(data, chunks=(2, 3))
+    for axis in (None, 0, 1):
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol)

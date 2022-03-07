@@ -174,11 +174,15 @@ def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=True)
 
 
+def _chunk_count(x, axis=None, keepdims=None):
+    return np.ma.count(x, axis=axis, keepdims=keepdims)
+
+
 @derived_from(np.ma)
 def count(a, axis=None, keepdims=False, split_every=None):
-    result = reduction(
+    return reduction(
         a,
-        chunk.count,
+        _chunk_count,
         chunk.sum,
         axis=axis,
         keepdims=keepdims,
@@ -186,4 +190,3 @@ def count(a, axis=None, keepdims=False, split_every=None):
         split_every=split_every,
         out=None,
     )
-    return result
