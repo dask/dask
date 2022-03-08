@@ -186,7 +186,7 @@ def count(a, axis=None, keepdims=False, split_every=None):
         chunk.sum,
         axis=axis,
         keepdims=keepdims,
-        dtype=np.dtype(int),
+        dtype=np.intp,
         split_every=split_every,
         out=None,
     )
