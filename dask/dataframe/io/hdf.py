@@ -443,7 +443,7 @@ def read_hdf(*args, **kwargs):
     return dataframe_backend_dispatch.read_hdf(*args, **kwargs)
 
 
-read_hdf.__doc__ = (read_hdf_pandas.__doc__,)
+read_hdf.__doc__ = read_hdf_pandas.__doc__
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
