@@ -15,6 +15,7 @@ from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
 from importlib import import_module
+from importlib.metadata import entry_points
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
@@ -642,6 +643,12 @@ class DaskBackendEntrypoint:
         return wrapper
 
 
+@functools.lru_cache(maxsize=1)
+def detect_entrypoints():
+    entrypoints = entry_points().get("dask.backends", ())
+    return {ep.name: ep for ep in entrypoints}
+
+
 class BackendDispatch:
     """Simple backend dispatch for collection functions"""
 
@@ -673,7 +680,11 @@ class BackendDispatch:
         try:
             impl = self._lookup[backend]
         except KeyError:
-            pass
+            # Check entrypoints for the specified backend
+            entrypoints = detect_entrypoints()
+            if backend in entrypoints:
+                self.register(backend, entrypoints[backend].load()())
+                return self._lookup[backend]
         else:
             return impl
         raise ValueError(f"No backend dispatch registered for {backend}")

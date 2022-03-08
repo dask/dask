@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from functools import cached_property
 from typing import Iterable
 
 import numpy as np
@@ -613,91 +612,3 @@ dataframe_backend_dispatch.register("pandas", PandasBackendEntrypoint())
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
-
-
-##
-## cudf "Backend" dispatching
-## TODO: Define `CudfBackendEntrypoint` in dask_cudf
-##
-
-
-def _dask_cudf():
-    try:
-        import dask_cudf
-
-        return dask_cudf
-    except ImportError:
-        raise ImportError(
-            "Dask-Dataframe backend is set to cudf, but dask_cudf is not installed."
-        )
-
-
-def _cudf():
-    try:
-        import cudf
-
-        return cudf
-    except ImportError:
-        raise ImportError(
-            "Dask-Dataframe backend is set to cudf, but cudf is not installed."
-        )
-
-
-class CudfBackendEntrypoint(DaskBackendEntrypoint):
-    @cached_property
-    def fallback(self):
-        return PandasBackendEntrypoint()
-
-    def move_from_fallback(self, ddf):
-        if isinstance(ddf._meta, pd.DataFrame):
-            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-        elif isinstance(ddf._meta, pd.Series):
-            return ddf.map_partitions(_cudf().Series.from_pandas)
-        return ddf
-
-    def make_timeseries(self, *args, df_backend=None, **kwargs):
-        return self.fallback.make_timeseries(*args, df_backend="cudf", **kwargs)
-
-    def read_parquet(self, *args, engine=None, **kwargs):
-        dask_cudf = _dask_cudf()
-        return self.fallback.read_parquet(
-            *args,
-            engine=dask_cudf.io.parquet.CudfEngine,
-            **kwargs,
-        )
-
-    def read_json(self, *args, engine=None, **kwargs):
-        return self.fallback.read_json(*args, engine=_cudf().read_json, **kwargs)
-
-    def read_orc(self, *args, **kwargs):
-        return _dask_cudf().read_orc(*args, **kwargs)
-
-    def read_csv(self, *args, **kwargs):
-        chunksize = kwargs.pop("chunksize", None)
-        blocksize = kwargs.pop("blocksize", "default")
-        if chunksize is None and blocksize != "default":
-            chunksize = blocksize
-        return _dask_cudf().read_csv(
-            *args,
-            chunksize=chunksize,
-            **kwargs,
-        )
-
-    def from_pandas(self, *args, **kwargs):
-        ddf = self.fallback.from_pandas(*args, **kwargs)
-        if isinstance(ddf._meta, pd.DataFrame):
-            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-        elif isinstance(ddf._meta, pd.Series):
-            return ddf.map_partitions(_cudf().Series.from_pandas)
-        return ddf
-
-    def from_array(self, *args, **kwargs):
-        ddf = self.fallback.from_array(*args, **kwargs)
-        if isinstance(ddf._meta, pd.DataFrame):
-            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-        elif isinstance(ddf._meta, pd.Series):
-            return ddf.map_partitions(_cudf().Series.from_pandas)
-        return ddf
-
-
-dataframe_backend_dispatch.register("cudf", CudfBackendEntrypoint())
