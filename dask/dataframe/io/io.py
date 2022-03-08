@@ -1,5 +1,4 @@
 import os
-import warnings
 from math import ceil
 from operator import getitem
 from threading import Lock
@@ -15,12 +14,7 @@ from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
-from ..dispatch import (
-    from_array_dispatch,
-    from_bcolz_dispatch,
-    from_cudf_dispatch,
-    from_pandas_dispatch,
-)
+from ..dispatch import dataframe_backend_dispatch
 from ..shuffle import set_partition
 from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
 
@@ -83,7 +77,6 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-@from_array_dispatch.register("pandas")
 def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     """Read any sliceable array into a Dask Dataframe
 
@@ -137,13 +130,13 @@ def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-from_array = from_array_dispatch.set_info(
-    doc=from_array_pandas.__doc__,
-    name="from_array",
-)
+def from_array(*args, **kwargs):
+    return dataframe_backend_dispatch.from_array(*args, **kwargs)
 
 
-@from_pandas_dispatch.register("pandas")
+from_array.__doc__ = from_array_pandas.__doc__
+
+
 def from_pandas_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     """
     Construct a Dask DataFrame from a Pandas DataFrame
@@ -247,30 +240,13 @@ def from_pandas_pandas(data, npartitions=None, chunksize=None, sort=True, name=N
     return new_dd_object(dsk, name, data, divisions)
 
 
-from_pandas = from_pandas_dispatch.set_info(
-    doc=from_pandas_pandas.__doc__,
-    name="from_pandas",
-)
+def from_pandas(*args, **kwargs):
+    return dataframe_backend_dispatch.from_pandas(*args, **kwargs)
 
 
-@from_cudf_dispatch.register("pandas")
-def from_cudf_pandas(df, *args, nullable=False, **kwargs):
-    """TODO: Add docstring"""
-    # Convert cudf.DataFrame to pandas, and then call usual from_pandas
-    if hasattr(df, "to_pandas"):
-        warnings.warn("Converting cudf data to pandas in from_cudf")
-
-        return from_pandas(df.to_pandas(nullable=nullable), *args, **kwargs)
-    return from_pandas(df, *args, **kwargs)
+from_pandas.__doc__ = from_pandas_pandas.__doc__
 
 
-from_cudf = from_cudf_dispatch.set_info(
-    doc=from_cudf_pandas.__doc__,
-    name="from_cudf",
-)
-
-
-@from_bcolz_dispatch.register("pandas")
 def from_bcolz_pandas(
     x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs
 ):
@@ -361,10 +337,11 @@ def from_bcolz_pandas(
         return result
 
 
-from_bcolz = from_bcolz_dispatch.set_info(
-    doc=from_bcolz_pandas.__doc__,
-    name="from_bcolz",
-)
+def from_bcolz(*args, **kwargs):
+    return dataframe_backend_dispatch.from_bcolz(*args, **kwargs)
+
+
+from_bcolz.__doc__ = from_bcolz_pandas.__doc__
 
 
 def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):

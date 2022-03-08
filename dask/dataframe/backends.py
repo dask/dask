@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import warnings
-from functools import partial
 from typing import Iterable
 
 import numpy as np
@@ -16,6 +15,7 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
@@ -24,9 +24,11 @@ from dask.sizeof import SimpleSizeof, sizeof
 from ..utils import is_arraylike, typename
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
+    BackendEntrypoint,
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
+    dataframe_backend_dispatch,
     get_parallel_type,
     group_split_dispatch,
     hash_object_dispatch,
@@ -549,6 +551,53 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
+class PandasBackendEntrypoint(BackendEntrypoint):
+    def make_timeseries(self, *args, **kwargs):
+        return dd.io.demo.make_timeseries_pandas(*args, **kwargs)
+
+    def read_parquet(self, *args, **kwargs):
+        return dd.io.parquet.core.read_parquet_pandas(*args, **kwargs)
+
+    def read_json(self, *args, **kwargs):
+        return dd.io.json.read_json_pandas(*args, **kwargs)
+
+    def read_orc(self, *args, **kwargs):
+        return dd.io.orc.core.read_orc_pandas(*args, **kwargs)
+
+    def read_csv(self, *args, **kwargs):
+        return dd.io.csv.read_csv_pandas(*args, **kwargs)
+
+    def read_table(self, *args, **kwargs):
+        return dd.io.csv.read_table_pandas(*args, **kwargs)
+
+    def read_fwf(self, *args, **kwargs):
+        return dd.io.csv.read_fwf_pandas(*args, **kwargs)
+
+    def read_hdf(self, *args, **kwargs):
+        return dd.io.hdf.read_hdf_pandas(*args, **kwargs)
+
+    def read_sql(self, *args, **kwargs):
+        return dd.io.sql.read_sql_pandas(*args, **kwargs)
+
+    def read_sql_query(self, *args, **kwargs):
+        return dd.io.sql.read_sql_query_pandas(*args, **kwargs)
+
+    def read_sql_table(self, *args, **kwargs):
+        return dd.io.sql.read_sql_table_pandas(*args, **kwargs)
+
+    def from_pandas(self, *args, **kwargs):
+        return dd.io.io.from_pandas_pandas(*args, **kwargs)
+
+    def from_array(self, *args, **kwargs):
+        return dd.io.io.from_array_pandas(*args, **kwargs)
+
+    def from_bcolz(self, *args, **kwargs):
+        return dd.io.io.from_bcolz_pandas(*args, **kwargs)
+
+
+dataframe_backend_dispatch.register("pandas", PandasBackendEntrypoint())
+
+
 ######################################
 # cuDF: Pandas Dataframes on the GPU #
 ######################################
@@ -566,25 +615,10 @@ def _register_cudf():
     import dask_cudf  # noqa: F401
 
 
-## cudf "Backend IO" Dispatching
-
-from .dispatch import (
-    from_array_dispatch,
-    from_bcolz_dispatch,
-    from_cudf_dispatch,
-    from_pandas_dispatch,
-    make_timeseries_dispatch,
-    read_csv_dispatch,
-    read_fwf_dispatch,
-    read_hdf_dispatch,
-    read_json_dispatch,
-    read_orc_dispatch,
-    read_parquet_dispatch,
-    read_sql_dispatch,
-    read_sql_query_dispatch,
-    read_sql_table_dispatch,
-    read_table_dispatch,
-)
+##
+## cudf "Backend" dispatching
+## TODO: Define `CudfBackendEntrypoint` in dask_cudf
+##
 
 
 def _dask_cudf():
@@ -609,98 +643,57 @@ def _cudf():
         )
 
 
-_no_cudf_support = (
-    read_table_dispatch,
-    read_fwf_dispatch,
-    read_hdf_dispatch,
-    read_sql_dispatch,
-    read_sql_query_dispatch,
-    read_sql_table_dispatch,
-    from_bcolz_dispatch,
-)
+class CudfBackendEntrypoint(BackendEntrypoint):
+    @property
+    def fallback(self):
+        return PandasBackendEntrypoint()
 
-
-def _move_data(dispatch_func, *args, **kwargs):
-    ddf = dispatch_func.dispatch("pandas")(*args, **kwargs)
-    warnings.warn(f"Converting pandas data to cudf in {dispatch_func}")
-
-    return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-
-
-for dispatch_func in _no_cudf_support:
-    dispatch_func.register("cudf", func=partial(_move_data, dispatch_func))
-
-
-@make_timeseries_dispatch.register("cudf")
-def make_timeseries_cudf(*args, df_backend=None, **kwargs):
-    return make_timeseries_dispatch.dispatch("pandas")(
-        *args, df_backend="cudf", **kwargs
-    )
-
-
-@read_parquet_dispatch.register("cudf")
-def read_parquet_cudf(*args, engine=None, **kwargs):
-    dask_cudf = _dask_cudf()
-    return read_parquet_dispatch.dispatch("pandas")(
-        *args,
-        engine=dask_cudf.io.parquet.CudfEngine,
-        **kwargs,
-    )
-
-
-@read_orc_dispatch.register("cudf")
-def read_orc_cudf(*args, **kwargs):
-    return _dask_cudf().read_orc(*args, **kwargs)
-
-
-@read_csv_dispatch.register("cudf")
-def read_csv_cudf(*args, **kwargs):
-    chunksize = kwargs.pop("chunksize", None)
-    blocksize = kwargs.pop("blocksize", "default")
-    if chunksize is None and blocksize != "default":
-        chunksize = blocksize
-    return _dask_cudf().read_csv(
-        *args,
-        chunksize=chunksize,
-        **kwargs,
-    )
-
-
-@read_json_dispatch.register("cudf")
-def read_json_cudf(*args, engine=None, **kwargs):
-    return read_json_dispatch.dispatch("pandas")(
-        *args, engine=_cudf().read_json, **kwargs
-    )
-
-
-@from_pandas_dispatch.register("cudf")
-def from_pandas_cudf(*args, engine=None, **kwargs):
-    ddf = from_pandas_dispatch.dispatch("pandas")(*args, **kwargs)
-    if isinstance(ddf._meta, pd.DataFrame):
-        warnings.warn("Converting pandas data to cudf in from_pandas")
-
+    def move_from_fallback(self, ddf):
         return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-    elif isinstance(ddf._meta, pd.Series):
-        warnings.warn("Converting pandas data to cudf in from_pandas")
 
-        return ddf.map_partitions(_cudf().Series.from_pandas)
-    # Note: We allow the input to be cudf already for
-    # backwards compat
-    return ddf
+    def make_timeseries(self, *args, df_backend=None, **kwargs):
+        return self.fallback.make_timeseries(*args, df_backend="cudf", **kwargs)
+
+    def read_parquet(self, *args, engine=None, **kwargs):
+        dask_cudf = _dask_cudf()
+        return self.fallback.read_parquet(
+            *args,
+            engine=dask_cudf.io.parquet.CudfEngine,
+            **kwargs,
+        )
+
+    def read_json(self, *args, engine=None, **kwargs):
+        return self.fallback.read_json(*args, engine=_cudf().read_json, **kwargs)
+
+    def read_orc(self, *args, **kwargs):
+        return _dask_cudf().read_orc(*args, **kwargs)
+
+    def read_csv(self, *args, **kwargs):
+        chunksize = kwargs.pop("chunksize", None)
+        blocksize = kwargs.pop("blocksize", "default")
+        if chunksize is None and blocksize != "default":
+            chunksize = blocksize
+        return _dask_cudf().read_csv(
+            *args,
+            chunksize=chunksize,
+            **kwargs,
+        )
+
+    def from_pandas(self, *args, **kwargs):
+        ddf = self.fallback.from_pandas(*args, **kwargs)
+        if isinstance(ddf._meta, pd.DataFrame):
+            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+        elif isinstance(ddf._meta, pd.Series):
+            return ddf.map_partitions(_cudf().Series.from_pandas)
+        return ddf
+
+    def from_array(self, *args, **kwargs):
+        ddf = self.fallback.from_array(*args, **kwargs)
+        if isinstance(ddf._meta, pd.DataFrame):
+            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+        elif isinstance(ddf._meta, pd.Series):
+            return ddf.map_partitions(_cudf().Series.from_pandas)
+        return ddf
 
 
-@from_cudf_dispatch.register("cudf")
-def from_cudf_cudf(*args, **kwargs):
-    return _dask_cudf().from_cudf(*args, **kwargs)
-
-
-@from_array_dispatch.register("cudf")
-def from_array_cudf(*args, engine=None, **kwargs):
-    ddf = from_array_dispatch.dispatch("pandas")(*args, **kwargs)
-    if isinstance(ddf._meta, pd.DataFrame):
-        warnings.warn("Converting pandas data to cudf in from_array")
-        return ddf.map_partitions(_cudf().DataFrame.from_pandas)
-    elif isinstance(ddf._meta, pd.Series):
-        warnings.warn("Converting pandas data to cudf in from_array")
-        return ddf.map_partitions(_cudf().Series.from_pandas)
-    return ddf
+dataframe_backend_dispatch.register("cudf", CudfBackendEntrypoint())

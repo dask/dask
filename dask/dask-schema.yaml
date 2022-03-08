@@ -1,13 +1,5 @@
 properties:
 
-  device:
-    type:
-    - string
-    - "null"
-    description: |
-        Hardware device preference for data creation and cluster deployment.
-        Available options include "cpu" and "cuda". Default is "cpu".
-
   temporary-directory:
     type:
     - string
@@ -41,6 +33,22 @@ properties:
         description: |
           Backend dataframe library to use for data creation and input IO.
           Available options include "pandas" and "cudf". Default is "pandas".
+
+      backend-options:
+        type: object
+        properties:
+
+          allow-fallback:
+            type: bool
+            description: |
+              Allow Dask to fall-back from the specified backend when the
+              necessary IO function is not defined.
+
+          warn-fallback:
+            type: bool
+            description: |
+              Warn the user when Dask falls-back from the specified backend
+              for unsupported IO functions.
 
       shuffle-compression:
         type:

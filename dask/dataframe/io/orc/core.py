@@ -9,7 +9,7 @@ from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
 from ...core import DataFrame, Scalar, new_dd_object
-from ...dispatch import read_orc_dispatch
+from ...dispatch import dataframe_backend_dispatch
 from .utils import ORCEngine
 
 
@@ -64,7 +64,6 @@ def _get_engine(engine, write=False):
     return engine
 
 
-@read_orc_dispatch.register("pandas")
 def read_orc_pandas(
     path,
     engine="pyarrow",
@@ -144,10 +143,11 @@ def read_orc_pandas(
     return new_dd_object(graph, output_name, meta, [None] * (len(parts) + 1))
 
 
-read_orc = read_orc_dispatch.set_info(
-    doc=read_orc_pandas.__doc__,
-    name="read_orc",
-)
+def read_orc(*args, **kwargs):
+    return dataframe_backend_dispatch.read_orc(*args, **kwargs)
+
+
+read_orc.__doc__ = read_orc_pandas.__doc__
 
 
 def to_orc(

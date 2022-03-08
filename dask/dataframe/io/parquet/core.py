@@ -15,7 +15,7 @@ from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, Scalar, new_dd_object
-from ...dispatch import read_parquet_dispatch
+from ...dispatch import dataframe_backend_dispatch
 from ...methods import concat
 from ..utils import _is_local_fs
 from .utils import Engine, _sort_and_analyze_paths
@@ -166,7 +166,6 @@ class ToParquetFunctionWrapper:
         )
 
 
-@read_parquet_dispatch.register("pandas")
 def read_parquet_pandas(
     path,
     columns=None,
@@ -486,10 +485,11 @@ def read_parquet_pandas(
     return new_dd_object(graph, output_name, meta, divisions)
 
 
-read_parquet = read_parquet_dispatch.set_info(
-    doc=read_parquet_pandas.__doc__,
-    name="read_parquet",
-)
+def read_parquet(*args, **kwargs):
+    return dataframe_backend_dispatch.read_parquet(*args, **kwargs)
+
+
+read_parquet.__doc__ = read_parquet_pandas.__doc__
 
 
 def check_multi_support(engine):

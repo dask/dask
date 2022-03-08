@@ -15,7 +15,7 @@ from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import get_scheduler_lock
 from ..core import DataFrame, new_dd_object
-from ..dispatch import read_hdf_dispatch
+from ..dispatch import dataframe_backend_dispatch
 from .io import _link
 
 
@@ -308,7 +308,6 @@ class HDFFunctionWrapper:
         return result
 
 
-@read_hdf_dispatch.register("pandas")
 def read_hdf_pandas(
     pattern,
     key,
@@ -440,10 +439,11 @@ def read_hdf_pandas(
     return new_dd_object(graph, name, meta, divisions)
 
 
-read_hdf = read_hdf_dispatch.set_info(
-    doc=read_hdf_pandas.__doc__,
-    name="read_hdf",
-)
+def read_hdf(*args, **kwargs):
+    return dataframe_backend_dispatch.read_hdf(*args, **kwargs)
+
+
+read_hdf.__doc__ = (read_hdf_pandas.__doc__,)
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):

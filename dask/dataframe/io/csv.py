@@ -5,7 +5,7 @@ from warnings import catch_warnings, simplefilter, warn
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ..dispatch import read_csv_dispatch, read_fwf_dispatch, read_table_dispatch
+from ..dispatch import dataframe_backend_dispatch
 
 try:
     import psutil
@@ -761,27 +761,33 @@ def make_reader(reader, reader_name, file_type):
 
 
 read_csv_pandas = make_reader(pd.read_csv, "read_csv", "CSV")
-read_csv_dispatch.register("pandas", func=read_csv_pandas)
-read_csv = read_csv_dispatch.set_info(
-    doc=read_csv_pandas.__doc__,
-    name="read_csv",
-)
+
+
+def read_csv(*args, **kwargs):
+    return dataframe_backend_dispatch.read_csv(*args, **kwargs)
+
+
+read_csv.__doc__ = read_csv_pandas.__doc__
 
 
 read_table_pandas = make_reader(pd.read_table, "read_table", "delimited")
-read_table_dispatch.register("pandas", func=read_table_pandas)
-read_table = read_table_dispatch.set_info(
-    doc=read_table_pandas.__doc__,
-    name="read_table",
-)
+
+
+def read_table(*args, **kwargs):
+    return dataframe_backend_dispatch.read_table(*args, **kwargs)
+
+
+read_table.__doc__ = read_table_pandas.__doc__
 
 
 read_fwf_pandas = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
-read_fwf_dispatch.register("pandas", func=read_fwf_pandas)
-read_fwf = read_fwf_dispatch.set_info(
-    doc=read_fwf_pandas.__doc__,
-    name="read_fwf",
-)
+
+
+def read_fwf(*args, **kwargs):
+    return dataframe_backend_dispatch.read_fwf(*args, **kwargs)
+
+
+read_fwf.__doc__ = read_fwf_pandas.__doc__
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):

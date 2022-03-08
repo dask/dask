@@ -9,7 +9,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask import config
 
-from ..utils import CreationDispatch, Dispatch
+from ..utils import BackendDispatch, Dispatch
 
 # Compute Dispatch Funcitons
 make_meta_dispatch = Dispatch("make_meta_dispatch")
@@ -142,32 +142,17 @@ def union_categoricals(to_union, sort_categories=False, ignore_order=False):
     return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
 
 
-class DFCreationDispatch(CreationDispatch):
-    """Simple dispatch for DataFrame-collection creation"""
+class DataFrameBackendDispatch(BackendDispatch):
+    def get_backend(self):
+        return config.get("dataframe.backend") or "pandas"
 
     @property
-    def default(self):
-        return "pandas"
+    def allow_fallback(self):
+        return config.get("dataframe.backend-options.allow-fallback", True)
 
-    def get_backend(self):
-        return config.get("dataframe.backend") or (
-            "cudf" if config.get("device") in ("cuda", "gpu") else "pandas"
-        )
+    @property
+    def warn_fallback(self):
+        return config.get("dataframe.backend-options.warn-fallback", True)
 
 
-# IO-Backend Disaptch Functions
-make_timeseries_dispatch = DFCreationDispatch("make_timeseries_dispatch")
-read_parquet_dispatch = DFCreationDispatch("read_parquet_dispatch")
-read_json_dispatch = DFCreationDispatch("read_json_dispatch")
-read_orc_dispatch = DFCreationDispatch("read_orc_dispatch")
-read_csv_dispatch = DFCreationDispatch("read_csv_dispatch")
-read_table_dispatch = DFCreationDispatch("read_table_dispatch")
-read_fwf_dispatch = DFCreationDispatch("read_fwf_dispatch")
-read_hdf_dispatch = DFCreationDispatch("read_hdf_dispatch")
-read_sql_dispatch = DFCreationDispatch("read_sql_dispatch")
-read_sql_query_dispatch = DFCreationDispatch("read_sql_query_dispatch")
-read_sql_table_dispatch = DFCreationDispatch("read_sql_table_dispatch")
-from_cudf_dispatch = DFCreationDispatch("from_cudf_dispatch")
-from_pandas_dispatch = DFCreationDispatch("from_pandas_dispatch")
-from_array_dispatch = DFCreationDispatch("from_array_dispatch")
-from_bcolz_dispatch = DFCreationDispatch("from_bcolz_dispatch")
+dataframe_backend_dispatch = DataFrameBackendDispatch("dataframe_backend_dispatch")

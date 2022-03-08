@@ -7,7 +7,7 @@ from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
 from ..core import new_dd_object, tokenize
-from ..dispatch import make_timeseries_dispatch
+from ..dispatch import dataframe_backend_dispatch
 
 __all__ = ["make_timeseries"]
 
@@ -127,7 +127,6 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwarg
     return df
 
 
-@make_timeseries_dispatch.register("pandas")
 def make_timeseries_pandas(
     start="2000-01-01",
     end="2000-12-31",
@@ -204,7 +203,8 @@ def make_timeseries_pandas(
     return new_dd_object(graph, name, head, divisions)
 
 
-make_timeseries = make_timeseries_dispatch.set_info(
-    doc=make_timeseries_pandas.__doc__,
-    name="make_timeseries",
-)
+def make_timeseries(*args, **kwargs):
+    return dataframe_backend_dispatch.make_timeseries(*args, **kwargs)
+
+
+make_timeseries.__doc__ = make_timeseries_pandas.__doc__

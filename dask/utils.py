@@ -613,33 +613,56 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
-class CreationDispatch:
-    """Simple dispatch for collection creation"""
+class BackendEntrypoint:
+    """Base Collection-Backend Entrypoint Class"""
+
+    @property
+    def fallback(self) -> BackendEntrypoint:
+        """Fallback entrypoint object"""
+        return None
+
+    def move_from_fallback(self, x):
+        """Move a Dask collection from the fallback backend"""
+        raise NotImplementedError
+
+    def _get_fallback_attr(self, attr):
+        """Return the fallback version of the specified attribute"""
+        if self.fallback is None:
+            raise ValueError(f"Fallback is not supported for {self}")
+
+        def wrapper(*args, **kwargs):
+            return self.move_from_fallback(
+                getattr(self.fallback, attr)(*args, **kwargs)
+            )
+
+        return wrapper
+
+
+class BackendDispatch:
+    """Simple backend dispatch for collection functions"""
 
     def __init__(self, name=None):
         self._lookup = {}
         if name:
             self.__name__ = name
 
-    def set_info(self, doc=None, name=None):
-        if doc:
-            self.__doc__ = doc
-        if name:
-            self.__name__ = name
-        return self
+    def register(self, backend: str, cls_target: BackendEntrypoint):
+        """Register a target class for a specific backend label"""
 
-    def register(self, backend, func=None):
-        """Register dispatch of `func` on arguments of type `type`"""
-
-        def wrapper(func):
+        def wrapper(cls_target):
             if isinstance(backend, tuple):
                 for b in backend:
-                    self.register(b, func)
+                    self.register(b, cls_target)
+            elif isinstance(cls_target, BackendEntrypoint):
+                self._lookup[backend] = cls_target
             else:
-                self._lookup[backend] = func
-            return func
+                raise ValueError(
+                    f"BackendDispatch only supportsBackendEntrypoint registration"
+                    f"got {cls_target}"
+                )
+            return cls_target
 
-        return wrapper(func) if func is not None else wrapper
+        return wrapper(cls_target)
 
     def dispatch(self, backend):
         """Return the function implementation for the given backend"""
@@ -651,31 +674,39 @@ class CreationDispatch:
             return impl
         raise ValueError(f"No backend dispatch registered for {backend}")
 
-    @property
-    def default(self):
-        raise NotImplementedError
-
     def get_backend(self):
+        """Return the desired collection backend"""
         raise NotImplementedError
 
-    def __call__(self, *args, **kwargs):
+    @property
+    def allow_fallback(self):
+        """Check if using the backend fallback is allowed"""
+        raise NotImplementedError
+
+    @property
+    def warn_fallback(self):
+        """Check if backend-fallback usage should raise a warning"""
+        raise NotImplementedError
+
+    def __getattr__(self, item):
         """
-        Call the corresponding method based on type of argument.
+        Return the appropriate attribute for the current backend
         """
-        backend = self.get_backend()
+        backend = self.dispatch(self.get_backend())
         try:
-            func = self.dispatch(backend)
-        except ValueError as err:
-            # Try falling back to the default
-            if self.default and backend != self.default:
-                warnings.warn(
-                    f"Dispatching {self.__name__} to {backend} backend failed."
-                    f" Falling back to {self.default}. "
-                )
-                func = self.dispatch(self.default)
-            else:
+            return getattr(backend, item)
+        except AttributeError as err:
+
+            if not backend.fallback or not self.allow_fallback:
                 raise err
-        return func(*args, **kwargs)
+
+            if self.warn_fallback:
+                warnings.warn(
+                    f"Falling back to {backend.fallback} for {item}. "
+                    f"Expect data-movement overhead!"
+                )
+
+            return backend._get_fallback_attr(item)
 
 
 def ensure_not_exists(filename):

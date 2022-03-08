@@ -9,7 +9,7 @@ from ...base import compute as dask_compute
 from ...bytes import read_bytes
 from ...core import flatten
 from ...delayed import delayed
-from ..dispatch import read_json_dispatch
+from ..dispatch import dataframe_backend_dispatch
 from ..utils import insert_meta_param_description, make_meta
 from .io import from_delayed
 
@@ -104,7 +104,6 @@ def write_json_partition(df, openfile, kwargs):
     return os.path.normpath(openfile.path)
 
 
-@read_json_dispatch.register("pandas")
 @insert_meta_param_description
 def read_json_pandas(
     url_path,
@@ -289,10 +288,11 @@ def read_json_pandas(
     return from_delayed(parts, meta=meta)
 
 
-read_json = read_json_dispatch.set_info(
-    doc=read_json_pandas.__doc__,
-    name="read_json",
-)
+def read_json(*args, **kwargs):
+    return dataframe_backend_dispatch.read_json(*args, **kwargs)
+
+
+read_json.__doc__ = read_json_pandas.__doc__
 
 
 def read_json_chunk(

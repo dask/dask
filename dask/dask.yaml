@@ -1,5 +1,3 @@
-device: null # Hardware device preference for data creation and cluster deployment
-
 temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /local
 
 tokenize:
@@ -7,6 +5,9 @@ tokenize:
 
 dataframe:
   backend: null  # Backend dataframe library for input IO and data creation
+  backend-options:
+    allow-fallback: True  # Allow Dask to fall-back from the specified backend
+    warn-fallback: True  # Raise a warning when Dask falls-back from the specified backend
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
