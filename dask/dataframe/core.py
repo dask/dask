@@ -580,6 +580,59 @@ Dask Name: {name}, {task} tasks"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
+    def compute_current_divisions(self, col=None):
+        """Compute the current divisions of the DataFrame.
+
+        This method triggers immediate computation. If you find yourself running this command
+        repeatedly for the same dataframe, we recommend storing the result
+        so you don't have to rerun it.
+
+        If the column or index values overlap between partitions, raises ``ValueError``.
+        To prevent this, make sure the data are sorted by the column or index.
+
+        Parameters
+        ----------
+        col : string, optional
+            Calculate the divisions for a non-index column by passing in the name of the column.
+            If col is not specified, the index will be used to calculate divisions.
+            In this case, if the divisions are already known, they will be returned
+            immediately without computing.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").clear_divisions()
+        >>> divisions = ddf.compute_current_divisions()
+        ... divisions
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+        >>> ddf.divisions = divisions
+        >>> ddf.known_divisions
+        True
+        >>> ddf = ddf.reset_index().clear_divisions()
+        >>> divisions = ddf.compute_current_divisions("timestamp")
+        ... divisions
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+        >>> ddf = ddf.set_index("timestamp", divisions=divisions, sorted=True)
+        """
+        if col is None and self.known_divisions:
+            return self.divisions
+
+        from .shuffle import compute_divisions
+
+        return compute_divisions(self, col=col)
+
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
         if 0 <= n < self.npartitions:
