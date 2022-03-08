@@ -25,18 +25,16 @@ can type this address into your browser to access the dashboard, but may be dire
 elsewhere if port 8787 is taken. You can also configure the address by passing options to the 
 scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/stable/deploying-python.html#reference>`__
 
-The dashboard link redirects you to main dashboard page as shown below:
-
-.. figure:: images/dashboard_status.png
-    :alt: Local host dashboard status page displaying the five panes that compose it. The Byte stored pane showing blue horizontal bar of the cluster memory stored up to 593.80 MiB, the Bytes stored per worker pane with four blue horizontal bars of approximately 150 MiB each, the Task Processing pane with four blue bars up to 350 tasks per worker, the Task Stream pane showing eight horizontal bars with different shades of greens and blues and some red, and the Progress pane showing horizontal bars for each task-prefix matching the blue and green colors of the task stream pane.
-
-In the entry point of the dashboard you can find multiple plots with information about your cluster 
-as listed below:
+The dashboard link redirects you to the entry point of the dashboard with information on:
 
 - :ref:`dashboard.memory`: Cluster memory and Memory per worker
 - :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ CPU Utilization per worker/ Expected runtime for all tasks currently on a worker.
 - :ref:`dashboard.task-stream`: Individual task across threads.
 - :ref:`dashboard.progress`: Progress of a set of tasks.
+
+.. figure:: images/dashboard_status.png
+    :alt: Main dashboard with five panes arranged into two columns. In the left column there are three bar charts. The top two show total bytes stored and bytes per worker. The bottom has three tabs to toggle between task processing, CPU utilization, and occupancy. In the right column, there are two bar charts with corresponding colors showing task activity over time, referred to as task stream and progress.
+
 
 .. _dashboard.memory: 
 
@@ -45,11 +43,7 @@ Bytes Stored and Bytes per Worker
 These two plots show a summary of the overall memory usage on the cluster (Bytes Stored),
 as well as the individual usage on each worker (Bytes per Worker). The colors on these plots 
 indicate the following.  
-
-.. figure:: images/dashboard_memory.png
-    :alt: The Byte stored pane showing blue and grey horizontal bar of the cluster memory, the blue portion corresponds to 12.6 GiB of memory while the grey portion represents the 750 MiB spilled to disc. The Bytes stored per worker pane showing 16 workers each of them with a horizontal bar. The first one from the top is orange and grey, the following three are orange, and the remaining twelve are blue. The orange and blue bars also have different levels of transparency. 
-
-
+     
 .. raw:: html
 
     <table>
@@ -73,6 +67,9 @@ indicate the following.
         </tr>
     </table>
 
+.. figure:: images/dashboard_memory.png
+    :alt: Two bar charts on memory usage. The top chart shows the total cluster memory in a single bar with mostly under target memory in blue and a small part of spilled to disk in grey. The bottom chart displays the memory usage per worker, with a separate bar for each of the 16 workers. The first four bars are orange as their worker's memory are close to the spilling to disk target, with the first worker standing out with a portion in grey that correspond to the amount spilled to disk. The remaining workers are all under target showing blue bars.  
+
 The different levels of transparency on these plot is related to the type of memory 
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
 `Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
@@ -89,9 +86,6 @@ The *Processing* tab in the figure shows the number of tasks being processed by 
 try to ensure that the workers are processing the same number of tasks. If one of the bars is completely white it means that 
 worker has no tasks and its waiting for them. This usually happens when the computations are close to finished (nothing 
 to worry about), but it can also mean that the distribution of the task across workers is not optimized. 
-
-.. figure:: images/dashboard_task_processing.png
-    :alt: Task Processing bar chart, showing a relatively even number of tasks on each worker.
 
 There are three different colors that can appear in this plot:
 
@@ -117,6 +111,9 @@ There are three different colors that can appear in this plot:
             <td>Idle: Does not have enough work to stay busy.</td>
         </tr>
     </table>
+
+.. figure:: images/dashboard_task_processing.png
+    :alt: Task Processing bar chart, showing a relatively even number of tasks on each worker.
 
 In this plot on the dashboard we have two extra tabs with the following information:
 
@@ -146,9 +143,6 @@ There are certain colors that are reserved for a specific kinds of tasks:
 
     <table>
         <tr>
-            <td><b>Color</b></td><td><b>Meaning</b></td>
-        </tr>
-        <tr>
             <td>
                 <div role="img" aria-label="light red square" style="color:rgba(255, 0, 0, 0.4); font-size: 25px ">&#9632;</div>
             </td>
@@ -175,24 +169,21 @@ There are certain colors that are reserved for a specific kinds of tasks:
     </table>
 
 
-.. figure:: images/dashboard_taskstream_healthy.png
-    :alt: Task Stream pane showing eight horizontal bars, one per worker-thread, with different shades of greens and blues and some red. 
-
-.. figure:: images/dashboard_task_stream_unhealthy.png
-    :alt:  Task Stream pane showing twelve horizontal bars, one per worker-thread, with majority of white space in each bar, and displaying some purple, red and orange rectangles.   
-
-
 In some scenarios the dashboard will have white spaces between each rectangle, this means that during that time the worker-thread
 is idle. Having too much white and red is an indication of not optimal use of resources.
+
+.. figure:: images/dashboard_taskstream_healthy.png
+    :alt: An example of a healthy Task Stream, with little to no red or white space. The stacked bar chart, with one bar per worker-thread, has different shades of blue and green for different tasks, with some red.
+
+.. figure:: images/dashboard_task_stream_unhealthy.png
+    :alt:  An example of an unhealthy Task Stream, the bar chart shows a lot of white space and red rectangles, and also some orange.
+
 
 .. _dashboard.progress:
 
 Progress
 --------
 
-.. figure:: images/dashboard_progress.png
-    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and the "sum" bar is empty.
- 
 The progress bars plot shows the progress of each individual task-prefix. The color of the of each bar matches the color of the 
 individual tasks on the task stream that correspond to the same task-prefix. Each horizontal bar has three different components:
 
@@ -219,6 +210,9 @@ individual tasks on the task stream that correspond to the same task-prefix. Eac
         </tr>
     </table>
 
+.. figure:: images/dashboard_progress.png
+    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and the "sum" bar is empty.
+ 
 
 Dask JupyterLab Extension
 --------------------------
