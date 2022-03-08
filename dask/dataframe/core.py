@@ -4597,8 +4597,10 @@ class DataFrame(_Frame):
         if divisions is not None:
             check_divisions(divisions)
         # mismatched sizes of indivual partitions = user error. how to fail gracefully?
+
         elif (
-            getattr(other, "known_divisions", False)
+            isinstance(other, Index)
+            and other.known_divisions
             and other.npartitions == self.npartitions
         ):
             pre_sorted = True

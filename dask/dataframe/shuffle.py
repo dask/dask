@@ -1026,10 +1026,7 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
         meta = df._meta.set_index(index._meta, drop=drop)
     elif isinstance(index, (str, pd.Index, pd.Series)):
         meta = df._meta.set_index(index, drop=drop)
-    # elif isinstance(index, str):
-    #     meta = df[index]
     else:
-
         raise TypeError("TBD -- other")
 
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)

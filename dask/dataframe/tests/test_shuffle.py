@@ -188,7 +188,7 @@ def test_partitioning_index_categorical_on_values():
     pytest.param(lambda df: df.x + 1, id="series x + 1"),
     pytest.param(lambda df: df.index, id="df.index"),
 ])
-def test_set_index_general_pmh(npartitions, column, shuffle_method):
+def test_set_index_general_paramed(npartitions, column, shuffle_method):
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
         index=np.random.random(100),
@@ -204,7 +204,6 @@ def test_set_index_general_pmh(npartitions, column, shuffle_method):
     assert_eq(expected, result)
 
 
-
 @pytest.mark.parametrize(
     "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
 )
@@ -217,17 +216,12 @@ def test_set_index_general(npartitions, shuffle_method):
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
     assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
-
     assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
-
     assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
-
     assert_eq(
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
-
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
-
     assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
