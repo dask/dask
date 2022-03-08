@@ -12,7 +12,7 @@ from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
-from ...utils import M, ensure_dict
+from ...utils import M, _deprecated, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..dispatch import dataframe_backend_dispatch
 from ..shuffle import set_partition
@@ -337,6 +337,7 @@ def from_bcolz_pandas(
         return result
 
 
+@_deprecated(after_version="2022.02.1")
 def from_bcolz(*args, **kwargs):
     return dataframe_backend_dispatch.from_bcolz(*args, **kwargs)
 

@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import dataclasses
 import datetime
+import hashlib
 import inspect
 import os
 import pickle
 import threading
 import uuid
+import warnings
 from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
-from dataclasses import fields, is_dataclass
 from functools import partial
-from hashlib import md5
 from numbers import Integral, Number
 from operator import getitem
 
@@ -21,6 +22,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from . import config, local, threaded
+from .compatibility import _PY_VERSION
 from .context import thread_state
 from .core import flatten
 from .core import get as simple_get
@@ -425,7 +427,7 @@ def unpack_collections(*args, traverse=True):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr) and not isinstance(expr, type):
+            elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -434,7 +436,7 @@ def unpack_collections(*args, traverse=True):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in fields(expr)
+                            for f in dataclasses.fields(expr)
                         ],
                     ),
                 )
@@ -843,6 +845,15 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
+# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
+if _PY_VERSION >= parse_version("3.9"):
+
+    def _md5(x, _hashlib_md5=hashlib.md5):
+        return _hashlib_md5(x, usedforsecurity=False)
+
+else:
+    _md5 = hashlib.md5
+
 
 def tokenize(*args, **kwargs):
     """Deterministic token
@@ -853,7 +864,7 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
-    hasher = md5(str(tuple(map(normalize_token, args))).encode())
+    hasher = _md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
         hasher.update(str(normalize_token(kwargs)).encode())
     return hasher.hexdigest()
@@ -932,6 +943,9 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
 
+    if dataclasses.is_dataclass(o):
+        return normalize_dataclass(o)
+
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
 
@@ -989,6 +1003,16 @@ def _normalize_function(func: Callable) -> Callable:
             return cloudpickle.dumps(func, protocol=4)
         except Exception:
             return str(func)
+
+
+def normalize_dataclass(obj):
+    fields = [
+        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
+    ]
+    return (
+        normalize_function(type(obj)),
+        _normalize_seq_func(fields),
+    )
 
 
 @normalize_token.register_lazy("pandas")
@@ -1252,7 +1276,13 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler.get
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
+
             if scheduler in named_schedulers:
+                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                    warnings.warn(
+                        "Running on a single-machine scheduler when a distributed client "
+                        "is active might lead to unexpected results."
+                    )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
                 from distributed.worker import get_client
