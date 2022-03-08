@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+from functools import cached_property
 from typing import Iterable
 
 import numpy as np
@@ -21,10 +22,9 @@ from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
-from ..utils import is_arraylike, typename
+from ..utils import BackendEntrypoint, is_arraylike, typename
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
-    BackendEntrypoint,
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
@@ -644,7 +644,7 @@ def _cudf():
 
 
 class CudfBackendEntrypoint(BackendEntrypoint):
-    @property
+    @cached_property
     def fallback(self):
         return PandasBackendEntrypoint()
 

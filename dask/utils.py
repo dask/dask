@@ -618,7 +618,11 @@ class BackendEntrypoint:
 
     @property
     def fallback(self) -> BackendEntrypoint:
-        """Fallback entrypoint object"""
+        """Fallback entrypoint object.
+
+        Returning anything other than ``None`` requires that
+        ``move_from_fallback`` be properly defined.
+        """
         return None
 
     def move_from_fallback(self, x):
