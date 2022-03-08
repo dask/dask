@@ -26,13 +26,13 @@ class PostComputeCallable(Protocol):
         """ """
 
 
-class PostPersistCallable(Protocol):
+class PostPersistCallable(Protocol[CollectionType]):
     def __call__(
         self,
         dsk: Mapping,
         *args,
         rename: Mapping[str, str] | None = None,
-    ) -> DaskCollection:
+    ) -> CollectionType:
         """ """
 
 
