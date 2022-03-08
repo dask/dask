@@ -649,7 +649,11 @@ class CudfBackendEntrypoint(BackendEntrypoint):
         return PandasBackendEntrypoint()
 
     def move_from_fallback(self, ddf):
-        return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+        if isinstance(ddf._meta, pd.DataFrame):
+            return ddf.map_partitions(_cudf().DataFrame.from_pandas)
+        elif isinstance(ddf._meta, pd.Series):
+            return ddf.map_partitions(_cudf().Series.from_pandas)
+        return ddf
 
     def make_timeseries(self, *args, df_backend=None, **kwargs):
         return self.fallback.make_timeseries(*args, df_backend="cudf", **kwargs)
