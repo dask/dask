@@ -22,7 +22,7 @@ from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
-from ..utils import BackendEntrypoint, is_arraylike, typename
+from ..utils import DaskBackendEntrypoint, is_arraylike, typename
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
@@ -551,7 +551,7 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
-class PandasBackendEntrypoint(BackendEntrypoint):
+class PandasBackendEntrypoint(DaskBackendEntrypoint):
     def make_timeseries(self, *args, **kwargs):
         return dd.io.demo.make_timeseries_pandas(*args, **kwargs)
 
@@ -643,7 +643,7 @@ def _cudf():
         )
 
 
-class CudfBackendEntrypoint(BackendEntrypoint):
+class CudfBackendEntrypoint(DaskBackendEntrypoint):
     @cached_property
     def fallback(self):
         return PandasBackendEntrypoint()

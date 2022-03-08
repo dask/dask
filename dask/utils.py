@@ -613,11 +613,11 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
-class BackendEntrypoint:
+class DaskBackendEntrypoint:
     """Base Collection-Backend Entrypoint Class"""
 
     @property
-    def fallback(self) -> BackendEntrypoint:
+    def fallback(self) -> DaskBackendEntrypoint:
         """Fallback entrypoint object.
 
         Returning anything other than ``None`` requires that
@@ -650,19 +650,19 @@ class BackendDispatch:
         if name:
             self.__name__ = name
 
-    def register(self, backend: str, cls_target: BackendEntrypoint):
+    def register(self, backend: str, cls_target: DaskBackendEntrypoint):
         """Register a target class for a specific backend label"""
 
         def wrapper(cls_target):
             if isinstance(backend, tuple):
                 for b in backend:
                     self.register(b, cls_target)
-            elif isinstance(cls_target, BackendEntrypoint):
+            elif isinstance(cls_target, DaskBackendEntrypoint):
                 self._lookup[backend] = cls_target
             else:
                 raise ValueError(
-                    f"BackendDispatch only supportsBackendEntrypoint registration"
-                    f"got {cls_target}"
+                    f"BackendDispatch only supports DaskBackendEntrypoint "
+                    f"registration. Got {cls_target}"
                 )
             return cls_target
 
