@@ -117,7 +117,9 @@ class DaskCollection(Protocol):
         """Value that must fully represent the object."""
 
     @staticmethod
-    def __dask_optimize__(dsk: MutableMapping, keys: Sequence[Hashable], **kwargs) -> MutableMapping:
+    def __dask_optimize__(
+        dsk: MutableMapping, keys: Sequence[Hashable], **kwargs
+    ) -> MutableMapping:
         """Given a graph and keys, return a new optimized graph."""
 
     @staticmethod
