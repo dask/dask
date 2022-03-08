@@ -388,6 +388,16 @@ def test_set_index_with_explicit_divisions():
         ddf.set_index("x", divisions=[3, 1, 5])
 
 
+def test_set_index_with_empty_divisions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Divisions must not be empty
+    with pytest.raises(ValueError):
+        ddf.set_index("x", divisions=[])
+
+
 def test_set_index_divisions_2():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")})
     ddf = dd.from_pandas(df, 2)

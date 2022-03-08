@@ -6715,6 +6715,8 @@ def check_divisions(divisions):
     if not isinstance(divisions, (list, tuple)):
         raise ValueError("New division must be list or tuple")
     divisions = list(divisions)
+    if len(divisions) == 0:
+        raise ValueError("New division must not be empty")
     if divisions != sorted(divisions):
         raise ValueError("New division must be sorted")
     if len(divisions[:-1]) != len(list(unique(divisions[:-1]))):
