@@ -603,7 +603,7 @@ Dask Name: {name}, {task} tasks"""
         >>> import dask
         >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").clear_divisions()
         >>> divisions = ddf.compute_current_divisions()
-        ... divisions
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
         (Timestamp('2021-01-01 00:00:00'),
          Timestamp('2021-01-02 00:00:00'),
          Timestamp('2021-01-03 00:00:00'),
@@ -611,12 +611,14 @@ Dask Name: {name}, {task} tasks"""
          Timestamp('2021-01-05 00:00:00'),
          Timestamp('2021-01-06 00:00:00'),
          Timestamp('2021-01-06 23:00:00'))
+
         >>> ddf.divisions = divisions
         >>> ddf.known_divisions
         True
+
         >>> ddf = ddf.reset_index().clear_divisions()
         >>> divisions = ddf.compute_current_divisions("timestamp")
-        ... divisions
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
         (Timestamp('2021-01-01 00:00:00'),
          Timestamp('2021-01-02 00:00:00'),
          Timestamp('2021-01-03 00:00:00'),
@@ -624,6 +626,7 @@ Dask Name: {name}, {task} tasks"""
          Timestamp('2021-01-05 00:00:00'),
          Timestamp('2021-01-06 00:00:00'),
          Timestamp('2021-01-06 23:00:00'))
+
         >>> ddf = ddf.set_index("timestamp", divisions=divisions, sorted=True)
         """
         if col is None and self.known_divisions:
