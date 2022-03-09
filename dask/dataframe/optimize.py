@@ -136,11 +136,6 @@ def optimize_dataframe_getitem(dsk, keys):
         row_select_layers = {k for k in deps if _kind(dsk.layers[k]) == "row-selection"}
         col_select_layers = deps - row_select_layers
 
-        # Can only handle single column-selection
-        # layer if there is no row selection (case A)
-        if len(row_select_layers) == 0 and len(col_select_layers) > 1:
-            continue
-
         # Can only handle single row-selection dependent (case B)
         if len(row_select_layers) > 1:
             continue
