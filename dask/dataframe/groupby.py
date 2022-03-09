@@ -189,12 +189,14 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
+    if shuffled:
+        df = df.sort_index()
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
@@ -1298,6 +1300,13 @@ class _GroupBy:
         graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
 
+    def compute(self, **kwargs):
+        raise NotImplementedError(
+            "DataFrameGroupBy does not allow compute method."
+            "Please chain it with an aggregation method (like ``.mean()``) or get a "
+            "specific group using ``.get_group()`` before calling ``compute()``"
+        )
+
     def _shuffle(self, meta):
         df = self.obj
 
@@ -1901,6 +1910,7 @@ class _GroupBy:
             df2,
             by,
             self._slice,
+            should_shuffle,
             periods=periods,
             freq=freq,
             axis=axis,

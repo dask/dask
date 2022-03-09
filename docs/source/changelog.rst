@@ -1,6 +1,72 @@
 Changelog
 =========
 
+.. _v2022.02.1:
+
+2022.02.1
+---------
+
+Released on February 25, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add  aggregate functions ``first`` and ``last`` to ``dask.dataframe.pivot_table`` (:pr:`8649`) `Knut Nordanger`_
+- Add ``std()`` support for ``datetime64`` ``dtype`` for pandas-like objects (:pr:`8523`) `Ben Glossner`_
+- Add materialized task counts to ``HighLevelGraph`` and ``Layer`` html reprs (:pr:`8589`) `kori73`_
+
+Enhancements
+^^^^^^^^^^^^
+- Do not allow iterating a ``DataFrameGroupBy`` (:pr:`8696`) `Bryan W. Weber`_
+- Fix missing newline after ``info()`` call on empty ``DataFrame`` (:pr:`8727`) `Naty Clementi`_
+- Add ``groupby.compute`` as a not implemented method (:pr:`8734`) `Dranaxel`_
+- Improve multi dataframe join performance (:pr:`8740`) `Holden Karau`_
+- Include ``bool`` type for ``Index`` (:pr:`8732`) `Naty Clementi`_
+- Allow ``ArrowDatasetEngine`` subclass to override pandas->arrow conversion also for partitioned write (:pr:`8741`) `Joris Van den Bossche`_
+- Increase performance of k-diagonal extraction in ``da.diag()`` and ``da.diagonal()`` (:pr:`8689`) `ParticularMiner`_
+- Change ``linspace`` creation to match numpy when num equal to 0 (:pr:`8676`) `Peter`_
+- Tokenize ``dataclasses`` (:pr:`8557`) `Gabe Joseph`_
+- Update ``tokenize`` to treat ``dict`` and ``kwargs`` differently (:pr:`8655`) `James Bourbeau`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in ``dask.array.roll()`` for roll-shifts that match the size of the input array (:pr:`8723`) `ParticularMiner`_
+- Fix for ``normalize_function`` ``dataclass`` methods (:pr:`8527`) `Sarah Charlotte Johnson`_
+- Fix rechunking with zero-size-chunks (:pr:`8703`) `ParticularMiner`_
+- Move creation of ``sqlalchemy`` connection for picklability (:pr:`8745`) `Julia Signell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Drop Python 3.7 (:pr:`8572`) `James Bourbeau`_
+- Deprecate ``iteritems`` (:pr:`8660`) `James Bourbeau`_
+- Deprecate ``dataframe.tseries.resample.getnanos`` (:pr:`8752`) `Sarah Charlotte Johnson`_
+- Add deprecation warning for pyarrow-legacy engine (:pr:`8758`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update link typos in changelog (:pr:`8717`) `James Bourbeau`_
+- Clarify ``dask.visualize`` docstring (:pr:`8710`) `Dranaxel`_
+- Update Docker example to use current best practices (:pr:`8731`) `Jacob Tomlinson`_
+- Update docs to include ``distributed.Client.preload`` (:pr:`8679`) `Bryan W. Weber`_
+- Document monthly social meeting (:pr:`8595`) `Thomas Grainger`_
+- Add docs for Gen2 access with RBAC/ACL i.e. security principal (:pr:`8748`) `Martin Thøgersen`_
+- Use Dask configuration extension from ``dask-sphinx-theme`` (:pr:`8751`) `Benjamin Zaitlen`_
+
+Maintenance
+^^^^^^^^^^^
+- Unpin ``coverage`` in CI (:pr:`8690`) `James Bourbeau`_
+- Add manual trigger for running test suite (:pr:`8716`) `James Bourbeau`_
+- Xfail ``scheduler_HLG_unpack_import``; flaky test (:pr:`8724`) `Mike McCarty`_
+- Temporarily remove ``scipy`` upstream CI build (:pr:`8725`) `James Bourbeau`_
+- Bump pre-release version to be greater than stable releases (:pr:`8728`) `Charles Blackmon-Luca`_
+- Move custom sort function logic to internal ``sort_values`` (:pr:`8571`) `Charles Blackmon-Luca`_
+- Pin ``cloudpickle`` and ``scipy`` in docs requirements (:pr:`8737`) `Julia Signell`_
+- Make the labeler not delete labels, and look for the docs at the right spot (:pr:`8746`) `Julia Signell`_
+- Fix docs build warnings (:pr:`8432`) `Kristopher Overholt`_
+- Update test status badge (:pr:`8747`) `James Bourbeau`_
+- Fix parquet ``test_pandas_timestamp_overflow_pyarrow`` test (:pr:`8733`) `Joris Van den Bossche`_
+- Only run PR builds on changes to relevant files (:pr:`8756`) `Charles Blackmon-Luca`_
+
+
 .. _v2022.02.0:
 
 2022.02.0
@@ -5129,6 +5195,7 @@ Other
 .. _`Martin Fleischmann`: https://github.com/martinfleis
 .. _`Robert Hales`: https://github.com/robalar
 .. _`João Paulo Lacerda`: https://github.com/jopasdev
+.. _`neel iyer`: https://github.com/spiyer99
 .. _`SnkSynthesis`: https://github.com/SnkSynthesis
 .. _`JoranDox`: https://github.com/JoranDox
 .. _`Kinshuk Dua`: https://github.com/kinshukdua
@@ -5163,4 +5230,10 @@ Other
 .. _`Bryan W. Weber`: https://github.com/bryanwweber
 .. _`Amir Kadivar`: https://github.com/amirkdv
 .. _`Pedro Silva`: https://github.com/ppsbs
-.. _`neel iyer`: https://github.com/spiyer99
+.. _`Knut Nordanger`: https://github.com/nordange
+.. _`Ben Glossner`: https://github.com/bglossner
+.. _`Dranaxel`: https://github.com/Dranaxel
+.. _`Holden Karau`: https://github.com/holdenk
+.. _`Peter`: https://github.com/peterpandelidis
+.. _`Thomas Grainger`: https://github.com/graingert
+.. _`Martin Thøgersen`: https://github.com/th0ger

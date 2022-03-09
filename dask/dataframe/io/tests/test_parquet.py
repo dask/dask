@@ -65,7 +65,7 @@ SKIP_PYARROW_LE = SKIP_PYARROW
 SKIP_PYARROW_LE_REASON = "pyarrow not found"
 SKIP_PYARROW_DS = SKIP_PYARROW
 SKIP_PYARROW_DS_REASON = "pyarrow not found"
-if pa_version.major >= 5 and not SKIP_PYARROW:
+if not SKIP_PYARROW_LE:
     # NOTE: We should use PYARROW_LE_MARK to skip
     # pyarrow-legacy tests once pyarrow officially
     # removes ParquetDataset support in the future.
@@ -3072,9 +3072,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
                     original_type = col.type
 
-                    series: pd.Series = col.cast(pa.int64()).to_pandas(
-                        types_mapper={pa.int64(): pd.Int64Dtype}
-                    )
+                    series: pd.Series = col.cast(pa.int64()).to_pandas()
                     info = np.iinfo(np.dtype("int64"))
                     # constrain data to be within valid ranges
                     series.clip(
@@ -3947,3 +3945,49 @@ def test_custom_filename_with_partition(tmpdir, engine):
     assert_eq(
         pdf, actual, check_index=False, check_dtype=False, check_categorical=False
     )
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(
+    pa_version < parse_version("5.0"),
+    reason="pyarrow write_dataset was added in version 5.0",
+)
+def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/8650
+
+    import pyarrow.parquet as pq
+    from pyarrow.dataset import HivePartitioning, write_dataset
+
+    # Sample data
+    df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+
+    # Write partitioned dataset with dask
+    dask_path = tmpdir.mkdir("foo-dask")
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(dask_path, engine=engine, partition_on=["col1"], write_index=False)
+
+    # Write partitioned dataset with pyarrow
+    pa_path = tmpdir.mkdir("foo-pyarrow")
+    table = pa.Table.from_pandas(df)
+    write_dataset(
+        data=table,
+        base_dir=pa_path,
+        basename_template="part.{i}.parquet",
+        format="parquet",
+        partitioning=HivePartitioning(pa.schema([("col1", pa.int32())])),
+    )
+
+    # Define simple function to ensure results should
+    # be comparable (same column and row order)
+    def _prep(x):
+        return x.sort_values("col2")[["col1", "col2"]]
+
+    # Check that reading dask-written data is the same for pyarrow and dask
+    df_read_dask = dd.read_parquet(dask_path, engine=engine)
+    df_read_pa = pq.read_table(dask_path).to_pandas()
+    assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
+
+    # Check that reading pyarrow-written data is the same for pyarrow and dask
+    df_read_dask = dd.read_parquet(pa_path, engine=engine)
+    df_read_pa = pq.read_table(pa_path).to_pandas()
+    assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)

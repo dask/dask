@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import subprocess
@@ -5,8 +6,8 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -226,9 +227,16 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f3\x94\x93\x94.",
+        (
+            b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f2\x94\x93\x94.",
+        ),
+        (
+            (
+                "c",
+                b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f1\x94\x93\x94.",
+            ),
+        ),
     )
     assert res == sol
 
@@ -407,6 +415,36 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+
+
+def test_tokenize_dataclass():
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Same name, same values, new definition: tokenize differently
+    ADataClassRedefinedDifferently = dataclasses.make_dataclass(
+        "ADataClass", [("a", Union[int, str])]
+    )
+    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
+
+
 def test_tokenize_range():
     assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
     assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
@@ -509,11 +547,6 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
-
-
-@dataclass
-class ADataClass:
-    a: int
 
 
 def test_unpack_collections():
@@ -1293,6 +1326,19 @@ def test_normalize_function_limited_size():
     assert 50 < len(function_cache) < 600
 
 
+def test_normalize_function_dataclass_field_no_repr():
+    A = dataclasses.make_dataclass(
+        "A",
+        [("param", float, dataclasses.field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
+
+
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
 
@@ -1378,6 +1424,19 @@ def test_get_scheduler():
     assert get_scheduler() is None
 
 
+def test_get_scheduler_with_distributed_active():
+
+    with dask.config.set(scheduler="dask.distributed"):
+        warning_message = (
+            "Running on a single-machine scheduler when a distributed client "
+            "is active might lead to unexpected results."
+        )
+        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
+            get_scheduler(scheduler="threads")
+            get_scheduler(scheduler="sync")
+        assert len(user_warnings_a) == 2
+
+
 def test_callable_scheduler():
     called = [False]
 
@@ -1420,11 +1479,12 @@ def test_optimizations_ctd():
 
 def test_clone_key():
     h = object()  # arbitrary hashable
-    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
-    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
-    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
+    assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
     assert clone_key(("sum-1-2-3", h, 1), 123) == (
-        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        "sum-1efd41f02035dc802f4ebb9995d07e9d",
         h,
         1,
     )
@@ -1432,7 +1492,7 @@ def test_clone_key():
         clone_key(1, 2)
 
 
-def test_compte_as_if_collection_low_level_task_graph():
+def test_compute_as_if_collection_low_level_task_graph():
     # See https://github.com/dask/dask/pull/7969
     da = pytest.importorskip("dask.array")
     x = da.arange(10)

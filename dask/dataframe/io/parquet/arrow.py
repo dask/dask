@@ -75,6 +75,7 @@ def _write_partitioned(
     filename,
     partition_cols,
     fs,
+    pandas_to_arrow_table,
     preserve_index,
     index_cols=(),
     **kwargs,
@@ -120,12 +121,8 @@ def _write_partitioned(
         subdir = fs.sep.join(
             [f"{name}={val}" for name, val in zip(partition_cols, keys)]
         )
-        subtable = pa.Table.from_pandas(
-            subgroup,
-            nthreads=1,
-            preserve_index=preserve_index,
-            schema=subschema,
-            safe=False,
+        subtable = pandas_to_arrow_table(
+            subgroup, preserve_index=preserve_index, schema=subschema
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -730,6 +727,7 @@ class ArrowDatasetEngine(Engine):
                 filename,
                 partition_on,
                 fs,
+                cls._pandas_to_arrow_table,
                 preserve_index,
                 index_cols=index_cols,
                 compression=compression,
@@ -1048,6 +1046,7 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         partition_obj = dataset_info["partitions"]
         partitions = dataset_info["partition_names"]
+        physical_column_names = dataset_info.get("physical_schema", schema).names
         columns = None
 
         # Set index and column names using
@@ -1070,7 +1069,7 @@ class ArrowDatasetEngine(Engine):
         else:
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
-            column_names = dataset_info.get("physical_schema", schema).names
+            column_names = physical_column_names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
@@ -1080,7 +1079,7 @@ class ArrowDatasetEngine(Engine):
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
         if partitions:
-            _partitions = [p for p in partitions if p not in column_names]
+            _partitions = [p for p in partitions if p not in physical_column_names]
             if not _partitions:
                 partitions = []
                 dataset_info["partitions"] = None
@@ -1090,7 +1089,9 @@ class ArrowDatasetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
-                    "columns: {} | partitions: {}".format(column_names, partitions)
+                    "physical columns: {} | partitions: {}".format(
+                        physical_column_names, partitions
+                    )
                 )
 
         column_names, index_names = _normalize_index_columns(

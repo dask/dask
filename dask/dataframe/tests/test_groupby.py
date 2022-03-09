@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -120,6 +120,16 @@ def test_groupby_error():
     msg = "Columns not found: "
     with pytest.raises(KeyError) as err:
         dp[["x", "A"]]
+    assert msg in str(err.value)
+
+    msg = (
+        "DataFrameGroupBy does not allow compute method."
+        "Please chain it with an aggregation method (like ``.mean()``) or get a "
+        "specific group using ``.get_group()`` before calling ``compute()``"
+    )
+
+    with pytest.raises(NotImplementedError) as err:
+        dp.compute()
     assert msg in str(err.value)
 
 
@@ -1188,7 +1198,8 @@ def test_series_aggregations_multilevel(grouper, agg_func):
         pytest.param(
             lambda df: [df["a"] > 2, df["b"] > 1],
             marks=pytest.mark.xfail(
-                reason="index dtype does not coincide: boolean != empty"
+                not PANDAS_GT_150,
+                reason="index dtype does not coincide: boolean != empty",
             ),
         ),
     ],
@@ -2129,6 +2140,27 @@ def test_groupby_shift_lazy_input():
         assert_eq(
             pdf.groupby(pdf.c).shift(periods=1, fill_value=pdf.b.max()),
             ddf.groupby(ddf.c).shift(periods=1, fill_value=ddf.b.max()),
+        )
+
+
+@pytest.mark.filterwarnings("ignore:`meta` is not specified")
+def test_groupby_shift_within_partition_sorting():
+    # Result is non-deterministic. We run the assertion a few times to keep
+    # the probability of false pass low.
+    for _ in range(10):
+        df = pd.DataFrame(
+            {
+                "a": range(60),
+                "b": [2, 4, 3, 1] * 15,
+                "c": [None, 10, 20, None, 30, 40] * 10,
+            }
+        )
+        df = df.set_index("a").sort_index()
+        ddf = dd.from_pandas(df, npartitions=6)
+        assert_eq(
+            df.groupby("b")["c"].shift(1),
+            ddf.groupby("b")["c"].shift(1),
+            scheduler="threads",
         )
 
 

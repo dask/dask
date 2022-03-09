@@ -20,6 +20,7 @@ from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
+    _noop,
     maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
@@ -344,7 +345,7 @@ def test_rearrange_by_column_with_narrow_divisions():
     list_eq(df, a)
 
 
-def test_maybe_buffered_partd():
+def test_maybe_buffered_partd(tmp_path):
     import partd
 
     f = maybe_buffered_partd()
@@ -354,6 +355,17 @@ def test_maybe_buffered_partd():
     assert not f2.buffer
     p2 = f2()
     assert isinstance(p2.partd, partd.File)
+
+    f3 = maybe_buffered_partd(tempdir=tmp_path)
+    p3 = f3()
+    assert isinstance(p3.partd, partd.Buffer)
+    contents = list(tmp_path.iterdir())
+    assert len(contents) == 1
+    assert contents[0].suffix == ".partd"
+    assert contents[0].parent == tmp_path
+    f4 = pickle.loads(pickle.dumps(f3))
+    assert not f4.buffer
+    assert f4.tempdir == tmp_path
 
 
 def test_set_index_with_explicit_divisions():
@@ -374,6 +386,16 @@ def test_set_index_with_explicit_divisions():
     # Divisions must be sorted
     with pytest.raises(ValueError):
         ddf.set_index("x", divisions=[3, 1, 5])
+
+
+def test_set_index_with_empty_divisions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Divisions must not be empty
+    with pytest.raises(ValueError):
+        ddf.set_index("x", divisions=[])
 
 
 def test_set_index_divisions_2():
@@ -913,6 +935,23 @@ def test_set_index_categorical():
     assert_categorical_equal(divisions, divisions.sort_values())
 
 
+def test_set_index_with_empty_and_overlap():
+    # https://github.com/dask/dask/issues/8735
+    df = pd.DataFrame(
+        index=list(range(8)),
+        data={
+            "a": [1, 2, 2, 3, 3, 3, 4, 5],
+            "b": [1, 1, 0, 0, 0, 1, 0, 0],
+        },
+    )
+    ddf = dd.from_pandas(df, 4)
+    result = ddf[ddf.b == 1].set_index("a", sorted=True)
+    expected = df[df.b == 1].set_index("a")
+
+    assert result.divisions == (1.0, 3.0, 3.0)
+    assert_eq(result, expected)
+
+
 def test_compute_divisions():
     from dask.dataframe.shuffle import compute_and_set_divisions
 
@@ -1144,6 +1183,45 @@ def test_set_index_overlap_2():
     assert ddf2.npartitions == 8
 
 
+def test_compute_current_divisions_nan_partition():
+    # Compute divisions 1 null partition
+    a = d[d.a > 3].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (4, 5, 8, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+    # Compute divisions with 0 null partitions
+    a = d[d.a > 1].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (2, 4, 7, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+
+def test_compute_current_divisions_overlap():
+    A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
+    a = dd.from_pandas(A, npartitions=2)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        divisions = a.compute_current_divisions("key")
+        b = a.set_index("key", divisions=divisions)
+        assert b.divisions == (1, 4, 7)
+        assert [len(p) for p in b.partitions] == [3, 5]
+
+
+def test_compute_current_divisions_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.clear_divisions().repartition(8)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        ddf2.compute_current_divisions()
+
+
 def test_shuffle_hlg_layer():
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
@@ -1278,6 +1356,29 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
+
+
+def test_shuffle_values_raises():
+    df = pd.DataFrame({"a": [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(
+        ValueError, match="na_position must be either 'first' or 'last'"
+    ):
+        ddf.sort_values(by="a", na_position="invalid")
+
+
+def test_shuffle_by_as_list():
+    df = pd.DataFrame({"a": [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=["a"], npartitions="auto", ascending=True)
+    expect = pd.DataFrame({"a": [1, 2, 3]})
+    dd.assert_eq(got, expect, check_index=False)
+
+
+def test_noop():
+    assert _noop(1, None) == 1
+    assert _noop("test", None) == "test"
 
 
 @pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])

@@ -580,6 +580,62 @@ Dask Name: {name}, {task} tasks"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
+    def compute_current_divisions(self, col=None):
+        """Compute the current divisions of the DataFrame.
+
+        This method triggers immediate computation. If you find yourself running this command
+        repeatedly for the same dataframe, we recommend storing the result
+        so you don't have to rerun it.
+
+        If the column or index values overlap between partitions, raises ``ValueError``.
+        To prevent this, make sure the data are sorted by the column or index.
+
+        Parameters
+        ----------
+        col : string, optional
+            Calculate the divisions for a non-index column by passing in the name of the column.
+            If col is not specified, the index will be used to calculate divisions.
+            In this case, if the divisions are already known, they will be returned
+            immediately without computing.
+
+        Examples
+        --------
+        >>> import dask
+        >>> ddf = dask.datasets.timeseries(start="2021-01-01", end="2021-01-07", freq="1H").clear_divisions()
+        >>> divisions = ddf.compute_current_divisions()
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+
+        >>> ddf.divisions = divisions
+        >>> ddf.known_divisions
+        True
+
+        >>> ddf = ddf.reset_index().clear_divisions()
+        >>> divisions = ddf.compute_current_divisions("timestamp")
+        >>> print(divisions)  # doctest: +NORMALIZE_WHITESPACE
+        (Timestamp('2021-01-01 00:00:00'),
+         Timestamp('2021-01-02 00:00:00'),
+         Timestamp('2021-01-03 00:00:00'),
+         Timestamp('2021-01-04 00:00:00'),
+         Timestamp('2021-01-05 00:00:00'),
+         Timestamp('2021-01-06 00:00:00'),
+         Timestamp('2021-01-06 23:00:00'))
+
+        >>> ddf = ddf.set_index("timestamp", divisions=divisions, sorted=True)
+        """
+        if col is None and self.known_divisions:
+            return self.divisions
+
+        from .shuffle import compute_divisions
+
+        return compute_divisions(self, col=col)
+
     def get_partition(self, n):
         """Get a dask DataFrame/Series representing the `nth` partition."""
         if 0 <= n < self.npartitions:
@@ -1254,8 +1310,11 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         divisions : list, optional
-            List of partitions to be used. Only used if npartitions and
-            partition_size isn't specified.
+            The "dividing lines" used to split the dataframe into partitions.
+            For ``divisions=[0, 10, 50, 100]``, there would be three output partitions,
+            where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
+            See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
+            Only used if npartitions and partition_size isn't specified.
             For convenience if given an integer this will defer to npartitions
             and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
@@ -1284,6 +1343,13 @@ Dask Name: {name}, {task} tasks"""
         Exactly one of `divisions`, `npartitions`, `partition_size`, or `freq`
         should be specified. A ``ValueError`` will be raised when that is
         not the case.
+
+        Also note that ``len(divisons)`` is equal to ``npartitions + 1``. This is because ``divisions``
+        represents the upper and lower bounds of each partition. The first item is the
+        lower bound of the first partition, the second item is the lower bound of the
+        second partition and the upper bound of the first partition, and so on.
+        The second-to-last item is the lower bound of the last partition, and the last
+        (extra) item is the upper bound of the last partition.
 
         Examples
         --------
@@ -2180,11 +2246,29 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
+        _raise_if_not_series_or_dataframe(self, "std")
+
         meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        is_df_like = is_dataframe_like(self._meta)
+        needs_time_conversion = False
+        numeric_dd = self
+
+        if PANDAS_GT_120 and is_df_like:
+            time_cols = self._meta.select_dtypes(include="datetime").columns
+            if len(time_cols) > 0:
+                (
+                    numeric_dd,
+                    needs_time_conversion,
+                ) = self._convert_time_cols_to_numeric(time_cols, axis, meta, skipna)
+        elif PANDAS_GT_120 and not is_df_like:
+            needs_time_conversion = is_datetime64_any_dtype(self._meta)
+            if needs_time_conversion:
+                numeric_dd = _convert_to_numeric(self, skipna)
+
         if axis == 1:
             result = map_partitions(
-                M.std,
-                self,
+                M.std if not needs_time_conversion else _sqrt_and_convert_to_timedelta,
+                numeric_dd,
                 meta=meta,
                 token=self._token_prefix + "std",
                 axis=axis,
@@ -2194,18 +2278,67 @@ Dask Name: {name}, {task} tasks"""
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
+
+        # Case where axis=0 or axis=None
+        v = numeric_dd.var(skipna=skipna, ddof=ddof, split_every=split_every)
+        name = self._token_prefix + "std"
+
+        if needs_time_conversion:
+            sqrt_func_kwargs = {
+                "is_df_like": is_df_like,
+                "time_cols": time_cols if is_df_like else None,
+                "axis": axis,
+            }
+            sqrt_func = _sqrt_and_convert_to_timedelta
         else:
-            v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
-            name = self._token_prefix + "std"
-            result = map_partitions(
-                np.sqrt,
-                v,
-                meta=meta,
-                token=name,
-                enforce_metadata=False,
-                parent_meta=self._meta,
+            sqrt_func_kwargs = {}
+            sqrt_func = np.sqrt
+
+        result = map_partitions(
+            sqrt_func,
+            v,
+            meta=meta,
+            token=name,
+            enforce_metadata=False,
+            parent_meta=self._meta,
+            **sqrt_func_kwargs,
+        )
+
+        # Try to match the Pandas result dtype
+        if is_df_like and hasattr(meta, "dtype"):
+            result = result.astype(meta.dtype)
+
+        return handle_out(out, result)
+
+    def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
+        from .io import from_pandas
+
+        needs_time_conversion = True
+
+        # Ensure all columns are correct type. Need to shallow copy since cols will be modified
+        if axis == 0:
+            numeric_dd = self[meta.index].copy()
+        else:
+            numeric_dd = self.copy()
+
+        # Mix of datetimes with other numeric types produces NaNs for each value in std() series
+        if axis == 1 and len(time_cols) != len(self.columns):
+            # This is faster than converting each column to numeric when it's not necessary
+            # since each standard deviation will just be NaN
+            needs_time_conversion = False
+            numeric_dd = from_pandas(
+                pd.DataFrame(
+                    {"_": pd.Series([np.nan])},
+                    index=self.index,
+                ),
+                npartitions=self.npartitions,
             )
-            return handle_out(out, result)
+        else:
+            # Convert timedelta and datetime columns to integer types so we can use var
+            for col in time_cols:
+                numeric_dd[col] = _convert_to_numeric(numeric_dd[col], skipna)
+
+        return numeric_dd, needs_time_conversion
 
     @_numeric_only
     @derived_from(pd.DataFrame)
@@ -4943,14 +5076,29 @@ class DataFrame(_Frame):
 
             from .multi import _recursive_pairwise_outer_join
 
-            other = _recursive_pairwise_outer_join(
-                other,
-                on=on,
-                lsuffix=lsuffix,
-                rsuffix=rsuffix,
-                npartitions=npartitions,
-                shuffle=shuffle,
-            )
+            # If its an outer join we can use the full recursive pairwise join.
+            if how == "outer":
+                full = [self] + other
+
+                return _recursive_pairwise_outer_join(
+                    full,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
+            else:
+                # Do recursive pairwise join on everything _except_ the last join
+                # where we need to do a left join.
+                other = _recursive_pairwise_outer_join(
+                    other,
+                    on=on,
+                    lsuffix=lsuffix,
+                    rsuffix=rsuffix,
+                    npartitions=npartitions,
+                    shuffle=shuffle,
+                )
 
         from .multi import merge
 
@@ -6623,6 +6771,8 @@ def check_divisions(divisions):
     if not isinstance(divisions, (list, tuple)):
         raise ValueError("New division must be list or tuple")
     divisions = list(divisions)
+    if len(divisions) == 0:
+        raise ValueError("New division must not be empty")
     if divisions != sorted(divisions):
         raise ValueError("New division must be sorted")
     if len(divisions[:-1]) != len(list(unique(divisions[:-1]))):
@@ -7523,3 +7673,41 @@ def series_map(base_series, map_series):
     divisions = list(base_series.divisions)
 
     return new_dd_object(graph, final_prefix, meta, divisions)
+
+
+def _convert_to_numeric(series, skipna):
+    if skipna:
+        return series.dropna().view("i8")
+
+    # series.view("i8") with pd.NaT produces -9223372036854775808 is why we need to do this
+    return series.view("i8").mask(series.isnull(), np.nan)
+
+
+def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
+    if axis == 1:
+        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+
+    is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
+
+    sqrt = np.sqrt(partition)
+
+    if not is_df_like:
+        return pd.to_timedelta(sqrt)
+
+    time_col_mask = sqrt.index.isin(time_cols)
+    matching_vals = sqrt[time_col_mask]
+    for time_col, matching_val in zip(time_cols, matching_vals):
+        sqrt[time_col] = pd.to_timedelta(matching_val)
+
+    return sqrt
+
+
+def _raise_if_not_series_or_dataframe(x, funcname):
+    """
+    Utility function to raise an error if an object is not a Series or DataFrame
+    """
+    if not is_series_like(x) and not is_dataframe_like(x):
+        raise NotImplementedError(
+            "`%s` is only supported with objects that are Dataframes or Series"
+            % funcname
+        )
