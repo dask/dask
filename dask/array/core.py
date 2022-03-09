@@ -5506,7 +5506,7 @@ class BlockView:
 
     ``BlockView`` provides an array-like interface
     to the blocks of a dask array.  Numpy-style indexing of a
-     ``BlockView`` returns a selection of blocks as a new dask array.
+    ``BlockView`` returns a selection of blocks as a new dask array.
 
     You can index ``BlockView`` like a numpy array of shape
     equal to the number of blocks in each dimension, (available as

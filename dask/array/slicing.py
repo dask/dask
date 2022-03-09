@@ -101,7 +101,9 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
     slices so that the resulting block slices give the same results
-    as the original slice on the original structure
+    as the original slice on the original structure. This function
+    works by successively unwrapping cases and passing down
+    through a sequence of functions.
 
     Index must be a tuple.  It may contain the following types
 
@@ -148,9 +150,6 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
 
     See Also
     --------
-    This function works by successively unwrapping cases and passing down
-    through a sequence of functions.
-
     slice_with_newaxis : handle None/newaxis case
     slice_wrap_lists : handle fancy indexing with lists
     slice_slices_and_integers : handle everything else

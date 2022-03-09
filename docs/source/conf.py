@@ -47,7 +47,12 @@ extensions = [
 ]
 
 # Turn on sphinx.ext.autosummary
-autosummary_generate = True
+autosummary_generate = [
+    "array-api.rst",
+    "bag-api.rst",
+    "dataframe-api.rst",
+    "delayed-api.rst",
+]
 
 # Add __init__ doc (ie. params) to class summaries
 autoclass_content = "both"
