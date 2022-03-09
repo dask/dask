@@ -1012,6 +1012,7 @@ def test_compute_nested():
 @pytest.mark.xfail(
     sys.platform == "win32",
     reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_visualize():
     pytest.importorskip("graphviz")

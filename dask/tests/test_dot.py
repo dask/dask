@@ -181,6 +181,7 @@ def test_to_graphviz_with_unconnected_node():
 @pytest.mark.xfail(
     sys.platform == "win32",
     reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
@@ -218,6 +219,7 @@ def test_dot_graph(tmpdir, format, typ):
 @pytest.mark.xfail(
     sys.platform == "win32",
     reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_dot_graph_no_filename(tmpdir, format, typ):
     before = tmpdir.listdir()
@@ -232,6 +234,7 @@ def test_dot_graph_no_filename(tmpdir, format, typ):
 @pytest.mark.xfail(
     sys.platform == "win32",
     reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_dot_graph_defaults():
     # Test with default args.
@@ -273,6 +276,7 @@ def test_dot_graph_defaults():
 @pytest.mark.xfail(
     sys.platform == "win32",
     reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_filenames_and_formats(tmpdir, filename, format, target, expected_result_type):
     result = dot_graph(dsk, filename=str(tmpdir.join(filename)), format=format)
