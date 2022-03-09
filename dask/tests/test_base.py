@@ -1,3 +1,4 @@
+import dataclasses
 import datetime
 import os
 import subprocess
@@ -5,8 +6,8 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
-from dataclasses import dataclass, field, make_dataclass
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -414,6 +415,36 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+
+
+def test_tokenize_dataclass():
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Same name, same values, new definition: tokenize differently
+    ADataClassRedefinedDifferently = dataclasses.make_dataclass(
+        "ADataClass", [("a", Union[int, str])]
+    )
+    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
+
+
 def test_tokenize_range():
     assert tokenize(range(5, 10, 2)) == tokenize(range(5, 10, 2))  # Identical ranges
     assert tokenize(range(5, 10, 2)) != tokenize(range(1, 10, 2))  # Different start
@@ -516,11 +547,6 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
-
-
-@dataclass
-class ADataClass:
-    a: int
 
 
 def test_unpack_collections():
@@ -1301,9 +1327,9 @@ def test_normalize_function_limited_size():
 
 
 def test_normalize_function_dataclass_field_no_repr():
-    A = make_dataclass(
+    A = dataclasses.make_dataclass(
         "A",
-        [("param", float, field(repr=False))],
+        [("param", float, dataclasses.field(repr=False))],
         namespace={"__dask_tokenize__": lambda self: self.param},
     )
 
@@ -1396,6 +1422,19 @@ def test_get_scheduler():
     with dask.config.set(scheduler="threads"):
         assert get_scheduler() is dask.threaded.get
     assert get_scheduler() is None
+
+
+def test_get_scheduler_with_distributed_active():
+
+    with dask.config.set(scheduler="dask.distributed"):
+        warning_message = (
+            "Running on a single-machine scheduler when a distributed client "
+            "is active might lead to unexpected results."
+        )
+        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
+            get_scheduler(scheduler="threads")
+            get_scheduler(scheduler="sync")
+        assert len(user_warnings_a) == 2
 
 
 def test_callable_scheduler():

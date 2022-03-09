@@ -4,6 +4,7 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_120, PANDAS_VERSION
@@ -1184,32 +1185,19 @@ def test_reductions_frame_dtypes():
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
-    if PANDAS_GT_120:
-        # std is implemented for datetimes in pandas 1.2.0, but dask
-        # implementation depends on var which isn't
-        assert_eq(
-            df_no_timedelta.drop("dt", axis=1).std(),
-            ddf_no_timedelta.drop("dt", axis=1).std(),
-        )
-    else:
-        assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-
-    df2 = df.drop("timedelta", axis=1)
-    ddf2 = ddf.drop("timedelta", axis=1)
-
-    assert_eq(df2.var(skipna=False), ddf2.var(skipna=False))
     assert_eq(df.sem(), ddf.sem())
-    if PANDAS_GT_120:
-        assert_eq(
-            df_no_timedelta.drop("dt", axis=1).std(ddof=0),
-            ddf_no_timedelta.drop("dt", axis=1).std(ddof=0),
-        )
-    else:
-        assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df2.var(ddof=0), ddf2.var(ddof=0))
-    assert_eq(df2.var(ddof=0, skipna=False), ddf2.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
+
+    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
+    assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
+    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
+    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
+    assert_eq(df_no_timedelta.var(skipna=False), ddf_no_timedelta.var(skipna=False))
+    assert_eq(df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0))
+    assert_eq(
+        df_no_timedelta.var(ddof=0, skipna=False),
+        ddf_no_timedelta.var(ddof=0, skipna=False),
+    )
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
 
@@ -1477,3 +1465,154 @@ def test_series_agg_with_min_count(method, min_count):
         assert result == 1
     else:
         assert result is np.nan
+
+
+# Default absolute tolerance of 2000 nanoseconds
+def assert_near_timedeltas(t1, t2, atol=2000):
+    if is_scalar(t1):
+        t1 = pd.Series([t1])
+    if is_scalar(t2):
+        t2 = pd.Series([t2])
+
+    assert t1.dtype == t2.dtype
+    assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
+)
+@pytest.mark.parametrize("axis", [0, 1])
+def test_datetime_std_creates_copy_cols(axis):
+    pdf = pd.DataFrame(
+        {
+            "dt1": [
+                datetime.fromtimestamp(1636426700 + (i * 250000)) for i in range(10)
+            ],
+            "dt2": [
+                datetime.fromtimestamp(1636426700 + (i * 300000)) for i in range(10)
+            ],
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, 3)
+
+    # Series test (same line twice to make sure data structure wasn't mutated)
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+
+    # DataFrame test (same line twice to make sure data structure wasn't mutated)
+    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
+    assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
+)
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("skipna", [False, True])
+def test_datetime_std_with_larger_dataset(axis, skipna):
+    num_rows = 250
+
+    dt1 = pd.concat(
+        [
+            pd.Series([pd.NaT] * 15, index=range(15)),
+            pd.to_datetime(
+                pd.Series(
+                    [
+                        datetime.fromtimestamp(1636426704 + (i * 250000))
+                        for i in range(num_rows - 15)
+                    ],
+                    index=range(15, 250),
+                )
+            ),
+        ],
+        ignore_index=False,
+    )
+
+    base_numbers = [
+        (1638290040706793300 + (i * 69527182702409)) for i in range(num_rows)
+    ]
+
+    pdf = pd.DataFrame(
+        {"dt1": dt1, "dt2": pd.to_datetime(pd.Series(base_numbers))}, index=range(250)
+    )
+
+    for i in range(3, 8):
+        pdf[f"dt{i}"] = pd.to_datetime(
+            pd.Series([int(x + (0.12 * i)) for x in base_numbers])
+        )
+
+    ddf = dd.from_pandas(pdf, 8)
+
+    assert_near_timedeltas(
+        ddf[["dt1"]].std(axis=axis, skipna=skipna).compute(),
+        pdf[["dt1"]].std(axis=axis, skipna=skipna),
+    )
+
+    # Same thing but as Series. No axis, since axis=1 raises error
+    assert_near_timedeltas(
+        ddf["dt1"].std(skipna=skipna).compute(), pdf["dt1"].std(skipna=skipna)
+    )
+
+    # Computation on full dataset
+    assert_near_timedeltas(
+        ddf.std(axis=axis, skipna=skipna).compute(), pdf.std(axis=axis, skipna=skipna)
+    )
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
+)
+@pytest.mark.filterwarnings(
+    "ignore:Dropping of nuisance columns:FutureWarning"
+)  # https://github.com/dask/dask/issues/7714
+@pytest.mark.parametrize("skipna", [False, True])
+def test_datetime_std_across_axis1_null_results(skipna):
+    pdf = pd.DataFrame(
+        {
+            "dt1": [
+                datetime.fromtimestamp(1636426704 + (i * 250000)) for i in range(10)
+            ],
+            "dt2": [
+                datetime.fromtimestamp(1636426704 + (i * 217790)) for i in range(10)
+            ],
+            "nums": [i for i in range(10)],
+        }
+    )
+
+    ddf = dd.from_pandas(pdf, 3)
+
+    # Single column always results in NaT
+    assert_eq(
+        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
+    )
+
+    # Mix of datetimes with other numeric types produces NaNs
+    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
+
+    # Test with mix of na and truthy datetimes
+    pdf2 = pd.DataFrame(
+        {
+            "dt1": [pd.NaT]
+            + [datetime.fromtimestamp(1636426704 + (i * 250000)) for i in range(10)]
+            + [pd.NaT],
+            "dt2": [
+                datetime.fromtimestamp(1636426704 + (i * 250000)) for i in range(12)
+            ],
+            "dt3": [
+                datetime.fromtimestamp(1636426704 + (i * 282616)) for i in range(12)
+            ],
+        }
+    )
+
+    ddf2 = dd.from_pandas(pdf2, 3)
+
+    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+
+
+def test_std_raises_on_index():
+    with pytest.raises(
+        NotImplementedError,
+        match="`std` is only supported with objects that are Dataframes or Series",
+    ):
+        dd.from_pandas(pd.DataFrame({"test": [1, 2]}), npartitions=2).index.std()

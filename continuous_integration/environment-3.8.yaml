@@ -55,7 +55,7 @@ dependencies:
   - requests
   - scikit-image
   - scikit-learn
-  - scipy<1.8.0 # See https://github.com/dask/dask/issues/8682
+  - scipy
   - toolz
   - python-snappy
   - sparse
