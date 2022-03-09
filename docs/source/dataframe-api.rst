@@ -274,7 +274,6 @@ String                      :func:`Series.str`
 
 .. autosummary::
    :toctree: generated/
-   :template: autosummary/accessor_attribute.rst
 
    Series.dt.ceil
    Series.dt.date
