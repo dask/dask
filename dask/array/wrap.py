@@ -9,6 +9,7 @@ from ..blockwise import blockwise as core_blockwise
 from ..layers import ArrayChunkShapeDep
 from ..utils import funcname
 from .core import Array, normalize_chunks
+from .dispatch import array_backend_dispatch
 from .utils import meta_from_array
 
 
@@ -162,9 +163,34 @@ def broadcast_trick(func):
     return inner
 
 
-ones = w(broadcast_trick(np.ones_like), dtype="f8")
-zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
-empty = w(broadcast_trick(np.empty_like), dtype="f8")
+ones_numpy = w(broadcast_trick(np.ones_like), dtype="f8")
+
+
+def ones(*args, **kwargs):
+    return array_backend_dispatch.ones(*args, **kwargs)
+
+
+ones.__doc__ = ones_numpy.__doc__
+
+
+zeros_numpy = w(broadcast_trick(np.zeros_like), dtype="f8")
+
+
+def zeros(*args, **kwargs):
+    return array_backend_dispatch.zeros(*args, **kwargs)
+
+
+zeros.__doc__ = zeros_numpy.__doc__
+
+
+empty_numpy = w(broadcast_trick(np.empty_like), dtype="f8")
+
+
+def empty(*args, **kwargs):
+    return array_backend_dispatch.empty(*args, **kwargs)
+
+
+empty.__doc__ = empty_numpy.__doc__
 
 
 w_like = wrap(wrap_func_like)
@@ -175,8 +201,15 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full_like))
+_full_numpy = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
+
+
+def _full(*args, **kwargs):
+    return array_backend_dispatch.full(*args, **kwargs)
+
+
+_full.__doc__ = _full_numpy.__doc__
 
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
 _full.__doc__ = _full.__doc__.replace(

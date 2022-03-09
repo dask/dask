@@ -1,6 +1,12 @@
+from functools import cached_property
+
 import numpy as np
 
+import dask.array as da
+
+from ..utils import DaskBackendEntrypoint
 from .dispatch import (
+    array_backend_dispatch,
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
@@ -203,3 +209,79 @@ def _tensordot_scipy_sparse(a, b, axes):
         return a * b
     elif a_axis == 1 and b_axis == 1:
         return a * b.T
+
+
+class NumpyBackendEntrypoint(DaskBackendEntrypoint):
+    def ones(self, *args, **kwargs):
+        return da.wrap.ones_numpy(*args, **kwargs)
+
+    def zeros(self, *args, **kwargs):
+        return da.wrap.zeros_numpy(*args, **kwargs)
+
+    def empty(self, *args, **kwargs):
+        return da.wrap.empty_numpy(*args, **kwargs)
+
+    def full(self, *args, **kwargs):
+        return da.wrap._full_numpy(*args, **kwargs)
+
+    def default_random_state(self):
+        if not hasattr(self, "_np_random_states"):
+            self._np_random_states = da.random.RandomState()
+        return self._np_random_states
+
+    def new_random_state(self, state):
+        return state
+
+    def from_array(self, *args, **kwargs):
+        return da.core.from_array_default(*args, **kwargs)
+
+
+array_backend_dispatch.register("numpy", NumpyBackendEntrypoint())
+
+
+try:
+    import cupy
+
+    class CupyBackendEntrypoint(DaskBackendEntrypoint):
+        @cached_property
+        def fallback(self):
+            return NumpyBackendEntrypoint()
+
+        def move_from_fallback(self, x):
+            return x.map_blocks(cupy.asarray)
+
+        def ones(self, *args, meta=None, **kwargs):
+            meta = cupy.empty(()) if meta is None else meta
+            return self.fallback.ones(*args, meta=meta, **kwargs)
+
+        def zeros(self, *args, meta=None, **kwargs):
+            meta = cupy.empty(()) if meta is None else meta
+            return self.fallback.zeros(*args, meta=meta, **kwargs)
+
+        def empty(self, *args, meta=None, **kwargs):
+            meta = cupy.empty(()) if meta is None else meta
+            return self.fallback.empty(*args, meta=meta, **kwargs)
+
+        def full(self, *args, meta=None, **kwargs):
+            meta = cupy.empty(()) if meta is None else meta
+            return self.fallback.full(*args, meta=meta, **kwargs)
+
+        def default_random_state(self):
+            if not hasattr(self, "_cupy_random_states"):
+                self._cupy_random_states = da.random.RandomState()
+            return self._cupy_random_states
+
+        def new_random_state(self, state):
+            if state is None:
+                state = cupy.random.RandomState
+            return state
+
+        def from_array(self, *args, **kwargs):
+            x = self.fallback.from_array(*args, **kwargs)
+            # TODO: Only call cupy.asarray if _meta is numpy
+            return x.map_blocks(cupy.asarray)
+
+    array_backend_dispatch.register("cupy", CupyBackendEntrypoint())
+
+except ImportError:
+    pass

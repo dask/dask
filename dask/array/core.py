@@ -77,7 +77,12 @@ from .chunk import getitem
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
-from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
+from .dispatch import (  # noqa: F401
+    array_backend_dispatch,
+    concatenate_lookup,
+    einsum_lookup,
+    tensordot_lookup,
+)
 from .numpy_compat import _numpy_120, _Recurser
 from .slicing import replace_ellipsis, setitem_array, slice_array
 
@@ -3099,7 +3104,7 @@ def _get_chunk_shape(a):
     return s[len(s) * (None,) + (slice(None),)]
 
 
-def from_array(
+def from_array_default(
     x,
     chunks="auto",
     name=None,
@@ -3329,6 +3334,13 @@ def from_array(
         meta = x
 
     return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
+
+
+def from_array(*args, **kwargs):
+    return array_backend_dispatch.from_array(*args, **kwargs)
+
+
+from_array.__doc__ = from_array_default.__doc__
 
 
 def from_zarr(

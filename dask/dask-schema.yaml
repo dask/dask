@@ -80,6 +80,30 @@ properties:
     type: object
     properties:
 
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend array library to use for data creation and input IO.
+          Available options include "numpy" and "cupy". Default is "numpy".
+
+      backend-options:
+        type: object
+        properties:
+
+          allow-fallback:
+            type: bool
+            description: |
+              Allow Dask to fall-back from the specified backend when the
+              necessary IO function is not defined.
+
+          warn-fallback:
+            type: bool
+            description: |
+              Warn the user when Dask falls-back from the specified backend
+              for unsupported IO functions.
+
       svg:
         type: object
         properties:
