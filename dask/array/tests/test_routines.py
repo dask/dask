@@ -1173,7 +1173,7 @@ def test_cov():
 
     assert_eq(da.cov(d), np.cov(x))
     assert_eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
-    with pytest.warns():  # warning dof <= 0 for slice
+    with pytest.warns(RuntimeWarning, match="Degrees of freedom <= 0 for slice"):
         assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
     assert_eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert_eq(da.cov(d, d), np.cov(x, x))

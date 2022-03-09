@@ -87,16 +87,14 @@ def check_pandas_issue_45618_warning(test_func):
     # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
 
     def decorator():
+        with warnings.catch_warnings(record=True) as record:
+            test_func()
         if PANDAS_VERSION == parse_version("1.4.0"):
-            with pytest.warns(FutureWarning) as record:
-                test_func()
-                assert all(
-                    "In a future version, passing a SparseArray" in str(r.message)
-                    for r in record
-                )
+            assert all(
+                "In a future version, passing a SparseArray" in str(r.message)
+                for r in record
+            )
         else:
-            with warnings.catch_warnings(record=True) as record:
-                test_func()
             assert not record
 
     return decorator

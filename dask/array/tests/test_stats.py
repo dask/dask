@@ -87,7 +87,8 @@ def test_two(kind, kwargs):
     dask_test = getattr(dask.array.stats, kind)
     scipy_test = getattr(scipy.stats, kind)
 
-    with warnings.catch_warnings():  # maybe overflow warning (powrer_divergence)
+    with warnings.catch_warnings():  # maybe overflow warning (power_divergence)
+        warnings.simplefilter("ignore", category=RuntimeWarning)
         result = dask_test(a_, b_, **kwargs)
         expected = scipy_test(a, b, **kwargs)
 

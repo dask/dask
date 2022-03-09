@@ -596,27 +596,20 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.add(r, fill_value=0), el.add(er, fill_value=0))
         assert_eq(l.sub(r, fill_value=0), el.sub(er, fill_value=0))
         assert_eq(l.mul(r, fill_value=0), el.mul(er, fill_value=0))
-        with warnings.catch_warnings():
-            # pandas-26793
-            warnings.simplefilter("ignore", RuntimeWarning)
-            assert_eq(l.div(r, fill_value=0), el.div(er, fill_value=0))
-            assert_eq(l.divide(r, fill_value=0), el.divide(er, fill_value=0))
-            assert_eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
-            assert_eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
-            assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
-            assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
+        assert_eq(l.div(r, fill_value=0), el.div(er, fill_value=0))
+        assert_eq(l.divide(r, fill_value=0), el.divide(er, fill_value=0))
+        assert_eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
+        assert_eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
+        assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
+        assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
 
         assert_eq(l.radd(r, fill_value=0), el.radd(er, fill_value=0))
         assert_eq(l.rsub(r, fill_value=0), el.rsub(er, fill_value=0))
         assert_eq(l.rmul(r, fill_value=0), el.rmul(er, fill_value=0))
-        with warnings.catch_warnings():
-            # pandas-26793
-            warnings.simplefilter("ignore", RuntimeWarning)
-
-            assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
-            assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
-            assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
-            assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
+        assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
+        assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
+        assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
+        assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
 
     for l, r, el, er in [(ddf1, ds2, pdf1, ps2), (ddf1, ddf2.X, pdf1, pdf2.X)]:
         assert_eq(l, el)
@@ -655,17 +648,13 @@ def test_frame_series_arithmetic_methods():
             assert_eq(l.div(r, axis=axis), el.div(er, axis=axis))
             assert_eq(l.divide(r, axis=axis), el.divide(er, axis=axis))
             assert_eq(l.truediv(r, axis=axis), el.truediv(er, axis=axis))
-            with warnings.catch_warnings():
-                # https://github.com/pandas-dev/pandas/issues/26793
-                warnings.simplefilter("ignore", RuntimeWarning)
-                assert_eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
-                assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
-                assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
-                assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
-                assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
-                assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
-                assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
-
+            assert_eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
+            assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
+            assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
+            assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
+            assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
+            assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
+            assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
             assert_eq(l.radd(r, axis=axis), el.radd(er, axis=axis))
             assert_eq(l.rsub(r, axis=axis), el.rsub(er, axis=axis))
             assert_eq(l.rmul(r, axis=axis), el.rmul(er, axis=axis))

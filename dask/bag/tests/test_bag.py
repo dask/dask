@@ -2,7 +2,6 @@ import gc
 import math
 import os
 import random
-import warnings
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
@@ -606,13 +605,8 @@ def test_take_npartitions_warn():
         with pytest.warns(UserWarning):
             b.take(7)
 
-        with warnings.catch_warnings(record=True) as record:
-            b.take(7, npartitions=2)
-        assert not record
-
-        with warnings.catch_warnings(record=True) as record:
-            b.take(7, warn=False)
-        assert not record
+        b.take(7, npartitions=2)
+        b.take(7, warn=False)
 
 
 def test_map_is_lazy():
@@ -963,8 +957,7 @@ def test_to_textfiles_name_function_warn():
     ]
     a = db.from_sequence(seq, npartitions=16)
     with tmpdir() as dn:
-        with warnings.catch_warnings():
-            a.to_textfiles(dn, name_function=str)
+        a.to_textfiles(dn, name_function=str)
 
 
 def test_to_textfiles_encoding():

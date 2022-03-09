@@ -158,8 +158,9 @@ def test_head_npartitions_warn():
 
     # No warn if all partitions are inspected
     for n in [3, -1]:
-        with warnings.catch_warnings():
+        with warnings.catch_warnings(record=True) as record:
             d.head(10, npartitions=n)
+        assert not record
 
     # With default args, this means that a 1 partition dataframe won't warn
     d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)

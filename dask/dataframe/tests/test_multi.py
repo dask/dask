@@ -753,18 +753,12 @@ def test_merge_columns_dtypes(how, on_index):
         b = b.set_index("A")
         on = None
 
-    if on_index:
-        with warnings.catch_warnings():
-            result = dd.merge(
-                a, b, on=on, how=how, left_index=left_index, right_index=right_index
-            )
-            warned = None
-    else:
-        with pytest.warns() as record:
-            result = dd.merge(
-                a, b, on=on, how=how, left_index=left_index, right_index=right_index
-            )
-            warned = any("merge column data type mismatches" in str(r) for r in record)
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
+        result = dd.merge(
+            a, b, on=on, how=how, left_index=left_index, right_index=right_index
+        )
+        warned = any("merge column data type mismatches" in str(r) for r in record)
 
     # result type depends on merge operation -> convert to pandas
     result = result if isinstance(result, pd.DataFrame) else result.compute()
@@ -1842,12 +1836,10 @@ def test_concat5():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with warnings.catch_warnings():
-            # some cases will raise warning directly from pandas
-            assert_eq(
-                dd.concat(case, interleave_partitions=True),
-                pd.concat(pdcase, sort=False),
-            )
+        assert_eq(
+            dd.concat(case, interleave_partitions=True),
+            pd.concat(pdcase, sort=False),
+        )
 
         assert_eq(
             dd.concat(case, join="inner", interleave_partitions=True),
@@ -2015,21 +2007,15 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-
     if PANDAS_GT_140:
-        with pytest.warns() as record:
+        with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
             assert_eq(result, expected)
-        for w in record:
-            assert w.category == FutureWarning
-            assert "append method is deprecated" in str(w.message)
     else:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            expected = pandas_obj.append(pandas_append)
-            result = dask_obj.append(dask_append)
-            assert_eq(result, expected)
+        expected = pandas_obj.append(pandas_append)
+        result = dask_obj.append(dask_append)
+        assert_eq(result, expected)
 
     return result
 
