@@ -8,12 +8,6 @@ import numpy as np
 from tlz import concat
 
 from ..core import flatten
-from . import numpy_compat as npcompat
-
-try:
-    from numpy import take_along_axis
-except ImportError:  # pragma: no cover
-    take_along_axis = npcompat.take_along_axis
 
 
 def keepdims_wrapper(a_callable):
@@ -234,7 +228,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     idx2 = idx2[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
-    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+    return np.take_along_axis(a, idx2, axis), np.take_along_axis(idx, idx2, axis)
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
@@ -244,11 +238,12 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     and return the index only.
     """
     assert keepdims is True
+    a_plus_idx = a_plus_idx if len(a_plus_idx) > 1 else a_plus_idx[0]
     a, idx = argtopk(a_plus_idx, k, axis, keepdims)
     axis = axis[0]
 
     idx2 = np.argsort(a, axis=axis)
-    idx = take_along_axis(idx, idx2, axis)
+    idx = np.take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
     return idx[
@@ -396,3 +391,33 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
             idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
         )
     ]
+
+
+def getitem(obj, index):
+    """Getitem function
+
+    This function creates a copy of the desired selection for array-like
+    inputs when the selection is smaller than half of the original array. This
+    avoids excess memory usage when extracting a small portion from a large array.
+    For more information, see
+    https://numpy.org/doc/stable/reference/arrays.indexing.html#basic-slicing-and-indexing.
+
+    Parameters
+    ----------
+    obj: ndarray, string, tuple, list
+        Object to get item from.
+    index: int, list[int], slice()
+        Desired selection to extract from obj.
+
+    Returns
+    -------
+    Selection obj[index]
+
+    """
+    result = obj[index]
+    try:
+        if not result.flags.owndata and obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

@@ -1,11 +1,68 @@
-Presentations On Dask
-=====================
+Talks & Tutorials
+=================
+
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/nnndxbr_Xq4"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
+Dask Tutorial
+-------------
+`Dask Tutorial <https://tutorial.dask.org>`__ provides an overview of Dask and is typically delivered in 3 hours.
+See `Parallel and Distributed Computing in Python with Dask <https://www.youtube.com/watch?v=EybGGLbLipI>`__ for the
+latest Dask Tutorial recording from SciPy 2020.
+
+Dask Slides
+-----------
+`Dask Slides <https://dask.org/slides>`__ provide a quick overview of the motivation for Dask.
+
+Dask YouTube channel
+--------------------
+You can find lots of videos about Dask on the `Dask YouTube channel <https://www.youtube.com/c/dask-dev>`__
+
+.. contents:: :local:
+
+Presentations
+-------------
+
+* Dask Summit 2021
+
+  * `Keynotes <https://www.youtube.com/playlist?list=PLJ0vO2F_f6OBymP5LtgOC6W4pxd9Mw3cE>`__ 
+  * `Workshops and Tutorials <https://www.youtube.com/playlist?list=PLJ0vO2F_f6OBD1_iNeT1f7cpRoYwAuMPy>`__
+  * `Talks <https://www.youtube.com/playlist?list=PLJ0vO2F_f6OBcisTDubrdEsQAhigkayjE>`__
+
+* PyCon US 2021
+
+  * `Tutorial: Hacking Dask: Diving into Dask's Internals <https://www.youtube.com/watch?v=LQrgDhN-XOo>`__  (`materials <https://github.com/jrbourbeau/hacking-dask>`__)
+  * `Dask-SQL: Empowering Pythonistas for Scalable End-to-End Data Engineering <https://www.youtube.com/watch?v=z7xKikaScxg>`__
+
+
+* BlazingSQL Webinars, May 2021
+
+  * `Intro to distributed computing on GPUs with Dask in Python <https://www.youtube.com/watch?v=py1YPs6s6so>`__ (`materials <https://gist.github.com/jacobtomlinson/6f16abb716f50f81a6687bd67efd2f61>`__)
+
+* PyData DC, August 2021
+
+  * `Inside Dask <https://www.youtube.com/watch?v=X95WO41abXo>`__ (`materials <https://github.com/jsignell/inside-dask>`__)
+
+* PyCon US 2020
+
+  * `Deploying Python at Scale with Dask <https://www.youtube.com/watch?v=deX0GlW4uew>`__
+
+* PyCon Australia 2020
+
+  * `dask-image: distributed image processing for large data <https://www.youtube.com/watch?v=MpjgzNeISeI>`__
 
 * PyCon Korea 2019, August 2019
 
   * `Adapting from Spark to Dask: what to expect (18 minutes)
     <https://www.youtube.com/watch?v=tx7qTHSlHKw>`__
-    
+
 * SciPy 2019, July 2019
 
   * `Refactoring the SciPy Ecosystem for Heterogeneous Computing (29 minutes)
@@ -18,7 +75,7 @@ Presentations On Dask
     <https://www.youtube.com/watch?v=x67K9FiPFBQ>`__
   * `Dask image:A Library for Distributed Image Processing (22 minutes)
     <https://www.youtube.com/watch?v=XGUS174vvLs>`__
-    
+
 * EuroPython 2019, July 2019
 
   * `Distributed Multi-GPU Computing with Dask, CuPy and RAPIDS (29 minutes)
@@ -45,7 +102,7 @@ Presentations On Dask
 
   * `Dask: Parallelism in Python (1 hour, 2 minutes)
     <https://www.youtube.com/watch?v=rZlshXJydgQ>`__
-    
+
 * PYCON 2017, May 2017
 
   * `Dask: A Pythonic Distributed Data Science Framework (46 minutes)

@@ -5,12 +5,13 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
+from __future__ import annotations
+
 import heapq
 import math
 from functools import reduce
 from itertools import chain, count, product
-from operator import add, getitem, itemgetter, mul
-from typing import Tuple
+from operator import add, itemgetter, mul
 from warnings import warn
 
 import numpy as np
@@ -21,6 +22,7 @@ from .. import config
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
+from .chunk import getitem
 from .core import Array, concatenate3, normalize_chunks
 from .utils import validate_axis
 from .wrap import empty
@@ -74,37 +76,77 @@ def _intersect_1d(breaks):
     breaks: list of tuples
         Each tuple is ('o', 8) or ('n', 8)
         These are pairs of 'o' old or new 'n'
-        indicator with a corresponding cumulative sum.
-
+        indicator with a corresponding cumulative sum,
+        or breakpoint (a position along the chunking axis).
+        The list of pairs is already ordered by breakpoint.
+        Note that an 'o' pair always occurs BEFORE
+        an 'n' pair if both share the same breakpoint.
     Uses 'o' and 'n' to make new tuples of slices for
     the new block crosswalk to old blocks.
     """
-    start = 0
+    # EXPLANATION:
+    # We know each new chunk is obtained from the old chunks, but
+    # from which ones and how? This function provides the answer.
+    # On return, each new chunk is represented as a list of slices
+    # of the old chunks. Therefore,  paired with each slice is the
+    # index of the old chunk to which that slice refers.
+    # NOTE: if any nonzero-size new chunks extend beyond the total
+    #    span of the old chunks, then those new chunks are assumed
+    #    to be obtained from an imaginary old chunk that extends
+    #    from the end of that total span to infinity. The chunk-
+    #    index of this imaginary chunk follows in consecutive order
+    #    from the chunk-indices of the actual old chunks.
+
+    # First, let us determine the index of the last old_chunk:
+    o_pairs = [pair for pair in breaks if pair[0] == "o"]
+    last_old_chunk_idx = len(o_pairs) - 2
+    last_o_br = o_pairs[-1][1]  # end of range spanning all old chunks
+
+    start = 0  # start of a slice of an old chunk
     last_end = 0
-    old_idx = 0
-    ret = []
-    ret_next = []
-    for idx in range(1, len(breaks)):
+    old_idx = 0  # index of old chunk
+    last_o_end = 0
+    ret = []  # will hold the list of new chunks
+    ret_next = []  # will hold the list of slices comprising one new chunk
+    for idx in range(1, len(breaks)):  # Note start from the 2nd pair
+        # the interval between any two consecutive breakpoints is a potential
+        # new chunk:
         label, br = breaks[idx]
         last_label, last_br = breaks[idx - 1]
         if last_label == "n":
+            # This always denotes the end of a new chunk or the start
+            # of the next new chunk or both
+            start = last_end
             if ret_next:
                 ret.append(ret_next)
                 ret_next = []
-        if last_label == "o":
-            start = 0
         else:
-            start = last_end
-        end = br - last_br + start
+            start = 0
+        end = br - last_br + start  # end of a slice of an old chunk
         last_end = end
         if br == last_br:
+            # Here we have a zero-size interval between the previous and
+            # current breakpoints. This should not result in a slice unless
+            # this interval's end-points (`last_label` and `label`) are both
+            # equal to 'n'
             if label == "o":
                 old_idx += 1
-            continue
+                last_o_end = end
+            if label == "n" and last_label == "n":
+                if br == last_o_br:
+                    # zero-size new chunks located at the edge of the range
+                    # spanning all the old chunks are assumed to come from the
+                    # end of the last old chunk:
+                    slc = slice(last_o_end, last_o_end)
+                    ret_next.append((last_old_chunk_idx, slc))
+                    continue
+            else:
+                continue
         ret_next.append((old_idx, slice(start, end)))
         if label == "o":
             old_idx += 1
             start = 0
+            last_o_end = end
 
     if ret_next:
         ret.append(ret_next)
@@ -140,7 +182,7 @@ def _old_to_new(old_chunks, new_chunks):
     sums2 = [sum(n) for n in new_known]
 
     if not sums == sums2:
-        raise ValueError("Cannot change dimensions from %r to %r" % (sums, sums2))
+        raise ValueError(f"Cannot change dimensions from {sums!r} to {sums2!r}")
     if not n_missing == n_missing2:
         raise ValueError(
             "Chunks must be unchanging along unknown dimensions.\n\n"
@@ -262,7 +304,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         raise ValueError("Provided chunks are not consistent with shape")
 
     if balance:
-        chunks = tuple([_balance_chunksizes(chunk) for chunk in chunks])
+        chunks = tuple(_balance_chunksizes(chunk) for chunk in chunks)
 
     new_shapes = tuple(map(sum, chunks))
 
@@ -697,18 +739,18 @@ def _get_chunks(n, chunksize):
     return tuple(chunks)
 
 
-def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
+def _balance_chunksizes(chunks: tuple[int, ...]) -> tuple[int, ...]:
     """
     Balance the chunk sizes
 
     Parameters
     ----------
-    chunks : Tuple[int, ...]
+    chunks : tuple[int, ...]
         Chunk sizes for Dask array.
 
     Returns
     -------
-    new_chunks : Tuple[int, ...]
+    new_chunks : tuple[int, ...]
         New chunks for Dask array with balanced sizes.
     """
     median_len = np.median(chunks).astype(int)

@@ -1,4 +1,12 @@
+from __future__ import annotations
+
+import contextlib
 import importlib
+import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .highlevelgraph import HighLevelGraph, Layer
 
 
 def inc(x):
@@ -11,6 +19,11 @@ def dec(x):
 
 def add(x, y):
     return x + y
+
+
+def slowadd(a, b, delay=0.1):
+    time.sleep(delay)
+    return a + b
 
 
 class GetFunctionTestMixin:
@@ -45,7 +58,7 @@ class GetFunctionTestMixin:
             pass
         else:
             msg = "Expected `{}` with badkey to raise KeyError.\n"
-            msg += "Obtained '{}' instead.".format(result)
+            msg += f"Obtained '{result}' instead."
             assert False, msg.format(self.get.__name__)
 
     def test_nested_badkey(self):
@@ -57,7 +70,7 @@ class GetFunctionTestMixin:
             pass
         else:
             msg = "Expected `{}` with badkey to raise KeyError.\n"
-            msg += "Obtained '{}' instead.".format(result)
+            msg += f"Obtained '{result}' instead."
             assert False, msg.format(self.get.__name__)
 
     def test_data_not_in_dict_is_ok(self):
@@ -94,7 +107,7 @@ class GetFunctionTestMixin:
 
     def test_get_works_with_unhashables_in_values(self):
         f = lambda x, y: x + len(y)
-        d = {"x": 1, "y": (f, "x", set([1]))}
+        d = {"x": 1, "y": (f, "x", {1})}
 
         assert self.get(d, "y") == 2
 
@@ -123,3 +136,29 @@ def import_or_none(name):
         return importlib.import_module(name)
     except (ImportError, AttributeError):
         return None
+
+
+def hlg_layer(hlg: HighLevelGraph, prefix: str) -> Layer:
+    "Get the first layer from a HighLevelGraph whose name starts with a prefix"
+    for key, lyr in hlg.layers.items():
+        if key.startswith(prefix):
+            return lyr
+    raise KeyError(f"No layer starts with {prefix!r}: {list(hlg.layers)}")
+
+
+def hlg_layer_topological(hlg: HighLevelGraph, i: int) -> Layer:
+    "Get the layer from a HighLevelGraph at position ``i``, topologically"
+    return hlg.layers[hlg._toposort_layers()[i]]
+
+
+@contextlib.contextmanager
+def _check_warning(condition: bool, category: type[Warning], message: str):
+    """Conditionally check if a warning is raised"""
+    if condition:
+        import pytest
+
+        with pytest.warns(category, match=message) as ctx:
+            yield ctx
+    else:
+        with contextlib.nullcontext() as ctx:
+            yield ctx

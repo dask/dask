@@ -1,9 +1,9 @@
 import copy
-import json
 import pickle
 import threading
 import warnings
 from collections import OrderedDict, defaultdict
+from contextlib import ExitStack
 
 import numpy as np
 import pandas as pd
@@ -18,10 +18,11 @@ try:
 except ImportError:
     pass
 
+from ....base import tokenize
+from ....delayed import Delayed
 from ....utils import natural_sort_key
-from ...methods import concat
 from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _meta_from_dtypes
+from ..utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 
 #########################
 # Fastparquet interface #
@@ -32,8 +33,11 @@ from .utils import (
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
+    _process_open_file_options,
     _row_groups_to_parts,
+    _set_metadata_task_size,
     _sort_and_analyze_paths,
+    _split_user_options,
 )
 
 # Thread lock required to reset row-groups
@@ -107,278 +111,7 @@ paths_to_cats = (
 )
 
 
-def _determine_pf_parts(fs, paths, gather_statistics, ignore_metadata_file, **kwargs):
-    """Determine how to access metadata and break read into ``parts``
-
-    This logic is mostly to handle `gather_statistics=False` cases,
-    because this also means we should avoid scanning every file in the
-    dataset.  If _metadata is available, set `gather_statistics=True`
-    (if `gather_statistics=None`).
-    """
-    parts = []
-    if len(paths) > 1:
-        paths, base, fns = _sort_and_analyze_paths(paths, fs)
-
-        # Check if _metadata is in paths, and
-        # remove it if ignore_metadata_file=True
-        _metadata_exists = "_metadata" in fns
-        if _metadata_exists and ignore_metadata_file:
-            fns.remove("_metadata")
-            paths = [fs.sep.join([base, fn]) for fn in fns]
-            _metadata_exists = False
-
-        if gather_statistics is not False:
-            # This scans all the files, allowing index/divisions
-            # and filtering
-            if _metadata_exists:
-                paths_use = fs.sep.join([base, "_metadata"])
-            else:
-                paths_use = paths
-            pf = ParquetFile(
-                paths_use, open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-            )
-        else:
-            if _metadata_exists:
-                # We have a _metadata file, lets use it
-                pf = ParquetFile(
-                    fs.sep.join([base, "_metadata"]),
-                    open_with=fs.open,
-                    sep=fs.sep,
-                    **kwargs.get("file", {}),
-                )
-            else:
-                # Rely on metadata for 0th file.
-                # Will need to pass a list of paths to read_partition
-                scheme = get_file_scheme(fns)
-                pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
-                pf.file_scheme = scheme
-                pf.cats = paths_to_cats(fns, scheme)
-                parts = paths.copy()
-    elif fs.isdir(paths[0]):
-        # This is a directory.
-        # Check if _metadata and/or _common_metadata files exists
-        base = paths[0]
-        _metadata_exists = _common_metadata_exists = True
-        if not ignore_metadata_file:
-            _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
-            _common_metadata_exists = fs.isfile(fs.sep.join([base, "_common_metadata"]))
-
-        # Find all files if we are not using a _metadata file
-        if ignore_metadata_file or not _metadata_exists:
-            # For now, we need to discover every file under paths[0]
-            paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
-            _common_metadata_exists = "_common_metadata" in fns
-            if "_metadata" in fns:
-                fns.remove("_metadata")
-                paths = [fs.sep.join([base, fn]) for fn in fns]
-            _metadata_exists = False
-
-        if _metadata_exists:
-            # Using _metadata file (best-case scenario)
-            pf = ParquetFile(
-                fs.sep.join([base, "_metadata"]),
-                open_with=fs.open,
-                sep=fs.sep,
-                **kwargs.get("file", {}),
-            )
-            if gather_statistics is None:
-                gather_statistics = True
-
-        elif gather_statistics is not False:
-            # Scan every file
-            pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
-        else:
-            # Use _common_metadata file if it is available.
-            # Otherwise, just use 0th file
-            if _common_metadata_exists:
-                pf = ParquetFile(
-                    fs.sep.join([base, "_common_metadata"]),
-                    open_with=fs.open,
-                    **kwargs.get("file", {}),
-                )
-                fns.remove("_common_metadata")
-            else:
-                pf = ParquetFile(paths[0], open_with=fs.open, **kwargs.get("file", {}))
-            scheme = get_file_scheme(fns)
-            pf.file_scheme = scheme
-            pf.cats = paths_to_cats(fns, scheme)
-            parts = [fs.sep.join([base, fn]) for fn in fns]
-    else:
-        # There is only one file to read
-        base = None
-        pf = ParquetFile(
-            paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-        )
-
-    # Ensure that there is no overlap between partition columns
-    # and explicit columns in `pf`
-    if pf.cats:
-        _partitions = [p for p in pf.cats if p not in pf.columns]
-        if not _partitions:
-            pf.cats = {}
-        elif len(_partitions) != len(pf.cats):
-            raise ValueError(
-                "No partition-columns should be written in the \n"
-                "file unless they are ALL written in the file.\n"
-                "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
-            )
-
-    return parts, pf, gather_statistics, base
-
-
 class FastParquetEngine(Engine):
-    @classmethod
-    def _generate_dd_meta(cls, pf, index, categories):
-        columns = None
-        if pf.fmd.key_value_metadata:
-            pandas_md = [
-                x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
-            ]
-        else:
-            pandas_md = []
-
-        if len(pandas_md) == 0:
-            index_names = []
-            column_names = pf.columns + list(pf.cats)
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
-
-        elif len(pandas_md) == 1:
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
-            #  auto-ranges should not be created by fastparquet
-            column_names.extend(pf.cats)
-
-        else:
-            raise ValueError("File has multiple entries for 'pandas' metadata")
-
-        if index is None and len(index_names) > 0:
-            if len(index_names) == 1 and index_names[0] is not None:
-                index = index_names[0]
-            else:
-                index = index_names
-
-        # Normalize user inputs
-        column_names, index_names = _normalize_index_columns(
-            columns, column_names, index, index_names
-        )
-
-        all_columns = index_names + column_names
-
-        categories_dict = None
-        if isinstance(categories, dict):
-            categories_dict = categories
-
-        if categories is None:
-            categories = pf.categories
-        elif isinstance(categories, str):
-            categories = [categories]
-        else:
-            categories = list(categories)
-
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
-
-        dtypes = pf._dtypes(categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
-
-        index_cols = index or ()
-        if isinstance(index_cols, str):
-            index_cols = [index_cols]
-        for ind in index_cols:
-            if getattr(dtypes.get(ind), "numpy_dtype", None):
-                # index does not support masked types
-                dtypes[ind] = dtypes[ind].numpy_dtype
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-
-        for cat in categories:
-            if cat in meta:
-                meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
-                    index=meta.index,
-                )
-
-        for catcol in pf.cats:
-            if catcol in meta.columns:
-                meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
-            elif meta.index.name == catcol:
-                meta.index = meta.index.set_categories(pf.cats[catcol])
-
-        return meta, dtypes, index_cols, categories_dict, categories, index
-
-    @classmethod
-    def _update_metadata_options(
-        cls,
-        pf,
-        parts,
-        gather_statistics,
-        split_row_groups,
-        index_cols,
-        filters,
-        chunksize,
-        aggregation_depth,
-    ):
-        # Cannot gather_statistics if our `parts` is already a list
-        # of paths, or if we are building a multi-index (for now).
-        # We also don't "need" to gather statistics if we don't
-        # want to apply any filters or calculate divisions.
-        if split_row_groups is None:
-            split_row_groups = False
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
-        )
-        if (
-            isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
-        ) or len(index_cols) > 1:
-            gather_statistics = False
-        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
-            gather_statistics = False
-
-        # Make sure gather_statistics allows filtering
-        # (if filters are desired)
-        if filters:
-            # Filters may require us to gather statistics
-            if gather_statistics is False and pf.info.get("partitions", None):
-                warnings.warn(
-                    "Filtering with gather_statistics=False. "
-                    "Only partition columns will be filtered correctly."
-                )
-            elif gather_statistics is False:
-                raise ValueError("Cannot apply filters with gather_statistics=False")
-            elif not gather_statistics:
-                gather_statistics = True
-
-        # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
-        stat_col_indices = {}
-        for i, name in enumerate(pf.columns):
-            if name in index_cols or name in flat_filters:
-                stat_col_indices[name] = i
-
-        # If the user has not specified `gather_statistics`,
-        # we will only do so if there are specific columns in
-        # need of statistics.
-        # NOTE: We cannot change `gather_statistics` from True
-        # to False (even if `stat_col_indices` is empty), in
-        # case a `chunksize` was specified, and the row-group
-        # statistics are needed for part aggregation.
-        if gather_statistics is None:
-            gather_statistics = bool(stat_col_indices)
-
-        return (
-            gather_statistics,
-            split_row_groups,
-            stat_col_indices,
-        )
-
     @classmethod
     def _organize_row_groups(
         cls,
@@ -389,19 +122,19 @@ class FastParquetEngine(Engine):
         filters,
         dtypes,
         base_path,
-        paths,
+        has_metadata_file,
         chunksize,
         aggregation_depth,
     ):
         """Organize row-groups by file."""
 
         # Get partitioning metadata
-        pqpartitions = pf.info.get("partitions", None)
+        pqpartitions = list(pf.cats)
 
         # Fastparquet does not use a natural sorting
         # order for partitioned data. Re-sort by path
         if (
-            pqpartitions is not None
+            pqpartitions
             and aggregation_depth
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
@@ -438,9 +171,10 @@ class FastParquetEngine(Engine):
             # NOTE: Here we assume that all column chunks are stored
             # in the same file. This is not strictly required by the
             # parquet spec.
-            fpath = row_group.columns[0].file_path
+            fp = row_group.columns[0].file_path
+            fpath = fp.decode() if isinstance(fp, bytes) else fp
             if fpath is None:
-                if paths and pf.fn in paths:
+                if not has_metadata_file:
                     # There doesn't need to be a file_path if the
                     # row group is in the same file as the metadata.
                     # Assume this is a single-file dataset.
@@ -574,26 +308,28 @@ class FastParquetEngine(Engine):
         real_row_groups = []
         for rg, rg_global in row_groups:
             row_group = pf.row_groups[rg_global]
-            row_group.statistics = None
-            row_group.helper = None
-            for c, col in enumerate(row_group.columns):
+            columns = row_group.columns
+            for c, col in enumerate(columns):
                 if c:
                     col.file_path = None
-                col.meta_data.key_value_metadata = None
+                md = col.meta_data
+                md.key_value_metadata = None
                 # NOTE: Fastparquet may need the null count in the
                 # statistics, so we cannot just set statistics
                 # to none.  Set attributes separately:
-                if col.meta_data.statistics:
-                    col.meta_data.statistics.distinct_count = None
-                    col.meta_data.statistics.max = None
-                    col.meta_data.statistics.min = None
-                    col.meta_data.statistics.max_value = None
-                    col.meta_data.statistics.min_value = None
-                col.meta_data.encodings = None
-                col.meta_data.total_uncompressed_size = None
-                col.meta_data.encoding_stats = None
+                st = md.statistics
+                if st:
+                    st.distinct_count = None
+                    st.max = None
+                    st.min = None
+                    st.max_value = None
+                    st.min_value = None
+                md.encodings = None
+                md.total_uncompressed_size = None
+                md.encoding_stats = None
+            row_group.columns = columns
             real_row_groups.append(row_group)
-        return pickle.dumps(real_row_groups)
+        return real_row_groups
 
     @classmethod
     def _make_part(
@@ -623,21 +359,447 @@ class FastParquetEngine(Engine):
         return part
 
     @classmethod
-    def _process_metadata(
+    def _collect_dataset_info(
         cls,
-        pf,
-        dtypes,
-        split_row_groups,
-        gather_statistics,
-        stat_col_indices,
-        filters,
-        categories,
-        base_path,
         paths,
         fs,
+        categories,
+        index,
+        gather_statistics,
+        filters,
+        split_row_groups,
         chunksize,
-        aggregation_depth,
+        aggregate_files,
+        ignore_metadata_file,
+        metadata_task_size,
+        kwargs,
     ):
+
+        # Define the parquet-file (pf) object to use for metadata,
+        # Also, initialize `parts`.  If `parts` is populated here,
+        # then each part will correspond to a file.  Otherwise, each part will
+        # correspond to a row group (populated later).
+        #
+        # This logic is mostly to handle `gather_statistics=False` cases,
+        # because this also means we should avoid scanning every file in the
+        # dataset.  If _metadata is available, set `gather_statistics=True`
+        # (if `gather_statistics=None`).
+
+        # Extract "supported" key-word arguments from `kwargs`.
+        # Split items into `dataset_kwargs` and `read_kwargs`
+        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
+
+        parts = []
+        _metadata_exists = False
+        require_extension = dataset_kwargs.pop(
+            "require_extension", (".parq", ".parquet")
+        )
+        if len(paths) == 1 and fs.isdir(paths[0]):
+
+            # This is a directory.
+            # Check if _metadata and/or _common_metadata files exists
+            base = paths[0]
+            _metadata_exists = True
+            if not ignore_metadata_file:
+                _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
+
+            # Find all files if we are not using a _metadata file
+            if ignore_metadata_file or not _metadata_exists:
+                # For now, we need to discover every file under paths[0]
+                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
+                _update_paths = False
+                for fn in ["_metadata", "_common_metadata"]:
+                    try:
+                        fns.remove(fn)
+                        _update_paths = True
+                    except ValueError:
+                        pass
+                if _update_paths:
+                    paths = [fs.sep.join([base, fn]) for fn in fns]
+                _metadata_exists = False
+            if _metadata_exists:
+                # Using _metadata file (best-case scenario)
+                pf = ParquetFile(
+                    fs.sep.join([base, "_metadata"]),
+                    open_with=fs.open,
+                    **dataset_kwargs,
+                )
+                if gather_statistics is None:
+                    gather_statistics = True
+            else:
+                # Use 0th file
+                # Note that "_common_metadata" can cause issues for
+                # partitioned datasets.
+                if require_extension:
+                    # Raise error if all files have been filtered by extension
+                    len0 = len(paths)
+                    paths = [path for path in paths if path.endswith(require_extension)]
+                    if len0 and paths == []:
+                        raise ValueError(
+                            "No files satisfy the `require_extension` criteria "
+                            f"(files must end with {require_extension})."
+                        )
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
+                scheme = get_file_scheme(fns)
+                pf.file_scheme = scheme
+                pf.cats = paths_to_cats(fns, scheme)
+                if not gather_statistics:
+                    parts = [fs.sep.join([base, fn]) for fn in fns]
+        else:
+            # This is a list of files
+            paths, base, fns = _sort_and_analyze_paths(paths, fs)
+
+            # Check if _metadata is in paths, and
+            # remove it if ignore_metadata_file=True
+            _metadata_exists = "_metadata" in fns
+            if _metadata_exists and ignore_metadata_file:
+                fns.remove("_metadata")
+                _metadata_exists = False
+            paths = [fs.sep.join([base, fn]) for fn in fns]
+
+            if _metadata_exists:
+                # We have a _metadata file, lets use it
+                pf = ParquetFile(
+                    fs.sep.join([base, "_metadata"]),
+                    open_with=fs.open,
+                    **dataset_kwargs,
+                )
+            else:
+                # Rely on metadata for 0th file.
+                # Will need to pass a list of paths to read_partition
+                scheme = get_file_scheme(fns)
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
+                pf.file_scheme = scheme
+                pf.cats = paths_to_cats(fns, scheme)
+                if not gather_statistics:
+                    parts = paths.copy()
+
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(
+            aggregate_files,
+            list(pf.cats),
+        )
+
+        # Ensure that there is no overlap between partition columns
+        # and explicit columns in `pf`
+        if pf.cats:
+            _partitions = [p for p in pf.cats if p not in pf.columns]
+            if not _partitions:
+                pf.cats = {}
+            elif len(_partitions) != len(pf.cats):
+                raise ValueError(
+                    "No partition-columns should be written in the \n"
+                    "file unless they are ALL written in the file.\n"
+                    "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
+                )
+
+        return {
+            "pf": pf,
+            "paths": paths,
+            "has_metadata_file": _metadata_exists,
+            "parts": parts,
+            "base": base,
+            "fs": fs,
+            "gather_statistics": gather_statistics,
+            "categories": categories,
+            "index": index,
+            "filters": filters,
+            "split_row_groups": split_row_groups,
+            "chunksize": chunksize,
+            "aggregate_files": aggregate_files,
+            "aggregation_depth": aggregation_depth,
+            "metadata_task_size": metadata_task_size,
+            "kwargs": {
+                "dataset": dataset_kwargs,
+                "read": read_kwargs,
+                **user_kwargs,
+            },
+        }
+
+    @classmethod
+    def _create_dd_meta(cls, dataset_info):
+
+        # Collect necessary information from dataset_info
+        pf = dataset_info["pf"]
+        index = dataset_info["index"]
+        categories = dataset_info["categories"]
+
+        columns = None
+        pandas_md = pf.pandas_metadata
+
+        if pandas_md:
+            (
+                index_names,
+                column_names,
+                storage_name_mapping,
+                column_index_names,
+            ) = _parse_pandas_metadata(pandas_md)
+            #  auto-ranges should not be created by fastparquet
+            column_names.extend(pf.cats)
+
+        else:
+            index_names = []
+            column_names = pf.columns + list(pf.cats)
+            storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
+
+        if index is None and len(index_names) > 0:
+            if len(index_names) == 1 and index_names[0] is not None:
+                index = index_names[0]
+            else:
+                index = index_names
+
+        # Normalize user inputs
+        column_names, index_names = _normalize_index_columns(
+            columns, column_names, index, index_names
+        )
+
+        all_columns = index_names + column_names
+
+        categories_dict = None
+        if isinstance(categories, dict):
+            categories_dict = categories
+
+        if categories is None:
+            categories = pf.categories
+        elif isinstance(categories, str):
+            categories = [categories]
+        else:
+            categories = list(categories)
+
+        # Check that categories are included in columns
+        if categories and not set(categories).intersection(all_columns):
+            raise ValueError(
+                "categories not in available columns.\n"
+                "categories: {} | columns: {}".format(categories, list(all_columns))
+            )
+
+        dtypes = pf._dtypes(categories)
+        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+
+        index_cols = index or ()
+        if isinstance(index_cols, str):
+            index_cols = [index_cols]
+        for ind in index_cols:
+            if getattr(dtypes.get(ind), "numpy_dtype", None):
+                # index does not support masked types
+                dtypes[ind] = dtypes[ind].numpy_dtype
+        for cat in categories:
+            if cat in all_columns:
+                dtypes[cat] = pd.CategoricalDtype(categories=[UNKNOWN_CATEGORIES])
+
+        for catcol in pf.cats:
+            if catcol in all_columns:
+                dtypes[catcol] = pd.CategoricalDtype(categories=pf.cats[catcol])
+
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+
+        # Update `dataset_info` and return `meta`
+        dataset_info["dtypes"] = dtypes
+        dataset_info["index"] = index
+        dataset_info["index_cols"] = index_cols
+        dataset_info["categories"] = categories
+        dataset_info["categories_dict"] = categories_dict
+
+        return meta
+
+    @classmethod
+    def _construct_collection_plan(cls, dataset_info):
+
+        # Collect necessary information from dataset_info
+        fs = dataset_info["fs"]
+        parts = dataset_info["parts"]
+        paths = dataset_info["paths"]
+        filters = dataset_info["filters"]
+        pf = dataset_info["pf"]
+        split_row_groups = dataset_info["split_row_groups"]
+        chunksize = dataset_info["chunksize"]
+        gather_statistics = dataset_info["gather_statistics"]
+        base_path = dataset_info["base"]
+        aggregation_depth = dataset_info["aggregation_depth"]
+        index_cols = dataset_info["index_cols"]
+        categories = dataset_info["categories"]
+        dtypes = dataset_info["dtypes"]
+        categories_dict = dataset_info["categories_dict"]
+        has_metadata_file = dataset_info["has_metadata_file"]
+        metadata_task_size = dataset_info["metadata_task_size"]
+        kwargs = dataset_info["kwargs"]
+
+        # Ensure metadata_task_size is set
+        # (Using config file or defaults)
+        metadata_task_size = _set_metadata_task_size(
+            dataset_info["metadata_task_size"], fs
+        )
+
+        # We don't "need" to gather statistics if we don't
+        # want to apply filters, aggregate files, or calculate
+        # divisions.
+        if split_row_groups is None:
+            split_row_groups = False
+        _need_aggregation_stats = chunksize or (
+            int(split_row_groups) > 1 and aggregation_depth
+        )
+        if len(index_cols) > 1:
+            gather_statistics = False
+        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
+            gather_statistics = False
+
+        # Make sure gather_statistics allows filtering
+        # (if filters are desired)
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and pf.cats:
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
+
+        # Determine which columns need statistics.
+        flat_filters = _flatten_filters(filters)
+        stat_col_indices = {}
+        for i, name in enumerate(pf.columns):
+            if name in index_cols or name in flat_filters:
+                stat_col_indices[name] = i
+
+        # If the user has not specified `gather_statistics`,
+        # we will only do so if there are specific columns in
+        # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
+        if gather_statistics is None:
+            gather_statistics = bool(stat_col_indices)
+
+        # Define common_kwargs
+        common_kwargs = {
+            "categories": categories_dict or categories,
+            "root_cats": pf.cats,
+            "root_file_scheme": pf.file_scheme,
+            "base_path": base_path,
+            **kwargs,
+        }
+
+        # Check if this is a very simple case where we can just
+        # return the path names. This requires that `parts`
+        # already be a list of paths. Also, we cannot be splitting
+        # by row-group or collecting statistics.
+        if (
+            gather_statistics is False
+            and not split_row_groups
+            and isinstance(parts, list)
+            and len(parts)
+            and isinstance(parts[0], str)
+        ):
+            return (
+                [{"piece": (full_path, None)} for full_path in parts],
+                [],
+                common_kwargs,
+            )
+
+        dataset_info_kwargs = {
+            "fs": fs,
+            "split_row_groups": split_row_groups,
+            "gather_statistics": gather_statistics,
+            "filters": filters,
+            "dtypes": dtypes,
+            "stat_col_indices": stat_col_indices,
+            "aggregation_depth": aggregation_depth,
+            "chunksize": chunksize,
+            "root_cats": pf.cats,
+            "root_file_scheme": pf.file_scheme,
+            "base_path": "" if base_path is None else base_path,
+            "has_metadata_file": has_metadata_file,
+        }
+
+        if (
+            has_metadata_file
+            or metadata_task_size == 0
+            or metadata_task_size > len(paths)
+        ):
+            # Construct the output-partitioning plan on the
+            # client process (in serial).  This means we have
+            # a global _metadata file, or that `metadata_task_size`
+            # is zero or larger than the number of files.
+            pf_or_paths = pf if has_metadata_file else paths
+            parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
+
+        else:
+            # We DON'T have a global _metadata file to work with.
+            # We should loop over files in parallel
+            parts, stats = [], []
+            if paths:
+                # Build and compute a task graph to construct stats/parts
+                gather_parts_dsk = {}
+                name = "gather-pq-parts-" + tokenize(paths, dataset_info_kwargs)
+                finalize_list = []
+                for task_i, file_i in enumerate(
+                    range(0, len(paths), metadata_task_size)
+                ):
+                    finalize_list.append((name, task_i))
+                    gather_parts_dsk[finalize_list[-1]] = (
+                        cls._collect_file_parts,
+                        paths[file_i : file_i + metadata_task_size],
+                        dataset_info_kwargs,
+                    )
+
+                def _combine_parts(parts_and_stats):
+                    parts, stats = [], []
+                    for part, stat in parts_and_stats:
+                        parts += part
+                        if stat:
+                            stats += stat
+                    return parts, stats
+
+                gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
+                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute()
+
+        return parts, stats, common_kwargs
+
+    @classmethod
+    def _collect_file_parts(
+        cls,
+        pf_or_files,
+        dataset_info_kwargs,
+    ):
+
+        # Collect necessary information from dataset_info
+        fs = dataset_info_kwargs["fs"]
+        split_row_groups = dataset_info_kwargs["split_row_groups"]
+        gather_statistics = dataset_info_kwargs["gather_statistics"]
+        stat_col_indices = dataset_info_kwargs["stat_col_indices"]
+        filters = dataset_info_kwargs["filters"]
+        dtypes = dataset_info_kwargs["dtypes"]
+        chunksize = dataset_info_kwargs["chunksize"]
+        aggregation_depth = dataset_info_kwargs["aggregation_depth"]
+        base_path = dataset_info_kwargs.get("base_path", None)
+        root_cats = dataset_info_kwargs.get("root_cats", None)
+        root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
+        has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+
+        # Get ParquetFile
+        if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
+            # Construct local `ParquetFile` object
+            pf = ParquetFile(
+                pf_or_files,
+                open_with=fs.open,
+                root=base_path,
+            )
+            # Update hive-partitioning to match global cats/scheme
+            pf.cats = root_cats or {}
+            if root_cats:
+                pf.file_scheme = root_file_scheme
+        else:
+            # We already have a ParquetFile object to work with
+            pf = pf_or_files
 
         # Organize row-groups by file
         (
@@ -654,7 +816,7 @@ class FastParquetEngine(Engine):
             filters,
             dtypes,
             base_path,
-            paths,
+            has_metadata_file,
             chunksize,
             aggregation_depth,
         )
@@ -673,68 +835,11 @@ class FastParquetEngine(Engine):
                 "fs": fs,
                 "pf": pf,
                 "base_path": base_path,
-                "partitions": pf.info.get("partitions", None),
+                "partitions": list(pf.cats),
             },
         )
 
         return parts, stats
-
-    @classmethod
-    def _construct_parts(
-        cls,
-        fs,
-        pf,
-        paths,
-        parts,
-        dtypes,
-        base_path,
-        filters,
-        index_cols,
-        categories,
-        split_row_groups,
-        gather_statistics,
-        chunksize,
-        aggregation_depth,
-    ):
-
-        # Check if `parts` is just a list of paths
-        # (not splitting by row-group or collecting statistics)
-        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
-            stats = []
-            return [{"piece": (full_path, None)} for full_path in parts], stats
-
-        # Update `gather_statistics` and `split_row_groups`
-        # before constructing `parts`
-        (
-            gather_statistics,
-            split_row_groups,
-            stat_col_indices,
-        ) = cls._update_metadata_options(
-            pf,
-            parts,
-            gather_statistics,
-            split_row_groups,
-            index_cols,
-            filters,
-            chunksize,
-            aggregation_depth,
-        )
-
-        # Process row-groups and return `(parts, stats)`
-        return cls._process_metadata(
-            pf,
-            dtypes,
-            split_row_groups,
-            gather_statistics,
-            stat_col_indices,
-            filters,
-            categories,
-            base_path,
-            paths,
-            fs,
-            chunksize,
-            aggregation_depth,
-        )
 
     @classmethod
     def read_metadata(
@@ -749,54 +854,34 @@ class FastParquetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
+        metadata_task_size=None,
         **kwargs,
     ):
-        # Define the parquet-file (pf) object to use for metadata,
-        # Also, initialize `parts`.  If `parts` is populated here,
-        # then each part will correspond to a file.  Otherwise, each part will
-        # correspond to a row group (populated below).
-        parts, pf, gather_statistics, base_path = _determine_pf_parts(
-            fs,
-            paths,
-            gather_statistics,
-            ignore_metadata_file,
-            **kwargs,
-        )
 
-        # Process metadata to define `meta` and `index_cols`
-        (
-            meta,
-            dtypes,
-            index_cols,
-            categories_dict,
+        # Stage 1: Collect general dataset information
+        dataset_info = cls._collect_dataset_info(
+            paths,
+            fs,
             categories,
             index,
-        ) = cls._generate_dd_meta(pf, index, categories)
-
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(
-            aggregate_files,
-            list(pf.cats),
-        )
-
-        # Break `pf` into a list of `parts`
-        parts, stats = cls._construct_parts(
-            fs,
-            pf,
-            paths,
-            parts,
-            dtypes,
-            base_path,
-            filters,
-            index_cols,
-            categories,
-            split_row_groups,
             gather_statistics,
+            filters,
+            split_row_groups,
             chunksize,
-            aggregation_depth,
+            aggregate_files,
+            ignore_metadata_file,
+            metadata_task_size,
+            kwargs,
         )
+
+        # Stage 2: Generate output `meta`
+        meta = cls._create_dd_meta(dataset_info)
+
+        # Stage 3: Generate parts and stats
+        parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
 
         # Cannot allow `None` in columns if the user has specified index=False
+        index = dataset_info["index"]
         if index is False and None in meta.columns:
             meta.drop(columns=[None], inplace=True)
 
@@ -804,13 +889,14 @@ class FastParquetEngine(Engine):
         # We can return as a separate element in the future, but
         # should avoid breaking the API for now.
         if len(parts):
-            parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
-            parts[0]["aggregation_depth"] = aggregation_depth
+            parts[0]["common_kwargs"] = common_kwargs
+            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 
             # Strip all partition-dependent or unnecessary
             # data from the `ParquetFile` object
+            pf = dataset_info["pf"]
             pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
@@ -823,9 +909,21 @@ class FastParquetEngine(Engine):
         return cls == FastParquetEngine
 
     @classmethod
-    def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
+    def read_partition(
+        cls,
+        fs,
+        pieces,
+        columns,
+        index,
+        categories=(),
+        root_cats=None,
+        root_file_scheme=None,
+        base_path=None,
+        **kwargs,
+    ):
 
         null_index_name = False
+        base_path = False if not root_cats else base_path
         if isinstance(index, list):
             if index == [None]:
                 # Handling a None-labeled index...
@@ -858,8 +956,8 @@ class FastParquetEngine(Engine):
                 parquet_file = ParquetFile(
                     [p[0] for p in pieces],
                     open_with=fs.open,
-                    sep=fs.sep,
-                    **kwargs.get("file", {}),
+                    root=base_path or False,
+                    **kwargs.get("dataset", {}),
                 )
                 for piece in pieces:
                     _pf = (
@@ -868,8 +966,8 @@ class FastParquetEngine(Engine):
                         else ParquetFile(
                             piece[0],
                             open_with=fs.open,
-                            sep=fs.sep,
-                            **kwargs.get("file", {}),
+                            root=base_path or False,
+                            **kwargs.get("dataset", {}),
                         )
                     )
                     n_local_row_groups = len(_pf.row_groups)
@@ -898,6 +996,12 @@ class FastParquetEngine(Engine):
 
             if update_parquet_file:
                 with _FP_FILE_LOCK:
+                    for rg in row_groups:
+                        for chunk in rg.columns:
+                            s = chunk.file_path
+                            if s and isinstance(s, bytes):
+                                chunk.file_path = s.decode()
+
                     parquet_file.fmd.row_groups = row_groups
                     # NOTE: May lose cats after `_set_attrs` call
                     save_cats = parquet_file.cats
@@ -910,37 +1014,120 @@ class FastParquetEngine(Engine):
                     index = ["__index_level_0__"]
                     columns += index
 
+            # Update hive-partitioning information if necessary
+            parquet_file.cats = root_cats or {}
+            if root_cats:
+                parquet_file.file_scheme = root_file_scheme
+
             parquet_file._dtypes = (
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
-            if set(columns).issubset(
-                parquet_file.columns + list(parquet_file.cats.keys())
-            ):
-                # Convert ParquetFile to pandas
-                return parquet_file.to_pandas(
-                    columns=columns,
-                    categories=categories,
-                    index=index,
-                )
-            else:
-                # Read necessary row-groups and concatenate
-                dfs = []
-                for row_group in row_groups:
-                    dfs.append(
-                        parquet_file.read_row_group_file(
-                            row_group,
-                            columns,
-                            categories,
-                            index=index,
-                            **kwargs.get("read", {}),
-                        )
-                    )
-                return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            # Convert ParquetFile to pandas
+            return cls.pf_to_pandas(
+                parquet_file,
+                fs=fs,
+                columns=columns,
+                categories=categories,
+                index=index,
+                **kwargs.get("read", {}),
+            )
 
         else:
-            # `piece` is NOT a tuple
-            raise ValueError(f"Expected tuple, got {type(piece)}")
+            # `sample` is NOT a tuple
+            raise ValueError(f"Expected tuple, got {type(sample)}")
+
+    @classmethod
+    def pf_to_pandas(
+        cls,
+        pf,
+        fs=None,
+        columns=None,
+        categories=None,
+        index=None,
+        open_file_options=None,
+        **kwargs,
+    ):
+        # This method was mostly copied from the fastparquet
+        # `ParquetFile.to_pandas` definition. We maintain our
+        # own implmentation in Dask to enable better remote
+        # file-handling control
+
+        # Handle selected columns
+        if columns is not None:
+            columns = columns[:]
+        else:
+            columns = pf.columns + list(pf.cats)
+        if index:
+            columns += [i for i in index if i not in columns]
+
+        # Extract row-groups and pre-allocate df
+        rgs = pf.row_groups
+        size = sum(rg.num_rows for rg in rgs)
+        df, views = pf.pre_allocate(size, columns, categories, index)
+        start = 0
+
+        # Get a map of file names -> row-groups
+        fn_rg_map = defaultdict(list)
+        for rg in rgs:
+            fn = pf.row_group_filename(rg)
+            fn_rg_map[fn].append(rg)
+
+        # Define file-opening options
+        precache_options, open_file_options = _process_open_file_options(
+            open_file_options,
+            **(
+                {
+                    "allow_precache": False,
+                    "default_cache": "readahead",
+                }
+                if _is_local_fs(fs)
+                else {
+                    "metadata": pf,
+                    "columns": list(set(columns).intersection(pf.columns)),
+                    "row_groups": [rgs for rgs in fn_rg_map.values()],
+                    "default_engine": "fastparquet",
+                    "default_cache": "readahead",
+                }
+            ),
+        )
+
+        with ExitStack() as stack:
+
+            for fn, infile in zip(
+                fn_rg_map.keys(),
+                _open_input_files(
+                    list(fn_rg_map.keys()),
+                    fs=fs,
+                    context_stack=stack,
+                    precache_options=precache_options,
+                    **open_file_options,
+                ),
+            ):
+                for rg in fn_rg_map[fn]:
+                    thislen = rg.num_rows
+                    parts = {
+                        name: (
+                            v
+                            if name.endswith("-catdef")
+                            else v[start : start + thislen]
+                        )
+                        for (name, v) in views.items()
+                    }
+
+                    # Add row-group data to df
+                    pf.read_row_group_file(
+                        rg,
+                        columns,
+                        categories,
+                        index,
+                        assign=parts,
+                        partition_meta=pf.partition_meta,
+                        infile=infile,
+                        **kwargs,
+                    )
+                    start += thislen
+        return df
 
     @classmethod
     def initialize_write(
@@ -953,13 +1140,16 @@ class FastParquetEngine(Engine):
         ignore_divisions=False,
         division_info=None,
         schema=None,
+        object_encoding="utf8",
+        index_cols=None,
+        custom_metadata=None,
         **kwargs,
     ):
+        if index_cols is None:
+            index_cols = []
         if append and division_info is None:
             ignore_divisions = True
         fs.mkdirs(path, exist_ok=True)
-        object_encoding = kwargs.pop("object_encoding", "utf8")
-        index_cols = kwargs.pop("index_cols", [])
         if object_encoding == "infer" or (
             isinstance(object_encoding, dict) and "infer" in object_encoding.values()
         ):
@@ -972,8 +1162,8 @@ class FastParquetEngine(Engine):
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
-                pf = fastparquet.api.ParquetFile(path, open_with=fs.open, sep=fs.sep)
-            except (IOError, ValueError):
+                pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
+            except (OSError, ValueError):
                 # append for create
                 append = False
         if append:
@@ -991,7 +1181,7 @@ class FastParquetEngine(Engine):
             elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(pf.dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(pf.dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
             else:
@@ -1021,6 +1211,15 @@ class FastParquetEngine(Engine):
                 **kwargs,
             )
             i_offset = 0
+        if custom_metadata is not None:
+            kvm = fmd.key_value_metadata or []
+            kvm.extend(
+                [
+                    fastparquet.parquet_thrift.KeyValue(key=key, value=value)
+                    for key, value in custom_metadata.items()
+                ]
+            )
+            fmd.key_value_metadata = kvm
 
         schema = None  # ArrowEngine compatibility
         return (fmd, schema, i_offset)
@@ -1041,8 +1240,12 @@ class FastParquetEngine(Engine):
     ):
         # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
+        for s in fmd.schema:
+            if isinstance(s.name, bytes):
+                # can be coerced to bytes on copy
+                s.name = s.name.decode()
         if custom_metadata and fmd is not None:
-            fmd.key_value_metadata.extend(
+            fmd.key_value_metadata = fmd.key_value_metadata + (
                 [
                     fastparquet.parquet_thrift.KeyValue(key=key, value=value)
                     for key, value in custom_metadata.items()
@@ -1085,16 +1288,18 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
-        _meta = copy.copy(fmd)
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
+        _meta = copy.copy(meta)
+        rgs = meta.row_groups
         if parts:
             for rg in parts:
                 if rg is not None:
                     if isinstance(rg, list):
                         for r in rg:
-                            _meta.row_groups.append(r)
+                            rgs.append(r)
                     else:
-                        _meta.row_groups.append(rg)
+                        rgs.append(rg)
+            _meta.row_groups = rgs
             fn = fs.sep.join([path, "_metadata"])
             fastparquet.writer.write_common_metadata(
                 fn, _meta, open_with=fs.open, no_row_groups=False

@@ -18,11 +18,11 @@ def format_time(t):
     m, s = divmod(t, 60)
     h, m = divmod(m, 60)
     if h:
-        return "{0:2.0f}hr {1:2.0f}min {2:4.1f}s".format(h, m, s)
+        return f"{h:2.0f}hr {m:2.0f}min {s:4.1f}s"
     elif m:
-        return "{0:2.0f}min {1:4.1f}s".format(m, s)
+        return f"{m:2.0f}min {s:4.1f}s"
     else:
-        return "{0:4.1f}s".format(s)
+        return f"{s:4.1f}s"
 
 
 class ProgressBar(Callback):
@@ -37,6 +37,10 @@ class ProgressBar(Callback):
         Width of the bar
     dt : float, optional
         Update resolution in seconds, default is 0.1 seconds
+    out : file object, optional
+        File object to which the progress bar will be written
+        It can be ``sys.stdout``, ``sys.stderr`` or any other file object able to write ``str`` objects
+        Default is ``sys.stdout``
 
     Examples
     --------

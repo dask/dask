@@ -16,10 +16,9 @@ from .base import (
 )
 from .base import tokenize as _tokenize
 from .context import globalmethod
-from .core import quote
+from .core import flatten, quote
 from .highlevelgraph import HighLevelGraph
-from .optimization import cull
-from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
+from .utils import OperatorMethodMixin, apply, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
 
@@ -207,7 +206,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, **kwargs):
+def tokenize(*args, pure=None, **kwargs):
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -219,7 +218,6 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    pure = kwargs.pop("pure", None)
     if pure is None:
         pure = config.get("delayed_pure", False)
 
@@ -452,11 +450,11 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             except AttributeError:
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
-            name = "%s-%s" % (prefix, token)
+            name = f"{prefix}-{token}"
         return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
-            name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
+            name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph, nout)
@@ -472,9 +470,12 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
-    dsk = ensure_dict(dsk)
-    dsk2, _ = cull(dsk, keys)
-    return dsk2
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    dsk = dsk.cull(set(flatten(keys)))
+    return dsk
 
 
 class Delayed(DaskMethodsMixin, OperatorMethodMixin):
@@ -483,12 +484,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "_dask", "_length")
+    __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None):
+    def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
         self._dask = dsk
         self._length = length
+
+        # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
 
     @property
     def key(self):
@@ -505,12 +513,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        # Delayed objects created with .to_delayed() have exactly
-        # one layer which may have a non-canonical name "delayed-<original name>"
-        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
-            return tuple(self.dask.layers)
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -526,10 +529,18 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def _rebuild(self, dsk, *, rename=None):
         key = replace_name_in_key(self.key, rename) if rename else self.key
-        return Delayed(key, dsk, self._length)
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            # FIXME Delayed is currently the only collection type that supports both high- and low-level graphs.
+            # The HLG output of `optimize` will have a layer name that doesn't match `key`.
+            # Remove this when Delayed is HLG-only (because `optimize` will only be passed HLGs, so it won't have
+            # to generate random layer names).
+            layer = next(iter(dsk.layers))
+        else:
+            layer = None
+        return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
-        return "Delayed({0})".format(repr(self.key))
+        return f"Delayed({repr(self.key)})"
 
     def __hash__(self):
         return hash(self.key)
@@ -576,12 +587,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
-    def __call__(self, *args, **kwargs):
-        pure = kwargs.pop("pure", None)
-        name = kwargs.pop("dask_key_name", None)
+    def __call__(self, *args, pure=None, dask_key_name=None, **kwargs):
         func = delayed(apply, pure=pure)
-        if name is not None:
-            return func(self, args, kwargs, dask_key_name=name)
+        if dask_key_name is not None:
+            return func(self, args, kwargs, dask_key_name=dask_key_name)
         return func(self, args, kwargs)
 
     def __bool__(self):
@@ -607,7 +616,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     pure = kwargs.pop("pure", pure)
 
     if dask_key_name is None:
-        name = "%s-%s" % (
+        name = "{}-{}".format(
             funcname(func),
             tokenize(func_token, *args, pure=pure, **kwargs),
         )

@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 from functools import partial
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -23,7 +26,7 @@ class Accessor:
     Subclasses should define ``_accessor_name``
     """
 
-    _not_implemented = set()
+    _not_implemented: ClassVar[set[str]] = set()
 
     def __init__(self, series):
         from .core import Series
@@ -51,7 +54,7 @@ class Accessor:
 
     def _property_map(self, attr):
         meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
-        token = "%s-%s" % (self._accessor_name, attr)
+        token = f"{self._accessor_name}-{attr}"
         return self._series.map_partitions(
             self._delegate_property, self._accessor_name, attr, token=token, meta=meta
         )
@@ -63,7 +66,7 @@ class Accessor:
             meta = self._delegate_method(
                 self._series._meta_nonempty, self._accessor_name, attr, args, kwargs
             )
-        token = "%s-%s" % (self._accessor_name, attr)
+        token = f"{self._accessor_name}-{attr}"
         return self._series.map_partitions(
             self._delegate_method,
             self._accessor_name,

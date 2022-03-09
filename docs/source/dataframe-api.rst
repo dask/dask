@@ -291,6 +291,8 @@ DataFrame Groupby
    DataFrameGroupBy.last
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
+   DataFrameGroupBy.rolling
+
 
 Series Groupby
 **************
@@ -317,6 +319,7 @@ Series Groupby
    SeriesGroupBy.last
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
+   SeriesGroupBy.rolling
 
 Custom Aggregation
 ******************
@@ -373,6 +376,8 @@ Create DataFrames
    read_json
    read_orc
    read_sql_table
+   read_sql_query
+   read_sql
    from_array
    from_bcolz
    from_dask_array

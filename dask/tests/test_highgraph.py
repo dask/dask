@@ -49,20 +49,6 @@ def test_keys_values_items_to_dict_methods():
     assert hg.to_dict() == dict(hg)
 
 
-def test_keyset_deprecated():
-    a = {"x": 1, "y": (inc, "x")}
-    hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.warns(FutureWarning, match="HighLevelGraph.keys"):
-        assert hg.keyset() == hg.keys()
-
-
-def test_dicts_deprecated():
-    a = {"x": 1, "y": (inc, "x")}
-    hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.warns(FutureWarning, match="HighLevelGraph.layers"):
-        assert hg.dicts == hg.layers
-
-
 def test_getitem():
     hg = HighLevelGraph(
         {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}}, {"a": set(), "b": set()}
@@ -204,6 +190,17 @@ def test_annotation_pack_unpack():
     assert annotations == {"workers": {"n": ("alice",)}}
 
 
+def test_materializedlayer_cull_preserves_annotations():
+    layer = MaterializedLayer(
+        {"a": 42, "b": 3.14},
+        annotations={"foo": "bar"},
+    )
+
+    culled_layer, _ = layer.cull({"a"}, [])
+    assert len(culled_layer) == 1
+    assert culled_layer.annotations == {"foo": "bar"}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
@@ -235,13 +232,6 @@ def test_blockwise_cull(flat):
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
         assert not layer.is_materialized()
-
-
-def test_highlevelgraph_dicts_deprecation():
-    with pytest.warns(FutureWarning):
-        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
-        hg = HighLevelGraph(layers, {"a": set()})
-        assert hg.dicts == layers
 
 
 def test_len_does_not_materialize():

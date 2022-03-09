@@ -8,7 +8,7 @@ import numpy as np
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import _deprecated, derived_from, random_state_data, skip_doctest
+from ..utils import derived_from, random_state_data
 from .core import (
     Array,
     asarray,
@@ -18,18 +18,6 @@ from .core import (
     slices_from_chunks,
 )
 from .creation import arange
-
-
-@_deprecated()
-def doc_wraps(func):
-    """Copy docstring from one function to another"""
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
 
 
 class RandomState:
@@ -119,7 +107,7 @@ class RandomState:
                     dependencies.append(res)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[i] = name
                     dsk[name] = res
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
@@ -134,7 +122,7 @@ class RandomState:
                     dependencies.append(res)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[key] = name
                     dsk[name] = res
                 small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
@@ -144,7 +132,7 @@ class RandomState:
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
-        name = "{0}-{1}".format(funcname, token)
+        name = f"{funcname}-{token}"
 
         keys = product(
             [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))

@@ -1,20 +1,21 @@
+from __future__ import annotations
+
 import math
-import numbers
 import re
 import sys
 import textwrap
 import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from numbers import Number
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
-from ..base import is_dask_collection
+from ..base import get_scheduler, is_dask_collection
 from ..core import get_deps
-from ..local import get_sync
 from ..utils import is_arraylike  # noqa: F401
 from ..utils import asciitable
 from ..utils import is_dataframe_like as dask_is_dataframe_like
@@ -28,7 +29,7 @@ from .dispatch import make_meta  # noqa : F401
 from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
 from .extensions import make_scalar
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
@@ -147,7 +148,7 @@ def insert_meta_param_description(*args, **kwargs):
     body = textwrap.wrap(
         _META_DESCRIPTION, initial_indent=indent, subsequent_indent=indent, width=78
     )
-    descr = "{0}\n{1}".format(_META_TYPES, "\n".join(body))
+    descr = "{}\n{}".format(_META_TYPES, "\n".join(body))
     if f.__doc__:
         if "$META" in f.__doc__:
             f.__doc__ = f.__doc__.replace("$META", descr)
@@ -156,7 +157,7 @@ def insert_meta_param_description(*args, **kwargs):
             parameter_header = "Parameters\n%s----------" % indent[4:]
             first, last = re.split("Parameters\\n[ ]*----------", f.__doc__)
             parameters, rest = last.split("\n\n", 1)
-            f.__doc__ = "{0}{1}{2}\n{3}{4}\n\n{5}".format(
+            f.__doc__ = "{}{}{}\n{}{}\n\n{}".format(
                 first, parameter_header, parameters, indent[4:], descr, rest
             )
     return f
@@ -193,7 +194,7 @@ def raise_on_meta_error(funcname=None, udf=False):
             "---------\n"
             "{2}"
         )
-        msg = msg.format(" in `{0}`".format(funcname) if funcname else "", repr(e), tb)
+        msg = msg.format(f" in `{funcname}`" if funcname else "", repr(e), tb)
         raise ValueError(msg) from e
 
 
@@ -306,7 +307,7 @@ def _scalar_from_dtype(dtype):
         o = _simple_fake_mapping[dtype.kind]
         return o.astype(dtype) if dtype.kind in ("m", "M") else o
     else:
-        raise TypeError("Can't handle dtype: {0}".format(dtype))
+        raise TypeError(f"Can't handle dtype: {dtype}")
 
 
 def _nonempty_scalar(x):
@@ -317,7 +318,7 @@ def _nonempty_scalar(x):
         dtype = x.dtype if hasattr(x, "dtype") else np.dtype(type(x))
         return make_scalar(dtype)
 
-    raise TypeError("Can't handle meta of type '{0}'".format(typename(type(x))))
+    raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
 
 
 def is_dataframe_like(df):
@@ -376,7 +377,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     # Notice, we use .__class__ as opposed to type() in order to support
     # object proxies see <https://github.com/dask/dask/pull/6981>
     if x.__class__ != meta.__class__:
-        errmsg = "Expected partition of type `%s` but got `%s`" % (
+        errmsg = "Expected partition of type `{}` but got `{}`".format(
             typename(type(meta)),
             typename(type(x)),
         )
@@ -388,7 +389,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             if not equal_dtypes(a, b)
         ]
         if bad_dtypes:
-            errmsg = "Partition type: `%s`\n%s" % (
+            errmsg = "Partition type: `{}`\n{}".format(
                 typename(type(meta)),
                 asciitable(["Column", "Found", "Expected"], bad_dtypes),
             )
@@ -398,7 +399,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     else:
         if equal_dtypes(x.dtype, meta.dtype):
             return x
-        errmsg = "Partition type: `%s`\n%s" % (
+        errmsg = "Partition type: `{}`\n{}".format(
             typename(type(meta)),
             asciitable(["", "dtype"], [("Found", x.dtype), ("Expected", meta.dtype)]),
         )
@@ -433,11 +434,11 @@ def index_summary(idx, name=None):
     if n:
         head = idx[0]
         tail = idx[-1]
-        summary = ", {} to {}".format(head, tail)
+        summary = f", {head} to {tail}"
     else:
         summary = ""
 
-    return "{}: {} entries{}".format(name, n, summary)
+    return f"{name}: {n} entries{summary}"
 
 
 ###############################################################
@@ -445,7 +446,7 @@ def index_summary(idx, name=None):
 ###############################################################
 
 
-def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
+def _check_dask(dsk, check_names=True, check_dtypes=True, result=None, scheduler=None):
     import dask.dataframe as dd
 
     if hasattr(dsk, "__dask_graph__"):
@@ -453,7 +454,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
         if hasattr(graph, "validate"):
             graph.validate()
         if result is None:
-            result = dsk.compute(scheduler="sync")
+            result = dsk.compute(scheduler=scheduler)
         if isinstance(dsk, dd.Index):
             assert "Index" in type(result).__name__, type(result)
             # assert type(dsk._meta) == type(result), type(dsk._meta)
@@ -500,13 +501,13 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
             if check_dtypes:
                 assert_dask_dtypes(dsk, result)
         else:
-            msg = "Unsupported dask instance {0} found".format(type(dsk))
+            msg = f"Unsupported dask instance {type(dsk)} found"
             raise AssertionError(msg)
         return result
     return dsk
 
 
-def _maybe_sort(a):
+def _maybe_sort(a, check_index: bool):
     # sort by value, then index
     try:
         if is_dataframe_like(a):
@@ -519,7 +520,7 @@ def _maybe_sort(a):
             a = a.sort_values()
     except (TypeError, IndexError, ValueError):
         pass
-    return a.sort_index()
+    return a.sort_index() if check_index else a
 
 
 def assert_eq(
@@ -529,33 +530,39 @@ def assert_eq(
     check_dtype=True,
     check_divisions=True,
     check_index=True,
+    scheduler="sync",
     **kwargs,
 ):
     if check_divisions:
-        assert_divisions(a)
-        assert_divisions(b)
+        assert_divisions(a, scheduler=scheduler)
+        assert_divisions(b, scheduler=scheduler)
         if hasattr(a, "divisions") and hasattr(b, "divisions"):
             at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
             bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
             assert at == bt, (at, bt)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtype)
-    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtype)
-    if not check_index:
-        a = a.reset_index(drop=True)
-        b = b.reset_index(drop=True)
+    a = _check_dask(
+        a, check_names=check_names, check_dtypes=check_dtype, scheduler=scheduler
+    )
+    b = _check_dask(
+        b, check_names=check_names, check_dtypes=check_dtype, scheduler=scheduler
+    )
     if hasattr(a, "to_pandas"):
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
+    if isinstance(a, (pd.DataFrame, pd.Series)):
+        a = _maybe_sort(a, check_index)
+        b = _maybe_sort(b, check_index)
+    if not check_index:
+        a = a.reset_index(drop=True)
+        b = b.reset_index(drop=True)
     if isinstance(a, pd.DataFrame):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b, check_dtype=check_dtype, **kwargs)
+        tm.assert_frame_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Series):
-        a = _maybe_sort(a)
-        b = _maybe_sort(b)
         tm.assert_series_equal(
             a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
         )
@@ -581,14 +588,15 @@ def assert_dask_graph(dask, label):
             k = k[0]
         if k.startswith(label):
             return True
-    raise AssertionError(
-        "given dask graph doesn't contain label: {label}".format(label=label)
-    )
+    raise AssertionError(f"given dask graph doesn't contain label: {label}")
 
 
-def assert_divisions(ddf):
+def assert_divisions(ddf, scheduler=None):
     if not hasattr(ddf, "divisions"):
         return
+
+    assert isinstance(ddf.divisions, tuple)
+
     if not getattr(ddf, "known_divisions", False):
         return
 
@@ -600,7 +608,8 @@ def assert_divisions(ddf):
         except AttributeError:
             return x.index
 
-    results = get_sync(ddf.dask, ddf.__dask_keys__())
+    get = get_scheduler(scheduler=scheduler, collections=[type(ddf)])
+    results = get(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]
@@ -691,11 +700,11 @@ def valid_divisions(divisions):
     for i, x in enumerate(divisions[:-2]):
         if x >= divisions[i + 1]:
             return False
-        if isinstance(x, numbers.Number) and math.isnan(x):
+        if isinstance(x, Number) and math.isnan(x):
             return False
 
     for x in divisions[-2:]:
-        if isinstance(x, numbers.Number) and math.isnan(x):
+        if isinstance(x, Number) and math.isnan(x):
             return False
 
     if divisions[-2] > divisions[-1]:

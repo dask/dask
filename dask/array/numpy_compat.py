@@ -8,6 +8,7 @@ from ..utils import derived_from
 _np_version = parse_version(np.__version__)
 _numpy_120 = _np_version >= parse_version("1.20.0")
 _numpy_121 = _np_version >= parse_version("1.21.0")
+_numpy_122 = _np_version >= parse_version("1.22.0")
 
 
 # Taken from scikit-learn:
@@ -124,8 +125,7 @@ class _Recurser:
             return
         for i, xi in enumerate(x):
             # yield from ...
-            for v in self.walk(xi, index + (i,)):
-                yield v
+            yield from self.walk(xi, index + (i,))
 
 
 # Implementation taken directly from numpy:
@@ -263,3 +263,11 @@ else:
         return np.lib.stride_tricks.as_strided(
             x, strides=out_strides, shape=out_shape, subok=subok, writeable=writeable
         )
+
+
+# kwarg is renamed in numpy 1.22.0
+def percentile(a, q, method="linear"):
+    if _numpy_122:
+        return np.percentile(a, q, method=method)
+    else:
+        return np.percentile(a, q, interpolation=method)

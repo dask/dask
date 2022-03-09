@@ -4,11 +4,13 @@ from pandas.core.resample import Resampler as pd_Resampler
 
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
-from ...utils import derived_from
+from ...utils import _deprecated, derived_from
 from .. import methods
+from .._compat import PANDAS_GT_140
 from ..core import DataFrame, Series
 
 
+@_deprecated(after_version="2022.02.0")
 def getnanos(rule):
     try:
         return getattr(rule, "nanos", None)
@@ -32,11 +34,20 @@ def _resample_series(
         *how_args, **how_kwargs
     )
 
+    if PANDAS_GT_140:
+        if reindex_closed is None:
+            inclusive = "both"
+        else:
+            inclusive = reindex_closed
+        closed_kwargs = {"inclusive": inclusive}
+    else:
+        closed_kwargs = {"closed": reindex_closed}
+
     new_index = pd.date_range(
         start.tz_localize(None),
         end.tz_localize(None),
         freq=rule,
-        closed=reindex_closed,
+        **closed_kwargs,
         name=out.index.name,
     ).tz_localize(start.tz, nonexistent="shift_forward")
 

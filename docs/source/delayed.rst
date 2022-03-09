@@ -5,7 +5,6 @@ Delayed
    :maxdepth: 1
    :hidden:
 
-   delayed-api.rst
    delayed-collections.rst
    delayed-best-practices.rst
 
@@ -24,7 +23,7 @@ directly with a light annotation of normal python code:
    >>> z.visualize()
 
 .. image:: images/inc-add.svg
-   :alt: simple task graph created with dask.delayed
+   :alt: A task graph with two "inc" functions combined using an "add" function resulting in an output node.
 
 .. raw:: html
 
@@ -113,7 +112,7 @@ example, because these functions are already very small and fast.)
 
 .. image:: images/delayed-inc-double-add.svg
    :align: right
-   :alt: simple task graph created with dask.delayed
+   :alt: A task graph with many nodes for "inc" and "double" that combine with "add" nodes. The output of the "add" nodes finally aggregate with a "sum" node.
 
 We can now compute this lazy result to execute the graph in parallel:
 
