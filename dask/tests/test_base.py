@@ -1009,6 +1009,10 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+)
 def test_visualize():
     pytest.importorskip("graphviz")
     with tmpdir() as d:

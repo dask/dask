@@ -178,6 +178,10 @@ def test_to_graphviz_with_unconnected_node():
         pytest.param("svg", SVG, marks=ipython_not_installed_mark),
     ],
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+)
 def test_dot_graph(tmpdir, format, typ):
     # Use a name that the shell would interpret specially to ensure that we're
     # not vulnerable to shell injection when interacting with `dot`.
@@ -211,6 +215,10 @@ def test_dot_graph(tmpdir, format, typ):
         pytest.param("svg", SVG, marks=ipython_not_installed_mark),
     ],
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+)
 def test_dot_graph_no_filename(tmpdir, format, typ):
     before = tmpdir.listdir()
     result = dot_graph(dsk, filename=None, format=format)
@@ -221,6 +229,10 @@ def test_dot_graph_no_filename(tmpdir, format, typ):
 
 
 @ipython_not_installed_mark
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+)
 def test_dot_graph_defaults():
     # Test with default args.
     default_name = "mydask"
@@ -257,6 +269,10 @@ def test_dot_graph_defaults():
             marks=ipython_not_installed_mark,
         ),
     ],
+)
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
 )
 def test_filenames_and_formats(tmpdir, filename, format, target, expected_result_type):
     result = dot_graph(dsk, filename=str(tmpdir.join(filename)), format=format)
