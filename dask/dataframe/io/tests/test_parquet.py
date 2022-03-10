@@ -2504,6 +2504,43 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+def test_getitem_optimization_after_filter(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
+    dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
+
+    df2 = df[df["b"] > 10][["a"]]
+    ddf2 = ddf[ddf["b"] > 10][["a"]]
+
+    dsk = optimize_dataframe_getitem(ddf2.dask, keys=[ddf2._name])
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert set(subgraph_rd.columns) == {"a", "b"}
+
+    assert_eq(df2, ddf2)
+
+
+def test_getitem_optimization_after_filter_complex(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
+    dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
+
+    df2 = df[["b"]]
+    df2 = df2.assign(d=1)
+    df2 = df[df2["d"] == 1][["b"]]
+
+    ddf2 = ddf[["b"]]
+    ddf2 = ddf2.assign(d=1)
+    ddf2 = ddf[ddf2["d"] == 1][["b"]]
+
+    dsk = optimize_dataframe_getitem(ddf2.dask, keys=[ddf2._name])
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert set(subgraph_rd.columns) == {"b"}
+
+    assert_eq(df2, ddf2)
+
+
 def test_layer_creation_info(tmpdir, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat", "dog"] * 5})
     dd.from_pandas(df, npartitions=1).to_parquet(
