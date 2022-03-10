@@ -12,7 +12,6 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.core import PerformanceWarning
 from dask.array.utils import assert_eq, same_keys
 
 
@@ -1173,7 +1172,8 @@ def test_cov():
 
     assert_eq(da.cov(d), np.cov(x))
     assert_eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
-    with pytest.warns(RuntimeWarning, match="Degrees of freedom <= 0 for slice"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # dof <= 0 for slice
         assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
     assert_eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert_eq(da.cov(d, d), np.cov(x, x))
@@ -1294,7 +1294,7 @@ def test_isin_rand(
     d2 = da.from_array(a2, chunks=test_chunks)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=PerformanceWarning)
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         r_a = np.isin(a1, a2, invert=invert)
         r_d = da.isin(d1, d2, invert=invert)
     assert_eq(r_a, r_d)
@@ -2390,7 +2390,7 @@ def test_einsum(einsum_signature):
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=PerformanceWarning)
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         assert_eq(
             np.einsum(einsum_signature, *np_inputs),
             da.einsum(einsum_signature, *da_inputs),

@@ -1,5 +1,6 @@
 import gzip
 import os
+import warnings
 from io import BytesIO
 from unittest import mock
 
@@ -774,7 +775,9 @@ def test_warn_non_seekable_files():
         assert "gzip" in msg
         assert "blocksize=None" in msg
 
-        df = dd.read_csv("2014-01-*.csv", compression="gzip", blocksize=None)
+        with warnings.catch_warnings(record=True) as record:
+            df = dd.read_csv("2014-01-*.csv", compression="gzip", blocksize=None)
+        assert not record
 
         with pytest.raises(NotImplementedError):
             with pytest.warns(UserWarning):  # needed for pytest

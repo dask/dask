@@ -2,6 +2,7 @@ import gc
 import math
 import os
 import random
+import warnings
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
@@ -605,8 +606,10 @@ def test_take_npartitions_warn():
         with pytest.warns(UserWarning):
             b.take(7)
 
-        b.take(7, npartitions=2)
-        b.take(7, warn=False)
+        with warnings.catch_warnings(record=True) as record:
+            b.take(7, npartitions=2)
+            b.take(7, warn=False)
+        assert not record
 
 
 def test_map_is_lazy():

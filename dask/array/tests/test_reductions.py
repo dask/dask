@@ -260,18 +260,17 @@ def test_nanarg_reductions(dfunc, func):
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
-    with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning, match="All-NaN slice encountered"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # All-NaN slice encountered
+        with pytest.raises(ValueError):
             dfunc(a, 1).compute()
 
-    with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning, match="All-NaN slice encountered"):
+        with pytest.raises(ValueError):
             dfunc(a, 2).compute()
 
-    x[:] = np.nan
-    a = da.from_array(x, chunks=(3, 4, 5))
-    with pytest.raises(ValueError):
-        with pytest.warns(RuntimeWarning, match="All-NaN slice encountered"):
+        x[:] = np.nan
+        a = da.from_array(x, chunks=(3, 4, 5))
+        with pytest.raises(ValueError):
             dfunc(a).compute()
 
 
@@ -457,7 +456,8 @@ def test_reductions_with_empty_array():
     x2 = dx2.compute()
 
     for dx, x in [(dx1, x1), (dx2, x2)]:
-        with pytest.warns(RuntimeWarning, match="Mean of empty slice"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # Mean of empty slice
             assert_eq(dx.mean(), x.mean())
             assert_eq(dx.mean(axis=()), x.mean(axis=()))
             assert_eq(dx.mean(axis=0), x.mean(axis=0))
@@ -774,7 +774,7 @@ def test_mean_func_does_not_warn():
     xr = pytest.importorskip("xarray")
     a = xr.DataArray(da.from_array(np.full((10, 10), np.nan)))
 
-    with warnings.catch_warnings() as rec:
+    with warnings.catch_warnings(record=True) as rec:
         a.mean().compute()
     assert not rec  # did not warn
 
@@ -786,7 +786,7 @@ def test_nan_func_does_not_warn(func):
     x[0] = 1
     x[1] = 2
     d = da.from_array(x, chunks=2)
-    with warnings.catch_warnings() as rec:
+    with warnings.catch_warnings(record=True) as rec:
         getattr(da, func)(d).compute()
     assert not rec  # did not warn
 

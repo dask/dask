@@ -955,9 +955,8 @@ def test_operators():
     assert_eq(c, x + x.reshape((10, 1)))
 
     expr = (3 / a * b) ** 2 > 5
-    with pytest.warns(
-        RuntimeWarning, match="divide by zero encountered in true_divide"
-    ):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # divide by zero
         assert_eq(expr, (3 / x * y) ** 2 > 5)
 
     c = da.exp(a)
@@ -3755,7 +3754,8 @@ def test_no_chunks_2d():
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(RuntimeWarning, match="divide by zero encountered in log"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # divide by zero
         assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
@@ -4881,8 +4881,10 @@ def test_scipy_sparse_concatenate(axis):
 
 
 def test_3851():
-    Y = da.random.random((10, 10), chunks="auto")
-    da.argmax(Y, axis=0).compute()
+    with warnings.catch_warnings(record=True) as record:
+        Y = da.random.random((10, 10), chunks="auto")
+        da.argmax(Y, axis=0).compute()
+    assert not record
 
 
 def test_3925():
