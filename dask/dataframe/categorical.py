@@ -178,6 +178,16 @@ class CategoricalAccessor(Accessor):
     """
 
     _accessor_name = "cat"
+    _accessor_methods = (
+        "add_categories",
+        "as_ordered",
+        "as_unordered",
+        "remove_categories",
+        "rename_categories",
+        "reorder_categories",
+        "set_categories",
+    )
+    _accessor_properties = ()
 
     @property
     def known(self):
