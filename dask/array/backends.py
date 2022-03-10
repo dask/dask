@@ -224,6 +224,9 @@ class NumpyBackendEntrypoint(DaskBackendEntrypoint):
     def full(self, *args, **kwargs):
         return da.wrap._full_numpy(*args, **kwargs)
 
+    def arange(self, *args, **kwargs):
+        return da.creation.arange_numpy(*args, **kwargs)
+
     def default_random_state(self):
         if not hasattr(self, "_np_random_states"):
             self._np_random_states = da.random.RandomState()
@@ -265,6 +268,10 @@ try:
         def full(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
             return self.fallback.full(*args, meta=meta, **kwargs)
+
+        def arange(self, *args, like=None, **kwargs):
+            like = cupy.empty(()) if like is None else like
+            return self.fallback.arange(*args, like=like, **kwargs)
 
         def default_random_state(self):
             if not hasattr(self, "_cupy_random_states"):

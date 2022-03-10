@@ -22,6 +22,7 @@ from .core import (
     normalize_chunks,
     stack,
 )
+from .dispatch import array_backend_dispatch
 from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
 from .utils import meta_from_array
@@ -327,7 +328,7 @@ def linspace(
         return Array(dsk, name, chunks, dtype=dtype)
 
 
-def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
+def arange_numpy(*args, chunks="auto", like=None, dtype=None, **kwargs):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -413,6 +414,13 @@ def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
+
+
+def arange(*args, **kwargs):
+    return array_backend_dispatch.arange(*args, **kwargs)
+
+
+arange.__doc__ = arange_numpy.__doc__
 
 
 @derived_from(np)
