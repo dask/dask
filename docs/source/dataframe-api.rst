@@ -267,6 +267,7 @@ Datetime Accessor
 
 .. autosummary::
    :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
 
    Series.dt.ceil
    Series.dt.date
@@ -300,7 +301,7 @@ String Accessor
 
 .. autosummary::
    :toctree: generated/
-   :template: autosummary/accessor_attribute.rst
+   :template: autosummary/accessor_method.rst
 
    Series.str.capitalize
    Series.str.casefold
