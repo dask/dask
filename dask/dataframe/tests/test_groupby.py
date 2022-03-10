@@ -2656,7 +2656,7 @@ def test_groupby_iter_fails():
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
 
-        
+
 def test_groupby_sort_as_false_affects_within_chunk_groupby_sort():
     df = pd.DataFrame(
         [["2021-11-24", "B"], ["2021-11-25", "A"]], columns=["DATE", "HASH"]

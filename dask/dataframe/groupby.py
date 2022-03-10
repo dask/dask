@@ -521,10 +521,8 @@ def _drop_duplicates_reindex(df):
     return result
 
 
-def _nunique_df_chunk(df, *by, **kwargs):
-    name = kwargs.pop("name")
-
-    g = _groupby_raise_unaligned(df, by=by, **kwargs)
+def _nunique_df_chunk(df, *by, name=None, sort=None, **_ignored_):
+    g = _groupby_raise_unaligned(df, by=by, sort=sort)
     if len(df) > 0:
         grouped = (
             g[[name]].apply(_drop_duplicates_reindex).reset_index(level=-1, drop=True)
@@ -556,7 +554,9 @@ def _nunique_series_chunk(df, *by, sort=True, **_ignored_):
     assert is_series_like(df)
 
     df = df.to_frame()
-    return _nunique_df_chunk(df, *by, sort=sort, name=df.columns[0], levels=_determine_levels(by))
+    return _nunique_df_chunk(
+        df, *by, sort=sort, name=df.columns[0], levels=_determine_levels(by)
+    )
 
 
 ###############################################################
