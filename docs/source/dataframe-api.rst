@@ -156,7 +156,6 @@ Series
    Series.autocorr
    Series.between
    Series.bfill
-   Series.cat
    Series.clear_divisions
    Series.clip
    Series.clip_lower
@@ -175,7 +174,6 @@ Series
    Series.div
    Series.drop_duplicates
    Series.dropna
-   Series.dt
    Series.dtype
    Series.eq
    Series.explode
@@ -240,7 +238,6 @@ Series
    Series.shift
    Series.size
    Series.std
-   Series.str
    Series.sub
    Series.sum
    Series.to_bag
@@ -265,12 +262,8 @@ Accessors
 Similar to pandas, Dask provides dtype-specific methods under various accessors.
 These are separate namespaces within :class:`Series` that only apply to specific data types.
 
-=========================== =================================
-Data Type                   Accessor
-=========================== =================================
-Datetime, Timedelta, Period :func:`Series.dt`
-String                      :func:`Series.str`
-=========================== =================================
+Datetime Accessor
+*****************
 
 .. autosummary::
    :toctree: generated/
@@ -302,6 +295,14 @@ String                      :func:`Series.str`
    Series.dt.weekday
    Series.dt.weekofyear
    Series.dt.year
+
+String Accessor
+***************
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
    Series.str.capitalize
    Series.str.casefold
    Series.str.cat
@@ -354,6 +355,28 @@ String                      :func:`Series.str`
    Series.str.upper
    Series.str.wrap
    Series.str.zfill
+
+Categorical Accessor
+********************
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
+   Series.cat.add_categories
+   Series.cat.as_known
+   Series.cat.as_ordered
+   Series.cat.as_unknown
+   Series.cat.as_unordered
+   Series.cat.categories
+   Series.cat.codes
+   Series.cat.known
+   Series.cat.ordered
+   Series.cat.remove_categories
+   Series.cat.remove_unused_categories
+   Series.cat.rename_categories
+   Series.cat.reorder_categories
+   Series.cat.set_categories
 
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~

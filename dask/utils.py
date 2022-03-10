@@ -724,11 +724,14 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     # in the doc
     original_method = getattr(cls, method.__name__)
 
+    doc = getattr(original_method, "__doc__", None)
+
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
 
-    doc = original_method.__doc__
     if doc is None:
         doc = ""
 
