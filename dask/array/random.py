@@ -450,20 +450,12 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     return func(*args, size=size, **kwargs)
 
 
-class RandomStateDispatch:
-    def __getattr__(self, item):
-        return getattr(
-            array_backend_dispatch.default_random_state(),
-            item,
-        )
-
-
-_state_dispatch = RandomStateDispatch()
-
-
 def _make_api(attr):
     def wrapper(*args, **kwargs):
-        return getattr(_state_dispatch, attr)(*args, **kwargs)
+        return getattr(
+            array_backend_dispatch.default_random_state(),
+            attr,
+        )(*args, **kwargs)
 
     wrapper.__name__ = getattr(RandomState, attr).__name__
     wrapper.__doc__ = getattr(RandomState, attr).__doc__
