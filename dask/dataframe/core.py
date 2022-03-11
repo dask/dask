@@ -14,7 +14,6 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_timedelta64_dtype,
 )
-from pandas.util import cache_readonly
 from tlz import first, merge, partition_all, remove, unique
 
 from .. import array as da
@@ -49,7 +48,7 @@ from ..utils import (
 from ..widgets import get_template
 from . import methods
 from ._compat import PANDAS_GT_140, PANDAS_GT_150
-from .accessor import DatetimeAccessor, StringAccessor
+from .accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
     get_parallel_type,
@@ -3386,19 +3385,11 @@ class Series(_Frame):
         """Return data type"""
         return self._meta.dtype
 
-    @cache_readonly
-    def dt(self):
-        """Namespace of datetime methods"""
-        return DatetimeAccessor(self)
+    dt = CachedAccessor("dt", DatetimeAccessor)
 
-    @cache_readonly
-    def cat(self):
-        return CategoricalAccessor(self)
+    cat = CachedAccessor("cat", CategoricalAccessor)
 
-    @cache_readonly
-    def str(self):
-        """Namespace for string methods"""
-        return StringAccessor(self)
+    str = CachedAccessor("str", StringAccessor)
 
     def __dir__(self):
         o = set(dir(type(self)))
