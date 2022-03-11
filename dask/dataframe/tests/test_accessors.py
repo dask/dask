@@ -223,27 +223,35 @@ def test_str_accessor_cat_none():
     assert_eq(ds.str.cat(sep="_", na_rep="-"), s.str.cat(sep="_", na_rep="-"))
 
 
-def test_str_accessor_noexpand():
+@pytest.mark.parametrize("method", ["split", "rsplit"])
+def test_str_accessor_split_noexpand(method):
+    def call(obj, *args, **kwargs):
+        return getattr(obj.str, method)(*args, **kwargs)
+
     s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], name="foo")
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:
-        assert_eq(s.str.split(n=n, expand=False), ds.str.split(n=n, expand=False))
+        assert_eq(call(s, n=n, expand=False), call(ds, n=n, expand=False))
 
-    assert ds.str.split(n=1, expand=False).name == "foo"
+    assert call(ds, n=1, expand=False).name == "foo"
 
 
-def test_str_accessor_expand():
+@pytest.mark.parametrize("method", ["split", "rsplit"])
+def test_str_accessor_split_expand(method):
+    def call(obj, *args, **kwargs):
+        return getattr(obj.str, method)(*args, **kwargs)
+
     s = pd.Series(
         ["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], index=["row1", "row2", "row3"]
     )
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:
-        assert_eq(s.str.split(n=n, expand=True), ds.str.split(n=n, expand=True))
+        assert_eq(call(s, n=n, expand=True), call(ds, n=n, expand=True))
 
     with pytest.raises(NotImplementedError) as info:
-        ds.str.split(expand=True)
+        call(ds, expand=True)
 
     assert "n=" in str(info.value)
 
@@ -252,13 +260,12 @@ def test_str_accessor_expand():
 
     for n in [1, 2, 3]:
         assert_eq(
-            s.str.split(pat=",", n=n, expand=True),
-            ds.str.split(pat=",", n=n, expand=True),
+            call(s, pat=",", n=n, expand=True), call(ds, pat=",", n=n, expand=True)
         )
 
 
 @pytest.mark.xfail(reason="Need to pad columns")
-def test_str_accessor_expand_more_columns():
+def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c d", "aa", "aaa bbb ccc dddd"])
     ds = dd.from_pandas(s, npartitions=2)
 

@@ -4,7 +4,7 @@ Support for pandas ExtensionArray in dask.dataframe.
 See :ref:`extensionarrays` for more.
 """
 from ..utils import Dispatch
-from ._accessor import (
+from .accessor import (
     register_dataframe_accessor,
     register_index_accessor,
     register_series_accessor,
