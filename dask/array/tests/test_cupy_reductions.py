@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pytest
 
@@ -55,16 +57,16 @@ def test_nanarg_reductions(dfunc, func):
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # All-NaN slice encountered
+        with pytest.raises(ValueError):
             dfunc(a, 1).compute()
 
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+        with pytest.raises(ValueError):
             dfunc(a, 2).compute()
 
-    x[:] = cupy.nan
-    a = da.from_array(x, chunks=(3, 4, 5))
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+        x[:] = cupy.nan
+        a = da.from_array(x, chunks=(3, 4, 5))
+        with pytest.raises(ValueError):
             dfunc(a).compute()

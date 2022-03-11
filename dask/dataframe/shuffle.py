@@ -4,6 +4,7 @@ import math
 import shutil
 import tempfile
 import uuid
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -85,16 +86,29 @@ def sort_values(
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
-    if not isinstance(by, str):
-        # support ["a"] as input
-        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
-            by = by[0]
-        else:
-            raise NotImplementedError(
-                "Dataframe only supports sorting by a single column which must "
-                "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(by)
-            )
+    if not isinstance(by, list):
+        by = [by]
+    if len(by) > 1 and df.npartitions > 1 or any(not isinstance(b, str) for b in by):
+        raise NotImplementedError(
+            "Dataframes only support sorting by named columns which must be passed as a "
+            "string or a list of strings; multi-partition dataframes only support sorting "
+            "by a single column.\n"
+            "You passed %s" % str(by)
+        )
+
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    if df.npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
+
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
@@ -103,7 +117,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[by]
+    sort_by_col = df[by[0]]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
@@ -111,7 +125,7 @@ def sort_values(
 
     if len(divisions) == 2:
         return df.repartition(npartitions=1).map_partitions(
-            sort_function, **sort_function_kwargs
+            sort_function, **sort_kwargs
         )
 
     if not isinstance(ascending, bool):
@@ -141,7 +155,7 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        return df.map_partitions(sort_function, **sort_function_kwargs)
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     df = rearrange_by_divisions(
         df,
@@ -151,7 +165,7 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(sort_function, **sort_function_kwargs)
+    df = df.map_partitions(sort_function, **sort_kwargs)
     return df
 
 
@@ -679,7 +693,7 @@ def rearrange_by_column_tasks(
     else:
         k = n
 
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k**stages)]
 
     npartitions_orig = df.npartitions
     token = tokenize(df, stages, column, n, k)
@@ -896,7 +910,7 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
     typ = np.min_scalar_type(npartitions * 2)
 
     c = np.mod(c, npartitions).astype(typ, copy=False)
-    np.floor_divide(c, k ** stage, out=c)
+    np.floor_divide(c, k**stage, out=c)
     np.mod(c, k, out=c)
 
     return group_split_dispatch(df, c, k, ignore_index=ignore_index)
@@ -950,11 +964,22 @@ def get_overlap(df, index):
     return df.loc[[index]] if index in df.index else df._constructor()
 
 
-def fix_overlap(ddf, overlap):
-    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive"""
-    name = "fix-overlap-" + tokenize(ddf, overlap)
-    n = len(ddf.divisions) - 1
-    dsk = {(name, i): (ddf._name, i) for i in range(n)}
+def fix_overlap(ddf, mins, maxes, lens):
+    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive
+
+    This is accomplished by first removing empty partitions, then altering existing
+    partitions as needed to include all the values for a particular index value in
+    one partition.
+    """
+    name = "fix-overlap-" + tokenize(ddf, mins, maxes, lens)
+
+    non_empties = [i for i, l in enumerate(lens) if l != 0]
+    # drop empty partitions by mapping each partition in a new graph to a particular
+    # partition on the old graph.
+    dsk = {(name, i): (ddf._name, div) for i, div in enumerate(non_empties)}
+    divisions = tuple(mins) + (maxes[-1],)
+
+    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
 
     frames = []
     for i in overlap:
@@ -962,45 +987,79 @@ def fix_overlap(ddf, overlap):
         # `frames` is a list of data from previous partitions that we may want to
         # move to partition i.  Here, we add "overlap" from the previous partition
         # (i-1) to this list.
-        frames.append((get_overlap, (ddf._name, i - 1), ddf.divisions[i]))
+        frames.append((get_overlap, dsk[(name, i - 1)], divisions[i]))
 
         # Make sure that any data added from partition i-1 to `frames` is removed
         # from partition i-1.
-        dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+        dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], divisions[i])
 
         # We do not want to move "overlap" from the previous partition (i-1) into
         # this partition (i) if the data from this partition will need to be moved
         # to the next partition (i+1) anyway.  If we concatenate data too early,
         # we may lose rows (https://github.com/dask/dask/issues/6972).
-        if i == ddf.npartitions - 2 or ddf.divisions[i] != ddf.divisions[i + 1]:
-            frames.append((ddf._name, i))
+        if i == len(mins) - 2 or divisions[i] != divisions[i + 1]:
+            frames.append(dsk[(name, i)])
             dsk[(name, i)] = (methods.concat, frames)
             frames = []
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    return new_dd_object(graph, name, ddf._meta, ddf.divisions)
+    return new_dd_object(graph, name, ddf._meta, divisions)
+
+
+def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
+    """For a given column, compute the min, max, and len of each partition.
+
+    And make sure that the partitions are sorted relative to each other.
+    NOTE: this does not guarantee that every partition is internally sorted.
+    """
+    mins = column.map_partitions(M.min, meta=column)
+    maxes = column.map_partitions(M.max, meta=column)
+    lens = column.map_partitions(len, meta=column)
+    mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
+    non_empty_mins = [m for m, l in zip(mins, lens) if l != 0]
+    non_empty_maxes = [m for m, l in zip(maxes, lens) if l != 0]
+    if (
+        sorted(non_empty_mins) != non_empty_mins
+        or sorted(non_empty_maxes) != non_empty_maxes
+    ):
+        raise ValueError(
+            f"Partitions are not sorted ascending by {column.name or 'the index'}",
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are : {list(zip(mins, maxes, lens))}",
+        )
+    if not allow_overlap and any(
+        a <= b for a, b in zip(non_empty_mins[1:], non_empty_maxes[:-1])
+    ):
+        warnings.warn(
+            "Partitions have overlapping values, so divisions are non-unique."
+            "Use `set_index(sorted=True)` with no `divisions` to allow dask to fix the overlap. "
+            f"In your dataset the (min, max, len) values of {column.name or 'the index'} "
+            f"for each partition are : {list(zip(mins, maxes, lens))}",
+            UserWarning,
+        )
+    if not allow_overlap:
+        return (mins, maxes, lens)
+    else:
+        return (non_empty_mins, non_empty_maxes, lens)
+
+
+def compute_divisions(df, col=None, **kwargs) -> tuple:
+    column = df.index if col is None else df[col]
+    mins, maxes, _ = _compute_partition_stats(column, allow_overlap=False, **kwargs)
+
+    return tuple(mins) + (maxes[-1],)
 
 
 def compute_and_set_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
-    mins = remove_nans(mins)
-    maxes = remove_nans(maxes)
+    mins, maxes, lens = _compute_partition_stats(df.index, allow_overlap=True, **kwargs)
+    if len(mins) == len(df.divisions) - 1:
+        df.divisions = tuple(mins) + (maxes[-1],)
+        if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
+            return df
 
-    if (
-        sorted(mins) != list(mins)
-        or sorted(maxes) != list(maxes)
-        or any(a > b for a, b in zip(mins, maxes))
-    ):
-        raise ValueError(
-            "Partitions must be sorted ascending with the index", mins, maxes
-        )
-
-    df.divisions = tuple(mins) + (list(maxes)[-1],)
-
-    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
-    return fix_overlap(df, overlap) if overlap else df
+    return fix_overlap(df, mins, maxes, lens)
 
 
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):

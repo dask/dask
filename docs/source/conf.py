@@ -10,11 +10,15 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from __future__ import annotations
+
 import os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
+
+import sphinx_autosummary_accessors
 
 # -- General configuration -----------------------------------------------------
 
@@ -27,20 +31,18 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../../"))
 
-source_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(source_dir, "ext"))
-
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx_autosummary_accessors",
     "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "numpydoc",
     "sphinx_click.ext",
-    "dask_config_sphinx_ext",
+    "dask_sphinx_theme.ext.dask_config_sphinx_ext",
     "sphinx_tabs.tabs",
     "sphinx_remove_toctrees",
     "IPython.sphinxext.ipython_console_highlighting",
@@ -56,7 +58,7 @@ sphinx_tabs_disable_tab_closing = True
 remove_from_toctrees = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -83,7 +85,7 @@ copyright = "2014-2018, Anaconda, Inc. and contributors"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = []
+exclude_patterns: list[str] = []
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 # default_role = None
@@ -187,7 +189,7 @@ htmlhelp_basename = "daskdoc"
 
 # -- Options for LaTeX output --------------------------------------------------
 
-latex_elements = {
+latex_elements: dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     #'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').

@@ -438,6 +438,18 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
         return df.astype(meta.dtypes.to_dict(), copy=False)
 
 
+def _to_sql_chunk(d, uri, engine_kwargs=None, **kwargs):
+    import sqlalchemy as sa
+
+    engine_kwargs = engine_kwargs or {}
+    engine = sa.create_engine(uri, **engine_kwargs)
+
+    q = d.to_sql(con=engine, **kwargs)
+    engine.dispose()
+
+    return q
+
+
 def _gt14() -> bool:
     """
     Check if sqlalchemy.__version__ is at least 1.4.0, when several
@@ -678,6 +690,7 @@ def to_sql(
     method=None,
     compute=True,
     parallel=False,
+    engine_kwargs=None,
 ):
     """Store Dask Dataframe to a SQL table
 
@@ -734,6 +747,8 @@ def to_sql(
         When true, have each block append itself to the DB table concurrently. This can result in DB rows being in a
         different order than the source DataFrame's corresponding rows. When false, load each block into the SQL DB in
         sequence.
+    engine_kwargs : dict or None
+        Specific db engine parameters for sqlalchemy
 
     Raises
     ------
@@ -792,7 +807,8 @@ def to_sql(
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
         name=name,
-        con=uri,
+        uri=uri,
+        engine_kwargs=engine_kwargs,
         schema=schema,
         if_exists=if_exists,
         index=index,
@@ -802,11 +818,7 @@ def to_sql(
         method=method,
     )
 
-    def make_meta(meta):
-        return meta.to_sql(**kwargs)
-
-    make_meta = delayed(make_meta)
-    meta_task = make_meta(df._meta)
+    meta_task = delayed(_to_sql_chunk)(df._meta, **kwargs)
 
     # Partitions should always append to the empty table created from `meta` above
     worker_kwargs = dict(kwargs, if_exists="append")
@@ -815,7 +827,8 @@ def to_sql(
         # Perform the meta insert, then one task that inserts all blocks concurrently:
         result = [
             _extra_deps(
-                d.to_sql,
+                _to_sql_chunk,
+                d,
                 extras=meta_task,
                 **worker_kwargs,
                 dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
@@ -829,7 +842,8 @@ def to_sql(
         for d in df.to_delayed():
             result.append(
                 _extra_deps(
-                    d.to_sql,
+                    _to_sql_chunk,
+                    d,
                     extras=last,
                     **worker_kwargs,
                     dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),

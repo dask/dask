@@ -1,9 +1,12 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_VERSION, tm
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -78,9 +81,26 @@ def test_get_dummies_kwargs():
     assert_eq(res, exp)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:In a future version, passing a SparseArray:FutureWarning"
-)  # https://github.com/pandas-dev/pandas/issues/45618
+def check_pandas_issue_45618_warning(test_func):
+    # Check for FutureWarning raised in `pandas=1.4.0`-only.
+    # This can be removed when `pandas=1.4.0` is no longer supported (PANDAS_GT_140).
+    # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
+
+    def decorator():
+        with warnings.catch_warnings(record=True) as record:
+            test_func()
+        if PANDAS_VERSION == parse_version("1.4.0"):
+            assert all(
+                "In a future version, passing a SparseArray" in str(r.message)
+                for r in record
+            )
+        else:
+            assert not record
+
+    return decorator
+
+
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
     ds = dd.from_pandas(s, 2)
@@ -98,9 +118,7 @@ def test_get_dummies_sparse():
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
-@pytest.mark.filterwarnings(
-    "ignore:In a future version, passing a SparseArray:FutureWarning"
-)  # https://github.com/pandas-dev/pandas/issues/45618
+@check_pandas_issue_45618_warning
 def test_get_dummies_sparse_mix():
     df = pd.DataFrame(
         {
@@ -162,7 +180,7 @@ def test_get_dummies_errors():
 
 
 @pytest.mark.parametrize("values", ["B", ["B"], ["B", "D"]])
-@pytest.mark.parametrize("aggfunc", ["mean", "sum", "count"])
+@pytest.mark.parametrize("aggfunc", ["mean", "sum", "count", "first", "last"])
 def test_pivot_table(values, aggfunc):
     df = pd.DataFrame(
         {
@@ -189,6 +207,32 @@ def test_pivot_table(values, aggfunc):
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
     assert_eq(res, exp)
+
+
+@pytest.mark.parametrize("values", ["B", ["D"], ["B", "D"]])
+@pytest.mark.parametrize("aggfunc", ["first", "last"])
+def test_pivot_table_firstlast(values, aggfunc):
+
+    df = pd.DataFrame(
+        {
+            "A": np.random.choice(list("XYZ"), size=100),
+            "B": np.random.randn(100),
+            "C": pd.Categorical(np.random.choice(list("abc"), size=100)),
+            "D": np.random.choice(list("abc"), size=100),
+        }
+    )
+    ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
+
+    res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
+
+    assert_eq(exp, res)
+
+    # method
+    res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+    exp = df.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
+
+    assert_eq(exp, res)
 
 
 def test_pivot_table_dtype():
@@ -247,7 +291,7 @@ def test_pivot_table_errors():
         dd.pivot_table(ddf, index="A", columns="C", values=[["B"]])
     assert msg in str(err.value)
 
-    msg = "aggfunc must be either 'mean', 'sum' or 'count'"
+    msg = "aggfunc must be either 'mean', 'sum', 'count', 'first', 'last'"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values="B", aggfunc=["sum"])
     assert msg in str(err.value)

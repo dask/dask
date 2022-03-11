@@ -7,6 +7,7 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
 import dask
@@ -16,7 +17,13 @@ import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_140, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    tm,
+)
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -30,7 +37,7 @@ from dask.dataframe.core import (
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
-from dask.utils_test import hlg_layer
+from dask.utils_test import _check_warning, hlg_layer
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -150,15 +157,15 @@ def test_head_npartitions_warn():
 
     # No warn if all partitions are inspected
     for n in [3, -1]:
-        with pytest.warns(None) as rec:
+        with warnings.catch_warnings(record=True) as record:
             d.head(10, npartitions=n)
-    assert not rec
+        assert not record
 
     # With default args, this means that a 1 partition dataframe won't warn
     d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as record:
         d2.head()
-    assert not rec
+    assert not record
 
 
 def test_index_head():
@@ -355,8 +362,8 @@ def test_rename_series_method_2():
     ds = dd.from_pandas(s, 2)
 
     for is_sorted in [True, False]:
-        res = ds.rename(lambda x: x ** 2, sorted_index=is_sorted)
-        assert_eq(res, s.rename(lambda x: x ** 2))
+        res = ds.rename(lambda x: x**2, sorted_index=is_sorted)
+        assert_eq(res, s.rename(lambda x: x**2))
         assert res.known_divisions == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
@@ -372,13 +379,13 @@ def test_rename_series_method_2():
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
-    res = ds2.rename(lambda x: x ** 2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x ** 2))
+    res = ds2.rename(lambda x: x**2, sorted_index=True)
+    assert_eq(res, s.rename(lambda x: x**2))
     assert not res.known_divisions
 
-    res = ds.rename(lambda x: x ** 2, inplace=True, sorted_index=True)
+    res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
-    s.rename(lambda x: x ** 2, inplace=True)
+    s.rename(lambda x: x**2, inplace=True)
     assert_eq(ds, s)
 
 
@@ -570,7 +577,7 @@ def test_describe_empty():
         df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
     )
 
-    with pytest.raises((ValueError, RuntimeWarning)):
+    with pytest.warns(RuntimeWarning):
         ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
@@ -2961,19 +2968,22 @@ def test_apply():
     )
 
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(
             ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
             df.apply(lambda xy: xy[0] + xy[1], axis=1),
         )
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
     # specify meta
     func = lambda x: pd.Series([x, x])
     assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
@@ -2994,9 +3004,9 @@ def test_apply_warns():
         ddf.apply(func, axis=1)
     assert len(w) == 1
 
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings(record=True) as record:
         ddf.apply(func, axis=1, meta=(None, int))
-    assert len(w) == 0
+    assert not record
 
     with pytest.warns(UserWarning) as w:
         ddf.apply(lambda x: x, axis=1)
@@ -3005,13 +3015,13 @@ def test_apply_warns():
     assert "int64" in str(w[0].message)
 
 
-def test_apply_fails_with_invalid_meta():
+def test_apply_warns_with_invalid_meta():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
 
     func = lambda row: row["x"] + row["y"]
 
-    with pytest.raises(ValueError, match="Meta is not valid"):
+    with pytest.warns(FutureWarning, match="Meta is not valid"):
         ddf.apply(func, axis=1, meta=int)
 
 
@@ -3232,14 +3242,16 @@ def test_apply_infer_columns():
         return pd.Series([x.sum(), x.mean()], index=["sum", "mean"])
 
     # DataFrame to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(return_df, axis=1)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["sum", "mean"]))
     assert_eq(result, df.apply(return_df, axis=1))
 
     # DataFrame to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(lambda x: 1, axis=1)
     assert isinstance(result, dd.Series)
     assert result.name is None
@@ -3249,14 +3261,16 @@ def test_apply_infer_columns():
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
     # Series to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
     assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(lambda x: 1)
     assert isinstance(result, dd.Series)
     assert result.name == "x"
@@ -3362,7 +3376,16 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df["x"].iteritems(), ddf["x"].iteritems()):
+    # `iteritems` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        pd_items = df["x"].iteritems()
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="iteritems is deprecated"
+    ):
+        dd_items = ddf["x"].iteritems()
+    for (a, b) in zip(pd_items, dd_items):
         assert a == b
 
 
@@ -3709,8 +3732,8 @@ def test_inplace_operators():
 
     ddf.y **= 0.5
 
-    assert_eq(ddf.y, df.y ** 0.5)
-    assert_eq(ddf, df.assign(y=df.y ** 0.5))
+    assert_eq(ddf.y, df.y**0.5)
+    assert_eq(ddf, df.assign(y=df.y**0.5))
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -4506,7 +4529,9 @@ def test_meta_nonempty_uses_meta_value_if_provided():
     dask_offsets = dd.from_pandas(offsets, npartitions=1)
     dask_offsets._meta = offsets.head()
 
-    with pytest.warns(None):  # not vectorized performance warning
+    with warnings.catch_warnings():  # not vectorized performance warning
+        warnings.simplefilter("ignore", PerformanceWarning)
+        warnings.simplefilter("ignore", UserWarning)
         expected = base + offsets
         actual = dask_base + dask_offsets
         assert_eq(expected, actual)
@@ -5006,7 +5031,16 @@ def test_is_monotonic_numeric():
     s = pd.Series(range(20))
     ds = dd.from_pandas(s, npartitions=5)
     assert_eq(s.is_monotonic_increasing, ds.is_monotonic_increasing)
-    assert_eq(s.is_monotonic, ds.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5)
@@ -5032,7 +5066,16 @@ def test_index_is_monotonic_numeric():
     s = pd.Series(1, index=range(20))
     ds = dd.from_pandas(s, npartitions=5, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
-    assert_eq(s.index.is_monotonic, ds.index.is_monotonic)
+    # `is_monotonic` was deprecated starting in `pandas=1.5.0`
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        expected = s.index.is_monotonic
+    with _check_warning(
+        PANDAS_GT_150, FutureWarning, message="is_monotonic is deprecated"
+    ):
+        result = ds.index.is_monotonic
+    assert_eq(expected, result)
 
     s_2 = pd.Series(1, index=range(20, 0, -1))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
@@ -5052,3 +5095,34 @@ def test_index_is_monotonic_dt64():
     s_2 = pd.Series(1, index=list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_custom_map_reduce():
+    # Make sure custom map-reduce workflows can use
+    # the universal ACA code path with metadata
+    # that is not DataFrame-like.
+    # See: https://github.com/dask/dask/issues/8636
+
+    df = pd.DataFrame(columns=["a"], data=[[2], [4], [8]], index=[0, 1, 2])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    def map_fn(x):
+        return {"x": x, "y": x}
+
+    def reduce_fn(series):
+        merged = None
+        for mapped in series:
+            if merged is None:
+                merged = mapped.copy()
+            else:
+                merged["x"] += mapped["x"]
+                merged["y"] *= mapped["y"]
+        return merged
+
+    result = (
+        ddf["a"]
+        .map(map_fn, meta=("data", "object"))
+        .reduction(reduce_fn, aggregate=reduce_fn, meta=("data", "object"))
+        .compute()[0]
+    )
+    assert result == {"x": 14, "y": 64}

@@ -753,18 +753,17 @@ def test_merge_columns_dtypes(how, on_index):
         b = b.set_index("A")
         on = None
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
         result = dd.merge(
             a, b, on=on, how=how, left_index=left_index, right_index=right_index
         )
-
-    warned = any("merge column data type mismatches" in str(r) for r in record)
+        warned = any("merge column data type mismatches" in str(r) for r in record)
 
     # result type depends on merge operation -> convert to pandas
     result = result if isinstance(result, pd.DataFrame) else result.compute()
 
     has_nans = result.isna().values.any()
-
     assert (has_nans and warned) or not has_nans
 
 
@@ -1599,9 +1598,9 @@ def test_concat_unknown_divisions():
     with pytest.raises(ValueError):
         dd.concat([aa, cc], axis=1)
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
-        assert len(record) == 0
+    assert not record
 
 
 def test_concat_unknown_divisions_errors():
@@ -1837,12 +1836,10 @@ def test_concat5():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with pytest.warns(None):
-            # some cases will raise warning directly from pandas
-            assert_eq(
-                dd.concat(case, interleave_partitions=True),
-                pd.concat(pdcase, sort=False),
-            )
+        assert_eq(
+            dd.concat(case, interleave_partitions=True),
+            pd.concat(pdcase, sort=False),
+        )
 
         assert_eq(
             dd.concat(case, join="inner", interleave_partitions=True),
@@ -2009,18 +2006,16 @@ def test_concat_datetimeindex():
     assert_eq(result, expected)
 
 
-def check_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-    with pytest.warns(None) as record:
+def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
+    if PANDAS_GT_140:
+        with pytest.warns(FutureWarning, match="append method is deprecated"):
+            expected = pandas_obj.append(pandas_append)
+            result = dask_obj.append(dask_append)
+            assert_eq(result, expected)
+    else:
         expected = pandas_obj.append(pandas_append)
         result = dask_obj.append(dask_append)
         assert_eq(result, expected)
-
-    if PANDAS_GT_140:
-        for w in record:
-            assert w.category == FutureWarning
-            assert "append method is deprecated" in str(w.message)
-    else:
-        assert not record
 
     return result
 
@@ -2040,20 +2035,20 @@ def test_append():
 
     s = pd.Series([7, 8], name=6, index=["a", "b"])
 
-    check_with_warning(ddf, s, df, s)
-    check_with_warning(ddf, ddf2, df, df2)
-    check_with_warning(ddf.a, ddf2.a, df.a, df2.a)
+    check_append_with_warning(ddf, s, df, s)
+    check_append_with_warning(ddf, ddf2, df, df2)
+    check_append_with_warning(ddf.a, ddf2.a, df.a, df2.a)
 
     # different columns
-    check_with_warning(ddf, ddf3, df, df3)
-    check_with_warning(ddf.a, ddf3.b, df.a, df3.b)
+    check_append_with_warning(ddf, ddf3, df, df3)
+    check_append_with_warning(ddf.a, ddf3.b, df.a, df3.b)
 
     # dask + pandas
-    check_with_warning(ddf, df2, df, df2)
-    check_with_warning(ddf.a, df2.a, df.a, df2.a)
+    check_append_with_warning(ddf, df2, df, df2)
+    check_append_with_warning(ddf.a, df2.a, df.a, df2.a)
 
-    check_with_warning(ddf, df3, df, df3)
-    check_with_warning(ddf.a, df3.b, df.a, df3.b)
+    check_append_with_warning(ddf, df3, df, df3)
+    check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
 def test_append2():
@@ -2082,20 +2077,20 @@ def test_append2():
     ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
     df3 = ddf3.compute()
 
-    check_with_warning(ddf1, ddf2, df1, df2)
-    check_with_warning(ddf2, ddf1, df2, df1)
+    check_append_with_warning(ddf1, ddf2, df1, df2)
+    check_append_with_warning(ddf2, ddf1, df2, df1)
 
     # different columns
-    check_with_warning(ddf1, ddf3, df1, df3)
-    check_with_warning(ddf3, ddf1, df3, df1)
+    check_append_with_warning(ddf1, ddf3, df1, df3)
+    check_append_with_warning(ddf3, ddf1, df3, df1)
 
     # Dask + pandas
-    check_with_warning(ddf1, df2, df1, df2)
-    check_with_warning(ddf2, df1, df2, df1)
+    check_append_with_warning(ddf1, df2, df1, df2)
+    check_append_with_warning(ddf2, df1, df2, df1)
 
     # different columns
-    check_with_warning(ddf1, df3, df1, df3)
-    check_with_warning(ddf3, df1, df3, df1)
+    check_append_with_warning(ddf1, df3, df1, df3)
+    check_append_with_warning(ddf3, df1, df3, df1)
 
 
 def test_append_categorical():
@@ -2133,16 +2128,16 @@ def test_append_categorical():
             )
         ddf1, ddf2 = dframes
 
-        res = check_with_warning(ddf1, ddf2, df1, df2)
+        res = check_append_with_warning(ddf1, ddf2, df1, df2)
 
         assert has_known_categories(res.index) == known
         assert has_known_categories(res.y) == known
 
-        res = check_with_warning(ddf1.y, ddf2.y, df1.y, df2.y)
+        res = check_append_with_warning(ddf1.y, ddf2.y, df1.y, df2.y)
         assert has_known_categories(res.index) == known
         assert has_known_categories(res) == known
 
-        res = check_with_warning(ddf1.index, ddf2.index, df1.index, df2.index)
+        res = check_append_with_warning(ddf1.index, ddf2.index, df1.index, df2.index)
         assert has_known_categories(res) == known
 
 
@@ -2150,7 +2145,7 @@ def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
 
-    res = check_with_warning(ddf, ddf, df, df)
+    res = check_append_with_warning(ddf, ddf, df, df)
     assert res.known_divisions is False
 
 
@@ -2213,10 +2208,9 @@ def test_dtype_equality_warning():
     df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
     df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
 
-    with pytest.warns(None) as r:
+    with warnings.catch_warnings(record=True) as record:
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
-
-    assert len(r) == 0
+    assert not record
 
 
 @pytest.mark.parametrize(

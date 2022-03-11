@@ -18,11 +18,11 @@ from dask.blockwise import (
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import dec, inc
 
-a, b, c, d, e, f, g = "abcdefg"
+a, b, c, d, e, f, g = "a", "b", "c", "d", "e", "f", "g"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
-    _BLOCKWISE_DEFAULT_PREFIX + "%d" % i for i in range(10)
+    f"{_BLOCKWISE_DEFAULT_PREFIX}{i}" for i in range(10)
 )
-i, j, k = "ijk"
+i, j, k = "i", "j", "k"
 
 
 @pytest.mark.parametrize(
@@ -683,7 +683,7 @@ def test_args_delayed():
 
 
 @pytest.mark.parametrize(
-    "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]
+    "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]  # type: ignore
 )
 def test_namedtuple(tup):
     A = da.random.random((20, 20), chunks=(10, 10))
@@ -728,7 +728,9 @@ def test_dont_merge_before_reductions():
 
 def test_atop_legacy():
     x = da.ones(10, chunks=(5,))
-    with pytest.warns(None):
+    with pytest.warns(
+        UserWarning, match="The da.atop function has moved to da.blockwise"
+    ):
         y = da.atop(inc, "i", x, "i", dtype=x.dtype)
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)

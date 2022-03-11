@@ -2,6 +2,7 @@ import gc
 import math
 import os
 import random
+import warnings
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
@@ -605,13 +606,10 @@ def test_take_npartitions_warn():
         with pytest.warns(UserWarning):
             b.take(7)
 
-        with pytest.warns(None) as rec:
+        with warnings.catch_warnings(record=True) as record:
             b.take(7, npartitions=2)
-        assert len(rec) == 0
-
-        with pytest.warns(None) as rec:
             b.take(7, warn=False)
-        assert len(rec) == 0
+        assert not record
 
 
 def test_map_is_lazy():
@@ -736,7 +734,7 @@ def test_from_empty_sequence():
 
 def test_product():
     b2 = b.product(b)
-    assert b2.npartitions == b.npartitions ** 2
+    assert b2.npartitions == b.npartitions**2
     assert set(b2) == {(i, j) for i in L for j in L}
 
     x = db.from_sequence([1, 2, 3, 4])
@@ -962,8 +960,7 @@ def test_to_textfiles_name_function_warn():
     ]
     a = db.from_sequence(seq, npartitions=16)
     with tmpdir() as dn:
-        with pytest.warns(None):
-            a.to_textfiles(dn, name_function=str)
+        a.to_textfiles(dn, name_function=str)
 
 
 def test_to_textfiles_encoding():
@@ -1161,15 +1158,12 @@ def test_from_delayed_iterator():
 
     delayed_records = delayed(lazy_records, pure=False)
     bag = db.from_delayed([delayed_records(5) for _ in range(5)])
-    assert (
-        db.compute(
-            bag.count(),
-            bag.pluck("operations").count(),
-            bag.pluck("operations").flatten().count(),
-            scheduler="sync",
-        )
-        == (25, 25, 50)
-    )
+    assert db.compute(
+        bag.count(),
+        bag.pluck("operations").count(),
+        bag.pluck("operations").flatten().count(),
+        scheduler="sync",
+    ) == (25, 25, 50)
 
 
 def test_range():
@@ -1293,7 +1287,7 @@ def test_groupby_tasks():
 
     b = db.from_sequence(range(1000), npartitions=100)
     out = b.groupby(lambda x: x % 123, shuffle="tasks")
-    assert len(out.dask) < 100 ** 2
+    assert len(out.dask) < 100**2
     partitions = dask.get(out.dask, out.__dask_keys__())
 
     for a in partitions:

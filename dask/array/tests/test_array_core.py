@@ -577,6 +577,16 @@ def test_concatenate_unknown_axes():
     assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
 
 
+def test_concatenate_flatten():
+    x = np.array([1, 2])
+    y = np.array([[3, 4], [5, 6]])
+
+    a = da.from_array(x, chunks=(2,))
+    b = da.from_array(y, chunks=(2, 1))
+
+    assert_eq(np.concatenate([x, y], axis=None), da.concatenate([a, b], axis=None))
+
+
 def test_concatenate_rechunk():
     x = da.random.random((6, 6), chunks=(3, 3))
     y = da.random.random((6, 6), chunks=(2, 2))
@@ -852,21 +862,18 @@ def test_block_tuple():
 
 
 def test_broadcast_shapes():
-    with warnings.catch_warnings(record=True) as record:
-        assert () == broadcast_shapes()
-        assert (2, 5) == broadcast_shapes((2, 5))
-        assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
-        assert np.allclose(
-            (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
-        )
-        assert np.allclose(
-            (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
-        )
-        assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
-        assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
-        assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
-
-    assert not record
+    assert () == broadcast_shapes()
+    assert (2, 5) == broadcast_shapes((2, 5))
+    assert (0, 5) == broadcast_shapes((0, 1), (1, 5))
+    assert np.allclose(
+        (2, np.nan), broadcast_shapes((1, np.nan), (2, 1)), equal_nan=True
+    )
+    assert np.allclose(
+        (2, np.nan), broadcast_shapes((2, 1), (1, np.nan)), equal_nan=True
+    )
+    assert (3, 4, 5) == broadcast_shapes((3, 4, 5), (4, 1), ())
+    assert (3, 4) == broadcast_shapes((3, 1), (1, 4), (4,))
+    assert (5, 6, 7, 3, 4) == broadcast_shapes((3, 1), (), (5, 6, 7, 1, 4))
 
     pytest.raises(ValueError, lambda: broadcast_shapes((3,), (3, 4)))
     pytest.raises(ValueError, lambda: broadcast_shapes((2, 3), (2, 3, 1)))
@@ -948,11 +955,11 @@ def test_operators():
     assert_eq(c, x + x.reshape((10, 1)))
 
     expr = (3 / a * b) ** 2 > 5
-    with pytest.warns(None):  # ZeroDivisionWarning
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # divide by zero
         assert_eq(expr, (3 / x * y) ** 2 > 5)
 
-    with pytest.warns(None):  # OverflowWarning
-        c = da.exp(a)
+    c = da.exp(a)
     assert_eq(c, np.exp(x))
 
     assert_eq(abs(-a), a)
@@ -2294,7 +2301,7 @@ def test_arithmetic():
     assert_eq(b | b, y | y)
     assert_eq(b ^ b, y ^ y)
     assert_eq(a // b, x // y)
-    assert_eq(a ** b, x ** y)
+    assert_eq(a**b, x**y)
     assert_eq(a % b, x % y)
     assert_eq(a > b, x > y)
     assert_eq(a < b, x < y)
@@ -2311,7 +2318,7 @@ def test_arithmetic():
     assert_eq(b | True, y | True)
     assert_eq(b ^ True, y ^ True)
     assert_eq(a // 2, x // 2)
-    assert_eq(a ** 2, x ** 2)
+    assert_eq(a**2, x**2)
     assert_eq(a % 2, x % 2)
     assert_eq(a > 2, x > 2)
     assert_eq(a < 2, x < 2)
@@ -2328,7 +2335,7 @@ def test_arithmetic():
     assert_eq(True | b, True | y)
     assert_eq(True ^ b, True ^ y)
     assert_eq(2 // b, 2 // y)
-    assert_eq(2 ** b, 2 ** y)
+    assert_eq(2**b, 2**y)
     assert_eq(2 % b, 2 % y)
     assert_eq(2 > b, 2 > y)
     assert_eq(2 < b, 2 < y)
@@ -2344,13 +2351,11 @@ def test_arithmetic():
 
     assert_eq(da.logaddexp(a, b), np.logaddexp(x, y))
     assert_eq(da.logaddexp2(a, b), np.logaddexp2(x, y))
-    with pytest.warns(None):  # Overflow warning
-        assert_eq(da.exp(b), np.exp(y))
+    assert_eq(da.exp(b), np.exp(y))
     assert_eq(da.log(a), np.log(x))
     assert_eq(da.log10(a), np.log10(x))
     assert_eq(da.log1p(a), np.log1p(x))
-    with pytest.warns(None):  # Overflow warning
-        assert_eq(da.expm1(b), np.expm1(y))
+    assert_eq(da.expm1(b), np.expm1(y))
     assert_eq(da.sqrt(a), np.sqrt(x))
     assert_eq(da.square(a), np.square(x))
 
@@ -2363,8 +2368,7 @@ def test_arithmetic():
     assert_eq(da.arctan2(b * 10, a), np.arctan2(y * 10, x))
     assert_eq(da.hypot(b, a), np.hypot(y, x))
     assert_eq(da.sinh(a), np.sinh(x))
-    with pytest.warns(None):  # Overflow warning
-        assert_eq(da.cosh(b), np.cosh(y))
+    assert_eq(da.cosh(b), np.cosh(y))
     assert_eq(da.tanh(a), np.tanh(x))
     assert_eq(da.arcsinh(b * 10), np.arcsinh(y * 10))
     assert_eq(da.arccosh(b * 10), np.arccosh(y * 10))
@@ -2389,8 +2393,7 @@ def test_arithmetic():
     assert_eq(da.signbit(a - 3), np.signbit(x - 3))
     assert_eq(da.copysign(a - 3, b), np.copysign(x - 3, y))
     assert_eq(da.nextafter(a - 3, b), np.nextafter(x - 3, y))
-    with pytest.warns(None):  # overflow warning
-        assert_eq(da.ldexp(c, c), np.ldexp(z, z))
+    assert_eq(da.ldexp(c, c), np.ldexp(z, z))
     assert_eq(da.fmod(a * 12, b), np.fmod(x * 12, y))
     assert_eq(da.floor(a * 0.5), np.floor(x * 0.5))
     assert_eq(da.ceil(a), np.ceil(x))
@@ -3751,7 +3754,8 @@ def test_no_chunks_2d():
     x = da.from_array(X, chunks=(2, 2))
     x._chunks = ((np.nan, np.nan), (np.nan, np.nan, np.nan))
 
-    with pytest.warns(None):  # zero division warning
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # divide by zero
         assert_eq(da.log(x), np.log(X))
     assert_eq(x.T, X.T)
     assert_eq(x.sum(axis=0, keepdims=True), X.sum(axis=0, keepdims=True))
@@ -3838,11 +3842,11 @@ def test_index_array_with_array_2d():
 
 @pytest.mark.xfail(reason="Chunking does not align well")
 def test_index_array_with_array_3d_2d():
-    x = np.arange(4 ** 3).reshape((4, 4, 4))
+    x = np.arange(4**3).reshape((4, 4, 4))
     dx = da.from_array(x, chunks=(2, 2, 2))
 
     ind = np.random.random((4, 4)) > 0.5
-    ind = np.arange(4 ** 2).reshape((4, 4)) % 2 == 0
+    ind = np.arange(4**2).reshape((4, 4)) % 2 == 0
     dind = da.from_array(ind, (2, 2))
 
     assert_eq(x[ind], dx[dind])
@@ -4614,6 +4618,35 @@ def test_zarr_nocompute():
         assert a2.chunks == a.chunks
 
 
+def test_zarr_regions():
+    zarr = pytest.importorskip("zarr")
+
+    a = da.arange(16).reshape((4, 4)).rechunk(2)
+    z = zarr.zeros_like(a, chunks=2)
+
+    a[:2, :2].to_zarr(z, region=(slice(2), slice(2)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    a[:3, 3:4].to_zarr(z, region=(slice(1, 4), slice(2, 3)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 0, 7, 0], [0, 0, 11, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    a[3:, 3:].to_zarr(z, region=(slice(2, 3), slice(1, 2)))
+    a2 = da.from_zarr(z)
+    expected = [[0, 1, 0, 0], [4, 5, 3, 0], [0, 15, 7, 0], [0, 0, 11, 0]]
+    assert_eq(a2, expected)
+    assert a2.chunks == a.chunks
+
+    with pytest.raises(ValueError):
+        with tmpdir() as d:
+            a.to_zarr(d, region=(slice(2), slice(2)))
+
+
 def test_tiledb_roundtrip():
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
@@ -4848,10 +4881,9 @@ def test_scipy_sparse_concatenate(axis):
 
 
 def test_3851():
-    with warnings.catch_warnings() as record:
+    with warnings.catch_warnings(record=True) as record:
         Y = da.random.random((10, 10), chunks="auto")
         da.argmax(Y, axis=0).compute()
-
     assert not record
 
 
@@ -4948,17 +4980,17 @@ def test_auto_chunks_h5py():
 
 
 def test_no_warnings_from_blockwise():
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((3, 10, 10), chunks=(3, 2, 2))
         da.map_blocks(lambda y: np.mean(y, axis=0), x, dtype=x.dtype, drop_axis=0)
     assert not record
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((15, 15), chunks=(5, 5))
         (x.dot(x.T + 1) - x.mean(axis=0)).std()
     assert not record
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         x = da.ones((1,), chunks=(1,))
         1 / x[0]
     assert not record

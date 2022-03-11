@@ -608,14 +608,14 @@ def test_to_fmt_warns():
 
     # testing warning when breaking order
     with tmpfile("h5") as fn:
-        with pytest.warns(None):
+        with pytest.warns(
+            UserWarning, match="To preserve order between partitions name_function"
+        ):
             a.to_hdf(fn, "/data*", name_function=str)
 
-    # testing warning when breaking order
     with tmpdir() as dn:
-        with pytest.warns(None):
-            fn = os.path.join(dn, "data_*.csv")
-            a.to_csv(fn, name_function=str)
+        fn = os.path.join(dn, "data_*.csv")
+        a.to_csv(fn, name_function=str)
 
 
 @pytest.mark.parametrize(

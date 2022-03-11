@@ -1,4 +1,6 @@
 import re
+import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -69,7 +71,7 @@ def test_make_meta():
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
-    # Iterable
+    # List
     meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
@@ -82,6 +84,31 @@ def test_make_meta():
     assert len(meta) == 0
     assert meta.dtype == "i8"
     assert meta.name == "a"
+
+    # Iterable
+    class CustomMetadata(Iterable):
+        """Custom class iterator returning pandas types."""
+
+        def __init__(self, max=0):
+            self.types = [("a", "i8"), ("c", "f8"), ("b", "O")]
+
+        def __iter__(self):
+            self.n = 0
+            return self
+
+        def __next__(self):
+            if self.n < len(self.types):
+                ret = self.types[self.n]
+                self.n += 1
+                return ret
+            else:
+                raise StopIteration
+
+    meta = make_meta(CustomMetadata())
+    assert (meta.columns == ["a", "c", "b"]).all()
+    assert len(meta) == 0
+    assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
+    assert isinstance(meta.index, pd.RangeIndex)
 
     # With index
     idx = pd.Index([1, 2], name="foo")
@@ -502,10 +529,9 @@ def test_apply_and_enforce_message():
 
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings(record=True) as record:
         meta_nonempty(ser)
-
-    assert len(w) == 0
+    assert not record
 
 
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
