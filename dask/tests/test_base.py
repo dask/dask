@@ -486,9 +486,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    with pytest.warns(None):
-        # ignore scipy.sparse.SparseEfficiencyWarning
-        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
     assert tokenize(a) == tokenize(b)
@@ -504,10 +502,9 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    with pytest.warns(None):
-        b = a.copy().asformat("coo")
-        b.row[:10] = np.arange(10)
-        b = b.asformat(cls_name)
+    b = a.copy().asformat("coo")
+    b.row[:10] = np.arange(10)
+    b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
 

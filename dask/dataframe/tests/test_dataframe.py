@@ -7,6 +7,7 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
 import dask
@@ -156,15 +157,15 @@ def test_head_npartitions_warn():
 
     # No warn if all partitions are inspected
     for n in [3, -1]:
-        with pytest.warns(None) as rec:
+        with warnings.catch_warnings(record=True) as record:
             d.head(10, npartitions=n)
-    assert not rec
+        assert not record
 
     # With default args, this means that a 1 partition dataframe won't warn
     d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as record:
         d2.head()
-    assert not rec
+    assert not record
 
 
 def test_index_head():
@@ -2967,19 +2968,22 @@ def test_apply():
     )
 
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(
             ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
             df.apply(lambda xy: xy[0] + xy[1], axis=1),
         )
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
     # specify meta
     func = lambda x: pd.Series([x, x])
     assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
@@ -3000,9 +3004,9 @@ def test_apply_warns():
         ddf.apply(func, axis=1)
     assert len(w) == 1
 
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings(record=True) as record:
         ddf.apply(func, axis=1, meta=(None, int))
-    assert len(w) == 0
+    assert not record
 
     with pytest.warns(UserWarning) as w:
         ddf.apply(lambda x: x, axis=1)
@@ -3238,14 +3242,16 @@ def test_apply_infer_columns():
         return pd.Series([x.sum(), x.mean()], index=["sum", "mean"])
 
     # DataFrame to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(return_df, axis=1)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["sum", "mean"]))
     assert_eq(result, df.apply(return_df, axis=1))
 
     # DataFrame to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(lambda x: 1, axis=1)
     assert isinstance(result, dd.Series)
     assert result.name is None
@@ -3255,14 +3261,16 @@ def test_apply_infer_columns():
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
     # Series to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
     assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(lambda x: 1)
     assert isinstance(result, dd.Series)
     assert result.name == "x"
@@ -4521,7 +4529,9 @@ def test_meta_nonempty_uses_meta_value_if_provided():
     dask_offsets = dd.from_pandas(offsets, npartitions=1)
     dask_offsets._meta = offsets.head()
 
-    with pytest.warns(None):  # not vectorized performance warning
+    with warnings.catch_warnings():  # not vectorized performance warning
+        warnings.simplefilter("ignore", PerformanceWarning)
+        warnings.simplefilter("ignore", UserWarning)
         expected = base + offsets
         actual = dask_base + dask_offsets
         assert_eq(expected, actual)
