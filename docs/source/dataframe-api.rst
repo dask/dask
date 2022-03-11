@@ -265,29 +265,38 @@ These are separate namespaces within :class:`Series` that only apply to specific
 Datetime Accessor
 *****************
 
+**Methods**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_method.rst
+
+   Series.dt.ceil
+   Series.dt.floor
+   Series.dt.isocalendar
+   Series.dt.normalize
+   Series.dt.round
+   Series.dt.strftime
+
+**Attributes**
+
 .. autosummary::
    :toctree: generated/
    :template: autosummary/accessor_attribute.rst
 
-   Series.dt.ceil
    Series.dt.date
    Series.dt.day
    Series.dt.dayofweek
    Series.dt.dayofyear
    Series.dt.daysinmonth
-   Series.dt.floor
    Series.dt.freq
    Series.dt.hour
-   Series.dt.isocalendar
    Series.dt.microsecond
    Series.dt.minute
    Series.dt.month
    Series.dt.nanosecond
-   Series.dt.normalize
    Series.dt.quarter
-   Series.dt.round
    Series.dt.second
-   Series.dt.strftime
    Series.dt.time
    Series.dt.timetz
    Series.dt.tz
@@ -298,6 +307,8 @@ Datetime Accessor
 
 String Accessor
 ***************
+
+**Methods**
 
 .. autosummary::
    :toctree: generated/
@@ -359,24 +370,33 @@ String Accessor
 Categorical Accessor
 ********************
 
+**Methods**
+
 .. autosummary::
    :toctree: generated/
-   :template: autosummary/accessor_attribute.rst
+   :template: autosummary/accessor_method.rst
 
    Series.cat.add_categories
    Series.cat.as_known
    Series.cat.as_ordered
    Series.cat.as_unknown
    Series.cat.as_unordered
-   Series.cat.categories
-   Series.cat.codes
-   Series.cat.known
-   Series.cat.ordered
    Series.cat.remove_categories
    Series.cat.remove_unused_categories
    Series.cat.rename_categories
    Series.cat.reorder_categories
    Series.cat.set_categories
+
+**Attributes**
+
+.. autosummary::
+   :toctree: generated/
+   :template: autosummary/accessor_attribute.rst
+
+   Series.cat.categories
+   Series.cat.codes
+   Series.cat.known
+   Series.cat.ordered
 
 Groupby Operations
 ~~~~~~~~~~~~~~~~~~
