@@ -542,21 +542,22 @@ def get_named_args(func):
 class Dispatch:
     """Simple single dispatch."""
 
-    def __init__(self, name=None):
+    def __init__(self, name=None, on_literal=False):
         self._lookup = {}
         self._lazy = {}
         if name:
             self.__name__ = name
+        self.on_literal = on_literal
 
-    def register(self, type, func=None):
+    def register(self, ref, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
 
         def wrapper(func):
-            if isinstance(type, tuple):
-                for t in type:
+            if isinstance(ref, tuple):
+                for t in ref:
                     self.register(t, func)
             else:
-                self._lookup[type] = func
+                self._lookup[ref] = func
             return func
 
         return wrapper(func) if func is not None else wrapper
@@ -573,44 +574,49 @@ class Dispatch:
 
         return wrapper(func) if func is not None else wrapper
 
-    def dispatch(self, cls):
+    def dispatch(self, ref):
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
-        for cls2 in cls.__mro__:
+        if self.on_literal:
             try:
-                impl = lk[cls2]
+                impl = lk[ref]
             except KeyError:
                 pass
             else:
-                if cls is not cls2:
-                    # Cache lookup
-                    lk[cls] = impl
                 return impl
-            # Is a lazy registration function present?
-            toplevel, _, _ = cls2.__module__.partition(".")
-            try:
-                register = self._lazy.pop(toplevel)
-            except KeyError:
-                pass
-            else:
-                register()
-                return self.dispatch(cls)  # recurse
-        raise TypeError(f"No dispatch for {cls}")
+            raise ValueError(f"No dispatch registered for {ref}")
+        else:
+            cls = ref
+            for cls2 in cls.__mro__:
+                try:
+                    impl = lk[cls2]
+                except KeyError:
+                    pass
+                else:
+                    if cls is not cls2:
+                        # Cache lookup
+                        lk[cls] = impl
+                    return impl
+                # Is a lazy registration function present?
+                toplevel, _, _ = cls2.__module__.partition(".")
+                try:
+                    register = self._lazy.pop(toplevel)
+                except KeyError:
+                    pass
+                else:
+                    register()
+                    return self.dispatch(cls)  # recurse
+        raise TypeError(f"No dispatch for {ref}")
 
     def __call__(self, arg, *args, **kwargs):
         """
         Call the corresponding method based on type of argument.
         """
-        meth = self.dispatch(type(arg))
+        if self.on_literal:
+            meth = self.dispatch(arg)
+        else:
+            meth = self.dispatch(type(arg))
         return meth(arg, *args, **kwargs)
-
-    @property
-    def __doc__(self):
-        try:
-            func = self.dispatch(object)
-            return func.__doc__
-        except TypeError:
-            return "Single Dispatch for %s" % self.__name__
 
 
 def ensure_not_exists(filename):
@@ -1875,3 +1881,6 @@ def cached_cumsum(seq, initial_zero=False):
         # Construct a temporary tuple, and look up by value.
         result = _cumsum(tuple(seq), initial_zero)
     return result
+
+
+dnf_filter_dispatch = Dispatch("dnf_filter_dispatch", on_literal=True)

@@ -20,7 +20,13 @@ from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
-from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
+from ..blockwise import (
+    Blockwise,
+    BlockwiseDep,
+    BlockwiseDepDict,
+    _get_blockwise_input,
+    blockwise,
+)
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -32,6 +38,7 @@ from ..utils import (
     _deprecated,
     apply,
     derived_from,
+    dnf_filter_dispatch,
     funcname,
     has_keyword,
     is_arraylike,
@@ -1475,6 +1482,15 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 meta=meta,
                 enforce_metadata=False,
+                creation_info={
+                    "func": DataFrame.fillna,
+                    "kwargs": {
+                        "method": method,
+                        "limit": limit,
+                        "axis": axis,
+                        **kwargs,
+                    },
+                },
                 **kwargs,
             )
 
@@ -1692,14 +1708,16 @@ Dask Name: {name}, {task} tasks"""
 
     @classmethod
     def _get_unary_operator(cls, op):
-        return lambda self: elemwise(op, self)
+        return lambda self: elemwise(op, self, creation_info={"func": op})
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         if inv:
             return lambda self, other: elemwise(op, other, self)
         else:
-            return lambda self, other: elemwise(op, self, other)
+            return lambda self, other: elemwise(
+                op, self, other, creation_info={"func": op}
+            )
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
@@ -4324,6 +4342,7 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
+        creation_info = {"func": operator.getitem}
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
@@ -4340,7 +4359,9 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(
+                operator.getitem, name, self, key, creation_info=creation_info
+            )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -4365,7 +4386,9 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(
+                operator.getitem, name, self, key, creation_info=creation_info
+            )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -4374,7 +4397,9 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(
+                operator.getitem, name, self, key, creation_info=creation_info
+            )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return eager_predicate_pushdown(
                 new_dd_object(graph, name, self, self.divisions)
@@ -7704,3 +7729,9 @@ def _raise_if_not_series_or_dataframe(x, funcname):
             "`%s` is only supported with objects that are Dataframes or Series"
             % funcname
         )
+
+
+@dnf_filter_dispatch.register(Series.fillna)
+def fillna_dnf(op, indices: list, dsk: HighLevelGraph):
+    # Return dnf of input collection
+    return _get_blockwise_input(0, indices, dsk)

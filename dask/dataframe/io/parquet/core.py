@@ -472,8 +472,7 @@ def read_parquet(
             label=label,
             creation_info={
                 "func": read_parquet,
-                "args": (path,),
-                "kwargs": input_kwargs,
+                "kwargs": {"path": path, **input_kwargs},
             },
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})

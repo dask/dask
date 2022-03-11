@@ -7,7 +7,7 @@ from .. import config, core
 from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import cull, fuse
-from ..utils import M, apply, ensure_dict
+from ..utils import dnf_filter_dispatch, ensure_dict
 
 
 def optimize(dsk, keys, **kwargs):
@@ -46,19 +46,6 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-def _operator_lookup(op):
-    # Return str symbol for comparator op.
-    # If no match with supported options,
-    # return None
-    return {
-        operator.eq: "==",
-        operator.gt: ">",
-        operator.ge: ">=",
-        operator.lt: "<",
-        operator.le: "<=",
-    }.get(op, None)
-
-
 def eager_predicate_pushdown(ddf):
     # This is a special optimization that must be called
     # eagerly on a DataFrame collection when filters are
@@ -66,171 +53,60 @@ def eager_predicate_pushdown(ddf):
     # is due to the fact that `npartitions` and `divisions`
     # may change when this optimization is applied (invalidating
     # npartition/divisions-specific logic in following Layers).
-
-    # This optimization looks for all `DataFrameIOLayer` instances,
-    # and checks if the only dependent layers correspond to a
-    # simple comparison operation (like df["x"] > 100)
-
-    # Check for quick return
-    if not config.get("optimization.eager"):
-        # Eager optimizations are disabled.
-        # Return original DataFrame
-        return ddf
-
     from ..layers import DataFrameIOLayer
 
+    # Get output layer name and HLG
+    name = ddf._name
     dsk = ddf.dask
 
-    # Quick return if we have more than six
-    # layers in our graph. Most basic case is:
-    # One IO layer, two getitem layers, and a
-    # comparison layer.  However, there may
-    # also be a column selection immediately
-    # after the IO layer, and/or a fillna
-    # operation immediately before the comparison.
-    if len(dsk.layers) > 6:
-        return ddf
-
-    # Quick return if we don't have a single
-    # DataFrameIO layer to optimize
-    io_layer_name = [
-        k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
-    ]
-    if len(io_layer_name) != 1:
-        return ddf
-    io_layer_name = io_layer_name[0]
-
-    # Quick return if creation_info does not contain filters
-    creation_info_kwargs = (
-        getattr(dsk.layers[io_layer_name], "creation_info", None) or {}
-    ).get("kwargs", {"filters": True}) or {"filters": True}
-    if creation_info_kwargs.get("filters", True) is not None:
-        # Current dataframe layer does not have a creation_info attribute,
-        # or the "filters" field is missing or populated
-        return ddf
-
-    # Find all dependents of io_layer_name.
-    # We can only apply predicate_pushdown if there
-    # are exactly one or two blockwise getitem dependents.
-    # If there is one dependent, it must be a
-    # column projction after the read (and the column
-    # projection must have exactly two dependents)
-    def _check_deps(layer_name):
-        deps = dsk.dependents[layer_name]
-        ndeps = len(deps)
-        good = ndeps in (1, 2) and all(
-            list(dsk.layers[d].dsk.values())[0][0] == operator.getitem for d in deps
-        )
-        if good and ndeps == 1:
-            # This may be a column selection layer.
-            # Check if comparison comes immediately after
-            # the column selection
-            return _check_deps(list(deps)[0])
-        return good, deps, layer_name
-
-    good, deps, base_layer_name = _check_deps(io_layer_name)
-    if not good:
-        return ddf
-
-    # Check for column selection
-    selection = None
-    if io_layer_name != base_layer_name:
-        selection = [
-            ind[0] for ind in dsk.layers[base_layer_name].indices if ind[1] is None
-        ]
-        if len(selection) > 1 or not isinstance(selection[0], (list, str)):
+    # Extract filters
+    try:
+        filters = dsk.layers[name]._dnf_filter_expression(dsk)
+        if filters:
+            if isinstance(filters[0], (list, tuple)):
+                filters = list(filters)
+            else:
+                filters = [filters]
+        else:
             return ddf
-        selection = selection[0]
+        if not isinstance(filters, list):
+            filters = [filters]
+    except (TypeError, ValueError):
+        # DNF dispatching failed for 1+ layers
+        return ddf
 
-    # If the first check was successful,
-    # we now need to check that the two
-    # dependents only depend on the base
-    # collection or eachother
-    okay_deps = {base_layer_name, *deps}
-    _key, _compare, _val = None, None, None
-    fillna_op = {}
-    for dep in deps:
-        _deps = dsk.dependencies[dep]
+    # We were able to extract a DNF filter expression.
+    # Check that all layers are regenerable, and that
+    # the graph contains an IO layer with filters support.
+    # All layers besides the root IO layer should also
+    # support DNF dispatching.  Otherwise, there could be
+    # something like column-assignment or data manipulation
+    # between the IO layer and the filter.
+    io_layer = []
+    for k, v in dsk.layers.items():
+        if not v._regenerable:
+            return ddf
+        if (
+            isinstance(v, DataFrameIOLayer)
+            and "filters" in v.creation_info.get("kwargs", {})
+            and v.creation_info["kwargs"]["filters"] is None
+        ):
+            io_layer.append(k)
+        else:
+            try:
+                dnf_filter_dispatch.dispatch(v.creation_info["func"])
+            except (TypeError, ValueError, AttributeError, KeyError):
+                # This is NOT an IO layer OR a filter-safe layer
+                return ddf
+    if len(io_layer) != 1:
+        return ddf
+    io_layer = io_layer.pop()
 
-        # Check fopr an extra fillna operation
-        extra_deps = _deps - okay_deps
-        if len(extra_deps) == 1:
-            extra_name = extra_deps.pop()
-            extra_layer = dsk.layers[extra_name]
-            extra_layer_task = extra_layer.dsk[extra_name]
-            if (
-                extra_layer_task
-                and extra_layer_task[0] == apply
-                and extra_layer_task[1] == M.fillna
-            ):
-                fillna_op["args"] = [
-                    extra_layer.indices[ind][0]
-                    for ind in range(1, len(extra_layer_task[2]))
-                ]
-                fillna_op["kwargs"] = extra_layer_task[3]
-                if (
-                    isinstance(fillna_op["kwargs"], tuple)
-                    and fillna_op["kwargs"]
-                    and callable(fillna_op["kwargs"][0])
-                ):
-                    fillna_op["kwargs"] = fillna_op["kwargs"][0](
-                        *fillna_op["kwargs"][1:]
-                    )
-                _deps = _deps - {
-                    extra_name,
-                }
-
-        if len(_deps) == 1:
-            _dependents = dsk.dependents[dep]
-            if len(_dependents) == 1:
-                _compare_name = next(iter(dsk.dependents[dep]))
-                _compare = dsk.layers[_compare_name].dsk[_compare_name][0]
-                _compare_indices = dsk.layers[_compare_name].indices
-                if (
-                    len(_compare_indices) > 1
-                    and len(_compare_indices[1]) == 2
-                    and _compare_indices[1][1] is None
-                ):
-                    _val = _compare_indices[1][0]
-                _indices = dsk.layers[dep].indices
-                if (
-                    len(_indices) > 1
-                    and len(_indices[1]) == 2
-                    and _indices[1][1] is None
-                    and isinstance(_indices[1][0], str)
-                ):
-                    _key = _indices[1][0]
-
-    # If we were able to define a key, comparison
-    # operator, and comparison value, we can
-    # reconstruct ddf with `filters` defined in
-    # the original DataFrameIOLayer
-    if None not in [_key, _compare, _val]:
-        _compare_str = _operator_lookup(_compare)
-        if _compare_str:
-            filters = [(_key, _compare_str, _val)]
-            old = dsk.layers[io_layer_name]
-            new_kwargs = old.creation_info["kwargs"].copy()
-            new_kwargs["filters"] = filters
-            if selection and new_kwargs.get("columns", None) is None:
-                new_kwargs["columns"] = selection
-            new = old.creation_info["func"](
-                *old.creation_info["args"],
-                **new_kwargs,
-            )
-            if selection:
-                new = new[selection]
-            return new[
-                _compare(
-                    new[_key].fillna(*fillna_op["args"], **fillna_op["kwargs"])
-                    if fillna_op
-                    else new[_key],
-                    _val,
-                )
-            ]
-
-    # Fallback
-    return ddf
+    # Regenerate collection with filtered IO layer
+    return dsk.layers[name]._regenerate_collection(
+        dsk,
+        new_kwargs={io_layer: {"filters": filters}},
+    )
 
 
 def optimize_dataframe_getitem(dsk, keys):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+import operator
 import os
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from itertools import product
@@ -17,6 +18,7 @@ from .optimization import SubgraphCallable, fuse
 from .utils import (
     _deprecated,
     apply,
+    dnf_filter_dispatch,
     ensure_dict,
     homogeneous_deepmap,
     stringify,
@@ -246,6 +248,7 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
+    creation_info=None,
     **kwargs,
 ):
     """Create a Blockwise symbolic mutable mapping
@@ -326,6 +329,7 @@ def blockwise(
         numblocks=numblocks,
         concatenate=concatenate,
         new_axes=new_axes,
+        creation_info=creation_info,
     )
     return subgraph
 
@@ -392,6 +396,7 @@ class Blockwise(Layer):
     concatenate: bool | None
     new_axes: Mapping[str, int]
     output_blocks: set[tuple[int, ...]] | None
+    creation_info: dict | None
 
     def __init__(
         self,
@@ -405,12 +410,14 @@ class Blockwise(Layer):
         output_blocks: set[tuple[int, ...]] | None = None,
         annotations: Mapping[str, Any] | None = None,
         io_deps: Mapping[str, BlockwiseDep] | None = None,
+        creation_info: dict | None = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
         self.output_indices = tuple(output_indices)
         self.output_blocks = output_blocks
         self.dsk = dsk
+        self.creation_info = creation_info or {}
 
         # Remove `BlockwiseDep` arguments from input indices
         # and add them to `self.io_deps`.
@@ -802,6 +809,81 @@ class Blockwise(Layer):
             ),
             (bind_to is not None and is_leaf),
         )
+
+    def _regenerable(self):
+        # creation_info must contain the callable
+        # function used to generate the collection
+        # terminated by this Layer. The kwargs should
+        # also be saved if/when applicable. Positional
+        # args should be captured by `indices`
+        return "func" in self.creation_info
+
+    def _regenerate_collection(
+        self,
+        dsk: HighLevelGraph,
+        new_kwargs: dict = None,
+        _regen_cache: dict = None,
+    ):
+
+        # Return regenerated layer if the work was
+        # already done
+        _regen_cache = _regen_cache or {}
+        if self.output in _regen_cache:
+            return _regen_cache[self.output]
+
+        # Check that this layer is `_regenerable`
+        if not self._regenerable:
+            raise ValueError("`_regenerate_collection` requires `_regenerable=True`")
+
+        # Recursively generate necessary inputs to
+        # this layer to generate the collection
+        inputs = []
+        for key, ind in self.indices:
+            if ind is None:
+                if isinstance(key, (str, tuple)) and key in dsk.layers:
+                    continue
+                inputs.append(key)
+            elif key in self.io_deps:
+                continue
+            elif dsk.layers[key]._regenerable:
+                inputs.append(
+                    dsk.layers[key]._regenerate_collection(
+                        dsk,
+                        new_kwargs=new_kwargs,
+                        _regen_cache=_regen_cache,
+                    )
+                )
+            else:
+                raise ValueError(
+                    "`_regenerate_collection` failed. "
+                    "Not all HLG layers are regenerable."
+                )
+
+        # Extract the callable func and key-word args.
+        # Then return a regenerated collection
+        func = self.creation_info.get("func", None)
+        if func is None:
+            raise ValueError(
+                "`_regenerate_collection` failed. "
+                "Not all HLG layers are regenerable."
+            )
+        regen_kwargs = self.creation_info.get("kwargs", {}).copy()
+        regen_kwargs.update((new_kwargs or {}).get(self.output, {}))
+        result = func(*inputs, **regen_kwargs)
+        _regen_cache[self.output] = result
+        return result
+
+    def _dnf_filter_expression(self, dsk: HighLevelGraph):
+        """Return a DNF-formatted filter expression for the
+        graph terminating at this layer
+        """
+        if self._regenerable:
+            return dnf_filter_dispatch(
+                self.creation_info["func"],
+                self.indices,
+                dsk,
+            )
+        return ValueError("DNF dispatching requires `_regenerable==True`")
 
 
 def _get_coord_mapping(
@@ -1629,3 +1711,46 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             dependencies[name] = set()
 
     return HighLevelGraph(layers, dependencies)
+
+
+_comparison_symbols = {
+    operator.eq: "==",
+    operator.ne: "!=",
+    operator.lt: "<",
+    operator.le: "<=",
+    operator.gt: ">",
+    operator.ge: ">=",
+}
+
+
+def _get_blockwise_input(input_index, indices, dsk):
+    key = indices[input_index][0]
+    if indices[input_index][1] is None:
+        return key
+    return dsk.layers[key]._dnf_filter_expression(dsk)
+
+
+@dnf_filter_dispatch.register(tuple(_comparison_symbols.keys()))
+def comparison_dnf(op, indices: list, dsk: HighLevelGraph):
+    left = _get_blockwise_input(0, indices, dsk)
+    right = _get_blockwise_input(1, indices, dsk)
+    return (left, _comparison_symbols[op], right)
+
+
+@dnf_filter_dispatch.register((operator.and_, operator.or_))
+def logical_dnf(op, indices: list, dsk: HighLevelGraph):
+    left = _get_blockwise_input(0, indices, dsk)
+    right = _get_blockwise_input(1, indices, dsk)
+    if op == operator.or_:
+        return [left], [right]
+    elif op == operator.and_:
+        return (left, right)
+    else:
+        raise ValueError
+
+
+@dnf_filter_dispatch.register(operator.getitem)
+def getitem_dnf(op, indices: list, dsk: HighLevelGraph):
+    # Return dnf of key (selected by getitem)
+    key = _get_blockwise_input(1, indices, dsk)
+    return key
