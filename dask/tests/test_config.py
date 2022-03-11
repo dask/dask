@@ -136,6 +136,34 @@ def test_collect_yaml_permission_errors(tmpdir, kind):
         assert config == expected
 
 
+def test_collect_yaml_malformed_file(tmpdir):
+    dir_path = str(tmpdir)
+    fil_path = os.path.join(dir_path, "a.yaml")
+
+    with open(fil_path, mode="wb") as f:
+        f.write(b"{")
+
+    with pytest.raises(ValueError) as rec:
+        collect_yaml(paths=[dir_path])
+    assert fil_path in str(rec.value)
+    assert "is malformed" in str(rec.value)
+    assert "original error message" in str(rec.value)
+
+
+def test_collect_yaml_no_top_level_dict(tmpdir):
+    dir_path = str(tmpdir)
+    fil_path = os.path.join(dir_path, "a.yaml")
+
+    with open(fil_path, mode="wb") as f:
+        f.write(b"[1234]")
+
+    with pytest.raises(ValueError) as rec:
+        collect_yaml(paths=[dir_path])
+    assert fil_path in str(rec.value)
+    assert "is malformed" in str(rec.value)
+    assert "must have a dict" in str(rec.value)
+
+
 def test_env():
     env = {
         "DASK_A_B": "123",
