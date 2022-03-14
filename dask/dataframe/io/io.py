@@ -7,15 +7,25 @@ import numpy as np
 import pandas as pd
 from tlz import merge
 
-from ... import array as da
-from ...base import tokenize
-from ...dataframe.core import new_dd_object
-from ...delayed import delayed
-from ...highlevelgraph import HighLevelGraph
-from ...utils import M, _deprecated, ensure_dict
-from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
-from ..shuffle import set_partition
-from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
+from dask import array as da
+from dask.base import tokenize
+from dask.dataframe.core import (
+    DataFrame,
+    Index,
+    Series,
+    has_parallel_type,
+    new_dd_object,
+)
+from dask.dataframe.shuffle import set_partition
+from dask.dataframe.utils import (
+    check_meta,
+    insert_meta_param_description,
+    is_series_like,
+    make_meta,
+)
+from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, _deprecated, ensure_dict
 
 lock = Lock()
 
@@ -535,7 +545,7 @@ def to_bag(df, index=False, format="tuple"):
     --------
     >>> bag = df.to_bag()  # doctest: +SKIP
     """
-    from ...bag.core import Bag
+    from dask.bag.core import Bag
 
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
@@ -640,7 +650,7 @@ def from_delayed(
     )
 
     if divisions == "sorted":
-        from ..shuffle import compute_and_set_divisions
+        from dask.dataframe.shuffle import compute_and_set_divisions
 
         df = compute_and_set_divisions(df)
 

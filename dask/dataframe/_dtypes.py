@@ -1,6 +1,6 @@
 import pandas as pd
 
-from .extensions import make_array_nonempty, make_scalar
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 
 @make_array_nonempty.register(pd.DatetimeTZDtype)

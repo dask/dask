@@ -78,8 +78,8 @@ Work towards *small goals* with *big steps*.
 from collections import defaultdict, namedtuple
 from math import log
 
-from .core import get_dependencies, get_deps, getcycle, reverse_dict  # noqa: F401
-from .utils_test import add, inc  # noqa: F401
+from dask.core import get_dependencies, get_deps, getcycle, reverse_dict  # noqa: F401
+from dask.utils_test import add, inc  # noqa: F401
 
 
 def order(dsk, dependencies=None):

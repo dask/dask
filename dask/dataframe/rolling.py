@@ -6,12 +6,12 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
 from pandas.core.window import Rolling as pd_Rolling
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import M, derived_from, funcname, has_keyword
-from . import methods
-from .core import _emulate
-from .utils import make_meta
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import _emulate
+from dask.dataframe.utils import make_meta
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, derived_from, funcname, has_keyword
 
 
 def overlap_chunk(

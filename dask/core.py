@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from .utils_test import add, inc  # noqa: F401
+from dask.utils_test import add, inc  # noqa: F401
 
 no_default = "__no_default__"
 
