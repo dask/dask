@@ -383,19 +383,40 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @divisions.setter
     def divisions(self, value):
+        if not isinstance(value, tuple):
+            try:
+                value = tuple(value)
+            except Exception:
+                raise TypeError(
+                    "divisions should be an iterable, got {type(value)}"
+                ) from None
+
+        if len(value) != len(self._divisions):
+            n = len(self._divisions)
+            raise ValueError(
+                f"This dataframe has npartitions={n - 1}, divisions should be a "
+                f"tuple of length={n}, got {len(value)}"
+            )
+
         if None in value:
             if any(v is not None for v in value):
-                warnings.warn(
-                    "recieved `divisions` with mix of nulls and non-nulls, future versions will only accept "
-                    "`divisions` that are all null or all non-null",
-                    PendingDeprecationWarning,
+                raise ValueError(
+                    "divisions may not contain a mix of None and non-None values"
                 )
-        if not isinstance(value, tuple):
-            warnings.warn(
-                f"recieved `divisions` of type {type(value)}, future versions will only accept `divisions` of type "
-                "tuple",
-                PendingDeprecationWarning,
-            )
+        else:
+            # Known divisions, check monotonically increasing
+
+            # XXX: if the index dtype is an ordered categorical dtype, then we skip the
+            # sortedness check, since the order is dtype dependent
+            index_dtype = getattr(self._meta, "index", self._meta).dtype
+            if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
+                if value != tuple(sorted(value)):
+                    raise ValueError("divisions must be sorted")
+            if len(value[:-1]) != len(list(unique(value[:-1]))):
+                raise ValueError(
+                    "divisions must be unique, except for the last element"
+                )
+
         self._divisions = value
 
     @property
@@ -1317,8 +1338,10 @@ Dask Name: {name}, {task} tasks"""
             For convenience if given an integer this will defer to npartitions
             and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
-            Number of partitions of output. Only used if partition_size
-            isn't specified.
+            Approximate number of partitions of output. Only used if partition_size
+            isn't specified. The number of partitions used may be slightly
+            lower than npartitions depending on data distribution, but will never be
+            higher.
         partition_size: int or string, optional
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
@@ -3494,13 +3517,13 @@ Dask Name: {name}, {task} tasks""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res.divisions = tuple(methods.tolist(new))
+                    res._divisions = tuple(methods.tolist(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self.divisions = res.divisions
+                self._divisions = res.divisions
                 self._meta = res._meta
                 res = self
         return res
@@ -4403,7 +4426,7 @@ class DataFrame(_Frame):
         self.dask = df.dask
         self._name = df._name
         self._meta = df._meta
-        self.divisions = df.divisions
+        self._divisions = df.divisions
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
@@ -5851,7 +5874,7 @@ def handle_out(out, result):
         out.dask = result.dask
 
         if not isinstance(out, Scalar):
-            out.divisions = result.divisions
+            out._divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -6261,7 +6284,13 @@ def map_partitions(
         if collections:
             simple = False
 
-    divisions = dfs[0].divisions
+    if align_dataframes:
+        divisions = dfs[0].divisions
+    else:
+        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
+        # use longest divisions found
+        divisions = max((d.divisions for d in dfs), key=len)
+
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
         try:
             divisions = func(
@@ -7064,6 +7093,8 @@ def repartition_npartitions(df, npartitions):
             divisions[0] = df.divisions[0]
             divisions[-1] = df.divisions[-1]
 
+            # Ensure the computed divisions are unique
+            divisions = list(unique(divisions[:-1])) + [divisions[-1]]
             return df.repartition(divisions=divisions)
         else:
             div, mod = divmod(npartitions, df.npartitions)
