@@ -17,7 +17,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 from .. import array as da
-from .. import core, threaded
+from .. import config, core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import (
@@ -4401,8 +4401,11 @@ class DataFrame(_Frame):
                 operator.getitem, name, self, key, creation_info=creation_info
             )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            return eager_predicate_pushdown(
-                new_dd_object(graph, name, self, self.divisions)
+            out = new_dd_object(graph, name, self, self.divisions)
+            return (
+                eager_predicate_pushdown(out)
+                if config.get("optimization.eager")
+                else out
             )
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
@@ -5740,7 +5743,15 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
+def elemwise(
+    op,
+    *args,
+    meta=no_default,
+    out=None,
+    transform_divisions=True,
+    creation_info=None,
+    **kwargs,
+):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5818,7 +5829,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     ]
 
     # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    dsk = partitionwise_graph(op, _name, *args, creation_info=creation_info, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 
