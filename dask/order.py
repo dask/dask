@@ -78,8 +78,7 @@ Work towards *small goals* with *big steps*.
 from collections import defaultdict, namedtuple
 from math import log
 
-from dask.core import get_dependencies, get_deps, getcycle, reverse_dict  # noqa: F401
-from dask.utils_test import add, inc  # noqa: F401
+from dask.core import get_dependencies, get_deps, getcycle, reverse_dict
 
 
 def order(dsk, dependencies=None):
@@ -101,6 +100,8 @@ def order(dsk, dependencies=None):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'a': 1, 'b': 2, 'c': (inc, 'a'), 'd': (add, 'b', 'c')}
     >>> order(dsk)
     {'a': 0, 'c': 1, 'b': 2, 'd': 3}
@@ -865,6 +866,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
     >>> dsk = {'a1': 1, 'b1': (inc, 'a1'), 'b2': (inc, 'a1'), 'c1': (inc, 'b1')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> _, total_dependencies = ndependencies(dependencies, dependents)
@@ -939,6 +941,7 @@ def ndependencies(dependencies, dependents):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> num_dependencies, total_dependencies = ndependencies(dependencies, dependents)

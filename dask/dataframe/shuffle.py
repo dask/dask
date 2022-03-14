@@ -10,7 +10,7 @@ import numpy as np
 import pandas as pd
 import tlz as toolz
 
-from dask import base, config
+from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
@@ -38,7 +38,7 @@ def _calculate_divisions(
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
     mins = partition_col.map_partitions(M.min)
     maxes = partition_col.map_partitions(M.max)
-    divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+    divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
     divisions = methods.tolist(divisions)
     if type(sizes) is not list:
         sizes = methods.tolist(sizes)

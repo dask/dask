@@ -13,7 +13,6 @@ from dask.core import (
     subs,
     toposort,
 )
-from dask.utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
@@ -24,6 +23,11 @@ def cull(dsk, keys):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
     >>> dsk, dependencies = cull(d, 'out')
@@ -102,6 +106,12 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
+
     >>> d = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dsk, dependencies = fuse(d)
     >>> dsk # doctest: +SKIP
@@ -235,6 +245,11 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
+
+    >>> def add(x, y):
+    ...     return x + y
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)       # doctest: +ELLIPSIS
@@ -294,6 +309,9 @@ def inline_functions(
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> double = lambda x: x * 2
     >>> dsk = {'out': (add, 'i', 'd'),  # doctest: +SKIP
     ...        'i': (inc, 'x'),
     ...        'd': (double, 'y'),
@@ -354,6 +372,9 @@ def functions_of(task):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
+    >>> mul = lambda x, y: x * y
     >>> task = (add, (mul, 1, 2), (inc, 3))  # doctest: +SKIP
     >>> functions_of(task)  # doctest: +SKIP
     set([add, mul, inc])

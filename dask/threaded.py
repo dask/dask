@@ -16,7 +16,6 @@ from threading import Lock, current_thread
 from dask import config
 from dask.local import MultiprocessingPoolExecutor, get_async
 from dask.system import CPU_COUNT
-from dask.utils_test import add, inc  # noqa: F401
 
 
 def _thread_get_id():
@@ -50,7 +49,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
 
     Examples
     --------
-
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> get(dsk, 'w')
     4

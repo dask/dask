@@ -408,7 +408,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     --------
     (tokens have been simplified for the sake of brevity)
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
@@ -465,7 +465,7 @@ def wait_on(
     will only proceed when all chunks of the array ``x`` have been computed, but
     otherwise matches ``x``:
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x = da.ones(10, chunks=5)
     >>> u = wait_on(x)
 

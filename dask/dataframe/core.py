@@ -16,10 +16,10 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
-from dask.bag import map_partitions as map_bag_partitions
-from dask import array as da
+import dask.array as da
 from dask import core, threaded
 from dask.array.core import Array, normalize_arg
+from dask.bag import map_partitions as map_bag_partitions
 from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod

@@ -10,10 +10,6 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import accumulate, compose, drop, get, partition_all, pluck
 
-from dask.base import tokenize
-from dask.blockwise import lol_tuples
-from dask.highlevelgraph import HighLevelGraph
-from dask.utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from dask import config
 from dask.array import chunk
 from dask.array.blockwise import blockwise

@@ -9,7 +9,6 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
-from dask import delayed
 from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe.io.parquet.core import create_metadata_file
@@ -32,7 +31,7 @@ from dask.dataframe.io.utils import (
     _open_input_files,
 )
 from dask.dataframe.utils import clear_known_categories
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support

@@ -12,7 +12,6 @@ from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
 from dask.utils import ensure_dict, key_split, stringify
-from dask.utils_test import add, inc  # noqa: F401
 from dask.widgets import get_template
 
 
@@ -110,6 +109,8 @@ class Layer(Mapping):
 
         Examples
         --------
+        >>> inc = lambda x: x + 1
+        >>> add = lambda x, y: x + y
         >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
         >>> _, deps = d.cull({'out'}, d.keys())
         >>> deps

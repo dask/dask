@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from tlz import merge
 
-from dask import array as da
+import dask.array as da
 from dask.base import tokenize
 from dask.dataframe.core import (
     DataFrame,
