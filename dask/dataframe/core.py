@@ -391,7 +391,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     "divisions should be an iterable, got {type(value)}"
                 ) from None
 
-        if len(value) != len(self._divisions):
+        if hasattr(self, "_divisions") and len(value) != len(self._divisions):
             n = len(self._divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
