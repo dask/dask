@@ -4,11 +4,10 @@ import numpy as np
 import pandas as pd
 
 import dask
+from dask import delayed
+from dask.dataframe import methods
+from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.delayed import tokenize
-
-from ... import delayed
-from .. import methods
-from .io import from_delayed, from_pandas
 
 
 def read_sql_query(

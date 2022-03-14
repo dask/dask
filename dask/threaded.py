@@ -13,10 +13,10 @@ from collections import defaultdict
 from concurrent.futures import Executor, ThreadPoolExecutor
 from threading import Lock, current_thread
 
-from . import config
-from .local import MultiprocessingPoolExecutor, get_async
-from .system import CPU_COUNT
-from .utils_test import add, inc  # noqa: F401
+from dask import config
+from dask.local import MultiprocessingPoolExecutor, get_async
+from dask.system import CPU_COUNT
+from dask.utils_test import add, inc  # noqa: F401
 
 
 def _thread_get_id():

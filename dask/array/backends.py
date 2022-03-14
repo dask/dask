@@ -1,6 +1,6 @@
 import numpy as np
 
-from .dispatch import (
+from dask.array.dispatch import (
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
@@ -8,9 +8,9 @@ from .dispatch import (
     percentile_lookup,
     tensordot_lookup,
 )
-from .numpy_compat import divide as np_divide
-from .numpy_compat import ma_divide
-from .percentile import _percentile
+from dask.array.numpy_compat import divide as np_divide
+from dask.array.numpy_compat import ma_divide
+from dask.array.percentile import _percentile
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)

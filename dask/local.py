@@ -109,11 +109,11 @@ from concurrent.futures import Executor, Future
 from functools import partial
 from queue import Empty, Queue
 
-from . import config
-from .callbacks import local_callbacks, unpack_callbacks
-from .core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
-from .order import order
-from .utils_test import add, inc  # noqa: F401
+from dask import config
+from dask.callbacks import local_callbacks, unpack_callbacks
+from dask.core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
+from dask.order import order
+from dask.utils_test import add, inc  # noqa: F401
 
 if os.name == "nt":
     # Python 3 windows Queue.get doesn't handle interrupts properly. To

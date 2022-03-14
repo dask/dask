@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable, Hashable
 from typing import Callable, Hashable, Literal, TypeVar
 
-from .base import (
+from dask.base import (
     clone_key,
     get_collection_names,
     get_name_from_key,
@@ -16,10 +16,10 @@ from .base import (
     tokenize,
     unpack_collections,
 )
-from .blockwise import blockwise
-from .core import flatten
-from .delayed import Delayed, delayed
-from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.blockwise import blockwise
+from dask.core import flatten
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -122,21 +122,21 @@ def _can_apply_blockwise(collection) -> bool:
           pint.Quantity, xarray DataArray, Dataset, and Variable.
     """
     try:
-        from .bag import Bag
+        from dask.bag import Bag
 
         if isinstance(collection, Bag):
             return True
     except ImportError:
         pass
     try:
-        from .array import Array
+        from dask.array import Array
 
         if isinstance(collection, Array):
             return True
     except ImportError:
         pass
     try:
-        from .dataframe import DataFrame, Series
+        from dask.dataframe import DataFrame, Series
 
         return isinstance(collection, (DataFrame, Series))
     except ImportError:

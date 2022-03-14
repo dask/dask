@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pyarrow.orc as orc
 
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
+from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 
 class ArrowORCEngine:

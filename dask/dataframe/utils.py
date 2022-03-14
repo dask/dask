@@ -14,20 +14,20 @@ import pandas as pd
 from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
-from ..base import get_scheduler, is_dask_collection
-from ..core import get_deps
-from ..utils import is_arraylike  # noqa: F401
-from ..utils import asciitable
-from ..utils import is_dataframe_like as dask_is_dataframe_like
-from ..utils import is_index_like as dask_is_index_like
-from ..utils import is_series_like as dask_is_series_like
-from ..utils import typename
-from . import _dtypes  # noqa: F401 register pandas extension types
-from . import methods
-from ._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
-from .dispatch import make_meta  # noqa : F401
-from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
-from .extensions import make_scalar
+from dask.base import get_scheduler, is_dask_collection
+from dask.core import get_deps
+from dask.dataframe import _dtypes  # noqa: F401 register pandas extension types
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from dask.dataframe.dispatch import make_meta  # noqa : F401
+from dask.dataframe.dispatch import make_meta_obj, meta_nonempty  # noqa : F401
+from dask.dataframe.extensions import make_scalar
+from dask.utils import is_arraylike  # noqa: F401
+from dask.utils import asciitable
+from dask.utils import is_dataframe_like as dask_is_dataframe_like
+from dask.utils import is_index_like as dask_is_index_like
+from dask.utils import is_series_like as dask_is_series_like
+from dask.utils import typename
 
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:

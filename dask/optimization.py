@@ -3,8 +3,8 @@ import numbers
 import uuid
 from enum import Enum
 
-from . import config, core, utils
-from .core import (
+from dask import config, core, utils
+from dask.core import (
     flatten,
     get_dependencies,
     ishashable,
@@ -13,7 +13,7 @@ from .core import (
     subs,
     toposort,
 )
-from .utils_test import add, inc  # noqa: F401
+from dask.utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):

@@ -10,15 +10,15 @@ import numpy as np
 import pandas as pd
 import tlz as toolz
 
-from .. import base, config
-from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import ShuffleLayer, SimpleShuffleLayer
-from ..sizeof import sizeof
-from ..utils import M, digit
-from . import methods
-from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from .dispatch import group_split_dispatch, hash_object_dispatch
+from dask import base, config
+from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ShuffleLayer, SimpleShuffleLayer
+from dask.sizeof import sizeof
+from dask.utils import M, digit
 
 logger = logging.getLogger(__name__)
 

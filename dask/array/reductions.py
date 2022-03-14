@@ -10,26 +10,32 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import accumulate, compose, drop, get, partition_all, pluck
 
-from .. import config
-from ..base import tokenize
-from ..blockwise import lol_tuples
-from ..highlevelgraph import HighLevelGraph
-from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
-from . import chunk
-from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements, unknown_chunk_message
-from .creation import arange, diagonal
+from dask import config
+from dask.array import chunk
+from dask.array.blockwise import blockwise
+from dask.array.core import (
+    Array,
+    _concatenate2,
+    handle_out,
+    implements,
+    unknown_chunk_message,
+)
+from dask.array.creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
-from .dispatch import divide_lookup, empty_lookup  # noqa: F401
-from .utils import (
+from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
+from dask.array.utils import (
     asarray_safe,
     compute_meta,
     is_arraylike,
     meta_from_array,
     validate_axis,
 )
-from .wrap import ones, zeros
+from dask.array.wrap import ones, zeros
+from dask.base import tokenize
+from dask.blockwise import lol_tuples
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import deepmap, derived_from, funcname, getargspec, is_series_like
 
 
 def divide(a, b, dtype=None):

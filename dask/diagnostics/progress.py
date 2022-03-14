@@ -4,7 +4,7 @@ import threading
 import time
 from timeit import default_timer
 
-from ..callbacks import Callback
+from dask.callbacks import Callback
 
 
 def format_time(t):
