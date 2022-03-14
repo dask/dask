@@ -52,7 +52,30 @@ def test_sparse_concatenate(axis):
 
 
 @pytest.mark.parametrize("sp_format", ["csr", "csc"])
-def test_sparse_dot(sp_format):
+@pytest.mark.parametrize(
+    "input_sizes",
+    [
+        {
+            "x_shape": (4, 8),
+            "y_shape": (8, 6),
+            "x_chunks": (2, 4),
+            "y_chunks": (4, 3),
+        },
+        {
+            "x_shape": (4, 4),
+            "y_shape": (4, 4),
+            "x_chunks": (2, 2),
+            "y_chunks": (2, 2),
+        },
+        {
+            "x_shape": (4, 4),
+            "y_shape": (4, 4),
+            "x_chunks": (4, 2),
+            "y_chunks": (2, 4),
+        },
+    ],
+)
+def test_sparse_dot(sp_format, input_sizes):
     pytest.importorskip("cupyx")
 
     if sp_format == "csr":
@@ -61,8 +84,8 @@ def test_sparse_dot(sp_format):
         sp_matrix = cupyx.scipy.sparse.csc_matrix
     dtype = "f"
     density = 0.3
-    x_shape, x_chunks = (4, 8), (2, 4)
-    y_shape, y_chunks = (8, 6), (4, 3)
+    x_shape, x_chunks = input_sizes["x_shape"], input_sizes["x_chunks"]
+    y_shape, y_chunks = input_sizes["y_shape"], input_sizes["y_chunks"]
     x = cupy.random.random(x_shape, dtype=dtype)
     y = cupy.random.random(y_shape, dtype=dtype)
     x[x < 1 - density] = 0
