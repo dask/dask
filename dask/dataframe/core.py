@@ -494,7 +494,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 # are not yet supported for frames
                 return NotImplemented
             else:
-                return elemwise(numpy_ufunc, *inputs, **kwargs)
+                return elemwise(
+                    numpy_ufunc,
+                    *inputs,
+                    creation_info={"func": numpy_ufunc, "kwargs": kwargs},
+                    **kwargs,
+                )
         else:
             # ufunc methods are not yet supported for frames
             return NotImplemented
@@ -7746,3 +7751,25 @@ def _raise_if_not_series_or_dataframe(x, funcname):
 def fillna_dnf(op, indices: list, dsk: HighLevelGraph):
     # Return dnf of input collection
     return _get_blockwise_input(0, indices, dsk)
+
+
+# NOTE: Dask-SQL uses numpy comparators
+_comparison_symbols = {
+    np.greater: ">",
+    np.less: "<",
+    np.equal: "==",
+    np.greater_equal: ">=",
+    np.less_equal: "<=",
+    np.not_equal: "!=",
+}
+
+
+@dnf_filter_dispatch.register(tuple(_comparison_symbols.keys()))
+def np_comparison_dnf(op, indices: list, dsk: HighLevelGraph):
+    left = _get_blockwise_input(0, indices, dsk)
+    right = _get_blockwise_input(1, indices, dsk)
+    if is_arraylike(left) and hasattr(left, "item") and left.size == 1:
+        left = left.item()
+    if is_arraylike(right) and hasattr(right, "item") and right.size == 1:
+        right = right.item()
+    return (left, _comparison_symbols[op], right)

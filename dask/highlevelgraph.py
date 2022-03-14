@@ -515,6 +515,7 @@ class Layer(Mapping):
                     info[key] = html.escape(str(val))
         return info
 
+    @property
     def _regenerable(self):
         """Whether this layer supports ``_regenerate_collection``
 

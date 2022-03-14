@@ -810,6 +810,7 @@ class Blockwise(Layer):
             (bind_to is not None and is_leaf),
         )
 
+    @property
     def _regenerable(self):
         # creation_info must contain the callable
         # function used to generate the collection
@@ -1737,12 +1738,18 @@ def comparison_dnf(op, indices: list, dsk: HighLevelGraph):
     return (left, _comparison_symbols[op], right)
 
 
+def _maybe_list(val):
+    if isinstance(val, tuple) and val and isinstance(val[0], (tuple, list)):
+        return list(val)
+    return [val]
+
+
 @dnf_filter_dispatch.register((operator.and_, operator.or_))
 def logical_dnf(op, indices: list, dsk: HighLevelGraph):
     left = _get_blockwise_input(0, indices, dsk)
     right = _get_blockwise_input(1, indices, dsk)
     if op == operator.or_:
-        return [left], [right]
+        return _maybe_list(left), _maybe_list(right)
     elif op == operator.and_:
         return (left, right)
     else:
