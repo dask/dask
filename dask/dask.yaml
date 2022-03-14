@@ -16,7 +16,7 @@ array:
     split-large-chunks: null  # How to handle large output chunks in slicing. Warns by default.
 
 optimization:
-  eager: False  # Allow eager optimizations (e.g. predicate-pushdown)
+  eager: False  # Perform eager optimizations (e.g. predicate-pushdown)
   fuse:
     active: null  # Treat as false for dask.dataframe, true for everything else
     ave-width: 1
