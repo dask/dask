@@ -322,7 +322,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(meta))}"
             )
         self._meta = meta
-        self._divisions = tuple(divisions)
+        self.divisions = tuple(divisions)
 
     def __dask_graph__(self):
         return self.dask
@@ -384,12 +384,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @divisions.setter
     def divisions(self, value):
         if not isinstance(value, tuple):
-            try:
-                value = tuple(value)
-            except Exception:
-                raise TypeError(
-                    "divisions should be an iterable, got {type(value)}"
-                ) from None
+            raise TypeError("divisions must be a tuple")
 
         if hasattr(self, "_divisions") and len(value) != len(self._divisions):
             n = len(self._divisions)
@@ -4073,7 +4068,7 @@ class Index(Series):
     }
 
     def __getattr__(self, key):
-        if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
+        if is_categorical_dtype(self._meta.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
             return getattr(self.dt, key)
