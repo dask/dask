@@ -10,13 +10,8 @@ import itertools
 
 import dask.array as da
 import dask.config as config
-from dask.array.utils import assert_eq as _assert_eq
-from dask.array.utils import same_keys
+from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
-
-
-def assert_eq(a, b):
-    _assert_eq(a, b, equal_nan=True)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
@@ -812,7 +807,7 @@ def test_chunk_structure_independence(axes, split_every, chunks):
         dtype=x.dtype,
         meta=x._meta,
     )
-    _assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
+    assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
 
 
 def test_weighted_reduction():
@@ -834,11 +829,11 @@ def test_weighted_reduction():
 
     # No weights (i.e. normal sum)
     x = da.reduction(dx, w_sum, np.sum, dtype=dx.dtype)
-    _assert_eq(x, np.sum(a), check_shape=True)
+    assert_eq(x, np.sum(a), check_shape=True)
 
     # Weighted sum
     x = da.reduction(dx, w_sum, np.sum, dtype="f8", weights=w)
-    _assert_eq(x, np.sum(a * w), check_shape=True)
+    assert_eq(x, np.sum(a * w), check_shape=True)
 
     # Non-broadcastable weights (short axis)
     with pytest.raises(ValueError):
