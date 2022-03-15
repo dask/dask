@@ -911,6 +911,7 @@ def test_hdf_nonpandas_keys():
 
 
 def test_hdf_empty_dataframe():
+    pytest.importorskip("tables")
     # https://github.com/dask/dask/issues/8707
     from dask.dataframe.io.hdf import dont_use_fixed_error_message
 
