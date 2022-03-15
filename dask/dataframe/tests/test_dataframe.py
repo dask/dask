@@ -2834,7 +2834,6 @@ def test_gh580():
 
 
 def test_gh6305():
-    # breakpoint()
     df = pd.DataFrame({"x": np.arange(3, dtype=float)})
     ddf = dd.from_pandas(df, 1)
     ddf_index_only = ddf.set_index("x")

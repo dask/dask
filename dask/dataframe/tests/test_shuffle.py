@@ -179,37 +179,6 @@ def test_partitioning_index_categorical_on_values():
 @pytest.mark.parametrize(
     "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
 )
-@pytest.mark.parametrize(
-    "column",
-    [
-        pytest.param(lambda df: "x", id="column name 'x'"),
-        pytest.param(lambda df: "y", id="column name 'y'"),
-        pytest.param(lambda df: df.x, id="series x"),
-        pytest.param(lambda df: df.y, id="series y"),
-        pytest.param(lambda df: df.x + df.y, id="series x + y"),
-        pytest.param(lambda df: df.x + 1, id="series x + 1"),
-        pytest.param(lambda df: df.index, id="df.index"),
-    ],
-)
-def test_set_index_general_paramed(npartitions, column, shuffle_method):
-    df = pd.DataFrame(
-        {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
-        index=np.random.random(100),
-    )
-
-    ddf = dd.from_pandas(df, npartitions=npartitions)
-
-    pd_index = column(df)
-    expected = df.set_index(pd_index)
-
-    da_index = column(ddf)
-    result = ddf.set_index(da_index, shuffle=shuffle_method)
-    assert_eq(expected, result)
-
-
-@pytest.mark.parametrize(
-    "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
-)
 def test_set_index_general(npartitions, shuffle_method):
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
