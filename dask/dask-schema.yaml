@@ -145,9 +145,9 @@ properties:
         properties:
 
           scheduler:
-            type: [string, 'null']
+            type: string
             description: |
-              The scheduler used to compute Dask objects when they are provided as input
-              to ``assert_eq``. By default (None), ``assert_eq`` will set
+              The scheduler used to compute Dask collections when they are provided as
+              input to ``assert_eq``. By default, ``assert_eq`` will set
               ``scheduler="sync"``, using a local single-threaded scheduler. Can be
               overriden by explicitly passing a ``scheduler`` argument to ``assert_eq``.
