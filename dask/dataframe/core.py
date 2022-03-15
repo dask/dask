@@ -19,6 +19,7 @@ from tlz import first, merge, partition_all, remove, unique
 from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
+from ..bag import map_partitions as map_bag_partitions
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from ..context import globalmethod
@@ -4868,8 +4869,11 @@ class DataFrame(_Frame):
         index : bool, optional
             If True, the index is included as the first element of each tuple.
             Default is False.
-        format : {"tuple", "dict"},optional
-            Whether to return a bag of tuples or dictionaries.
+        format : {"tuple", "dict", "frame"}, optional
+            Whether to return a bag of tuples, dictionaries, or
+            dataframe-like objects. Default is "tuple". If "frame",
+            the original partitions of ``df`` will not be transformed
+            in any way.
         """
         from .io import to_bag
 
@@ -6030,21 +6034,21 @@ def apply_concat_apply(
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
-    chunked = map_partitions(
+    chunked = map_bag_partitions(
         chunk,
-        *args,
+        # Convert _Frame collections to Bag
+        *[
+            arg.to_bag(format="frame") if isinstance(arg, _Frame) else arg
+            for arg in args
+        ],
         token=chunk_name,
-        # NOTE: We are NOT setting the correct
-        # `meta` here on purpose. We are using
-        # `map_partitions` as a convenient way
-        # to build a `Blockwise` layer, and need
-        # to avoid the metadata emulation step.
-        meta=dfs[0],
-        enforce_metadata=False,
-        transform_divisions=False,
-        align_dataframes=False,
         **chunk_kwargs,
     )
+
+    # NOTE: `chunked` is now a Bag collection.
+    # We don't use a DataFrame collection, because
+    # the partitions may not contain dataframe-like
+    # objects anymore.
 
     # Blockwise Split Layer
     if split_out and split_out > 1:
@@ -6055,15 +6059,6 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
-            # NOTE: We are NOT setting the correct
-            # `meta` here on purpose. We are using
-            # `map_partitions` as a convenient way
-            # to build a `Blockwise` layer, and need
-            # to avoid the metadata emulation step.
-            meta=dfs[0],
-            enforce_metadata=False,
-            transform_divisions=False,
-            align_dataframes=False,
         )
 
     # Handle sort behavior
@@ -6080,7 +6075,7 @@ def apply_concat_apply(
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
     layer = DataFrameTreeReduction(
         final_name,
-        chunked._name,
+        chunked.name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
@@ -6217,7 +6212,12 @@ def map_partitions(
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
-            (name, 0): (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)
+            (name, 0): (
+                apply,
+                func,
+                (tuple, [(arg._name, 0) for arg in args]),
+                kwargs,
+            )
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
