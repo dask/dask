@@ -14,6 +14,7 @@ import pandas as pd
 from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
+from .. import config
 from ..base import get_scheduler, is_dask_collection
 from ..core import get_deps
 from ..utils import is_arraylike  # noqa: F401
@@ -530,9 +531,11 @@ def assert_eq(
     check_dtype=True,
     check_divisions=True,
     check_index=True,
-    scheduler="sync",
+    scheduler=None,
     **kwargs,
 ):
+    if scheduler is None:
+        scheduler = config.get("dataframe.assert-eq.scheduler", "sync")
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)
