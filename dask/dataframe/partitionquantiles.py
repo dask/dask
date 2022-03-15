@@ -75,10 +75,10 @@ import pandas as pd
 from pandas.api.types import is_datetime64tz_dtype
 from tlz import merge, merge_sorted, take
 
-from ..base import tokenize
-from ..utils import is_cupy_type, random_state_data
-from .core import Series
-from .utils import is_categorical_dtype
+from dask.base import tokenize
+from dask.dataframe.core import Series
+from dask.dataframe.utils import is_categorical_dtype
+from dask.utils import is_cupy_type, random_state_data
 
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):

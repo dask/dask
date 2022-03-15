@@ -4,12 +4,12 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import compute_as_if_collection, tokenize
-from ....highlevelgraph import HighLevelGraph
-from ....layers import DataFrameIOLayer
-from ....utils import apply
-from ...core import DataFrame, Scalar, new_dd_object
-from .utils import ORCEngine
+from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe.core import DataFrame, Scalar, new_dd_object
+from dask.dataframe.io.orc.utils import ORCEngine
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import apply
 
 
 class ORCFunctionWrapper:
@@ -52,7 +52,7 @@ def _get_engine(engine, write=False):
     if engine == "pyarrow":
         import pyarrow as pa
 
-        from .arrow import ArrowORCEngine
+        from dask.dataframe.io.orc.arrow import ArrowORCEngine
 
         if write and parse_version(pa.__version__) < parse_version("4.0.0"):
             raise ValueError("to_orc is not supported for pyarrow<4.0.0")

@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
-from ..utils import M
-from . import methods
-from .core import DataFrame, Series, apply_concat_apply, map_partitions
-from .utils import has_known_categories
+from dask.dataframe import methods
+from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
+from dask.dataframe.utils import has_known_categories
+from dask.utils import M
 
 ###############################################################
 # Dummies

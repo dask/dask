@@ -9,6 +9,7 @@ np = pytest.importorskip("numpy")
 import dask
 import dask.array as da
 from dask import config
+from dask.array.chunk import getitem
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
@@ -22,8 +23,6 @@ from dask.array.slicing import (
     take,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from ..chunk import getitem
 
 
 def test_slice_1d():

@@ -5,15 +5,15 @@ import pandas as pd
 from pandas.api.types import is_scalar
 from tlz import partition_all
 
-from ..base import compute_as_if_collection, tokenize
-from . import methods
-from .accessor import Accessor
-from .dispatch import (  # noqa: F401
+from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.accessor import Accessor
+from dask.dataframe.dispatch import (  # noqa: F401
     categorical_dtype,
     categorical_dtype_dispatch,
     is_categorical_dtype,
 )
-from .utils import clear_known_categories, has_known_categories
+from dask.dataframe.utils import clear_known_categories, has_known_categories
 
 
 def _categorize_block(df, categories, index):

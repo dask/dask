@@ -21,15 +21,15 @@ from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from . import config, local, threaded
-from .compatibility import _PY_VERSION
-from .context import thread_state
-from .core import flatten
-from .core import get as simple_get
-from .core import literal, quote
-from .hashing import hash_buffer_hex
-from .system import CPU_COUNT
-from .utils import Dispatch, apply, ensure_dict, key_split
+from dask import config, local, threaded
+from dask.compatibility import _PY_VERSION
+from dask.context import thread_state
+from dask.core import flatten
+from dask.core import get as simple_get
+from dask.core import literal, quote
+from dask.hashing import hash_buffer_hex
+from dask.system import CPU_COUNT
+from dask.utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
     "DaskMethodsMixin",
@@ -331,7 +331,7 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
     """
     Convert many collections into a single dask graph, after optimization
     """
-    from .highlevelgraph import HighLevelGraph
+    from dask.highlevelgraph import HighLevelGraph
 
     optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
 
@@ -362,7 +362,7 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
-    from .highlevelgraph import HighLevelGraph
+    from dask.highlevelgraph import HighLevelGraph
 
     graphs, keys = [], []
     for v in vals:
@@ -677,7 +677,7 @@ def visualize(
     }:
         import matplotlib.pyplot as plt
 
-        from .order import diagnostics, order
+        from dask.order import diagnostics, order
 
         o = order(dsk)
         try:

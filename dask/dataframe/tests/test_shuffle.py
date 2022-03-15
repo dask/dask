@@ -16,7 +16,6 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
@@ -872,8 +871,8 @@ def test_set_index_sorted_min_max_same():
     a = pd.DataFrame({"x": [1, 2, 3], "y": [0, 0, 0]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": [1, 1, 1]})
 
-    aa = delayed(a)
-    bb = delayed(b)
+    aa = dask.delayed(a)
+    bb = dask.delayed(b)
 
     df = dd.from_delayed([aa, bb], meta=a)
     assert not df.known_divisions

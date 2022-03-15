@@ -3,7 +3,7 @@ import random
 import sys
 from array import array
 
-from .utils import Dispatch
+from dask.utils import Dispatch
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)

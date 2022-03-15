@@ -18,14 +18,14 @@ import numpy as np
 import tlz as toolz
 from tlz import accumulate
 
-from .. import config
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import parse_bytes
-from .chunk import getitem
-from .core import Array, concatenate3, normalize_chunks
-from .utils import validate_axis
-from .wrap import empty
+from dask import config
+from dask.array.chunk import getitem
+from dask.array.core import Array, concatenate3, normalize_chunks
+from dask.array.utils import validate_axis
+from dask.array.wrap import empty
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import parse_bytes
 
 
 def cumdims_label(chunks, const):

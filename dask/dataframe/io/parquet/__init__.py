@@ -1,1 +1,6 @@
-from .core import create_metadata_file, read_parquet, read_parquet_part, to_parquet
+from dask.dataframe.io.parquet.core import (
+    create_metadata_file,
+    read_parquet,
+    read_parquet_part,
+    to_parquet,
+)

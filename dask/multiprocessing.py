@@ -13,11 +13,11 @@ from warnings import warn
 
 import cloudpickle
 
-from . import config
-from .local import MultiprocessingPoolExecutor, get_async, reraise
-from .optimization import cull, fuse
-from .system import CPU_COUNT
-from .utils import ensure_dict
+from dask import config
+from dask.local import MultiprocessingPoolExecutor, get_async, reraise
+from dask.optimization import cull, fuse
+from dask.system import CPU_COUNT
+from dask.utils import ensure_dict
 
 
 def _reduce_method_descriptor(m):

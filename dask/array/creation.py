@@ -7,11 +7,8 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import sliding_window
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import cached_cumsum, derived_from, is_cupy_type
-from . import chunk
-from .core import (
+from dask.array import chunk
+from dask.array.core import (
     Array,
     asarray,
     block,
@@ -22,10 +19,13 @@ from .core import (
     normalize_chunks,
     stack,
 )
-from .numpy_compat import _numpy_120
-from .ufunc import greater_equal, rint
-from .utils import meta_from_array
-from .wrap import empty, full, ones, zeros
+from dask.array.numpy_compat import _numpy_120
+from dask.array.ufunc import greater_equal, rint
+from dask.array.utils import meta_from_array
+from dask.array.wrap import empty, full, ones, zeros
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import cached_cumsum, derived_from, is_cupy_type
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -969,7 +969,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
         pad_arrays = [result, result]
 
         if mode == "constant":
-            from .utils import asarray_safe
+            from dask.array.utils import asarray_safe
 
             constant_values = kwargs["constant_values"][d]
             constant_values = [

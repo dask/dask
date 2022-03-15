@@ -3,7 +3,7 @@ import math
 import random as rnd
 from functools import partial
 
-from .core import Bag
+from dask.bag.core import Bag
 
 
 def sample(population, k):

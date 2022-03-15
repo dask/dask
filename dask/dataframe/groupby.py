@@ -7,10 +7,8 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import M, _deprecated, derived_from, funcname, itemgetter
-from .core import (
+from dask.base import tokenize
+from dask.dataframe.core import (
     DataFrame,
     Series,
     _extract_meta,
@@ -20,9 +18,9 @@ from .core import (
     no_default,
     split_out_on_index,
 )
-from .methods import concat, drop_columns
-from .shuffle import shuffle
-from .utils import (
+from dask.dataframe.methods import concat, drop_columns
+from dask.dataframe.shuffle import shuffle
+from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
@@ -30,6 +28,8 @@ from .utils import (
     make_meta,
     raise_on_meta_error,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 # #############################################
 #

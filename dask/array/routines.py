@@ -9,13 +9,8 @@ from numbers import Integral, Real
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
-from ..base import is_dask_collection, tokenize
-from ..core import flatten
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
-from . import chunk
-from .core import (
+from dask.array import chunk
+from dask.array.core import (
     Array,
     asanyarray,
     asarray,
@@ -31,13 +26,24 @@ from .core import (
     stack,
     tensordot_lookup,
 )
-from .creation import arange, diag, empty, indices, tri
-from .einsumfuncs import einsum  # noqa
-from .numpy_compat import _numpy_120
-from .reductions import reduction
-from .ufunc import multiply, sqrt
-from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
-from .wrap import ones
+from dask.array.creation import arange, diag, empty, indices, tri
+from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.numpy_compat import _numpy_120
+from dask.array.reductions import reduction
+from dask.array.ufunc import multiply, sqrt
+from dask.array.utils import (
+    array_safe,
+    asarray_safe,
+    meta_from_array,
+    safe_wraps,
+    validate_axis,
+)
+from dask.array.wrap import ones
+from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
 
 # save built-in for histogram functions which use range as a kwarg.
 _range = range
@@ -751,7 +757,7 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         *chunked_counts.chunks[1:],
     )
 
-    from .reductions import _tree_reduce
+    from dask.array.reductions import _tree_reduce
 
     output = _tree_reduce(
         chunked_counts,
@@ -2445,7 +2451,7 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
-            from .ma import getmaskarray
+            from dask.array.ma import getmaskarray
 
             wgt = wgt * (~getmaskarray(a))
         scl = wgt.sum(axis=axis, dtype=result_dtype)

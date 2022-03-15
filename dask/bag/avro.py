@@ -5,7 +5,7 @@ from fsspec.core import OpenFile, get_fs_token_paths, open_files
 from fsspec.utils import read_block
 from fsspec.utils import tokenize as fs_tokenize
 
-from ..highlevelgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph
 
 MAGIC = b"Obj\x01"
 SYNC_SIZE = 16

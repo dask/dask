@@ -8,8 +8,7 @@ import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
-
-from ..utils import Dispatch
+from dask.utils import Dispatch
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")

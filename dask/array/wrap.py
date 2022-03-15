@@ -4,12 +4,12 @@ from itertools import product
 import numpy as np
 from tlz import curry
 
-from ..base import tokenize
-from ..blockwise import blockwise as core_blockwise
-from ..layers import ArrayChunkShapeDep
-from ..utils import funcname
-from .core import Array, normalize_chunks
-from .utils import meta_from_array
+from dask.array.core import Array, normalize_chunks
+from dask.array.utils import meta_from_array
+from dask.base import tokenize
+from dask.blockwise import blockwise as core_blockwise
+from dask.layers import ArrayChunkShapeDep
+from dask.utils import funcname
 
 
 def _parse_wrap_args(func, args, kwargs, shape):

@@ -6,8 +6,8 @@ try:
 except (AttributeError, ImportError):
     pass
 
-from ..base import tokenize
-from .core import Array
+from dask.array.core import Array
+from dask.base import tokenize
 
 
 def add_leading_dimension(x):

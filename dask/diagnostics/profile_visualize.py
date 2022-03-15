@@ -6,8 +6,8 @@ from operator import add, itemgetter
 
 from tlz import accumulate, groupby, pluck, unique
 
-from ..core import istask
-from ..utils import apply, funcname, import_required
+from dask.core import istask
+from dask.utils import apply, funcname, import_required
 
 
 def BOKEH_VERSION():

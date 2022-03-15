@@ -4,9 +4,9 @@ import os
 from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.utils import infer_compression, read_block
 
-from ..base import tokenize
-from ..delayed import delayed
-from ..utils import is_integer, parse_bytes
+from dask.base import tokenize
+from dask.delayed import delayed
+from dask.utils import is_integer, parse_bytes
 
 
 def read_bytes(

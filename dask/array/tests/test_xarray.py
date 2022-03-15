@@ -1,8 +1,7 @@
 import pytest
 
 import dask.array as da
-
-from ..utils import assert_eq
+from dask.array.utils import assert_eq
 
 xr = pytest.importorskip("xarray")
 

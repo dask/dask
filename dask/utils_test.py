@@ -6,7 +6,7 @@ import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .highlevelgraph import HighLevelGraph, Layer
+    from dask.highlevelgraph import HighLevelGraph, Layer
 
 
 def inc(x):
@@ -122,7 +122,7 @@ class GetFunctionTestMixin:
         assert self.get(d, "x10000") == 10000
 
     def test_with_HighLevelGraph(self):
-        from .highlevelgraph import HighLevelGraph
+        from dask.highlevelgraph import HighLevelGraph
 
         layers = {"a": {"x": 1, "y": (inc, "x")}, "b": {"z": (add, (inc, "x"), "y")}}
         dependencies = {"a": (), "b": {"a"}}

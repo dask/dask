@@ -17,11 +17,8 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.sizeof import SimpleSizeof, sizeof
-
-from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
-from .dispatch import (
+from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
@@ -35,14 +32,16 @@ from .dispatch import (
     tolist_dispatch,
     union_categoricals_dispatch,
 )
-from .extensions import make_array_nonempty, make_scalar
-from .utils import (
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+from dask.sizeof import SimpleSizeof, sizeof
+from dask.utils import is_arraylike, typename
 
 ##########
 # Pandas #

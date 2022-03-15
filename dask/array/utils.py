@@ -8,9 +8,9 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
-from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, is_arraylike, is_cupy_type
-from .core import Array
+from dask.array.core import Array
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import has_keyword, is_arraylike, is_cupy_type
 
 
 def normalize_to_array(x):
@@ -430,7 +430,7 @@ def array_safe(a, like, **kwargs):
     to convert a `dask.Array` and CuPy doesn't implement `__array__` to
     prevent implicit copies to host.
     """
-    from .routines import array
+    from dask.array.routines import array
 
     return _array_like_safe(np.array, array, a, like, **kwargs)
 
@@ -444,7 +444,7 @@ def asarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asarray
+    from dask.array.core import asarray
 
     return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
 
@@ -458,7 +458,7 @@ def asanyarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asanyarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asanyarray
+    from dask.array.core import asanyarray
 
     return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 

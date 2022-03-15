@@ -4,7 +4,7 @@ Dispatch in dask.array.
 Also see backends.py
 """
 
-from ..utils import Dispatch
+from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")
 tensordot_lookup = Dispatch("tensordot")

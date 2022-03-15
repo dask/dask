@@ -2,8 +2,8 @@ import os
 import re
 from functools import partial
 
-from .core import get_dependencies, ishashable, istask
-from .utils import apply, funcname, import_required, key_split
+from dask.core import get_dependencies, ishashable, istask
+from dask.utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",
