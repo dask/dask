@@ -51,18 +51,6 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
-      assert-eq:
-        type: object
-        properties:
-
-          scheduler:
-            type: [string, 'null']
-            description: |
-              The scheduler used to compute Dask dataframes when they are provided as
-              input to ``assert_eq``. By default (None), ``assert_eq`` will set
-              ``scheduler="sync"``, using a local single-threaded scheduler. Can be
-              overriden by explicitly passing a ``scheduler`` argument to ``assert_eq``.
-
   array:
     type: object
     properties:
@@ -147,3 +135,19 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+  testing:
+    type: object
+    properties:
+
+      assert-eq:
+        type: object
+        properties:
+
+          scheduler:
+            type: [string, 'null']
+            description: |
+              The scheduler used to compute Dask objects when they are provided as input
+              to ``assert_eq``. By default (None), ``assert_eq`` will set
+              ``scheduler="sync"``, using a local single-threaded scheduler. Can be
+              overriden by explicitly passing a ``scheduler`` argument to ``assert_eq``.

@@ -8,6 +8,7 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
+from .. import config
 from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
@@ -272,9 +273,12 @@ def assert_eq(
     check_meta=True,
     check_chunks=True,
     check_type=True,
-    scheduler="sync",
+    scheduler=None,
     **kwargs,
 ):
+    if scheduler is None:
+        scheduler = config.get("testing.assert-eq.scheduler")
+
     a_original = a
     b_original = b
 

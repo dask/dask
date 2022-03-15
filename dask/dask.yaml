@@ -8,8 +8,6 @@ dataframe:
   parquet:
     metadata-task-size-local: 512  # Number of files per local metadata-processing task
     metadata-task-size-remote: 16  # Number of files per remote metadata-processing task
-  assert-eq:
-    scheduler: "sync"  # default scheduler used when computing dataframes for assertions
 
 array:
   svg:
@@ -26,3 +24,7 @@ optimization:
     max-depth-new-edges: null  # ave_width * 1.5
     subgraphs: null  # true for dask.dataframe, false for everything else
     rename-keys: true
+
+testing:
+  assert-eq:
+    scheduler: "sync"  # default scheduler used when computing dataframes for assertions

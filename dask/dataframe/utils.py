@@ -535,7 +535,7 @@ def assert_eq(
     **kwargs,
 ):
     if scheduler is None:
-        scheduler = config.get("dataframe.assert-eq.scheduler")
+        scheduler = config.get("testing.assert-eq.scheduler")
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)
