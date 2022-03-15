@@ -4,10 +4,10 @@ from functools import partial
 from fsspec.core import open_files
 from tlz import concat
 
-from ..bytes import read_bytes
-from ..delayed import delayed
-from ..utils import parse_bytes, system_encoding
-from .core import from_delayed
+from dask.bag.core import from_delayed
+from dask.bytes import read_bytes
+from dask.delayed import delayed
+from dask.utils import parse_bytes, system_encoding
 
 delayed = delayed(pure=True)
 

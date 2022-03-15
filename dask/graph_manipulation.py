@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable, Hashable
 from typing import Callable, Hashable, Literal, TypeVar
 
-from .base import (
+from dask.base import (
     clone_key,
     get_collection_names,
     get_name_from_key,
@@ -16,10 +16,10 @@ from .base import (
     tokenize,
     unpack_collections,
 )
-from .blockwise import blockwise
-from .core import flatten
-from .delayed import Delayed, delayed
-from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.blockwise import blockwise
+from dask.core import flatten
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -122,21 +122,21 @@ def _can_apply_blockwise(collection) -> bool:
           pint.Quantity, xarray DataArray, Dataset, and Variable.
     """
     try:
-        from .bag import Bag
+        from dask.bag import Bag
 
         if isinstance(collection, Bag):
             return True
     except ImportError:
         pass
     try:
-        from .array import Array
+        from dask.array import Array
 
         if isinstance(collection, Array):
             return True
     except ImportError:
         pass
     try:
-        from .dataframe import DataFrame, Series
+        from dask.dataframe import DataFrame, Series
 
         return isinstance(collection, (DataFrame, Series))
     except ImportError:
@@ -408,7 +408,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     --------
     (tokens have been simplified for the sake of brevity)
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
@@ -465,7 +465,7 @@ def wait_on(
     will only proceed when all chunks of the array ``x`` have been computed, but
     otherwise matches ``x``:
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x = da.ones(10, chunks=5)
     >>> u = wait_on(x)
 

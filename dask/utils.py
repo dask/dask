@@ -23,7 +23,7 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
-from .core import get_deps
+from dask.core import get_deps
 
 K = TypeVar("K")
 V = TypeVar("V")
@@ -1138,8 +1138,8 @@ class SerializableLock:
 def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
     scheduler used."""
-    from . import multiprocessing
-    from .base import get_scheduler
+    from dask import multiprocessing
+    from dask.base import get_scheduler
 
     actual_get = get_scheduler(collections=[collection], scheduler=scheduler)
 
@@ -1254,7 +1254,7 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    from .base import is_dask_collection
+    from dask.base import is_dask_collection
 
     is_duck_array = hasattr(x, "__array_function__") or hasattr(x, "__array_ufunc__")
 
@@ -1757,7 +1757,7 @@ def stringify(obj, exclusive: Iterable | None = None):
         return str(obj)
 
     if typ is tuple and obj:
-        from .optimization import SubgraphCallable
+        from dask.optimization import SubgraphCallable
 
         obj0 = obj[0]
         if type(obj0) is SubgraphCallable:

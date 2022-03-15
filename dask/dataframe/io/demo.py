@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from ...highlevelgraph import HighLevelGraph
-from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
-from ..core import DataFrame, tokenize
+from dask.dataframe.core import DataFrame, tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
 

@@ -1,4 +1,4 @@
-from .. import config
+from dask import config
 
 
 def assert_eq(a, b, scheduler=None):
