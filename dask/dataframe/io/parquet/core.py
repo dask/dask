@@ -19,14 +19,6 @@ from ...methods import concat
 from ..utils import _is_local_fs
 from .utils import Engine, _sort_and_analyze_paths
 
-try:
-    import snappy
-
-    snappy.compress
-except (ImportError, AttributeError):
-    snappy = None
-
-
 __all__ = ("read_parquet", "to_parquet")
 
 NONE_LABEL = "__null_dask_index__"
@@ -528,7 +520,7 @@ def to_parquet(
     df,
     path,
     engine="auto",
-    compression="default",
+    compression="snappy",
     write_index=True,
     append=False,
     overwrite=False,
@@ -558,11 +550,10 @@ def to_parquet(
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet library to use. If only one library is installed, it will use
         that one; if both, it will use 'fastparquet'.
-    compression : string or dict, default 'default'
+    compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
-        to compressors like ``{"name": "gzip", "values": "snappy"}``. The
-        default is ``"default"``, which uses the default compression for
-        whichever engine is selected.
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
+        to ``"snappy"``.
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
     append : bool, default False
@@ -651,10 +642,12 @@ def to_parquet(
     compute_kwargs = compute_kwargs or {}
 
     if compression == "default":
-        if snappy is not None:
-            compression = "snappy"
-        else:
-            compression = None
+        warnings.warn(
+            "compression='default' is deprecated and will be removed in a "
+            "future version, the default for all engines is 'snappy' now.",
+            FutureWarning,
+        )
+        compression = "snappy"
 
     partition_on = partition_on or []
     if isinstance(partition_on, str):
