@@ -1,7 +1,5 @@
 from collections import defaultdict
 
-from .utils_test import add, inc  # noqa: F401
-
 no_default = "__no_default__"
 
 
@@ -87,6 +85,8 @@ def _execute_task(arg, cache, dsk=None):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> cache = {'x': 1, 'y': 2}
 
     Compute tasks against a cache
@@ -159,6 +159,8 @@ def keys_in_tasks(keys, tasks, as_list=False):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -222,6 +224,8 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -259,6 +263,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 def get_deps(dsk):
     """Get dependencies and dependents from dask dask graph
 
+    >>> inc = lambda x: x + 1
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
@@ -322,6 +327,8 @@ def subs(task, key, val):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
 
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +ELLIPSIS
     (<function inc at ...>, 1)
@@ -438,6 +445,7 @@ def getcycle(d, keys):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
     >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
     >>> getcycle(d, 'x')
     ['x', 'z', 'y', 'x']
@@ -457,6 +465,7 @@ def isdag(d, keys):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
     >>> inc = lambda x: x + 1
     >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
     True
@@ -494,6 +503,7 @@ def quote(x):
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
 
+    >>> add = lambda x, y: x + y
     >>> quote((add, 1, 2))
     (literal<type=tuple>,)
     """

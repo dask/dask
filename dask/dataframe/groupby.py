@@ -7,10 +7,8 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import M, _deprecated, derived_from, funcname, itemgetter
-from .core import (
+from dask.base import tokenize
+from dask.dataframe.core import (
     DataFrame,
     Series,
     _extract_meta,
@@ -20,9 +18,9 @@ from .core import (
     no_default,
     split_out_on_index,
 )
-from .methods import concat, drop_columns
-from .shuffle import shuffle
-from .utils import (
+from dask.dataframe.methods import concat, drop_columns
+from dask.dataframe.shuffle import shuffle
+from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
@@ -30,6 +28,8 @@ from .utils import (
     make_meta,
     raise_on_meta_error,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 # #############################################
 #
@@ -189,12 +189,14 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
+    if shuffled:
+        df = df.sort_index()
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
@@ -1908,6 +1910,7 @@ class _GroupBy:
             df2,
             by,
             self._slice,
+            should_shuffle,
             periods=periods,
             freq=freq,
             axis=axis,

@@ -16,7 +16,6 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
@@ -386,6 +385,16 @@ def test_set_index_with_explicit_divisions():
     # Divisions must be sorted
     with pytest.raises(ValueError):
         ddf.set_index("x", divisions=[3, 1, 5])
+
+
+def test_set_index_with_empty_divisions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Divisions must not be empty
+    with pytest.raises(ValueError):
+        ddf.set_index("x", divisions=[])
 
 
 def test_set_index_divisions_2():
@@ -862,8 +871,8 @@ def test_set_index_sorted_min_max_same():
     a = pd.DataFrame({"x": [1, 2, 3], "y": [0, 0, 0]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": [1, 1, 1]})
 
-    aa = delayed(a)
-    bb = delayed(b)
+    aa = dask.delayed(a)
+    bb = dask.delayed(b)
 
     df = dd.from_delayed([aa, bb], meta=a)
     assert not df.known_divisions
@@ -923,6 +932,23 @@ def test_set_index_categorical():
     # sorted with the metric defined by the Categorical
     divisions = pd.Categorical(result.divisions, dtype=dtype)
     assert_categorical_equal(divisions, divisions.sort_values())
+
+
+def test_set_index_with_empty_and_overlap():
+    # https://github.com/dask/dask/issues/8735
+    df = pd.DataFrame(
+        index=list(range(8)),
+        data={
+            "a": [1, 2, 2, 3, 3, 3, 4, 5],
+            "b": [1, 1, 0, 0, 0, 1, 0, 0],
+        },
+    )
+    ddf = dd.from_pandas(df, 4)
+    result = ddf[ddf.b == 1].set_index("a", sorted=True)
+    expected = df[df.b == 1].set_index("a")
+
+    assert result.divisions == (1.0, 3.0, 3.0)
+    assert_eq(result, expected)
 
 
 def test_compute_divisions():
@@ -1154,6 +1180,45 @@ def test_set_index_overlap_2():
 
     assert_eq(ddf1, ddf2)
     assert ddf2.npartitions == 8
+
+
+def test_compute_current_divisions_nan_partition():
+    # Compute divisions 1 null partition
+    a = d[d.a > 3].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (4, 5, 8, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+    # Compute divisions with 0 null partitions
+    a = d[d.a > 1].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (2, 4, 7, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+
+def test_compute_current_divisions_overlap():
+    A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
+    a = dd.from_pandas(A, npartitions=2)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        divisions = a.compute_current_divisions("key")
+        b = a.set_index("key", divisions=divisions)
+        assert b.divisions == (1, 4, 7)
+        assert [len(p) for p in b.partitions] == [3, 5]
+
+
+def test_compute_current_divisions_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.clear_divisions().repartition(8)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        ddf2.compute_current_divisions()
 
 
 def test_shuffle_hlg_layer():

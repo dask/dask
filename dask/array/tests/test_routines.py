@@ -1,6 +1,7 @@
 import contextlib
 import itertools
 import sys
+import warnings
 from numbers import Number
 
 import pytest
@@ -1171,7 +1172,8 @@ def test_cov():
 
     assert_eq(da.cov(d), np.cov(x))
     assert_eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
-    with pytest.warns(None):  # warning dof <= 0 for slice
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # dof <= 0 for slice
         assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
     assert_eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert_eq(da.cov(d, d), np.cov(x, x))
@@ -1291,7 +1293,8 @@ def test_isin_rand(
     a2 = rng.randint(low, high, size=test_shape) - 5
     d2 = da.from_array(a2, chunks=test_chunks)
 
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         r_a = np.isin(a1, a2, invert=invert)
         r_d = da.isin(d1, d2, invert=invert)
     assert_eq(r_a, r_d)
@@ -2144,7 +2147,7 @@ def test_coarsen_bad_chunks(chunks):
 )
 def test_aligned_coarsen_chunks(chunks, divisor):
 
-    from ..routines import aligned_coarsen_chunks as acc
+    from dask.array.routines import aligned_coarsen_chunks as acc
 
     aligned_chunks = acc(chunks, divisor)
     any_remainders = (np.array(aligned_chunks) % divisor) != 0
@@ -2392,7 +2395,8 @@ def test_einsum(einsum_signature):
 
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         assert_eq(
             np.einsum(einsum_signature, *np_inputs),
             da.einsum(einsum_signature, *da_inputs),

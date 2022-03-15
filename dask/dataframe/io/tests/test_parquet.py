@@ -2504,6 +2504,43 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+def test_getitem_optimization_after_filter(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
+    dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
+
+    df2 = df[df["b"] > 10][["a"]]
+    ddf2 = ddf[ddf["b"] > 10][["a"]]
+
+    dsk = optimize_dataframe_getitem(ddf2.dask, keys=[ddf2._name])
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert set(subgraph_rd.columns) == {"a", "b"}
+
+    assert_eq(df2, ddf2)
+
+
+def test_getitem_optimization_after_filter_complex(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, 3] * 5, "b": range(15), "c": range(15)})
+    dd.from_pandas(df, npartitions=3).to_parquet(tmpdir, engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
+
+    df2 = df[["b"]]
+    df2 = df2.assign(d=1)
+    df2 = df[df2["d"] == 1][["b"]]
+
+    ddf2 = ddf[["b"]]
+    ddf2 = ddf2.assign(d=1)
+    ddf2 = ddf[ddf2["d"] == 1][["b"]]
+
+    dsk = optimize_dataframe_getitem(ddf2.dask, keys=[ddf2._name])
+    subgraph_rd = hlg_layer(dsk, "read-parquet")
+    assert isinstance(subgraph_rd, DataFrameIOLayer)
+    assert set(subgraph_rd.columns) == {"b"}
+
+    assert_eq(df2, ddf2)
+
+
 def test_layer_creation_info(tmpdir, engine):
     df = pd.DataFrame({"a": range(10), "b": ["cat", "dog"] * 5})
     dd.from_pandas(df, npartitions=1).to_parquet(
@@ -3945,3 +3982,49 @@ def test_custom_filename_with_partition(tmpdir, engine):
     assert_eq(
         pdf, actual, check_index=False, check_dtype=False, check_categorical=False
     )
+
+
+@PYARROW_MARK
+@pytest.mark.skipif(
+    pa_version < parse_version("5.0"),
+    reason="pyarrow write_dataset was added in version 5.0",
+)
+def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/8650
+
+    import pyarrow.parquet as pq
+    from pyarrow.dataset import HivePartitioning, write_dataset
+
+    # Sample data
+    df = pd.DataFrame({"col1": [1, 2], "col2": ["a", "b"]})
+
+    # Write partitioned dataset with dask
+    dask_path = tmpdir.mkdir("foo-dask")
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(dask_path, engine=engine, partition_on=["col1"], write_index=False)
+
+    # Write partitioned dataset with pyarrow
+    pa_path = tmpdir.mkdir("foo-pyarrow")
+    table = pa.Table.from_pandas(df)
+    write_dataset(
+        data=table,
+        base_dir=pa_path,
+        basename_template="part.{i}.parquet",
+        format="parquet",
+        partitioning=HivePartitioning(pa.schema([("col1", pa.int32())])),
+    )
+
+    # Define simple function to ensure results should
+    # be comparable (same column and row order)
+    def _prep(x):
+        return x.sort_values("col2")[["col1", "col2"]]
+
+    # Check that reading dask-written data is the same for pyarrow and dask
+    df_read_dask = dd.read_parquet(dask_path, engine=engine)
+    df_read_pa = pq.read_table(dask_path).to_pandas()
+    assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
+
+    # Check that reading pyarrow-written data is the same for pyarrow and dask
+    df_read_dask = dd.read_parquet(pa_path, engine=engine)
+    df_read_pa = pq.read_table(pa_path).to_pandas()
+    assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
