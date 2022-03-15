@@ -1,4 +1,5 @@
 import random
+import sys
 from copy import deepcopy
 from itertools import product
 
@@ -421,4 +422,4 @@ def test_count():
     for axis in (None, 0, 1):
         res = da.ma.count(dx, axis=axis)
         sol = np.ma.count(x, axis=axis)
-        assert_eq(res, sol)
+        assert_eq(res, sol, check_dtype=sys.platform != "win32")
