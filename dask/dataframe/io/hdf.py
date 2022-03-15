@@ -8,14 +8,14 @@ import pandas as pd
 from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
-from ... import config, multiprocessing
-from ...base import compute_as_if_collection, get_scheduler, tokenize
-from ...delayed import Delayed, delayed
-from ...highlevelgraph import HighLevelGraph
-from ...layers import DataFrameIOLayer
-from ...utils import get_scheduler_lock
-from ..core import DataFrame, new_dd_object
-from .io import _link
+from dask import config, multiprocessing
+from dask.base import compute_as_if_collection, get_scheduler, tokenize
+from dask.dataframe.core import DataFrame, new_dd_object
+from dask.dataframe.io.io import _link
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import get_scheduler_lock
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -543,6 +543,6 @@ def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
     return keys, stops, divisions
 
 
-from ..core import _Frame
+from dask.dataframe.core import _Frame
 
 _Frame.to_hdf.__doc__ = to_hdf.__doc__

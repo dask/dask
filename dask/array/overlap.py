@@ -5,13 +5,13 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import ArrayOverlapLayer
-from ..utils import derived_from
-from . import chunk, numpy_compat
-from .core import Array, concatenate, map_blocks, unify_chunks
-from .creation import empty_like, full_like
+from dask.array import chunk, numpy_compat
+from dask.array.core import Array, concatenate, map_blocks, unify_chunks
+from dask.array.creation import empty_like, full_like
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayOverlapLayer
+from dask.utils import derived_from
 
 
 def _overlap_internal_chunks(original_chunks, axes):

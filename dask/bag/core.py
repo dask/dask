@@ -35,17 +35,19 @@ from tlz import (
     valmap,
 )
 
-from .. import config
-from ..base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
-from ..blockwise import blockwise
-from ..context import globalmethod
-from ..core import flatten, get_dependencies, istask, quote, reverse_dict
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..multiprocessing import get as mpget
-from ..optimization import cull, fuse, inline
-from ..sizeof import sizeof
-from ..utils import (
+from dask import config
+from dask.bag import chunk
+from dask.bag.avro import to_avro
+from dask.base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
+from dask.blockwise import blockwise
+from dask.context import globalmethod
+from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.multiprocessing import get as mpget
+from dask.optimization import cull, fuse, inline
+from dask.sizeof import sizeof
+from dask.utils import (
     apply,
     digit,
     ensure_bytes,
@@ -59,8 +61,6 @@ from ..utils import (
     system_encoding,
     takes_multiple_arguments,
 )
-from . import chunk
-from .avro import to_avro
 
 no_default = "__no__default__"
 no_result = type(

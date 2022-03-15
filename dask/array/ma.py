@@ -2,10 +2,10 @@ from functools import wraps
 
 import numpy as np
 
-from ..base import normalize_token
-from ..utils import derived_from
-from .core import asanyarray, blockwise, map_blocks
-from .routines import _average
+from dask.array.core import asanyarray, blockwise, map_blocks
+from dask.array.routines import _average
+from dask.base import normalize_token
+from dask.utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)
