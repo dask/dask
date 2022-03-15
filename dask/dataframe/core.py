@@ -4594,15 +4594,20 @@ class DataFrame(_Frame):
         pre_sorted = sorted
         del sorted
 
+        if isinstance(other, Series) and other._name == self.index._name:
+            # Index is equal to current index, no-op
+            return self
+
         if divisions is not None:
             check_divisions(divisions)
-        # mismatched sizes of indivual partitions = user error. how to fail gracefully?
-
         elif (
             isinstance(other, Index)
             and other.known_divisions
             and other.npartitions == self.npartitions
         ):
+            # If the index has the same number of partitions and known
+            # divisions, then we can treat it as pre-sorted with known
+            # divisions
             pre_sorted = True
             divisions = other.divisions
 
