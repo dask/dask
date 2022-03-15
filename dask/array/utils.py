@@ -8,9 +8,9 @@ import warnings
 import numpy as np
 from tlz import concat, frequencies
 
-from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, is_arraylike, is_cupy_type
-from .core import Array
+from dask.array.core import Array
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import has_keyword, is_arraylike, is_cupy_type
 
 
 def normalize_to_array(x):
@@ -272,6 +272,7 @@ def assert_eq(
     check_meta=True,
     check_chunks=True,
     check_type=True,
+    equal_nan=True,
     scheduler="sync",
     **kwargs,
 ):
@@ -351,7 +352,7 @@ def assert_eq(
                         )
                         assert type(b_meta) == type(b_computed), msg
         msg = "found values in 'a' and 'b' which differ by more than the allowed amount"
-        assert allclose(a, b, **kwargs), msg
+        assert allclose(a, b, equal_nan=equal_nan, **kwargs), msg
         return True
     except TypeError:
         pass
@@ -429,7 +430,7 @@ def array_safe(a, like, **kwargs):
     to convert a `dask.Array` and CuPy doesn't implement `__array__` to
     prevent implicit copies to host.
     """
-    from .routines import array
+    from dask.array.routines import array
 
     return _array_like_safe(np.array, array, a, like, **kwargs)
 
@@ -443,7 +444,7 @@ def asarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asarray
+    from dask.array.core import asarray
 
     return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
 
@@ -457,7 +458,7 @@ def asanyarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asanyarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asanyarray
+    from dask.array.core import asanyarray
 
     return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 

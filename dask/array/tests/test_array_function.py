@@ -3,9 +3,8 @@ import pytest
 
 import dask.array as da
 from dask.array.numpy_compat import _numpy_120
+from dask.array.tests.test_dispatch import EncapsulateNDArray, WrappedArray
 from dask.array.utils import assert_eq
-
-from .test_dispatch import EncapsulateNDArray, WrappedArray
 
 
 @pytest.mark.parametrize(

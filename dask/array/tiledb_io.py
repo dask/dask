@@ -1,4 +1,4 @@
-from . import core
+from dask.array import core
 
 
 def _tiledb_to_chunks(tiledb_array):

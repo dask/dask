@@ -2,12 +2,12 @@ import numpy as np
 import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ...base import tokenize
-from ...highlevelgraph import HighLevelGraph
-from ...utils import _deprecated, derived_from
-from .. import methods
-from .._compat import PANDAS_GT_140
-from ..core import DataFrame, Series
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe.core import DataFrame, Series
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import _deprecated, derived_from
 
 
 @_deprecated(after_version="2022.02.0")

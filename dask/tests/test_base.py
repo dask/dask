@@ -14,7 +14,6 @@ from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
-from dask import delayed
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
@@ -37,7 +36,7 @@ from dask.base import (
     visualize,
 )
 from dask.core import literal
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
@@ -486,9 +485,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    with pytest.warns(None):
-        # ignore scipy.sparse.SparseEfficiencyWarning
-        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
     assert tokenize(a) == tokenize(b)
@@ -504,10 +501,9 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    with pytest.warns(None):
-        b = a.copy().asformat("coo")
-        b.row[:10] = np.arange(10)
-        b = b.asformat(cls_name)
+    b = a.copy().asformat("coo")
+    b.row[:10] = np.arange(10)
+    b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
 
@@ -1008,6 +1004,11 @@ def test_compute_nested():
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+)
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
 )
 def test_visualize():
     pytest.importorskip("graphviz")

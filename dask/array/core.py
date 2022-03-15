@@ -32,8 +32,20 @@ from fsspec import get_mapper
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
-from .. import compute, config, core, threaded
-from ..base import (
+from dask import compute, config, core, threaded
+from dask.array import chunk
+from dask.array.chunk import getitem
+from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
+# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
+from dask.array.dispatch import (  # noqa: F401
+    concatenate_lookup,
+    einsum_lookup,
+    tensordot_lookup,
+)
+from dask.array.numpy_compat import _numpy_120, _Recurser
+from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
+from dask.base import (
     DaskMethodsMixin,
     compute_as_if_collection,
     dont_optimize,
@@ -41,15 +53,15 @@ from ..base import (
     persist,
     tokenize,
 )
-from ..blockwise import blockwise as core_blockwise
-from ..blockwise import broadcast_dimensions
-from ..context import globalmethod
-from ..core import quote
-from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph, MaterializedLayer
-from ..layers import ArraySliceDep, reshapelist
-from ..sizeof import sizeof
-from ..utils import (
+from dask.blockwise import blockwise as core_blockwise
+from dask.blockwise import broadcast_dimensions
+from dask.context import globalmethod
+from dask.core import quote
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.layers import ArraySliceDep, reshapelist
+from dask.sizeof import sizeof
+from dask.utils import (
     IndexCallable,
     M,
     SerializableLock,
@@ -71,15 +83,7 @@ from ..utils import (
     parse_bytes,
     typename,
 )
-from ..widgets import get_template
-from . import chunk
-from .chunk import getitem
-from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
-
-# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
-from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .numpy_compat import _numpy_120, _Recurser
-from .slicing import replace_ellipsis, setitem_array, slice_array
+from dask.widgets import get_template
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -154,7 +158,7 @@ def getter_inline(a, b, asarray=True, lock=None):
     return getter(a, b, asarray=asarray, lock=lock)
 
 
-from .optimization import fuse_slice, optimize
+from dask.array.optimization import fuse_slice, optimize
 
 # __array_function__ dict for mapping aliases and mismatching names
 _HANDLED_FUNCTIONS = {}
@@ -436,7 +440,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    from .utils import meta_from_array
+    from dask.array.utils import meta_from_array
 
     # make sure that every arg is an evaluated array
     args = [
@@ -1499,18 +1503,18 @@ class Array(DaskMethodsMixin):
 
         if method == "__call__":
             if numpy_ufunc is np.matmul:
-                from .routines import matmul
+                from dask.array.routines import matmul
 
                 # special case until apply_gufunc handles optional dimensions
                 return matmul(*inputs, **kwargs)
             if numpy_ufunc.signature is not None:
-                from .gufunc import apply_gufunc
+                from dask.array.gufunc import apply_gufunc
 
                 return apply_gufunc(
                     numpy_ufunc, numpy_ufunc.signature, *inputs, **kwargs
                 )
             if numpy_ufunc.nout > 1:
-                from . import ufunc
+                from dask.array import ufunc
 
                 try:
                     da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -1520,7 +1524,7 @@ class Array(DaskMethodsMixin):
             else:
                 return elemwise(numpy_ufunc, *inputs, **kwargs)
         elif method == "outer":
-            from . import ufunc
+            from dask.array import ufunc
 
             try:
                 da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -1710,7 +1714,7 @@ class Array(DaskMethodsMixin):
         -------
         text: An svg string depicting the array as a grid of chunks
         """
-        from .svg import svg
+        from dask.array.svg import svg
 
         return svg(self.chunks, size=size)
 
@@ -1757,7 +1761,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.dataframe.from_dask_array
         """
-        from ..dataframe import from_dask_array
+        from dask.dataframe import from_dask_array
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
 
@@ -1798,7 +1802,7 @@ class Array(DaskMethodsMixin):
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
-            from .routines import where
+            from dask.array.routines import where
 
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
@@ -1868,7 +1872,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(index, tuple):
             index = (index,)
 
-        from .slicing import (
+        from dask.array.slicing import (
             normalize_index,
             slice_with_bool_dask_array,
             slice_with_int_dask_array,
@@ -2028,7 +2032,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def dot(self, other):
-        from .routines import tensordot
+        from dask.array.routines import tensordot
 
         return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
 
@@ -2042,7 +2046,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def transpose(self, *axes):
-        from .routines import transpose
+        from dask.array.routines import transpose
 
         if not axes:
             axes = None
@@ -2056,7 +2060,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def ravel(self):
-        from .routines import ravel
+        from dask.array.routines import ravel
 
         return ravel(self)
 
@@ -2064,7 +2068,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def choose(self, choices):
-        from .routines import choose
+        from dask.array.routines import choose
 
         return choose(self, choices)
 
@@ -2076,7 +2080,7 @@ class Array(DaskMethodsMixin):
            See :meth:`dask.array.reshape` for an explanation of
            the ``merge_chunks`` and `limit` keywords.
         """
-        from .reshape import reshape
+        from dask.array.reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
@@ -2088,7 +2092,7 @@ class Array(DaskMethodsMixin):
         See :func:`dask.array.topk` for docstring.
 
         """
-        from .reductions import topk
+        from dask.array.reductions import topk
 
         return topk(self, k, axis=axis, split_every=split_every)
 
@@ -2098,7 +2102,7 @@ class Array(DaskMethodsMixin):
         See :func:`dask.array.argtopk` for docstring.
 
         """
-        from .reductions import argtopk
+        from dask.array.reductions import argtopk
 
         return argtopk(self, k, axis=axis, split_every=split_every)
 
@@ -2284,67 +2288,67 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __matmul__(self, other):
-        from .routines import matmul
+        from dask.array.routines import matmul
 
         return matmul(self, other)
 
     @check_if_handled_given_other
     def __rmatmul__(self, other):
-        from .routines import matmul
+        from dask.array.routines import matmul
 
         return matmul(other, self)
 
     @check_if_handled_given_other
     def __divmod__(self, other):
-        from .ufunc import divmod
+        from dask.array.ufunc import divmod
 
         return divmod(self, other)
 
     @check_if_handled_given_other
     def __rdivmod__(self, other):
-        from .ufunc import divmod
+        from dask.array.ufunc import divmod
 
         return divmod(other, self)
 
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import any
+        from dask.array.reductions import any
 
         return any(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def all(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import all
+        from dask.array.reductions import all
 
         return all(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def min(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import min
+        from dask.array.reductions import min
 
         return min(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def max(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import max
+        from dask.array.reductions import max
 
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def argmin(self, axis=None, split_every=None, out=None):
-        from .reductions import argmin
+        from dask.array.reductions import argmin
 
         return argmin(self, axis=axis, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def argmax(self, axis=None, split_every=None, out=None):
-        from .reductions import argmax
+        from dask.array.reductions import argmax
 
         return argmax(self, axis=axis, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import sum
+        from dask.array.reductions import sum
 
         return sum(
             self,
@@ -2357,13 +2361,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
-        from .reductions import trace
+        from dask.array.reductions import trace
 
         return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
 
     @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import prod
+        from dask.array.reductions import prod
 
         return prod(
             self,
@@ -2376,7 +2380,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def mean(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import mean
+        from dask.array.reductions import mean
 
         return mean(
             self,
@@ -2391,7 +2395,7 @@ class Array(DaskMethodsMixin):
     def std(
         self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
     ):
-        from .reductions import std
+        from dask.array.reductions import std
 
         return std(
             self,
@@ -2407,7 +2411,7 @@ class Array(DaskMethodsMixin):
     def var(
         self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
     ):
-        from .reductions import var
+        from dask.array.reductions import var
 
         return var(
             self,
@@ -2463,7 +2467,7 @@ class Array(DaskMethodsMixin):
 
         """
 
-        from .reductions import moment
+        from dask.array.reductions import moment
 
         return moment(
             self,
@@ -2563,7 +2567,7 @@ class Array(DaskMethodsMixin):
                [20, 22, 24, 26],
                [24, 26, 28, 30]])
         """
-        from .overlap import map_overlap
+        from dask.array.overlap import map_overlap
 
         return map_overlap(
             func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
@@ -2582,7 +2586,7 @@ class Array(DaskMethodsMixin):
               This method may be faster or more memory efficient depending on workload,
               scheduler, and hardware.  More benchmarking is necessary.
         """
-        from .reductions import cumsum
+        from dask.array.reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out, method=method)
 
@@ -2599,13 +2603,13 @@ class Array(DaskMethodsMixin):
               This method may be faster or more memory efficient depending on workload,
               scheduler, and hardware.  More benchmarking is necessary.
         """
-        from .reductions import cumprod
+        from dask.array.reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):
-        from .routines import squeeze
+        from dask.array.routines import squeeze
 
         return squeeze(self, axis)
 
@@ -2613,30 +2617,30 @@ class Array(DaskMethodsMixin):
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
         """See da.rechunk for docstring"""
-        from .rechunk import rechunk  # avoid circular import
+        from dask.array.rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
 
     @property
     def real(self):
-        from .ufunc import real
+        from dask.array.ufunc import real
 
         return real(self)
 
     @property
     def imag(self):
-        from .ufunc import imag
+        from dask.array.ufunc import imag
 
         return imag(self)
 
     def conj(self):
-        from .ufunc import conj
+        from dask.array.ufunc import conj
 
         return conj(self)
 
     @derived_from(np.ndarray)
     def clip(self, min=None, max=None):
-        from .ufunc import clip
+        from dask.array.ufunc import clip
 
         return clip(self, min, max)
 
@@ -2685,13 +2689,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def swapaxes(self, axis1, axis2):
-        from .routines import swapaxes
+        from dask.array.routines import swapaxes
 
         return swapaxes(self, axis1, axis2)
 
     @derived_from(np.ndarray)
     def round(self, decimals=0):
-        from .routines import round
+        from dask.array.routines import round
 
         return round(self, decimals=decimals)
 
@@ -2734,13 +2738,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def repeat(self, repeats, axis=None):
-        from .creation import repeat
+        from dask.array.creation import repeat
 
         return repeat(self, repeats, axis=axis)
 
     @derived_from(np.ndarray)
     def nonzero(self):
-        from .routines import nonzero
+        from dask.array.routines import nonzero
 
         return nonzero(self)
 
@@ -2760,7 +2764,7 @@ class Array(DaskMethodsMixin):
 
         See https://docs.tiledb.io for details about the format and engine.
         """
-        from .tiledb_io import to_tiledb
+        from dask.array.tiledb_io import to_tiledb
 
         return to_tiledb(self, uri, *args, **kwargs)
 
@@ -3467,7 +3471,7 @@ def to_zarr(
             arr = arr.rechunk(z.chunks)
             regions = None
         else:
-            from .slicing import new_blockdim, normalize_index
+            from dask.array.slicing import new_blockdim, normalize_index
 
             old_chunks = normalize_chunks(z.chunks, z.shape)
             index = normalize_index(region, z.shape)
@@ -3572,7 +3576,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
-    from ..delayed import Delayed, delayed
+    from dask.delayed import Delayed, delayed
 
     if not isinstance(value, Delayed) and hasattr(value, "key"):
         value = delayed(value)
@@ -4010,7 +4014,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
-    from . import wrap
+    from dask.array import wrap
 
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
@@ -4950,7 +4954,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     concatenate
     """
-    from . import wrap
+    from dask.array import wrap
 
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
@@ -5331,7 +5335,7 @@ def _vindex_array(x, dict_indexes):
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
-    from .wrap import empty
+    from dask.array.wrap import empty
 
     result_1d = empty(
         tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
@@ -5492,7 +5496,7 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
-        from ..dataframe.core import new_dd_object
+        from dask.dataframe.core import new_dd_object
 
         assert all(len(c) == 1 for c in chunks[1:])
         divisions = [None] * (len(chunks[0]) + 1)
@@ -5549,7 +5553,7 @@ class BlockView:
     def __getitem__(
         self, index: int | Sequence[int] | slice | Sequence[slice]
     ) -> Array:
-        from .slicing import normalize_index
+        from dask.array.slicing import normalize_index
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -5602,5 +5606,5 @@ class BlockView:
         return [self[idx] for idx in np.ndindex(self.shape)]
 
 
-from .blockwise import blockwise
-from .utils import compute_meta, meta_from_array
+from dask.array.blockwise import blockwise
+from dask.array.utils import compute_meta, meta_from_array

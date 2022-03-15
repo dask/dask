@@ -2,7 +2,7 @@ import sys
 from numbers import Number
 from timeit import default_timer
 
-from .callbacks import Callback
+from dask.callbacks import Callback
 
 overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 

@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import pytest
 from tlz import merge
@@ -8,6 +9,7 @@ np = pytest.importorskip("numpy")
 import dask
 import dask.array as da
 from dask import config
+from dask.array.chunk import getitem
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
@@ -21,8 +23,6 @@ from dask.array.slicing import (
     take,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from ..chunk import getitem
 
 
 def test_slice_1d():
@@ -784,9 +784,9 @@ def test_slicing_integer_no_warnings():
     # https://github.com/dask/dask/pull/2457/
     X = da.random.random((100, 2), (2, 2))
     idx = np.array([0, 0, 1, 1])
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as record:
         X[idx].compute()
-    assert len(rec) == 0
+    assert not record
 
 
 @pytest.mark.slow
@@ -887,17 +887,17 @@ def test_getitem_avoids_large_chunks():
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": False}):
-            with pytest.warns(None) as e:
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
-            assert len(e) == 0
             assert_eq(result, expected)
+            assert not record
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": True}):
-            with pytest.warns(None) as e:
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
-            assert len(e) == 0  # no
             assert_eq(result, expected)
+            assert not record
 
             assert result.chunks == ((1,) * 12, (128,), (128,))
 
