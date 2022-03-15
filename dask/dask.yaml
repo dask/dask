@@ -27,4 +27,4 @@ optimization:
 
 testing:
   assert-eq:
-    scheduler: "sync"  # default scheduler used when computing dataframes for assertions
+    scheduler: "sync"  # default scheduler used when computing dask collections for assertions
