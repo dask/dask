@@ -409,7 +409,10 @@ def read_hdf(
     # Build metadata
     with pd.HDFStore(paths[0], mode=mode) as hdf:
         meta_key = _expand_key(key, hdf)[0]
-    meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
+    try:
+        meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
+    except IndexError:  # if file is empty, don't set stop
+        meta = pd.read_hdf(paths[0], meta_key, mode=mode)
     if columns is not None:
         meta = meta[columns]
 
