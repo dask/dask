@@ -17,7 +17,15 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements, unknown_chunk_message
+from .core import (
+    Array,
+    _concatenate2,
+    asanyarray,
+    broadcast_to,
+    handle_out,
+    implements,
+    unknown_chunk_message,
+)
 from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
@@ -52,6 +60,7 @@ def reduction(
     concatenate=True,
     output_size=1,
     meta=None,
+    weights=None,
 ):
     """General version of reductions
 
@@ -59,7 +68,7 @@ def reduction(
     ----------
     x: Array
         Data being reduced along one or more axes
-    chunk: callable(x_chunk, axis, keepdims)
+    chunk: callable(x_chunk, [weights_chunk=None], axis, keepdims)
         First function to be executed when resolving the dask graph.
         This function is applied in parallel to all original chunks of x.
         See below for function parameters.
@@ -114,6 +123,12 @@ def reduction(
     output_size: int >= 1, optional
         Size of the output of the ``aggregate`` function along the reduced
         axes. Ignored if keepdims is False.
+    weights : array_like, optional
+        Weights to be used in the reduction of `x`. Will be
+        automatically broadcast to the shape of `x`, and so must have
+        a compatible shape. For instance, if `x` has shape ``(3, 4)``
+        then acceptable shapes for `weights` are ``(3, 4)``, ``(4,)``,
+        ``(3, 1)``, ``(1, 1)``, ``(1)``, and ``()``.
 
     Returns
     -------
@@ -127,6 +142,14 @@ def reduction(
         the concatenation of the outputs produced by the previous ``chunk`` or
         ``combine`` functions. If concatenate=False, it's a list of the raw
         outputs from the previous functions.
+    weights_chunk: numpy.ndarray, optional
+        Only applicable to the ``chunk`` function. Weights, with the
+        same shape as `x_chunk`, to be applied during the reduction of
+        the individual input chunk. If ``weights`` have not been
+        provided then the function may omit this parameter. When
+        `weights_chunk` is included then it must occur immediately
+        after the `x_chunk` parameter, and must also have a default
+        value for cases when ``weights`` are not provided.
     axis: tuple
         Normalized list of axes to reduce upon, e.g. ``(0, )``
         Scalar, negative, and None axes have been normalized away.
@@ -136,6 +159,7 @@ def reduction(
     keepdims: bool
         Whether the reduction function should preserve the reduced axes or
         remove them.
+
     """
     if axis is None:
         axis = tuple(range(x.ndim))
@@ -154,9 +178,24 @@ def reduction(
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
+
+    args = (x, inds)
+    if weights is not None:
+        # Broadcast weights to x and add to args
+        wgt = asanyarray(weights)
+        try:
+            wgt = broadcast_to(wgt, x.shape)
+        except ValueError:
+            raise ValueError(
+                f"Weights with shape {wgt.shape} are not broadcastable "
+                f"to x with shape {x.shape}"
+            )
+
+        args += (wgt, inds)
+
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = blockwise(
-        chunk, inds, x, inds, axis=axis, keepdims=True, token=name, dtype=dtype or float
+        chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
     )
     tmp._chunks = tuple(
         (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)
