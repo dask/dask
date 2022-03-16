@@ -29,7 +29,7 @@ def sample(population, k):
     ... list(random.sample(b, 3).compute())
     [1, 3, 5]
     """
-    return _reservoir_sample(population=population, k=k)
+    return _sample(population=population, k=k)
 
 
 def choices(population, k=1):
@@ -52,43 +52,7 @@ def choices(population, k=1):
     ... list(random.choices(b, 3).compute())
     [1, 1, 5]
     """
-    return _reservoir_sample_with_replacement(population=population, k=k)
-
-
-def _sample(population, k, replace=False):
-    return population.reduction(
-        partial(_sample_map_partitions, k=k, replace=replace),
-        partial(_sample_reduce, k=k, replace=replace),
-        out_type=Bag,
-    )
-
-
-def _sample_map_partitions(population, k, replace):
-    """
-    Map function used on the sample and choices functions.
-    Parameters
-    ----------
-    population : list
-        List of elements to sample.
-    k : int, optional
-        Number of elements to sample. Default is 1.
-
-    Returns
-    -------
-    sample: list
-        List of sampled elements from the partition.
-    lx: int
-        Number of elements on the partition.
-    k: int
-        Number of elements to sample.
-    """
-    population = list(population)
-    lx = len(population)
-    real_k = k if k <= lx else lx
-    sample_func = rnd.choices if replace else rnd.sample
-    # because otherwise it raises IndexError:
-    sampled = [] if real_k == 0 else sample_func(population=population, k=real_k)
-    return sampled, lx
+    return _sample_with_replacement(population=population, k=k)
 
 
 def _sample_reduce(reduce_iter, k, replace):
@@ -136,15 +100,15 @@ def _weighted_sampling_without_replacement(population, weights, k):
     return [population[x[1]] for x in heapq.nlargest(k, elt)]
 
 
-def _reservoir_sample(population, k):
+def _sample(population, k):
     return population.reduction(
-        partial(_reservoir_sample_map_partitions, k=k),
+        partial(_sample_map_partitions, k=k),
         partial(_sample_reduce, k=k, replace=False),
         out_type=Bag,
     )
 
 
-def _reservoir_sample_map_partitions(population, k):
+def _sample_map_partitions(population, k):
     """
     Reservoir sampling strategy based on the L algorithm
     See https://en.wikipedia.org/wiki/Reservoir_sampling#An_optimal_algorithm
@@ -169,15 +133,15 @@ def _reservoir_sample_map_partitions(population, k):
     return reservoir, stream_length
 
 
-def _reservoir_sample_with_replacement(population, k):
+def _sample_with_replacement(population, k):
     return population.reduction(
-        partial(_reservoir_sample_with_replacement_map_partitions, k=k),
+        partial(_sample_with_replacement_map_partitions, k=k),
         partial(_sample_reduce, k=k, replace=True),
         out_type=Bag,
     )
 
 
-def _reservoir_sample_with_replacement_map_partitions(population, k):
+def _sample_with_replacement_map_partitions(population, k):
     """
     Reservoir sampling with replacement, the main idea is to use k reservoirs of size 1
     See Section Applications in http://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf

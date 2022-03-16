@@ -136,7 +136,7 @@ def test_reservoir_sample_map_partitions_correctness():
     expected_distribution = [0 for _ in range(N)]
     reps = 2000
     for _ in range(reps):
-        picks, _ = random._reservoir_sample_map_partitions(seq, k)
+        picks, _ = random._sample_map_partitions(seq, k)
         for pick in picks:
             distribution[pick] += 1
         for pick in rnd.sample(seq, k=k):
@@ -159,7 +159,7 @@ def test_reservoir_sample_with_replacement_map_partitions_correctness():
     expected_distribution = [0 for _ in range(N)]
     reps = 2000
     for _ in range(reps):
-        picks, _ = random._reservoir_sample_with_replacement_map_partitions(seq, k)
+        picks, _ = random._sample_with_replacement_map_partitions(seq, k)
         for pick in picks:
             distribution[pick] += 1
         for pick in rnd.choices(seq, k=k):
