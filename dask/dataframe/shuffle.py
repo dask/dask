@@ -1063,12 +1063,20 @@ def compute_and_set_divisions(df, **kwargs):
 
 
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
+    if isinstance(index, _Frame):
         meta = df._meta.set_index(index._meta, drop=drop)
+    else:
+        meta = df._meta.set_index(index, drop=drop)
 
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+    result = map_partitions(
+        M.set_index,
+        df,
+        index,
+        drop=drop,
+        meta=meta,
+        align_dataframes=False,
+        transform_divisions=False,
+    )
 
     if not divisions:
         return compute_and_set_divisions(result, **kwargs)

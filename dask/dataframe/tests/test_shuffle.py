@@ -187,17 +187,12 @@ def test_set_index_general(npartitions, shuffle_method):
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
     assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
-
     assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
-
     assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
-
     assert_eq(
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
-
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
-
     assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
@@ -1293,6 +1288,63 @@ def test_set_index_nan_partition():
     d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
     a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
     assert_eq(a, a)
+
+
+def test_set_index_with_dask_dt_index():
+    values = {
+        "x": [1, 2, 3, 4] * 3,
+        "y": [10, 20, 30] * 4,
+        "name": ["Alice", "Bob"] * 6,
+    }
+    date_index = pd.date_range(
+        start="2022-02-22", freq="16h", periods=12
+    ) - pd.Timedelta(seconds=30)
+    df = pd.DataFrame(values, index=date_index)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # specify a different date index entirely
+    day_index = ddf.index.dt.floor("D")
+    day_df = ddf.set_index(day_index)
+    expected = dd.from_pandas(
+        pd.DataFrame(values, index=date_index.floor("D")), npartitions=3
+    )
+    assert_eq(day_df, expected)
+
+    # specify an index with shifted dates
+    one_day = pd.Timedelta(days=1)
+    next_day_df = ddf.set_index(ddf.index + one_day)
+    expected = dd.from_pandas(
+        pd.DataFrame(values, index=date_index + one_day), npartitions=3
+    )
+    assert_eq(next_day_df, expected)
+
+    # try a different index type
+    no_dates = dd.from_pandas(pd.DataFrame(values), npartitions=3)
+    range_df = ddf.set_index(no_dates.index)
+    expected = dd.from_pandas(pd.DataFrame(values), npartitions=3)
+    assert_eq(range_df, expected)
+
+
+def test_set_index_with_series_uses_fastpath():
+    dates = pd.date_range(start="2022-02-22", freq="16h", periods=12) - pd.Timedelta(
+        seconds=30
+    )
+    one_day = pd.Timedelta(days=1)
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4] * 3,
+            "y": [10, 20, 30] * 4,
+            "name": ["Alice", "Bob"] * 6,
+            "d1": dates + one_day,
+            "d2": dates + one_day * 5,
+        },
+        index=dates,
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    res = ddf.set_index(ddf.d2 + one_day)
+    expected = df.set_index(df.d2 + one_day)
+    assert_eq(res, expected)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
