@@ -16,8 +16,9 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe.eager_optimize import attempt_predicate_pushdown
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
-from dask.dataframe.optimize import eager_predicate_pushdown, optimize_dataframe_getitem
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key
@@ -2525,7 +2526,7 @@ def test_getitem_optimization_multi(tmpdir, engine):
         (operator.le, "<="),
     ],
 )
-def test_eager_predicate_pushdown(tmpdir, engine, preserve_index, index, op, op_name):
+def test_attempt_predicate_pushdown(tmpdir, engine, preserve_index, index, op, op_name):
     df = pd.DataFrame(
         {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
     )
@@ -2536,7 +2537,7 @@ def test_eager_predicate_pushdown(tmpdir, engine, preserve_index, index, op, op_
     ddf = ddf[op(ddf["B"], 3)]
     if op_name != "<":
         # Will be a `MaterializedLayer` if everything gets filtered
-        ddf2 = eager_predicate_pushdown(ddf)
+        ddf2 = attempt_predicate_pushdown(ddf)
         subgraph_rd = hlg_layer(ddf2.dask, "read-parquet")
         assert subgraph_rd.creation_info["kwargs"]["filters"] == [("B", op_name, 3)]
         assert isinstance(subgraph_rd, DataFrameIOLayer)

@@ -46,69 +46,6 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-def eager_predicate_pushdown(ddf):
-    # This is a special optimization that must be called
-    # eagerly on a DataFrame collection when filters are
-    # applied. The "eager" requirement for this optimization
-    # is due to the fact that `npartitions` and `divisions`
-    # may change when this optimization is applied (invalidating
-    # npartition/divisions-specific logic in following Layers).
-    from ..layers import DataFrameIOLayer
-
-    # Get output layer name and HLG
-    name = ddf._name
-    dsk = ddf.dask
-
-    # Extract filters
-    try:
-        filters = dsk.layers[name]._dnf_filter_expression(dsk)
-        if filters:
-            if isinstance(filters[0], (list, tuple)):
-                filters = list(filters)
-            else:
-                filters = [filters]
-        else:
-            return ddf
-        if not isinstance(filters, list):
-            filters = [filters]
-    except (TypeError, ValueError):
-        # DNF dispatching failed for 1+ layers
-        return ddf
-
-    # We were able to extract a DNF filter expression.
-    # Check that all layers are regenerable, and that
-    # the graph contains an IO layer with filters support.
-    # All layers besides the root IO layer should also
-    # support DNF dispatching.  Otherwise, there could be
-    # something like column-assignment or data manipulation
-    # between the IO layer and the filter.
-    io_layer = []
-    for k, v in dsk.layers.items():
-        if not v._regenerable:
-            return ddf
-        if (
-            isinstance(v, DataFrameIOLayer)
-            and "filters" in v.creation_info.get("kwargs", {})
-            and v.creation_info["kwargs"]["filters"] is None
-        ):
-            io_layer.append(k)
-        else:
-            try:
-                dnf_filter_dispatch.dispatch(v.creation_info["func"])
-            except (TypeError, ValueError, AttributeError, KeyError):
-                # This is NOT an IO layer OR a filter-safe layer
-                return ddf
-    if len(io_layer) != 1:
-        return ddf
-    io_layer = io_layer.pop()
-
-    # Regenerate collection with filtered IO layer
-    return dsk.layers[name]._regenerate_collection(
-        dsk,
-        new_kwargs={io_layer: {"filters": filters}},
-    )
-
-
 def optimize_dataframe_getitem(dsk, keys):
     # This optimization looks for all `DataFrameIOLayer` instances,
     # and calls `project_columns` on any IO layers that precede
