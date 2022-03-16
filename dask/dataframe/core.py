@@ -16,50 +16,6 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
-<<<<<<< HEAD
-from .. import array as da
-from .. import config, core, threaded
-from ..array.core import Array, normalize_arg
-from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
-from ..blockwise import (
-    Blockwise,
-    BlockwiseDep,
-    BlockwiseDepDict,
-    _get_blockwise_input,
-    blockwise,
-)
-from ..context import globalmethod
-from ..delayed import Delayed, delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..layers import DataFrameTreeReduction
-from ..utils import (
-    IndexCallable,
-    M,
-    OperatorMethodMixin,
-    _deprecated,
-    apply,
-    derived_from,
-    dnf_filter_dispatch,
-    funcname,
-    has_keyword,
-    is_arraylike,
-    iter_chunks,
-    key_split,
-    memory_repr,
-    parse_bytes,
-    partial_by_order,
-    pseudorandom,
-    put_lines,
-    random_state_data,
-    typename,
-)
-from ..widgets import get_template
-from . import methods
-from ._compat import PANDAS_GT_140, PANDAS_GT_150
-from .accessor import CachedAccessor, DatetimeAccessor, StringAccessor
-from .categorical import CategoricalAccessor, categorize
-from .dispatch import (
-=======
 import dask.array as da
 from dask import core, threaded
 from dask.array.core import Array, normalize_arg
@@ -72,19 +28,13 @@ from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
 from dask.dataframe.dispatch import (
->>>>>>> upstream/main
     get_parallel_type,
     group_split_dispatch,
     hash_object_dispatch,
     meta_nonempty,
 )
-<<<<<<< HEAD
-from .optimize import eager_predicate_pushdown, optimize
-from .utils import (
-=======
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
->>>>>>> upstream/main
     PANDAS_GT_110,
     PANDAS_GT_120,
     check_matching_columns,
@@ -538,12 +488,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 # are not yet supported for frames
                 return NotImplemented
             else:
-                return elemwise(
-                    numpy_ufunc,
-                    *inputs,
-                    creation_info={"func": numpy_ufunc, "kwargs": kwargs},
-                    **kwargs,
-                )
+                return elemwise(numpy_ufunc, *inputs, **kwargs)
         else:
             # ufunc methods are not yet supported for frames
             return NotImplemented
@@ -1531,15 +1476,6 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 meta=meta,
                 enforce_metadata=False,
-                creation_info={
-                    "func": DataFrame.fillna,
-                    "kwargs": {
-                        "method": method,
-                        "limit": limit,
-                        "axis": axis,
-                        **kwargs,
-                    },
-                },
                 **kwargs,
             )
 
@@ -1757,16 +1693,14 @@ Dask Name: {name}, {task} tasks"""
 
     @classmethod
     def _get_unary_operator(cls, op):
-        return lambda self: elemwise(op, self, creation_info={"func": op})
+        return lambda self: elemwise(op, self)
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
         if inv:
             return lambda self, other: elemwise(op, other, self)
         else:
-            return lambda self, other: elemwise(
-                op, self, other, creation_info={"func": op}
-            )
+            return lambda self, other: elemwise(op, self, other)
 
     def rolling(self, window, min_periods=None, center=False, win_type=None, axis=0):
         """Provides rolling transformations.
@@ -4391,7 +4325,6 @@ class DataFrame(_Frame):
 
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
-        creation_info = {"func": operator.getitem}
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
@@ -4408,9 +4341,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(
-                operator.getitem, name, self, key, creation_info=creation_info
-            )
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -4435,9 +4366,7 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(
-                operator.getitem, name, self, key, creation_info=creation_info
-            )
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -4446,16 +4375,9 @@ class DataFrame(_Frame):
                 from dask.dataframe.multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(
-                operator.getitem, name, self, key, creation_info=creation_info
-            )
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            out = new_dd_object(graph, name, self, self.divisions)
-            return (
-                eager_predicate_pushdown(out)
-                if config.get("optimization.eager")
-                else out
-            )
+            return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
@@ -5809,15 +5731,7 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(
-    op,
-    *args,
-    meta=no_default,
-    out=None,
-    transform_divisions=True,
-    creation_info=None,
-    **kwargs,
-):
+def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5895,7 +5809,7 @@ def elemwise(
     ]
 
     # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, creation_info=creation_info, **kwargs)
+    dsk = partitionwise_graph(op, _name, *args, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 
@@ -7802,31 +7716,3 @@ def _raise_if_not_series_or_dataframe(x, funcname):
             "`%s` is only supported with objects that are Dataframes or Series"
             % funcname
         )
-
-
-@dnf_filter_dispatch.register(Series.fillna)
-def fillna_dnf(op, indices: list, dsk: HighLevelGraph):
-    # Return dnf of input collection
-    return _get_blockwise_input(0, indices, dsk)
-
-
-# NOTE: Dask-SQL uses numpy comparators
-_comparison_symbols = {
-    np.greater: ">",
-    np.less: "<",
-    np.equal: "==",
-    np.greater_equal: ">=",
-    np.less_equal: "<=",
-    np.not_equal: "!=",
-}
-
-
-@dnf_filter_dispatch.register(tuple(_comparison_symbols.keys()))
-def np_comparison_dnf(op, indices: list, dsk: HighLevelGraph):
-    left = _get_blockwise_input(0, indices, dsk)
-    right = _get_blockwise_input(1, indices, dsk)
-    if is_arraylike(left) and hasattr(left, "item") and left.size == 1:
-        left = left.item()
-    if is_arraylike(right) and hasattr(right, "item") and right.size == 1:
-        right = right.item()
-    return (left, _comparison_symbols[op], right)

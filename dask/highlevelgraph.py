@@ -516,35 +516,6 @@ class Layer(Mapping):
                     info[key] = html.escape(str(val))
         return info
 
-    @property
-    def _regenerable(self):
-        """Whether this layer supports ``_regenerate_collection``
-
-        If True, this layer can regenerate a Dask collection
-        when provided the required collection inputs.
-        """
-        return False
-
-    def _regenerate_collection(
-        self,
-        dsk: HighLevelGraph,
-        new_kwargs: dict = None,
-        _regen_cache: dict = None,
-    ):
-        """Regenerate a Dask collection for this layer using the
-        provided inputs and key-word arguments
-        """
-        if self._regenerable:
-            raise NotImplementedError
-        raise ValueError("`_regenerate_collection` requires `_regenerable=True`")
-
-    def _dnf_filter_expression(self, dsk: HighLevelGraph):
-        """Return a DNF-formatted filter expression for the
-        graph terminating at this layer
-        """
-        # Default Implementation returns TypeError
-        raise TypeError(f"No DNF dispatching implemented for {self.__class__}")
-
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`

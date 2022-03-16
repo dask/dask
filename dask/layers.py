@@ -1156,9 +1156,10 @@ class DataFrameIOLayer(Blockwise):
         serialization purposes, and will be deprecated in the
         future. Default is False.
     creation_info: dict (optional)
-        Dictionary containing the callable function ('func')
-        and key-word arguments ('kwargs') used to produce the
-        dask collection with this underlying ``DataFrameIOLayer``.
+        Dictionary containing the callable function ('func'),
+        positional arguments ('args'), and key-word arguments
+        ('kwargs') used to produce the dask collection with
+        this underlying ``DataFrameIOLayer``.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -1181,6 +1182,7 @@ class DataFrameIOLayer(Blockwise):
         self.label = label
         self.produces_tasks = produces_tasks
         self.annotations = annotations
+        self.creation_info = creation_info
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
@@ -1196,7 +1198,6 @@ class DataFrameIOLayer(Blockwise):
             dsk=dsk,
             indices=[(io_arg_map, "i")],
             numblocks={},
-            creation_info=creation_info,
             annotations=annotations,
         )
 
