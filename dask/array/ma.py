@@ -2,7 +2,9 @@ from functools import wraps
 
 import numpy as np
 
+from dask.array import chunk
 from dask.array.core import asanyarray, blockwise, map_blocks
+from dask.array.reductions import reduction
 from dask.array.routines import _average
 from dask.base import normalize_token
 from dask.utils import derived_from
@@ -170,3 +172,21 @@ def set_fill_value(a, fill_value):
 @derived_from(np.ma)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=True)
+
+
+def _chunk_count(x, axis=None, keepdims=None):
+    return np.ma.count(x, axis=axis, keepdims=keepdims)
+
+
+@derived_from(np.ma)
+def count(a, axis=None, keepdims=False, split_every=None):
+    return reduction(
+        a,
+        _chunk_count,
+        chunk.sum,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=np.intp,
+        split_every=split_every,
+        out=None,
+    )
