@@ -510,7 +510,7 @@ def merge(
     if how not in supported_how:
         raise ValueError(
             f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
-            f"Note that leftanti and leftsemi are only dask_cudf options."
+            f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
         )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
