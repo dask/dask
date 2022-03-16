@@ -190,3 +190,7 @@ API
 .. autoclass:: HighLevelGraph
    :members:
    :inherited-members:
+   :exclude-members: visualize
+
+.. TODO: Fix graphviz dependency in docs build and remove ``visualize`` from
+   exclude-members in the above directive

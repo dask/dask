@@ -3,10 +3,10 @@ import warnings
 
 import tlz as toolz
 
-from .. import base, utils
-from ..blockwise import blockwise as core_blockwise
-from ..delayed import unpack_collections
-from ..highlevelgraph import HighLevelGraph
+from dask import base, utils
+from dask.blockwise import blockwise as core_blockwise
+from dask.delayed import unpack_collections
+from dask.highlevelgraph import HighLevelGraph
 
 
 def blockwise(
@@ -21,7 +21,7 @@ def blockwise(
     align_arrays=True,
     concatenate=None,
     meta=None,
-    **kwargs
+    **kwargs,
 ):
     """Tensor operation: Generalized inner and outer products
 
@@ -168,7 +168,7 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    from .core import normalize_arg, unify_chunks
+    from dask.array.core import normalize_arg, unify_chunks
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -229,7 +229,7 @@ def blockwise(
 
     # Finish up the name
     if not out:
-        out = "%s-%s" % (
+        out = "{}-{}".format(
             token or utils.funcname(func).strip("_"),
             base.tokenize(func, out_ind, argindsstr, dtype, **kwargs),
         )
@@ -243,7 +243,7 @@ def blockwise(
         dependencies=dependencies,
         new_axes=new_axes,
         concatenate=concatenate,
-        **kwargs2
+        **kwargs2,
     )
     graph = HighLevelGraph.from_collections(
         out, graph, dependencies=arrays + dependencies
@@ -260,11 +260,8 @@ def blockwise(
                 elif isinstance(adjust_chunks[ind], (tuple, list)):
                     if len(adjust_chunks[ind]) != len(chunks[i]):
                         raise ValueError(
-                            "Dimension {0} has {1} blocks, "
-                            "adjust_chunks specified with "
-                            "{2} blocks".format(
-                                i, len(chunks[i]), len(adjust_chunks[ind])
-                            )
+                            f"Dimension {i} has {len(chunks[i])} blocks, adjust_chunks "
+                            f"specified with {len(adjust_chunks[ind])} blocks"
                         )
                     chunks[i] = tuple(adjust_chunks[ind])
                 else:
@@ -274,7 +271,7 @@ def blockwise(
     chunks = tuple(chunks)
 
     if meta is None:
-        from .utils import compute_meta
+        from dask.array.utils import compute_meta
 
         meta = compute_meta(func, dtype, *args[::2], **kwargs)
     return new_da_object(graph, out, chunks, meta=meta, dtype=dtype)
@@ -285,4 +282,4 @@ def atop(*args, **kwargs):
     return blockwise(*args, **kwargs)
 
 
-from .core import new_da_object
+from dask.array.core import new_da_object

@@ -3,7 +3,7 @@ import math
 import random as rnd
 from functools import partial
 
-from .core import Bag
+from dask.bag.core import Bag
 
 
 def sample(population, k):
@@ -21,11 +21,10 @@ def sample(population, k):
 
     Examples
     --------
-    >>> import dask.bag as db # doctest: +SKIP
-    ... from dask.bag import random
-    ...
-    ... b = db.from_sequence(range(5), npartitions=2)
-    ... list(random.sample(b, 3).compute())
+    >>> import dask.bag as db
+    >>> from dask.bag import random
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
     return _sample(population=population, k=k, replace=False)
@@ -44,11 +43,10 @@ def choices(population, k=1):
 
     Examples
     --------
-    >>> import dask.bag as db # doctest: +SKIP
-    ... from dask.bag import random
-    ...
-    ... b = db.from_sequence(range(5), npartitions=2)
-    ... list(random.choices(b, 3).compute())
+    >>> import dask.bag as db
+    >>> from dask.bag import random
+    >>> b = db.from_sequence(range(5), npartitions=2)
+    >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
     return _sample(population=population, k=k, replace=True)

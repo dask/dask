@@ -4,9 +4,9 @@ import os
 from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.utils import infer_compression, read_block
 
-from ..base import tokenize
-from ..delayed import delayed
-from ..utils import is_integer, parse_bytes
+from dask.base import tokenize
+from dask.delayed import delayed
+from dask.utils import is_integer, parse_bytes
 
 
 def read_bytes(
@@ -17,7 +17,7 @@ def read_bytes(
     sample="10 kiB",
     compression=None,
     include_path=False,
-    **kwargs
+    **kwargs,
 ):
     """Given a path or paths, return delayed objects that read from those paths.
 
@@ -81,7 +81,7 @@ def read_bytes(
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)
 
     if len(paths) == 0:
-        raise IOError("%s resolved to no files" % urlpath)
+        raise OSError("%s resolved to no files" % urlpath)
 
     if blocksize is not None:
         if isinstance(blocksize, str):
@@ -112,20 +112,40 @@ def read_bytes(
                     "Backing filesystem couldn't determine file size, cannot "
                     "do chunked reads. To read, set blocksize=None."
                 )
-            off = list(range(0, size, blocksize))
-            length = [blocksize] * len(off)
-            if not_zero:
-                off[0] = 1
-                length[0] -= 1
-            offsets.append(off)
-            lengths.append(length)
+
+            elif size == 0:
+                # skip empty
+                offsets.append([])
+                lengths.append([])
+            else:
+                # shrink blocksize to give same number of parts
+                if size % blocksize and size > blocksize:
+                    blocksize1 = size / (size // blocksize)
+                else:
+                    blocksize1 = blocksize
+                place = 0
+                off = [0]
+                length = []
+
+                # figure out offsets, spreading around spare bytes
+                while size - place > (blocksize1 * 2) - 1:
+                    place += blocksize1
+                    off.append(int(place))
+                    length.append(off[-1] - off[-2])
+                length.append(size - off[-1])
+
+                if not_zero:
+                    off[0] = 1
+                    length[0] -= 1
+                offsets.append(off)
+                lengths.append(length)
 
     delayed_read = delayed(read_block_from_file)
 
     out = []
     for path, offset, length in zip(paths, offsets, lengths):
         token = tokenize(fs_token, delimiter, path, fs.ukey(path), compression, offset)
-        keys = ["read-block-%s-%s" % (o, token) for o in offset]
+        keys = [f"read-block-{o}-{token}" for o in offset]
         values = [
             delayed_read(
                 OpenFile(fs, path, compression=compression),

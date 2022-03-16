@@ -1,28 +1,21 @@
+from __future__ import annotations
+
 import itertools
 import os
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from itertools import product
-from typing import (
-    Any,
-    Hashable,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from math import prod
+from typing import Any, Hashable, Iterable, Mapping, Sequence
 
 import tlz as toolz
 
-from .base import clone_key, get_name_from_key, tokenize
-from .compatibility import prod
-from .core import flatten, keys_in_tasks, reverse_dict
-from .delayed import unpack_collections
-from .highlevelgraph import HighLevelGraph, Layer
-from .optimization import SubgraphCallable, fuse
-from .utils import (
+from dask.base import clone_key, get_name_from_key, tokenize
+from dask.core import flatten, keys_in_tasks, reverse_dict
+from dask.delayed import unpack_collections
+from dask.highlevelgraph import HighLevelGraph, Layer
+from dask.optimization import SubgraphCallable, fuse
+from dask.utils import (
+    _deprecated,
     apply,
     ensure_dict,
     homogeneous_deepmap,
@@ -53,16 +46,16 @@ class BlockwiseDep:
     dask.blockwise.BlockwiseDepDict
     """
 
-    numblocks: Tuple[int, ...]
+    numblocks: tuple[int, ...]
     produces_tasks: bool
 
-    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+    def __getitem__(self, idx: tuple[int, ...]) -> Any:
         """Return Blockwise-function arguments for a specific index"""
         raise NotImplementedError(
             "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
-    def get(self, idx: Tuple[int, ...], default) -> Any:
+    def get(self, idx: tuple[int, ...], default) -> Any:
         """BlockwiseDep ``__getitem__`` Wrapper"""
         try:
             return self.__getitem__(idx)
@@ -70,7 +63,7 @@ class BlockwiseDep:
             return default
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         """Client-side serialization for ``BlockwiseDep`` objects.
 
@@ -113,8 +106,8 @@ class BlockwiseDepDict(BlockwiseDep):
     that the function will be passed a single input object when
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
-    >>> import pandas as pd  # doctest: +SKIP
-    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+    >>> import pandas as pd
+    >>> func = lambda x: pd.read_csv(**x)
 
     Use ``BlockwiseDepDict`` to define the input argument to
     ``func`` for each block/partition:
@@ -134,7 +127,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...             "names": ["a", "b"],
     ...         },
     ...     }
-    ... )  # doctest: +SKIP
+    ... )
 
     Construct a Blockwise Layer with ``dep`` speficied
     in the ``indices`` list:
@@ -145,7 +138,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     dsk={"collection-name": (func, '_0')},
     ...     indices=[(dep, "i")],
     ...     numblocks={},
-    ... )  # doctest: +SKIP
+    ... )
 
     See Also
     --------
@@ -156,7 +149,7 @@ class BlockwiseDepDict(BlockwiseDep):
     def __init__(
         self,
         mapping: dict,
-        numblocks: Optional[Tuple[int, ...]] = None,
+        numblocks: tuple[int, ...] | None = None,
         produces_tasks: bool = False,
     ):
         self.mapping = mapping
@@ -165,11 +158,11 @@ class BlockwiseDepDict(BlockwiseDep):
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
-    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+    def __getitem__(self, idx: tuple[int, ...]) -> Any:
         return self.mapping[idx]
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         from distributed.protocol import to_serialize
 
@@ -181,6 +174,32 @@ class BlockwiseDepDict(BlockwiseDep):
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
         }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
+
+
+class BlockIndex(BlockwiseDep):
+    """Index BlockwiseDep argument
+
+    The purpose of this class is to provide each
+    block of a ``Blockwise``-based operation with
+    the current block index.
+    """
+
+    produces_tasks: bool = False
+
+    def __init__(self, numblocks: tuple[int, ...]):
+        # NOTE: Unused - Just needs to be set to
+        # follow the `BlockwiseDep` interface
+        self.numblocks = numblocks
+
+    def __getitem__(self, idx: tuple[int, ...]) -> tuple[int, ...]:
+        return idx
+
+    def __dask_distributed_pack__(self, **kwargs):
+        return {"numblocks": self.numblocks}
 
     @classmethod
     def __dask_distributed_unpack__(cls, state):
@@ -208,10 +227,13 @@ def index_subs(ind, substitution):
     if ind is None:
         return ind
     else:
-        return tuple([substitution.get(c, c) for c in ind])
+        return tuple(substitution.get(c, c) for c in ind)
 
 
-def blockwise_token(i, prefix="_"):
+_BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
+
+
+def blockwise_token(i, prefix=_BLOCKWISE_DEFAULT_PREFIX):
     return prefix + "%d" % i
 
 
@@ -230,6 +252,11 @@ def blockwise(
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a
     dict, it returns a symbolic Blockwise object.
+
+    ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
+    allowing for collections it can accept BlockwiseDep instances, which allows for lazy
+    evaluation of arguments to ``func`` which might be different for different
+    chunks/paritions.
 
     See Also
     --------
@@ -323,7 +350,7 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value.
@@ -337,14 +364,14 @@ class Blockwise(Layer):
     new_axes: Mapping
         New index dimensions that may have been created and their size,
         e.g. ``{'j': 2, 'k': 3}``
-    output_blocks: Set[Tuple[int, ...]]
+    output_blocks: set[tuple[int, ...]]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: Dict[str, BlockwiseDep] (optional)
+    io_deps: dict[str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
         keys and ``BlockwiseDep``-based objects.
         **WARNING**: This argument should only be used internally (for culling,
@@ -358,26 +385,26 @@ class Blockwise(Layer):
     """
 
     output: str
-    output_indices: Tuple[str, ...]
+    output_indices: tuple[str, ...]
     dsk: Mapping[str, tuple]
-    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
-    concatenate: Optional[bool]
+    concatenate: bool | None
     new_axes: Mapping[str, int]
-    output_blocks: Optional[Set[Tuple[int, ...]]]
+    output_blocks: set[tuple[int, ...]] | None
 
     def __init__(
         self,
         output: str,
         output_indices: Iterable[str],
         dsk: Mapping[str, tuple],
-        indices: Iterable[Tuple[Union[str, BlockwiseDep], Optional[Iterable[str]]]],
+        indices: Iterable[tuple[str | BlockwiseDep, Iterable[str] | None]],
         numblocks: Mapping[str, Sequence[int]],
-        concatenate: bool = None,
-        new_axes: Mapping[str, int] = None,
-        output_blocks: Set[Tuple[int, ...]] = None,
-        annotations: Mapping[str, Any] = None,
-        io_deps: Optional[Mapping[str, BlockwiseDep]] = None,
+        concatenate: bool | None = None,
+        new_axes: Mapping[str, int] | None = None,
+        output_blocks: set[tuple[int, ...]] | None = None,
+        annotations: Mapping[str, Any] | None = None,
+        io_deps: Mapping[str, BlockwiseDep] | None = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
@@ -424,7 +451,7 @@ class Blockwise(Layer):
         return self._dims
 
     def __repr__(self):
-        return "Blockwise<{} -> {}>".format(self.indices, self.output)
+        return f"Blockwise<{self.indices} -> {self.output}>"
 
     @property
     def _dict(self):
@@ -505,7 +532,7 @@ class Blockwise(Layer):
                 if val_is_a_key:
                     keys2.append(key)
                     indices2.append((val, index))
-                    global_dependencies.add(val)
+                    global_dependencies.add(stringify(val))
                 else:
                     dsk[key] = val  # Literal
             else:
@@ -656,9 +683,12 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
+            if ind is None:
+                try:
+                    if arg in all_hlg_keys:
+                        const_deps.add(arg)
+                except TypeError:
+                    pass  # unhashable
 
         # Get dependencies for each output block
         key_deps = {}
@@ -696,7 +726,7 @@ class Blockwise(Layer):
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
-    ) -> Tuple[Layer, Mapping[Hashable, set]]:
+    ) -> tuple[Layer, Mapping[Hashable, set]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
@@ -718,7 +748,7 @@ class Blockwise(Layer):
         keys: set,
         seed: Hashable,
         bind_to: Hashable = None,
-    ) -> Tuple[Layer, bool]:
+    ) -> tuple[Layer, bool]:
         names = {get_name_from_key(k) for k in keys}
         # We assume that 'keys' will contain either all or none of the output keys of
         # each of the layers, because clone/bind are always invoked at collection level.
@@ -749,7 +779,7 @@ class Blockwise(Layer):
         dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}
 
         if bind_to is not None and is_leaf:
-            from .graph_manipulation import chunks
+            from dask.graph_manipulation import chunks
 
             # It's always a Delayed generated by dask.graph_manipulation.checkpoint;
             # the layer name always matches the key
@@ -1293,6 +1323,11 @@ def _optimize_blockwise(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
+def _unique_dep(dep, ind):
+    # Append blockwise index information to dependency name
+    return dep + "_" + "_".join(str(i) for i in list(ind))
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1302,7 +1337,7 @@ def rewrite_blockwise(inputs):
 
     Parameters
     ----------
-    inputs : List[Blockwise]
+    inputs : list[Blockwise]
 
     Returns
     -------
@@ -1348,9 +1383,15 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
+            # Change dep name to avoid fusing the same dep
+            # (in different iteration orders) into a single
+            # subgraph key/dependency
+            # (see: https://github.com/dask/dask/issues/8535)
+            local_dep = dep if dep == root else _unique_dep(dep, ind)
+
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -1394,6 +1435,10 @@ def rewrite_blockwise(inputs):
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
+            # Change new_dsk key to match local_dep
+            if dep != local_dep and dep in new_dsk:
+                new_dsk[local_dep] = new_dsk.pop(dep)
+
             # indices.extend(new_indices)
             dsk.update(new_dsk)
 
@@ -1436,6 +1481,7 @@ def rewrite_blockwise(inputs):
     )
 
 
+@_deprecated()
 def zero_broadcast_dimensions(lol, nblocks):
     """
     >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
@@ -1444,7 +1490,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
     ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
 
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +SKIP
     [[('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)]]
@@ -1504,14 +1550,14 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
     )
 
     g = toolz.groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
+    g = {k: {d for i, d in v} for k, v in g.items()}
 
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+    g2 = {k: v - set(sentinels) if len(v) > 1 else v for k, v in g.items()}
 
     if consolidate:
         return toolz.valmap(consolidate, g2)
 
-    if g2 and not set(map(len, g2.values())) == set([1]):
+    if g2 and not set(map(len, g2.values())) == {1}:
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)

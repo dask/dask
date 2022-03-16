@@ -1,3 +1,5 @@
+import pytest
+
 import dask
 from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
@@ -13,18 +15,18 @@ def test_start_state():
     expected = {
         "cache": {"x": 1, "y": 2},
         "dependencies": {
-            "w": set(["y", "z"]),
-            "x": set([]),
-            "y": set([]),
-            "z": set(["x"]),
+            "w": {"y", "z"},
+            "x": set(),
+            "y": set(),
+            "z": {"x"},
         },
-        "dependents": {"w": set([]), "x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
-        "finished": set([]),
-        "released": set([]),
-        "running": set([]),
+        "dependents": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
+        "finished": set(),
+        "released": set(),
+        "running": set(),
         "ready": ["z"],
-        "waiting": {"w": set(["z"])},
-        "waiting_data": {"x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
+        "waiting": {"w": {"z"}},
+        "waiting_data": {"x": {"z"}, "y": {"w"}, "z": {"w"}},
     }
     assert result == expected
 
@@ -33,7 +35,7 @@ def test_start_state_looks_at_cache():
     dsk = {"b": (inc, "a")}
     cache = {"a": 1}
     result = start_state_from_dask(dsk, cache)
-    assert result["dependencies"]["b"] == set(["a"])
+    assert result["dependencies"]["b"] == {"a"}
     assert result["ready"] == ["b"]
 
 
@@ -52,7 +54,7 @@ def test_start_state_with_tasks_no_deps():
     state = start_state_from_dask(dsk)
     assert list(state["cache"].keys()) == ["b"]
     assert "a" in state["ready"] and "c" in state["ready"]
-    deps = dict((k, set()) for k in "abc")
+    deps = {k: set() for k in "abc"}
     assert state["dependencies"] == deps
     assert state["dependents"] == deps
 
@@ -62,7 +64,7 @@ def test_finish_task():
     sortkey = order(dsk).get
     state = start_state_from_dask(dsk)
     state["ready"].remove("z")
-    state["running"] = set(["z", "other-task"])
+    state["running"] = {"z", "other-task"}
     task = "z"
     result = 2
 
@@ -72,18 +74,18 @@ def test_finish_task():
     assert state == {
         "cache": {"y": 2, "z": 2},
         "dependencies": {
-            "w": set(["y", "z"]),
-            "x": set([]),
-            "y": set([]),
-            "z": set(["x"]),
+            "w": {"y", "z"},
+            "x": set(),
+            "y": set(),
+            "z": {"x"},
         },
-        "finished": set(["z"]),
-        "released": set(["x"]),
-        "running": set(["other-task"]),
-        "dependents": {"w": set([]), "x": set(["z"]), "y": set(["w"]), "z": set(["w"])},
+        "finished": {"z"},
+        "released": {"x"},
+        "running": {"other-task"},
+        "dependents": {"w": set(), "x": {"z"}, "y": {"w"}, "z": {"w"}},
         "ready": ["w"],
         "waiting": {},
-        "waiting_data": {"y": set(["w"]), "z": set(["w"])},
+        "waiting_data": {"y": {"w"}, "z": {"w"}},
     }
 
 
@@ -95,11 +97,7 @@ class TestGetAsync(GetFunctionTestMixin):
 
 
 def test_cache_options():
-    try:
-        from chest import Chest
-    except ImportError:
-        return
-    cache = Chest()
+    cache = {}
 
     def inc2(x):
         assert "y" in cache
@@ -170,3 +168,22 @@ def test_ordering():
     get_sync(dsk, "y")
 
     assert L == sorted(L)
+
+
+def test_complex_ordering():
+    da = pytest.importorskip("dask.array")
+    from dask.diagnostics import Callback
+
+    actual_order = []
+
+    def track_order(key, dask, state):
+        actual_order.append(key)
+
+    x = da.random.normal(size=(20, 20), chunks=(-1, -1))
+    res = (x.dot(x.T) - x.mean(axis=0)).std()
+    dsk = dict(res.__dask_graph__())
+    exp_order_dict = order(dsk)
+    exp_order = sorted(exp_order_dict.keys(), key=exp_order_dict.get)
+    with Callback(pretask=track_order):
+        get_sync(dsk, exp_order[-1])
+    assert actual_order == exp_order

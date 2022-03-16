@@ -1,4 +1,5 @@
 """ A set of NumPy functions to apply per chunk """
+import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 from numbers import Integral
@@ -6,14 +7,7 @@ from numbers import Integral
 import numpy as np
 from tlz import concat
 
-from ..core import flatten
-from ..utils import ignoring
-from . import numpy_compat as npcompat
-
-try:
-    from numpy import take_along_axis
-except ImportError:  # pragma: no cover
-    take_along_axis = npcompat.take_along_axis
+from dask.core import flatten
 
 
 def keepdims_wrapper(a_callable):
@@ -71,17 +65,17 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
 var = np.var
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanvar = np.nanvar
 
 std = np.std
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanstd = np.nanstd
 
 
@@ -100,9 +94,9 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     Examples
     --------
     >>> x = np.array([1, 2, 3, 4, 5, 6])
-    >>> coarsen(np.sum, x, {0: 2})          #doctest: +SKIP
+    >>> coarsen(np.sum, x, {0: 2})
     array([ 3,  7, 11])
-    >>> coarsen(np.max, x, {0: 3})          #doctest: +SKIP
+    >>> coarsen(np.max, x, {0: 3})
     array([3, 6])
 
     Provide dictionary of scale per dimension
@@ -114,14 +108,14 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
            [12, 13, 14, 15, 16, 17],
            [18, 19, 20, 21, 22, 23]])
 
-    >>> coarsen(np.min, x, {0: 2, 1: 3})    #doctest: +SKIP
+    >>> coarsen(np.min, x, {0: 2, 1: 3})
     array([[ 0,  3],
            [12, 15]])
 
     You must avoid excess elements explicitly
 
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
-    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)    #doctest: +SKIP
+    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
     array([1, 4])
     """
     # Insert singleton dimensions if they don't exist already
@@ -234,7 +228,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     idx2 = idx2[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
-    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+    return np.take_along_axis(a, idx2, axis), np.take_along_axis(idx, idx2, axis)
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
@@ -244,11 +238,12 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     and return the index only.
     """
     assert keepdims is True
+    a_plus_idx = a_plus_idx if len(a_plus_idx) > 1 else a_plus_idx[0]
     a, idx = argtopk(a_plus_idx, k, axis, keepdims)
     axis = axis[0]
 
     idx2 = np.argsort(a, axis=axis)
-    idx = take_along_axis(idx, idx2, axis)
+    idx = np.take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
     return idx[
@@ -259,10 +254,22 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
 
 
 def arange(start, stop, step, length, dtype, like=None):
-    from .utils import arange_safe
+    from dask.array.utils import arange_safe
 
     res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
+
+
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from dask.array.core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
 
 
 def astype(x, astype_dtype=None, **kwargs):
@@ -306,6 +313,10 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     x sliced along axis, using only the elements of idx that fall inside the
     current chunk.
     """
+    from dask.array.utils import asarray_safe, meta_from_array
+
+    idx = asarray_safe(idx, like=meta_from_array(x))
+
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
 
@@ -380,3 +391,33 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
             idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
         )
     ]
+
+
+def getitem(obj, index):
+    """Getitem function
+
+    This function creates a copy of the desired selection for array-like
+    inputs when the selection is smaller than half of the original array. This
+    avoids excess memory usage when extracting a small portion from a large array.
+    For more information, see
+    https://numpy.org/doc/stable/reference/arrays.indexing.html#basic-slicing-and-indexing.
+
+    Parameters
+    ----------
+    obj: ndarray, string, tuple, list
+        Object to get item from.
+    index: int, list[int], slice()
+        Desired selection to extract from obj.
+
+    Returns
+    -------
+    Selection obj[index]
+
+    """
+    result = obj[index]
+    try:
+        if not result.flags.owndata and obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

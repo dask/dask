@@ -3,10 +3,10 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
-from ..core import flatten
-from ..highlevelgraph import HighLevelGraph
-from .core import Array, apply_infer_dtype, asarray, blockwise, getitem
-from .utils import meta_from_array
+from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, getitem
+from dask.array.utils import meta_from_array
+from dask.core import flatten
+from dask.highlevelgraph import HighLevelGraph
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
@@ -14,13 +14,13 @@ from .utils import meta_from_array
 # See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
-_ARGUMENT = r"\({}\)".format(_CORE_DIMENSION_LIST)
+_ARGUMENT = rf"\({_CORE_DIMENSION_LIST}\)"
 _INPUT_ARGUMENTS = "(?:{0:}(?:,{0:})*,?)?".format(_ARGUMENT)
 _OUTPUT_ARGUMENTS = "{0:}(?:,{0:})*".format(
     _ARGUMENT
 )  # Use `'{0:}(?:,{0:})*,?'` if gufunc-
 # signature should be allowed for length 1 tuple returns
-_SIGNATURE = "^{0:}->{1:}$".format(_INPUT_ARGUMENTS, _OUTPUT_ARGUMENTS)
+_SIGNATURE = f"^{_INPUT_ARGUMENTS}->{_OUTPUT_ARGUMENTS}$"
 
 
 def _parse_gufunc_signature(signature):
@@ -39,9 +39,9 @@ def _parse_gufunc_signature(signature):
     of the form List[Tuple[str, ...]], except for one output. For one output
     core dimension is not a list, but of the form Tuple[str, ...]
     """
-    signature = signature.replace(" ", "")
+    signature = re.sub(r"\s+", "", signature)
     if not re.match(_SIGNATURE, signature):
-        raise ValueError("Not a valid gufunc signature: {}".format(signature))
+        raise ValueError(f"Not a valid gufunc signature: {signature}")
     in_txt, out_txt = signature.split("->")
     ins = [
         tuple(re.findall(_DIMENSION_NAME, arg)) for arg in re.findall(_ARGUMENT, in_txt)
@@ -291,6 +291,10 @@ def apply_gufunc(
     ## Signature
     if not isinstance(signature, str):
         raise TypeError("`signature` has to be of type string")
+    # NumPy versions before https://github.com/numpy/numpy/pull/19627
+    # would not ignore whitespace characters in `signature` like they
+    # are supposed to. We remove the whitespace here as a workaround.
+    signature = re.sub(r"\s+", "", signature)
     input_coredimss, output_coredimss = _parse_gufunc_signature(signature)
 
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
@@ -422,9 +426,7 @@ def apply_gufunc(
     for dim, sizes in dimsizess.items():
         #### Check that the arrays have same length for same dimensions or dimension `1`
         if set(sizes) | {1} != {1, max(sizes)}:
-            raise ValueError(
-                "Dimension `'{}'` with different lengths in arrays".format(dim)
-            )
+            raise ValueError(f"Dimension `'{dim}'` with different lengths in arrays")
         if not allow_rechunk:
             chunksizes = chunksizess[dim]
             #### Check if core dimensions consist of only one chunk
@@ -442,7 +444,7 @@ significantly.".format(
             )
             if len(relevant_chunksizes) > 1:
                 raise ValueError(
-                    "Dimension `'{}'` with different chunksize present".format(dim)
+                    f"Dimension `'{dim}'` with different chunksize present"
                 )
 
     ## Apply function - use blockwise here
@@ -623,19 +625,30 @@ class gufunc:
     .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
 
-    def __init__(self, pyfunc, **kwargs):
+    def __init__(
+        self,
+        pyfunc,
+        *,
+        signature=None,
+        vectorize=False,
+        axes=None,
+        axis=None,
+        keepdims=False,
+        output_sizes=None,
+        output_dtypes=None,
+        allow_rechunk=False,
+        meta=None,
+    ):
         self.pyfunc = pyfunc
-        self.signature = kwargs.pop("signature", None)
-        self.vectorize = kwargs.pop("vectorize", False)
-        self.axes = kwargs.pop("axes", None)
-        self.axis = kwargs.pop("axis", None)
-        self.keepdims = kwargs.pop("keepdims", False)
-        self.output_sizes = kwargs.pop("output_sizes", None)
-        self.output_dtypes = kwargs.pop("output_dtypes", None)
-        self.allow_rechunk = kwargs.pop("allow_rechunk", False)
-        self.meta = kwargs.pop("meta", None)
-        if kwargs:
-            raise TypeError("Unsupported keyword argument(s) provided")
+        self.signature = signature
+        self.vectorize = vectorize
+        self.axes = axes
+        self.axis = axis
+        self.keepdims = keepdims
+        self.output_sizes = output_sizes
+        self.output_dtypes = output_dtypes
+        self.allow_rechunk = allow_rechunk
+        self.meta = meta
 
         self.__doc__ = """
         Bound ``dask.array.gufunc``
@@ -657,7 +670,7 @@ class gufunc:
             func=str(self.pyfunc), signature=self.signature
         )
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args, allow_rechunk=False, **kwargs):
         return apply_gufunc(
             self.pyfunc,
             self.signature,
@@ -668,7 +681,7 @@ class gufunc:
             keepdims=self.keepdims,
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
-            allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
+            allow_rechunk=self.allow_rechunk or allow_rechunk,
             meta=self.meta,
             **kwargs,
         )

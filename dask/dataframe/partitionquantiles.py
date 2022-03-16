@@ -75,10 +75,10 @@ import pandas as pd
 from pandas.api.types import is_datetime64tz_dtype
 from tlz import merge, merge_sorted, take
 
-from ..base import tokenize
-from ..utils import is_cupy_type, random_state_data
-from .core import Series
-from .utils import is_categorical_dtype
+from dask.base import tokenize
+from dask.dataframe.core import Series
+from dask.dataframe.utils import is_categorical_dtype
+from dask.utils import is_cupy_type, random_state_data
 
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):
@@ -401,21 +401,22 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.array.percentile import _percentile
+    from dask.array.dispatch import percentile_lookup as _percentile
 
     length = len(df)
     if length == 0:
         return ()
     random_state = np.random.RandomState(state)
     qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
-    data = df.values
+    data = df
     interpolation = "linear"
+
     if is_categorical_dtype(data):
-        data = data.codes
+        data = data.cat.codes
         interpolation = "nearest"
-    elif np.issubdtype(data.dtype, np.integer) and not is_cupy_type(data):
-        # CuPy doesn't currently support "nearest" interpolation,
-        # so it's special cased in the condition above.
+    elif isinstance(data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
+        data.dtype, np.integer
+    ):
         interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
     if (

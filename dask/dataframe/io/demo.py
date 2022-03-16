@@ -1,10 +1,10 @@
 import numpy as np
 import pandas as pd
 
-from ...highlevelgraph import HighLevelGraph
-from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
-from ..core import DataFrame, tokenize
+from dask.dataframe.core import DataFrame, tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
 
@@ -122,7 +122,7 @@ def make_timeseries(
     freq="10s",
     partition_freq="1M",
     seed=None,
-    **kwargs
+    **kwargs,
 ):
     """Create timeseries dataframe with random data
 
@@ -186,170 +186,3 @@ def make_timeseries(
     graph = HighLevelGraph({name: layer}, {name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
     return DataFrame(graph, name, head, divisions)
-
-
-class GenerateDay:
-    """
-    Wrapper Class for ``generate_day``
-    Generates daily-stock data for a day.
-    """
-
-    def __init__(self, freq):
-        self.freq = freq
-
-    def __call__(self, part):
-        s, seed = part
-        if isinstance(seed, int):
-            seed = random_state_data(1, seed)
-        return generate_day(
-            s.name,
-            s.loc["Open"],
-            s.loc["High"],
-            s.loc["Low"],
-            s.loc["Close"],
-            s.loc["Volume"],
-            freq=self.freq,
-            random_state=seed,
-        )
-
-
-def generate_day(
-    date,
-    open,
-    high,
-    low,
-    close,
-    volume,
-    freq=pd.Timedelta(seconds=60),
-    random_state=None,
-):
-    """Generate a day of financial data from open/close high/low values"""
-    if not isinstance(random_state, np.random.RandomState):
-        random_state = np.random.RandomState(random_state)
-    if not isinstance(date, pd.Timestamp):
-        date = pd.Timestamp(date)
-    if not isinstance(freq, pd.Timedelta):
-        freq = pd.Timedelta(freq)
-
-    time = pd.date_range(
-        date + pd.Timedelta(hours=9),
-        date + pd.Timedelta(hours=12 + 4),
-        freq=freq / 5,
-        name="timestamp",
-    )
-    n = len(time)
-    while True:
-        values = (random_state.random_sample(n) - 0.5).cumsum()
-        values *= (high - low) / (values.max() - values.min())  # scale
-        values += np.linspace(
-            open - values[0], close - values[-1], len(values)
-        )  # endpoints
-        assert np.allclose(open, values[0])
-        assert np.allclose(close, values[-1])
-
-        mx = max(close, open)
-        mn = min(close, open)
-        ind = values > mx
-        values[ind] = (values[ind] - mx) * (high - mx) / (values.max() - mx) + mx
-        ind = values < mn
-        values[ind] = (values[ind] - mn) * (low - mn) / (values.min() - mn) + mn
-        # The process fails if min/max are the same as open close.  This is rare
-        if np.allclose(values.max(), high) and np.allclose(values.min(), low):
-            break
-
-    s = pd.Series(values.round(3), index=time)
-    rs = s.resample(freq)
-    # TODO: add in volume
-    return pd.DataFrame(
-        {"open": rs.first(), "close": rs.last(), "high": rs.max(), "low": rs.min()}
-    )
-
-
-def daily_stock(
-    symbol,
-    start,
-    stop,
-    freq=pd.Timedelta(seconds=1),
-    data_source="yahoo",
-    random_state=None,
-):
-    """Create artificial stock data
-
-    This data matches daily open/high/low/close values from Yahoo! Finance, but
-    interpolates values within each day with random values.  This makes the
-    results look natural without requiring the downloading of large volumes of
-    data.  This is useful for education and benchmarking.
-
-    Parameters
-    ----------
-    symbol: string
-        A stock symbol like "GOOG" or "F"
-    start: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    stop: date, str, or pd.Timestamp
-        The start date, input will be fed into pd.Timestamp for normalization
-    freq: timedelta, str, or pd.Timedelta
-        The frequency of sampling
-    data_source: str, optional
-        defaults to 'yahoo'.  See pandas_datareader.data.DataReader for options
-    random_state: int, np.random.RandomState object
-        random seed, defaults to randomly chosen
-
-    Examples
-    --------
-    >>> import dask.dataframe as dd  # doctest: +SKIP
-    >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
-    >>> df  # doctest: +SKIP
-    Dask DataFrame Structure:
-                           close     high      low     open
-    npartitions=252
-    2010-01-04 09:00:00  float64  float64  float64  float64
-    2010-01-05 09:00:00      ...      ...      ...      ...
-    ...                      ...      ...      ...      ...
-    2010-12-31 09:00:00      ...      ...      ...      ...
-    2010-12-31 16:00:00      ...      ...      ...      ...
-    Dask Name: from-delayed, 504 tasks
-
-    >>> df.head()  # doctest: +SKIP
-                           close     high      low     open
-    timestamp
-    2010-01-04 09:00:00  626.944  626.964  626.944  626.951
-    2010-01-04 09:00:01  626.906  626.931  626.906  626.931
-    2010-01-04 09:00:02  626.901  626.911  626.901  626.905
-    2010-01-04 09:00:03  626.920  626.920  626.905  626.905
-    2010-01-04 09:00:04  626.894  626.917  626.894  626.906
-    """
-    from pandas_datareader import data
-
-    df = data.DataReader(symbol, data_source, start, stop)
-    npartitions = len(df)
-    if random_state is None:
-        # Get random integer seed for each partition. We can
-        # call `random_state_data` in `GenerateDay`
-        seeds = np.random.randint(2e9, size=npartitions)
-    else:
-        seeds = random_state_data(npartitions, random_state=random_state)
-
-    label = "daily-stock-"
-    name = label + tokenize(symbol, start, stop, freq, data_source, seeds)
-
-    divisions = []
-    inputs = []
-    for i, seed in zip(range(npartitions), seeds):
-        s = df.iloc[i]
-        if s.isnull().any():
-            continue
-        inputs.append((s, seed))
-        divisions.append(s.name + pd.Timedelta(hours=9))
-
-    layer = DataFrameIOLayer(
-        name=name,
-        columns=None,
-        inputs=inputs,
-        io_func=GenerateDay(freq),
-        label=label,
-    )
-
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
-    return DataFrame(graph, name, meta, divisions)

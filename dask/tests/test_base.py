@@ -1,21 +1,25 @@
+import dataclasses
+import datetime
 import os
 import subprocess
 import sys
 import time
 from collections import OrderedDict
+from concurrent.futures import Executor
 from operator import add, mul
+from typing import Union
 
 import pytest
 from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
-from dask import delayed
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
     collections_to_dsk,
     compute,
+    compute_as_if_collection,
     function_cache,
     get_collection_names,
     get_name_from_key,
@@ -32,8 +36,9 @@ from dask.base import (
     visualize,
 )
 from dask.core import literal
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
 from dask.utils_test import dec, import_or_none, inc
 
@@ -125,15 +130,25 @@ def test_tokenize_numpy_scalar_string_rep():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
-    assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
-        np.array(["a", "aa", "aaa"], dtype=object)
-    )
+    a = np.array(["a", "aa", "aaa"], dtype=object)
+    assert tokenize(a) == tokenize(a)
     assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
         np.array(["a", None, "aaa"], dtype=object)
     )
     assert tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
+
+    # Trigger non-deterministic hashing for object dtype
+    class NoPickle:
+        pass
+
+    x = np.array(["a", None, NoPickle], dtype=object)
+    assert tokenize(x) != tokenize(x)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            tokenize(x)
 
 
 @pytest.mark.skipif("not np")
@@ -178,7 +193,7 @@ def test_tokenize_numpy_memmap():
         b = tokenize(mm[1, :])
         c = tokenize(mm[0:3, :])
         d = tokenize(mm[:, 0])
-        assert len(set([a, b, c, d])) == 4
+        assert len({a, b, c, d}) == 4
         assert tokenize(mm) == tokenize(mm2)
         assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
 
@@ -211,16 +226,40 @@ def test_tokenize_partial_func_args_kwargs_consistent():
     f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
-        b"cdask.tests.test_base\nf3\np0\n.",
-        (b"cdask.tests.test_base\nf2\np0\n.",),
-        (("c", b"cdask.tests.test_base\nf1\np0\n."),),
+        b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f3\x94\x93\x94.",
+        (
+            b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f2\x94\x93\x94.",
+        ),
+        (
+            (
+                "c",
+                b"\x80\x04\x95\x1f\x00\x00\x00\x00\x00\x00\x00\x8c\x14dask.tests.test_base\x94\x8c\x02f1\x94\x93\x94.",
+            ),
+        ),
     )
     assert res == sol
 
 
 def test_normalize_base():
-    for i in [1, 1.1, "1", slice(1, 2, 3)]:
+    for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25)]:
         assert normalize_token(i) is i
+
+
+def test_tokenize_object():
+    o = object()
+    # Defaults to non-deterministic tokenization
+    assert normalize_token(o) != normalize_token(o)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            normalize_token(o)
+
+
+def test_tokenize_callable():
+    def my_func(a, b, c=1):
+        return a + b + c
+
+    assert tokenize(my_func) == tokenize(my_func)  # Consistent token
 
 
 @pytest.mark.skipif("not pd")
@@ -252,7 +291,7 @@ def test_tokenize_pandas_invalid_unicode():
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_mixed_unicode_bytes():
     df = pd.DataFrame(
-        {"ö".encode("utf8"): [1, 2, 3], "ö": ["ö", "ö".encode("utf8"), None]},
+        {"ö".encode(): [1, 2, 3], "ö": ["ö", "ö".encode(), None]},
         index=[1, 2, 3],
     )
     tokenize(df)
@@ -282,13 +321,12 @@ def test_tokenize_pandas_extension_array():
         ),
     ]
 
-    if dd._compat.PANDAS_GT_100:
-        arrays.extend(
-            [
-                pd.array(["a", "b", None], dtype="string"),
-                pd.array([True, False, None], dtype="boolean"),
-            ]
-        )
+    arrays.extend(
+        [
+            pd.array(["a", "b", None], dtype="string"),
+            pd.array([True, False, None], dtype="boolean"),
+        ]
+    )
 
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
@@ -308,6 +346,7 @@ def test_tokenize_kwargs():
     assert tokenize(5) != tokenize(5, x=1)
     assert tokenize(5, x=1) != tokenize(5, x=2)
     assert tokenize(5, x=1) != tokenize(5, y=1)
+    assert tokenize(5, foo="bar") != tokenize(5, {"foo": "bar"})
 
 
 def test_tokenize_same_repr():
@@ -332,6 +371,10 @@ def test_tokenize_method():
     a, b = Foo(1), Foo(2)
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
+
+    for ensure in [True, False]:
+        with dask.config.set({"tokenize.ensure-deterministic": ensure}):
+            assert tokenize(a) == tokenize(a)
 
     # dispatch takes precedence
     before = tokenize(a)
@@ -369,6 +412,36 @@ def test_tokenize_ordered_dict():
 
     assert tokenize(a) == tokenize(b)
     assert tokenize(a) != tokenize(c)
+
+
+ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+
+
+def test_tokenize_dataclass():
+    a1 = ADataClass(1)
+    a2 = ADataClass(2)
+    assert tokenize(a1) == tokenize(a1)
+    assert tokenize(a1) != tokenize(a2)
+
+    # Same field names and values, but dataclass types are different
+    b1 = BDataClass(1)
+    assert tokenize(a1) != tokenize(b1)
+
+    class SubA(ADataClass):
+        pass
+
+    assert dataclasses.is_dataclass(
+        SubA
+    ), "Python regression: SubA should be considered a dataclass"
+    assert tokenize(SubA(1)) == tokenize(SubA(1))
+    assert tokenize(SubA(1)) != tokenize(a1)
+
+    # Same name, same values, new definition: tokenize differently
+    ADataClassRedefinedDifferently = dataclasses.make_dataclass(
+        "ADataClass", [("a", Union[int, str])]
+    )
+    assert tokenize(a1) != tokenize(ADataClassRedefinedDifferently(1))
 
 
 def test_tokenize_range():
@@ -412,9 +485,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    with pytest.warns(None):
-        # ignore scipy.sparse.SparseEfficiencyWarning
-        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
     assert tokenize(a) == tokenize(b)
@@ -430,18 +501,32 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    with pytest.warns(None):
-        b = a.copy().asformat("coo")
-        b.row[:10] = np.arange(10)
-        b = b.asformat(cls_name)
+    b = a.copy().asformat("coo")
+    b.row[:10] = np.arange(10)
+    b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
 
-def test_tokenize_object_with_recursion_error_returns_uuid():
+def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
 
     assert len(tokenize(cycle)) == 32
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
+            tokenize(cycle)
+
+
+def test_tokenize_datetime_date():
+    # Same date
+    assert tokenize(datetime.date(2021, 6, 25)) == tokenize(datetime.date(2021, 6, 25))
+    # Different year
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2022, 6, 25))
+    # Different month
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 7, 25))
+    # Different day
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
 def test_is_dask_collection():
@@ -458,15 +543,6 @@ def test_is_dask_collection():
     assert is_dask_collection(DummyCollection({}))
     assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
-
-
-try:
-    import dataclasses
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-except ImportError:
-    dataclasses = None
 
 
 def test_unpack_collections():
@@ -490,9 +566,8 @@ def test_unpack_collections():
             iterator,
         )  # Iterator
 
-        if dataclasses is not None:
-            t[2]["f"] = ADataClass(a=a)
-            t[2]["g"] = (ADataClass, a)
+        t[2]["f"] = ADataClass(a=a)
+        t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -557,15 +632,12 @@ def test_get_collection_names():
     h1 = object()
     h2 = object()
     # __dask_keys__() returns a nested list
-    assert (
-        get_collection_names(
-            DummyCollection(
-                {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
-                [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
-            )
+    assert get_collection_names(
+        DummyCollection(
+            {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
+            [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
         )
-        == {"a-1", "b-2", "c"}
-    )
+    ) == {"a-1", "b-2", "c"}
 
 
 def test_get_name_from_key():
@@ -879,7 +951,7 @@ def test_compute_array_dataframe():
 
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode("utf8")])
+    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode()])
     dd.from_pandas(df, npartitions=4)
 
 
@@ -933,6 +1005,11 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
+)
 def test_visualize():
     pytest.importorskip("graphviz")
     with tmpdir() as d:
@@ -969,19 +1046,7 @@ def test_visualize_highlevelgraph():
         x = da.arange(5, chunks=2)
         viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
         # check visualization will automatically render in the jupyter notebook
-        assert isinstance(viz, graphviz.dot.Digraph)
-
-
-@pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
-)
-def test_visualize_lists(tmpdir):
-    pytest.importorskip("graphviz")
-    fn = os.path.join(str(tmpdir), "myfile.dot")
-    dask.visualize([{"abc-xyz": (add, 1, 2)}], filename=fn)
-    with open(fn) as f:
-        text = f.read()
-    assert "abc-xyz" in text
+        assert isinstance(viz, graphviz.Digraph)
 
 
 @pytest.mark.skipif("not da")
@@ -1262,6 +1327,19 @@ def test_normalize_function_limited_size():
     assert 50 < len(function_cache) < 600
 
 
+def test_normalize_function_dataclass_field_no_repr():
+    A = dataclasses.make_dataclass(
+        "A",
+        [("param", float, dataclasses.field(repr=False))],
+        namespace={"__dask_tokenize__": lambda self: self.param},
+    )
+
+    a1, a2 = A(1), A(2)
+
+    assert normalize_function(a1) == normalize_function(a1)
+    assert normalize_function(a1) != normalize_function(a2)
+
+
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
 
@@ -1331,13 +1409,33 @@ def test_raise_get_keyword():
     assert "scheduler=" in str(info.value)
 
 
+class MyExecutor(Executor):
+    _max_workers = None
+
+
 def test_get_scheduler():
     assert get_scheduler() is None
+    assert get_scheduler(scheduler=dask.local.get_sync) is dask.local.get_sync
     assert get_scheduler(scheduler="threads") is dask.threaded.get
     assert get_scheduler(scheduler="sync") is dask.local.get_sync
+    assert callable(get_scheduler(scheduler=dask.local.synchronous_executor))
+    assert callable(get_scheduler(scheduler=MyExecutor()))
     with dask.config.set(scheduler="threads"):
-        assert get_scheduler(scheduler="threads") is dask.threaded.get
+        assert get_scheduler() is dask.threaded.get
     assert get_scheduler() is None
+
+
+def test_get_scheduler_with_distributed_active():
+
+    with dask.config.set(scheduler="dask.distributed"):
+        warning_message = (
+            "Running on a single-machine scheduler when a distributed client "
+            "is active might lead to unexpected results."
+        )
+        with pytest.warns(UserWarning, match=warning_message) as user_warnings_a:
+            get_scheduler(scheduler="threads")
+            get_scheduler(scheduler="sync")
+        assert len(user_warnings_a) == 2
 
 
 def test_callable_scheduler():
@@ -1382,13 +1480,40 @@ def test_optimizations_ctd():
 
 def test_clone_key():
     h = object()  # arbitrary hashable
-    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
-    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
-    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
+    assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
     assert clone_key(("sum-1-2-3", h, 1), 123) == (
-        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        "sum-1efd41f02035dc802f4ebb9995d07e9d",
         h,
         1,
     )
     with pytest.raises(TypeError):
         clone_key(1, 2)
+
+
+def test_compute_as_if_collection_low_level_task_graph():
+    # See https://github.com/dask/dask/pull/7969
+    da = pytest.importorskip("dask.array")
+    x = da.arange(10)
+
+    # Boolean flag to ensure MyDaskArray.__dask_optimize__ is called
+    optimized = False
+
+    class MyDaskArray(da.Array):
+        """Dask Array subclass with validation logic in __dask_optimize__"""
+
+        @classmethod
+        def __dask_optimize__(cls, dsk, keys, **kwargs):
+            # Ensure `compute_as_if_collection` don't convert to a low-level task graph
+            assert type(dsk) is HighLevelGraph
+            nonlocal optimized
+            optimized = True
+            return super().__dask_optimize__(dsk, keys, **kwargs)
+
+    result = compute_as_if_collection(
+        MyDaskArray, x.__dask_graph__(), x.__dask_keys__()
+    )[0]
+    assert optimized
+    da.utils.assert_eq(x, result)

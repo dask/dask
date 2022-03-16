@@ -4,17 +4,12 @@ from itertools import product
 import numpy as np
 from tlz import curry
 
-from ..base import tokenize
-from ..layers import BlockwiseCreateArray
-from ..utils import funcname
-from .core import Array, normalize_chunks
-from .utils import (
-    empty_like_safe,
-    full_like_safe,
-    meta_from_array,
-    ones_like_safe,
-    zeros_like_safe,
-)
+from dask.array.core import Array, normalize_chunks
+from dask.array.utils import meta_from_array
+from dask.base import tokenize
+from dask.blockwise import blockwise as core_blockwise
+from dask.layers import ArrayChunkShapeDep
+from dask.utils import funcname
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -70,12 +65,16 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     kwargs = parsed["kwargs"]
     func = partial(func, dtype=dtype, **kwargs)
 
-    graph = BlockwiseCreateArray(
-        name,
+    out_ind = dep_ind = tuple(range(len(shape)))
+    graph = core_blockwise(
         func,
-        shape,
-        chunks,
+        name,
+        out_ind,
+        ArrayChunkShapeDep(chunks),
+        dep_ind,
+        numblocks={},
     )
+
     return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
@@ -107,20 +106,8 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func, func_like, *args, **kwargs):
-    """
-    Safe implementation for wrap_func_like(), attempts to use func_like(),
-    if the shape keyword argument, falls back to func().
-    """
-    try:
-        return func_like(*args, **kwargs)
-    except TypeError:
-        return func(*args, **kwargs)
-
-
 @curry
-def wrap(wrap_func, func, **kwargs):
-    func_like = kwargs.pop("func_like", None)
+def wrap(wrap_func, func, func_like=None, **kwargs):
     if func_like is None:
         f = partial(wrap_func, func, **kwargs)
     else:
@@ -144,10 +131,10 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 @curry
 def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
-    if shape == ():
-        return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
-    else:
-        return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
+    # cupy-specific hack. numpy is happy with hardcoded shape=().
+    null_shape = () if shape == () else 1
+
+    return np.broadcast_to(func(meta, shape=null_shape, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -169,23 +156,18 @@ def broadcast_trick(func):
     Note that those array are read-only and numpy will refuse to assign to them,
     so should be safe.
     """
-
     inner = _broadcast_trick_inner(func)
-
-    if func.__doc__ is not None:
-        inner.__doc__ = func.__doc__
-        inner.__name__ = func.__name__
-        if inner.__name__.endswith("_like_safe"):
-            inner.__name__ = inner.__name__[:-10]
+    inner.__doc__ = func.__doc__
+    inner.__name__ = func.__name__
     return inner
 
 
-ones = w(broadcast_trick(ones_like_safe), dtype="f8")
-zeros = w(broadcast_trick(zeros_like_safe), dtype="f8")
-empty = w(broadcast_trick(empty_like_safe), dtype="f8")
+ones = w(broadcast_trick(np.ones_like), dtype="f8")
+zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
+empty = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
-w_like = wrap(wrap_func_like_safe)
+w_like = wrap(wrap_func_like)
 
 
 empty_like = w_like(np.empty, func_like=np.empty_like)
@@ -193,7 +175,7 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(full_like_safe))
+_full = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
@@ -210,6 +192,11 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
+    if "dtype" not in kwargs:
+        if hasattr(fill_value, "dtype"):
+            kwargs["dtype"] = fill_value.dtype
+        else:
+            kwargs["dtype"] = type(fill_value)
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 

@@ -1,11 +1,12 @@
 import os
+import xml.etree.ElementTree
 from collections.abc import Set
 
 import pytest
 
 import dask
 from dask.blockwise import Blockwise, blockwise_token
-from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
 
 
@@ -127,6 +128,17 @@ def test_cull_layers():
         assert culled.dependencies[k] is hg.dependencies[k]
 
 
+def test_repr_html_hlg_layers():
+    pytest.importorskip("jinja2")
+    hg = HighLevelGraph(
+        {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}},
+        {"a": set(), "b": set()},
+    )
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
+
+
 def annot_map_fn(key):
     return key[1:]
 
@@ -178,6 +190,17 @@ def test_annotation_pack_unpack():
     assert annotations == {"workers": {"n": ("alice",)}}
 
 
+def test_materializedlayer_cull_preserves_annotations():
+    layer = MaterializedLayer(
+        {"a": 42, "b": 3.14},
+        annotations={"foo": "bar"},
+    )
+
+    culled_layer, _ = layer.cull({"a"}, [])
+    assert len(culled_layer) == 1
+    assert culled_layer.annotations == {"foo": "bar"}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
@@ -211,13 +234,6 @@ def test_blockwise_cull(flat):
         assert not layer.is_materialized()
 
 
-def test_highlevelgraph_dicts_deprecation():
-    with pytest.warns(FutureWarning):
-        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
-        hg = HighLevelGraph(layers, {"a": set()})
-        assert hg.dicts == layers
-
-
 def test_len_does_not_materialize():
     a = {"x": 1}
     b = Blockwise(
@@ -240,3 +256,23 @@ def test_len_does_not_materialize():
     assert len(hg) == len(a) + len(b) == 7
 
     assert not hg.layers["b"].is_materialized()
+
+
+def test_node_tooltips_exist():
+    da = pytest.importorskip("dask.array")
+    pytest.importorskip("graphviz")
+
+    a = da.ones((1000, 1000), chunks=(100, 100))
+    b = a + a.T
+    c = b.sum(axis=1)
+
+    hg = c.dask
+    g = to_graphviz(hg)
+
+    for layer in g.body:
+        if "label" in layer:
+            assert "tooltip" in layer
+            start = layer.find('tooltip="') + len('tooltip="')
+            end = layer.find('"', start)
+            tooltip = layer[start:end]
+            assert len(tooltip) > 0

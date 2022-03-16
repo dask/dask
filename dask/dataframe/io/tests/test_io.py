@@ -1,3 +1,4 @@
+import contextlib
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
@@ -112,6 +113,12 @@ def test_from_array_with_record_dtype():
     assert (d.compute().to_records(index=False) == x).all()
 
 
+@contextlib.contextmanager
+def check_bcolz_deprecation_warning():
+    with pytest.warns(FutureWarning, match="bcolz was deprecated"):
+        yield
+
+
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip("bcolz")
 
@@ -119,11 +126,47 @@ def test_from_bcolz_multiple_threads():
         t = bcolz.ctable(
             [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
         )
+
+        d = dd.from_bcolz(t, chunksize=2)
+
+        assert d.npartitions == 2
+        assert is_categorical_dtype(d.dtypes["a"])
+        assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
+        assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
+
+        d = dd.from_bcolz(t, chunksize=2, index="x")
+
+        L = list(d.index.compute(scheduler="sync"))
+        assert L == [1, 2, 3] or L == [1, 3, 2]
+
+        # Names
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
+            dd.from_bcolz(t, chunksize=2).dask
+        )
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
+            dd.from_bcolz(t, chunksize=3).dask
+        )
+
+    with check_bcolz_deprecation_warning():
+        with ThreadPoolExecutor(5) as pool:
+            list(pool.map(check, range(5)))
+
+
+def test_from_bcolz():
+    bcolz = pytest.importorskip("bcolz")
+
+    t = bcolz.ctable(
+        [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
+    )
+
+    with check_bcolz_deprecation_warning():
         d = dd.from_bcolz(t, chunksize=2)
         assert d.npartitions == 2
         assert is_categorical_dtype(d.dtypes["a"])
         assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
         assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
+        L = list(d.index.compute(scheduler="sync"))
+        assert L == [0, 1, 2]
 
         d = dd.from_bcolz(t, chunksize=2, index="x")
         L = list(d.index.compute(scheduler="sync"))
@@ -137,42 +180,12 @@ def test_from_bcolz_multiple_threads():
             dd.from_bcolz(t, chunksize=3).dask
         )
 
-    with ThreadPoolExecutor(5) as pool:
-        list(pool.map(check, range(5)))
+        dsk = dd.from_bcolz(t, chunksize=3).dask
 
+        t.append((4, 4.0, "b"))
+        t.flush()
 
-def test_from_bcolz():
-    bcolz = pytest.importorskip("bcolz")
-
-    t = bcolz.ctable(
-        [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
-    )
-    d = dd.from_bcolz(t, chunksize=2)
-    assert d.npartitions == 2
-    assert is_categorical_dtype(d.dtypes["a"])
-    assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
-    assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
-    L = list(d.index.compute(scheduler="sync"))
-    assert L == [0, 1, 2]
-
-    d = dd.from_bcolz(t, chunksize=2, index="x")
-    L = list(d.index.compute(scheduler="sync"))
-    assert L == [1, 2, 3] or L == [1, 3, 2]
-
-    # Names
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
-        dd.from_bcolz(t, chunksize=2).dask
-    )
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
-        dd.from_bcolz(t, chunksize=3).dask
-    )
-
-    dsk = dd.from_bcolz(t, chunksize=3).dask
-
-    t.append((4, 4.0, "b"))
-    t.flush()
-
-    assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(dsk)
+        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(dsk)
 
 
 def test_from_bcolz_no_lock():
@@ -182,9 +195,12 @@ def test_from_bcolz_no_lock():
     t = bcolz.ctable(
         [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"], chunklen=2
     )
-    a = dd.from_bcolz(t, chunksize=2)
-    b = dd.from_bcolz(t, chunksize=2, lock=True)
-    c = dd.from_bcolz(t, chunksize=2, lock=False)
+
+    with check_bcolz_deprecation_warning():
+        a = dd.from_bcolz(t, chunksize=2)
+        b = dd.from_bcolz(t, chunksize=2, lock=True)
+        c = dd.from_bcolz(t, chunksize=2, lock=False)
+
     assert_eq(a, b)
     assert_eq(a, c)
 
@@ -202,7 +218,9 @@ def test_from_bcolz_filename():
         )
         t.flush()
 
-        d = dd.from_bcolz(fn, chunksize=2)
+        with check_bcolz_deprecation_warning():
+            d = dd.from_bcolz(fn, chunksize=2)
+
         assert list(d.x.compute()) == [1, 2, 3]
 
 
@@ -212,7 +230,10 @@ def test_from_bcolz_column_order():
     t = bcolz.ctable(
         [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
     )
-    df = dd.from_bcolz(t, chunksize=2)
+
+    with check_bcolz_deprecation_warning():
+        df = dd.from_bcolz(t, chunksize=2)
+
     assert list(df.loc[0].compute().columns) == ["x", "y", "a"]
 
 
@@ -512,8 +533,54 @@ def test_to_bag():
 
     assert ddf.to_bag().compute() == list(a.itertuples(False))
     assert ddf.to_bag(True).compute() == list(a.itertuples(True))
-    assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
+    assert ddf.to_bag(format="dict").compute() == [
+        {"x": "a", "y": 2},
+        {"x": "b", "y": 3},
+        {"x": "c", "y": 4},
+        {"x": "d", "y": 5},
+    ]
+    assert ddf.to_bag(True, format="dict").compute() == [
+        {"index": 1.0, "x": "a", "y": 2},
+        {"index": 2.0, "x": "b", "y": 3},
+        {"index": 3.0, "x": "c", "y": 4},
+        {"index": 4.0, "x": "d", "y": 5},
+    ]
+    assert ddf.x.to_bag(True).compute() == list(a.x.items())
     assert ddf.x.to_bag().compute() == list(a.x)
+
+    assert ddf.x.to_bag(True, format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
+    assert ddf.x.to_bag(format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
+
+
+def test_to_bag_frame():
+    from dask import get
+    from dask.bag import Bag
+
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
+            index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
+        ),
+        npartitions=2,
+    )
+
+    # Convert to bag, and check that
+    # collection type has changed, but
+    # partition data has not
+    bagdf = ddf.to_bag(format="frame")
+    assert isinstance(bagdf, Bag)
+    assert_eq(get(bagdf.dask, (bagdf.name, 0)), ddf.partitions[0])
+    assert_eq(get(bagdf.dask, (bagdf.name, 1)), ddf.partitions[1])
 
 
 def test_to_records():
@@ -598,6 +665,20 @@ def test_from_delayed():
     with pytest.raises(ValueError) as e:
         dd.from_delayed(dfs, meta=meta.a).compute()
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
+
+
+def test_from_delayed_preserves_hlgs():
+    df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
+    parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
+    dfs = [delayed(parts.__getitem__)(i) for i in range(4)]
+    meta = dfs[0].compute()
+
+    chained = [d.a for d in dfs]
+    hlg = dd.from_delayed(chained, meta=meta).dask
+    for d in chained:
+        for layer_name, layer in d.dask.layers.items():
+            assert hlg.layers[layer_name] == layer
+            assert hlg.dependencies[layer_name] == d.dask.dependencies[layer_name]
 
 
 def test_from_delayed_misordered_meta():

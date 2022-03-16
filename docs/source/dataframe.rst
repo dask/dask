@@ -5,7 +5,6 @@ DataFrame
    :maxdepth: 1
    :hidden:
 
-   dataframe-api.rst
    dataframe-create.rst
    dataframe-best-practices.rst
    dataframe-design.rst
@@ -41,14 +40,16 @@ Dask DataFrame.
 Design
 ------
 
+.. image:: images/dask-dataframe.svg
+   :alt: Column of four squares collectively labeled as a Dask DataFrame with a single constituent square labeled as a Pandas DataFrame.
+   :width: 35%
+   :align: right
+
 Dask DataFrames coordinate many Pandas DataFrames/Series arranged along the
 index.  A Dask DataFrame is partitioned *row-wise*, grouping rows by index value
 for efficiency.  These Pandas objects may live on disk or on other machines.
 
-.. image:: images/dask-dataframe.svg
-   :alt: Dask DataFrames coordinate many Pandas DataFrames
-   :width: 40%
-
+|
 
 Dask DataFrame copies the Pandas API
 ------------------------------------
@@ -169,6 +170,6 @@ bound than NumPy, so multi-core speed-ups are not as pronounced for
 Dask DataFrame as they are for Dask Array.  This is changing, and
 the Pandas development team is actively working on releasing the GIL.
 
-When dealing with text data, you may see speedups by switching to the newer
-:doc:`distributed scheduler <setup/single-distributed>` either on a cluster or
+When dealing with text data, you may see speedups by switching to the
+:doc:`distributed scheduler <deploying>` either on a cluster or
 single machine.

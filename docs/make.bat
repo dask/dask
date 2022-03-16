@@ -39,6 +39,8 @@ if "%1" == "help" (
 )
 
 if "%1" == "clean" (
+	for /d %%i in (source\generated\*) do rmdir /q /s %%i
+	del /q /s source\generated\*
 	for /d %%i in (%BUILDDIR%\*) do rmdir /q /s %%i
 	del /q /s %BUILDDIR%\*
 	goto end

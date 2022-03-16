@@ -1,25 +1,16 @@
-import difflib
+import contextlib
 import functools
 import itertools
 import math
 import numbers
-import os
 import warnings
 
 import numpy as np
 from tlz import concat, frequencies
 
-from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
-from .core import Array
-
-try:
-    AxisError = np.AxisError
-except AttributeError:
-    try:
-        np.array([0]).sum(axis=5)
-    except Exception as e:
-        AxisError = type(e)
+from dask.array.core import Array
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import has_keyword, is_arraylike, is_cupy_type
 
 
 def normalize_to_array(x):
@@ -167,7 +158,7 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:
-            with ignoring(AttributeError):
+            with contextlib.suppress(AttributeError):
                 meta = meta.astype(_dtype)
 
         if np.isscalar(meta):
@@ -223,19 +214,25 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def _check_chunks(x):
-    x = x.persist(scheduler="sync")
+def _check_chunks(x, scheduler=None):
+    x = x.persist(scheduler=scheduler)
     for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
         chunk = x.dask[(x.name,) + idx]
+        if hasattr(chunk, "result"):  # it's a future
+            chunk = chunk.result()
         if not hasattr(chunk, "dtype"):
             chunk = np.array(chunk, dtype="O")
         expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
         assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
-        assert chunk.dtype == x.dtype
+        assert (
+            chunk.dtype == x.dtype
+        ), "maybe you forgot to pass the scheduler to `assert_eq`?"
     return x
 
 
-def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=True):
+def _get_dt_meta_computed(
+    x, check_shape=True, check_graph=True, check_chunks=True, scheduler=None
+):
     x_original = x
     x_meta = None
     x_computed = None
@@ -248,8 +245,8 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=Tr
         x_meta = getattr(x, "_meta", None)
         if check_chunks:
             # Replace x with persisted version to avoid computing it twice.
-            x = _check_chunks(x)
-        x = x.compute(scheduler="sync")
+            x = _check_chunks(x, scheduler=scheduler)
+        x = x.compute(scheduler=scheduler)
         x_computed = x
         if hasattr(x, "todense"):
             x = x.todense()
@@ -275,26 +272,36 @@ def assert_eq(
     check_meta=True,
     check_chunks=True,
     check_type=True,
+    check_dtype=True,
+    equal_nan=True,
+    scheduler="sync",
     **kwargs,
 ):
     a_original = a
     b_original = b
 
+    if isinstance(a, (list, int, float)):
+        a = np.array(a)
+    if isinstance(b, (list, int, float)):
+        b = np.array(b)
+
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
-        a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
+        a,
+        check_shape=check_shape,
+        check_graph=check_graph,
+        check_chunks=check_chunks,
+        scheduler=scheduler,
     )
     b, bdt, b_meta, b_computed = _get_dt_meta_computed(
-        b, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
+        b,
+        check_shape=check_shape,
+        check_graph=check_graph,
+        check_chunks=check_chunks,
+        scheduler=scheduler,
     )
 
-    if str(adt) != str(bdt):
-        # Ignore check for matching length of flexible dtypes, since Array._meta
-        # can't encode that information
-        if adt.type == bdt.type and not (adt.type == np.bytes_ or adt.type == np.str_):
-            diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
-            raise AssertionError(
-                "string repr are different" + os.linesep + os.linesep.join(diff)
-            )
+    if check_dtype and str(adt) != str(bdt):
+        raise AssertionError(f"a and b have different dtypes: (a: {adt}, b: {bdt})")
 
     try:
         assert (
@@ -346,7 +353,7 @@ def assert_eq(
                         )
                         assert type(b_meta) == type(b_computed), msg
         msg = "found values in 'a' and 'b' which differ by more than the allowed amount"
-        assert allclose(a, b, **kwargs), msg
+        assert allclose(a, b, equal_nan=equal_nan, **kwargs), msg
         return True
     except TypeError:
         pass
@@ -380,59 +387,6 @@ def _dtype_of(a):
         return a.dtype
     except AttributeError:
         return np.asanyarray(a).dtype
-
-
-def empty_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.empty_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.empty(shape, **kwargs)``.
-    """
-    try:
-        return np.empty_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.empty(shape, **kwargs)
-
-
-def full_like_safe(a, fill_value, shape, **kwargs):
-    """
-    Return ``np.full_like(a, fill_value, shape=shape, **kwargs)`` if the
-    shape argument is supported (requires NumPy >= 1.17), otherwise
-    falls back to using the old behavior, returning
-    ``np.full(shape, fill_value, **kwargs)``.
-    """
-    try:
-        return np.full_like(a, fill_value, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.full(shape, fill_value, **kwargs)
-
-
-def ones_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.ones_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.ones(shape, **kwargs)``.
-    """
-    try:
-        return np.ones_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.ones(shape, **kwargs)
-
-
-def zeros_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.zeros_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.zeros(shape, **kwargs)``.
-    """
-    try:
-        return np.zeros_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.zeros(shape, **kwargs)
 
 
 def arange_safe(*args, like, **kwargs):
@@ -477,7 +431,7 @@ def array_safe(a, like, **kwargs):
     to convert a `dask.Array` and CuPy doesn't implement `__array__` to
     prevent implicit copies to host.
     """
-    from .routines import array
+    from dask.array.routines import array
 
     return _array_like_safe(np.array, array, a, like, **kwargs)
 
@@ -491,7 +445,7 @@ def asarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asarray
+    from dask.array.core import asarray
 
     return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
 
@@ -505,7 +459,7 @@ def asanyarray_safe(a, like, **kwargs):
     a.compute(scheduler="sync") before np.asanyarray, as downstream
     libraries are unlikely to know how to convert a dask.Array.
     """
-    from .core import asanyarray
+    from dask.array.core import asanyarray
 
     return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 
@@ -517,7 +471,7 @@ def validate_axis(axis, ndim):
     if not isinstance(axis, numbers.Integral):
         raise TypeError("Axis value must be an integer, got %s" % axis)
     if axis < -ndim or axis >= ndim:
-        raise AxisError(
+        raise np.AxisError(
             "Axis %d is out of bounds for array of dimension %d" % (axis, ndim)
         )
     if axis < 0:
@@ -587,15 +541,15 @@ def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
 
 
-def _is_nep18_active():
-    class A:
-        def __array_function__(self, *args, **kwargs):
-            return True
-
-    try:
-        return np.concatenate([A()])
-    except ValueError:
-        return False
-
-
-IS_NEP18_ACTIVE = _is_nep18_active()
+def __getattr__(name):
+    # Can't use the @_deprecated decorator as it would not work on `except AxisError`
+    if name == "AxisError":
+        warnings.warn(
+            "AxisError was deprecated after version 2021.10.0 and will be removed in a "
+            "future release. Please use numpy.AxisError instead.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        return np.AxisError
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")

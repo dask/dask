@@ -1,3 +1,5 @@
+:orphan:
+
 Diagnostics (distributed)
 =========================
 
@@ -21,7 +23,7 @@ Dashboard
             allowfullscreen>
     </iframe>
 
-If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
+If `Bokeh <https://docs.bokeh.org>`_ is installed
 then the dashboard will start up automatically whenever the scheduler is created.
 For local use this happens when you create a client with no arguments:
 
@@ -107,14 +109,13 @@ The ``progress`` function takes a Dask object that is executing in the backgroun
 
 .. code-block:: python
 
-   # Single machine progress bar
+   # Progress bar on a single-machine scheduler
    from dask.diagnostics import ProgressBar
 
    with ProgressBar():
        x.compute()
 
-   # Distributed scheduler ProgressBar
-
+   # Progress bar with the distributed scheduler
    from dask.distributed import Client, progress
 
    client = Client()  # use dask.distributed by default

@@ -2,21 +2,13 @@
 output collections produced by this module are typically not functionally equivalent to
 their inputs.
 """
-import uuid
-from numbers import Number
-from typing import (
-    AbstractSet,
-    Callable,
-    Dict,
-    Hashable,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from __future__ import annotations
 
-from .base import (
+import uuid
+from collections.abc import Callable, Hashable
+from typing import Callable, Hashable, Literal, TypeVar
+
+from dask.base import (
     clone_key,
     get_collection_names,
     get_name_from_key,
@@ -24,23 +16,20 @@ from .base import (
     tokenize,
     unpack_collections,
 )
-from .blockwise import blockwise
-from .core import flatten
-from .delayed import Delayed, delayed
-from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.blockwise import blockwise
+from dask.core import flatten
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
-try:
-    from typing import Literal  # Python >= 3.8
-
-    SplitEvery = Union[Number, Literal[False], None]
-except ImportError:
-    SplitEvery = Union[Number, bool, None]  # type: ignore
 
 
-def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:
+def checkpoint(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
@@ -125,7 +114,7 @@ def _checkpoint_one(collection, split_every) -> Delayed:
     return Delayed(name, dsk)
 
 
-def _can_apply_blockwise(collection):
+def _can_apply_blockwise(collection) -> bool:
     """Return True if _map_blocks can be sped up via blockwise operations; False
     otherwise.
 
@@ -133,21 +122,21 @@ def _can_apply_blockwise(collection):
           pint.Quantity, xarray DataArray, Dataset, and Variable.
     """
     try:
-        from .bag import Bag
+        from dask.bag import Bag
 
         if isinstance(collection, Bag):
             return True
     except ImportError:
         pass
     try:
-        from .array import Array
+        from dask.array import Array
 
         if isinstance(collection, Array):
             return True
     except ImportError:
         pass
     try:
-        from .dataframe import DataFrame, Series
+        from dask.dataframe import DataFrame, Series
 
         return isinstance(collection, (DataFrame, Series))
     except ImportError:
@@ -159,7 +148,7 @@ def _build_map_layer(
     prev_name: str,
     new_name: str,
     collection,
-    dependencies: Tuple[Delayed, ...] = (),
+    dependencies: tuple[Delayed, ...] = (),
 ) -> Layer:
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
     fall back to MaterializedLayer otherwise.
@@ -219,7 +208,7 @@ def bind(
     omit=None,
     seed: Hashable = None,
     assume_layers: bool = True,
-    split_every: SplitEvery = None,
+    split_every: float | Literal[False] | None = None,
 ) -> T:
     """
     Make ``children`` collection(s), optionally omitting sub-collections, dependent on
@@ -317,9 +306,9 @@ def bind(
 
 def _bind_one(
     child: T,
-    blocker: Optional[Delayed],
-    omit_layers: Set[str],
-    omit_keys: Set[Hashable],
+    blocker: Delayed | None,
+    omit_layers: set[str],
+    omit_keys: set[Hashable],
     seed: Hashable,
 ) -> T:
     prev_coll_names = get_collection_names(child)
@@ -329,8 +318,8 @@ def _bind_one(
         return child
 
     dsk = child.__dask_graph__()  # type: ignore
-    new_layers: Dict[str, Layer] = {}
-    new_deps: Dict[str, AbstractSet[str]] = {}
+    new_layers: dict[str, Layer] = {}
+    new_deps: dict[str, set[str]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:
@@ -419,7 +408,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     --------
     (tokens have been simplified for the sake of brevity)
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
@@ -465,7 +454,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def wait_on(*collections, split_every: SplitEvery = None):
+def wait_on(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+):
     """Ensure that all chunks of all input collections have been computed before
     computing the dependents of any of the chunks.
 
@@ -473,7 +465,7 @@ def wait_on(*collections, split_every: SplitEvery = None):
     will only proceed when all chunks of the array ``x`` have been computed, but
     otherwise matches ``x``:
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x = da.ones(10, chunks=5)
     >>> u = wait_on(x)
 

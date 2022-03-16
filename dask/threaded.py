@@ -3,18 +3,19 @@ A threaded shared-memory scheduler
 
 See local.py
 """
+from __future__ import annotations
+
 import atexit
 import multiprocessing.pool
 import sys
 import threading
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Executor, ThreadPoolExecutor
 from threading import Lock, current_thread
 
-from . import config
-from .local import MultiprocessingPoolExecutor, get_async
-from .system import CPU_COUNT
-from .utils_test import add, inc  # noqa: F401
+from dask import config
+from dask.local import MultiprocessingPoolExecutor, get_async
+from dask.system import CPU_COUNT
 
 
 def _thread_get_id():
@@ -22,8 +23,8 @@ def _thread_get_id():
 
 
 main_thread = current_thread()
-default_pool = None
-pools = defaultdict(dict)
+default_pool: Executor | None = None
+pools: defaultdict[threading.Thread, dict[int, Executor]] = defaultdict(dict)
 pools_lock = Lock()
 
 
@@ -48,7 +49,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
 
     Examples
     --------
-
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> get(dsk, 'w')
     4
@@ -84,7 +86,7 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
         cache=cache,
         get_id=_thread_get_id,
         pack_exception=pack_exception,
-        **kwargs
+        **kwargs,
     )
 
     # Cleanup pools associated to dead threads

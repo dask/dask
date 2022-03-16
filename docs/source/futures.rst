@@ -44,7 +44,7 @@ among the various worker processes or threads:
    # or
    client = Client(processes=False)  # start local workers as threads
 
-If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
+If you have `Bokeh <https://docs.bokeh.org>`_ installed, then this starts up a
 diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
@@ -719,14 +719,9 @@ Publish-Subscribe
 Dask implements the `Publish Subscribe pattern <https://en.wikipedia.org/wiki/Publish%E2%80%93subscribe_pattern>`_,
 providing an additional channel of communication between ongoing tasks.
 
-.. autoclass:: Pub
-   :members:
 
 Actors
 ------
-
-.. note:: This is an advanced feature and is rarely necessary in the common case.
-.. note:: This is an experimental feature and is subject to change without notice.
 
 Actors allow workers to manage rapidly changing state without coordinating with
 the central scheduler.  This has the advantage of reducing latency
@@ -887,7 +882,6 @@ API
    Client.scatter
    Client.shutdown
    Client.scheduler_info
-   Client.shutdown
    Client.start_ipython_workers
    Client.start_ipython_scheduler
    Client.submit

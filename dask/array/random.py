@@ -1,15 +1,12 @@
+import contextlib
 import numbers
-import warnings
 from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, ignoring, random_state_data, skip_doctest
-from .core import (
+from dask.array.core import (
     Array,
     asarray,
     broadcast_shapes,
@@ -17,22 +14,10 @@ from .core import (
     normalize_chunks,
     slices_from_chunks,
 )
-from .creation import arange
-
-
-def doc_wraps(func):
-    """Copy docstring from one function to another"""
-    warnings.warn(
-        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
-        FutureWarning,
-    )
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
+from dask.array.creation import arange
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from, random_state_data
 
 
 class RandomState:
@@ -122,7 +107,7 @@ class RandomState:
                     dependencies.append(res)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[i] = name
                     dsk[name] = res
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
@@ -137,7 +122,7 @@ class RandomState:
                     dependencies.append(res)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[key] = name
                     dsk[name] = res
                 small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
@@ -147,7 +132,7 @@ class RandomState:
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
-        name = "{0}-{1}".format(funcname, token)
+        name = f"{funcname}-{token}"
 
         keys = product(
             [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))
@@ -204,7 +189,7 @@ class RandomState:
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with ignoring(AttributeError):
+    with contextlib.suppress(AttributeError):
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
@@ -360,7 +345,7 @@ class RandomState:
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
-        from .slicing import shuffle_slice
+        from dask.array.slicing import shuffle_slice
 
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")

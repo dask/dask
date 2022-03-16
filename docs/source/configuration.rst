@@ -25,46 +25,26 @@ Access Configuration
 .. autosummary::
    dask.config.get
 
-Configuration is usually read by using the ``dask.config`` module, either with
-the ``config`` dictionary or the ``get`` function:
+Dask's configuration system is usually accessed using the ``dask.config.get`` function.
+You can use ``.`` for nested access, for example:
 
 .. code-block:: python
 
    >>> import dask
    >>> import dask.distributed  # populate config with distributed defaults
-   >>> dask.config.config
-   {
-       "array": {
-           "chunk-size": "128 MiB",
-       }
-       "distributed": {
-           "logging": {
-               "distributed": "info",
-               "bokeh": "critical",
-               "tornado": "critical"
-            },
-            "admin": {
-                "log-format": "%(name)s - %(levelname)s - %(message)s"
-            }
-       }
-   }
 
-   >>> dask.config.get("distributed.logging")
-   {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical'
-   }
+   >>> dask.config.get("distributed.client") # use `.` for nested access
+   {'heartbeat': '5s', 'scheduler-info-interval': '2s'}
 
-   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
-   'critical'
+   >>> dask.config.get("distributed.scheduler.unknown-task-duration")
+   '500ms'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
 
 Note that the ``get`` function treats underscores and hyphens identically.
-For example, ``dask.config.get('num_workers')`` is equivalent to
-``dask.config.get('num-workers')``.
+For example, ``dask.config.get("temporary-directory")`` is equivalent to
+``dask.config.get("temporary_directory")``.
 
 Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
 :ref:`api.utilities`.
@@ -75,31 +55,32 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-You can specify configuration values in YAML files like the following:
+You can specify configuration values in YAML files. For example:
 
 .. code-block:: yaml
 
    array:
-      chunk-size: 128 MiB
+     chunk-size: 128 MiB
 
    distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
-
-     scheduler:
-       work-stealing: True
-       allowed-failures: 5
-
-       admin:
-         log-format: '%(name)s - %(levelname)s - %(message)s'
+     worker:
+       memory:
+         spill: 0.85  # default: 0.7
+         target: 0.75  # default: 0.6
+         terminate: 0.98  # default: 0.95
+            
+     dashboard:
+       # Locate the dashboard if working on a Jupyter Hub server
+       link: /user/<user>/proxy/8787/status
+        
 
 These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+3.  The ``{prefix}/etc/dask`` directories with ``{prefix}`` in `site.PREFIXES
+    <https://docs.python.org/3/library/site.html#site.PREFIXES>`_
+4.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
     variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
@@ -112,9 +93,6 @@ The contents of these YAML files are merged together, allowing different
 Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
 
-*Note: for historical reasons we also look in the ``~/.dask`` directory for
-config files.  This is deprecated and will soon be removed.*
-
 
 Environment Variables
 ~~~~~~~~~~~~~~~~~~~~~
@@ -126,6 +104,7 @@ the following:
 
    export DASK_DISTRIBUTED__SCHEDULER__WORK_STEALING=True
    export DASK_DISTRIBUTED__SCHEDULER__ALLOWED_FAILURES=5
+   export DASK_DISTRIBUTED__DASHBOARD__LINK="/user/<user>/proxy/8787/status"
 
 resulting in configuration values like the following:
 
@@ -189,18 +168,24 @@ and interprets ``"."`` as nested access:
 
 .. code-block:: python
 
-   >>> dask.config.set({'scheduler.work-stealing': True})
+   >>> dask.config.set({'optimization.fuse.ave-width': 4})
 
 This function can also be used as a context manager for consistent cleanup:
 
 .. code-block:: python
 
-   with dask.config.set({'scheduler.work-stealing': True}):
-       ...
+   >>> with dask.config.set({'optimization.fuse.ave-width': 4}):
+   ...     arr2, = dask.optimize(arr)
 
 Note that the ``set`` function treats underscores and hyphens identically.
-For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
-equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
+For example, ``dask.config.set({'optimization.fuse.ave_width': 4})`` is
+equivalent to ``dask.config.set({'optimization.fuse.ave-width': 4})``.
+
+Finally, note that persistent objects may acquire configuration settings when
+they are initialized. These settings may also be cached for performance reasons.
+This is particularly true for ``dask.distributed`` objects such as Client, Scheduler,
+Worker, and Nanny.
+
 
 Distributing configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -231,11 +216,15 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   array:
+      chunk-size: 128 MiB
+
    distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
+      workers:
+         memory:
+            spill: 0.85
+            target: 0.75
+            terminate: 0.98
    </textarea>
 
 **Environment variable**
@@ -243,9 +232,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
-   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
-   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
-   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   export DASK_ARRAY__CHUNK_SIZE="128 MiB"
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__SPILL=0.85
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TARGET=0.75
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TERMINATE=0.98
    </textarea>
 
 **Inline with dot notation**
@@ -253,9 +243,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
-   >>> dask.config.set({"distributed.logging.distributed": "info"})
-   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
-   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   >>> dask.config.set({"array.chunk-size": "128 MiB"})
+   >>> dask.config.set({"distributed.workers.memory.spill": 0.85})
+   >>> dask.config.set({"distributed.workers.memory.target": 0.75})
+   >>> dask.config.set({"distributed.workers.memory.terminate": 0.98})
    </textarea>
 
 Updating Configuration
@@ -460,3 +451,101 @@ API
 .. autofunction:: dask.config.refresh
 .. autofunction:: dask.config.ensure_file
 .. autofunction:: dask.config.expand_environment_variables
+
+
+Configuration Reference
+-----------------------
+
+.. contents:: :local:
+
+.. note::
+   It is possible to configure Dask inline with dot notation, with YAML or via environment variables.
+   See the `conversion utility <#conversion-utility>`_ for converting the following dot notation to other forms.
+
+Dask
+~~~~
+
+.. dask-config-block::
+    :location: dask
+    :config: https://raw.githubusercontent.com/dask/dask/main/dask/dask.yaml
+    :schema: https://raw.githubusercontent.com/dask/dask/main/dask/dask-schema.yaml
+
+
+Distributed Client
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.client
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+Distributed Comm
+~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.comm
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Dashboard
+~~~~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.dashboard
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Deploy
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.deploy
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Scheduler
+~~~~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.scheduler
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Worker
+~~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.worker
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Nanny
+~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.nanny
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed Admin
+~~~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.admin
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Distributed RMM
+~~~~~~~~~~~~~~~
+
+.. dask-config-block::
+    :location: distributed.rmm
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml

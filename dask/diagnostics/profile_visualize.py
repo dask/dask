@@ -1,13 +1,21 @@
 import random
+import warnings
 from bisect import bisect_left
-from distutils.version import LooseVersion
 from itertools import cycle
 from operator import add, itemgetter
 
 from tlz import accumulate, groupby, pluck, unique
 
-from ..core import istask
-from ..utils import apply, funcname, import_required
+from dask.core import istask
+from dask.utils import apply, funcname, import_required
+
+
+def BOKEH_VERSION():
+    import bokeh
+    from packaging.version import parse as parse_version
+
+    return parse_version(bokeh.__version__)
+
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 
@@ -90,13 +98,13 @@ def pprint_task(task, keys, label_size=60):
         if kwargs:
             if label_size2 > 5:
                 kwargs = ", " + ", ".join(
-                    "{0}={1}".format(k, pprint(v)) for k, v in sorted(kwargs.items())
+                    f"{k}={pprint(v)}" for k, v in sorted(kwargs.items())
                 )
             else:
                 kwargs = ", ..."
         else:
             kwargs = ""
-        return "{0}({1}{2}{3}".format(head, args, kwargs, tail)
+        return f"{head}({args}{kwargs}{tail}"
     elif isinstance(task, list):
         if not task:
             return "[]"
@@ -106,7 +114,7 @@ def pprint_task(task, keys, label_size=60):
         else:
             label_size2 = int((label_size - 2 - 2 * len(task)) // len(task))
             args = ", ".join(pprint_task(t, keys, label_size2) for t in task)
-            return "[{0}]".format(args)
+            return f"[{args}]"
     else:
         try:
             if task in keys:
@@ -145,7 +153,9 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwargs):
+def visualize(
+    profilers, filename="profile.html", show=True, save=None, mode=None, **kwargs
+):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
@@ -154,12 +164,12 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     ----------
     profilers : profiler or list
         Profiler or list of profilers.
-    file_path : string, optional
+    filename : string, optional
         Name of the plot output file.
     show : boolean, optional
         If True (default), the plot is opened in a browser.
     save : boolean, optional
-        If True (default), the plot is saved to disk.
+        If True (default when not in notebook), the plot is saved to disk.
     mode : str, optional
         Mode passed to bokeh.output_file()
     **kwargs
@@ -171,20 +181,20 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
+    from bokeh.io import state
 
-    if LooseVersion(bokeh.__version__) >= "0.12.10":
-        from bokeh.io import state
+    if "file_path" in kwargs:
+        warnings.warn(
+            "The file_path keyword argument is deprecated "
+            "and will be removed in a future release. "
+            "Please use filename instead.",
+            category=FutureWarning,
+            stacklevel=2,
+        )
+        filename = kwargs.pop("file_path")
 
-        in_notebook = state.curstate().notebook
-    else:
-        from bokeh.io import _state
-
-        in_notebook = _state._notebook
-
-    if not in_notebook:
-        file_path = file_path or "profile.html"
-        bp.output_file(file_path, mode=mode)
+    if save is None:
+        save = not state.curstate().notebook
 
     if not isinstance(profilers, list):
         profilers = [profilers]
@@ -198,18 +208,25 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            f.plot_height -= 30
+            if BOKEH_VERSION().major < 3:
+                f.plot_height -= 30
+            else:
+                f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
         p = bp.gridplot([[f] for f in figs])
     if show:
         bp.show(p)
-    if file_path and save:
+    if save:
+        bp.output_file(filename, mode=mode)
         bp.save(p)
     return p
 
@@ -257,15 +274,15 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         keys, tasks, starts, ends, ids = zip(*results)
 
         id_group = groupby(itemgetter(4), results)
-        timings = dict(
-            (k, [i.end_time - i.start_time for i in v]) for (k, v) in id_group.items()
-        )
-        id_lk = dict(
-            (t[0], n)
+        timings = {
+            k: [i.end_time - i.start_time for i in v] for (k, v) in id_group.items()
+        }
+        id_lk = {
+            t[0]: n
             for (n, t) in enumerate(
                 sorted(timings.items(), key=itemgetter(1), reverse=True)
             )
-        )
+        }
 
         left = min(starts)
         right = max(ends)
@@ -273,7 +290,7 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         p = bp.figure(
             y_range=[str(i) for i in range(len(id_lk))],
             x_range=[0, right - left],
-            **defaults
+            **defaults,
         )
 
         data = {}
@@ -338,7 +355,6 @@ def plot_resources(results, palette="Viridis", **kwargs):
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
     from bokeh import palettes
     from bokeh.models import LinearAxis, Range1d
 
@@ -352,8 +368,12 @@ def plot_resources(results, palette="Viridis", **kwargs):
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
 
     # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
     if "label_size" in kwargs:
@@ -368,7 +388,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         p = bp.figure(
             y_range=fix_bounds(0, max(cpu), 100),
             x_range=fix_bounds(0, right - left, 1),
-            **defaults
+            **defaults,
         )
     else:
         t = mem = cpu = []
@@ -379,11 +399,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         cpu,
         color=colors[0],
         line_width=4,
-        **{
-            "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
-            else "legend": "% CPU"
-        }
+        legend_label="% CPU",
     )
     p.yaxis.axis_label = "% CPU"
     p.extra_y_ranges = {
@@ -397,11 +413,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         color=colors[2],
         y_range_name="memory",
         line_width=4,
-        **{
-            "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
-            else "legend": "Memory"
-        }
+        legend_label="Memory",
     )
     p.add_layout(LinearAxis(y_range_name="memory", axis_label="Memory (MB)"), "right")
     p.xaxis.axis_label = "Time (s)"
@@ -454,8 +466,12 @@ def plot_cache(
     # Support plot_width and plot_height for backwards compatibility
     if "plot_width" in kwargs:
         kwargs["width"] = kwargs.pop("plot_width")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use width instead of plot_width with Bokeh >= 3")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+        if BOKEH_VERSION().major >= 3:
+            warnings.warn("Use height instead of plot_height with Bokeh >= 3")
     defaults.update(**kwargs)
 
     if results:
@@ -486,7 +502,7 @@ def plot_cache(
 
     else:
         p = bp.figure(y_range=[0, 10], x_range=[0, 10], **defaults)
-    p.yaxis.axis_label = "Cache Size ({0})".format(metric_name)
+    p.yaxis.axis_label = f"Cache Size ({metric_name})"
     p.xaxis.axis_label = "Time (s)"
 
     hover = p.select(HoverTool)

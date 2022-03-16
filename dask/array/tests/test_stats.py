@@ -1,3 +1,5 @@
+import warnings
+
 import pytest
 
 scipy = pytest.importorskip("scipy")
@@ -75,15 +77,18 @@ def test_one(kind):
     ],
 )
 def test_two(kind, kwargs):
+    # The sums of observed and expected frequencies must match
     a = np.random.random(size=30)
-    b = np.random.random(size=30)
+    b = a[::-1]
+
     a_ = da.from_array(a, 3)
     b_ = da.from_array(b, 3)
 
     dask_test = getattr(dask.array.stats, kind)
     scipy_test = getattr(scipy.stats, kind)
 
-    with pytest.warns(None):  # maybe overflow warning (powrer_divergence)
+    with warnings.catch_warnings():  # maybe overflow warning (power_divergence)
+        warnings.simplefilter("ignore", category=RuntimeWarning)
         result = dask_test(a_, b_, **kwargs)
         expected = scipy_test(a, b, **kwargs)
 

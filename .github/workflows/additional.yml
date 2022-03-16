@@ -8,7 +8,10 @@ jobs:
 
     strategy:
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-non-optional", "mindeps-distributed"]
+        environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
+
+    env:
+      COVERAGE: "true"
 
     steps:
       - name: Checkout source
@@ -20,8 +23,8 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
-          python-version: "3.7"
+          channel-priority: strict
+          python-version: "3.8"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
@@ -33,6 +36,9 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1
 
   check-hdfs:
     runs-on: ubuntu-latest
@@ -83,9 +89,9 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-latest.yaml
+          channel-priority: strict
+          python-version: "3.9"
+          environment-file: continuous_integration/environment-3.9.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -102,7 +108,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.8", "3.9"]
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -113,8 +119,8 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
-          python-version: "3.7"
+          channel-priority: strict
+          python-version: "3.8"
           activate-environment: test-environment
           auto-activate-base: false
 

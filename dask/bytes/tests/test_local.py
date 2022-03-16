@@ -2,7 +2,6 @@ import gzip
 import os
 import pathlib
 import sys
-from distutils.version import LooseVersion
 from functools import partial
 from time import sleep
 
@@ -151,7 +150,9 @@ def test_read_bytes_block():
     with filetexts(files, mode="b"):
         for bs in [5, 15, 45, 1500]:
             sample, vals = read_bytes(".test.account*", blocksize=bs)
-            assert list(map(len, vals)) == [(len(v) // bs + 1) for v in files.values()]
+            assert list(map(len, vals)) == [
+                max((len(v) // bs), 1) for v in files.values()
+            ]
 
             results = compute(*concat(vals))
             assert sum(len(r) for r in results) == sum(len(v) for v in files.values())
@@ -187,7 +188,7 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
+fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]  # type: ignore
 
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
@@ -350,14 +351,3 @@ def test_abs_paths(tmpdir):
     with fs.open(out[0], "r") as f:
         res = f.read()
     assert res == "hi"
-
-
-def test_get_pyarrow_filesystem():
-    from fsspec.implementations.local import LocalFileSystem
-
-    pa = pytest.importorskip("pyarrow")
-    if pa.__version__ >= LooseVersion("2.0.0"):
-        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
-
-    fs = LocalFileSystem()
-    assert isinstance(fs, pa.filesystem.FileSystem)
