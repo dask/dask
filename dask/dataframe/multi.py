@@ -506,10 +506,11 @@ def merge(
         left_on = right_on = on
         on = None
 
-    supported_how = ("left", "right", "outer", "inner")
+    supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
     if how not in supported_how:
         raise ValueError(
-            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}"
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f"Note that leftanti and leftsemi are only dask_cudf options."
         )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
