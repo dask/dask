@@ -16,6 +16,7 @@ from pandas.api.types import (
 )
 from tlz import first, merge, partition_all, remove, unique
 
+<<<<<<< HEAD
 from .. import array as da
 from .. import config, core, threaded
 from ..array.core import Array, normalize_arg
@@ -58,13 +59,32 @@ from ._compat import PANDAS_GT_140, PANDAS_GT_150
 from .accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
+=======
+import dask.array as da
+from dask import core, threaded
+from dask.array.core import Array, normalize_arg
+from dask.bag import map_partitions as map_bag_partitions
+from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
+from dask.context import globalmethod
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
+from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
+from dask.dataframe.categorical import CategoricalAccessor, categorize
+from dask.dataframe.dispatch import (
+>>>>>>> upstream/main
     get_parallel_type,
     group_split_dispatch,
     hash_object_dispatch,
     meta_nonempty,
 )
+<<<<<<< HEAD
 from .optimize import eager_predicate_pushdown, optimize
 from .utils import (
+=======
+from dask.dataframe.optimize import optimize
+from dask.dataframe.utils import (
+>>>>>>> upstream/main
     PANDAS_GT_110,
     PANDAS_GT_120,
     check_matching_columns,
@@ -81,6 +101,30 @@ from .utils import (
     raise_on_meta_error,
     valid_divisions,
 )
+from dask.delayed import Delayed, delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameTreeReduction
+from dask.utils import (
+    IndexCallable,
+    M,
+    OperatorMethodMixin,
+    _deprecated,
+    apply,
+    derived_from,
+    funcname,
+    has_keyword,
+    is_arraylike,
+    iter_chunks,
+    key_split,
+    memory_repr,
+    parse_bytes,
+    partial_by_order,
+    pseudorandom,
+    put_lines,
+    random_state_data,
+    typename,
+)
+from dask.widgets import get_template
 
 no_default = "__no_default__"
 
@@ -643,7 +687,7 @@ Dask Name: {name}, {task} tasks"""
         if col is None and self.known_divisions:
             return self.divisions
 
-        from .shuffle import compute_divisions
+        from dask.dataframe.shuffle import compute_divisions
 
         return compute_divisions(self, col=col)
 
@@ -946,7 +990,7 @@ Dask Name: {name}, {task} tasks"""
         2017-01-10    17.0
         Freq: D, dtype: float64
         """
-        from .rolling import map_overlap
+        from dask.dataframe.rolling import map_overlap
 
         return map_overlap(func, self, before, after, *args, **kwargs)
 
@@ -1263,14 +1307,14 @@ Dask Name: {name}, {task} tasks"""
         >>> df.loc["b"]  # doctest: +SKIP
         >>> df.loc["b":"d"]  # doctest: +SKIP
         """
-        from .indexing import _LocIndexer
+        from dask.dataframe.indexing import _LocIndexer
 
         return _LocIndexer(self)
 
     def _partitions(self, index):
         if not isinstance(index, tuple):
             index = (index,)
-        from ..array.slicing import normalize_index
+        from dask.array.slicing import normalize_index
 
         index = normalize_index(index, (self.npartitions,))
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
@@ -1442,7 +1486,7 @@ Dask Name: {name}, {task} tasks"""
         --------
         >>> df = df.shuffle(df.columns[0])  # doctest: +SKIP
         """
-        from .shuffle import shuffle as dd_shuffle
+        from dask.dataframe.shuffle import shuffle as dd_shuffle
 
         return dd_shuffle(
             self,
@@ -1635,13 +1679,13 @@ Dask Name: {name}, {task} tasks"""
 
     def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
         """See dd.to_hdf docstring for more information"""
-        from .io import to_hdf
+        from dask.dataframe.io import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_csv(self, filename, **kwargs):
         """See dd.to_csv docstring for more information"""
-        from .io import to_csv
+        from dask.dataframe.io import to_csv
 
         return to_csv(self, filename, **kwargs)
 
@@ -1661,7 +1705,7 @@ Dask Name: {name}, {task} tasks"""
         engine_kwargs=None,
     ):
         """See dd.to_sql docstring for more information"""
-        from .io import to_sql
+        from dask.dataframe.io import to_sql
 
         return to_sql(
             self,
@@ -1681,7 +1725,7 @@ Dask Name: {name}, {task} tasks"""
 
     def to_json(self, filename, *args, **kwargs):
         """See dd.to_json docstring for more information"""
-        from .io import to_json
+        from dask.dataframe.io import to_json
 
         return to_json(self, filename, *args, **kwargs)
 
@@ -2333,7 +2377,7 @@ Dask Name: {name}, {task} tasks"""
         return handle_out(out, result)
 
     def _convert_time_cols_to_numeric(self, time_cols, axis, meta, skipna):
-        from .io import from_pandas
+        from dask.dataframe.io import from_pandas
 
         needs_time_conversion = True
 
@@ -2411,7 +2455,7 @@ Dask Name: {name}, {task} tasks"""
         Uses the array version from da.stats in case we are passing in a single series
         """
         # import depends on scipy, not installed by default
-        from ..array import stats as da_stats
+        from dask.array import stats as da_stats
 
         if pd.Int64Dtype.is_dtype(column._meta_nonempty):
             column = column.astype("f8")
@@ -2438,7 +2482,7 @@ Dask Name: {name}, {task} tasks"""
         Maps the array version from da.stats onto the numeric array of columns.
         """
         # import depends on scipy, not installed by default
-        from ..array import stats as da_stats
+        from dask.array import stats as da_stats
 
         num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
 
@@ -2523,7 +2567,7 @@ Dask Name: {name}, {task} tasks"""
         Uses the array version from da.stats in case we are passing in a single series
         """
         # import depends on scipy, not installed by default
-        from ..array import stats as da_stats
+        from dask.array import stats as da_stats
 
         if pd.api.types.is_integer_dtype(column._meta_nonempty):
             column = column.astype("f8")
@@ -2554,7 +2598,7 @@ Dask Name: {name}, {task} tasks"""
         Maps the array version from da.stats onto the numeric array of columns.
         """
         # import depends on scipy, not installed by default
-        from ..array import stats as da_stats
+        from dask.array import stats as da_stats
 
         num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
 
@@ -2809,7 +2853,7 @@ Dask Name: {name}, {task} tasks"""
         is_timedelta_column=False,
         is_datetime_column=False,
     ):
-        from .numeric import to_numeric
+        from dask.dataframe.numeric import to_numeric
 
         if is_timedelta_column or is_datetime_column:
             num = to_numeric(data)
@@ -2858,7 +2902,7 @@ Dask Name: {name}, {task} tasks"""
     def _describe_nonnumeric_1d(
         self, data, split_every=False, datetime_is_numeric=False
     ):
-        from .numeric import to_numeric
+        from dask.dataframe.numeric import to_numeric
 
         vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
@@ -3080,7 +3124,7 @@ Dask Name: {name}, {task} tasks"""
             )
         # because DataFrame.append will override the method,
         # wrap by pd.Series.append docstring
-        from .multi import concat
+        from dask.dataframe.multi import concat
 
         if isinstance(other, (list, dict)):
             msg = "append doesn't support list or dict input"
@@ -3161,7 +3205,7 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.DataFrame)
     def resample(self, rule, closed=None, label=None):
-        from .tseries.resample import Resampler
+        from dask.dataframe.tseries.resample import Resampler
 
         return Resampler(self, rule, closed=closed, label=label)
 
@@ -3250,7 +3294,7 @@ Dask Name: {name}, {task} tasks"""
         -------
         a float representing the approximate number of elements
         """
-        from . import hyperloglog  # here to avoid circular import issues
+        from dask.dataframe import hyperloglog  # here to avoid circular import issues
 
         return aca(
             [self],
@@ -3554,7 +3598,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """Approximate quantiles of Series used for repartitioning"""
-        from .partitionquantiles import partition_quantiles
+        from dask.dataframe.partitionquantiles import partition_quantiles
 
         return partition_quantiles(self, npartitions, upsample=upsample)
 
@@ -3823,7 +3867,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
-        from .io import to_bag
+        from dask.dataframe.io import to_bag
 
         return to_bag(self, index, format=format)
 
@@ -3943,7 +3987,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def cov(self, other, min_periods=None, split_every=False):
-        from .multi import concat
+        from dask.dataframe.multi import concat
 
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
@@ -3952,7 +3996,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def corr(self, other, method="pearson", min_periods=None, split_every=False):
-        from .multi import concat
+        from dask.dataframe.multi import concat
 
         if not isinstance(other, Series):
             raise TypeError("other must be a dask.dataframe.Series")
@@ -4320,7 +4364,7 @@ class DataFrame(_Frame):
         --------
         >>> df.iloc[:, [2, 0, 1]]  # doctest: +SKIP
         """
-        from .indexing import _iLocIndexer
+        from dask.dataframe.indexing import _iLocIndexer
 
         # For dataframes with unique column names, this will be transformed into a __getitem__ call
         return _iLocIndexer(self)
@@ -4399,7 +4443,7 @@ class DataFrame(_Frame):
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:
-                from .multi import _maybe_align_partitions
+                from dask.dataframe.multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
             dsk = partitionwise_graph(
@@ -4557,7 +4601,7 @@ class DataFrame(_Frame):
         --------
         >>> df2 = df.sort_values('x')  # doctest: +SKIP
         """
-        from .shuffle import sort_values
+        from dask.dataframe.shuffle import sort_values
 
         return sort_values(
             self,
@@ -4686,17 +4730,31 @@ class DataFrame(_Frame):
         pre_sorted = sorted
         del sorted
 
+        if isinstance(other, Series) and other._name == self.index._name:
+            # Index is equal to current index, no-op
+            return self
+
         if divisions is not None:
             check_divisions(divisions)
+        elif (
+            isinstance(other, Index)
+            and other.known_divisions
+            and other.npartitions == self.npartitions
+        ):
+            # If the index has the same number of partitions and known
+            # divisions, then we can treat it as pre-sorted with known
+            # divisions
+            pre_sorted = True
+            divisions = other.divisions
 
         if pre_sorted:
-            from .shuffle import set_sorted_index
+            from dask.dataframe.shuffle import set_sorted_index
 
             return set_sorted_index(
                 self, other, drop=drop, divisions=divisions, **kwargs
             )
         else:
-            from .shuffle import set_index
+            from dask.dataframe.shuffle import set_index
 
             return set_index(
                 self,
@@ -4781,7 +4839,7 @@ class DataFrame(_Frame):
             if callable(v):
                 kwargs[k] = v(data)
             if isinstance(v, Array):
-                from .io import from_dask_array
+                from dask.dataframe.io import from_dask_array
 
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
@@ -4903,22 +4961,25 @@ class DataFrame(_Frame):
         index : bool, optional
             If True, the index is included as the first element of each tuple.
             Default is False.
-        format : {"tuple", "dict"},optional
-            Whether to return a bag of tuples or dictionaries.
+        format : {"tuple", "dict", "frame"}, optional
+            Whether to return a bag of tuples, dictionaries, or
+            dataframe-like objects. Default is "tuple". If "frame",
+            the original partitions of ``df`` will not be transformed
+            in any way.
         """
-        from .io import to_bag
+        from dask.dataframe.io import to_bag
 
         return to_bag(self, index, format)
 
     def to_parquet(self, path, *args, **kwargs):
         """See dd.to_parquet docstring for more information"""
-        from .io import to_parquet
+        from dask.dataframe.io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
 
     def to_orc(self, path, *args, **kwargs):
         """See dd.to_orc docstring for more information"""
-        from .io import to_orc
+        from dask.dataframe.io import to_orc
 
         return to_orc(self, path, *args, **kwargs)
 
@@ -5060,7 +5121,7 @@ class DataFrame(_Frame):
         if not is_dataframe_like(right):
             raise ValueError("right must be DataFrame")
 
-        from .multi import merge
+        from dask.dataframe.multi import merge
 
         return merge(
             self,
@@ -5100,7 +5161,7 @@ class DataFrame(_Frame):
             if how not in ["outer", "left"]:
                 raise ValueError("merge_multi only supports left or outer joins")
 
-            from .multi import _recursive_pairwise_outer_join
+            from dask.dataframe.multi import _recursive_pairwise_outer_join
 
             # If its an outer join we can use the full recursive pairwise join.
             if how == "outer":
@@ -5126,7 +5187,7 @@ class DataFrame(_Frame):
                     shuffle=shuffle,
                 )
 
-        from .multi import merge
+        from dask.dataframe.multi import merge
 
         return merge(
             self,
@@ -5526,7 +5587,7 @@ class DataFrame(_Frame):
         -------
         table : DataFrame
         """
-        from .reshape import pivot_table
+        from dask.dataframe.reshape import pivot_table
 
         return pivot_table(
             self, index=index, columns=columns, values=values, aggfunc=aggfunc
@@ -5575,7 +5636,7 @@ class DataFrame(_Frame):
         --------
         pandas.DataFrame.melt
         """
-        from .reshape import melt
+        from dask.dataframe.reshape import melt
 
         return melt(
             self,
@@ -5587,7 +5648,7 @@ class DataFrame(_Frame):
         )
 
     def to_records(self, index=False, lengths=None):
-        from .io import to_records
+        from dask.dataframe.io import to_records
 
         if lengths is True:
             lengths = tuple(self.map_partitions(len).compute())
@@ -5786,7 +5847,7 @@ def elemwise(
 
     args = _maybe_from_pandas(args)
 
-    from .multi import _maybe_align_partitions
+    from dask.dataframe.multi import _maybe_align_partitions
 
     args = _maybe_align_partitions(args)
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
@@ -5907,7 +5968,7 @@ def handle_out(out, result):
 
 
 def _maybe_from_pandas(dfs):
-    from .io import from_pandas
+    from dask.dataframe.io import from_pandas
 
     dfs = [
         from_pandas(df, 1)
@@ -6073,21 +6134,21 @@ def apply_concat_apply(
 
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
-    chunked = map_partitions(
+    chunked = map_bag_partitions(
         chunk,
-        *args,
+        # Convert _Frame collections to Bag
+        *[
+            arg.to_bag(format="frame") if isinstance(arg, _Frame) else arg
+            for arg in args
+        ],
         token=chunk_name,
-        # NOTE: We are NOT setting the correct
-        # `meta` here on purpose. We are using
-        # `map_partitions` as a convenient way
-        # to build a `Blockwise` layer, and need
-        # to avoid the metadata emulation step.
-        meta=dfs[0],
-        enforce_metadata=False,
-        transform_divisions=False,
-        align_dataframes=False,
         **chunk_kwargs,
     )
+
+    # NOTE: `chunked` is now a Bag collection.
+    # We don't use a DataFrame collection, because
+    # the partitions may not contain dataframe-like
+    # objects anymore.
 
     # Blockwise Split Layer
     if split_out and split_out > 1:
@@ -6098,15 +6159,6 @@ def apply_concat_apply(
             split_out_setup_kwargs,
             ignore_index,
             token="split-%s" % token_key,
-            # NOTE: We are NOT setting the correct
-            # `meta` here on purpose. We are using
-            # `map_partitions` as a convenient way
-            # to build a `Blockwise` layer, and need
-            # to avoid the metadata emulation step.
-            meta=dfs[0],
-            enforce_metadata=False,
-            transform_divisions=False,
-            align_dataframes=False,
         )
 
     # Handle sort behavior
@@ -6123,7 +6175,7 @@ def apply_concat_apply(
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"
     layer = DataFrameTreeReduction(
         final_name,
-        chunked._name,
+        chunked.name,
         npartitions,
         partial(_concat, ignore_index=ignore_index),
         partial(combine, **combine_kwargs) if combine_kwargs else combine,
@@ -6238,7 +6290,7 @@ def map_partitions(
         token = tokenize(func, meta, *args, **kwargs)
     name = f"{name}-{token}"
 
-    from .multi import _maybe_align_partitions
+    from dask.dataframe.multi import _maybe_align_partitions
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
@@ -6260,7 +6312,12 @@ def map_partitions(
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
-            (name, 0): (apply, func, (tuple, [(arg._name, 0) for arg in args]), kwargs)
+            (name, 0): (
+                apply,
+                func,
+                (tuple, [(arg._name, 0) for arg in args]),
+                kwargs,
+            )
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
@@ -7210,7 +7267,7 @@ def repartition(df, divisions=None, force=False):
         return new_dd_object(graph, out, df._meta, divisions)
     elif is_dataframe_like(df) or is_series_like(df):
         name = "repartition-dataframe-" + token
-        from .utils import shard_df_on_index
+        from dask.dataframe.utils import shard_df_on_index
 
         dfs = shard_df_on_index(df, divisions[1:-1])
         dsk = {(name, i): df for i, df in enumerate(dfs)}

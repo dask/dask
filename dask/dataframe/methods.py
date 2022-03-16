@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-from ._compat import PANDAS_GT_131
+from dask.dataframe._compat import PANDAS_GT_131
 
 #  preserve compatibility while moving dispatch objects
-from .dispatch import (  # noqa: F401
+from dask.dataframe.dispatch import (  # noqa: F401
     concat,
     concat_dispatch,
     group_split_dispatch,
@@ -18,7 +18,7 @@ from .dispatch import (  # noqa: F401
     tolist_dispatch,
     union_categoricals,
 )
-from .utils import is_dataframe_like, is_index_like, is_series_like
+from dask.dataframe.utils import is_dataframe_like, is_index_like, is_series_like
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch

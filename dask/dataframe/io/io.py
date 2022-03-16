@@ -7,15 +7,25 @@ import numpy as np
 import pandas as pd
 from tlz import merge
 
-from ... import array as da
-from ...base import tokenize
-from ...dataframe.core import new_dd_object
-from ...delayed import delayed
-from ...highlevelgraph import HighLevelGraph
-from ...utils import M, _deprecated, ensure_dict
-from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
-from ..shuffle import set_partition
-from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
+import dask.array as da
+from dask.base import tokenize
+from dask.dataframe.core import (
+    DataFrame,
+    Index,
+    Series,
+    has_parallel_type,
+    new_dd_object,
+)
+from dask.dataframe.shuffle import set_partition
+from dask.dataframe.utils import (
+    check_meta,
+    insert_meta_param_description,
+    is_series_like,
+    make_meta,
+)
+from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, _deprecated, ensure_dict
 
 lock = Lock()
 
@@ -524,23 +534,33 @@ def to_bag(df, index=False, format="tuple"):
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
         they're just the ``value``.  Default is False.
-    format : {"tuple", "dict"},optional
-            Whether to return a bag of tuples or dictionaries.
+    format : {"tuple", "dict", "frame"}, optional
+        Whether to return a bag of tuples, dictionaries, or
+        dataframe-like objects. Default is "tuple". If "frame",
+        the original partitions of ``df`` will not be transformed
+        in any way.
+
 
     Examples
     --------
     >>> bag = df.to_bag()  # doctest: +SKIP
     """
-    from ...bag.core import Bag
+    from dask.bag.core import Bag
 
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
     name = "to_bag-" + tokenize(df, index, format)
-    dsk = {
-        (name, i): (_df_to_bag, block, index, format)
-        for (i, block) in enumerate(df.__dask_keys__())
-    }
-    dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
+    if format == "frame":
+        # Use existing graph and name of df, but
+        # drop meta to produce a Bag collection
+        dsk = df.dask
+        name = df._name
+    else:
+        dsk = {
+            (name, i): (_df_to_bag, block, index, format)
+            for (i, block) in enumerate(df.__dask_keys__())
+        }
+        dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))
     return Bag(dsk, name, df.npartitions)
 
 
@@ -630,7 +650,7 @@ def from_delayed(
     )
 
     if divisions == "sorted":
-        from ..shuffle import compute_and_set_divisions
+        from dask.dataframe.shuffle import compute_and_set_divisions
 
         df = compute_and_set_divisions(df)
 

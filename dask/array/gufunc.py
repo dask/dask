@@ -3,10 +3,10 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
-from ..core import flatten
-from ..highlevelgraph import HighLevelGraph
-from .core import Array, apply_infer_dtype, asarray, blockwise, getitem
-from .utils import meta_from_array
+from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, getitem
+from dask.array.utils import meta_from_array
+from dask.core import flatten
+from dask.highlevelgraph import HighLevelGraph
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:

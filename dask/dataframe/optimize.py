@@ -3,11 +3,11 @@ import operator
 
 import numpy as np
 
-from .. import config, core
-from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
-from ..highlevelgraph import HighLevelGraph
-from ..optimization import cull, fuse
-from ..utils import dnf_filter_dispatch, ensure_dict
+from dask import config, core
+from dask.blockwise import Blockwise, fuse_roots, optimize_blockwise
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import cull, fuse
+from dask.utils import ensure_dict
 
 
 def optimize(dsk, keys, **kwargs):
@@ -114,7 +114,7 @@ def optimize_dataframe_getitem(dsk, keys):
     # and calls `project_columns` on any IO layers that precede
     # a (qualified) `getitem` operation.
 
-    from ..layers import DataFrameIOLayer
+    from dask.layers import DataFrameIOLayer
 
     # Construct a list containg the names of all
     # DataFrameIOLayer layers in the graph

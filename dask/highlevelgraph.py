@@ -8,12 +8,11 @@ from typing import Any
 
 import tlz as toolz
 
-from . import config
-from .base import clone_key, flatten, is_dask_collection
-from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify
-from .utils_test import add, inc  # noqa: F401
-from .widgets import get_template
+from dask import config
+from dask.base import clone_key, flatten, is_dask_collection
+from dask.core import keys_in_tasks, reverse_dict
+from dask.utils import ensure_dict, key_split, stringify
+from dask.widgets import get_template
 
 
 def compute_layer_dependencies(layers):
@@ -110,6 +109,8 @@ class Layer(Mapping):
 
         Examples
         --------
+        >>> inc = lambda x: x + 1
+        >>> add = lambda x, y: x + y
         >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
         >>> _, deps = d.cull({'out'}, d.keys())
         >>> deps
@@ -272,7 +273,7 @@ class Layer(Mapping):
         -----
         This method should be overridden by subclasses to avoid materializing the layer.
         """
-        from .graph_manipulation import chunks
+        from dask.graph_manipulation import chunks
 
         is_leaf: bool
 
@@ -486,7 +487,7 @@ class Layer(Mapping):
         ):
             chunks = self.collection_annotations.get("chunks")
             if chunks:
-                from .array.svg import svg
+                from dask.array.svg import svg
 
                 svg_repr = svg(chunks)
 
@@ -899,7 +900,7 @@ class HighLevelGraph(Mapping):
         dask.base.visualize # low level variant
         """
 
-        from .dot import graphviz_to_file
+        from dask.dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
         graphviz_to_file(g, filename, format)
@@ -1171,7 +1172,7 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, label, name
+    from dask.dot import graphviz, label, name
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}

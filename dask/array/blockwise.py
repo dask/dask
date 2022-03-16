@@ -3,10 +3,10 @@ import warnings
 
 import tlz as toolz
 
-from .. import base, utils
-from ..blockwise import blockwise as core_blockwise
-from ..delayed import unpack_collections
-from ..highlevelgraph import HighLevelGraph
+from dask import base, utils
+from dask.blockwise import blockwise as core_blockwise
+from dask.delayed import unpack_collections
+from dask.highlevelgraph import HighLevelGraph
 
 
 def blockwise(
@@ -168,7 +168,7 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    from .core import normalize_arg, unify_chunks
+    from dask.array.core import normalize_arg, unify_chunks
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -271,7 +271,7 @@ def blockwise(
     chunks = tuple(chunks)
 
     if meta is None:
-        from .utils import compute_meta
+        from dask.array.utils import compute_meta
 
         meta = compute_meta(func, dtype, *args[::2], **kwargs)
     return new_da_object(graph, out, chunks, meta=meta, dtype=dtype)
@@ -282,4 +282,4 @@ def atop(*args, **kwargs):
     return blockwise(*args, **kwargs)
 
 
-from .core import new_da_object
+from dask.array.core import new_da_object

@@ -14,7 +14,6 @@ from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
-from dask import delayed
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
@@ -37,7 +36,7 @@ from dask.base import (
     visualize,
 )
 from dask.core import literal
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile

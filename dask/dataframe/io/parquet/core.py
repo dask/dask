@@ -8,24 +8,16 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import compute_as_if_collection, tokenize
-from ....blockwise import BlockIndex
-from ....delayed import Delayed
-from ....highlevelgraph import HighLevelGraph
-from ....layers import DataFrameIOLayer
-from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...core import DataFrame, Scalar, new_dd_object
-from ...methods import concat
-from ..utils import _is_local_fs
-from .utils import Engine, _sort_and_analyze_paths
-
-try:
-    import snappy
-
-    snappy.compress
-except (ImportError, AttributeError):
-    snappy = None
-
+from dask.base import compute_as_if_collection, tokenize
+from dask.blockwise import BlockIndex
+from dask.dataframe.core import DataFrame, Scalar, new_dd_object
+from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
+from dask.dataframe.io.utils import _is_local_fs
+from dask.dataframe.methods import concat
+from dask.delayed import Delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import apply, import_required, natural_sort_key, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -527,7 +519,7 @@ def to_parquet(
     df,
     path,
     engine="auto",
-    compression="default",
+    compression="snappy",
     write_index=True,
     append=False,
     overwrite=False,
@@ -557,11 +549,10 @@ def to_parquet(
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet library to use. If only one library is installed, it will use
         that one; if both, it will use 'fastparquet'.
-    compression : string or dict, default 'default'
+    compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
-        to compressors like ``{"name": "gzip", "values": "snappy"}``. The
-        default is ``"default"``, which uses the default compression for
-        whichever engine is selected.
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
+        to ``"snappy"``.
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
     append : bool, default False
@@ -650,10 +641,12 @@ def to_parquet(
     compute_kwargs = compute_kwargs or {}
 
     if compression == "default":
-        if snappy is not None:
-            compression = "snappy"
-        else:
-            compression = None
+        warnings.warn(
+            "compression='default' is deprecated and will be removed in a "
+            "future version, the default for all engines is 'snappy' now.",
+            FutureWarning,
+        )
+        compression = "snappy"
 
     partition_on = partition_on or []
     if isinstance(partition_on, str):
@@ -1019,7 +1012,7 @@ def get_engine(engine):
 
     elif engine == "fastparquet":
         import_required("fastparquet", "`fastparquet` not installed")
-        from .fastparquet import FastParquetEngine
+        from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
 
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
@@ -1039,11 +1032,11 @@ def get_engine(engine):
                     f"pyarrow.dataset API. Please install pyarrow>=1."
                 )
 
-            from .arrow import ArrowDatasetEngine
+            from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
         else:
-            from .arrow import ArrowLegacyEngine
+            from dask.dataframe.io.parquet.arrow import ArrowLegacyEngine
 
             warnings.warn(
                 "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "

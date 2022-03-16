@@ -1,6 +1,6 @@
 import random
 
-from .utils import import_required
+from dask.utils import import_required
 
 
 def timeseries(

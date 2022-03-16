@@ -10,11 +10,11 @@ from typing import Any
 import tlz as toolz
 from tlz.curried import map
 
-from .base import tokenize
-from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
-from .core import flatten, keys_in_tasks
-from .highlevelgraph import Layer
-from .utils import (
+from dask.base import tokenize
+from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
+from dask.core import flatten, keys_in_tasks
+from dask.highlevelgraph import Layer
+from dask.utils import (
     apply,
     cached_cumsum,
     concrete,
