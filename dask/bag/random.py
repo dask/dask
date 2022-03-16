@@ -2,6 +2,7 @@ import heapq
 import math
 import random as rnd
 from functools import partial
+from itertools import islice
 
 from dask.bag.core import Bag
 
@@ -27,7 +28,7 @@ def sample(population, k):
     >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
-    return _sample(population=population, k=k, replace=False)
+    return _sample(population=population, k=k)
 
 
 def choices(population, k=1):
@@ -49,43 +50,7 @@ def choices(population, k=1):
     >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
-    return _sample(population=population, k=k, replace=True)
-
-
-def _sample(population, k, replace=False):
-    return population.reduction(
-        partial(_sample_map_partitions, k=k, replace=replace),
-        partial(_sample_reduce, k=k, replace=replace),
-        out_type=Bag,
-    )
-
-
-def _sample_map_partitions(population, k, replace):
-    """
-    Map function used on the sample and choices functions.
-    Parameters
-    ----------
-    population : list
-        List of elements to sample.
-    k : int, optional
-        Number of elements to sample. Default is 1.
-
-    Returns
-    -------
-    sample: list
-        List of sampled elements from the partition.
-    lx: int
-        Number of elements on the partition.
-    k: int
-        Number of elements to sample.
-    """
-    population = list(population)
-    lx = len(population)
-    real_k = k if k <= lx else lx
-    sample_func = rnd.choices if replace else rnd.sample
-    # because otherwise it raises IndexError:
-    sampled = [] if real_k == 0 else sample_func(population=population, k=real_k)
-    return sampled, lx
+    return _sample_with_replacement(population=population, k=k)
 
 
 def _sample_reduce(reduce_iter, k, replace):
@@ -131,3 +96,76 @@ def _weighted_sampling_without_replacement(population, weights, k):
     """
     elt = [(math.log(rnd.random()) / weights[i], i) for i in range(len(weights))]
     return [population[x[1]] for x in heapq.nlargest(k, elt)]
+
+
+def _sample(population, k):
+    return population.reduction(
+        partial(_sample_map_partitions, k=k),
+        partial(_sample_reduce, k=k, replace=False),
+        out_type=Bag,
+    )
+
+
+def _sample_map_partitions(population, k):
+    """
+    Reservoir sampling strategy based on the L algorithm
+    See https://en.wikipedia.org/wiki/Reservoir_sampling#An_optimal_algorithm
+    """
+
+    reservoir, stream_length = [], 0
+    stream = iter(population)
+    for e in islice(stream, k):
+        reservoir.append(e)
+        stream_length += 1
+
+    w = math.exp(math.log(rnd.random()) / k)
+    nxt = (k - 1) + _geometric(w)
+
+    for i, e in enumerate(stream, k):
+        if i == nxt:
+            reservoir[rnd.randrange(k)] = e
+            w *= math.exp(math.log(rnd.random()) / k)
+            nxt += _geometric(w)
+        stream_length += 1
+
+    return reservoir, stream_length
+
+
+def _sample_with_replacement(population, k):
+    return population.reduction(
+        partial(_sample_with_replacement_map_partitions, k=k),
+        partial(_sample_reduce, k=k, replace=True),
+        out_type=Bag,
+    )
+
+
+def _sample_with_replacement_map_partitions(population, k):
+    """
+    Reservoir sampling with replacement, the main idea is to use k reservoirs of size 1
+    See Section Applications in http://utopia.duth.gr/~pefraimi/research/data/2007EncOfAlg.pdf
+    """
+
+    stream = iter(population)
+    e = next(stream)
+    reservoir, stream_length = [e for _ in range(k)], 1
+
+    w = [rnd.random() for _ in range(k)]
+    nxt = [_geometric(wi) for wi in w]
+    min_nxt = min(nxt)
+
+    for i, e in enumerate(stream, 1):
+        if i == min_nxt:
+            for j, n in enumerate(nxt):
+                if n == min_nxt:
+                    reservoir[j] = e
+                    w[j] *= rnd.random()
+                    nxt[j] += _geometric(w[j])
+            min_nxt = min(nxt)
+
+        stream_length += 1
+
+    return reservoir, stream_length
+
+
+def _geometric(p):
+    return int(math.log(rnd.uniform(0, 1)) / math.log(1 - p)) + 1
