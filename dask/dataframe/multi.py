@@ -506,6 +506,12 @@ def merge(
         left_on = right_on = on
         on = None
 
+    supported_how = ("left", "right", "outer", "inner")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}"
+        )
+
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
     ):
