@@ -18,21 +18,34 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
+    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Sequence
+from typing import Any
 
 import numpy as np
 from fsspec import get_mapper
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
-from .. import compute, config, core, threaded
-from ..base import (
+from dask import compute, config, core, threaded
+from dask.array import chunk
+from dask.array.chunk import getitem
+from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
+# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
+from dask.array.dispatch import (  # noqa: F401
+    concatenate_lookup,
+    einsum_lookup,
+    tensordot_lookup,
+)
+from dask.array.numpy_compat import _numpy_120, _Recurser
+from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
+from dask.base import (
     DaskMethodsMixin,
     compute_as_if_collection,
     dont_optimize,
@@ -40,17 +53,19 @@ from ..base import (
     persist,
     tokenize,
 )
-from ..blockwise import broadcast_dimensions
-from ..context import globalmethod
-from ..core import quote
-from ..delayed import Delayed, delayed
-from ..highlevelgraph import HighLevelGraph
-from ..layers import reshapelist
-from ..sizeof import sizeof
-from ..utils import (
+from dask.blockwise import blockwise as core_blockwise
+from dask.blockwise import broadcast_dimensions
+from dask.context import globalmethod
+from dask.core import quote
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.layers import ArraySliceDep, reshapelist
+from dask.sizeof import sizeof
+from dask.utils import (
     IndexCallable,
     M,
     SerializableLock,
+    cached_cumsum,
     cached_property,
     concrete,
     derived_from,
@@ -68,15 +83,7 @@ from ..utils import (
     parse_bytes,
     typename,
 )
-from ..widgets import get_template
-from . import chunk
-from .chunk import getitem
-from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
-
-# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
-from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .numpy_compat import _numpy_120, _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
+from dask.widgets import get_template
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -151,7 +158,7 @@ def getter_inline(a, b, asarray=True, lock=None):
     return getter(a, b, asarray=asarray, lock=lock)
 
 
-from .optimization import fuse_slice, optimize
+from dask.array.optimization import fuse_slice, optimize
 
 # __array_function__ dict for mapping aliases and mismatching names
 _HANDLED_FUNCTIONS = {}
@@ -232,46 +239,88 @@ def slices_from_chunks(chunks):
     return list(product(*slices))
 
 
-def getem(
-    arr,
+def graph_from_arraylike(
+    arr,  # Any array-like which supports slicing
     chunks,
+    shape,
+    name,
     getitem=getter,
-    shape=None,
-    out_name=None,
     lock=False,
     asarray=True,
     dtype=None,
-):
-    """Dask getting various chunks from an array-like
-
-    >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
-
-    >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
-    {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
-     ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
-     ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
-     ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
+    inline_array=False,
+) -> HighLevelGraph:
     """
-    out_name = out_name or arr
+    HighLevelGraph for slicing chunks from an array-like according to a chunk pattern.
+
+    If ``inline_array`` is True, this make a Blockwise layer of slicing tasks where the
+    array-like is embedded into every task.,
+
+    If ``inline_array`` is False, this inserts the array-like as a standalone value in
+    a MaterializedLayer, then generates a Blockwise layer of slicing tasks that refer
+    to it.
+
+    >>> dict(graph_from_arraylike(arr, chunks=(2, 3), shape=(4, 6), name="X", inline_array=True))  # doctest: +SKIP
+    {(arr, 0, 0): (getter, arr, (slice(0, 2), slice(0, 3))),
+     (arr, 1, 0): (getter, arr, (slice(2, 4), slice(0, 3))),
+     (arr, 1, 1): (getter, arr, (slice(2, 4), slice(3, 6))),
+     (arr, 0, 1): (getter, arr, (slice(0, 2), slice(3, 6)))}
+
+    >>> dict(  # doctest: +SKIP
+            graph_from_arraylike(arr, chunks=((2, 2), (3, 3)), shape=(4,6), name="X", inline_array=False)
+        )
+    {"original-X": arr,
+     ('X', 0, 0): (getter, 'original-X', (slice(0, 2), slice(0, 3))),
+     ('X', 1, 0): (getter, 'original-X', (slice(2, 4), slice(0, 3))),
+     ('X', 1, 1): (getter, 'original-X', (slice(2, 4), slice(3, 6))),
+     ('X', 0, 1): (getter, 'original-X', (slice(0, 2), slice(3, 6)))}
+    """
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *(range(len(bds)) for bds in chunks))
-    slices = slices_from_chunks(chunks)
+    out_ind = tuple(range(len(shape)))
 
     if (
         has_keyword(getitem, "asarray")
         and has_keyword(getitem, "lock")
         and (not asarray or lock)
     ):
-        values = [(getitem, arr, x, asarray, lock) for x in slices]
+        getter = partial(getitem, asarray=asarray, lock=lock)
     else:
         # Common case, drop extra parameters
-        values = [(getitem, arr, x) for x in slices]
+        getter = getitem
 
-    return dict(zip(keys, values))
+    if inline_array:
+        layer = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            arr,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+        return HighLevelGraph.from_collections(name, layer)
+    else:
+        original_name = "original-" + name
+
+        layers = {}
+        layers[original_name] = MaterializedLayer({original_name: arr})
+        layers[name] = core_blockwise(
+            getter,
+            name,
+            out_ind,
+            original_name,
+            None,
+            ArraySliceDep(chunks),
+            out_ind,
+            numblocks={},
+        )
+
+        deps = {
+            original_name: set(),
+            name: {original_name},
+        }
+        return HighLevelGraph(layers, deps)
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -391,7 +440,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    from .utils import meta_from_array
+    from dask.array.utils import meta_from_array
 
     # make sure that every arg is an evaluated array
     args = [
@@ -1454,18 +1503,18 @@ class Array(DaskMethodsMixin):
 
         if method == "__call__":
             if numpy_ufunc is np.matmul:
-                from .routines import matmul
+                from dask.array.routines import matmul
 
                 # special case until apply_gufunc handles optional dimensions
                 return matmul(*inputs, **kwargs)
             if numpy_ufunc.signature is not None:
-                from .gufunc import apply_gufunc
+                from dask.array.gufunc import apply_gufunc
 
                 return apply_gufunc(
                     numpy_ufunc, numpy_ufunc.signature, *inputs, **kwargs
                 )
             if numpy_ufunc.nout > 1:
-                from . import ufunc
+                from dask.array import ufunc
 
                 try:
                     da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -1475,7 +1524,7 @@ class Array(DaskMethodsMixin):
             else:
                 return elemwise(numpy_ufunc, *inputs, **kwargs)
         elif method == "outer":
-            from . import ufunc
+            from dask.array import ufunc
 
             try:
                 da_ufunc = getattr(ufunc, numpy_ufunc.__name__)
@@ -1665,7 +1714,7 @@ class Array(DaskMethodsMixin):
         -------
         text: An svg string depicting the array as a grid of chunks
         """
-        from .svg import svg
+        from dask.array.svg import svg
 
         return svg(self.chunks, size=size)
 
@@ -1712,7 +1761,7 @@ class Array(DaskMethodsMixin):
         --------
         dask.dataframe.from_dask_array
         """
-        from ..dataframe import from_dask_array
+        from dask.dataframe import from_dask_array
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
 
@@ -1753,7 +1802,7 @@ class Array(DaskMethodsMixin):
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
-            from .routines import where
+            from dask.array.routines import where
 
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
@@ -1823,7 +1872,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(index, tuple):
             index = (index,)
 
-        from .slicing import (
+        from dask.array.slicing import (
             normalize_index,
             slice_with_bool_dask_array,
             slice_with_int_dask_array,
@@ -1983,7 +2032,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def dot(self, other):
-        from .routines import tensordot
+        from dask.array.routines import tensordot
 
         return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
 
@@ -1997,7 +2046,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def transpose(self, *axes):
-        from .routines import transpose
+        from dask.array.routines import transpose
 
         if not axes:
             axes = None
@@ -2011,7 +2060,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def ravel(self):
-        from .routines import ravel
+        from dask.array.routines import ravel
 
         return ravel(self)
 
@@ -2019,23 +2068,23 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def choose(self, choices):
-        from .routines import choose
+        from dask.array.routines import choose
 
         return choose(self, choices)
 
     @derived_from(np.ndarray)
-    def reshape(self, *shape, merge_chunks=True):
+    def reshape(self, *shape, merge_chunks=True, limit=None):
         """
         .. note::
 
            See :meth:`dask.array.reshape` for an explanation of
-           the ``merge_chunks`` keyword.
+           the ``merge_chunks`` and `limit` keywords.
         """
-        from .reshape import reshape
+        from dask.array.reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape, merge_chunks=merge_chunks)
+        return reshape(self, shape, merge_chunks=merge_chunks, limit=limit)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
@@ -2043,7 +2092,7 @@ class Array(DaskMethodsMixin):
         See :func:`dask.array.topk` for docstring.
 
         """
-        from .reductions import topk
+        from dask.array.reductions import topk
 
         return topk(self, k, axis=axis, split_every=split_every)
 
@@ -2053,7 +2102,7 @@ class Array(DaskMethodsMixin):
         See :func:`dask.array.argtopk` for docstring.
 
         """
-        from .reductions import argtopk
+        from dask.array.reductions import argtopk
 
         return argtopk(self, k, axis=axis, split_every=split_every)
 
@@ -2239,67 +2288,67 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __matmul__(self, other):
-        from .routines import matmul
+        from dask.array.routines import matmul
 
         return matmul(self, other)
 
     @check_if_handled_given_other
     def __rmatmul__(self, other):
-        from .routines import matmul
+        from dask.array.routines import matmul
 
         return matmul(other, self)
 
     @check_if_handled_given_other
     def __divmod__(self, other):
-        from .ufunc import divmod
+        from dask.array.ufunc import divmod
 
         return divmod(self, other)
 
     @check_if_handled_given_other
     def __rdivmod__(self, other):
-        from .ufunc import divmod
+        from dask.array.ufunc import divmod
 
         return divmod(other, self)
 
     @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import any
+        from dask.array.reductions import any
 
         return any(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def all(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import all
+        from dask.array.reductions import all
 
         return all(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def min(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import min
+        from dask.array.reductions import min
 
         return min(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def max(self, axis=None, keepdims=False, split_every=None, out=None):
-        from .reductions import max
+        from dask.array.reductions import max
 
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def argmin(self, axis=None, split_every=None, out=None):
-        from .reductions import argmin
+        from dask.array.reductions import argmin
 
         return argmin(self, axis=axis, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def argmax(self, axis=None, split_every=None, out=None):
-        from .reductions import argmax
+        from dask.array.reductions import argmax
 
         return argmax(self, axis=axis, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import sum
+        from dask.array.reductions import sum
 
         return sum(
             self,
@@ -2312,13 +2361,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def trace(self, offset=0, axis1=0, axis2=1, dtype=None):
-        from .reductions import trace
+        from dask.array.reductions import trace
 
         return trace(self, offset=offset, axis1=axis1, axis2=axis2, dtype=dtype)
 
     @derived_from(np.ndarray)
     def prod(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import prod
+        from dask.array.reductions import prod
 
         return prod(
             self,
@@ -2331,7 +2380,7 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def mean(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        from .reductions import mean
+        from dask.array.reductions import mean
 
         return mean(
             self,
@@ -2346,7 +2395,7 @@ class Array(DaskMethodsMixin):
     def std(
         self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
     ):
-        from .reductions import std
+        from dask.array.reductions import std
 
         return std(
             self,
@@ -2362,7 +2411,7 @@ class Array(DaskMethodsMixin):
     def var(
         self, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
     ):
-        from .reductions import var
+        from dask.array.reductions import var
 
         return var(
             self,
@@ -2418,7 +2467,7 @@ class Array(DaskMethodsMixin):
 
         """
 
-        from .reductions import moment
+        from dask.array.reductions import moment
 
         return moment(
             self,
@@ -2518,7 +2567,7 @@ class Array(DaskMethodsMixin):
                [20, 22, 24, 26],
                [24, 26, 28, 30]])
         """
-        from .overlap import map_overlap
+        from dask.array.overlap import map_overlap
 
         return map_overlap(
             func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
@@ -2537,7 +2586,7 @@ class Array(DaskMethodsMixin):
               This method may be faster or more memory efficient depending on workload,
               scheduler, and hardware.  More benchmarking is necessary.
         """
-        from .reductions import cumsum
+        from dask.array.reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out, method=method)
 
@@ -2554,13 +2603,13 @@ class Array(DaskMethodsMixin):
               This method may be faster or more memory efficient depending on workload,
               scheduler, and hardware.  More benchmarking is necessary.
         """
-        from .reductions import cumprod
+        from dask.array.reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):
-        from .routines import squeeze
+        from dask.array.routines import squeeze
 
         return squeeze(self, axis)
 
@@ -2568,30 +2617,30 @@ class Array(DaskMethodsMixin):
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
         """See da.rechunk for docstring"""
-        from .rechunk import rechunk  # avoid circular import
+        from dask.array.rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
 
     @property
     def real(self):
-        from .ufunc import real
+        from dask.array.ufunc import real
 
         return real(self)
 
     @property
     def imag(self):
-        from .ufunc import imag
+        from dask.array.ufunc import imag
 
         return imag(self)
 
     def conj(self):
-        from .ufunc import conj
+        from dask.array.ufunc import conj
 
         return conj(self)
 
     @derived_from(np.ndarray)
     def clip(self, min=None, max=None):
-        from .ufunc import clip
+        from dask.array.ufunc import clip
 
         return clip(self, min, max)
 
@@ -2640,13 +2689,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def swapaxes(self, axis1, axis2):
-        from .routines import swapaxes
+        from dask.array.routines import swapaxes
 
         return swapaxes(self, axis1, axis2)
 
     @derived_from(np.ndarray)
     def round(self, decimals=0):
-        from .routines import round
+        from dask.array.routines import round
 
         return round(self, decimals=decimals)
 
@@ -2689,13 +2738,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def repeat(self, repeats, axis=None):
-        from .creation import repeat
+        from dask.array.creation import repeat
 
         return repeat(self, repeats, axis=axis)
 
     @derived_from(np.ndarray)
     def nonzero(self):
-        from .routines import nonzero
+        from dask.array.routines import nonzero
 
         return nonzero(self)
 
@@ -2715,7 +2764,7 @@ class Array(DaskMethodsMixin):
 
         See https://docs.tiledb.io for details about the format and engine.
         """
-        from .tiledb_io import to_tiledb
+        from dask.array.tiledb_io import to_tiledb
 
         return to_tiledb(self, uri, *args, **kwargs)
 
@@ -3233,13 +3282,10 @@ def from_array(
     )
 
     if name in (None, True):
-        token = tokenize(x, chunks)
-        original_name = "array-original-" + token
+        token = tokenize(x, chunks, lock, asarray, fancy, getitem, inline_array)
         name = name or "array-" + token
     elif name is False:
-        original_name = name = "array-" + str(uuid.uuid1())
-    else:
-        original_name = name
+        name = "array-" + str(uuid.uuid1())
 
     if lock is True:
         lock = SerializableLock()
@@ -3266,23 +3312,17 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        if inline_array:
-            get_from = x
-        else:
-            get_from = original_name
-
-        dsk = getem(
-            get_from,
+        dsk = graph_from_arraylike(
+            x,
             chunks,
+            x.shape,
+            name,
             getitem=getitem,
-            shape=x.shape,
-            out_name=name,
             lock=lock,
             asarray=asarray,
             dtype=x.dtype,
+            inline_array=inline_array,
         )
-        if not inline_array:
-            dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
@@ -3361,6 +3401,7 @@ def to_zarr(
     component=None,
     storage_options=None,
     overwrite=False,
+    region=None,
     compute=True,
     return_stored=False,
     **kwargs,
@@ -3386,6 +3427,9 @@ def to_zarr(
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
         where overwrite=True will replace the existing data.
+    region: tuple of slices or None
+        The region of data that should be written if ``url`` is a zarr.Array.
+        Not to be used with other types of ``url``.
     compute: bool
         See :func:`~dask.array.store` for more details.
     return_stored: bool
@@ -3397,6 +3441,7 @@ def to_zarr(
     ------
     ValueError
         If ``arr`` has unknown chunk sizes, which is not supported by Zarr.
+        If ``region`` is specified and ``url`` is not a zarr.Array
 
     See Also
     --------
@@ -3421,8 +3466,27 @@ def to_zarr(
                 "Cannot store into in memory Zarr Array using "
                 "the Distributed Scheduler."
             )
-        arr = arr.rechunk(z.chunks)
-        return arr.store(z, lock=False, compute=compute, return_stored=return_stored)
+
+        if region is None:
+            arr = arr.rechunk(z.chunks)
+            regions = None
+        else:
+            from dask.array.slicing import new_blockdim, normalize_index
+
+            old_chunks = normalize_chunks(z.chunks, z.shape)
+            index = normalize_index(region, z.shape)
+            chunks = tuple(
+                tuple(new_blockdim(s, c, r))
+                for s, c, r in zip(z.shape, old_chunks, index)
+            )
+            arr = arr.rechunk(chunks)
+            regions = [region]
+        return arr.store(
+            z, lock=False, regions=regions, compute=compute, return_stored=return_stored
+        )
+
+    if region is not None:
+        raise ValueError("Cannot use `region` keyword when url is not a `zarr.Array`.")
 
     if not _check_regular_chunks(arr.chunks):
         raise ValueError(
@@ -3512,7 +3576,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
-    from ..delayed import Delayed, delayed
+    from dask.delayed import Delayed, delayed
 
     if not isinstance(value, Delayed) and hasattr(value, "key"):
         value = delayed(value)
@@ -3918,7 +3982,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     ----------
     seq: list of dask.arrays
     axis: int
-        Dimension along which to align all of the arrays
+        Dimension along which to align all of the arrays. If axis is None,
+        arrays are flattened before use.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
@@ -3949,12 +4014,16 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     stack
     """
-    from . import wrap
+    from dask.array import wrap
 
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
+
+    if axis is None:
+        seq = [a.flatten() for a in seq]
+        axis = 0
 
     seq_metas = [meta_from_array(s) for s in seq]
     _concatenate = concatenate_lookup.dispatch(
@@ -4278,7 +4347,7 @@ def asarray(
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, dtype=None, order=None, *, like=None):
+def asanyarray(a, dtype=None, order=None, *, like=None, inline_array=False):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4305,6 +4374,9 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
         Requires NumPy 1.20.0 or higher.
+    inline_array:
+        Whether to inline the array in the resulting dask graph. For more information,
+        see the documentation for ``dask.array.from_array()``.
 
     Returns
     -------
@@ -4343,7 +4415,13 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
             return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
         else:
             a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
+    return from_array(
+        a,
+        chunks=a.shape,
+        getitem=getter_inline,
+        asarray=False,
+        inline_array=inline_array,
+    )
 
 
 def is_scalar_for_elemwise(arg):
@@ -4876,7 +4954,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     --------
     concatenate
     """
-    from . import wrap
+    from dask.array import wrap
 
     seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
@@ -5257,7 +5335,7 @@ def _vindex_array(x, dict_indexes):
 
     # output has a zero dimension, just create a new zero-shape array with the
     # same dtype
-    from .wrap import empty
+    from dask.array.wrap import empty
 
     result_1d = empty(
         tuple(map(sum, chunks)), chunks=chunks, dtype=x.dtype, name=out_name
@@ -5418,7 +5496,7 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
-        from ..dataframe.core import new_dd_object
+        from dask.dataframe.core import new_dd_object
 
         assert all(len(c) == 1 for c in chunks[1:])
         divisions = [None] * (len(chunks[0]) + 1)
@@ -5475,7 +5553,7 @@ class BlockView:
     def __getitem__(
         self, index: int | Sequence[int] | slice | Sequence[slice]
     ) -> Array:
-        from .slicing import normalize_index
+        from dask.array.slicing import normalize_index
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -5528,5 +5606,5 @@ class BlockView:
         return [self[idx] for idx in np.ndindex(self.shape)]
 
 
-from .blockwise import blockwise
-from .utils import compute_meta, meta_from_array
+from dask.array.blockwise import blockwise
+from dask.array.utils import compute_meta, meta_from_array

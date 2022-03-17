@@ -149,10 +149,12 @@ messy situations in everyday problems.
    array.rst
    bag.rst
    dataframe.rst
+   dashboard.rst
    delayed.rst
    futures.rst
    scheduling.rst
    graphs.rst
+   deploying.rst
    internals.rst
 
 .. toctree::

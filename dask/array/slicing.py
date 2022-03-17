@@ -4,16 +4,16 @@ import math
 import warnings
 from itertools import product
 from numbers import Integral, Number
-from operator import add, itemgetter
+from operator import itemgetter
 
 import numpy as np
-from tlz import accumulate, concat, memoize, merge, pluck
+from tlz import concat, memoize, merge, pluck
 
-from .. import config, core, utils
-from ..base import is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import is_arraylike
-from .chunk import getitem
+from dask import config, core, utils
+from dask.array.chunk import getitem
+from dask.base import is_dask_collection, tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -56,7 +56,7 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
-    from .utils import asanyarray_safe
+    from dask.array.utils import asanyarray_safe
 
     if ind is None:
         return None
@@ -292,7 +292,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
-    from .core import unknown_chunk_message
+    from dask.array.core import unknown_chunk_message
 
     shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
@@ -553,7 +553,7 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    from .utils import asarray_safe
+    from dask.array.utils import asarray_safe
 
     if not is_arraylike(index):
         index = np.asanyarray(index)
@@ -620,7 +620,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
-    from .core import PerformanceWarning
+    from dask.array.core import PerformanceWarning
 
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
@@ -641,7 +641,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     other_chunks = [chunks[i] for i in range(len(chunks)) if i != axis]
     other_numel = np.prod([sum(x) for x in other_chunks])
 
-    if math.isnan(other_numel):
+    if math.isnan(other_numel) or other_numel == 0:
         warnsize = maxsize = math.inf
     else:
         maxsize = math.ceil(nbytes / (other_numel * itemsize))
@@ -878,7 +878,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from .core import Array, from_array
+    from dask.array.core import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -1010,7 +1010,7 @@ def slice_with_int_dask_array(x, index):
     replaced to the original slicer where a 1D filter has been applied and
     one less element where a zero-dimensional filter has been applied.
     """
-    from .core import Array
+    from dask.array.core import Array
 
     assert len(index) == x.ndim
     fancy_indexes = [
@@ -1050,9 +1050,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
-    from . import chunk
-    from .core import Array, blockwise, from_array
-    from .utils import asarray_safe
+    from dask.array import chunk
+    from dask.array.core import Array, blockwise, from_array
+    from dask.array.utils import asarray_safe
 
     assert 0 <= axis < x.ndim
 
@@ -1133,7 +1133,7 @@ def slice_with_bool_dask_array(x, index):
 
     Note: The sliced x will have nan chunks on the sliced axes.
     """
-    from .core import Array, blockwise, elemwise
+    from dask.array.core import Array, blockwise, elemwise
 
     out_index = [
         slice(None) if isinstance(ind, Array) and ind.dtype == bool else ind
@@ -1240,7 +1240,7 @@ def make_block_sorted_slices(index, chunks):
     >>> b
     array([3, 0, 2, 1, 7, 4, 6, 5])
     """
-    from .core import slices_from_chunks
+    from dask.array.core import slices_from_chunks
 
     slices = slices_from_chunks(chunks)
 
@@ -1277,7 +1277,7 @@ def shuffle_slice(x, index):
     -------
     Array
     """
-    from .core import PerformanceWarning
+    from dask.array.core import PerformanceWarning
 
     chunks1 = chunks2 = x.chunks
     if x.ndim > 1:
@@ -1286,65 +1286,6 @@ def shuffle_slice(x, index):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PerformanceWarning)
         return x[index2].rechunk(chunks2)[index3]
-
-
-class _HashIdWrapper:
-    """Hash and compare a wrapped object by identity instead of value"""
-
-    def __init__(self, wrapped):
-        self.wrapped = wrapped
-
-    def __eq__(self, other):
-        if not isinstance(other, _HashIdWrapper):
-            return NotImplemented
-        return self.wrapped is other.wrapped
-
-    def __ne__(self, other):
-        if not isinstance(other, _HashIdWrapper):
-            return NotImplemented
-        return self.wrapped is not other.wrapped
-
-    def __hash__(self):
-        return id(self.wrapped)
-
-
-@functools.lru_cache()
-def _cumsum(seq, initial_zero):
-    if isinstance(seq, _HashIdWrapper):
-        seq = seq.wrapped
-    if initial_zero:
-        return tuple(accumulate(add, seq, 0))
-    else:
-        return tuple(accumulate(add, seq))
-
-
-def cached_cumsum(seq, initial_zero=False):
-    """Compute :meth:`toolz.accumulate` with caching.
-
-    Caching is by the identify of `seq` rather than the value. It is thus
-    important that `seq` is a tuple of immutable objects, and this function
-    is intended for use where `seq` is a value that will persist (generally
-    block sizes).
-
-    Parameters
-    ----------
-    seq : tuple
-        Values to cumulatively sum.
-    initial_zero : bool, optional
-        If true, the return value is prefixed with a zero.
-
-    Returns
-    -------
-    tuple
-    """
-    if isinstance(seq, tuple):
-        # Look up by identity first, to avoid a linear-time __hash__
-        # if we've seen this tuple object before.
-        result = _cumsum(_HashIdWrapper(seq), initial_zero)
-    else:
-        # Construct a temporary tuple, and look up by value.
-        result = _cumsum(tuple(seq), initial_zero)
-    return result
 
 
 def parse_assignment_indices(indices, shape):
@@ -1375,24 +1316,38 @@ def parse_assignment_indices(indices, shape):
     parsed_indices : `list`
         The reformated indices that are equivalent to the input
         indices.
-    indices_shape : `list`
-        The shape implied by of the parsed indices. For instance,
-        indices of ``(slice(0,2), 5, [4,1,-1])`` will have shape
+    implied_shape : `list`
+        The shape implied by the parsed indices. For instance, indices
+        of ``(slice(0,2), 5, [4,1,-1])`` will have implied shape
         ``[2,3]``.
     reverse : `list`
         The positions of the dimensions whose indices in the
         parsed_indices output are reversed slices.
+    implied_shape_positions: `list`
+        The positions of the dimensions whose indices contribute to
+        the implied_shape. For instance, indices of ``(slice(0,2), 5,
+        [4,1,-1])`` will have implied_shape ``[2,3]`` and
+        implied_shape_positions ``[0,2]``.
 
     Examples
     --------
     >>> parse_assignment_indices((slice(1, -1),), (8,))
-    ([slice(1, 7, 1)], [6], [])
+    ([slice(1, 7, 1)], [6], [], [0])
 
     >>> parse_assignment_indices(([1, 2, 6, 5],), (8,))
-    ([array([1, 2, 6, 5])], [4], [])
+    ([array([1, 2, 6, 5])], [4], [], [0])
 
     >>> parse_assignment_indices((3, slice(-1, 2, -1)), (7, 8))
-    ([3, slice(3, 8, 1)], [5], [1])
+    ([3, slice(3, 8, 1)], [5], [1], [1])
+
+    >>> parse_assignment_indices((slice(-1, 2, -1), 3, [1, 2]), (7, 8, 9))
+    ([slice(3, 7, 1), 3, array([1, 2])], [4, 2], [0], [0, 2])
+
+    >>> parse_assignment_indices((slice(0, 5), slice(3, None, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 4, 2)], [5, 1], [], [0, 1])
+
+    >>> parse_assignment_indices((slice(0, 5), slice(3, 3, 2)), (5, 4))
+    ([slice(0, 5, 1), slice(3, 3, 2)], [5, 0], [], [0])
 
     """
     if not isinstance(indices, tuple):
@@ -1417,7 +1372,8 @@ def parse_assignment_indices(indices, shape):
             )
 
     # Inititalize output variables
-    indices_shape = []
+    implied_shape = []
+    implied_shape_positions = []
     reverse = []
     parsed_indices = list(normalize_index(indices, shape))
 
@@ -1460,14 +1416,20 @@ def parse_assignment_indices(indices, shape):
                 reverse.append(i)
 
             start, stop, step = index.indices(size)
+
+            # Note: We now have stop >= start and step >= 0
+
             div, mod = divmod(stop - start, step)
-            if div <= 0:
-                indices_shape.append(0)
+            if not div and not mod:
+                # stop equals start => zero-sized slice for this
+                # dimension
+                implied_shape.append(0)
             else:
                 if mod != 0:
                     div += 1
 
-                indices_shape.append(div)
+                implied_shape.append(div)
+                implied_shape_positions.append(i)
 
         elif isinstance(index, (int, np.integer)):
             # Index is an integer
@@ -1504,14 +1466,18 @@ def parse_assignment_indices(indices, shape):
 
             # Posify an integer dask array (integer numpy arrays were
             # posified in `normalize_index`)
-            if is_dask_collection(index) and index.dtype != bool:
-                index = np.where(index < 0, index + size, index)
+            if is_dask_collection(index):
+                if index.dtype == bool:
+                    index_size = np.nan
+                else:
+                    index = np.where(index < 0, index + size, index)
 
-            indices_shape.append(index_size)
+            implied_shape.append(index_size)
+            implied_shape_positions.append(i)
 
         parsed_indices[i] = index
 
-    return parsed_indices, indices_shape, reverse
+    return parsed_indices, implied_shape, reverse, implied_shape_positions
 
 
 def concatenate_array_chunks(x):
@@ -1529,7 +1495,7 @@ def concatenate_array_chunks(x):
         The concatenated dask array with one chunk.
 
     """
-    from .core import Array, concatenate3
+    from dask.array.core import Array, concatenate3
 
     if x.npartitions == 1:
         return x
@@ -1608,7 +1574,7 @@ def setitem_array(out_name, array, indices, value):
 
     """
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The positions of index elements in the range values loc0 and loc1.
 
@@ -1673,7 +1639,7 @@ def setitem_array(out_name, array, indices, value):
 
         return i
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
         """Number of True index elements between positions loc0 and loc1.
 
@@ -1701,7 +1667,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[loc0:loc1])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def n_preceeding_from_1d_bool_index(dim, loc0):
         """Number of True index elements preceeding position loc0.
 
@@ -1727,7 +1693,7 @@ def setitem_array(out_name, array, indices, value):
         """
         return np.sum(index[:loc0])
 
-    @functools.lru_cache()
+    @functools.lru_cache
     def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
         """Value indices for index elements between loc0 and loc1.
 
@@ -1781,21 +1747,23 @@ def setitem_array(out_name, array, indices, value):
 
         return i
 
-    from ..core import flatten
+    from dask.core import flatten
 
     array_shape = array.shape
     value_shape = value.shape
     value_ndim = len(value_shape)
 
     # Reformat input indices
-    indices, indices_shape, reverse = parse_assignment_indices(indices, array_shape)
+    indices, implied_shape, reverse, implied_shape_positions = parse_assignment_indices(
+        indices, array_shape
+    )
 
     # Empty slices can only be assigned size 1 values
-    if 0 in indices_shape and value_shape and max(value_shape) > 1:
+    if 0 in implied_shape and value_shape and max(value_shape) > 1:
         raise ValueError(
             f"shape mismatch: value array of shape {value_shape} "
             "could not be broadcast to indexing result "
-            f"of shape {tuple(indices_shape)}"
+            f"of shape {tuple(implied_shape)}"
         )
 
     # Set variables needed when creating the part of the assignment
@@ -1846,18 +1814,18 @@ def setitem_array(out_name, array, indices, value):
     #
     # Note that array_common_shape and value_common_shape may be
     # different if there are any size 1 dimensions being brodacast.
-    offset = len(indices_shape) - value_ndim
+    offset = len(implied_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the
         # assignment value
-        array_common_shape = indices_shape[offset:]
+        array_common_shape = implied_shape[offset:]
         value_common_shape = value_shape
         value_offset = 0
         reverse = [i - offset for i in reverse if i >= offset]
     else:
         # The assigmment value has more dimensions than the array
         value_offset = -offset
-        array_common_shape = indices_shape
+        array_common_shape = implied_shape
         value_common_shape = value_shape[value_offset:]
         offset = 0
 
@@ -1865,12 +1833,29 @@ def setitem_array(out_name, array, indices, value):
         if value_shape[:value_offset] != (1,) * value_offset:
             raise ValueError(
                 "could not broadcast input array from shape"
-                f"{value_shape} into shape {tuple(indices_shape)}"
+                f"{value_shape} into shape {tuple(implied_shape)}"
             )
 
     base_value_indices = []
     non_broadcast_dimensions = []
-    for i, (a, b) in enumerate(zip(array_common_shape, value_common_shape)):
+
+    for i, (a, b, j) in enumerate(
+        zip(array_common_shape, value_common_shape, implied_shape_positions)
+    ):
+        index = indices[j]
+        if is_dask_collection(index) and index.dtype == bool:
+            if math.isnan(b) or b <= index.size:
+                base_value_indices.append(None)
+                non_broadcast_dimensions.append(i)
+            else:
+                raise ValueError(
+                    f"shape mismatch: value array dimension size of {b} is "
+                    "greater then corresponding boolean index size of "
+                    f"{index.size}"
+                )
+
+            continue
+
         if b == 1:
             base_value_indices.append(slice(None))
         elif a == b:
@@ -1880,11 +1865,12 @@ def setitem_array(out_name, array, indices, value):
             base_value_indices.append(None)
             non_broadcast_dimensions.append(i)
         else:
-            # Can't check  ...
             raise ValueError(
-                f"Can't broadcast data with shape {value_common_shape} "
-                f"across shape {tuple(indices_shape)}"
+                f"shape mismatch: value array of shape {value_shape} "
+                "could not be broadcast to indexing result of shape "
+                f"{tuple(implied_shape)}"
             )
+
     # Translate chunks tuple to a set of array locations in product
     # order
     chunks = array.chunks
@@ -1936,11 +1922,7 @@ def setitem_array(out_name, array, indices, value):
         dim_1d_int_index = None
 
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
-            zip(
-                indices,
-                array_shape,
-                locations,
-            )
+            zip(indices, array_shape, locations)
         ):
 
             integer_index = isinstance(index, int)
@@ -1985,7 +1967,6 @@ def setitem_array(out_name, array, indices, value):
                 # Index is a 1-d array
                 is_bool = index.dtype == bool
                 block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
-
                 if is_bool:
                     block_index_size = block_index_shape_from_1d_bool_index(
                         dim, loc0, loc1
@@ -2045,9 +2026,7 @@ def setitem_array(out_name, array, indices, value):
                 index = indices[j]
 
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index,
-                    value_shape[i + value_offset],
-                    *loc0_loc1,
+                    dim_1d_int_index, value_shape[i + value_offset], *loc0_loc1
                 )
             else:
                 # Index is a slice or 1-d boolean array

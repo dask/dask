@@ -1,10 +1,10 @@
 import pandas as pd
 
-from .extensions import make_array_nonempty, make_scalar
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 
 @make_array_nonempty.register(pd.DatetimeTZDtype)
-def _dtype(dtype):
+def _(dtype):
     return pd.array([pd.Timestamp(1), pd.NaT], dtype=dtype)
 
 
@@ -24,7 +24,7 @@ def _(x):
 
 
 @make_array_nonempty.register(pd.BooleanDtype)
-def _dtype(dtype):
+def _(dtype):
     return pd.array([True, pd.NA], dtype=dtype)
 
 

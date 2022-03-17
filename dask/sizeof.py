@@ -3,14 +3,14 @@ import random
 import sys
 from array import array
 
-from .utils import Dispatch
+from dask.utils import Dispatch
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
     getsizeof = sys.getsizeof
 except (AttributeError, TypeError):  # Monkey patch
 
-    def getsizeof(x):
+    def getsizeof(x):  # type: ignore
         return 100
 
 
@@ -148,7 +148,7 @@ def register_pandas():
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
         p = sizeof(df.index)
-        for name, col in df.iteritems():
+        for name, col in df.items():
             p += col.memory_usage(index=False)
             if col.dtype == object:
                 p += object_size(col._values)

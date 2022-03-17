@@ -1,9 +1,10 @@
+import os
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
 
-from ...highlevelgraph import HighLevelGraph
-from ...layers import DataFrameIOLayer
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
 
 try:
     import psutil
@@ -26,13 +27,13 @@ from pandas.api.types import (
     is_object_dtype,
 )
 
-from ...base import tokenize
-from ...bytes import read_bytes
-from ...core import flatten
-from ...delayed import delayed
-from ...utils import asciitable, parse_bytes
-from ..core import new_dd_object
-from ..utils import clear_known_categories
+from dask.base import tokenize
+from dask.bytes import read_bytes
+from dask.core import flatten
+from dask.dataframe.core import new_dd_object
+from dask.dataframe.utils import clear_known_categories
+from dask.delayed import delayed
+from dask.utils import asciitable, parse_bytes
 
 
 class CSVFunctionWrapper:
@@ -436,7 +437,7 @@ def auto_blocksize(total_memory, cpu_count):
 
 
 def _infer_block_size():
-    default = 2 ** 25
+    default = 2**25
     if psutil is not None:
         with catch_warnings():
             simplefilter("ignore", RuntimeWarning)
@@ -766,7 +767,7 @@ read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
     with fil as f:
         df.to_csv(f, **kwargs)
-    return None
+    return os.path.normpath(fil.path)
 
 
 def to_csv(
@@ -953,12 +954,11 @@ def to_csv(
 
         import dask
 
-        dask.compute(*values, **compute_kwargs)
-        return [f.path for f in files]
+        return list(dask.compute(*values, **compute_kwargs))
     else:
         return values
 
 
-from ..core import _Frame
+from dask.dataframe.core import _Frame
 
 _Frame.to_csv.__doc__ = to_csv.__doc__

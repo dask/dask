@@ -1,13 +1,15 @@
 import contextlib
 import os
+import warnings
 from operator import add, mul
-from time import sleep
 
 import pytest
 
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
+from dask.diagnostics.profile_visualize import BOKEH_VERSION
 from dask.threaded import get
 from dask.utils import apply, tmpfile
+from dask.utils_test import slowadd
 
 try:
     import bokeh
@@ -21,10 +23,8 @@ except ImportError:
 
 prof = Profiler()
 
-
 dsk = {"a": 1, "b": 2, "c": (add, "a", "b"), "d": (mul, "a", "b"), "e": (mul, "c", "d")}
-
-dsk2 = {"a": 1, "b": 2, "c": (lambda a, b: sleep(0.1) or (a + b), "a", "b")}
+dsk2 = {"a": 1, "b": 2, "c": (slowadd, "a", "b")}
 
 
 def test_profiler():
@@ -220,24 +220,27 @@ def test_profiler_plot():
     with prof:
         get(dsk, "e")
     p = prof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    if BOKEH_VERSION().major < 3:
+        assert p.plot_width == 500
+        assert p.plot_height == 300
+    else:
+        assert p.width == 500
+        assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title.text == "Not the default"
     # Test empty, checking for errors
     prof.clear()
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         prof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    assert not record
 
 
 @pytest.mark.skipif("not bokeh")
@@ -246,15 +249,19 @@ def test_resource_profiler_plot():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, "c")
     p = rprof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    if BOKEH_VERSION().major < 3:
+        assert p.plot_width == 500
+        assert p.plot_height == 300
+    else:
+        assert p.width == 500
+        assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title.text == "Not the default"
@@ -263,9 +270,9 @@ def test_resource_profiler_plot():
     rprof.clear()
     for results in [[], [(1.0, 0, 0)]]:
         rprof.results = results
-        with pytest.warns(None) as record:
+        with warnings.catch_warnings(record=True) as record:
             p = rprof.visualize(show=False, save=False)
-        assert len(record) == 0
+        assert not record
         # Check bounds are valid
         assert p.x_range.start == 0
         assert p.x_range.end == 1
@@ -280,25 +287,28 @@ def test_cache_profiler_plot():
     with CacheProfiler(metric_name="non-standard") as cprof:
         get(dsk, "e")
     p = cprof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    if BOKEH_VERSION().major < 3:
+        assert p.plot_width == 500
+        assert p.plot_height == 300
+    else:
+        assert p.width == 500
+        assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert p.title.text == "Not the default"
     assert p.axis[1].axis_label == "Cache Size (non-standard)"
     # Test empty, checking for errors
     cprof.clear()
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         cprof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    assert not record
 
 
 @pytest.mark.skipif("not bokeh")

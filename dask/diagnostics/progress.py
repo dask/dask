@@ -4,7 +4,7 @@ import threading
 import time
 from timeit import default_timer
 
-from ..callbacks import Callback
+from dask.callbacks import Callback
 
 
 def format_time(t):
@@ -37,6 +37,10 @@ class ProgressBar(Callback):
         Width of the bar
     dt : float, optional
         Update resolution in seconds, default is 0.1 seconds
+    out : file object, optional
+        File object to which the progress bar will be written
+        It can be ``sys.stdout``, ``sys.stderr`` or any other file object able to write ``str`` objects
+        Default is ``sys.stdout``
 
     Examples
     --------

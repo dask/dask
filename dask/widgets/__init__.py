@@ -1,5 +1,10 @@
 try:
-    from .widgets import FILTERS, TEMPLATE_PATHS, get_environment, get_template
+    from dask.widgets.widgets import (
+        FILTERS,
+        TEMPLATE_PATHS,
+        get_environment,
+        get_template,
+    )
 
 except ImportError as e:
     msg = (
@@ -9,11 +14,11 @@ except ImportError as e:
         '  python -m pip install "dask[diagnostics]" --upgrade  # or python -m pip install'
     )
     exception = e  # Explicit reference for e as it will be lost outside the try block
-    FILTERS = dict()
+    FILTERS = {}
     TEMPLATE_PATHS = []
 
-    def get_environment(*args, **kwargs):
+    def get_environment():
         raise ImportError(msg) from exception
 
-    def get_template(*args, **kwargs):
+    def get_template(name: str):
         raise ImportError(msg) from exception

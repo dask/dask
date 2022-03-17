@@ -1,9 +1,8 @@
 try:
-    from ..base import compute
-    from . import backends, fft, lib, linalg, ma, overlap, random
-    from .blockwise import atop, blockwise
-    from .chunk_types import register_chunk_type
-    from .core import (
+    from dask.array import backends, fft, lib, linalg, ma, overlap, random
+    from dask.array.blockwise import atop, blockwise
+    from dask.array.chunk_types import register_chunk_type
+    from dask.array.core import (
         Array,
         PerformanceWarning,
         asanyarray,
@@ -24,7 +23,7 @@ try:
         to_zarr,
         unify_chunks,
     )
-    from .creation import (
+    from dask.array.creation import (
         arange,
         diag,
         diagonal,
@@ -42,13 +41,13 @@ try:
         tri,
         zeros_like,
     )
-    from .gufunc import apply_gufunc, as_gufunc, gufunc
-    from .numpy_compat import moveaxis, rollaxis
-    from .optimization import optimize
-    from .overlap import map_overlap
-    from .percentile import percentile
-    from .rechunk import rechunk
-    from .reductions import (
+    from dask.array.gufunc import apply_gufunc, as_gufunc, gufunc
+    from dask.array.numpy_compat import moveaxis, rollaxis
+    from dask.array.optimization import optimize
+    from dask.array.overlap import map_overlap
+    from dask.array.percentile import percentile
+    from dask.array.rechunk import rechunk
+    from dask.array.reductions import (
         all,
         any,
         argmax,
@@ -81,8 +80,8 @@ try:
         trace,
         var,
     )
-    from .reshape import reshape
-    from .routines import (
+    from dask.array.reshape import reshape
+    from dask.array.routines import (
         allclose,
         append,
         apply_along_axis,
@@ -108,6 +107,7 @@ try:
         dstack,
         ediff1d,
         einsum,
+        expand_dims,
         extract,
         flatnonzero,
         flip,
@@ -156,8 +156,8 @@ try:
         vstack,
         where,
     )
-    from .tiledb_io import from_tiledb, to_tiledb
-    from .ufunc import (
+    from dask.array.tiledb_io import from_tiledb, to_tiledb
+    from dask.array.ufunc import (
         absolute,
         add,
         angle,
@@ -253,8 +253,9 @@ try:
         true_divide,
         trunc,
     )
-    from .utils import assert_eq
-    from .wrap import empty, full, ones, zeros
+    from dask.array.utils import assert_eq
+    from dask.array.wrap import empty, full, ones, zeros
+    from dask.base import compute
 
 except ImportError as e:
     msg = (

@@ -4,8 +4,7 @@ import pytest
 from fsspec.compression import compr
 from tlz import concat
 
-import dask
-from dask import compute
+from dask import compute, config
 from dask.bag.text import read_text
 from dask.bytes import utils
 from dask.utils import filetexts
@@ -31,7 +30,7 @@ files = {
 
 expected = "".join([files[v] for v in sorted(files)])
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
+fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]  # type: ignore
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc_path = [
@@ -102,7 +101,7 @@ def test_files_per_partition():
     with filetexts(files3):
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns
-        with dask.config.set({"scheduler": "single-threaded"}):
+        with config.set({"scheduler": "single-threaded"}):
             with pytest.warns(UserWarning):
                 b = read_text("*.txt", files_per_partition=10)
                 l = len(b.take(100, npartitions=1))

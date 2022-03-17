@@ -5,15 +5,20 @@ from numbers import Number
 import numpy as np
 import tlz as toolz
 
-from ..base import tokenize, wait
-from ..blockwise import blockwise
-from ..delayed import delayed
-from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from
-from .core import Array, concatenate, dotmany, from_delayed
-from .creation import eye
-from .random import RandomState
-from .utils import array_safe, meta_from_array, solve_triangular_safe, svd_flip
+from dask.array.core import Array, concatenate, dotmany, from_delayed
+from dask.array.creation import eye
+from dask.array.random import RandomState
+from dask.array.utils import (
+    array_safe,
+    meta_from_array,
+    solve_triangular_safe,
+    svd_flip,
+)
+from dask.base import tokenize, wait
+from dask.blockwise import blockwise
+from dask.delayed import delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from
 
 
 def _cumsum_blocks(it):
@@ -1399,7 +1404,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.conj().dot(b))
     residuals = b - a.dot(x)
-    residuals = abs(residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
+    residuals = abs(residuals**2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 

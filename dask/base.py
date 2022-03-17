@@ -1,31 +1,35 @@
+from __future__ import annotations
+
+import dataclasses
 import datetime
+import hashlib
 import inspect
 import os
 import pickle
 import threading
 import uuid
+import warnings
 from collections import OrderedDict
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
-from dataclasses import fields, is_dataclass
 from functools import partial
-from hashlib import md5
 from numbers import Integral, Number
 from operator import getitem
-from typing import Iterator, Mapping, Set
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from . import config, local, threaded
-from .context import thread_state
-from .core import flatten
-from .core import get as simple_get
-from .core import literal, quote
-from .hashing import hash_buffer_hex
-from .system import CPU_COUNT
-from .utils import Dispatch, apply, ensure_dict, key_split
+from dask import config, local, threaded
+from dask.compatibility import _PY_VERSION
+from dask.context import thread_state
+from dask.core import flatten
+from dask.core import get as simple_get
+from dask.core import literal, quote
+from dask.hashing import hash_buffer_hex
+from dask.system import CPU_COUNT
+from dask.utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
     "DaskMethodsMixin",
@@ -327,7 +331,7 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
     """
     Convert many collections into a single dask graph, after optimization
     """
-    from .highlevelgraph import HighLevelGraph
+    from dask.highlevelgraph import HighLevelGraph
 
     optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
 
@@ -358,7 +362,7 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
 def _extract_graph_and_keys(vals):
     """Given a list of dask vals, return a single graph and a list of keys such
     that ``get(dsk, keys)`` is equivalent to ``[v.compute() for v in vals]``."""
-    from .highlevelgraph import HighLevelGraph
+    from dask.highlevelgraph import HighLevelGraph
 
     graphs, keys = [], []
     for v in vals:
@@ -423,7 +427,7 @@ def unpack_collections(*args, traverse=True):
                 tsk = (typ, [_unpack(i) for i in expr])
             elif typ in (dict, OrderedDict):
                 tsk = (typ, [[_unpack(k), _unpack(v)] for k, v in expr.items()])
-            elif is_dataclass(expr) and not isinstance(expr, type):
+            elif dataclasses.is_dataclass(expr) and not isinstance(expr, type):
                 tsk = (
                     apply,
                     typ,
@@ -432,7 +436,7 @@ def unpack_collections(*args, traverse=True):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in fields(expr)
+                            for f in dataclasses.fields(expr)
                         ],
                     ),
                 )
@@ -584,7 +588,8 @@ def visualize(
     Parameters
     ----------
     args : object
-        Any number of objects. If it is a dask object, its associated graph
+        Any number of objects. If it is a dask collection (for example, a
+        dask DataFrame, Array, Bag, or Delayed), its associated graph
         will be included in the output of visualize. By default, python builtin
         collections are also traversed to look for dask objects (for more
         information see the ``traverse`` keyword). Arguments lacking an
@@ -672,7 +677,7 @@ def visualize(
     }:
         import matplotlib.pyplot as plt
 
-        from .order import diagnostics, order
+        from dask.order import diagnostics, order
 
         o = order(dsk)
         try:
@@ -840,6 +845,15 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 # Tokenize #
 ############
 
+# Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
+if _PY_VERSION >= parse_version("3.9"):
+
+    def _md5(x, _hashlib_md5=hashlib.md5):
+        return _hashlib_md5(x, usedforsecurity=False)
+
+else:
+    _md5 = hashlib.md5
+
 
 def tokenize(*args, **kwargs):
     """Deterministic token
@@ -850,9 +864,10 @@ def tokenize(*args, **kwargs):
     >>> tokenize('Hello') == tokenize('Hello')
     True
     """
+    hasher = _md5(str(tuple(map(normalize_token, args))).encode())
     if kwargs:
-        args = args + (kwargs,)
-    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+        hasher.update(str(normalize_token(kwargs)).encode())
+    return hasher.hexdigest()
 
 
 normalize_token = Dispatch()
@@ -928,6 +943,9 @@ def normalize_object(o):
     if callable(o):
         return normalize_function(o)
 
+    if dataclasses.is_dataclass(o):
+        return normalize_dataclass(o)
+
     if not config.get("tokenize.ensure-deterministic"):
         return uuid.uuid4().hex
 
@@ -938,11 +956,11 @@ def normalize_object(o):
     )
 
 
-function_cache = {}
+function_cache: dict[Callable, Callable] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func):
+def normalize_function(func: Callable) -> Callable:
     try:
         return function_cache[func]
     except KeyError:
@@ -958,7 +976,7 @@ def normalize_function(func):
         return _normalize_function(func)
 
 
-def _normalize_function(func):
+def _normalize_function(func: Callable) -> Callable:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
@@ -974,7 +992,7 @@ def _normalize_function(func):
         return (normalize_function(func.func), args, kws)
     else:
         try:
-            result = pickle.dumps(func, protocol=0)
+            result = pickle.dumps(func, protocol=4)
             if b"__main__" not in result:  # abort on dynamic functions
                 return result
         except Exception:
@@ -982,9 +1000,19 @@ def _normalize_function(func):
         try:
             import cloudpickle
 
-            return cloudpickle.dumps(func, protocol=0)
+            return cloudpickle.dumps(func, protocol=4)
         except Exception:
             return str(func)
+
+
+def normalize_dataclass(obj):
+    fields = [
+        (field.name, getattr(obj, field.name)) for field in dataclasses.fields(obj)
+    ]
+    return (
+        normalize_function(type(obj)),
+        _normalize_seq_func(fields),
+    )
 
 
 @normalize_token.register_lazy("pandas")
@@ -1248,7 +1276,13 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler.get
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
+
             if scheduler in named_schedulers:
+                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                    warnings.warn(
+                        "Running on a single-machine scheduler when a distributed client "
+                        "is active might lead to unexpected results."
+                    )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
                 from distributed.worker import get_client
@@ -1317,7 +1351,7 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return x
 
 
-def get_collection_names(collection) -> Set[str]:
+def get_collection_names(collection) -> set[str]:
     """Infer the collection names from the dask keys, under the assumption that all keys
     are either tuples with matching first element, and that element is a string, or
     there is exactly one key and it is a string.
@@ -1391,22 +1425,20 @@ def replace_name_in_key(key, rename: Mapping[str, str]):
 
 def clone_key(key, seed):
     """Clone a key from a Dask collection, producing a new key with the same prefix and
-    indices and a token which a deterministic function of the previous token and seed.
+    indices and a token which is a deterministic function of the previous key and seed.
 
     Examples
     --------
-    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
-    'inc-1d291de52f5045f8a969743daea271fd'
-    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
+    >>> clone_key("x", 123)
+    'x-dc2b8d1c184c72c19faa81c797f8c6b0'
+    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)
+    'inc-f81b5a88038a2132882aa29a9fcfec06'
+    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)
+    ('sum-fd6be9e9fe07fc232ad576fa997255e8', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]
     if isinstance(key, str):
         prefix = key_split(key)
-        token = key[len(prefix) + 1 :]
-        if token:
-            return prefix + "-" + tokenize(token, seed)
-        else:
-            return tokenize(key, seed)
+        return prefix + "-" + tokenize(key, seed)
     raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")

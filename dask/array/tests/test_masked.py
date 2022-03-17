@@ -1,4 +1,5 @@
 import random
+import sys
 from copy import deepcopy
 from itertools import product
 
@@ -51,7 +52,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x ** 2,
+    lambda x: x**2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -393,3 +394,32 @@ def test_arithmetic_results_in_masked():
     sol = x + masked
     assert_eq(res, sol)
     assert isinstance(res.compute(), np.ma.masked_array)
+
+
+def test_count():
+    data = np.arange(120).reshape((12, 10))
+    mask = (data % 3 == 0) | (data % 4 == 0)
+    x = np.ma.masked_where(mask, data)
+    dx = da.from_array(x, chunks=(2, 3))
+
+    for axis in (None, 0, 1):
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol)
+
+    res = da.ma.count(dx, keepdims=True)
+    sol = np.ma.count(x, keepdims=True)
+    assert_eq(res, sol)
+
+    # Test all masked
+    x = np.ma.masked_all((12, 10))
+    dx = da.from_array(x, chunks=(2, 3))
+    assert_eq(da.ma.count(dx), np.ma.count(x))
+
+    # Test on non-masked array
+    x = np.arange(120).reshape((12, 10))
+    dx = da.from_array(data, chunks=(2, 3))
+    for axis in (None, 0, 1):
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol, check_dtype=sys.platform != "win32")

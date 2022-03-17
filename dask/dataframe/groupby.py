@@ -7,10 +7,8 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import M, _deprecated, derived_from, funcname, itemgetter
-from .core import (
+from dask.base import tokenize
+from dask.dataframe.core import (
     DataFrame,
     Series,
     _extract_meta,
@@ -20,9 +18,9 @@ from .core import (
     no_default,
     split_out_on_index,
 )
-from .methods import concat, drop_columns
-from .shuffle import shuffle
-from .utils import (
+from dask.dataframe.methods import concat, drop_columns
+from dask.dataframe.shuffle import shuffle
+from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
@@ -30,6 +28,8 @@ from .utils import (
     make_meta,
     raise_on_meta_error,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 
 # #############################################
 #
@@ -37,8 +37,8 @@ from .utils import (
 #
 # Dask groupby supports reductions, i.e., mean, sum and alike, and apply. The
 # former do not shuffle the data and are efficiently implemented as tree
-# reductions. The latter is implemented by shuffling the underlying partiitons
-# such that all items of a group can be found in the same parititon.
+# reductions. The latter is implemented by shuffling the underlying partitions
+# such that all items of a group can be found in the same partition.
 #
 # The argument to ``.groupby`` (``by``), can be a ``str``, ``dd.DataFrame``,
 # ``dd.Series``, or a list thereof. In operations on the grouped object, the
@@ -189,12 +189,14 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
     observed = {"observed": observed} if observed is not None else {}
+    if shuffled:
+        df = df.sort_index()
     g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
@@ -342,7 +344,7 @@ def _var_agg(g, levels, ddof, sort=False):
     n = g[g.columns[-nc // 3 :]].rename(columns=lambda c: c[0])
 
     # TODO: replace with _finalize_var?
-    result = x2 - x ** 2 / n
+    result = x2 - x**2 / n
     div = n - ddof
     div[div < 0] = 0
     result /= div
@@ -988,7 +990,7 @@ def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
     x = df[sum_column]
     x2 = df[sum2_column]
 
-    result = x2 - x ** 2 / n
+    result = x2 - x**2 / n
     div = n - ddof
     div[div < 0] = 0
     result /= div
@@ -1105,7 +1107,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property
+    @property  # type: ignore
     @_deprecated()
     def index(self):
         return self.by
@@ -1123,6 +1125,14 @@ class _GroupBy:
             "sort": self.sort,
             **self.observed,
         }
+
+    def __iter__(self):
+        raise NotImplementedError(
+            "Iteration of DataFrameGroupBy objects requires computing the groups which "
+            "may be slow. You probably want to use 'apply' to execute a function for "
+            "all the columns. To access individual groups, use 'get_group'. To list "
+            "all the group names, use 'df[<group column>].unique().compute()'."
+        )
 
     @property
     def _meta_nonempty(self):
@@ -1231,7 +1241,7 @@ class _GroupBy:
         cumpart_ext = cumpart_raw_frame.assign(
             **{
                 i: self.obj[i]
-                if np.isscalar(i) and i in self.obj.columns
+                if np.isscalar(i) and i in getattr(self.obj, "columns", [])
                 else self.obj.index
                 for i in by
             }
@@ -1282,10 +1292,20 @@ class _GroupBy:
                 aggregate,
                 initial,
             )
-        graph = HighLevelGraph.from_collections(
-            name, dask, dependencies=[cumpart_raw, cumpart_ext, cumlast]
-        )
+
+        dependencies = [cumpart_raw]
+        if self.obj.npartitions > 1:
+            dependencies += [cumpart_ext, cumlast]
+
+        graph = HighLevelGraph.from_collections(name, dask, dependencies=dependencies)
         return new_dd_object(graph, name, chunk(self._meta), self.obj.divisions)
+
+    def compute(self, **kwargs):
+        raise NotImplementedError(
+            "DataFrameGroupBy does not allow compute method."
+            "Please chain it with an aggregation method (like ``.mean()``) or get a "
+            "specific group using ``.get_group()`` before calling ``compute()``"
+        )
 
     def _shuffle(self, meta):
         df = self.obj
@@ -1890,6 +1910,7 @@ class _GroupBy:
             df2,
             by,
             self._slice,
+            should_shuffle,
             periods=periods,
             freq=freq,
             axis=axis,

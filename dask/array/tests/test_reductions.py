@@ -1,6 +1,6 @@
 import os
 import warnings
-from itertools import zip_longest
+from itertools import permutations, zip_longest
 
 import pytest
 
@@ -10,13 +10,8 @@ import itertools
 
 import dask.array as da
 import dask.config as config
-from dask.array.utils import assert_eq as _assert_eq
-from dask.array.utils import same_keys
+from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
-
-
-def assert_eq(a, b):
-    _assert_eq(a, b, equal_nan=True)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
@@ -130,56 +125,54 @@ def test_reductions_1D(dtype):
 
 
 def reduction_2d_test(da_func, darr, np_func, narr, use_dtype=True, split_every=True):
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")  # overflow
-        assert_eq(da_func(darr), np_func(narr))
-        assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
-        assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
-        assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
-        assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
-        assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
-        assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
+    assert_eq(da_func(darr), np_func(narr))
+    assert_eq(da_func(darr, keepdims=True), np_func(narr, keepdims=True))
+    assert_eq(da_func(darr, axis=()), np_func(narr, axis=()))
+    assert_eq(da_func(darr, axis=0), np_func(narr, axis=0))
+    assert_eq(da_func(darr, axis=1), np_func(narr, axis=1))
+    assert_eq(da_func(darr, axis=-1), np_func(narr, axis=-1))
+    assert_eq(da_func(darr, axis=-2), np_func(narr, axis=-2))
+    assert_eq(
+        da_func(darr, axis=1, keepdims=True), np_func(narr, axis=1, keepdims=True)
+    )
+    assert_eq(
+        da_func(darr, axis=(), keepdims=True), np_func(narr, axis=(), keepdims=True)
+    )
+    assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
+
+    assert same_keys(da_func(darr, axis=()), da_func(darr, axis=()))
+    assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
+    assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
+
+    if use_dtype:
+        assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
+        assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
+
+    if split_every:
+        a1 = da_func(darr, split_every=4)
+        a2 = da_func(darr, split_every={0: 2, 1: 2})
+        assert same_keys(a1, a2)
+        assert_eq(a1, np_func(narr))
+        assert_eq(a2, np_func(narr))
         assert_eq(
-            da_func(darr, axis=1, keepdims=True), np_func(narr, axis=1, keepdims=True)
+            da_func(darr, keepdims=True, split_every=4),
+            np_func(narr, keepdims=True),
+        )
+        assert_eq(da_func(darr, axis=(), split_every=2), np_func(narr, axis=()))
+        assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
+        assert_eq(
+            da_func(darr, axis=(), keepdims=True, split_every=2),
+            np_func(narr, axis=(), keepdims=True),
         )
         assert_eq(
-            da_func(darr, axis=(), keepdims=True), np_func(narr, axis=(), keepdims=True)
+            da_func(darr, axis=0, keepdims=True, split_every=2),
+            np_func(narr, axis=0, keepdims=True),
         )
-        assert_eq(da_func(darr, axis=(1, 0)), np_func(narr, axis=(1, 0)))
-
-        assert same_keys(da_func(darr, axis=()), da_func(darr, axis=()))
-        assert same_keys(da_func(darr, axis=1), da_func(darr, axis=1))
-        assert same_keys(da_func(darr, axis=(1, 0)), da_func(darr, axis=(1, 0)))
-
-        if use_dtype:
-            assert_eq(da_func(darr, dtype="f8"), np_func(narr, dtype="f8"))
-            assert_eq(da_func(darr, dtype="i8"), np_func(narr, dtype="i8"))
-
-        if split_every:
-            a1 = da_func(darr, split_every=4)
-            a2 = da_func(darr, split_every={0: 2, 1: 2})
-            assert same_keys(a1, a2)
-            assert_eq(a1, np_func(narr))
-            assert_eq(a2, np_func(narr))
-            assert_eq(
-                da_func(darr, keepdims=True, split_every=4),
-                np_func(narr, keepdims=True),
-            )
-            assert_eq(da_func(darr, axis=(), split_every=2), np_func(narr, axis=()))
-            assert_eq(da_func(darr, axis=0, split_every=2), np_func(narr, axis=0))
-            assert_eq(
-                da_func(darr, axis=(), keepdims=True, split_every=2),
-                np_func(narr, axis=(), keepdims=True),
-            )
-            assert_eq(
-                da_func(darr, axis=0, keepdims=True, split_every=2),
-                np_func(narr, axis=0, keepdims=True),
-            )
-            assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
-            assert_eq(
-                da_func(darr, axis=1, keepdims=True, split_every=2),
-                np_func(narr, axis=1, keepdims=True),
-            )
+        assert_eq(da_func(darr, axis=1, split_every=2), np_func(narr, axis=1))
+        assert_eq(
+            da_func(darr, axis=1, keepdims=True, split_every=2),
+            np_func(narr, axis=1, keepdims=True),
+        )
 
 
 def test_reduction_errors():
@@ -191,6 +184,7 @@ def test_reduction_errors():
 
 
 @pytest.mark.slow
+@pytest.mark.filterwarnings("ignore:overflow encountered in reduce:RuntimeWarning")
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
 def test_reductions_2D(dtype):
     x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
@@ -261,18 +255,17 @@ def test_nanarg_reductions(dfunc, func):
     a = da.from_array(x, chunks=(3, 4, 5))
     assert_eq(dfunc(a), func(x))
     assert_eq(dfunc(a, 0), func(x, 0))
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)  # All-NaN slice encountered
+        with pytest.raises(ValueError):
             dfunc(a, 1).compute()
 
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+        with pytest.raises(ValueError):
             dfunc(a, 2).compute()
 
-    x[:] = np.nan
-    a = da.from_array(x, chunks=(3, 4, 5))
-    with pytest.raises(ValueError):
-        with pytest.warns(None):  # All NaN axis
+        x[:] = np.nan
+        a = da.from_array(x, chunks=(3, 4, 5))
+        with pytest.raises(ValueError):
             dfunc(a).compute()
 
 
@@ -327,47 +320,28 @@ def test_reductions_2D_nans():
 
     reduction_2d_test(da.nansum, a, np.nansum, x, False, False)
     reduction_2d_test(da.nanprod, a, np.nanprod, x, False, False)
-    reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
-    with pytest.warns(None):  # division by 0 warning
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        reduction_2d_test(da.nanmean, a, np.nanmean, x, False, False)
         reduction_2d_test(da.nanvar, a, np.nanvar, x, False, False)
-    with pytest.warns(None):  # division by 0 warning
         reduction_2d_test(da.nanstd, a, np.nanstd, x, False, False)
-    with pytest.warns(None):  # all NaN axis warning
         reduction_2d_test(da.nanmin, a, np.nanmin, x, False, False)
-    with pytest.warns(None):  # all NaN axis warning
         reduction_2d_test(da.nanmax, a, np.nanmax, x, False, False)
 
-    with warnings.catch_warnings():
-        # RuntimeWarning: invalid value encountered in reduce
-        warnings.simplefilter("ignore", RuntimeWarning)
         assert_eq(da.argmax(a), np.argmax(x))
         assert_eq(da.argmin(a), np.argmin(x))
-
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a), np.nanargmax(x))
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a), np.nanargmin(x))
 
-    with warnings.catch_warnings():
-        # RuntimeWarning: invalid value encountered in reduce
-        warnings.simplefilter("ignore", RuntimeWarning)
         assert_eq(da.argmax(a, axis=0), np.argmax(x, axis=0))
         assert_eq(da.argmin(a, axis=0), np.argmin(x, axis=0))
-
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=0), np.nanargmax(x, axis=0))
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=0), np.nanargmin(x, axis=0))
 
-    with warnings.catch_warnings():
-        # RuntimeWarning: invalid value encountered in reduce
-        warnings.simplefilter("ignore", RuntimeWarning)
         assert_eq(da.argmax(a, axis=1), np.argmax(x, axis=1))
         assert_eq(da.argmin(a, axis=1), np.argmin(x, axis=1))
-
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmax(a, axis=1), np.nanargmax(x, axis=1))
-    with pytest.warns(None):  # all NaN axis warning
         assert_eq(da.nanargmin(a, axis=1), np.nanargmin(x, axis=1))
 
 
@@ -477,7 +451,8 @@ def test_reductions_with_empty_array():
     x2 = dx2.compute()
 
     for dx, x in [(dx1, x1), (dx2, x2)]:
-        with pytest.warns(None):  # empty slice warning
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)  # Mean of empty slice
             assert_eq(dx.mean(), x.mean())
             assert_eq(dx.mean(axis=()), x.mean(axis=()))
             assert_eq(dx.mean(axis=0), x.mean(axis=0))
@@ -794,7 +769,7 @@ def test_mean_func_does_not_warn():
     xr = pytest.importorskip("xarray")
     a = xr.DataArray(da.from_array(np.full((10, 10), np.nan)))
 
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as rec:
         a.mean().compute()
     assert not rec  # did not warn
 
@@ -806,6 +781,64 @@ def test_nan_func_does_not_warn(func):
     x[0] = 1
     x[1] = 2
     d = da.from_array(x, chunks=2)
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as rec:
         getattr(da, func)(d).compute()
     assert not rec  # did not warn
+
+
+@pytest.mark.parametrize("chunks", list(permutations(((2, 1) * 8, (3,) * 8, (6,) * 4))))
+@pytest.mark.parametrize("split_every", [2, 4])
+@pytest.mark.parametrize(
+    "axes", list(permutations((0, 1, 2), 2)) + list(permutations((0, 1, 2)))
+)
+def test_chunk_structure_independence(axes, split_every, chunks):
+    # Reducing an array should not depend on its chunk-structure!!!
+    # See Issue #8541: https://github.com/dask/dask/issues/8541
+    shape = tuple(np.sum(s) for s in chunks)
+    np_array = np.arange(np.prod(shape)).reshape(*shape)
+    x = da.from_array(np_array, chunks=chunks)
+    reduced_x = da.reduction(
+        x,
+        lambda x, axis, keepdims: x,
+        lambda x, axis, keepdims: x,
+        keepdims=True,
+        axis=axes,
+        split_every=split_every,
+        dtype=x.dtype,
+        meta=x._meta,
+    )
+    assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
+
+
+def test_weighted_reduction():
+    # Weighted reduction
+    def w_sum(x, weights=None, dtype=None, computing_meta=False, **kwargs):
+        """`chunk` callable for (weighted) sum"""
+        if computing_meta:
+            return x
+        if weights is not None:
+            x = x * weights
+        return np.sum(x, dtype=dtype, **kwargs)
+
+    # Arrays
+    a = 1 + np.ma.arange(60).reshape(6, 10)
+    a[2, 2] = np.ma.masked
+    dx = da.from_array(a, chunks=(4, 5))
+    # Weights
+    w = np.linspace(1, 2, 6).reshape(6, 1)
+
+    # No weights (i.e. normal sum)
+    x = da.reduction(dx, w_sum, np.sum, dtype=dx.dtype)
+    assert_eq(x, np.sum(a), check_shape=True)
+
+    # Weighted sum
+    x = da.reduction(dx, w_sum, np.sum, dtype="f8", weights=w)
+    assert_eq(x, np.sum(a * w), check_shape=True)
+
+    # Non-broadcastable weights (short axis)
+    with pytest.raises(ValueError):
+        da.reduction(dx, w_sum, np.sum, weights=[1, 2, 3])
+
+    # Non-broadcastable weights (too many dims)
+    with pytest.raises(ValueError):
+        da.reduction(dx, w_sum, np.sum, weights=[[[2]]])

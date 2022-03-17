@@ -3,10 +3,10 @@ import re
 import numpy as np
 from tlz import concat, merge, unique
 
-from ..core import flatten
-from ..highlevelgraph import HighLevelGraph
-from .core import Array, apply_infer_dtype, asarray, blockwise, getitem
-from .utils import meta_from_array
+from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, getitem
+from dask.array.utils import meta_from_array
+from dask.core import flatten
+from dask.highlevelgraph import HighLevelGraph
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
@@ -14,7 +14,7 @@ from .utils import meta_from_array
 # See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
-_ARGUMENT = fr"\({_CORE_DIMENSION_LIST}\)"
+_ARGUMENT = rf"\({_CORE_DIMENSION_LIST}\)"
 _INPUT_ARGUMENTS = "(?:{0:}(?:,{0:})*,?)?".format(_ARGUMENT)
 _OUTPUT_ARGUMENTS = "{0:}(?:,{0:})*".format(
     _ARGUMENT

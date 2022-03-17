@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -14,11 +17,8 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.sizeof import SimpleSizeof, sizeof
-
-from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
-from .dispatch import (
+from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
@@ -32,15 +32,16 @@ from .dispatch import (
     tolist_dispatch,
     union_categoricals_dispatch,
 )
-from .extensions import make_array_nonempty, make_scalar
-from .utils import (
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
-    is_categorical_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+from dask.sizeof import SimpleSizeof, sizeof
+from dask.utils import is_arraylike, typename
 
 ##########
 # Pandas #
@@ -61,16 +62,16 @@ def _(x):
 
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x, index=None):
+def _(x, index=None):
     return x.iloc[:0]
 
 
 @make_meta_dispatch.register(pd.Index)
-def make_meta_index(x, index=None):
+def _(x, index=None):
     return x[0:0]
 
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
@@ -126,7 +127,7 @@ def make_meta_object(x, index=None):
         )
     if isinstance(x, tuple) and len(x) == 2:
         return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
+    elif isinstance(x, Iterable) and not isinstance(x, str):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
             raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(
@@ -192,7 +193,13 @@ def _nonempty_index(idx):
     elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
-        return pd.Index(["a", "b"], name=idx.name)
+        if idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with

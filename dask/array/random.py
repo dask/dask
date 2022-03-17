@@ -6,10 +6,7 @@ from operator import getitem
 
 import numpy as np
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import _deprecated, derived_from, random_state_data, skip_doctest
-from .core import (
+from dask.array.core import (
     Array,
     asarray,
     broadcast_shapes,
@@ -17,19 +14,10 @@ from .core import (
     normalize_chunks,
     slices_from_chunks,
 )
-from .creation import arange
-
-
-@_deprecated()
-def doc_wraps(func):
-    """Copy docstring from one function to another"""
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
+from dask.array.creation import arange
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from, random_state_data
 
 
 class RandomState:
@@ -357,7 +345,7 @@ class RandomState:
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
-        from .slicing import shuffle_slice
+        from dask.array.slicing import shuffle_slice
 
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")

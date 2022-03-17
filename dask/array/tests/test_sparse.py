@@ -22,7 +22,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x ** 2,
+    lambda x: x**2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -96,7 +96,7 @@ def test_basic(func):
     xx = func(x)
     yy = func(y)
 
-    assert_eq(xx, yy)
+    assert_eq(xx, yy, check_meta=False)
 
     if yy.shape:
         zz = yy.compute()

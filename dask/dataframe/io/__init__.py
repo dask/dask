@@ -1,7 +1,7 @@
-from . import demo
-from .csv import read_csv, read_fwf, read_table, to_csv
-from .hdf import read_hdf, to_hdf
-from .io import (
+from dask.dataframe.io import demo
+from dask.dataframe.io.csv import read_csv, read_fwf, read_table, to_csv
+from dask.dataframe.io.hdf import read_hdf, to_hdf
+from dask.dataframe.io.io import (
     dataframe_from_ctable,
     from_array,
     from_bcolz,
@@ -11,15 +11,15 @@ from .io import (
     to_bag,
     to_records,
 )
-from .json import read_json, to_json
-from .sql import read_sql_table, to_sql
+from dask.dataframe.io.json import read_json, to_json
+from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table, to_sql
 
 try:
-    from .parquet import read_parquet, to_parquet
+    from dask.dataframe.io.parquet import read_parquet, to_parquet
 except ImportError:
     pass
 
 try:
-    from .orc import read_orc, to_orc
+    from dask.dataframe.io.orc import read_orc, to_orc
 except ImportError:
     pass

@@ -3,6 +3,7 @@ import pickle
 import threading
 import warnings
 from collections import OrderedDict, defaultdict
+from contextlib import ExitStack
 
 import numpy as np
 import pandas as pd
@@ -17,26 +18,27 @@ try:
 except ImportError:
     pass
 
-from ....base import tokenize
-from ....delayed import Delayed
-from ....utils import natural_sort_key
-from ...methods import concat
-from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _meta_from_dtypes
+from dask.base import tokenize
 
 #########################
 # Fastparquet interface #
 #########################
-from .utils import (
+from dask.dataframe.io.parquet.utils import (
     Engine,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
+    _process_open_file_options,
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
+    _split_user_options,
 )
+from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
+from dask.delayed import Delayed
+from dask.utils import natural_sort_key
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()
@@ -370,8 +372,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
-        require_extension=(".parq", ".parquet"),
-        **kwargs,
+        kwargs,
     ):
 
         # Define the parquet-file (pf) object to use for metadata,
@@ -384,8 +385,15 @@ class FastParquetEngine(Engine):
         # dataset.  If _metadata is available, set `gather_statistics=True`
         # (if `gather_statistics=None`).
 
+        # Extract "supported" key-word arguments from `kwargs`.
+        # Split items into `dataset_kwargs` and `read_kwargs`
+        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
+
         parts = []
         _metadata_exists = False
+        require_extension = dataset_kwargs.pop(
+            "require_extension", (".parq", ".parquet")
+        )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -414,7 +422,7 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    **kwargs,
+                    **dataset_kwargs,
                 )
                 if gather_statistics is None:
                     gather_statistics = True
@@ -431,7 +439,9 @@ class FastParquetEngine(Engine):
                             "No files satisfy the `require_extension` criteria "
                             f"(files must end with {require_extension})."
                         )
-                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
@@ -454,13 +464,15 @@ class FastParquetEngine(Engine):
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
                     open_with=fs.open,
-                    **kwargs,
+                    **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
                 # Will need to pass a list of paths to read_partition
                 scheme = get_file_scheme(fns)
-                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
+                pf = ParquetFile(
+                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
+                )
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
                 if not gather_statistics:
@@ -501,7 +513,11 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
-            "kwargs": kwargs,
+            "kwargs": {
+                "dataset": dataset_kwargs,
+                "read": read_kwargs,
+                **user_kwargs,
+            },
         }
 
     @classmethod
@@ -611,6 +627,7 @@ class FastParquetEngine(Engine):
         categories_dict = dataset_info["categories_dict"]
         has_metadata_file = dataset_info["has_metadata_file"]
         metadata_task_size = dataset_info["metadata_task_size"]
+        kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
         # (Using config file or defaults)
@@ -668,6 +685,7 @@ class FastParquetEngine(Engine):
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
             "base_path": base_path,
+            **kwargs,
         }
 
         # Check if this is a very simple case where we can just
@@ -853,11 +871,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
-            **{
-                # Support "file" key for backward compat
-                **kwargs.get("file", {}),
-                **kwargs.get("dataset", {}),
-            },
+            kwargs,
         )
 
         # Stage 2: Generate output `meta`
@@ -943,7 +957,7 @@ class FastParquetEngine(Engine):
                     [p[0] for p in pieces],
                     open_with=fs.open,
                     root=base_path or False,
-                    **kwargs.get("file", {}),
+                    **kwargs.get("dataset", {}),
                 )
                 for piece in pieces:
                     _pf = (
@@ -953,7 +967,7 @@ class FastParquetEngine(Engine):
                             piece[0],
                             open_with=fs.open,
                             root=base_path or False,
-                            **kwargs.get("file", {}),
+                            **kwargs.get("dataset", {}),
                         )
                     )
                     n_local_row_groups = len(_pf.row_groups)
@@ -1009,33 +1023,111 @@ class FastParquetEngine(Engine):
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
-            if set(columns).issubset(
-                parquet_file.columns + list(parquet_file.cats.keys())
-            ):
-                # Convert ParquetFile to pandas
-                return parquet_file.to_pandas(
-                    columns=columns,
-                    categories=categories,
-                    index=index,
-                )
-            else:
-                # Read necessary row-groups and concatenate
-                dfs = []
-                for row_group in row_groups:
-                    dfs.append(
-                        parquet_file.read_row_group_file(
-                            row_group,
-                            columns,
-                            categories,
-                            index=index,
-                            **kwargs.get("read", {}),
-                        )
-                    )
-                return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            # Convert ParquetFile to pandas
+            return cls.pf_to_pandas(
+                parquet_file,
+                fs=fs,
+                columns=columns,
+                categories=categories,
+                index=index,
+                **kwargs.get("read", {}),
+            )
 
         else:
             # `sample` is NOT a tuple
             raise ValueError(f"Expected tuple, got {type(sample)}")
+
+    @classmethod
+    def pf_to_pandas(
+        cls,
+        pf,
+        fs=None,
+        columns=None,
+        categories=None,
+        index=None,
+        open_file_options=None,
+        **kwargs,
+    ):
+        # This method was mostly copied from the fastparquet
+        # `ParquetFile.to_pandas` definition. We maintain our
+        # own implmentation in Dask to enable better remote
+        # file-handling control
+
+        # Handle selected columns
+        if columns is not None:
+            columns = columns[:]
+        else:
+            columns = pf.columns + list(pf.cats)
+        if index:
+            columns += [i for i in index if i not in columns]
+
+        # Extract row-groups and pre-allocate df
+        rgs = pf.row_groups
+        size = sum(rg.num_rows for rg in rgs)
+        df, views = pf.pre_allocate(size, columns, categories, index)
+        start = 0
+
+        # Get a map of file names -> row-groups
+        fn_rg_map = defaultdict(list)
+        for rg in rgs:
+            fn = pf.row_group_filename(rg)
+            fn_rg_map[fn].append(rg)
+
+        # Define file-opening options
+        precache_options, open_file_options = _process_open_file_options(
+            open_file_options,
+            **(
+                {
+                    "allow_precache": False,
+                    "default_cache": "readahead",
+                }
+                if _is_local_fs(fs)
+                else {
+                    "metadata": pf,
+                    "columns": list(set(columns).intersection(pf.columns)),
+                    "row_groups": [rgs for rgs in fn_rg_map.values()],
+                    "default_engine": "fastparquet",
+                    "default_cache": "readahead",
+                }
+            ),
+        )
+
+        with ExitStack() as stack:
+
+            for fn, infile in zip(
+                fn_rg_map.keys(),
+                _open_input_files(
+                    list(fn_rg_map.keys()),
+                    fs=fs,
+                    context_stack=stack,
+                    precache_options=precache_options,
+                    **open_file_options,
+                ),
+            ):
+                for rg in fn_rg_map[fn]:
+                    thislen = rg.num_rows
+                    parts = {
+                        name: (
+                            v
+                            if name.endswith("-catdef")
+                            else v[start : start + thislen]
+                        )
+                        for (name, v) in views.items()
+                    }
+
+                    # Add row-group data to df
+                    pf.read_row_group_file(
+                        rg,
+                        columns,
+                        categories,
+                        index,
+                        assign=parts,
+                        partition_meta=pf.partition_meta,
+                        infile=infile,
+                        **kwargs,
+                    )
+                    start += thislen
+        return df
 
     @classmethod
     def initialize_write(
@@ -1089,7 +1181,7 @@ class FastParquetEngine(Engine):
             elif (pd.Series(pf.dtypes).loc[pf.columns] != df[pf.columns].dtypes).any():
                 raise ValueError(
                     "Appended dtypes differ.\n{}".format(
-                        set(pf.dtypes.items()) ^ set(df.dtypes.iteritems())
+                        set(pf.dtypes.items()) ^ set(df.dtypes.items())
                     )
                 )
             else:
@@ -1196,9 +1288,9 @@ class FastParquetEngine(Engine):
             return []
 
     @classmethod
-    def write_metadata(cls, parts, fmd, fs, path, append=False, **kwargs):
-        _meta = copy.copy(fmd)
-        rgs = fmd.row_groups
+    def write_metadata(cls, parts, meta, fs, path, append=False, **kwargs):
+        _meta = copy.copy(meta)
+        rgs = meta.row_groups
         if parts:
             for rg in parts:
                 if rg is not None:

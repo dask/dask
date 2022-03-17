@@ -18,7 +18,7 @@ from dask import compute, delayed, persist
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.utils import get_named_args, tmpdir
+from dask.utils import get_named_args, tmpdir, tmpfile
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -130,8 +130,13 @@ def test_futures_to_delayed_array(c):
     assert_eq(A.compute(), np.concatenate([x, x], axis=0))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @gen_cluster(client=True)
 async def test_local_get_with_distributed_active(c, s, a, b):
+
     with dask.config.set(scheduler="sync"):
         x = delayed(inc)(1).persist()
     await asyncio.sleep(0.01)
@@ -146,11 +151,15 @@ def test_to_hdf_distributed(c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from ..dataframe.io.tests.test_hdf import test_to_hdf
+    from dask.dataframe.io.tests.test_hdf import test_to_hdf
 
     test_to_hdf()
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -169,7 +178,7 @@ def test_to_hdf_scheduler_distributed(npartitions, c):
     pytest.importorskip("numpy")
     pytest.importorskip("pandas")
 
-    from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
+    from dask.dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
     test_to_hdf_schedulers(None, npartitions)
 
@@ -181,9 +190,15 @@ async def test_serializable_groupby_agg(c, s, a, b):
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    result = ddf.groupby("y").agg("count")
+    result = ddf.groupby("y").agg("count", split_out=2)
 
-    await c.compute(result)
+    # Check Culling and Compute
+    agg0 = await c.compute(result.partitions[0])
+    agg1 = await c.compute(result.partitions[1])
+    dd.utils.assert_eq(
+        pd.concat([agg0, agg1]),
+        pd.DataFrame({"x": [2, 2], "y": [0, 1]}).set_index("y"),
+    )
 
 
 def test_futures_in_graph(c):
@@ -198,16 +213,15 @@ def test_futures_in_graph(c):
     assert xxyy3.compute(scheduler="dask.distributed") == ((1 + 1) + (2 + 2)) + 10
 
 
-def test_zarr_distributed_roundtrip():
+def test_zarr_distributed_roundtrip(c):
     da = pytest.importorskip("dask.array")
     pytest.importorskip("zarr")
-    assert_eq = da.utils.assert_eq
 
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d)
         a2 = da.from_zarr(d)
-        assert_eq(a, a2)
+        da.assert_eq(a, a2, scheduler=c)
         assert a2.chunks == a.chunks
 
 
@@ -312,9 +326,13 @@ def test_blockwise_array_creation(c, io, fuse):
         dsk = dask.array.optimize(darr.dask, darr.__dask_keys__())
         # dsk should be a dict unless fuse is explicitly False
         assert isinstance(dsk, dict) == (fuse is not False)
-        da.assert_eq(darr, narr)
+        da.assert_eq(darr, narr, scheduler=c)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
 @pytest.mark.parametrize(
     "io",
     ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
@@ -359,6 +377,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
         dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
         # dsk should not be a dict unless fuse is explicitly True
         assert isinstance(dsk, dict) == bool(fuse)
+
         dd.assert_eq(ddf, df, check_index=False)
 
 
@@ -472,8 +491,7 @@ async def test_combo_of_layer_types(c, s, a, b):
     assert res == 21
 
 
-@gen_cluster(client=True)
-async def test_blockwise_concatenate(c, s, a, b):
+def test_blockwise_concatenate(c):
     """Test a blockwise operation with concatenated axes"""
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
@@ -494,9 +512,8 @@ async def test_blockwise_concatenate(c, s, a, b):
         dtype=x.dtype,
         concatenate=True,
     )
-
-    await c.compute(z, optimize_graph=False)
-    da.assert_eq(z, x)
+    c.compute(z, optimize_graph=False)
+    da.assert_eq(z, x, scheduler=c)
 
 
 @gen_cluster(client=True)
@@ -653,3 +670,56 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     packed = hlg.__dask_distributed_pack__(c, ["z"], {})
     unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
+
+
+@pytest.mark.filterwarnings(
+    "ignore:Running on a single-machine scheduler when a distributed client "
+    "is active might lead to unexpected results."
+)
+@gen_cluster(client=True)
+async def test_to_sql_engine_kwargs(c, s, a, b):
+    # https://github.com/dask/dask/issues/8738
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip("sqlalchemy")
+
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=1)
+    with tmpfile() as f:
+        uri = f"sqlite:///{f}"
+        result = ddf.to_sql(
+            "test", uri, index=True, engine_kwargs={"echo": False}, compute=False
+        )
+        await c.compute(result)
+
+        dd.utils.assert_eq(
+            ddf,
+            dd.read_sql_table("test", uri, "index"),
+            check_divisions=False,
+        )
+
+
+@gen_cluster(client=True)
+async def test_non_recursive_df_reduce(c, s, a, b):
+    # See https://github.com/dask/dask/issues/8773
+
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    class SomeObject:
+        def __init__(self, val):
+            self.val = val
+
+    N = 170
+    series = pd.Series(data=[1] * N, index=range(2, N + 2))
+    dask_series = dd.from_pandas(series, npartitions=34)
+    result = dask_series.reduction(
+        chunk=lambda x: x,
+        aggregate=lambda x: SomeObject(x.sum().sum()),
+        split_every=False,
+        token="commit-dataset",
+        meta=object,
+    )
+
+    assert (await c.compute(result)).val == 170
