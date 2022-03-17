@@ -660,11 +660,13 @@ class DelayedLeaf(Delayed):
             self._obj, self._key, args, kwargs, pure=self._pure, nout=self._nout
         )
 
-    def __getattr__(self, attr):
-        if attr == "__name__": return self._obj.__name__
-        if attr == "__doc__": return self._obj.__doc__
+    @property
+    def __name__(self):
+        return self._obj.__name__
 
-        return super().__getattr__(attr)
+    @property
+    def __doc__(self):
+        return self._obj.__doc__
 
 
 class DelayedAttr(Delayed):
