@@ -15,7 +15,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
-from dask.dataframe.eager_optimize import attempt_predicate_pushdown
+from dask.dataframe.eager_optimize import predicate_pushdown
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -2556,7 +2556,7 @@ def test_predicate_pushdown(tmpdir, filter_func, filter_dnf, engine):
     pq_ddf_expect = filter_func(
         dd.read_parquet(tmpdir, engine=engine, index="index", filters=filter_dnf)
     )
-    pq_ddf_pp = attempt_predicate_pushdown(
+    pq_ddf_pp = predicate_pushdown(
         filter_func(dd.read_parquet(tmpdir, engine=engine, index="index"))
     )
 

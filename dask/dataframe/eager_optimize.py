@@ -10,22 +10,66 @@ from dask.layers import DataFrameIOLayer
 from dask.utils import M, apply, is_arraylike
 
 
-def attempt_predicate_pushdown(ddf: dd.DataFrame) -> dd.DataFrame:
+def predicate_pushdown(ddf: dd.DataFrame, strict: bool = False) -> dd.DataFrame:
     """Use graph information to update IO-level filters
 
+    WARNING: This API is experimental, and may be
+    removed in the future.
+
     The original `ddf` will be returned if/when the
-    predicate-pushdown optimization fails.
+    predicate-pushdown optimization fails. If ``strict``
+    is set to ``True``, a warning will be raised if/when
+    the optimization is skipped.
 
     This is a special optimization that must be called
-    eagerly on a DataFrame collection when filters are
-    applied. The "eager" requirement for this optimization
+    eagerly on a DataFrame collection right after filters
+    are applied. The "eager" requirement for this optimization
     is due to the fact that `npartitions` and `divisions`
     may change when this optimization is applied (invalidating
     npartition/divisions-specific logic in following Layers).
     """
 
-    # Get output layer name and HLG
-    name = ddf._name
+    # Check that we have a supported `ddf` object
+    if not isinstance(ddf, dd.DataFrame):
+        raise ValueError(
+            f"Predicate pushdown optimization skipped. Type {type(ddf)} "
+            f"does not support predicate pushdown."
+        )
+    elif not isinstance(ddf.dask, HighLevelGraph):
+        if strict:
+            warnings.warning(
+                f"Predicate pushdown optimization skipped. Graph must be "
+                f"a HighLevelGraph object (got {type(ddf.dask)})."
+            )
+        return ddf
+
+    # Check that we have a single IO layer with `filters` support.
+    # We can bail here if there is not a supported IO layer
+    io_layer = []
+    for k, v in ddf.dask.layers.items():
+        if isinstance(v, DataFrameIOLayer):
+            io_layer.append(k)
+            if (
+                "filters" not in v.creation_info.get("kwargs", {})
+                or v.creation_info["kwargs"]["filters"] is not None
+            ):
+                if strict:
+                    warnings.warning(
+                        "Predicate pushdown optimization skipped. The IO "
+                        "layer does not support a `filters` argument, or "
+                        "`filters` was already populated."
+                    )
+                # No filters support, or filters is already set
+                return ddf
+    if len(io_layer) != 1:
+        # Not a single IO layer
+        if strict:
+            warnings.warning(
+                f"Predicate pushdown optimization skipped. {len(io_layer)} "
+                f"IO layers detected, but only one IO layer is allowed."
+            )
+        return ddf
+    io_layer = io_layer.pop()
 
     # Start by converting the HLG to a `RegenerableGraph`.
     # Succeeding here means that all layers in the graph
@@ -33,9 +77,15 @@ def attempt_predicate_pushdown(ddf: dd.DataFrame) -> dd.DataFrame:
     try:
         dsk = RegenerableGraph.from_hlg(ddf.dask)
     except (ValueError, TypeError):
+        if strict:
+            warnings.warning(
+                "Predicate pushdown optimization skipped. One or more "
+                "layers in the HighLevelGraph was not 'regenerable'."
+            )
         return ddf
 
     # Extract a DNF-formatted filter expression
+    name = ddf._name
     try:
         filters = dsk.layers[name]._dnf_filter_expression(dsk)
         if filters:
@@ -49,25 +99,14 @@ def attempt_predicate_pushdown(ddf: dd.DataFrame) -> dd.DataFrame:
             filters = [filters]
     except ValueError:
         # DNF dispatching failed for 1+ layers
+        if strict:
+            warnings.warning(
+                "Predicate pushdown optimization skipped. One or "
+                "more layers has an unknown filter expression."
+            )
         return ddf
 
     # We were able to extract a DNF filter expression.
-    # Check that we have a single IO layer with `filters` support
-    io_layer = []
-    for k, v in dsk.layers.items():
-        if isinstance(v.layer, DataFrameIOLayer):
-            io_layer.append(k)
-            if (
-                "filters" not in v.creation_info.get("kwargs", {})
-                or v.creation_info["kwargs"]["filters"] is not None
-            ):
-                # No filters support, or filters is already set
-                return ddf
-    if len(io_layer) != 1:
-        # Not a single IO layer
-        return ddf
-    io_layer = io_layer.pop()
-
     # Regenerate collection with filtered IO layer
     try:
         return dsk.layers[name]._regenerate_collection(

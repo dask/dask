@@ -17,7 +17,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import config, core, threaded
+from dask import core, threaded
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
@@ -4377,12 +4377,7 @@ class DataFrame(_Frame):
                 self, key = _maybe_align_partitions([self, key])
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            out = new_dd_object(graph, name, self, self.divisions)
-            if config.get("optimization.eager"):
-                from dask.dataframe.eager_optimize import attempt_predicate_pushdown
-
-                return attempt_predicate_pushdown(out)
-            return out
+            return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
