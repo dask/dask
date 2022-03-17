@@ -730,3 +730,13 @@ def test_annotations_survive_optimization():
     assert len(d_opt.dask.layers) == 1
     assert len(d_opt.dask.layers["b"]) == 2  # c is culled
     assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
+
+
+def test_delayed_function_attributes_forwarded():
+    @delayed
+    def add(x, y):
+        """This is a docstring"""
+        return x + y
+
+    assert add.__name__ == "add"
+    assert add.__doc__ == "This is a docstring"
