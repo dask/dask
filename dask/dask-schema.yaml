@@ -1,4 +1,69 @@
 properties:
+  array_optimize:
+    type: object
+    description: |
+      ...
+
+  array_plugins:
+    type: object
+    description: |
+      ...
+
+  chunksize:
+    type: object
+    description: |
+      ...
+
+  delayed_pure:
+    type: boolean
+    description: |
+      ...
+
+  func_dumps:
+    type: object
+    description: |
+      ...
+
+  func_loads:
+    type: object
+    description: |
+      ...
+
+  get:
+    type: string
+    description: |
+      ...
+
+  num_workers:
+    type: integer
+    description: |
+      ...
+
+  optimizations:
+    type: object
+    description: |
+      ...
+
+  pool:
+    type: object
+    description: |
+      ...
+
+  scheduler:
+    type: string
+    description: |
+      ...
+
+  shuffle:
+    type: string
+    description: |
+      ...
+
+  split_every:
+    type: integer
+    description: |
+      ...    
+
   temporary-directory:
     type:
     - string
@@ -9,6 +74,14 @@ properties:
 
       When the value is "null" (default), dask will create a directory from
       where dask was launched: `cwd/dask-worker-space`
+
+  multiprocessing:
+    type: object
+    properties:
+      context:
+        type: object
+        description: |
+          ...
 
   tokenize:
     type: object
@@ -54,6 +127,11 @@ properties:
   array:
     type: object
     properties:
+
+      chunk-size:
+        type: string
+        description: |
+          ...
 
       svg:
         type: object
