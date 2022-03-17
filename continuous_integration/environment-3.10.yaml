@@ -18,11 +18,7 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  # Avoid `SystemError: PY_SSIZE_T_CLEAN macro must be defined for '#' formats`
-  # from thrift on Python 3.10
-  # https://github.com/dask/fastparquet/issues/514
-  # https://github.com/apache/thrift/pull/2487
-  # - fastparquet
+  - fastparquet>=0.8.0
   - h5py
   - pytables
   - zarr
@@ -32,10 +28,7 @@ dependencies:
   - tiledb>=2.5.0
   - xarray
   - fsspec
-  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
-  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  # sqlalchemy<1.4.0 doesn't support Python 3.10
-  # - sqlalchemy<1.4.0
+  - sqlalchemy>=1.4.0
   - pyarrow
   - coverage
   - jsonschema
@@ -57,9 +50,7 @@ dependencies:
   - distributed
   - ipython
   - lz4
-  # Numba isn't yet built with Python 3.10 on conda-forge
-  # see https://github.com/conda-forge/numba-feedstock/pull/86
-  # - numba
+  - numba
   - partd
   - psutil
   - requests
