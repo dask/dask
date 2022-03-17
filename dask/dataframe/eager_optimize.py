@@ -79,7 +79,8 @@ def attempt_predicate_pushdown(ddf: dd.DataFrame) -> dd.DataFrame:
         # We can just bail on predicate pushdown, but we also
         # raise a warning to encourage the user to file an issue.
         warnings.warn(
-            f"Predicate pushdown failed. Please open a bug report at "
+            f"Predicate pushdown failed for filters={filters}. "
+            f"Please open a bug report at "
             f"https://github.com/dask/dask/issues/new/choose "
             f"and include the following error message: {err}"
         )

@@ -1,6 +1,5 @@
 import glob
 import math
-import operator
 import os
 import sys
 import warnings
@@ -2514,39 +2513,61 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
-@pytest.mark.parametrize("preserve_index", [True, False])
-@pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
 @pytest.mark.parametrize(
-    "op,op_name",
+    "filter_func,filter_dnf",
     [
-        (operator.eq, "=="),
-        (operator.gt, ">"),
-        (operator.ge, ">="),
-        (operator.lt, "<"),
-        (operator.le, "<="),
+        (lambda x: x[x["b"] == 10], [("b", "==", 10)]),
+        (lambda x: x[x["b"] <= 10], [("b", "<=", 10)]),
+        (lambda x: x[x["b"] >= 10], [("b", ">=", 10)]),
+        (
+            lambda x: x[(x["a"] < 3) & ((x["b"] > 1) & (x["b"] < 5))],
+            [("a", "<", 3), ("b", ">", 1), ("b", "<", 5)],
+        ),
+        (
+            lambda x: x[((x["b"] > 5) & (x["b"] < 10)) | (x["a"] == 1)],
+            [[("b", ">", 5), ("b", "<", 10)], [("a", "==", 1)]],
+        ),
+        (
+            # PRedicate pushdown will faile here, because datetime accessors
+            # are not yet supported. However, the query should still succeed.
+            lambda x: x[x["d"].dt.year < 2015],
+            None,
+        ),
     ],
 )
-def test_attempt_predicate_pushdown(tmpdir, engine, preserve_index, index, op, op_name):
-    df = pd.DataFrame(
-        {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
-    )
-    df.index.name = "my_index"
-    ddf = dd.from_pandas(df, 2, sort=False)
-    ddf.to_parquet(str(tmpdir), engine=engine, write_index=preserve_index)
-    ddf = dd.read_parquet(str(tmpdir), engine=engine)
-    ddf = ddf[op(ddf["B"], 3)]
-    if op_name != "<":
-        # Will be a `MaterializedLayer` if everything gets filtered
-        ddf2 = attempt_predicate_pushdown(ddf)
-        subgraph_rd = hlg_layer(ddf2.dask, "read-parquet")
-        assert subgraph_rd.creation_info["kwargs"]["filters"] == [("B", op_name, 3)]
-        assert isinstance(subgraph_rd, DataFrameIOLayer)
+def test_predicate_pushdown(tmpdir, filter_func, filter_dnf, engine):
 
-    # NOTE: Index may be different when filters are
-    # applied in `read_parquet` if `preserve_index=False`
-    assert_eq(
-        ddf.compute(optimize_graph=False), ddf.compute(), check_index=preserve_index
+    # Write simple parquet dataset and read back
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3] * 5,
+            "b": range(15),
+            "c": ["A"] * 15,
+            "d": [
+                pd.Timestamp("2013-08-01 23:00:00"),
+                pd.Timestamp("2014-09-01 23:00:00"),
+                pd.Timestamp("2015-10-01 23:00:00"),
+            ]
+            * 5,
+            "index": range(15),
+        },
     )
+    dd.from_pandas(pdf, npartitions=3).to_parquet(tmpdir, engine=engine)
+    pq_ddf_expect = filter_func(
+        dd.read_parquet(tmpdir, engine=engine, index="index", filters=filter_dnf)
+    )
+    pq_ddf_pp = attempt_predicate_pushdown(
+        filter_func(dd.read_parquet(tmpdir, engine=engine, index="index"))
+    )
+
+    # Check for predicate pushdown
+    assert (
+        hlg_layer(pq_ddf_expect.dask, "read-parquet").creation_info["kwargs"]["filters"]
+        == hlg_layer(pq_ddf_pp.dask, "read-parquet").creation_info["kwargs"]["filters"]
+    )
+
+    # Check computed result is correct
+    dd.assert_eq(pq_ddf_expect.compute(), pq_ddf_pp.compute())
 
 
 def test_getitem_optimization_after_filter(tmpdir, engine):
