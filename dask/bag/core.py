@@ -35,16 +35,19 @@ from tlz import (
     valmap,
 )
 
-from .. import config
-from ..base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
-from ..context import globalmethod
-from ..core import flatten, get_dependencies, istask, quote, reverse_dict
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..multiprocessing import get as mpget
-from ..optimization import cull, fuse, inline
-from ..sizeof import sizeof
-from ..utils import (
+from dask import config
+from dask.bag import chunk
+from dask.bag.avro import to_avro
+from dask.base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
+from dask.blockwise import blockwise
+from dask.context import globalmethod
+from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.multiprocessing import get as mpget
+from dask.optimization import cull, fuse, inline
+from dask.sizeof import sizeof
+from dask.utils import (
     apply,
     digit,
     ensure_bytes,
@@ -58,8 +61,6 @@ from ..utils import (
     system_encoding,
     takes_multiple_arguments,
 )
-from . import chunk
-from .avro import to_avro
 
 no_default = "__no__default__"
 no_result = type(
@@ -2230,13 +2231,11 @@ def map_partitions(func, *args, **kwargs):
     single graph, and then computes everything at once, and in some cases
     may be more efficient.
     """
-    name = "{}-{}".format(
-        funcname(func), tokenize(func, "map-partitions", *args, **kwargs)
-    )
-    dependencies = []
-
+    name = kwargs.pop("token", None) or funcname(func)
+    name = "{}-{}".format(name, tokenize(func, "map-partitions", *args, **kwargs))
     bags = []
     args2 = []
+    dependencies = []
     for a in args:
         if isinstance(a, Bag):
             bags.append(a)
@@ -2278,7 +2277,9 @@ def map_partitions(func, *args, **kwargs):
             (zip, list(bag_kwargs), [(b.name, n) for b in bag_kwargs.values()]),
         )
 
-    if kwargs:
+    if bag_kwargs:
+        # Avoid using `blockwise` when a key-word
+        # argument is being used to refer to a collection.
         dsk = {
             (name, n): (
                 apply,
@@ -2289,7 +2290,32 @@ def map_partitions(func, *args, **kwargs):
             for n in range(npartitions)
         }
     else:
-        dsk = {(name, n): (func,) + tuple(build_args(n)) for n in range(npartitions)}
+        pairs = []
+        numblocks = {}
+        for arg in args2:
+            # TODO: Allow interaction with Frame/Array
+            # collections with proper partitioning
+            if isinstance(arg, Bag):
+                pairs.extend([arg.name, "i"])
+                numblocks[arg.name] = (arg.npartitions,)
+            else:
+                pairs.extend([arg, None])
+        if other_kwargs and isinstance(other_kwargs, tuple):
+            # `other_kwargs` is a nested subgraph,
+            # designed to generate the kwargs lazily.
+            # We need to convert this to a dictionary
+            # before passing to `blockwise`
+            other_kwargs = other_kwargs[0](other_kwargs[1][0](*other_kwargs[1][1:]))
+        dsk = blockwise(
+            func,
+            name,
+            "i",
+            *pairs,
+            numblocks=numblocks,
+            concatenate=True,
+            dependencies=dependencies,
+            **other_kwargs,
+        )
 
     # If all bags are the same type, use that type, otherwise fallback to Bag
     return_type = set(map(type, bags))

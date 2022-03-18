@@ -9,21 +9,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
-from dask import delayed
-
-from ....base import tokenize
-from ....core import flatten
-from ....delayed import Delayed
-from ....utils import getargspec, natural_sort_key
-from ...utils import clear_known_categories
-from ..utils import (
-    _get_pyarrow_dtypes,
-    _is_local_fs,
-    _meta_from_dtypes,
-    _open_input_files,
-)
-from .core import create_metadata_file
-from .utils import (
+from dask.base import tokenize
+from dask.core import flatten
+from dask.dataframe.io.parquet.core import create_metadata_file
+from dask.dataframe.io.parquet.utils import (
     Engine,
     _flatten_filters,
     _get_aggregation_depth,
@@ -35,6 +24,15 @@ from .utils import (
     _sort_and_analyze_paths,
     _split_user_options,
 )
+from dask.dataframe.io.utils import (
+    _get_pyarrow_dtypes,
+    _is_local_fs,
+    _meta_from_dtypes,
+    _open_input_files,
+)
+from dask.dataframe.utils import clear_known_categories
+from dask.delayed import Delayed, delayed
+from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)

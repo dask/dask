@@ -10,16 +10,16 @@ import numpy as np
 import pandas as pd
 import tlz as toolz
 
-from .. import base, config
-from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import ShuffleLayer, SimpleShuffleLayer
-from ..sizeof import sizeof
-from ..utils import M, digit
-from . import methods
-from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from .dispatch import group_split_dispatch, hash_object_dispatch
-from .utils import UNKNOWN_CATEGORIES
+from dask import config
+from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ShuffleLayer, SimpleShuffleLayer
+from dask.sizeof import sizeof
+from dask.utils import M, digit
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ def _calculate_divisions(
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
     mins = partition_col.map_partitions(M.min)
     maxes = partition_col.map_partitions(M.max)
-    divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+    divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
     divisions = methods.tolist(divisions)
     if type(sizes) is not list:
         sizes = methods.tolist(sizes)
@@ -1073,12 +1073,20 @@ def compute_and_set_divisions(df, **kwargs):
 
 
 def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if not isinstance(index, Series):
-        meta = df._meta.set_index(index, drop=drop)
-    else:
+    if isinstance(index, _Frame):
         meta = df._meta.set_index(index._meta, drop=drop)
+    else:
+        meta = df._meta.set_index(index, drop=drop)
 
-    result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
+    result = map_partitions(
+        M.set_index,
+        df,
+        index,
+        drop=drop,
+        meta=meta,
+        align_dataframes=False,
+        transform_divisions=False,
+    )
 
     if not divisions:
         return compute_and_set_divisions(result, **kwargs)

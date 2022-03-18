@@ -6,11 +6,11 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from .core import Array
-from .numpy_compat import _numpy_122
-from .numpy_compat import percentile as np_percentile
+from dask.array.core import Array
+from dask.array.numpy_compat import _numpy_122
+from dask.array.numpy_compat import percentile as np_percentile
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
 
 
 @wraps(np.percentile)
@@ -105,8 +105,8 @@ def percentile(a, q, method="linear", internal_method="default", **kwargs):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
-    from .dispatch import percentile_lookup as _percentile
-    from .utils import array_safe, meta_from_array
+    from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe, meta_from_array
 
     allowed_internal_methods = ["default", "dask", "tdigest"]
 
@@ -226,7 +226,7 @@ def merge_percentiles(finalq, qs, vals, method="lower", Ns=None, raise_on_nan=Tr
     >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
-    from .utils import array_safe
+    from dask.array.utils import array_safe
 
     if isinstance(finalq, Iterator):
         finalq = list(finalq)

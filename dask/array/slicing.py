@@ -9,11 +9,11 @@ from operator import itemgetter
 import numpy as np
 from tlz import concat, memoize, merge, pluck
 
-from .. import config, core, utils
-from ..base import is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import cached_cumsum, is_arraylike
-from .chunk import getitem
+from dask import config, core, utils
+from dask.array.chunk import getitem
+from dask.base import is_dask_collection, tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -56,7 +56,7 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
-    from .utils import asanyarray_safe
+    from dask.array.utils import asanyarray_safe
 
     if ind is None:
         return None
@@ -292,7 +292,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
 
     _slice_1d
     """
-    from .core import unknown_chunk_message
+    from dask.array.core import unknown_chunk_message
 
     shape = tuple(cached_cumsum(dim, initial_zero=True)[-1] for dim in blockdims)
 
@@ -553,7 +553,7 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    from .utils import asarray_safe
+    from dask.array.utils import asarray_safe
 
     if not is_arraylike(index):
         index = np.asanyarray(index)
@@ -620,7 +620,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
-    from .core import PerformanceWarning
+    from dask.array.core import PerformanceWarning
 
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
@@ -878,7 +878,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from .core import Array, from_array
+    from dask.array.core import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -1010,7 +1010,7 @@ def slice_with_int_dask_array(x, index):
     replaced to the original slicer where a 1D filter has been applied and
     one less element where a zero-dimensional filter has been applied.
     """
-    from .core import Array
+    from dask.array.core import Array
 
     assert len(index) == x.ndim
     fancy_indexes = [
@@ -1050,9 +1050,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
-    from . import chunk
-    from .core import Array, blockwise, from_array
-    from .utils import asarray_safe
+    from dask.array import chunk
+    from dask.array.core import Array, blockwise, from_array
+    from dask.array.utils import asarray_safe
 
     assert 0 <= axis < x.ndim
 
@@ -1133,7 +1133,7 @@ def slice_with_bool_dask_array(x, index):
 
     Note: The sliced x will have nan chunks on the sliced axes.
     """
-    from .core import Array, blockwise, elemwise
+    from dask.array.core import Array, blockwise, elemwise
 
     out_index = [
         slice(None) if isinstance(ind, Array) and ind.dtype == bool else ind
@@ -1240,7 +1240,7 @@ def make_block_sorted_slices(index, chunks):
     >>> b
     array([3, 0, 2, 1, 7, 4, 6, 5])
     """
-    from .core import slices_from_chunks
+    from dask.array.core import slices_from_chunks
 
     slices = slices_from_chunks(chunks)
 
@@ -1277,7 +1277,7 @@ def shuffle_slice(x, index):
     -------
     Array
     """
-    from .core import PerformanceWarning
+    from dask.array.core import PerformanceWarning
 
     chunks1 = chunks2 = x.chunks
     if x.ndim > 1:
@@ -1495,7 +1495,7 @@ def concatenate_array_chunks(x):
         The concatenated dask array with one chunk.
 
     """
-    from .core import Array, concatenate3
+    from dask.array.core import Array, concatenate3
 
     if x.npartitions == 1:
         return x
@@ -1747,7 +1747,7 @@ def setitem_array(out_name, array, indices, value):
 
         return i
 
-    from ..core import flatten
+    from dask.core import flatten
 
     array_shape = array.shape
     value_shape = value.shape
