@@ -1,6 +1,75 @@
 Changelog
 =========
 
+.. _v2022.03.0:
+
+2022.03.0
+---------
+
+Released on March 18, 2022
+
+New Features
+^^^^^^^^^^^^
+- Bag: add implementation for reservoir sampling (:pr:`7636`) `Daniel Mesejo-León`_
+- Add ``ma.count`` to Dask array (:pr:`8785`) `David Hassell`_
+- Change ``to_parquet`` default to ``compression="snappy"`` (:pr:`8814`) `Jim Crist-Harif`_
+- Add ``weights`` parameter to ``dask.array.reduction`` (:pr:`8805`) `David Hassell`_
+- Add ``ddf.compute_current_divisions`` to get divisions on a sorted index or column (:pr:`8517`) `Julia Signell`_
+
+
+Enhancements
+^^^^^^^^^^^^
+- Pass ``__name__`` and ``__doc__`` through on DelayedLeaf (:pr:`8820`) `Leo Gao`_
+- Raise exception for not implemented merge ``how`` option (:pr:`8818`) `Naty Clementi`_
+- Move ``Bag.map_partitions`` to ``Blockwise`` (:pr:`8646`) `Richard (Rick) Zamora`_
+- Improve error messages for malformed config files (:pr:`8801`) `Jim Crist-Harif`_
+- Revise column-projection optimization to capture common dask-sql patterns (:pr:`8692`) `Richard (Rick) Zamora`_
+- Useful error for empty divisions (:pr:`8789`) `Pavithra Eswaramoorthy`_
+- Scipy 1.8.0 compat: copy private classes into dask/array/stats.py (:pr:`8694`) `Julia Signell`_
+- Raise warning when using multiple types of schedulers where one is ``distributed`` (:pr:`8700`) `Pedro Silva`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in applying != filter in ``read_parquet`` (:pr:`8824`) `Richard (Rick) Zamora`_
+- Fix ``set_index`` when directly passed a dask Index (:pr:`8680`) `Paul Hobson`_
+- Quick fix for unbounded memory usage in tensordot  (:pr:`7980`) `Genevieve Buckley`_
+- If hdf file is empty, don't fail on meta creation (:pr:`8809`) `Julia Signell`_
+- Update ``clone_key("x")`` to retain prefix (:pr:`8792`) `Guido Imperiale`_
+- Fix "physical" column bug in pyarrow-based ``read_parquet`` (:pr:`8775`) `Richard (Rick) Zamora`_
+- Fix ``groupby.shift`` bug caused by unsorted partitions after shuffle (:pr:`8782`) `kori73`_
+- Fix serialization bug (:pr:`8786`) `Richard (Rick) Zamora`_
+
+Deprecations
+^^^^^^^^^^^^
+- Bump diagnostics bokeh dependency to 2.4.2 (:pr:`8791`) `Charles Blackmon-Luca`_
+- Deprecate ``bcolz`` support (:pr:`8754`) `Pavithra Eswaramoorthy`_
+- Finish making ``map_overlap`` default boundary ``kwarg`` ``'none'`` (:pr:`8743`) `Genevieve Buckley`_
+
+Documentation
+^^^^^^^^^^^^^
+- Custom collection example docs fix (:pr:`8807`) `Doug Davis`_
+- Add ``Series.str``, ``Series.dt``, and ``Series.cat`` accessors to docs (:pr:`8757`) `Sarah Charlotte Johnson`_
+- Fix docstring for ``ddf.compute_current_divisions`` (:pr:`8793`) `Julia Signell`_
+- Dashboard docs on /status page  (:pr:`8648`) `Naty Clementi`_
+- Clarify divisions ``kwarg`` in repartition docstring (:pr:`8781`) `Sarah Charlotte Johnson`_
+- Update Docker images to use ghcr.io (:pr:`8774`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Reduce gpuci ``pytest`` parallelism (:pr:`8826`) `GALI PREM SAGAR`_
+- ``absolufy-imports`` - No relative imports - PEP8 (:pr:`8796`) `Julia Signell`_
+- Tidy up ``assert_eq`` calls in array tests (:pr:`8812`) `Julia Signell`_
+- Avoid ``pytest.warns(None)`` (:pr:`8718`) `LSturtew`_
+- Fix ``test_describe_empty`` to work without global ``-Werror`` (:pr:`8291`) `Michał Górny`_
+- Temporarily xfail graphviz tests on windows (:pr:`8794`) `Jim Crist-Harif`_
+- Use ``packaging.parse`` for ``md5`` compatibility (:pr:`8763`) `James Bourbeau`_
+- Make ``tokenize`` work in a FIPS 140-2 environment (:pr:`8762`) `Jim Crist-Harif`_
+- Label issues and PRs on open with 'needs triage' (:pr:`8761`) `Julia Signell`_
+- Add some extra test coverage (:pr:`8302`) `lrjball`_
+- Specify action version and change from ``pull_request_target`` to ``pull_request`` (:pr:`8767`) `Julia Signell`_
+- Make scheduler ``kwarg`` pass though to sub functions in ``da.assert_eq`` (:pr:`8755`) `Julia Signell`_
+
+
 .. _v2022.02.1:
 
 2022.02.1
@@ -5237,3 +5306,8 @@ Other
 .. _`Peter`: https://github.com/peterpandelidis
 .. _`Thomas Grainger`: https://github.com/graingert
 .. _`Martin Thøgersen`: https://github.com/th0ger
+.. _`Leo Gao`: https://github.com/leogao2
+.. _`Paul Hobson`: https://github.com/phobson
+.. _`LSturtew`: https://github.com/LSturtew
+.. _`Michał Górny`: https://github.com/mgorny
+.. _`lrjball`: https://github.com/lrjball
