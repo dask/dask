@@ -6632,7 +6632,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     meta = make_meta(
         [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
     )
-    return DataFrame(graph, name, meta, (df.columns[0], df.columns[-1]))
+    return DataFrame(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
 def cov_corr_chunk(df, corr=False):
