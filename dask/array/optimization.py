@@ -9,7 +9,7 @@ from dask.array.core import getter, getter_inline, getter_nofancy
 from dask.blockwise import fuse_roots, optimize_blockwise
 from dask.core import flatten, reverse_dict
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import fuse, inline_functions
+from dask.optimization import SubgraphCallable, fuse, inline_functions
 from dask.utils import ensure_dict
 
 # All get* functions the optimizations know about
@@ -115,6 +115,30 @@ def hold_keys(dsk, dependencies):
     return hold_keys
 
 
+def _is_getter_task(value) -> bool:
+    """Check if a value in a Dask graph looks like a getter.
+
+    1. Is it a tuple with the first element a known getter.
+    2. Is it a SubgraphCallable with a single element in its
+       dsk which is a known getter.
+
+    TODO: the second check is a hack to allow for slice fusion between tasks produced
+    from blockwise layers and slicing operations. Once slicing operations have
+    HighLevelGraph layers which can talk to Blockwise layers this check *should* be
+    removed, and we should not have to introspect SubgraphCallables.
+    """
+    if type(value) is not tuple or len(value) <= 1:
+        return False
+    first = value[0]
+    if first in GETTERS:
+        return True
+    elif isinstance(first, SubgraphCallable) and len(first.dsk) == 1:
+        v = next(iter(first.dsk.values()))
+        return type(v) is tuple and len(v) > 1 and v[0] in GETTERS
+    else:
+        return False
+
+
 def optimize_slices(dsk):
     """Optimize slices
 
@@ -127,7 +151,7 @@ def optimize_slices(dsk):
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple and v[0] in GETTERS and len(v) in (3, 5):
+        if _is_getter_task(v) and len(v) in (3, 5):
             if len(v) == 3:
                 get, a, a_index = v
                 # getter defaults to asarray=True, getitem is semantically False
@@ -135,7 +159,7 @@ def optimize_slices(dsk):
                 a_lock = None
             else:
                 get, a, a_index, a_asarray, a_lock = v
-            while type(a) is tuple and a[0] in GETTERS and len(a) in (3, 5):
+            while _is_getter_task(a) and len(a) in (3, 5):
                 if len(a) == 3:
                     f2, b, b_index = a
                     b_asarray = f2 is not getitem
