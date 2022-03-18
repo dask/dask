@@ -407,10 +407,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             if not (is_categorical_dtype(index_dtype) and index_dtype.ordered):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
-            if len(value[:-1]) != len(list(unique(value[:-1]))):
-                raise ValueError(
-                    "divisions must be unique, except for the last element"
-                )
 
         self._divisions = value
 
