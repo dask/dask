@@ -63,12 +63,9 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 from tlz import merge_sorted, unique
 
-from ..base import is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import BroadcastJoinLayer
-from ..utils import M, apply
-from . import methods
-from .core import (
+from dask.base import is_dask_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import (
     DataFrame,
     Index,
     Series,
@@ -81,16 +78,24 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
-from .dispatch import group_split_dispatch, hash_object_dispatch
-from .io import from_pandas
-from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
-from .utils import (
+from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.io import from_pandas
+from dask.dataframe.shuffle import (
+    partitioning_index,
+    rearrange_by_divisions,
+    shuffle,
+    shuffle_group,
+)
+from dask.dataframe.utils import (
     asciitable,
     is_dataframe_like,
     is_series_like,
     make_meta,
     strip_unknown_categories,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import BroadcastJoinLayer
+from dask.utils import M, apply
 
 
 def align_partitions(*dfs):
@@ -505,6 +510,13 @@ def merge(
     if on and not left_on and not right_on:
         left_on = right_on = on
         on = None
+
+    supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
+        )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)

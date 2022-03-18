@@ -753,18 +753,17 @@ def test_merge_columns_dtypes(how, on_index):
         b = b.set_index("A")
         on = None
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
+        warnings.simplefilter("always")
         result = dd.merge(
             a, b, on=on, how=how, left_index=left_index, right_index=right_index
         )
-
-    warned = any("merge column data type mismatches" in str(r) for r in record)
+        warned = any("merge column data type mismatches" in str(r) for r in record)
 
     # result type depends on merge operation -> convert to pandas
     result = result if isinstance(result, pd.DataFrame) else result.compute()
 
     has_nans = result.isna().values.any()
-
     assert (has_nans and warned) or not has_nans
 
 
@@ -848,6 +847,26 @@ def test_merge(how, shuffle_method):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+def test_merge_how_raises():
+    left = pd.DataFrame(
+        {
+            "A": ["A0", "A1", "A2", "A3"],
+            "B": ["B0", "B1", "B2", "B3"],
+        }
+    )
+    right = pd.DataFrame(
+        {
+            "A": ["C0", "C1", "C2", "C3"],
+            "B": ["D0", "D1", "D2", "D3"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="dask.dataframe.merge does not support how='cross'"
+    ):
+        dd.merge(left, right, how="cross")
 
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
@@ -1599,9 +1618,9 @@ def test_concat_unknown_divisions():
     with pytest.raises(ValueError):
         dd.concat([aa, cc], axis=1)
 
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         dd.concat([aa, bb], axis=1, ignore_unknown_divisions=True)
-        assert len(record) == 0
+    assert not record
 
 
 def test_concat_unknown_divisions_errors():
@@ -1837,12 +1856,10 @@ def test_concat5():
     for case in cases:
         pdcase = [c.compute() for c in case]
 
-        with pytest.warns(None):
-            # some cases will raise warning directly from pandas
-            assert_eq(
-                dd.concat(case, interleave_partitions=True),
-                pd.concat(pdcase, sort=False),
-            )
+        assert_eq(
+            dd.concat(case, interleave_partitions=True),
+            pd.concat(pdcase, sort=False),
+        )
 
         assert_eq(
             dd.concat(case, join="inner", interleave_partitions=True),
@@ -2010,21 +2027,15 @@ def test_concat_datetimeindex():
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
-
     if PANDAS_GT_140:
-        with pytest.warns() as record:
+        with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
             assert_eq(result, expected)
-        for w in record:
-            assert w.category == FutureWarning
-            assert "append method is deprecated" in str(w.message)
     else:
-        with warnings.catch_warnings():
-            warnings.simplefilter("error")
-            expected = pandas_obj.append(pandas_append)
-            result = dask_obj.append(dask_append)
-            assert_eq(result, expected)
+        expected = pandas_obj.append(pandas_append)
+        result = dask_obj.append(dask_append)
+        assert_eq(result, expected)
 
     return result
 
@@ -2217,10 +2228,9 @@ def test_dtype_equality_warning():
     df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
     df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
 
-    with pytest.warns(None) as r:
+    with warnings.catch_warnings(record=True) as record:
         dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
-
-    assert len(r) == 0
+    assert not record
 
 
 @pytest.mark.parametrize(

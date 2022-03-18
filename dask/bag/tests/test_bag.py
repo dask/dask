@@ -2,6 +2,7 @@ import gc
 import math
 import os
 import random
+import warnings
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
@@ -29,9 +30,10 @@ from dask.bag.core import (
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, hlg_layer_topological, inc
+from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -471,6 +473,16 @@ def test_map_partitions_args_kwargs():
     assert_eq(dx.map_partitions(maximum, dy_mean), sol)
 
 
+def test_map_partitions_blockwise():
+    # Check that the `token` argument works,
+    # and that `map_partitions`` is using `Blockwise`.
+    layer = hlg_layer(
+        b.map_partitions(lambda x: x, token="test-string").dask, "test-string"
+    )
+    assert layer
+    assert isinstance(layer, Blockwise)
+
+
 def test_random_sample_size():
     """
     Number of randomly sampled elements are in the expected range.
@@ -605,13 +617,10 @@ def test_take_npartitions_warn():
         with pytest.warns(UserWarning):
             b.take(7)
 
-        with pytest.warns(None) as rec:
+        with warnings.catch_warnings(record=True) as record:
             b.take(7, npartitions=2)
-        assert len(rec) == 0
-
-        with pytest.warns(None) as rec:
             b.take(7, warn=False)
-        assert len(rec) == 0
+        assert not record
 
 
 def test_map_is_lazy():
@@ -962,8 +971,7 @@ def test_to_textfiles_name_function_warn():
     ]
     a = db.from_sequence(seq, npartitions=16)
     with tmpdir() as dn:
-        with pytest.warns(None):
-            a.to_textfiles(dn, name_function=str)
+        a.to_textfiles(dn, name_function=str)
 
 
 def test_to_textfiles_encoding():

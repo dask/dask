@@ -9,13 +9,8 @@ from numbers import Integral, Real
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
-from ..base import is_dask_collection, tokenize
-from ..core import flatten
-from ..delayed import Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
-from . import chunk
-from .core import (
+from dask.array import chunk
+from dask.array.core import (
     Array,
     asanyarray,
     asarray,
@@ -25,19 +20,31 @@ from .core import (
     broadcast_to,
     concatenate,
     elemwise,
+    from_array,
     implements,
     is_scalar_for_elemwise,
     map_blocks,
     stack,
     tensordot_lookup,
 )
-from .creation import arange, diag, empty, indices, tri
-from .einsumfuncs import einsum  # noqa
-from .numpy_compat import _numpy_120
-from .reductions import reduction
-from .ufunc import multiply, sqrt
-from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
-from .wrap import ones
+from dask.array.creation import arange, diag, empty, indices, tri
+from dask.array.einsumfuncs import einsum  # noqa
+from dask.array.numpy_compat import _numpy_120
+from dask.array.reductions import reduction
+from dask.array.ufunc import multiply, sqrt
+from dask.array.utils import (
+    array_safe,
+    asarray_safe,
+    meta_from_array,
+    safe_wraps,
+    validate_axis,
+)
+from dask.array.wrap import ones
+from dask.base import is_dask_collection, tokenize
+from dask.core import flatten
+from dask.delayed import Delayed, unpack_collections
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
 
 # save built-in for histogram functions which use range as a kwarg.
 _range = range
@@ -259,28 +266,40 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
-def _tensordot(a, b, axes):
+def _tensordot(a, b, axes, is_sparse):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
-
-    if len(axes[0]) != 1:
+    if is_sparse and len(axes[0]) == 1:
+        return x
+    else:
         ind = [slice(None, None)] * x.ndim
         for a in sorted(axes[0]):
             ind.insert(a, None)
         x = x[tuple(ind)]
+        return x
 
-    return x
+
+def _tensordot_is_sparse(x):
+    is_sparse = "sparse" in str(type(x._meta))
+    if is_sparse:
+        # exclude pydata sparse arrays, no workaround required for these in tensordot
+        is_sparse = "sparse._coo.core.COO" not in str(type(x._meta))
+    return is_sparse
 
 
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2):
+    if not isinstance(lhs, Array):
+        lhs = from_array(lhs)
+    if not isinstance(rhs, Array):
+        rhs = from_array(rhs)
+
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
         left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
         right_axes = tuple(range(0, axes))
-
     if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
     if isinstance(right_axes, Integral):
@@ -289,23 +308,23 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-    if len(left_axes) == 1:
+    is_sparse = _tensordot_is_sparse(lhs) or _tensordot_is_sparse(rhs)
+    if is_sparse and len(left_axes) == 1:
         concatenate = True
     else:
         concatenate = False
-
     dt = np.promote_types(lhs.dtype, rhs.dtype)
-
     left_index = list(range(lhs.ndim))
     right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
-
+    adjust_chunks = {}
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
         if concatenate:
             out_index.remove(left_index[l])
-
+        else:
+            adjust_chunks[left_index[l]] = lambda c: 1
     intermediate = blockwise(
         _tensordot,
         out_index,
@@ -315,9 +334,10 @@ def tensordot(lhs, rhs, axes=2):
         right_index,
         dtype=dt,
         concatenate=concatenate,
+        adjust_chunks=adjust_chunks,
         axes=(left_axes, right_axes),
+        is_sparse=is_sparse,
     )
-
     if concatenate:
         return intermediate
     else:
@@ -751,7 +771,7 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         *chunked_counts.chunks[1:],
     )
 
-    from .reductions import _tree_reduce
+    from dask.array.reductions import _tree_reduce
 
     output = _tree_reduce(
         chunked_counts,
@@ -2445,7 +2465,7 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
             wgt = broadcast_to(wgt, (a.ndim - 1) * (1,) + wgt.shape)
             wgt = wgt.swapaxes(-1, axis)
         if is_masked:
-            from .ma import getmaskarray
+            from dask.array.ma import getmaskarray
 
             wgt = wgt * (~getmaskarray(a))
         scl = wgt.sum(axis=axis, dtype=result_dtype)
