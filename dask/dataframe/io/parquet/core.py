@@ -1152,6 +1152,8 @@ def apply_filters(parts, statistics, filters):
                     if (
                         operator in ("==", "=")
                         and min <= value <= max
+                        or operator == "!="
+                        and (min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="

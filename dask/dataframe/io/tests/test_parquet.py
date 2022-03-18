@@ -1399,6 +1399,9 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert len(f)
     assert (f.y == "c").all().compute()
 
+    g = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "!=", 1)])
+    assert g.npartitions == 5
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
