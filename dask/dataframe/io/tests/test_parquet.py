@@ -1399,6 +1399,9 @@ def test_filters(tmpdir, write_engine, read_engine):
     assert len(f)
     assert (f.y == "c").all().compute()
 
+    g = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", "!=", 1)])
+    assert g.npartitions == 5
+
 
 @write_read_engines()
 def test_filters_v0(tmpdir, write_engine, read_engine):
@@ -1735,11 +1738,24 @@ def check_compression(engine, filename, compression):
                     )
 
 
-@pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
+def test_explicit_compression_default_deprecated(tmpdir, engine):
+    """TODO: remove this test when `compression="default"` is fully removed"""
+    fn = str(tmpdir)
+
+    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    with pytest.warns(FutureWarning, match="compression='default'"):
+        ddf.to_parquet(fn, compression="default", engine=engine)
+    out = dd.read_parquet(fn, engine=engine)
+    assert_eq(out, ddf)
+    check_compression(engine, fn, "default")
+
+
+@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
 def test_writing_parquet_with_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-    if compression in ["snappy", "default"]:
-        pytest.importorskip("snappy")
 
     df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
     df.index.name = "index"
@@ -1751,11 +1767,9 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     check_compression(engine, fn, compression)
 
 
-@pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
+@pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
 def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
     fn = str(tmpdir)
-    if compression in ["snappy", "default"]:
-        pytest.importorskip("snappy")
 
     df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
     df.index.name = "index"
@@ -2030,7 +2044,6 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     fn = str(tmpdir)
     path1 = os.path.join(fn, "normal")
     path2 = os.path.join(fn, "partitioned")
-    pytest.importorskip("snappy")
 
     df = pd.DataFrame(
         {
@@ -2096,8 +2109,6 @@ def test_to_parquet_with_get(tmpdir):
 
 
 def test_select_partitioned_column(tmpdir, engine):
-    pytest.importorskip("snappy")
-
     fn = str(tmpdir)
     size = 20
     d = {

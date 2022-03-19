@@ -5,7 +5,7 @@ import warnings
 import numpy as np
 import pandas as pd
 
-from ..utils import derived_from
+from dask.utils import derived_from
 
 
 def _bind_method(cls, pd_cls, attr):
@@ -53,7 +53,7 @@ class Accessor:
     """
 
     def __init__(self, series):
-        from .core import Series
+        from dask.dataframe.core import Series
 
         if not isinstance(series, Series):
             raise ValueError("Accessor cannot be initialized")
@@ -278,7 +278,7 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
-        from .core import Index, Series
+        from dask.dataframe.core import Index, Series
 
         if others is None:
 

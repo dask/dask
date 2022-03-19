@@ -6,13 +6,13 @@ from operator import mul
 
 import numpy as np
 
-from .. import config
-from ..base import tokenize
-from ..core import flatten
-from ..highlevelgraph import HighLevelGraph
-from ..utils import M, parse_bytes
-from .core import Array, normalize_chunks
-from .utils import meta_from_array
+from dask import config
+from dask.array.core import Array, normalize_chunks
+from dask.array.utils import meta_from_array
+from dask.base import tokenize
+from dask.core import flatten
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M, parse_bytes
 
 
 def reshape_rechunk(inshape, outshape, inchunks):
@@ -188,8 +188,8 @@ def reshape(x, shape, merge_chunks=True, limit=None):
     numpy.reshape
     """
     # Sanitize inputs, look for -1 in shape
-    from .core import PerformanceWarning
-    from .slicing import sanitize_index
+    from dask.array.core import PerformanceWarning
+    from dask.array.slicing import sanitize_index
 
     shape = tuple(map(sanitize_index, shape))
     known_sizes = [s for s in shape if s != -1]

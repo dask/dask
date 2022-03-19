@@ -30,9 +30,10 @@ from dask.bag.core import (
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpdir, tmpfile
-from dask.utils_test import add, hlg_layer_topological, inc
+from dask.utils_test import add, hlg_layer, hlg_layer_topological, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -470,6 +471,16 @@ def test_map_partitions_args_kwargs():
     dy_mean = dask.delayed(dy_mean)
     assert_eq(dx.map_partitions(maximum, y=dy_mean), sol)
     assert_eq(dx.map_partitions(maximum, dy_mean), sol)
+
+
+def test_map_partitions_blockwise():
+    # Check that the `token` argument works,
+    # and that `map_partitions`` is using `Blockwise`.
+    layer = hlg_layer(
+        b.map_partitions(lambda x: x, token="test-string").dask, "test-string"
+    )
+    assert layer
+    assert isinstance(layer, Blockwise)
 
 
 def test_random_sample_size():

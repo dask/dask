@@ -3,7 +3,7 @@ import warnings
 import numpy as np
 from packaging.version import parse as parse_version
 
-from ..utils import derived_from
+from dask.utils import derived_from
 
 _np_version = parse_version(np.__version__)
 _numpy_120 = _np_version >= parse_version("1.20.0")

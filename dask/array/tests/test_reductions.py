@@ -10,13 +10,8 @@ import itertools
 
 import dask.array as da
 import dask.config as config
-from dask.array.utils import assert_eq as _assert_eq
-from dask.array.utils import same_keys
+from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
-
-
-def assert_eq(a, b):
-    _assert_eq(a, b, equal_nan=True)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
@@ -812,4 +807,38 @@ def test_chunk_structure_independence(axes, split_every, chunks):
         dtype=x.dtype,
         meta=x._meta,
     )
-    _assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
+    assert_eq(reduced_x, np_array, check_chunks=False, check_shape=False)
+
+
+def test_weighted_reduction():
+    # Weighted reduction
+    def w_sum(x, weights=None, dtype=None, computing_meta=False, **kwargs):
+        """`chunk` callable for (weighted) sum"""
+        if computing_meta:
+            return x
+        if weights is not None:
+            x = x * weights
+        return np.sum(x, dtype=dtype, **kwargs)
+
+    # Arrays
+    a = 1 + np.ma.arange(60).reshape(6, 10)
+    a[2, 2] = np.ma.masked
+    dx = da.from_array(a, chunks=(4, 5))
+    # Weights
+    w = np.linspace(1, 2, 6).reshape(6, 1)
+
+    # No weights (i.e. normal sum)
+    x = da.reduction(dx, w_sum, np.sum, dtype=dx.dtype)
+    assert_eq(x, np.sum(a), check_shape=True)
+
+    # Weighted sum
+    x = da.reduction(dx, w_sum, np.sum, dtype="f8", weights=w)
+    assert_eq(x, np.sum(a * w), check_shape=True)
+
+    # Non-broadcastable weights (short axis)
+    with pytest.raises(ValueError):
+        da.reduction(dx, w_sum, np.sum, weights=[1, 2, 3])
+
+    # Non-broadcastable weights (too many dims)
+    with pytest.raises(ValueError):
+        da.reduction(dx, w_sum, np.sum, weights=[[[2]]])
