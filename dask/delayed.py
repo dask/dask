@@ -7,18 +7,18 @@ from dataclasses import fields, is_dataclass
 
 from tlz import concat, curry, merge, unique
 
-from . import config, threaded
-from .base import (
+from dask import config, threaded
+from dask.base import (
     DaskMethodsMixin,
     dont_optimize,
     is_dask_collection,
     replace_name_in_key,
 )
-from .base import tokenize as _tokenize
-from .context import globalmethod
-from .core import flatten, quote
-from .highlevelgraph import HighLevelGraph
-from .utils import OperatorMethodMixin, apply, funcname, methodcaller
+from dask.base import tokenize as _tokenize
+from dask.context import globalmethod
+from dask.core import flatten, quote
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
 
@@ -659,6 +659,14 @@ class DelayedLeaf(Delayed):
         return call_function(
             self._obj, self._key, args, kwargs, pure=self._pure, nout=self._nout
         )
+
+    @property
+    def __name__(self):
+        return self._obj.__name__
+
+    @property
+    def __doc__(self):
+        return self._obj.__doc__
 
 
 class DelayedAttr(Delayed):

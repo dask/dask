@@ -562,6 +562,27 @@ def test_to_bag():
     ]
 
 
+def test_to_bag_frame():
+    from dask import get
+    from dask.bag import Bag
+
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
+            index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
+        ),
+        npartitions=2,
+    )
+
+    # Convert to bag, and check that
+    # collection type has changed, but
+    # partition data has not
+    bagdf = ddf.to_bag(format="frame")
+    assert isinstance(bagdf, Bag)
+    assert_eq(get(bagdf.dask, (bagdf.name, 0)), ddf.partitions[0])
+    assert_eq(get(bagdf.dask, (bagdf.name, 1)), ddf.partitions[1])
+
+
 def test_to_records():
     pytest.importorskip("dask.array")
     from dask.array.utils import assert_eq

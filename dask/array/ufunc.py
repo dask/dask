@@ -3,17 +3,17 @@ from operator import getitem
 
 import numpy as np
 
-from .. import core
-from ..base import is_dask_collection, normalize_function
-from ..highlevelgraph import HighLevelGraph
-from ..utils import (
+from dask import core
+from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, elemwise
+from dask.base import is_dask_collection, normalize_function
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import (
     derived_from,
     funcname,
     is_dataframe_like,
     is_index_like,
     is_series_like,
 )
-from .core import Array, apply_infer_dtype, asarray, blockwise, elemwise
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):

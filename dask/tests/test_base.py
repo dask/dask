@@ -14,7 +14,6 @@ from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
-from dask import delayed
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
@@ -37,7 +36,7 @@ from dask.base import (
     visualize,
 )
 from dask.core import literal
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
@@ -486,9 +485,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    with pytest.warns(None):
-        # ignore scipy.sparse.SparseEfficiencyWarning
-        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
     assert tokenize(a) == tokenize(b)
@@ -504,10 +501,9 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    with pytest.warns(None):
-        b = a.copy().asformat("coo")
-        b.row[:10] = np.arange(10)
-        b = b.asformat(cls_name)
+    b = a.copy().asformat("coo")
+    b.row[:10] = np.arange(10)
+    b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
 
@@ -1009,6 +1005,11 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
+)
 def test_visualize():
     pytest.importorskip("graphviz")
     with tmpdir() as d:
@@ -1479,11 +1480,12 @@ def test_optimizations_ctd():
 
 def test_clone_key():
     h = object()  # arbitrary hashable
-    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
-    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
-    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
+    assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
     assert clone_key(("sum-1-2-3", h, 1), 123) == (
-        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        "sum-1efd41f02035dc802f4ebb9995d07e9d",
         h,
         1,
     )
@@ -1491,7 +1493,7 @@ def test_clone_key():
         clone_key(1, 2)
 
 
-def test_compte_as_if_collection_low_level_task_graph():
+def test_compute_as_if_collection_low_level_task_graph():
     # See https://github.com/dask/dask/pull/7969
     da = pytest.importorskip("dask.array")
     x = da.arange(10)

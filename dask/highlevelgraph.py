@@ -8,12 +8,11 @@ from typing import Any
 
 import tlz as toolz
 
-from . import config
-from .base import clone_key, flatten, is_dask_collection
-from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify
-from .utils_test import add, inc  # noqa: F401
-from .widgets import get_template
+from dask import config
+from dask.base import clone_key, flatten, is_dask_collection
+from dask.core import keys_in_tasks, reverse_dict
+from dask.utils import ensure_dict, key_split, stringify
+from dask.widgets import get_template
 
 
 def compute_layer_dependencies(layers):
@@ -215,6 +214,8 @@ class Layer(Mapping):
 
         Examples
         --------
+        >>> inc = lambda x: x + 1
+        >>> add = lambda x, y: x + y
         >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
         >>> _, deps = d.cull({'out'}, d.keys())
         >>> deps
@@ -297,7 +298,7 @@ class Layer(Mapping):
         -----
         This method should be overridden by subclasses to avoid materializing the layer.
         """
-        from .graph_manipulation import chunks
+        from dask.graph_manipulation import chunks
 
         is_leaf: bool
 
@@ -421,7 +422,88 @@ class Layer(Mapping):
             v.update(annotations.get(k, {}))
         annotations.update(expanded)
 
-    def __dask_distributed_pack__(self, all_hlg_keys, *args, **kwargs):
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> tuple[Layer, bool]:
+        """Clone selected keys in the layer, as well as references to keys in other
+        layers
+
+        Parameters
+        ----------
+        keys
+            Keys to be replaced. This never includes keys not listed by
+            :meth:`get_output_keys`. It must also include any keys that are outside
+            of this layer that may be referenced by it.
+        seed
+            Common hashable used to alter the keys; see :func:`dask.base.clone_key`
+        bind_to
+            Optional key to bind the leaf nodes to. A leaf node here is one that does
+            not reference any replaced keys; in other words it's a node where the
+            replacement graph traversal stops; it may still have dependencies on
+            non-replaced nodes.
+            A bound node will not be computed until after ``bind_to`` has been computed.
+
+        Returns
+        -------
+        - New layer
+        - True if the ``bind_to`` key was injected anywhere; False otherwise
+
+        Notes
+        -----
+        This method should be overridden by subclasses to avoid materializing the layer.
+        """
+        from dask.graph_manipulation import chunks
+
+        is_leaf: bool
+
+        def clone_value(o):
+            """Variant of distributed.utils_comm.subs_multiple, which allows injecting
+            bind_to
+            """
+            nonlocal is_leaf
+
+            typ = type(o)
+            if typ is tuple and o and callable(o[0]):
+                return (o[0],) + tuple(clone_value(i) for i in o[1:])
+            elif typ is list:
+                return [clone_value(i) for i in o]
+            elif typ is dict:
+                return {k: clone_value(v) for k, v in o.items()}
+            else:
+                try:
+                    if o not in keys:
+                        return o
+                except TypeError:
+                    return o
+                is_leaf = False
+                return clone_key(o, seed)
+
+        dsk_new = {}
+        bound = False
+
+        for key, value in self.items():
+            if key in keys:
+                key = clone_key(key, seed)
+                is_leaf = True
+                value = clone_value(value)
+                if bind_to is not None and is_leaf:
+                    value = (chunks.bind, value, bind_to)
+                    bound = True
+
+            dsk_new[key] = value
+
+        return MaterializedLayer(dsk_new), bound
+
+    def __dask_distributed_pack__(
+        self,
+        all_hlg_keys: Iterable[Hashable],
+        known_key_dependencies: Mapping[Hashable, set],
+        client,
+        client_keys: Iterable[Hashable],
+    ) -> Any:
         """Pack the layer for scheduler communication in Distributed
 
         This method should pack its current state and is called by the Client when
@@ -460,7 +542,9 @@ class Layer(Mapping):
             # get the pre-stringified key dependencies
             return MaterializedLayer(
                 dict(self), annotations=self.annotations
-            ).__dask_distributed_pack__(all_hlg_keys, *args, **kwargs)
+            ).__dask_distributed_pack__(
+                all_hlg_keys, known_key_dependencies, client, client_keys
+            )
 
         state = self.layer_state.copy()
         state["layer_dependencies"] = pre_stringified_deps
@@ -596,7 +680,7 @@ class Layer(Mapping):
         ):
             chunks = self.collection_annotations.get("chunks")
             if chunks:
-                from .array.svg import svg
+                from dask.array.svg import svg
 
                 svg_repr = svg(chunks)
 
@@ -1090,7 +1174,7 @@ class HighLevelGraph(Mapping):
         dask.base.visualize # low level variant
         """
 
-        from .dot import graphviz_to_file
+        from dask.dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
         graphviz_to_file(g, filename, format)
@@ -1395,7 +1479,7 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, label, name
+    from dask.dot import graphviz, label, name
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}
