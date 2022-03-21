@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 from itertools import zip_longest
 from numbers import Integral
+from typing import Callable
 
 import numpy as np
 
@@ -115,12 +118,14 @@ def hold_keys(dsk, dependencies):
     return hold_keys
 
 
-def _is_getter_task(value) -> bool:
+def _is_getter_task(value) -> Callable | None:
     """Check if a value in a Dask graph looks like a getter.
 
     1. Is it a tuple with the first element a known getter.
     2. Is it a SubgraphCallable with a single element in its
        dsk which is a known getter.
+
+    Returns the relevant getter function if it is found, otherwise returns None
 
     TODO: the second check is a hack to allow for slice fusion between tasks produced
     from blockwise layers and slicing operations. Once slicing operations have
@@ -128,15 +133,15 @@ def _is_getter_task(value) -> bool:
     removed, and we should not have to introspect SubgraphCallables.
     """
     if type(value) is not tuple or len(value) <= 1:
-        return False
+        return None
     first = value[0]
     if first in GETTERS:
-        return True
+        return first
     elif isinstance(first, SubgraphCallable) and len(first.dsk) == 1:
         v = next(iter(first.dsk.values()))
-        return type(v) is tuple and len(v) > 1 and v[0] in GETTERS
-    else:
-        return False
+        if type(v) is tuple and len(v) > 1 and v[0] in GETTERS:
+            return v[0]
+    return None
 
 
 def optimize_slices(dsk):
@@ -151,21 +156,21 @@ def optimize_slices(dsk):
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if _is_getter_task(v) and len(v) in (3, 5):
+        if (get := _is_getter_task(v)) and len(v) in (3, 5):
             if len(v) == 3:
-                get, a, a_index = v
+                _, a, a_index = v
                 # getter defaults to asarray=True, getitem is semantically False
                 a_asarray = get is not getitem
                 a_lock = None
             else:
-                get, a, a_index, a_asarray, a_lock = v
-            while _is_getter_task(a) and len(a) in (3, 5):
+                _, a, a_index, a_asarray, a_lock = v
+            while (f2 := _is_getter_task(a)) and len(a) in (3, 5):
                 if len(a) == 3:
-                    f2, b, b_index = a
+                    _, b, b_index = a
                     b_asarray = f2 is not getitem
                     b_lock = None
                 else:
-                    f2, b, b_index, b_asarray, b_lock = a
+                    _, b, b_index, b_asarray, b_lock = a
 
                 if a_lock and a_lock is not b_lock:
                     break
