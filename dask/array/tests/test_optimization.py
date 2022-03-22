@@ -6,21 +6,95 @@ import numpy as np
 
 import dask
 import dask.array as da
-from dask.array.core import getter, getter_nofancy
+from dask.array.chunk import getitem as da_getitem
+from dask.array.core import getter as da_getter
+from dask.array.core import getter_nofancy as da_getter_nofancy
 from dask.array.optimization import (
+    _is_getter_task,
     fuse_slice,
-    getitem,
     optimize,
     optimize_blockwise,
     optimize_slices,
 )
 from dask.array.utils import assert_eq
 from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import fuse
+from dask.optimization import SubgraphCallable, fuse
 from dask.utils import SerializableLock
 
 
-def test_fuse_getitem():
+def _wrap_getter(func, wrap):
+    """
+    Getters generated from a Blockwise layer might be wrapped in a SubgraphCallable.
+    Make sure that the optimization functions can still work if that is the case.
+    """
+    if wrap:
+        return SubgraphCallable({"key": (func, "index")}, outkey="key", inkeys="index")
+    else:
+        return func
+
+
+@pytest.fixture(params=[True, False])
+def getter(request):
+    yield _wrap_getter(da_getter, request.param)
+
+
+@pytest.fixture(params=[True, False])
+def getitem(request):
+    yield _wrap_getter(da_getitem, request.param)
+
+
+@pytest.fixture(params=[True, False])
+def getter_nofancy(request):
+    yield _wrap_getter(da_getter_nofancy, request.param)
+
+
+def _check_task(a, b) -> bool:
+    """
+    Check that two tasks (possibly containing nested tasks) are equal, where
+    equality is lax by allowing the callable in a SubgraphCallable to be the same
+    as a non-wrapped task.
+    """
+    if len(a) < 1 or len(a) != len(b):
+        return False
+
+    a_get = (
+        list(a[0].dsk.values())[0][0] if isinstance(a[0], SubgraphCallable) else a[0]
+    )
+    b_get = (
+        list(b[0].dsk.values())[0][0] if isinstance(b[0], SubgraphCallable) else b[0]
+    )
+    if a_get != b_get:
+        return False
+
+    for ae, be in zip(a[1:], b[1:]):
+        if dask.core.istask(ae):
+            if not _check_task(ae, be):
+                return False
+        elif ae != be:
+            return False
+    return True
+
+
+def _assert_eq(a, b):
+    """
+    Compare two getter dsks.
+
+    TODO: this is here to support the fact that low-level array slice fusion needs to be
+    able to introspect slicing tasks. But some slicing tasks (e.g. `from_array`) could
+    be hidden within SubgraphCallables. This and _check_task should be removed
+    when high-level slicing lands, and replaced with basic equality checks.
+    """
+    assert a.keys() == b.keys()
+    for k, av in a.items():
+        bv = b[k]
+        if dask.core.istask(av):
+            assert _check_task(av, bv)
+        else:
+            assert av == bv
+
+
+def test_fuse_getitem(getter, getter_nofancy, getitem):
+
     pairs = [
         (
             (getter, (getter, "x", slice(1000, 2000)), slice(15, 20)),
@@ -105,10 +179,10 @@ def test_fuse_getitem():
 
     for inp, expected in pairs:
         result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+        _assert_eq(result, {"y": expected})
 
 
-def test_fuse_getitem_lock():
+def test_fuse_getitem_lock(getter, getter_nofancy, getitem):
     lock1 = SerializableLock()
     lock2 = SerializableLock()
 
@@ -159,10 +233,10 @@ def test_fuse_getitem_lock():
 
     for inp, expected in pairs:
         result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+        _assert_eq(result, {"y": expected})
 
 
-def test_optimize_with_getitem_fusion():
+def test_optimize_with_getitem_fusion(getter):
     dsk = {
         "a": "some-array",
         "b": (getter, "a", (slice(10, 20), slice(100, 200))),
@@ -171,11 +245,11 @@ def test_optimize_with_getitem_fusion():
 
     result = optimize(dsk, ["c"])
     expected_task = (getter, "some-array", (15, slice(150, 160)))
-    assert any(v == expected_task for v in result.values())
+    assert any(_check_task(v, expected_task) for v in result.values())
     assert len(result) < len(dsk)
 
 
-def test_optimize_slicing():
+def test_optimize_slicing(getter):
     dsk = {
         "a": (range, 10),
         "b": (getter, "a", (slice(None, None, None),)),
@@ -186,7 +260,7 @@ def test_optimize_slicing():
 
     expected = {"e": (getter, (range, 10), (slice(0, 5, None),))}
     result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
-    assert result == expected
+    _assert_eq(result, expected)
 
     # protect output keys
     expected = {
@@ -196,7 +270,7 @@ def test_optimize_slicing():
     }
     result = optimize_slices(fuse(dsk, ["c", "d", "e"], rename_keys=False)[0])
 
-    assert result == expected
+    _assert_eq(result, expected)
 
 
 def test_fuse_slice():
@@ -255,11 +329,11 @@ def test_nonfusible_fancy_indexing():
             fuse_slice(a, b)
 
 
-def test_hard_fuse_slice_cases():
+def test_hard_fuse_slice_cases(getter):
     dsk = {
         "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
     }
-    assert optimize_slices(dsk) == {"x": (getter, "x", (None, 5))}
+    _assert_eq(optimize_slices(dsk), {"x": (getter, "x", (None, 5))})
 
 
 def test_dont_fuse_numpy_arrays():
@@ -271,7 +345,7 @@ def test_dont_fuse_numpy_arrays():
         assert sum(isinstance(v, np.ndarray) for v in dsk.values()) == 1
 
 
-def test_fuse_slices_with_alias():
+def test_fuse_slices_with_alias(getter, getitem):
     dsk = {
         "x": np.arange(16).reshape((4, 4)),
         ("dx", 0, 0): (getter, "x", (slice(0, 4), slice(0, 4))),
@@ -282,10 +356,10 @@ def test_fuse_slices_with_alias():
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
     fused_key = (dsk2.keys() - {"x", ("dx2", 0)}).pop()
-    assert dsk2[fused_key] == (getter, "x", (slice(0, 4), 0))
+    assert _check_task(dsk2[fused_key], (getter, "x", (slice(0, 4), 0)))
 
 
-def test_dont_fuse_fancy_indexing_in_getter_nofancy():
+def test_dont_fuse_fancy_indexing_in_getter_nofancy(getitem, getter_nofancy):
     dsk = {
         "a": (
             getitem,
@@ -293,10 +367,10 @@ def test_dont_fuse_fancy_indexing_in_getter_nofancy():
             ([1, 3], slice(50, 60, None)),
         )
     }
-    assert optimize_slices(dsk) == dsk
+    _assert_eq(optimize_slices(dsk), dsk)
 
     dsk = {"a": (getitem, (getter_nofancy, "x", [1, 2, 3]), 0)}
-    assert optimize_slices(dsk) == dsk
+    _assert_eq(optimize_slices(dsk), dsk)
 
 
 @pytest.mark.parametrize("chunks", [10, 5, 3])
@@ -311,7 +385,7 @@ def test_fuse_getter_with_asarray(chunks):
         assert s.count("getitem") + s.count("getter") <= 1
         if v is not x:
             assert "1234567890" not in s
-    n_getters = len([v for v in dsk.values() if v[0] in (getitem, getter)])
+    n_getters = len([v for v in dsk.values() if _is_getter_task(v)])
     if y.npartitions > 1:
         assert n_getters == y.npartitions
     else:
@@ -320,30 +394,48 @@ def test_fuse_getter_with_asarray(chunks):
     assert_eq(z, x + 1)
 
 
-@pytest.mark.parametrize(
-    "get,remove", [(getter, False), (getter_nofancy, False), (getitem, True)]
-)
-def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove):
-    # Test that no-op slices are removed as long as get is not getter or
+def test_remove_no_op_slices_for_getitem(getitem):
+    null = slice(0, None)
+    opts = [
+        ((getitem, "x", null, False, False), "x"),
+        ((getitem, (getitem, "x", null, False, False), null), "x"),
+        ((getitem, (getitem, "x", (null, null), False, False), ()), "x"),
+    ]
+    for orig, final in opts:
+        _assert_eq(optimize_slices({"a": orig}), {"a": final})
+
+
+@pytest.mark.parametrize("which", ["getter", "getter_nofancy"])
+def test_dont_remove_no_op_slices_for_getter_or_getter_nofancy(
+    which, getitem, getter, getter_nofancy
+):
+    # Test that no-op slices are *not* removed when using getter or
     # getter_nofancy. This ensures that `get` calls are always made in all
     # tasks created by `from_array`, even after optimization
+
+    # Pytest doesn't make it easy to parameterize over parameterized fixtures
+    if which == "getter":
+        get = getter
+    else:
+        get = getter_nofancy
+
     null = slice(0, None)
     opts = [
         (
             (get, "x", null, False, False),
-            "x" if remove else (get, "x", null, False, False),
+            (get, "x", null, False, False),
         ),
         (
             (getitem, (get, "x", null, False, False), null),
-            "x" if remove else (get, "x", null, False, False),
+            (get, "x", null, False, False),
         ),
         (
             (getitem, (get, "x", (null, null), False, False), ()),
-            "x" if remove else (get, "x", (null, null), False, False),
+            (get, "x", (null, null), False, False),
         ),
     ]
     for orig, final in opts:
-        assert optimize_slices({"a": orig}) == {"a": final}
+        _assert_eq(optimize_slices({"a": orig}), {"a": final})
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")
