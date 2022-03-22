@@ -375,20 +375,21 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
-    name = "hash-join-" + token
-
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    dsk = {
-        (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
-        for i in range(npartitions)
-    }
+    joined = map_partitions(
+        merge_chunk,
+        lhs2,
+        rhs2,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
 
-    divisions = [None] * (npartitions + 1)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def single_partition_join(left, right, **kwargs):

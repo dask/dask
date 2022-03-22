@@ -233,12 +233,14 @@ def test_hash_join(how, shuffle_method):
 
     c = hash_join(a, "y", b, "y", how)
 
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     result = c.compute()
     expected = pd.merge(A, B, how, "y")
     list_eq(result, expected)
 
     # Different columns and npartitions
     c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     assert c.npartitions == 3
 
     result = c.compute(scheduler="single-threaded")
