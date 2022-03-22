@@ -1050,6 +1050,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
+    astyped_dfs = []
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
@@ -1074,7 +1075,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+
+        astyped_dfs.append(df)
+
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
@@ -1099,7 +1102,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=astyped_dfs)
+
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def concat(
