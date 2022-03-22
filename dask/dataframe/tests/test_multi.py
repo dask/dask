@@ -717,6 +717,29 @@ def test_concat_series(join):
         assert_eq(result, expected)
 
 
+def test_concat_with_operation_remains_hlg():
+    pdf1 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+
+    pdf2 = pd.DataFrame({"y": list("abcdef")}, index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # Do some operation which will remain blockwise in the dask case.
+    pdf2["x"] = range(len(pdf2["y"]))
+    # See https://stackoverflow.com/a/60852409
+    ddf2["x"] = ddf2.assign(partition_count=1).partition_count.cumsum() - 1
+    kwargs = {"sort": False}
+
+    expected = pd.concat([pdf1, pdf2], **kwargs)
+    result = dd.concat([ddf1, ddf2], **kwargs)
+    # The third layer is the assignment to column `x`, which should remain
+    # blockwise
+    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    assert_eq(result, expected)
+
+
 @pytest.mark.parametrize(
     "value_1, value_2",
     [
