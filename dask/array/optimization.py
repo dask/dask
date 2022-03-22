@@ -101,14 +101,14 @@ def hold_keys(dsk, dependencies):
             # when there's either more than one dependent, or the dependent is
             # no longer a get* function or an alias. We then add the final
             # key to the list of keys not to fuse.
-            if type(task) is tuple and task and task[0] in GETTERS:
+            if _is_getter_task(task):
                 try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
                         # If the task is a get* or an alias, continue up the
                         # linear chain
-                        if new_task[0] in GETTERS or new_task in dsk:
+                        if _is_getter_task(new_task) or new_task in dsk:
                             dep = new_dep
                         else:
                             break
