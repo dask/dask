@@ -2,7 +2,7 @@ import pickle
 import types
 from collections import namedtuple
 from functools import partial
-from operator import add, setitem
+from operator import add, matmul, setitem
 from random import random
 
 import cloudpickle
@@ -13,12 +13,8 @@ import dask
 import dask.bag as db
 from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
-
-try:
-    from operator import matmul
-except ImportError:
-    matmul = None
 
 
 class Tuple:
@@ -127,7 +123,7 @@ def test_operators():
     assert (1 + a).compute() == 11
     assert (a >> 1).compute() == 5
     assert (a > 2).compute()
-    assert (a ** 2).compute() == 100
+    assert (a**2).compute() == 100
 
     if matmul:
 
@@ -162,7 +158,7 @@ def test_method_getattr_call_same_task():
     a = delayed([1, 2, 3])
     o = a.index(1)
     # Don't getattr the method, then call in separate task
-    assert getattr not in set(v[0] for v in o.__dask_graph__().values())
+    assert getattr not in {v[0] for v in o.__dask_graph__().values()}
 
 
 def test_np_dtype_of_delayed():
@@ -223,6 +219,9 @@ def test_delayed_optimize():
     (x2,) = dask.optimize(x)
     # Delayed's __dask_optimize__ culls out 'c'
     assert sorted(x2.dask.keys()) == ["a", "b"]
+    assert x2._layer != x2._key
+    # Optimize generates its own layer name, which doesn't match the key.
+    # `Delayed._rebuild` handles this.
 
 
 def test_lists():
@@ -239,8 +238,8 @@ def test_literates():
     assert delayed(lit).compute() == (1, 2, 3)
     lit = [a, b, 3]
     assert delayed(lit).compute() == [1, 2, 3]
-    lit = set((a, b, 3))
-    assert delayed(lit).compute() == set((1, 2, 3))
+    lit = {a, b, 3}
+    assert delayed(lit).compute() == {1, 2, 3}
     lit = {a: "a", b: "b", 3: "c"}
     assert delayed(lit).compute() == {1: "a", 2: "b", 3: "c"}
     assert delayed(lit)[a].compute() == "a"
@@ -539,11 +538,11 @@ def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
+    assert func(data)._key == "identity-4f318f3c27b869239e97c3ac07f7201a"
 
     data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key
-    assert func(1)._key == "identity-ca2fae46a3b938016331acac1908ae45"
+    assert func(1)._key == "identity-7258833899272585e16d0ec36b21a3de"
 
 
 def test_sensitive_to_partials():
@@ -701,14 +700,43 @@ def test_dask_layers():
     assert d2.dask.dependencies == {d1.key: set(), d2.key: {d1.key}}
     assert d2.__dask_layers__() == (d2.key,)
 
+    hlg = HighLevelGraph.from_collections("foo", {"alias": d2.key}, dependencies=[d2])
+    with pytest.raises(ValueError, match="not in"):
+        Delayed("alias", hlg)
 
-def test_dask_layers_to_delayed():
-    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
-    # match the key
-    da = pytest.importorskip("dask.array")
-    d = da.ones(1).to_delayed()[0]
-    name = d.key[0]
-    assert d.key[1:] == (0,)
-    assert d.dask.layers.keys() == {"delayed-" + name}
-    assert d.dask.dependencies == {"delayed-" + name: set()}
-    assert d.__dask_layers__() == ("delayed-" + name,)
+    explicit = Delayed("alias", hlg, layer="foo")
+    assert explicit.__dask_layers__() == ("foo",)
+    explicit.dask.validate()
+
+
+def test_annotations_survive_optimization():
+    with dask.annotate(foo="bar"):
+        graph = HighLevelGraph.from_collections(
+            "b",
+            {"a": 1, "b": (inc, "a"), "c": (inc, "b")},
+            [],
+        )
+        d = Delayed("b", graph)
+
+    assert type(d.dask) is HighLevelGraph
+    assert len(d.dask.layers) == 1
+    assert len(d.dask.layers["b"]) == 3
+    assert d.dask.layers["b"].annotations == {"foo": "bar"}
+
+    # Ensure optimizing a Delayed object returns a HighLevelGraph
+    # and doesn't loose annotations
+    (d_opt,) = dask.optimize(d)
+    assert type(d_opt.dask) is HighLevelGraph
+    assert len(d_opt.dask.layers) == 1
+    assert len(d_opt.dask.layers["b"]) == 2  # c is culled
+    assert d_opt.dask.layers["b"].annotations == {"foo": "bar"}
+
+
+def test_delayed_function_attributes_forwarded():
+    @delayed
+    def add(x, y):
+        """This is a docstring"""
+        return x + y
+
+    assert add.__name__ == "add"
+    assert add.__doc__ == "This is a docstring"

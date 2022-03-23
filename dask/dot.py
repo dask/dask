@@ -2,15 +2,16 @@ import os
 import re
 from functools import partial
 
-from .core import get_dependencies, ishashable, istask
-from .utils import apply, funcname, import_required, key_split
+from dask.core import get_dependencies, ishashable, istask
+from dask.utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",
-    "Drawing dask graphs requires the "
-    "`graphviz` python library and the "
-    "`graphviz` system library to be "
-    "installed.",
+    "Drawing dask graphs requires the `graphviz` python library and the "
+    "`graphviz` system library.\n\n"
+    "Please either conda or pip install as follows:\n\n"
+    "  conda install python-graphviz     # either conda install\n"
+    "  python -m pip install graphviz    # or pip install and follow installation instructions",
 )
 
 
@@ -30,13 +31,13 @@ def task_label(task):
         func = task[1]
     if hasattr(func, "funcs"):
         if len(func.funcs) > 1:
-            return "{0}(...)".format(funcname(func.funcs[0]))
+            return f"{funcname(func.funcs[0])}(...)"
         else:
             head = funcname(func.funcs[0])
     else:
         head = funcname(func)
     if any(has_sub_tasks(i) for i in task[1:]):
-        return "{0}(...)".format(head)
+        return f"{head}(...)"
     else:
         return head
 
@@ -94,7 +95,7 @@ def label(x, cache=None):
             for h in m.groups():
                 if cache is not None:
                     n = cache.get(h, len(cache))
-                    label = "#{0}".format(n)
+                    label = f"#{n}"
                     # cache will be overwritten destructively
                     cache[h] = n
                 else:

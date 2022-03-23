@@ -1,16 +1,18 @@
 import contextlib
 import itertools
 import sys
+import warnings
 from numbers import Number
 
 import pytest
+from numpy import AxisError
 
 from dask.delayed import delayed
 
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.utils import AxisError, assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys
 
 
 def test_array():
@@ -379,7 +381,7 @@ def test_tensordot_more_than_26_dims():
     ndim = 27
     x = np.broadcast_to(1, [2] * ndim)
     dx = da.from_array(x, chunks=-1)
-    assert_eq(da.tensordot(dx, dx, ndim), np.array(2 ** ndim))
+    assert_eq(da.tensordot(dx, dx, ndim), np.array(2**ndim))
 
 
 def test_dot_method():
@@ -389,6 +391,19 @@ def test_dot_method():
     b = da.from_array(y, chunks=(5, 5))
 
     assert_eq(a.dot(b), x.dot(y))
+
+
+def test_dot_persist_equivalence():
+    # Regression test for https://github.com/dask/dask/issues/6907
+    x = da.random.random((4, 4), chunks=(2, 2))
+    x[x < 0.65] = 0
+    y = x.persist()
+    z = x.compute()
+    r1 = da.dot(x, x).compute()
+    r2 = da.dot(y, y).compute()
+    rr = np.dot(z, z)
+    assert np.allclose(rr, r1)
+    assert np.allclose(rr, r2)
 
 
 @pytest.mark.parametrize("shape, chunks", [((20,), (6,)), ((4, 5), (2, 3))])
@@ -742,7 +757,6 @@ def test_histogram_alternative_bins_range():
     assert_eq(b1, b2)
 
 
-@pytest.mark.filterwarnings("ignore:invalid value:RuntimeWarning")
 def test_histogram_bins_range_with_nan_array():
     # Regression test for issue #3977
     v = da.from_array(np.array([-2, np.nan, 2]), chunks=1)
@@ -1171,7 +1185,8 @@ def test_cov():
 
     assert_eq(da.cov(d), np.cov(x))
     assert_eq(da.cov(d, rowvar=0), np.cov(x, rowvar=0))
-    with pytest.warns(None):  # warning dof <= 0 for slice
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)  # dof <= 0 for slice
         assert_eq(da.cov(d, ddof=10), np.cov(x, ddof=10))
     assert_eq(da.cov(d, bias=1), np.cov(x, bias=1))
     assert_eq(da.cov(d, d), np.cov(x, x))
@@ -1291,7 +1306,8 @@ def test_isin_rand(
     a2 = rng.randint(low, high, size=test_shape) - 5
     d2 = da.from_array(a2, chunks=test_chunks)
 
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         r_a = np.isin(a1, a2, invert=invert)
         r_d = da.isin(d1, d2, invert=invert)
     assert_eq(r_a, r_d)
@@ -1329,10 +1345,19 @@ def test_roll(chunks, shift, axis):
         assert_eq(np.roll(x, shift, axis), da.roll(a, shift, axis))
 
 
+def test_roll_always_results_in_a_new_array():
+    x = da.arange(2, 3)
+    y = da.roll(x, 1)
+    assert y is not x
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
-def test_shape(shape):
+def test_shape_and_ndim(shape):
     x = da.random.random(shape)
     assert np.shape(x) == shape
+
+    x = da.random.random(shape)
+    assert np.ndim(x) == len(shape)
 
 
 @pytest.mark.parametrize(
@@ -1409,6 +1434,25 @@ def test_ravel_with_array_like():
     # nested i.e. tuples in list
     assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
     assert isinstance(da.ravel([(0,), (0,)]), da.core.Array)
+
+
+@pytest.mark.parametrize("axis", [None, 0, 1, -1, (0, 1), (0, 2), (1, 2), 2])
+def test_expand_dims(axis):
+    a = np.arange(10)
+    d = da.from_array(a, chunks=(3,))
+
+    if axis is None:
+        with pytest.raises(TypeError):
+            da.expand_dims(d, axis=axis)
+    elif axis == 2:
+        with pytest.raises(AxisError):
+            da.expand_dims(d, axis=axis)
+    else:
+        a_e = np.expand_dims(a, axis=axis)
+        d_e = da.expand_dims(d, axis=axis)
+
+        assert_eq(d_e, a_e)
+        assert same_keys(d_e, da.expand_dims(d, axis=axis))
 
 
 @pytest.mark.parametrize("is_func", [True, False])
@@ -2116,7 +2160,7 @@ def test_coarsen_bad_chunks(chunks):
 )
 def test_aligned_coarsen_chunks(chunks, divisor):
 
-    from ..routines import aligned_coarsen_chunks as acc
+    from dask.array.routines import aligned_coarsen_chunks as acc
 
     aligned_chunks = acc(chunks, divisor)
     any_remainders = (np.array(aligned_chunks) % divisor) != 0
@@ -2171,10 +2215,10 @@ def test_insert():
     with pytest.raises(NotImplementedError):
         da.insert(a, [4, 2], -1, axis=0)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.insert(a, [3], -1, axis=2)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.insert(a, [3], -1, axis=-3)
 
 
@@ -2216,9 +2260,9 @@ def test_append():
     )
 
     # check AxisError
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.append(a, ((0,) * 10,) * 10, axis=2)
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.append(a, ((0,) * 10,) * 10, axis=-3)
 
     # check ValueError if dimensions don't align
@@ -2255,10 +2299,10 @@ def test_delete():
 
     assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.delete(a, [3], axis=2)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.delete(a, [3], axis=-3)
 
 
@@ -2364,7 +2408,8 @@ def test_einsum(einsum_signature):
 
     np_inputs, da_inputs = _numpy_and_dask_inputs(input_sigs)
 
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=da.PerformanceWarning)
         assert_eq(
             np.einsum(einsum_signature, *np_inputs),
             da.einsum(einsum_signature, *da_inputs),

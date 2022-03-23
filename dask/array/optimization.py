@@ -1,16 +1,16 @@
 from itertools import zip_longest
 from numbers import Integral
-from operator import getitem
 
 import numpy as np
 
-from .. import config
-from ..blockwise import fuse_roots, optimize_blockwise
-from ..core import flatten, reverse_dict
-from ..highlevelgraph import HighLevelGraph
-from ..optimization import fuse, inline_functions
-from ..utils import ensure_dict
-from .core import getter, getter_inline, getter_nofancy
+from dask import config
+from dask.array.chunk import getitem
+from dask.array.core import getter, getter_inline, getter_nofancy
+from dask.blockwise import fuse_roots, optimize_blockwise
+from dask.core import flatten, reverse_dict
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import fuse, inline_functions
+from dask.utils import ensure_dict
 
 # All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
@@ -27,7 +27,7 @@ def optimize(
     fast_functions=None,
     inline_functions_fast_functions=(getter_inline,),
     rename_fused_keys=True,
-    **kwargs
+    **kwargs,
 ):
     """Optimize dask for array computation
 

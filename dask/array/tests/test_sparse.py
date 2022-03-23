@@ -22,7 +22,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x ** 2,
+    lambda x: x**2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -52,8 +52,8 @@ functions = [
     lambda x: x.sum(axis=(1, 2)),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
-    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
-    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=False),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True, boundary="none"),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=False, boundary="none"),
     lambda x: x.round(1),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     lambda x: abs(x),
@@ -96,7 +96,7 @@ def test_basic(func):
     xx = func(x)
     yy = func(y)
 
-    assert_eq(xx, yy)
+    assert_eq(xx, yy, check_meta=False)
 
     if yy.shape:
         zz = yy.compute()

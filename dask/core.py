@@ -1,7 +1,5 @@
 from collections import defaultdict
 
-from .utils_test import add, inc  # noqa: F401
-
 no_default = "__no_default__"
 
 
@@ -67,12 +65,10 @@ def preorder_traversal(task):
 
     for item in task:
         if istask(item):
-            for i in preorder_traversal(item):
-                yield i
+            yield from preorder_traversal(item)
         elif isinstance(item, list):
             yield list
-            for i in preorder_traversal(item):
-                yield i
+            yield from preorder_traversal(item)
         else:
             yield item
 
@@ -89,6 +85,8 @@ def _execute_task(arg, cache, dsk=None):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> cache = {'x': 1, 'y': 2}
 
     Compute tasks against a cache
@@ -143,7 +141,7 @@ def get(dsk, out, cache=None):
     """
     for k in flatten(out) if isinstance(out, list) else [out]:
         if k not in dsk:
-            raise KeyError("{0} is not a key in the graph".format(k))
+            raise KeyError(f"{k} is not a key in the graph")
     if cache is None:
         cache = {}
     for key in toposort(dsk):
@@ -161,6 +159,8 @@ def keys_in_tasks(keys, tasks, as_list=False):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -224,6 +224,8 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 
     Examples
     --------
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1,
     ...        'y': (inc, 'x'),
     ...        'z': (add, 'x', 'y'),
@@ -261,6 +263,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 def get_deps(dsk):
     """Get dependencies and dependents from dask dask graph
 
+    >>> inc = lambda x: x + 1
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
     >>> dependencies
@@ -296,8 +299,7 @@ def flatten(seq, container=list):
     else:
         for item in seq:
             if isinstance(item, container):
-                for item2 in flatten(item, container=container):
-                    yield item2
+                yield from flatten(item, container=container)
             else:
                 yield item
 
@@ -325,6 +327,8 @@ def subs(task, key, val):
 
     Examples
     --------
+    >>> def inc(x):
+    ...     return x + 1
 
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +ELLIPSIS
     (<function inc at ...>, 1)
@@ -379,7 +383,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
     seen = set()
 
     if dependencies is None:
-        dependencies = dict((k, get_dependencies(dsk, k)) for k in dsk)
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
     for key in keys:
         if key in completed:
@@ -441,6 +445,7 @@ def getcycle(d, keys):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
     >>> d = {'x': (inc, 'z'), 'y': (inc, 'x'), 'z': (inc, 'y')}
     >>> getcycle(d, 'x')
     ['x', 'z', 'y', 'x']
@@ -460,6 +465,7 @@ def isdag(d, keys):
     Examples
     --------
 
+    >>> inc = lambda x: x + 1
     >>> inc = lambda x: x + 1
     >>> isdag({'x': 0, 'y': (inc, 'x')}, 'y')
     True
@@ -497,6 +503,7 @@ def quote(x):
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
 
+    >>> add = lambda x, y: x + y
     >>> quote((add, 1, 2))
     (literal<type=tuple>,)
     """

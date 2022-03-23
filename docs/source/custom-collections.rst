@@ -82,7 +82,7 @@ interface is used inside Dask.
 
 .. method:: __dask_layers__(self)
 
-    This method should only be implemented if the collection uses
+    This method only needs to be implemented if the collection uses
     :class:`~dask.highlevelgraph.HighLevelGraph` to implement its dask graph.
 
     **Returns**
@@ -339,7 +339,7 @@ created. It too has three stages:
 
    - A ``rebuild`` function, which takes in a persisted graph.  The keys of
      this graph are the same as ``__dask_keys__`` for the corresponding
-     collection, and the values are computed results (for the single machine
+     collection, and the values are computed results (for the single-machine
      scheduler) or futures (for the distributed scheduler).
    - A tuple of extra arguments to pass to ``rebuild`` after the graph
 
@@ -497,9 +497,9 @@ elements of ``dask.delayed``:
 
         @staticmethod
         def __dask_optimize__(dsk, keys, **kwargs):
-            # We cull unnecessary tasks here. Note that this isn't necessary,
-            # dask will do this automatically, this just shows one optimization
-            # you could do.
+            # We cull unncessary tasks here. See
+            # https://docs.dask.org/en/stable/optimize.html for more
+            # information on optimizations in Dask.
             dsk2, _ = cull(dsk, keys)
             return dsk2
 

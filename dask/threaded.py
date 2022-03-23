@@ -3,15 +3,16 @@ A threaded shared-memory scheduler
 
 See local.py
 """
+from __future__ import annotations
+
 import multiprocessing.pool
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
-from . import config
-from .local import MultiprocessingPoolExecutor, get_async
-from .system import CPU_COUNT
-from .utils_test import add, inc  # noqa: F401
+from dask import config
+from dask.local import MultiprocessingPoolExecutor, get_async
+from dask.system import CPU_COUNT
 
 _EXECUTORS = threading.local()
 
@@ -73,7 +74,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
 
     Examples
     --------
-
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
     >>> get(dsk, 'w')
     4
@@ -101,5 +103,5 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
         cache=cache,
         get_id=_thread_get_id,
         pack_exception=pack_exception,
-        **kwargs
+        **kwargs,
     )

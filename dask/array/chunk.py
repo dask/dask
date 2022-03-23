@@ -7,13 +7,7 @@ from numbers import Integral
 import numpy as np
 from tlz import concat
 
-from ..core import flatten
-from . import numpy_compat as npcompat
-
-try:
-    from numpy import take_along_axis
-except ImportError:  # pragma: no cover
-    take_along_axis = npcompat.take_along_axis
+from dask.core import flatten
 
 
 def keepdims_wrapper(a_callable):
@@ -234,7 +228,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
     idx2 = np.argpartition(a, -k, axis=axis)
     k_slice = slice(-k, None) if k > 0 else slice(-k)
     idx2 = idx2[tuple(k_slice if i == axis else slice(None) for i in range(a.ndim))]
-    return take_along_axis(a, idx2, axis), take_along_axis(idx, idx2, axis)
+    return np.take_along_axis(a, idx2, axis), np.take_along_axis(idx, idx2, axis)
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
@@ -244,11 +238,12 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     and return the index only.
     """
     assert keepdims is True
+    a_plus_idx = a_plus_idx if len(a_plus_idx) > 1 else a_plus_idx[0]
     a, idx = argtopk(a_plus_idx, k, axis, keepdims)
     axis = axis[0]
 
     idx2 = np.argsort(a, axis=axis)
-    idx = take_along_axis(idx, idx2, axis)
+    idx = np.take_along_axis(idx, idx2, axis)
     if k < 0:
         return idx
     return idx[
@@ -259,14 +254,14 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
 
 
 def arange(start, stop, step, length, dtype, like=None):
-    from .utils import arange_safe
+    from dask.array.utils import arange_safe
 
     res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
 
 
 def linspace(start, stop, num, endpoint=True, dtype=None):
-    from .core import Array
+    from dask.array.core import Array
 
     if isinstance(start, Array):
         start = start.compute()
@@ -318,7 +313,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     x sliced along axis, using only the elements of idx that fall inside the
     current chunk.
     """
-    from .utils import asarray_safe, meta_from_array
+    from dask.array.utils import asarray_safe, meta_from_array
 
     idx = asarray_safe(idx, like=meta_from_array(x))
 
@@ -396,3 +391,33 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
             idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
         )
     ]
+
+
+def getitem(obj, index):
+    """Getitem function
+
+    This function creates a copy of the desired selection for array-like
+    inputs when the selection is smaller than half of the original array. This
+    avoids excess memory usage when extracting a small portion from a large array.
+    For more information, see
+    https://numpy.org/doc/stable/reference/arrays.indexing.html#basic-slicing-and-indexing.
+
+    Parameters
+    ----------
+    obj: ndarray, string, tuple, list
+        Object to get item from.
+    index: int, list[int], slice()
+        Desired selection to extract from obj.
+
+    Returns
+    -------
+    Selection obj[index]
+
+    """
+    result = obj[index]
+    try:
+        if not result.flags.owndata and obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

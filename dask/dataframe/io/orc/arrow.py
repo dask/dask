@@ -1,7 +1,7 @@
 import pyarrow as pa
 import pyarrow.orc as orc
 
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
+from dask.dataframe.io.utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
 
 class ArrowORCEngine:
@@ -66,7 +66,7 @@ class ArrowORCEngine:
             ex = set(columns) - set(schema)
             if ex:
                 raise ValueError(
-                    "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
+                    f"Requested columns ({ex}) not in schema ({set(schema)})"
                 )
 
         # Check if we can aggregate adjacent parts together

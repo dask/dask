@@ -10,26 +10,34 @@ from numbers import Integral, Number
 import numpy as np
 from tlz import accumulate, compose, drop, get, partition_all, pluck
 
-from .. import config
-from ..base import tokenize
-from ..blockwise import lol_tuples
-from ..highlevelgraph import HighLevelGraph
-from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
-from . import chunk
-from .blockwise import blockwise
-from .core import Array, _concatenate2, handle_out, implements
-from .creation import arange, diagonal
+from dask import config
+from dask.array import chunk
+from dask.array.blockwise import blockwise
+from dask.array.core import (
+    Array,
+    _concatenate2,
+    asanyarray,
+    broadcast_to,
+    handle_out,
+    implements,
+    unknown_chunk_message,
+)
+from dask.array.creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
-from .dispatch import divide_lookup, empty_lookup  # noqa: F401
-from .utils import (
+from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
+from dask.array.utils import (
     asarray_safe,
     compute_meta,
     is_arraylike,
     meta_from_array,
     validate_axis,
 )
-from .wrap import ones, zeros
+from dask.array.wrap import ones, zeros
+from dask.base import tokenize
+from dask.blockwise import lol_tuples
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import deepmap, derived_from, funcname, getargspec, is_series_like
 
 
 def divide(a, b, dtype=None):
@@ -52,6 +60,7 @@ def reduction(
     concatenate=True,
     output_size=1,
     meta=None,
+    weights=None,
 ):
     """General version of reductions
 
@@ -59,7 +68,7 @@ def reduction(
     ----------
     x: Array
         Data being reduced along one or more axes
-    chunk: callable(x_chunk, axis, keepdims)
+    chunk: callable(x_chunk, [weights_chunk=None], axis, keepdims)
         First function to be executed when resolving the dask graph.
         This function is applied in parallel to all original chunks of x.
         See below for function parameters.
@@ -114,6 +123,12 @@ def reduction(
     output_size: int >= 1, optional
         Size of the output of the ``aggregate`` function along the reduced
         axes. Ignored if keepdims is False.
+    weights : array_like, optional
+        Weights to be used in the reduction of `x`. Will be
+        automatically broadcast to the shape of `x`, and so must have
+        a compatible shape. For instance, if `x` has shape ``(3, 4)``
+        then acceptable shapes for `weights` are ``(3, 4)``, ``(4,)``,
+        ``(3, 1)``, ``(1, 1)``, ``(1)``, and ``()``.
 
     Returns
     -------
@@ -127,6 +142,14 @@ def reduction(
         the concatenation of the outputs produced by the previous ``chunk`` or
         ``combine`` functions. If concatenate=False, it's a list of the raw
         outputs from the previous functions.
+    weights_chunk: numpy.ndarray, optional
+        Only applicable to the ``chunk`` function. Weights, with the
+        same shape as `x_chunk`, to be applied during the reduction of
+        the individual input chunk. If ``weights`` have not been
+        provided then the function may omit this parameter. When
+        `weights_chunk` is included then it must occur immediately
+        after the `x_chunk` parameter, and must also have a default
+        value for cases when ``weights`` are not provided.
     axis: tuple
         Normalized list of axes to reduce upon, e.g. ``(0, )``
         Scalar, negative, and None axes have been normalized away.
@@ -136,6 +159,7 @@ def reduction(
     keepdims: bool
         Whether the reduction function should preserve the reduced axes or
         remove them.
+
     """
     if axis is None:
         axis = tuple(range(x.ndim))
@@ -154,9 +178,24 @@ def reduction(
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
+
+    args = (x, inds)
+    if weights is not None:
+        # Broadcast weights to x and add to args
+        wgt = asanyarray(weights)
+        try:
+            wgt = broadcast_to(wgt, x.shape)
+        except ValueError:
+            raise ValueError(
+                f"Weights with shape {wgt.shape} are not broadcastable "
+                f"to x with shape {x.shape}"
+            )
+
+        args += (wgt, inds)
+
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = blockwise(
-        chunk, inds, x, inds, axis=axis, keepdims=True, token=name, dtype=dtype or float
+        chunk, inds, *args, axis=axis, keepdims=True, token=name, dtype=dtype or float
     )
     tmp._chunks = tuple(
         (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)
@@ -216,7 +255,7 @@ def _tree_reduce(
     # Normalize split_every
     split_every = split_every or config.get("split_every", 4)
     if isinstance(split_every, dict):
-        split_every = dict((k, split_every.get(k, 2)) for k in axis)
+        split_every = {k: split_every.get(k, 2) for k in axis}
     elif isinstance(split_every, Integral):
         n = builtins.max(int(split_every ** (1 / (len(axis) or 1))), 2)
         split_every = dict.fromkeys(axis, n)
@@ -230,7 +269,7 @@ def _tree_reduce(
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     for i in range(depth - 1):
         x = partial_reduce(
             func,
@@ -243,7 +282,7 @@ def _tree_reduce(
         )
     func = partial(aggregate, axis=axis, keepdims=keepdims)
     if concatenate:
-        func = compose(func, partial(_concatenate2, axes=axis))
+        func = compose(func, partial(_concatenate2, axes=sorted(axis)))
     return partial_reduce(
         func,
         x,
@@ -293,9 +332,11 @@ def partial_reduce(
         out_chunks = list(getter(out_chunks))
     dsk = {}
     for k, p in zip(keys, product(*parts)):
-        decided = dict((i, j[0]) for (i, j) in enumerate(p) if len(j) == 1)
-        dummy = dict(i for i in enumerate(p) if i[0] not in decided)
-        g = lol_tuples((x.name,), range(x.ndim), decided, dummy)
+        free = {
+            i: j[0] for (i, j) in enumerate(p) if len(j) == 1 and i not in split_every
+        }
+        dummy = dict(i for i in enumerate(p) if i[0] in split_every)
+        g = lol_tuples((x.name,), range(x.ndim), free, dummy)
         dsk[(name,) + k] = (func, g)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
 
@@ -515,30 +556,60 @@ def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
 
 @derived_from(np)
 def nanmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmin which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmin,
-        chunk.nanmin,
+        _nanmin_skip,
+        _nanmin_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmin_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmin(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 @derived_from(np)
 def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    if np.isnan(a.size):
+        raise ValueError(f"Arrays chunk sizes are unknown. {unknown_chunk_message}")
+    if a.size == 0:
+        raise ValueError(
+            "zero-size array to reduction operation fmax which has no identity"
+        )
     return reduction(
         a,
-        chunk.nanmax,
-        chunk.nanmax,
+        _nanmax_skip,
+        _nanmax_skip,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def _nanmax_skip(x_chunk, axis, keepdims):
+    if x_chunk.size > 0:
+        return np.nanmax(x_chunk, axis=axis, keepdims=keepdims)
+    else:
+        return asarray_safe(
+            np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
+        )
 
 
 def numel(x, **kwargs):
@@ -625,7 +696,8 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
     totals = deepmap(lambda pair: pair["total"], pairs)
     total = _concatenate2(totals, axes=axis).sum(axis=axis, dtype=dtype, **kwargs)
 
-    return divide(total, n, dtype=dtype)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        return divide(total, n, dtype=dtype)
 
 
 @derived_from(np)
@@ -688,11 +760,11 @@ def moment_chunk(
 
 def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
     M = Ms[..., order - 2].sum(axis=axis, **kwargs) + sum(
-        ns * inner_term ** order, axis=axis, **kwargs
+        ns * inner_term**order, axis=axis, **kwargs
     )
     for k in range(1, order - 1):
         coeff = factorial(order) / (factorial(k) * factorial(order - k))
-        M += coeff * sum(Ms[..., order - k - 2] * inner_term ** k, axis=axis, **kwargs)
+        M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, axis=axis, **kwargs)
     return M
 
 
@@ -1037,7 +1109,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         axis = (axis,)
         ravel = x.ndim == 1
     else:
-        raise TypeError("axis must be either `None` or int, got '{0}'".format(axis))
+        raise TypeError(f"axis must be either `None` or int, got '{axis}'")
 
     for ax in axis:
         chunks = x.chunks[ax]
@@ -1051,7 +1123,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
             )
 
     # Map chunk across all blocks
-    name = "arg-reduce-{0}".format(tokenize(axis, x, chunk, combine, split_every))
+    name = f"arg-reduce-{tokenize(axis, x, chunk, combine, split_every)}"
     old = x.name
     keys = list(product(*map(range, x.numblocks)))
     offsets = list(product(*(accumulate(operator.add, bd[:-1], 0) for bd in x.chunks)))
@@ -1061,10 +1133,10 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         offset_info = pluck(axis[0], offsets)
 
     chunks = tuple((1,) * len(c) if i in axis else c for (i, c) in enumerate(x.chunks))
-    dsk = dict(
-        ((name,) + k, (chunk, (old,) + k, axis, off))
+    dsk = {
+        (name,) + k: (chunk, (old,) + k, axis, off)
         for (k, off) in zip(keys, offset_info)
-    )
+    }
 
     dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
     meta = None
@@ -1210,7 +1282,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, preop, binop, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, preop, binop, x, dtype)}"
     base_key = (name,)
 
     # Right now, the metadata for batches is incorrect, but this should be okay
@@ -1327,7 +1399,7 @@ def cumreduction(
           This method may be faster or more memory efficient depending on workload,
           scheduler, and hardware.  More benchmarking is necessary.
     preop: callable, optional
-        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
+        Function used by 'blelloch' method like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------
@@ -1359,7 +1431,7 @@ def cumreduction(
 
     m = x.map_blocks(func, axis=axis, dtype=dtype)
 
-    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, binop, ident, x, dtype))
+    name = f"{func.__name__}-{tokenize(func, axis, binop, ident, x, dtype)}"
     n = x.numblocks[axis]
     full = slice(None, None, None)
     slc = (full,) * axis + (slice(-1, None),) + (full,) * (x.ndim - axis - 1)

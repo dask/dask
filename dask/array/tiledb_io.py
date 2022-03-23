@@ -1,4 +1,4 @@
-from . import core
+from dask.array import core
 
 
 def _tiledb_to_chunks(tiledb_array):
@@ -70,7 +70,13 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
 
 
 def to_tiledb(
-    darray, uri, compute=True, return_stored=False, storage_options=None, **kwargs
+    darray,
+    uri,
+    compute=True,
+    return_stored=False,
+    storage_options=None,
+    key=None,
+    **kwargs,
 ):
     """Save array to the TileDB storage format
 
@@ -90,6 +96,8 @@ def to_tiledb(
         Dict containing any configuration options for the TileDB backend.
         see https://docs.tiledb.io/en/stable/tutorials/config.html
     compute, return_stored: see ``store()``
+    key: str or None
+        Encryption key
 
     Returns
     -------
@@ -124,7 +132,7 @@ def to_tiledb(
 
     tiledb_config = storage_options or dict()
     # encryption key, if any
-    key = tiledb_config.pop("key", None)
+    key = key or tiledb_config.pop("key", None)
 
     if not core._check_regular_chunks(darray.chunks):
         raise ValueError(
@@ -134,7 +142,6 @@ def to_tiledb(
 
     if isinstance(uri, str):
         chunks = [c[0] for c in darray.chunks]
-        key = kwargs.pop("key", None)
         # create a suitable, empty, writable TileDB array
         tdb = tiledb.empty_like(
             uri, darray, tile=chunks, config=tiledb_config, key=key, **kwargs

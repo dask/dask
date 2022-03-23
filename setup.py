@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import annotations
+
 import sys
 from os.path import exists
 
@@ -9,27 +11,32 @@ import versioneer
 
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
-extras_require = {
+extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2021.09.0"],
+    "distributed": ["distributed == 2022.03.0"],
     "diagnostics": [
-        "bokeh >= 1.0.0, != 2.0.0",
+        "bokeh >= 2.4.2",
         "jinja2",
     ],
     "delayed": [],  # keeping for backwards compatibility
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
-extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
+extras_require["test"] = [
+    "pytest",
+    "pytest-rerunfailures",
+    "pytest-xdist",
+    "pre-commit",
+]
 
 install_requires = [
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",
     "packaging >= 20.0",
     "partd >= 0.3.10",
-    "pyyaml",
+    "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
 ]
 
@@ -64,14 +71,13 @@ setup(
     keywords="task-scheduling parallel numpy pandas pydata",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
         "License :: OSI Approved :: BSD License",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
-    python_requires=">=3.7",
+    python_requires=">=3.8",
     install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=["pytest"],

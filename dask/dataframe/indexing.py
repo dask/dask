@@ -4,14 +4,15 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_bool_dtype
 
-from ..array.core import Array
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from . import methods
-from ._compat import PANDAS_GT_130
-from .core import Series, new_dd_object
-from .utils import is_index_like, meta_nonempty
+from dask.array.core import Array
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_130
+from dask.dataframe.core import Series, new_dd_object
+from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
+from dask.highlevelgraph import HighLevelGraph
 
 
 class _IndexerBase:
@@ -114,14 +115,21 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_slice(iindexer, cindexer)
             elif isinstance(iindexer, (list, np.ndarray)):
                 return self._loc_list(iindexer, cindexer)
+            elif is_series_like(iindexer) and not is_bool_dtype(iindexer.dtype):
+                return self._loc_list(iindexer.values, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
         else:
-            if isinstance(iindexer, (list, np.ndarray)):
+            if isinstance(iindexer, (list, np.ndarray)) or (
+                is_series_like(iindexer) and not is_bool_dtype(iindexer.dtype)
+            ):
                 # applying map_partitions to each partition
                 # results in duplicated NaN rows
-                msg = "Cannot index with list against unknown division"
+                msg = (
+                    "Cannot index with list against unknown division. "
+                    "Try setting divisions using ``ddf.set_index``"
+                )
                 raise KeyError(msg)
             elif not isinstance(iindexer, slice):
                 iindexer = slice(iindexer, iindexer)
@@ -141,6 +149,11 @@ class _LocIndexer(_IndexerBase):
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
+        if not is_bool_dtype(iindexer.dtype):
+            raise KeyError(
+                "Cannot index with non-boolean dask Series. Try passing computed "
+                "values instead (e.g. ``ddf.loc[iindexer.compute()]``)"
+            )
         meta = self._make_meta(iindexer, cindexer)
         return self.obj.map_partitions(
             methods.loc, iindexer, cindexer, token="loc-series", meta=meta
