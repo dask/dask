@@ -1,6 +1,141 @@
 Changelog
 =========
 
+.. _v2022.03.0:
+
+2022.03.0
+---------
+
+Released on March 18, 2022
+
+New Features
+^^^^^^^^^^^^
+- Bag: add implementation for reservoir sampling (:pr:`7636`) `Daniel Mesejo-León`_
+- Add ``ma.count`` to Dask array (:pr:`8785`) `David Hassell`_
+- Change ``to_parquet`` default to ``compression="snappy"`` (:pr:`8814`) `Jim Crist-Harif`_
+- Add ``weights`` parameter to ``dask.array.reduction`` (:pr:`8805`) `David Hassell`_
+- Add ``ddf.compute_current_divisions`` to get divisions on a sorted index or column (:pr:`8517`) `Julia Signell`_
+
+
+Enhancements
+^^^^^^^^^^^^
+- Pass ``__name__`` and ``__doc__`` through on DelayedLeaf (:pr:`8820`) `Leo Gao`_
+- Raise exception for not implemented merge ``how`` option (:pr:`8818`) `Naty Clementi`_
+- Move ``Bag.map_partitions`` to ``Blockwise`` (:pr:`8646`) `Richard (Rick) Zamora`_
+- Improve error messages for malformed config files (:pr:`8801`) `Jim Crist-Harif`_
+- Revise column-projection optimization to capture common dask-sql patterns (:pr:`8692`) `Richard (Rick) Zamora`_
+- Useful error for empty divisions (:pr:`8789`) `Pavithra Eswaramoorthy`_
+- Scipy 1.8.0 compat: copy private classes into dask/array/stats.py (:pr:`8694`) `Julia Signell`_
+- Raise warning when using multiple types of schedulers where one is ``distributed`` (:pr:`8700`) `Pedro Silva`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in applying != filter in ``read_parquet`` (:pr:`8824`) `Richard (Rick) Zamora`_
+- Fix ``set_index`` when directly passed a dask Index (:pr:`8680`) `Paul Hobson`_
+- Quick fix for unbounded memory usage in tensordot  (:pr:`7980`) `Genevieve Buckley`_
+- If hdf file is empty, don't fail on meta creation (:pr:`8809`) `Julia Signell`_
+- Update ``clone_key("x")`` to retain prefix (:pr:`8792`) `Guido Imperiale`_
+- Fix "physical" column bug in pyarrow-based ``read_parquet`` (:pr:`8775`) `Richard (Rick) Zamora`_
+- Fix ``groupby.shift`` bug caused by unsorted partitions after shuffle (:pr:`8782`) `kori73`_
+- Fix serialization bug (:pr:`8786`) `Richard (Rick) Zamora`_
+
+Deprecations
+^^^^^^^^^^^^
+- Bump diagnostics bokeh dependency to 2.4.2 (:pr:`8791`) `Charles Blackmon-Luca`_
+- Deprecate ``bcolz`` support (:pr:`8754`) `Pavithra Eswaramoorthy`_
+- Finish making ``map_overlap`` default boundary ``kwarg`` ``'none'`` (:pr:`8743`) `Genevieve Buckley`_
+
+Documentation
+^^^^^^^^^^^^^
+- Custom collection example docs fix (:pr:`8807`) `Doug Davis`_
+- Add ``Series.str``, ``Series.dt``, and ``Series.cat`` accessors to docs (:pr:`8757`) `Sarah Charlotte Johnson`_
+- Fix docstring for ``ddf.compute_current_divisions`` (:pr:`8793`) `Julia Signell`_
+- Dashboard docs on /status page  (:pr:`8648`) `Naty Clementi`_
+- Clarify divisions ``kwarg`` in repartition docstring (:pr:`8781`) `Sarah Charlotte Johnson`_
+- Update Docker images to use ghcr.io (:pr:`8774`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Reduce gpuci ``pytest`` parallelism (:pr:`8826`) `GALI PREM SAGAR`_
+- ``absolufy-imports`` - No relative imports - PEP8 (:pr:`8796`) `Julia Signell`_
+- Tidy up ``assert_eq`` calls in array tests (:pr:`8812`) `Julia Signell`_
+- Avoid ``pytest.warns(None)`` (:pr:`8718`) `LSturtew`_
+- Fix ``test_describe_empty`` to work without global ``-Werror`` (:pr:`8291`) `Michał Górny`_
+- Temporarily xfail graphviz tests on windows (:pr:`8794`) `Jim Crist-Harif`_
+- Use ``packaging.parse`` for ``md5`` compatibility (:pr:`8763`) `James Bourbeau`_
+- Make ``tokenize`` work in a FIPS 140-2 environment (:pr:`8762`) `Jim Crist-Harif`_
+- Label issues and PRs on open with 'needs triage' (:pr:`8761`) `Julia Signell`_
+- Add some extra test coverage (:pr:`8302`) `lrjball`_
+- Specify action version and change from ``pull_request_target`` to ``pull_request`` (:pr:`8767`) `Julia Signell`_
+- Make scheduler ``kwarg`` pass though to sub functions in ``da.assert_eq`` (:pr:`8755`) `Julia Signell`_
+
+
+.. _v2022.02.1:
+
+2022.02.1
+---------
+
+Released on February 25, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add  aggregate functions ``first`` and ``last`` to ``dask.dataframe.pivot_table`` (:pr:`8649`) `Knut Nordanger`_
+- Add ``std()`` support for ``datetime64`` ``dtype`` for pandas-like objects (:pr:`8523`) `Ben Glossner`_
+- Add materialized task counts to ``HighLevelGraph`` and ``Layer`` html reprs (:pr:`8589`) `kori73`_
+
+Enhancements
+^^^^^^^^^^^^
+- Do not allow iterating a ``DataFrameGroupBy`` (:pr:`8696`) `Bryan W. Weber`_
+- Fix missing newline after ``info()`` call on empty ``DataFrame`` (:pr:`8727`) `Naty Clementi`_
+- Add ``groupby.compute`` as a not implemented method (:pr:`8734`) `Dranaxel`_
+- Improve multi dataframe join performance (:pr:`8740`) `Holden Karau`_
+- Include ``bool`` type for ``Index`` (:pr:`8732`) `Naty Clementi`_
+- Allow ``ArrowDatasetEngine`` subclass to override pandas->arrow conversion also for partitioned write (:pr:`8741`) `Joris Van den Bossche`_
+- Increase performance of k-diagonal extraction in ``da.diag()`` and ``da.diagonal()`` (:pr:`8689`) `ParticularMiner`_
+- Change ``linspace`` creation to match numpy when num equal to 0 (:pr:`8676`) `Peter`_
+- Tokenize ``dataclasses`` (:pr:`8557`) `Gabe Joseph`_
+- Update ``tokenize`` to treat ``dict`` and ``kwargs`` differently (:pr:`8655`) `James Bourbeau`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in ``dask.array.roll()`` for roll-shifts that match the size of the input array (:pr:`8723`) `ParticularMiner`_
+- Fix for ``normalize_function`` ``dataclass`` methods (:pr:`8527`) `Sarah Charlotte Johnson`_
+- Fix rechunking with zero-size-chunks (:pr:`8703`) `ParticularMiner`_
+- Move creation of ``sqlalchemy`` connection for picklability (:pr:`8745`) `Julia Signell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Drop Python 3.7 (:pr:`8572`) `James Bourbeau`_
+- Deprecate ``iteritems`` (:pr:`8660`) `James Bourbeau`_
+- Deprecate ``dataframe.tseries.resample.getnanos`` (:pr:`8752`) `Sarah Charlotte Johnson`_
+- Add deprecation warning for pyarrow-legacy engine (:pr:`8758`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update link typos in changelog (:pr:`8717`) `James Bourbeau`_
+- Clarify ``dask.visualize`` docstring (:pr:`8710`) `Dranaxel`_
+- Update Docker example to use current best practices (:pr:`8731`) `Jacob Tomlinson`_
+- Update docs to include ``distributed.Client.preload`` (:pr:`8679`) `Bryan W. Weber`_
+- Document monthly social meeting (:pr:`8595`) `Thomas Grainger`_
+- Add docs for Gen2 access with RBAC/ACL i.e. security principal (:pr:`8748`) `Martin Thøgersen`_
+- Use Dask configuration extension from ``dask-sphinx-theme`` (:pr:`8751`) `Benjamin Zaitlen`_
+
+Maintenance
+^^^^^^^^^^^
+- Unpin ``coverage`` in CI (:pr:`8690`) `James Bourbeau`_
+- Add manual trigger for running test suite (:pr:`8716`) `James Bourbeau`_
+- Xfail ``scheduler_HLG_unpack_import``; flaky test (:pr:`8724`) `Mike McCarty`_
+- Temporarily remove ``scipy`` upstream CI build (:pr:`8725`) `James Bourbeau`_
+- Bump pre-release version to be greater than stable releases (:pr:`8728`) `Charles Blackmon-Luca`_
+- Move custom sort function logic to internal ``sort_values`` (:pr:`8571`) `Charles Blackmon-Luca`_
+- Pin ``cloudpickle`` and ``scipy`` in docs requirements (:pr:`8737`) `Julia Signell`_
+- Make the labeler not delete labels, and look for the docs at the right spot (:pr:`8746`) `Julia Signell`_
+- Fix docs build warnings (:pr:`8432`) `Kristopher Overholt`_
+- Update test status badge (:pr:`8747`) `James Bourbeau`_
+- Fix parquet ``test_pandas_timestamp_overflow_pyarrow`` test (:pr:`8733`) `Joris Van den Bossche`_
+- Only run PR builds on changes to relevant files (:pr:`8756`) `Charles Blackmon-Luca`_
+
+
 .. _v2022.02.0:
 
 2022.02.0
@@ -5164,4 +5299,15 @@ Other
 .. _`Bryan W. Weber`: https://github.com/bryanwweber
 .. _`Amir Kadivar`: https://github.com/amirkdv
 .. _`Pedro Silva`: https://github.com/ppsbs
-.. _`neel iyer`: https://github.com/spiyer99
+.. _`Knut Nordanger`: https://github.com/nordange
+.. _`Ben Glossner`: https://github.com/bglossner
+.. _`Dranaxel`: https://github.com/Dranaxel
+.. _`Holden Karau`: https://github.com/holdenk
+.. _`Peter`: https://github.com/peterpandelidis
+.. _`Thomas Grainger`: https://github.com/graingert
+.. _`Martin Thøgersen`: https://github.com/th0ger
+.. _`Leo Gao`: https://github.com/leogao2
+.. _`Paul Hobson`: https://github.com/phobson
+.. _`LSturtew`: https://github.com/LSturtew
+.. _`Michał Górny`: https://github.com/mgorny
+.. _`lrjball`: https://github.com/lrjball

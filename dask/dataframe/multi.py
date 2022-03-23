@@ -63,12 +63,9 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 from tlz import merge_sorted, unique
 
-from ..base import is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import BroadcastJoinLayer
-from ..utils import M, apply
-from . import methods
-from .core import (
+from dask.base import is_dask_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import (
     DataFrame,
     Index,
     Series,
@@ -81,16 +78,24 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
-from .dispatch import group_split_dispatch, hash_object_dispatch
-from .io import from_pandas
-from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
-from .utils import (
+from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.io import from_pandas
+from dask.dataframe.shuffle import (
+    partitioning_index,
+    rearrange_by_divisions,
+    shuffle,
+    shuffle_group,
+)
+from dask.dataframe.utils import (
     asciitable,
     is_dataframe_like,
     is_series_like,
     make_meta,
     strip_unknown_categories,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import BroadcastJoinLayer
+from dask.utils import M, apply
 
 
 def align_partitions(*dfs):
@@ -370,20 +375,21 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
-    name = "hash-join-" + token
-
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    dsk = {
-        (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
-        for i in range(npartitions)
-    }
+    joined = map_partitions(
+        merge_chunk,
+        lhs2,
+        rhs2,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
 
-    divisions = [None] * (npartitions + 1)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def single_partition_join(left, right, **kwargs):
@@ -505,6 +511,13 @@ def merge(
     if on and not left_on and not right_on:
         left_on = right_on = on
         on = None
+
+    supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
+        )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
@@ -1037,6 +1050,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
+    astyped_dfs = []
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
@@ -1061,7 +1075,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+
+        astyped_dfs.append(df)
+
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
@@ -1086,7 +1102,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=astyped_dfs)
+
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def concat(

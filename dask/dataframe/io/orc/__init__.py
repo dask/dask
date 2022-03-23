@@ -1,1 +1,1 @@
-from .core import read_orc, to_orc
+from dask.dataframe.io.orc.core import read_orc, to_orc

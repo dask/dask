@@ -19,16 +19,12 @@ try:
 except ImportError:
     pass
 
-from ....base import tokenize
-from ....delayed import Delayed
-from ....utils import natural_sort_key
-from ...utils import UNKNOWN_CATEGORIES
-from ..utils import _is_local_fs, _meta_from_dtypes, _open_input_files
+from dask.base import tokenize
 
 #########################
 # Fastparquet interface #
 #########################
-from .utils import (
+from dask.dataframe.io.parquet.utils import (
     Engine,
     EngineOptions,
     _flatten_filters,
@@ -40,6 +36,10 @@ from .utils import (
     _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
+from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
+from dask.delayed import Delayed
+from dask.utils import natural_sort_key
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()

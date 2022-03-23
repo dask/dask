@@ -9,21 +9,10 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
-from dask import delayed
-
-from ....base import tokenize
-from ....core import flatten
-from ....delayed import Delayed
-from ....utils import getargspec, natural_sort_key
-from ...utils import clear_known_categories
-from ..utils import (
-    _get_pyarrow_dtypes,
-    _is_local_fs,
-    _meta_from_dtypes,
-    _open_input_files,
-)
-from .core import create_metadata_file
-from .utils import (
+from dask.base import tokenize
+from dask.core import flatten
+from dask.dataframe.io.parquet.core import create_metadata_file
+from dask.dataframe.io.parquet.utils import (
     Engine,
     EngineOptions,
     _flatten_filters,
@@ -35,6 +24,15 @@ from .utils import (
     _set_metadata_task_size,
     _sort_and_analyze_paths,
 )
+from dask.dataframe.io.utils import (
+    _get_pyarrow_dtypes,
+    _is_local_fs,
+    _meta_from_dtypes,
+    _open_input_files,
+)
+from dask.dataframe.utils import clear_known_categories
+from dask.delayed import Delayed, delayed
+from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
@@ -1033,6 +1031,7 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         partition_obj = dataset_info["partitions"]
         partitions = dataset_info["partition_names"]
+        physical_column_names = dataset_info.get("physical_schema", schema).names
         columns = None
 
         # Set index and column names using
@@ -1055,7 +1054,7 @@ class ArrowDatasetEngine(Engine):
         else:
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
-            column_names = dataset_info.get("physical_schema", schema).names
+            column_names = physical_column_names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
@@ -1065,7 +1064,7 @@ class ArrowDatasetEngine(Engine):
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
         if partitions:
-            _partitions = [p for p in partitions if p not in column_names]
+            _partitions = [p for p in partitions if p not in physical_column_names]
             if not _partitions:
                 partitions = []
                 dataset_info["partitions"] = None
@@ -1075,7 +1074,9 @@ class ArrowDatasetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
-                    "columns: {} | partitions: {}".format(column_names, partitions)
+                    "physical columns: {} | partitions: {}".format(
+                        physical_column_names, partitions
+                    )
                 )
 
         column_names, index_names = _normalize_index_columns(

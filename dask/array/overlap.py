@@ -5,13 +5,13 @@ import numpy as np
 from tlz import concat, get, partial
 from tlz.curried import map
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import ArrayOverlapLayer
-from ..utils import derived_from
-from . import chunk, numpy_compat
-from .core import Array, concatenate, map_blocks, unify_chunks
-from .creation import empty_like, full_like
+from dask.array import chunk, numpy_compat
+from dask.array.core import Array, concatenate, map_blocks, unify_chunks
+from dask.array.creation import empty_like, full_like
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayOverlapLayer
+from dask.utils import derived_from
 
 
 def _overlap_internal_chunks(original_chunks, axes):
@@ -82,8 +82,7 @@ def trim_overlap(x, depth, boundary=None):
 
     # parameter to be passed to trim_internal
     axes = coerce_depth(x.ndim, depth)
-    boundary2 = coerce_boundary(x.ndim, boundary)
-    return trim_internal(x, axes=axes, boundary=boundary2)
+    return trim_internal(x, axes=axes, boundary=boundary)
 
 
 def trim_internal(x, axes, boundary=None):
@@ -637,17 +636,6 @@ def map_overlap(
         trim = get(sig.index("trim"), args, trim)
         func, args = args[0], [func]
 
-    if boundary is None:
-        # Default boundary value is set in the function named "coerce_boundary"
-        warnings.warn(
-            "Default 'boundary' argument value will change from 'reflect' "
-            "to 'none' in future versions from 2022.03.0 onwards. "
-            "Use 'boundary=\"none\"' to opt into the future behavior now "
-            "or set 'boundary=\"reflect\"' to maintain the current behavior "
-            "going forward.",
-            FutureWarning,
-        )
-
     if not callable(func):
         raise TypeError(
             "First argument must be callable function, not {}\n"
@@ -750,7 +738,7 @@ def coerce_depth_type(ndim, depth):
 
 
 def coerce_boundary(ndim, boundary):
-    default = "reflect"
+    default = "none"
     if boundary is None:
         boundary = default
     if not isinstance(boundary, (tuple, dict)):

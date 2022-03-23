@@ -3,10 +3,10 @@ import re
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 
-from .... import config
-from ....core import flatten
-from ....utils import natural_sort_key
-from ..utils import _is_local_fs
+from dask import config
+from dask.core import flatten
+from dask.dataframe.io.utils import _is_local_fs
+from dask.utils import natural_sort_key
 
 
 class EngineOptions:
