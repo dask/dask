@@ -447,18 +447,10 @@ def autodoc_skip_member_callback(app, what, name, obj, skip, options):
     exclusions = (
         "dask.array.tests",
         "dask.bag.tests",
-        "dask.delayed.tests",
         "dask.dataframe.tests",
     )
-    # This would re-include __call__ methods in main doc, previously excluded by templates:
-    # inclusions = ('__call__')
     if name in exclusions:
-        print(name)
         return True
-    # elif name in inclusions:
-    #     return False
-    else:
-        return skip
 
 
 def setup(app):
