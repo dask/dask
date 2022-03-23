@@ -272,6 +272,7 @@ def assert_eq(
     check_meta=True,
     check_chunks=True,
     check_type=True,
+    check_dtype=True,
     equal_nan=True,
     scheduler="sync",
     **kwargs,
@@ -299,7 +300,7 @@ def assert_eq(
         scheduler=scheduler,
     )
 
-    if str(adt) != str(bdt):
+    if check_dtype and str(adt) != str(bdt):
         raise AssertionError(f"a and b have different dtypes: (a: {adt}, b: {bdt})")
 
     try:

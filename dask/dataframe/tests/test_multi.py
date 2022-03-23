@@ -233,12 +233,14 @@ def test_hash_join(how, shuffle_method):
 
     c = hash_join(a, "y", b, "y", how)
 
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     result = c.compute()
     expected = pd.merge(A, B, how, "y")
     list_eq(result, expected)
 
     # Different columns and npartitions
     c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     assert c.npartitions == 3
 
     result = c.compute(scheduler="single-threaded")
@@ -686,18 +688,56 @@ def test_concat(join):
         result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
 
-    # test outer only, inner has a problem on pandas side
+
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_series(join):
+    pdf1 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[8, 9, 10, 11, 12, 13]
+    )
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # different columns
+    pdf3 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "z": list("abcdef")}, index=[8, 9, 10, 11, 12, 13]
+    )
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    kwargs = {"sort": False}
+
     for (dd1, dd2, pd1, pd2) in [
-        (ddf1, ddf2, pdf1, pdf2),
-        (ddf1, ddf3, pdf1, pdf3),
-        (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
-        (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
         (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
         (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
     ]:
-        expected = pd.concat([pd1, pd2], **kwargs)
-        result = dd.concat([dd1, dd2], **kwargs)
+        expected = pd.concat([pd1, pd2], join=join, **kwargs)
+        result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
+
+
+def test_concat_with_operation_remains_hlg():
+    pdf1 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+
+    pdf2 = pd.DataFrame({"y": list("abcdef")}, index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # Do some operation which will remain blockwise in the dask case.
+    pdf2["x"] = range(len(pdf2["y"]))
+    # See https://stackoverflow.com/a/60852409
+    ddf2["x"] = ddf2.assign(partition_count=1).partition_count.cumsum() - 1
+    kwargs = {"sort": False}
+
+    expected = pd.concat([pdf1, pdf2], **kwargs)
+    result = dd.concat([ddf1, ddf2], **kwargs)
+    # The third layer is the assignment to column `x`, which should remain
+    # blockwise
+    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -847,6 +887,26 @@ def test_merge(how, shuffle_method):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+def test_merge_how_raises():
+    left = pd.DataFrame(
+        {
+            "A": ["A0", "A1", "A2", "A3"],
+            "B": ["B0", "B1", "B2", "B3"],
+        }
+    )
+    right = pd.DataFrame(
+        {
+            "A": ["C0", "C1", "C2", "C3"],
+            "B": ["D0", "D1", "D2", "D3"],
+        }
+    )
+
+    with pytest.raises(
+        ValueError, match="dask.dataframe.merge does not support how='cross'"
+    ):
+        dd.merge(left, right, how="cross")
 
 
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])

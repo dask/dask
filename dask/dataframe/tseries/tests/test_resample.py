@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe.tseries.resample import getnanos
 from dask.dataframe.utils import assert_eq
 
 CHECK_FREQ = {}
@@ -214,8 +213,3 @@ def test_common_aggs(agg):
     expected = f(ds.resample("1d"))
 
     assert_eq(res, expected, check_dtype=False)
-
-
-def test_getnanos_deprecated():
-    with pytest.warns(FutureWarning, match="getnanos was deprecated"):
-        getnanos(None)
