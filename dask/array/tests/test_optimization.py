@@ -35,20 +35,32 @@ def _wrap_getter(func, wrap):
 
 @pytest.fixture(params=[True, False])
 def getter(request):
+    """
+    Parameterized fixture for dask.array.core.getter both alone (False)
+    and wrapped in a SubgraphCallable (True).
+    """
     yield _wrap_getter(da_getter, request.param)
 
 
 @pytest.fixture(params=[True, False])
 def getitem(request):
+    """
+    Parameterized fixture for dask.array.chunk.getitem both alone (False)
+    and wrapped in a SubgraphCallable (True).
+    """
     yield _wrap_getter(da_getitem, request.param)
 
 
 @pytest.fixture(params=[True, False])
 def getter_nofancy(request):
+    """
+    Parameterized fixture for dask.array.chunk.getter_nofancy both alone (False)
+    and wrapped in a SubgraphCallable (True).
+    """
     yield _wrap_getter(da_getter_nofancy, request.param)
 
 
-def _check_task(a, b) -> bool:
+def _check_get_task_eq(a, b) -> bool:
     """
     Check that two tasks (possibly containing nested tasks) are equal, where
     equality is lax by allowing the callable in a SubgraphCallable to be the same
@@ -57,38 +69,38 @@ def _check_task(a, b) -> bool:
     if len(a) < 1 or len(a) != len(b):
         return False
 
-    a_get = (
+    a_callable = (
         list(a[0].dsk.values())[0][0] if isinstance(a[0], SubgraphCallable) else a[0]
     )
-    b_get = (
+    b_callable = (
         list(b[0].dsk.values())[0][0] if isinstance(b[0], SubgraphCallable) else b[0]
     )
-    if a_get != b_get:
+    if a_callable != b_callable:
         return False
 
     for ae, be in zip(a[1:], b[1:]):
         if dask.core.istask(ae):
-            if not _check_task(ae, be):
+            if not _check_get_task_eq(ae, be):
                 return False
         elif ae != be:
             return False
     return True
 
 
-def _assert_eq(a, b):
+def _assert_getter_dsk_eq(a, b):
     """
     Compare two getter dsks.
 
     TODO: this is here to support the fact that low-level array slice fusion needs to be
     able to introspect slicing tasks. But some slicing tasks (e.g. `from_array`) could
-    be hidden within SubgraphCallables. This and _check_task should be removed
+    be hidden within SubgraphCallables. This and _check_get_task_eq should be removed
     when high-level slicing lands, and replaced with basic equality checks.
     """
     assert a.keys() == b.keys()
     for k, av in a.items():
         bv = b[k]
         if dask.core.istask(av):
-            assert _check_task(av, bv)
+            assert _check_get_task_eq(av, bv)
         else:
             assert av == bv
 
@@ -179,7 +191,7 @@ def test_fuse_getitem(getter, getter_nofancy, getitem):
 
     for inp, expected in pairs:
         result = optimize_slices({"y": inp})
-        _assert_eq(result, {"y": expected})
+        _assert_getter_dsk_eq(result, {"y": expected})
 
 
 def test_fuse_getitem_lock(getter, getter_nofancy, getitem):
@@ -233,7 +245,7 @@ def test_fuse_getitem_lock(getter, getter_nofancy, getitem):
 
     for inp, expected in pairs:
         result = optimize_slices({"y": inp})
-        _assert_eq(result, {"y": expected})
+        _assert_getter_dsk_eq(result, {"y": expected})
 
 
 def test_optimize_with_getitem_fusion(getter):
@@ -245,7 +257,7 @@ def test_optimize_with_getitem_fusion(getter):
 
     result = optimize(dsk, ["c"])
     expected_task = (getter, "some-array", (15, slice(150, 160)))
-    assert any(_check_task(v, expected_task) for v in result.values())
+    assert any(_check_get_task_eq(v, expected_task) for v in result.values())
     assert len(result) < len(dsk)
 
 
@@ -260,7 +272,7 @@ def test_optimize_slicing(getter):
 
     expected = {"e": (getter, (range, 10), (slice(0, 5, None),))}
     result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
-    _assert_eq(result, expected)
+    _assert_getter_dsk_eq(result, expected)
 
     # protect output keys
     expected = {
@@ -270,7 +282,7 @@ def test_optimize_slicing(getter):
     }
     result = optimize_slices(fuse(dsk, ["c", "d", "e"], rename_keys=False)[0])
 
-    _assert_eq(result, expected)
+    _assert_getter_dsk_eq(result, expected)
 
 
 def test_fuse_slice():
@@ -333,7 +345,7 @@ def test_hard_fuse_slice_cases(getter):
     dsk = {
         "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
     }
-    _assert_eq(optimize_slices(dsk), {"x": (getter, "x", (None, 5))})
+    _assert_getter_dsk_eq(optimize_slices(dsk), {"x": (getter, "x", (None, 5))})
 
 
 def test_dont_fuse_numpy_arrays():
@@ -356,7 +368,7 @@ def test_fuse_slices_with_alias(getter, getitem):
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
     fused_key = (dsk2.keys() - {"x", ("dx2", 0)}).pop()
-    assert _check_task(dsk2[fused_key], (getter, "x", (slice(0, 4), 0)))
+    assert _check_get_task_eq(dsk2[fused_key], (getter, "x", (slice(0, 4), 0)))
 
 
 def test_dont_fuse_fancy_indexing_in_getter_nofancy(getitem, getter_nofancy):
@@ -367,10 +379,10 @@ def test_dont_fuse_fancy_indexing_in_getter_nofancy(getitem, getter_nofancy):
             ([1, 3], slice(50, 60, None)),
         )
     }
-    _assert_eq(optimize_slices(dsk), dsk)
+    _assert_getter_dsk_eq(optimize_slices(dsk), dsk)
 
     dsk = {"a": (getitem, (getter_nofancy, "x", [1, 2, 3]), 0)}
-    _assert_eq(optimize_slices(dsk), dsk)
+    _assert_getter_dsk_eq(optimize_slices(dsk), dsk)
 
 
 @pytest.mark.parametrize("chunks", [10, 5, 3])
@@ -402,7 +414,7 @@ def test_remove_no_op_slices_for_getitem(getitem):
         ((getitem, (getitem, "x", (null, null), False, False), ()), "x"),
     ]
     for orig, final in opts:
-        _assert_eq(optimize_slices({"a": orig}), {"a": final})
+        _assert_getter_dsk_eq(optimize_slices({"a": orig}), {"a": final})
 
 
 @pytest.mark.parametrize("which", ["getter", "getter_nofancy"])
@@ -435,7 +447,7 @@ def test_dont_remove_no_op_slices_for_getter_or_getter_nofancy(
         ),
     ]
     for orig, final in opts:
-        _assert_eq(optimize_slices({"a": orig}), {"a": final})
+        _assert_getter_dsk_eq(optimize_slices({"a": orig}), {"a": final})
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")

@@ -127,7 +127,8 @@ def _is_getter_task(
     2. Is it a SubgraphCallable with a single element in its
        dsk which is a known getter.
 
-    Returns the relevant getter function if it is found, otherwise returns None
+    If a getter is found, it returns a tuple with (getter, array, index, asarray, lock).
+    Otherwise it returns ``None``.
 
     TODO: the second check is a hack to allow for slice fusion between tasks produced
     from blockwise layers and slicing operations. Once slicing operations have
@@ -140,6 +141,9 @@ def _is_getter_task(
     get = None
     if first in GETTERS:
         get = first
+    # We only accept SubgraphCallables with a single sub-task right now as it's
+    # not clear which task to inspect if there is more than one, or how to resolve
+    # conflicts if they occur.
     elif isinstance(first, SubgraphCallable) and len(first.dsk) == 1:
         v = next(iter(first.dsk.values()))
         if type(v) is tuple and len(v) > 1 and v[0] in GETTERS:
