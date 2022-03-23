@@ -50,12 +50,7 @@ extensions = [
 ]
 
 # Turn on sphinx.ext.autosummary
-autosummary_generate = [
-    "array-api.rst",
-    "bag-api.rst",
-    "dataframe-api.rst",
-    "delayed-api.rst",
-]
+autosummary_generate = ["array-api.rst", "bag-api.rst", "dataframe-api.rst"]
 
 # Add __init__ doc (ie. params) to class summaries
 autoclass_content = "both"
@@ -458,6 +453,7 @@ def autodoc_skip_member_callback(app, what, name, obj, skip, options):
     # This would re-include __call__ methods in main doc, previously excluded by templates:
     # inclusions = ('__call__')
     if name in exclusions:
+        print(name)
         return True
     # elif name in inclusions:
     #     return False

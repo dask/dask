@@ -38,9 +38,11 @@ or if statement (i.e. the example above is fine, but if ``data`` was a ``Delayed
 object it wouldn't be).
 Even with this limitation, many workflows can easily be parallelized.
 
-.. autosummary::
-   :toctree: generated/
-   :template: custom-module-template.rst
-   :recursive:
+.. currentmodule:: dask.delayed
 
-   dask.delayed
+.. autosummary::
+   delayed
+   Delayed
+
+.. autofunction:: delayed
+.. autoclass:: Delayed
