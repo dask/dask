@@ -2,12 +2,42 @@ properties:
   array_optimize:
     type: object
     description: |
-      ...
+      Custom optimization function that is used in the place of Dask's default
+      optimization strategy called whenever a Dask array is optimized. An optimization
+      function takes in a task graph and list of desired keys and returns a new task
+      graph.
+
+  dataframe_optimize:
+    type: object
+    description: |
+      Custom optimization function that is used in the place of Dask's default
+      optimization strategy called whenever a Dask dataframe is optimized. An
+      optimization function takes in a task graph and list of desired keys and returns
+      a new task graph.
+
+  delayed_optimize:
+    type: object
+    description: |
+      Custom optimization function that is used in the place of Dask's default
+      optimization strategy called whenever a Dask delayed is optimized. An optimization
+      function takes in a task graph and list of desired keys and returns a new task
+      graph.
+
+  bag_optimize:
+    type: object
+    description: |
+      Custom optimization function that is used in the place of Dask's default
+      optimization strategy called whenever a Dask bag is optimized. An optimization
+      function takes in a task graph and list of desired keys and returns a new task
+      graph. 
 
   array_plugins:
     type: object
     description: |
-      ...
+      List of functions to run on all Dask arrays whenever they are constructed. If the
+      plugin function returns None, then the input array will be returned without change.
+      If the function returns something else, then that value will be the result of the
+      constructor.
 
   chunksize:
     type: object
@@ -47,17 +77,32 @@ properties:
   pool:
     type: object
     description: |
-      ...
+      Pool executor object to be used by all schedulers defined within the scope that
+      this setting is used. Can be set to mediate the overhead of starting up a threaded
+      scheduler. By default, a ThreadPoolExecutor is spun up each time the scheduler is
+      invoked.
 
   scheduler:
-    type: string
+    type: object
     description: |
-      ...
+      The scheduler to be used on all Dask computations. Can be:
+
+      - A function ...
+      - An object extending a Distributed Client ...
+      - An Executor ...
+      - A string referring to the name of a commonly used scheduler:
+
+        - "single-threaded" - a single-threaded scheduler - can be useful for debugging.
+        - "threads" - the threaded scheduler.
+        - "processes" - the multiprocessing scheduler. 
 
   shuffle:
     type: string
     description: |
-      ...
+      The global data shuffling method used by Dask - can be ``"tasks"`` for task-based,
+      distributed shuffling, or ``"disk"`` for on-disk shuffling. By default, on-disk
+      shuffling is used unless the default scheduler is set to use a
+      ``dask.distributed.Client``.
 
   split_every:
     type: integer
