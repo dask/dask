@@ -1,15 +1,8 @@
 API
 ---
 
-Top level functions
-~~~~~~~~~~~~~~~~~~~
+.. currentmodule:: dask.array
 
-.. autosummary::
-    :toctree: generated
-    :recursive:
-    :template: custom-module-template.rst
-
-    dask.array
 
 Array
 ~~~~~
@@ -19,7 +12,7 @@ Array
     :recursive:
     :template: custom-class-template.rst
 
-    dask.array.Array
+    Array
 
 
 Fast Fourier Transforms
@@ -30,7 +23,7 @@ Fast Fourier Transforms
     :recursive:
     :template: custom-module-template.rst
 
-    dask.array.fft
+    fft
 
 
 Linear Algebra
@@ -41,7 +34,7 @@ Linear Algebra
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.linalg
+   linalg
 
 Masked Arrays
 ~~~~~~~~~~~~~
@@ -51,7 +44,7 @@ Masked Arrays
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.ma
+   ma
 
 Random
 ~~~~~~
@@ -61,7 +54,7 @@ Random
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.random
+   random
 
 Stats
 ~~~~~
@@ -71,7 +64,7 @@ Stats
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.Stats
+   stats
 
 Image Support
 ~~~~~~~~~~~~~
@@ -81,7 +74,7 @@ Image Support
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.image 
+   image 
     
 
 Slightly Overlapping Computations
@@ -92,8 +85,8 @@ Slightly Overlapping Computations
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.overlap
-   dask.array.lib.stride_tricks
+   overlap
+   lib.stride_tricks
 
 Create and Store Arrays
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -108,7 +101,7 @@ Generalized Ufuncs
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.gufunc
+   gufunc
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
@@ -118,4 +111,4 @@ Internal functions
    :template: custom-module-template.rst
    :recursive:
 
-   dask.array.core
+   core

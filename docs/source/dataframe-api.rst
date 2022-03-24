@@ -1,264 +1,34 @@
 API
 ---
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.core
 
 Dataframe
 ~~~~~~~~~
 
 .. autosummary::
-    :toctree: generated/
+    :toctree: generated
+    :recursive:
+    :template: custom-class-template.rst
 
     DataFrame
-    DataFrame.abs
-    DataFrame.add
-    DataFrame.align
-    DataFrame.all
-    DataFrame.any
-    DataFrame.append
-    DataFrame.apply
-    DataFrame.applymap
-    DataFrame.assign
-    DataFrame.astype
-    DataFrame.bfill
-    DataFrame.categorize
-    DataFrame.columns
-    DataFrame.compute
-    DataFrame.copy
-    DataFrame.corr
-    DataFrame.count
-    DataFrame.cov
-    DataFrame.cummax
-    DataFrame.cummin
-    DataFrame.cumprod
-    DataFrame.cumsum
-    DataFrame.describe
-    DataFrame.diff
-    DataFrame.div
-    DataFrame.divide
-    DataFrame.drop
-    DataFrame.drop_duplicates
-    DataFrame.dropna
-    DataFrame.dtypes
-    DataFrame.eq
-    DataFrame.eval
-    DataFrame.explode
-    DataFrame.ffill
-    DataFrame.fillna
-    DataFrame.first
-    DataFrame.floordiv
-    DataFrame.ge
-    DataFrame.get_partition
-    DataFrame.groupby
-    DataFrame.gt
-    DataFrame.head
-    DataFrame.idxmax
-    DataFrame.idxmin
-    DataFrame.iloc
-    DataFrame.index
-    DataFrame.info
-    DataFrame.isin
-    DataFrame.isna
-    DataFrame.isnull
-    DataFrame.items
-    DataFrame.iterrows
-    DataFrame.itertuples
-    DataFrame.join
-    DataFrame.known_divisions
-    DataFrame.last
-    DataFrame.le
-    DataFrame.loc
-    DataFrame.lt
-    DataFrame.map_partitions
-    DataFrame.mask
-    DataFrame.max
-    DataFrame.mean
-    DataFrame.melt
-    DataFrame.memory_usage
-    DataFrame.memory_usage_per_partition
-    DataFrame.merge
-    DataFrame.min
-    DataFrame.mod
-    DataFrame.mode
-    DataFrame.mul
-    DataFrame.ndim
-    DataFrame.ne
-    DataFrame.nlargest
-    DataFrame.npartitions
-    DataFrame.nsmallest
-    DataFrame.partitions
-    DataFrame.pivot_table
-    DataFrame.pop
-    DataFrame.pow
-    DataFrame.prod
-    DataFrame.quantile
-    DataFrame.query
-    DataFrame.radd
-    DataFrame.random_split
-    DataFrame.rdiv
-    DataFrame.rename
-    DataFrame.repartition
-    DataFrame.replace
-    DataFrame.resample
-    DataFrame.reset_index
-    DataFrame.rfloordiv
-    DataFrame.rmod
-    DataFrame.rmul
-    DataFrame.round
-    DataFrame.rpow
-    DataFrame.rsub
-    DataFrame.rtruediv
-    DataFrame.sample
-    DataFrame.select_dtypes
-    DataFrame.sem
-    DataFrame.set_index
-    DataFrame.shape
-    DataFrame.shuffle
-    DataFrame.size
-    DataFrame.sort_values
-    DataFrame.squeeze
-    DataFrame.std
-    DataFrame.sub
-    DataFrame.sum
-    DataFrame.tail
-    DataFrame.to_bag
-    DataFrame.to_csv
-    DataFrame.to_dask_array
-    DataFrame.to_delayed
-    DataFrame.to_hdf
-    DataFrame.to_html
-    DataFrame.to_json
-    DataFrame.to_parquet
-    DataFrame.to_records
-    DataFrame.to_string
-    DataFrame.to_sql
-    DataFrame.to_timestamp
-    DataFrame.truediv
-    DataFrame.values
-    DataFrame.var
-    DataFrame.visualize
-    DataFrame.where
 
 Series
 ~~~~~~
 
 .. autosummary::
-   :toctree: generated/
+   :toctree: generated
+   :recursive:
+   :template: custom-class-template.rst
 
    Series
-   Series.add
-   Series.align
-   Series.all
-   Series.any
-   Series.append
-   Series.apply
-   Series.astype
-   Series.autocorr
-   Series.between
-   Series.bfill
-   Series.clear_divisions
-   Series.clip
-   Series.clip_lower
-   Series.clip_upper
-   Series.compute
-   Series.copy
-   Series.corr
-   Series.count
-   Series.cov
-   Series.cummax
-   Series.cummin
-   Series.cumprod
-   Series.cumsum
-   Series.describe
-   Series.diff
-   Series.div
-   Series.drop_duplicates
-   Series.dropna
-   Series.dtype
-   Series.eq
-   Series.explode
-   Series.ffill
-   Series.fillna
-   Series.first
-   Series.floordiv
-   Series.ge
-   Series.get_partition
-   Series.groupby
-   Series.gt
-   Series.head
-   Series.idxmax
-   Series.idxmin
-   Series.isin
-   Series.isna
-   Series.isnull
-   Series.iteritems
-   Series.known_divisions
-   Series.last
-   Series.le
-   Series.loc
-   Series.lt
-   Series.map
-   Series.map_overlap
-   Series.map_partitions
-   Series.mask
-   Series.max
-   Series.mean
-   Series.memory_usage
-   Series.memory_usage_per_partition
-   Series.min
-   Series.mod
-   Series.mul
-   Series.nbytes
-   Series.ndim
-   Series.ne
-   Series.nlargest
-   Series.notnull
-   Series.nsmallest
-   Series.nunique
-   Series.nunique_approx
-   Series.persist
-   Series.pipe
-   Series.pow
-   Series.prod
-   Series.quantile
-   Series.radd
-   Series.random_split
-   Series.rdiv
-   Series.reduction
-   Series.repartition
-   Series.replace
-   Series.rename
-   Series.resample
-   Series.reset_index
-   Series.rolling
-   Series.round
-   Series.sample
-   Series.sem
-   Series.shape
-   Series.shift
-   Series.size
-   Series.std
-   Series.sub
-   Series.sum
-   Series.to_bag
-   Series.to_csv
-   Series.to_dask_array
-   Series.to_delayed
-   Series.to_frame
-   Series.to_hdf
-   Series.to_string
-   Series.to_timestamp
-   Series.truediv
-   Series.unique
-   Series.value_counts
-   Series.values
-   Series.var
-   Series.visualize
-   Series.where
 
 
 Accessors
 ~~~~~~~~~
+
+.. currentmodule:: dask.dataframe
+
 Similar to pandas, Dask provides dtype-specific methods under various accessors.
 These are separate namespaces within :class:`Series` that only apply to specific data types.
 
@@ -407,37 +177,18 @@ DataFrame Groupby
 *****************
 
 .. autosummary::
-   :toctree: generated/
+   :toctree: generated
+   :recursive:
+   :template: custom-class-template.rst
 
-   DataFrameGroupBy.aggregate
-   DataFrameGroupBy.apply
-   DataFrameGroupBy.count
-   DataFrameGroupBy.cumcount
-   DataFrameGroupBy.cumprod
-   DataFrameGroupBy.cumsum
-   DataFrameGroupBy.get_group
-   DataFrameGroupBy.max
-   DataFrameGroupBy.mean
-   DataFrameGroupBy.min
-   DataFrameGroupBy.size
-   DataFrameGroupBy.std
-   DataFrameGroupBy.sum
-   DataFrameGroupBy.var
-   DataFrameGroupBy.cov
-   DataFrameGroupBy.corr
-   DataFrameGroupBy.first
-   DataFrameGroupBy.last
-   DataFrameGroupBy.idxmin
-   DataFrameGroupBy.idxmax
-   DataFrameGroupBy.rolling
-
+   DataFrameGroupBy
 
 Series Groupby
 **************
 
 .. autosummary::
-   :toctree: generated/
-   :template: custom-module-template.rst
+   :toctree: generated
+   :template: custom-class-template.rst
    :recursive:
 
-   dask.dataframe
+   SeriesGroupBy
