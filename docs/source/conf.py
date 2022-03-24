@@ -443,17 +443,5 @@ def copy_legacy_redirects(app, docname):
                 f.write(page)
 
 
-def autodoc_skip_member_callback(app, what, name, obj, skip, options):
-    exclusions = (
-        "dask.array.tests",
-        "dask.bag.tests",
-        "dask.dataframe.tests",
-    )
-    if name in exclusions:
-        return True
-
-
 def setup(app):
     app.connect("build-finished", copy_legacy_redirects)
-    # Entry point to autodoc-skip-member
-    app.connect("autodoc-skip-member", autodoc_skip_member_callback)
