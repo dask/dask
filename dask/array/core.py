@@ -283,14 +283,14 @@ def graph_from_arraylike(
         and has_keyword(getitem, "lock")
         and (not asarray or lock)
     ):
-        getter = partial(getitem, asarray=asarray, lock=lock)
+        kwargs = {"asarray": asarray, "lock": lock}
     else:
         # Common case, drop extra parameters
-        getter = getitem
+        kwargs = {}
 
     if inline_array:
         layer = core_blockwise(
-            getter,
+            getitem,
             name,
             out_ind,
             arr,
@@ -298,6 +298,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            **kwargs,
         )
         return HighLevelGraph.from_collections(name, layer)
     else:
@@ -314,6 +315,7 @@ def graph_from_arraylike(
             ArraySliceDep(chunks),
             out_ind,
             numblocks={},
+            **kwargs,
         )
 
         deps = {
