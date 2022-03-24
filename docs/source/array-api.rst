@@ -4,38 +4,44 @@ API
 Top level functions
 ~~~~~~~~~~~~~~~~~~~
 
-.. automodule:: dask.array
-   :members:
+.. autosummary::
+    :toctree: generated
+    :recursive:
+    :template: custom-module-template.rst
 
+    dask.array
 
 Array
 ~~~~~
 
-.. autoclass:: dask.array.Array
-   :members:
-   .. autosummary::
-      :toctree: generated/
+.. autosummary::
+    :toctree: generated
+    :recursive:
+    :template: custom-class-template.rst
+
+    dask.array.Array
 
 
 Fast Fourier Transforms
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
-   :toctree: generated/
-   :template: custom-module-template.rst
-   :recursive:
+    :toctree: generated
+    :recursive:
+    :template: custom-module-template.rst
 
-dask.array.fft
+    dask.array.fft
+
 
 Linear Algebra
 ~~~~~~~~~~~~~~
 
 .. autosummary::
-   :toctree: generated/
+   :toctree: generated
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.linalg
+   dask.array.linalg
 
 Masked Arrays
 ~~~~~~~~~~~~~
@@ -45,7 +51,7 @@ Masked Arrays
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.ma
+   dask.array.ma
 
 Random
 ~~~~~~
@@ -55,7 +61,7 @@ Random
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.random
+   dask.array.random
 
 Stats
 ~~~~~
@@ -65,7 +71,7 @@ Stats
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.Stats
+   dask.array.Stats
 
 Image Support
 ~~~~~~~~~~~~~
@@ -75,7 +81,7 @@ Image Support
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.image 
+   dask.array.image 
     
 
 Slightly Overlapping Computations
@@ -86,8 +92,8 @@ Slightly Overlapping Computations
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.overlap
-dask.array.lib.stride_tricks
+   dask.array.overlap
+   dask.array.lib.stride_tricks
 
 Create and Store Arrays
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -102,7 +108,7 @@ Generalized Ufuncs
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.gufunc
+   dask.array.gufunc
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
@@ -112,4 +118,4 @@ Internal functions
    :template: custom-module-template.rst
    :recursive:
 
-dask.array.core
+   dask.array.core

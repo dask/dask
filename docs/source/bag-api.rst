@@ -2,8 +2,9 @@ API
 ===
 
 .. autosummary::
-   :toctree: generated/
-   :template: custom-module-template.rst
-   :recursive:
+    :toctree: generated
+    :template: custom-module-template.rst
+    :recursive:
 
-   dask.bag
+   dask.bag.avro
+   dask.bag.core
