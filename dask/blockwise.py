@@ -12,7 +12,7 @@ import tlz as toolz
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, keys_in_tasks, reverse_dict
 from dask.delayed import unpack_collections
-from dask.highlevelgraph import HighLevelGraph, Layer
+from dask.highlevelgraph import HighLevelGraph, Layer, PartitionedLayer
 from dask.optimization import SubgraphCallable, fuse
 from dask.utils import _deprecated, apply, ensure_dict, homogeneous_deepmap
 
@@ -267,7 +267,7 @@ def blockwise(
     return subgraph
 
 
-class Blockwise(Layer):
+class Blockwise(PartitionedLayer):
     """Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.

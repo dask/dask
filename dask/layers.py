@@ -13,7 +13,7 @@ from tlz.curried import map
 from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from dask.core import flatten
-from dask.highlevelgraph import Layer
+from dask.highlevelgraph import PartitionedLayer
 from dask.utils import apply, cached_cumsum, concrete, insert, stringify
 
 #
@@ -84,7 +84,7 @@ class ArraySliceDep(ArrayBlockwiseDep):
         return tuple(slice(*s, None) for s in loc)
 
 
-class ArrayOverlapLayer(Layer):
+class ArrayOverlapLayer(PartitionedLayer):
     """Simple HighLevelGraph array overlap layer.
 
     Lazily computed High-level graph layer for a array overlap operations.
@@ -301,7 +301,7 @@ def fractional_slice(task, axes):
 #
 
 
-class SimpleShuffleLayer(Layer):
+class SimpleShuffleLayer(PartitionedLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -649,7 +649,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return keys
 
 
-class BroadcastJoinLayer(Layer):
+class BroadcastJoinLayer(PartitionedLayer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -939,7 +939,7 @@ class DataFrameIOLayer(Blockwise):
         )
 
 
-class DataFrameTreeReduction(Layer):
+class DataFrameTreeReduction(PartitionedLayer):
     """DataFrame Tree-Reduction Layer
 
     Parameters
