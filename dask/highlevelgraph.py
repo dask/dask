@@ -206,8 +206,8 @@ class Layer(Mapping):
         In other words, return a new Layer with only the tasks required to
         calculate `keys` and a map of external key dependencies.
 
-        If the `output_blocks` property is defined, the materilaized graph
-        will only include the necessary tasks to produce these key indicies.
+        If the `output_blocks` property is defined, the materialized graph
+        will only include the necessary tasks to produce these key indices.
         Therefore, in these cases, "culling" should only require us to
         re-initialize the layer with a new ``output_blocks`` parameter. For
         other cases, we must cast the layer to a ``MaterializedLayer``.
@@ -1289,41 +1289,30 @@ class HighLevelGraph(Mapping):
                 # distributed - Materialize layers even if pickle=True
                 materialize = True
 
-        # Materialize layers first (if necessary).
-        # We must loop through the layers before packing so
-        # that all materialized dependencies are known
-        _original = {}
-        if materialize:
-            for name in self.layers.keys():
-                layer = self.layers[name]
-                if materialize and not isinstance(layer, MaterializedLayer):
-                    _original[name] = layer  # Save original layer
-                    self.layers[name] = MaterializedLayer(
-                        dict(_original[name]), annotations=layer.annotations
-                    )
-
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
+            layer_to_send = layer
+            if materialize and not isinstance(layer, MaterializedLayer):
+                # Convert to MaterializedLayer
+                layer_to_send = MaterializedLayer(
+                    dict(layer), annotations=layer.annotations
+                )
             layers.append(
                 {
-                    "__module__": layer.__module__,
-                    "__name__": type(layer).__name__,
-                    "state": layer.__dask_distributed_pack__(
+                    "__module__": layer_to_send.__module__,
+                    "__name__": type(layer_to_send).__name__,
+                    "state": layer_to_send.__dask_distributed_pack__(
                         self.get_all_external_keys(),
                         self.key_dependencies,
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_annotations_pack__(
+                    "annotations": layer_to_send.__dask_distributed_annotations_pack__(
                         annotations
                     ),
                 }
             )
-
-        # Reset the original (unmaterialized) HLG
-        for k, v in _original.items():
-            self.layers[k] = v
 
         return {"layers": layers}
 
