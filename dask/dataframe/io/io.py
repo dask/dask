@@ -10,7 +10,6 @@ from tlz import merge
 import dask.array as da
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
-from dask.core import get
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -593,7 +592,6 @@ def from_delayed(
     divisions=None,
     prefix="from-delayed",
     verify_meta=True,
-    fuse=False,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
 
@@ -615,12 +613,6 @@ def from_delayed(
         Prefix to prepend to the keys.
     verify_meta : bool, optional
         If True check that the partitions have consistent metadata, defaults to True.
-    fuse: bool, optional
-        Whether to fuse the input ``Delayed`` objects into a single task for each
-        partition in the new collection. This enables blockwise fusion with following
-        partition-wise operations, but requires the subgraph for each partition to
-        be executed within the same task. Fusion is not supported when one or more
-        elements of ``dfs`` are ``distributed.Future`` objects. Default is False.
     """
     from dask.delayed import Delayed
 
@@ -651,41 +643,20 @@ def from_delayed(
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
     name = prefix + "-" + tokenize(*dfs)
-    if fuse:
-
-        # Raise an error if the first element of dfs is a Future.
-        # TODO: Check for Futures in a more thorough way
-        check_key = dfs[0].key if dfs else None
-        if isinstance(check_key, str) and check_key.startswith("Future"):
-            raise ValueError("fuse=True not supported for distributed futures.")
-
-        layer = DataFrameIOLayer(
-            name=name,
-            columns=None,
-            inputs=dfs,
-            io_func=(lambda x: check_meta(get(x.dask, x.key), meta, "from_delayed"))
-            if verify_meta
-            else (lambda x: get(x.dask, x.key)),
-        )
-
-        df = new_dd_object(
-            HighLevelGraph({name: layer}, {name: set()}), name, meta, divs
-        )
-    else:
-        layer = DataFrameIOLayer(
-            name=name,
-            columns=None,
-            inputs=BlockwiseDepDict(
-                {(i,): inp.key for i, inp in enumerate(dfs)},
-                delayed=True,
-            ),
-            io_func=(lambda x: check_meta(x, meta, "from_delayed"))
-            if verify_meta
-            else (lambda x: x),
-        )
-        df = new_dd_object(
-            HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
-        )
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=BlockwiseDepDict(
+            {(i,): inp.key for i, inp in enumerate(dfs)},
+            delayed=True,
+        ),
+        io_func=(lambda x: check_meta(x, meta, "from_delayed"))
+        if verify_meta
+        else (lambda x: x),
+    )
+    df = new_dd_object(
+        HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
+    )
 
     if divisions == "sorted":
         from dask.dataframe.shuffle import compute_and_set_divisions
