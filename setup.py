@@ -14,7 +14,7 @@ import versioneer
 extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
-    "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
+    "dataframe": ["numpy >= 1.18", "pandas >= 1.3"],
     "distributed": ["distributed == 2022.03.0"],
     "diagnostics": [
         "bokeh >= 2.4.2",
