@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Callable, ClassVar, TypeVar
+from typing import ClassVar, TypeVar
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -820,7 +820,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     return wrapper
 
 
-def funcname(func: Callable) -> str:
+def funcname(func) -> str:
     """Get the name of a function."""
     # functools.partial
     if isinstance(func, functools.partial):
@@ -852,7 +852,7 @@ def funcname(func: Callable) -> str:
         return str(func)[:50]
 
 
-def typename(typ: type, short=False) -> str:
+def typename(typ, short=False) -> str:
     """
     Return the name of a type
 
