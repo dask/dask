@@ -1124,6 +1124,8 @@ def apply_filters(parts, statistics, filters):
 
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
+            if operator == "in" and not isinstance(value, (list, set, tuple)):
+                raise TypeError("Value of 'in' filter must be a list, set, or tuple.")
             out_parts = []
             out_statistics = []
             for part, stats in zip(parts, statistics):

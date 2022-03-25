@@ -3853,3 +3853,30 @@ def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     df_read_dask = dd.read_parquet(pa_path, engine=engine)
     df_read_pa = pq.read_table(pa_path).to_pandas()
     assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
+
+
+@pytest.mark.parametrize("filter_value", ({1}, [1], (1,)), ids=("set", "list", "tuple"))
+def test_in_predicate_can_use_iterables(tmpdir, engine, filter_value):
+    """Fixes GH8720"""
+    path = os.path.join(str(tmpdir), "in_predicate_iterable.parquet")
+    df = pd.DataFrame(
+        {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
+    )
+    df.to_parquet(path, engine=engine)
+    filters = [("B", "in", filter_value)]
+    result = dd.read_parquet(path, engine=engine, filters=filters)
+    expected = pd.read_parquet(path, engine=engine, filters=filters)
+    assert_eq(result, expected)
+
+
+def test_in_predicate_requires_an_iterable(tmpdir, engine):
+    """Fixes GH8720"""
+    path = os.path.join(str(tmpdir), "gh_8720.parquet")
+    df = pd.DataFrame(
+        {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
+    )
+    df.to_parquet(path, engine=engine)
+    # Non-iterable filter value
+    filters = [("B", "in", 10)]
+    with pytest.raises(TypeError, match="Value of 'in' filter"):
+        dd.read_parquet(path, engine=engine, filters=filters, gather_statistics=True)
