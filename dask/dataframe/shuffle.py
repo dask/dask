@@ -15,6 +15,7 @@ from dask.base import compute, compute_as_if_collection, is_dask_collection, tok
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
@@ -60,6 +61,9 @@ def _calculate_divisions(
         except (TypeError, ValueError):  # str type
             indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
             divisions = [divisions[i] for i in indexes]
+    else:
+        # Drop duplicate divisions returned by partition quantiles
+        divisions = list(toolz.unique(divisions[:-1])) + [divisions[-1]]
 
     mins = remove_nans(mins)
     maxes = remove_nans(maxes)
@@ -307,6 +311,12 @@ def set_partition(
 
     if pd.isna(divisions).any() and pd.api.types.is_integer_dtype(dtype):
         # Can't construct a Series[int64] when any / all of the divisions are NaN.
+        divisions = df._meta._constructor_sliced(divisions)
+    elif (
+        pd.api.types.is_categorical_dtype(dtype)
+        and UNKNOWN_CATEGORIES in dtype.categories
+    ):
+        # If categories are unknown, leave as a string dtype instead.
         divisions = df._meta._constructor_sliced(divisions)
     else:
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
@@ -1055,7 +1065,7 @@ def compute_divisions(df, col=None, **kwargs) -> tuple:
 def compute_and_set_divisions(df, **kwargs):
     mins, maxes, lens = _compute_partition_stats(df.index, allow_overlap=True, **kwargs)
     if len(mins) == len(df.divisions) - 1:
-        df.divisions = tuple(mins) + (maxes[-1],)
+        df._divisions = tuple(mins) + (maxes[-1],)
         if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
             return df
 
