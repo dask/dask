@@ -25,6 +25,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
 from dask.utils import M, _deprecated, ensure_dict
 
 lock = Lock()
@@ -585,7 +586,12 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
+    dfs,
+    meta=None,
+    divisions=None,
+    prefix="from-delayed",
+    verify_meta=True,
+    fuse=False,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
 
@@ -629,15 +635,6 @@ def from_delayed(
     if not dfs:
         dfs = [delayed(make_meta)(meta)]
 
-    name = prefix + "-" + tokenize(*dfs)
-    dsk = {}
-    if verify_meta:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-    else:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = df.key
-
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
     else:
@@ -645,9 +642,30 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = new_dd_object(
-        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
-    )
+    name = prefix + "-" + tokenize(*dfs)
+    if fuse:
+        layer = DataFrameIOLayer(
+            name=name,
+            columns=None,
+            inputs=dfs,
+            io_func=lambda x: x.compute(),
+        )
+
+        df = new_dd_object(
+            HighLevelGraph({name: layer}, {name: set()}), name, meta, divs
+        )
+    else:
+        dsk = {}
+        if verify_meta:
+            for (i, df) in enumerate(dfs):
+                dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
+        else:
+            for (i, df) in enumerate(dfs):
+                dsk[(name, i)] = df.key
+
+        df = new_dd_object(
+            HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+        )
 
     if divisions == "sorted":
         from dask.dataframe.shuffle import compute_and_set_divisions
