@@ -5054,6 +5054,12 @@ def concatenate3(arrays):
         key=lambda x: getattr(x, "__array_priority__", 0),
     )
 
+    # raise informative error if any outputs are not arraylike
+    if not is_arraylike(advanced):
+        raise ValueError(
+            f"Expected array-like objects. Got {type(advanced)} values like {advanced} instead."
+        )
+
     if not all(
         NDARRAY_ARRAY_FUNCTION
         is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
