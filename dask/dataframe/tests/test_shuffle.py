@@ -663,7 +663,7 @@ def test_set_index_interpolate(engine):
         d = dd.from_pandas(df, 2)
 
     d1 = d.set_index("x", npartitions=3)
-    assert d1.npartitions == 3
+    assert d1.npartitions <= 3
     assert set(d1.divisions) == {1, 2, 4}
 
     d2 = d.set_index("y", npartitions=3)
