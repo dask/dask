@@ -9,6 +9,8 @@ from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
+from dask.blockwise import BlockwiseDepDict
+from dask.core import get
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -17,8 +19,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.shuffle import set_partition
-from dask.dataframe.utils import (
-    check_meta,
+from dask.dataframe.utils import (  # check_meta,
     insert_meta_param_description,
     is_series_like,
     make_meta,
@@ -613,6 +614,11 @@ def from_delayed(
         Prefix to prepend to the keys.
     verify_meta : bool, optional
         If True check that the partitions have consistent metadata, defaults to True.
+    fuse: bool, optional
+        Whether to fuse the input ``Delayed`` objects into a single task for each
+        partition of the new collection. This enables fusion with following
+        partition-wise operations, but requires the subgraph for each partition to
+        be executed within the same task. Default is False.
     """
     from dask.delayed import Delayed
 
@@ -648,23 +654,35 @@ def from_delayed(
             name=name,
             columns=None,
             inputs=dfs,
-            io_func=lambda x: x.compute(),
+            io_func=lambda x: get(x.dask, x.key),
         )
 
         df = new_dd_object(
             HighLevelGraph({name: layer}, {name: set()}), name, meta, divs
         )
     else:
-        dsk = {}
-        if verify_meta:
-            for (i, df) in enumerate(dfs):
-                dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-        else:
-            for (i, df) in enumerate(dfs):
-                dsk[(name, i)] = df.key
+        # dsk = {}
+        # if verify_meta:
+        #     for (i, df) in enumerate(dfs):
+        #         dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
+        # else:
+        #     for (i, df) in enumerate(dfs):
+        #         dsk[(name, i)] = df.key
+        # df = new_dd_object(
+        #     HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+        # )
 
+        layer = DataFrameIOLayer(
+            name=name,
+            columns=None,
+            inputs=BlockwiseDepDict(
+                {(i,): inp.key for i, inp in enumerate(dfs)},
+                delayed=True,
+            ),
+            io_func=lambda x: x,
+        )
         df = new_dd_object(
-            HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+            HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
         )
 
     if divisions == "sorted":

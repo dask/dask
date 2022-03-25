@@ -62,6 +62,11 @@ class BlockwiseDep:
         except KeyError:
             return default
 
+    @property
+    def delayed(self):
+        """Whether all dependencies are Delayed objects"""
+        return False
+
     def __dask_distributed_pack__(
         self, required_indices: list[tuple[int, ...]] | None = None
     ):
@@ -151,12 +156,20 @@ class BlockwiseDepDict(BlockwiseDep):
         mapping: dict,
         numblocks: tuple[int, ...] | None = None,
         produces_tasks: bool = False,
+        delayed: bool = False,
     ):
         self.mapping = mapping
         self.produces_tasks = produces_tasks
 
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
+
+        # Whether `mapping` values are all Delayed objects
+        self._delayed = delayed
+
+    @property
+    def delayed(self):
+        return self._delayed
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
         return self.mapping[idx]
@@ -708,6 +721,14 @@ class Blockwise(Layer):
                         deps.add(tups)
             key_deps[(self.output,) + out_coords] = deps | const_deps
 
+        # Add delayed dependencies
+        for key, io_dep in self.io_deps.items():
+            if io_dep.delayed:
+                for out_coords in output_blocks:
+                    key = (self.output,) + out_coords
+                    delayed_key = io_dep.mapping[out_coords]
+                    key_deps[key] |= {delayed_key}
+
         return key_deps
 
     def _cull(self, output_blocks):
@@ -1133,6 +1154,15 @@ def make_blockwise_graph(
         dsk.update(ensure_dict(dsk2))
 
     if return_key_deps:
+
+        # Add delayed dependencies
+        for key, io_dep in io_deps.items():
+            if io_dep.delayed:
+                for out_coords in output_blocks:
+                    key = (output,) + out_coords
+                    delayed_key = io_dep.mapping[out_coords]
+                    key_deps[key] |= {delayed_key}
+
         return dsk, key_deps
     else:
         return dsk
