@@ -67,6 +67,11 @@ class BlockwiseDep:
         """Whether all dependencies are Delayed objects"""
         return False
 
+    @property
+    def delayed_deps(self) -> set:
+        """Return Delayed dependencies"""
+        return set()
+
     def __dask_distributed_pack__(
         self, required_indices: list[tuple[int, ...]] | None = None
     ):
@@ -170,6 +175,15 @@ class BlockwiseDepDict(BlockwiseDep):
     @property
     def delayed(self):
         return self._delayed
+
+    @property
+    def delayed_deps(self) -> set:
+        if self._delayed:
+            return set(self.mapping.values())
+        return set()
+
+    def __len__(self) -> int:
+        return len(self.mapping)
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
         return self.mapping[idx]
@@ -1344,6 +1358,8 @@ def _optimize_blockwise(full_graph, keys=()):
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
                 elif k not in io_names:
                     new_deps.add(k)
+                elif layers[layer].io_deps[k].delayed:
+                    new_deps |= layers[layer].io_deps[k].delayed_deps
             dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]

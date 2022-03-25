@@ -19,7 +19,8 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.shuffle import set_partition
-from dask.dataframe.utils import (  # check_meta,
+from dask.dataframe.utils import (
+    check_meta,
     insert_meta_param_description,
     is_series_like,
     make_meta,
@@ -616,9 +617,10 @@ def from_delayed(
         If True check that the partitions have consistent metadata, defaults to True.
     fuse: bool, optional
         Whether to fuse the input ``Delayed`` objects into a single task for each
-        partition of the new collection. This enables fusion with following
+        partition in the new collection. This enables blockwise fusion with following
         partition-wise operations, but requires the subgraph for each partition to
-        be executed within the same task. Default is False.
+        be executed within the same task. Fusion is not supported when one or more
+        elements of ``dfs`` are ``distributed.Future`` objects. Default is False.
     """
     from dask.delayed import Delayed
 
@@ -650,28 +652,26 @@ def from_delayed(
 
     name = prefix + "-" + tokenize(*dfs)
     if fuse:
+
+        # Raise an error if the first element of dfs is a Future.
+        # TODO: Check for Futures in a more thorough way
+        check_key = dfs[0].key if dfs else None
+        if isinstance(check_key, str) and check_key.startswith("Future"):
+            raise ValueError("fuse=True not supported for distributed futures.")
+
         layer = DataFrameIOLayer(
             name=name,
             columns=None,
             inputs=dfs,
-            io_func=lambda x: get(x.dask, x.key),
+            io_func=(lambda x: check_meta(get(x.dask, x.key), meta, "from_delayed"))
+            if verify_meta
+            else (lambda x: get(x.dask, x.key)),
         )
 
         df = new_dd_object(
             HighLevelGraph({name: layer}, {name: set()}), name, meta, divs
         )
     else:
-        # dsk = {}
-        # if verify_meta:
-        #     for (i, df) in enumerate(dfs):
-        #         dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-        # else:
-        #     for (i, df) in enumerate(dfs):
-        #         dsk[(name, i)] = df.key
-        # df = new_dd_object(
-        #     HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
-        # )
-
         layer = DataFrameIOLayer(
             name=name,
             columns=None,
@@ -679,7 +679,9 @@ def from_delayed(
                 {(i,): inp.key for i, inp in enumerate(dfs)},
                 delayed=True,
             ),
-            io_func=lambda x: x,
+            io_func=(lambda x: check_meta(x, meta, "from_delayed"))
+            if verify_meta
+            else (lambda x: x),
         )
         df = new_dd_object(
             HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
