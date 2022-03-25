@@ -1,9 +1,9 @@
+import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
 from itertools import product
 from operator import add
-import platform
 
 import numpy as np
 import pandas as pd
