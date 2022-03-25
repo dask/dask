@@ -73,6 +73,11 @@ class Layer(Mapping):
         )
 
     @property
+    def name(self) -> str:
+        """Name of the layer"""
+        raise NotImplementedError
+
+    @property
     def layer_state(self) -> dict:
         """Dictionary of key-word arguments required to
         to recreate this `Layer` on the scheduler.
@@ -698,6 +703,11 @@ class MaterializedLayer(Layer):
     def __init__(self, mapping: Mapping, annotations=None):
         super().__init__(annotations=annotations)
         self.mapping = mapping
+
+    @property
+    def name(self) -> str:
+        """Name of the layer"""
+        return None
 
     @property
     def layer_state(self):
