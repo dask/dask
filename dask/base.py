@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
+from typing import Any, Sequence
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -846,6 +847,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 ############
 
 # Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
+_md5: Callable
 if _PY_VERSION >= parse_version("3.9"):
 
     def _md5(x, _hashlib_md5=hashlib.md5):
@@ -960,7 +962,9 @@ function_cache: dict[Callable, Callable] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func: Callable) -> Callable:
+def normalize_function(
+    func: Callable,
+) -> Callable[..., Any] | Sequence[Callable] | dict[Callable, Callable]:
     try:
         return function_cache[func]
     except KeyError:
@@ -970,13 +974,15 @@ def normalize_function(func: Callable) -> Callable:
                 if len(function_cache) >= 500:
                     for k in list(function_cache)[::2]:
                         del function_cache[k]
-        function_cache[func] = result
+        function_cache[func] = result  # type: ignore
         return result
     except TypeError:  # not hashable
         return _normalize_function(func)
 
 
-def _normalize_function(func: Callable) -> Callable:
+def _normalize_function(
+    func: Callable,
+) -> Callable | Sequence[Callable] | Sequence[Any]:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs

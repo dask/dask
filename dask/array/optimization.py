@@ -120,7 +120,7 @@ def hold_keys(dsk, dependencies):
 
 def _is_getter_task(
     value,
-) -> tuple[Callable, Any, Any, bool, bool | None] | None:
+) -> tuple[Callable, Any, Any, bool, bool | None] | None:  # type: ignore
     """Check if a value in a Dask graph looks like a getter.
 
     1. Is it a tuple with the first element a known getter.
@@ -135,6 +135,7 @@ def _is_getter_task(
     HighLevelGraph layers which can talk to Blockwise layers this check *should* be
     removed, and we should not have to introspect SubgraphCallables.
     """
+    get: Callable | None
     if type(value) is not tuple:
         return None
     first = value[0]
@@ -156,7 +157,7 @@ def _is_getter_task(
         # getter defaults to asarray=True, getitem is semantically False
         return get, value[1], value[2], get is not getitem, None
     elif length == 5:
-        return get, *value[1:]
+        return get, *value[1:]  # type: ignore
 
     return None
 

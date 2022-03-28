@@ -5,7 +5,7 @@ import os
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from itertools import product
 from math import prod
-from typing import Any, Hashable, Iterable, Mapping, Sequence
+from typing import Any, Hashable, Iterable, Mapping, MutableMapping, Sequence
 
 import tlz as toolz
 
@@ -167,10 +167,10 @@ class BlockwiseDepDict(BlockwiseDep):
         from distributed.protocol import to_serialize
 
         if required_indices is None:
-            required_indices = self.mapping.keys()
+            required_indices = tuple(self.mapping.keys())  # type: ignore
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},  # type: ignore
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
         }
@@ -387,7 +387,7 @@ class Blockwise(Layer):
     output: str
     output_indices: tuple[str, ...]
     dsk: Mapping[str, tuple]
-    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...] | list[Any]
     numblocks: Mapping[str, Sequence[int]]
     concatenate: bool | None
     new_axes: Mapping[str, int]
@@ -404,7 +404,7 @@ class Blockwise(Layer):
         new_axes: Mapping[str, int] | None = None,
         output_blocks: set[tuple[int, ...]] | None = None,
         annotations: Mapping[str, Any] | None = None,
-        io_deps: Mapping[str, BlockwiseDep] | None = None,
+        io_deps: MutableMapping[str, BlockwiseDep] | None = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
@@ -423,8 +423,8 @@ class Blockwise(Layer):
             name = dep
             if isinstance(dep, BlockwiseDep):
                 name = tokenize(dep)
-                self.io_deps[name] = dep
-                self.numblocks[name] = dep.numblocks
+                self.io_deps[name] = dep  # type: ignore
+                self.numblocks[name] = dep.numblocks  # type: ignore
             self.indices.append((name, tuple(ind) if ind is not None else ind))
         self.indices = tuple(self.indices)
 

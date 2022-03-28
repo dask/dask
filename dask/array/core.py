@@ -18,6 +18,7 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
+    MutableSequence,
     Sequence,
 )
 from functools import partial, reduce, wraps
@@ -1006,7 +1007,7 @@ def broadcast_chunks(*chunkss):
 
 def store(
     sources: Array | Collection[Array],
-    targets,
+    targets: Array | Collection[Array],
     lock: bool | Lock = True,
     regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
     compute: bool = True,
@@ -1074,7 +1075,7 @@ def store(
 
     if isinstance(sources, Array):
         sources = [sources]
-        targets = [targets]
+        targets = [targets]  # type: ignore
 
     if any(not isinstance(s, Array) for s in sources):
         raise ValueError("All sources must be dask array objects")
@@ -1086,10 +1087,10 @@ def store(
         )
 
     if isinstance(regions, tuple) or regions is None:
-        regions = [regions]
+        regions = [regions]  # type: ignore
 
     if len(sources) > 1 and len(regions) == 1:
-        regions *= len(sources)
+        regions *= len(sources)  # type: ignore
 
     if len(sources) != len(regions):
         raise ValueError(
@@ -1104,7 +1105,7 @@ def store(
     )
     sources_name = "store-sources-" + tokenize(sources)
     layers = {sources_name: sources_layer}
-    dependencies = {sources_name: set()}
+    dependencies: dict[str, set] = {sources_name: set()}
 
     # Optimize all targets together
     targets_keys = []
@@ -1129,7 +1130,7 @@ def store(
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
         for s, t, r in zip(sources, targets, regions)
     ]
-    map_keys = []
+    map_keys: list = []
 
     for s, t, n, r in zip(sources, targets, map_names, regions):
         map_layer = insert_to_ooc(
@@ -1151,7 +1152,7 @@ def store(
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk = store_dsk
+        load_store_dsk: HighLevelGraph | Mapping = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
@@ -4117,7 +4118,14 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(graph, name, chunks, meta=meta)
 
 
-def load_store_chunk(x, out, index, lock, return_stored, load_stored):
+def load_store_chunk(
+    x: MutableSequence | None,
+    out: MutableSequence,
+    index: slice,
+    lock: Any,
+    return_stored: bool,
+    load_stored: bool,
+) -> MutableSequence | None:
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -4166,11 +4174,11 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     return result
 
 
-def store_chunk(x, out, index, lock, return_stored):
+def store_chunk(x, out, index, lock, return_stored) -> Sequence | None:
     return load_store_chunk(x, out, index, lock, return_stored, False)
 
 
-def load_chunk(out, index, lock):
+def load_chunk(out, index, lock) -> Sequence | None:
     return load_store_chunk(None, out, index, lock, True, True)
 
 
@@ -4181,7 +4189,7 @@ def insert_to_ooc(
     name: str,
     *,
     lock: Lock | bool = True,
-    region: slice | None = None,
+    region: tuple[slice, ...] | slice | None = None,
     return_stored: bool = False,
     load_stored: bool = False,
 ) -> dict:
@@ -4235,8 +4243,8 @@ def insert_to_ooc(
         func = load_store_chunk
         args = (load_stored,)
     else:
-        func = store_chunk
-        args = ()
+        func = store_chunk  # type: ignore
+        args = ()  # type: ignore
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
@@ -4247,7 +4255,7 @@ def insert_to_ooc(
 
 def retrieve_from_ooc(
     keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
-) -> dict:
+) -> dict[Any, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -4269,7 +4277,7 @@ def retrieve_from_ooc(
     >>> retrieve_from_ooc(g.keys(), g, {k: k for k in g.keys()})  # doctest: +SKIP
     """
     load_dsk = {
-        ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+        ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]  # type: ignore
         for k in keys
     }
 
@@ -5549,29 +5557,32 @@ class BlockView:
     An instance of ``da.array.Blockview``
     """
 
-    def __init__(self, array: Array) -> BlockView:
+    def __init__(self, array: Array) -> None:
         self._array = array
 
     def __getitem__(
         self, index: int | Sequence[int] | slice | Sequence[slice]
-    ) -> Array:
+    ) -> Array:  # type: ignore
         from dask.array.slicing import normalize_index
 
         if not isinstance(index, tuple):
-            index = (index,)
-        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
+            new_index = (index,)
+        else:
+            new_index = index  # type: ignore
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in new_index) > 1:  # type: ignore
             raise ValueError("Can only slice with a single list")
-        if any(ind is None for ind in index):
+        if any(ind is None for ind in new_index):  # type: ignore
             raise ValueError("Slicing with np.newaxis or None is not supported")
-        index = normalize_index(index, self._array.numblocks)
-        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
 
-        name = "blocks-" + tokenize(self._array, index)
+        new_index = normalize_index(new_index, self._array.numblocks)  # type: ignore
+        new_index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in new_index)  # type: ignore
 
-        new_keys = self._array._key_array[index]
+        name = "blocks-" + tokenize(self._array, new_index)
+
+        new_keys = self._array._key_array[new_index]
 
         chunks = tuple(
-            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, new_index)  # type: ignore
         )
 
         keys = product(*(range(len(c)) for c in chunks))
