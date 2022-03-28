@@ -2233,7 +2233,7 @@ def test_multi_duplicate_divisions():
 
     ddf1 = dd.from_pandas(df1, npartitions=2).set_index("x")
     ddf2 = dd.from_pandas(df2, npartitions=1).set_index("x")
-    assert ddf1.npartitions == 2
+    assert ddf1.npartitions <= 2
     assert len(ddf1) == len(df1)
 
     r1 = ddf1.merge(ddf2, how="left", left_index=True, right_index=True)
