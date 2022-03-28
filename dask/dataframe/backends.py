@@ -359,7 +359,7 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
     indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
+        c.astype(np.intp, copy=False), k
     )
     df2 = df.take(indexer)
     locations = locations.cumsum()
