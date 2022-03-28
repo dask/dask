@@ -11,7 +11,6 @@ from fsspec.core import open_files
 from packaging.version import parse as parse_version
 
 import dask.bag as db
-import dask.dataframe as dd
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -175,6 +174,8 @@ def test_open_glob(dir_server):
 @pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
 def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
+    dd = pytest.importorskip("dask.dataframe")
+    pytest.importorskip(engine)
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"
