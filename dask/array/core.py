@@ -1090,7 +1090,7 @@ def store(
         regions = [regions]  # type: ignore
 
     if len(sources) > 1 and len(regions) == 1:
-        regions *= len(sources)  # type: ignore
+        regions = list(regions) * len(sources)
 
     if len(sources) != len(regions):
         raise ValueError(
@@ -1130,7 +1130,7 @@ def store(
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
         for s, t, r in zip(sources, targets, regions)
     ]
-    map_keys: list = []
+    map_keys: list[Hashable] = []
 
     for s, t, n, r in zip(sources, targets, map_names, regions):
         map_layer = insert_to_ooc(
@@ -1152,7 +1152,7 @@ def store(
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk: HighLevelGraph | Mapping = store_dsk
+        load_store_dsk: HighLevelGraph | dict = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
@@ -4255,7 +4255,7 @@ def insert_to_ooc(
 
 def retrieve_from_ooc(
     keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
-) -> dict[Any, Any]:
+) -> dict[Hashable, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -5557,7 +5557,7 @@ class BlockView:
     An instance of ``da.array.Blockview``
     """
 
-    def __init__(self, array: Array) -> None:
+    def __init__(self, array: Array):
         self._array = array
 
     def __getitem__(
