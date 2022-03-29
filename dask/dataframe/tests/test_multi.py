@@ -636,7 +636,7 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
-def test_merge_asof_on_by_left_right():
+def test_merge_asof_on_left_right():
     df1 = pd.DataFrame(
         {
             "endofweek": [1, 1, 2, 2, 3, 4],
@@ -648,14 +648,7 @@ def test_merge_asof_on_by_left_right():
     )
 
     # pandas
-    result_df = pd.merge_asof(
-        df1,
-        df2,
-        left_on="endofweek",
-        right_on="timestamp",
-        left_by="GroupCol",
-        right_by="GroupVal",
-    )
+    result_df = pd.merge_asof(df1, df2, left_on="endofweek", right_on="timestamp")
 
     # dask
     result_dd = dd.merge_asof(
@@ -663,8 +656,6 @@ def test_merge_asof_on_by_left_right():
         dd.from_pandas(df2, npartitions=2),
         left_on="endofweek",
         right_on="timestamp",
-        left_by="GroupCol",
-        right_by="GroupVal",
     )
 
     assert_eq(result_df, result_dd, check_index=False)
