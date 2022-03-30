@@ -1572,7 +1572,7 @@ Dask Name: {name}, {task} tasks"""
             print(f'--------------------')
             for numerator in (1, 5, 9, 10, 20, 30, 50):
                 sample = df.sample(frac= numerator/100)
-            print(f'{numerator:^11} | {len(sample):^7}')
+                print(f'{numerator:^11} | {len(sample):^7}')
             
             
         
