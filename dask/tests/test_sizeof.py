@@ -1,13 +1,12 @@
-import sys
 import os
-import types
+import sys
 from array import array
 
 import pytest
 
+from dask.multiprocessing import get_context
 from dask.sizeof import getsizeof, sizeof
 from dask.utils import funcname
-from dask.multiprocessing import get_context
 
 
 def test_base():
@@ -155,7 +154,7 @@ def test_dict():
 def _get_sizeof_on_path(path, size):
     sys.path.append(os.fsdecode(path))
 
-    # Dask will have already called _register_entry_point_plugins 
+    # Dask will have already called _register_entry_point_plugins
     # before we can modify sys.path, so we re-register here.
     import dask.sizeof
     dask.sizeof._register_entry_point_plugins()
