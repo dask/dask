@@ -901,7 +901,7 @@ def ensure_bytes(s) -> bytes:
 
 
 def ensure_unicode(s) -> str:
-    """Turn string or bytes to bytes
+    """Turn string or bytes to string
 
     >>> ensure_unicode('123')
     '123'
