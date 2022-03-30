@@ -45,6 +45,8 @@ def test_loc():
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
+    assert_eq(d.loc[1000:2000], full.loc[1000:2000])
+    assert_eq(d.loc[:-1000], full.loc[:-1000])
     assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
     assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)

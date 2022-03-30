@@ -6,7 +6,6 @@ channels:
 dependencies:
   # required dependencies
   - python=3.10
-  - setuptools
   - packaging
   - numpy
   - pandas
