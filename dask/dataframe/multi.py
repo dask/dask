@@ -902,6 +902,19 @@ def merge_asof(
             " 'forward', or 'nearest'"
         )
 
+    if left is None or right is None:
+        raise ValueError("Cannot merge_asof on None")
+
+    if (left_on is not None or right_on is not None) and on is not None:
+        raise ValueError(
+            "Can only pass argument 'on' OR 'left_on' and 'right_on', not a combination of both."
+        )
+
+    if (left_by is not None or right_by is not None) and by is not None:
+        raise ValueError(
+            "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+        )
+
     kwargs = {
         "on": on,
         "left_on": left_on,
@@ -916,9 +929,6 @@ def merge_asof(
         "allow_exact_matches": allow_exact_matches,
         "direction": direction,
     }
-
-    if left is None or right is None:
-        raise ValueError("Cannot merge_asof on None")
 
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
