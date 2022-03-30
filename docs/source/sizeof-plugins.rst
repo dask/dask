@@ -1,13 +1,9 @@
 .. _order:
 
-``sizeof`` Plugins
-========
+Object Sizes
+============
 
-.. note::
-
-   This is an advanced topic that most users won't need to worry about.
-
-When Dask needs to compute the memory footprint of an object, e.g. to determine which objects to spill to disk, it uses the `sizeof` API. Libraries which need to define a `sizeof` implementation for their own objects can use the `sizeof.register` API:
+When Dask needs to compute the size of an object in bytes, e.g. to determine which objects to spill to disk, it uses the ``dask.sizeof.sizeof`` registration mechanism. Users who need to define a ``sizeof`` implementation for their own objects can use ``sizeof.register``:
 
 .. code-block:: python
 
@@ -19,7 +15,7 @@ When Dask needs to compute the memory footprint of an object, e.g. to determine 
 
 This code can be executed in order to register the implementation with Dask by placing it in one of the library's modules e.g. ``__init__.py``. However, this introduces a maintenance burden on the developers of these libraries, and must be manually imported on all workers in the event that these libraries do not accept the patch. 
 
-Dask exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.sizeof`` to enable third-party libraries to develop and maintain these ``sizeof`` implementations for other libraries. 
+Dask exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>`_ under the group ``dask.sizeof`` to enable third-party libraries to develop and maintain these ``sizeof`` implementations for other libraries. 
 
 For a fictitious library ``numpy_sizeof_dask.py``, the neccessary ``setup.cfg`` configuration would be as follows:
 

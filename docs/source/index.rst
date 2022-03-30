@@ -1,3 +1,8 @@
+.. note::
+
+    Help inform future development and improve the Dask community experience -
+    take the `2021 Dask User Survey <https://forms.gle/F7QSGpSHwBWu8NCg8>`_
+
 ====
 Dask
 ====
@@ -28,15 +33,11 @@ Dask emphasizes the following virtues:
 *  **Responsive**: Designed with interactive computing in mind, it provides rapid
    feedback and diagnostics to aid humans
 
-|
 
-.. figure:: images/dask-overview.svg
-   :alt: Dask is composed of three parts. "Collections" create "Task Graphs" which are then sent to the "Scheduler" for execution. There are two types of schedulers that are described in more detail below.
+.. image:: images/dask-overview.svg
+   :alt: Dask collections and schedulers
+   :width: 100%
    :align: center
-
-   High level collections are used to generate task graphs which can be executed by schedulers on a single machine or a cluster.
-
-|
 
 See the `dask.distributed documentation (separate website)
 <https://distributed.dask.org/en/latest/>`_ for more technical information
@@ -135,43 +136,76 @@ messy situations in everyday problems.
    :caption: Getting Started
 
    install.rst
-   10-minutes-to-dask.rst
-   presentations.rst
-   best-practices.rst
-   how-to/index.rst
-   faq.rst
+   setup.rst
+   Use Cases <https://stories.dask.org>
+   support.rst
+   why.rst
+   institutional-faq.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Fundamentals
+   :caption: User Interface
 
+   user-interfaces.rst
    array.rst
    bag.rst
    dataframe.rst
-   dashboard.rst
    delayed.rst
    futures.rst
-   scheduling.rst
-   graphs.rst
-   deploying.rst
-   internals.rst
+   Machine Learning <https://ml.dask.org>
+   best-practices.rst
+   api.rst
 
 .. toctree::
    :maxdepth: 1
    :hidden:
-   :caption: Reference
+   :caption: Scheduling
 
-   api.rst
+   scheduling.rst
+   Distributed Scheduling <https://distributed.dask.org/>
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Diagnostics
+
+   understanding-performance.rst
+   graphviz.rst
+   diagnostics-local.rst
+   diagnostics-distributed.rst
+   debugging.rst
+   order.rst
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Help & reference
+
    develop.rst
    changelog.rst
    configuration.rst
+   configuration-reference.rst
+   educational-resources.rst
+   presentations.rst
+   cheatsheet.rst
+   spark.rst
+   caching.rst
+   graphs.rst
+   phases-of-computation.rst
+   remote-data-services.rst
+   gpu.rst
+   sizeof-plugins.rst
+   cite.rst
+   funding.rst
+   logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
+.. _`gitter chat room`: https://gitter.im/dask/dask
 .. _`xarray`: https://xarray.pydata.org/en/stable/
 .. _`scikit-image`: https://scikit-image.org/docs/stable/
 .. _`scikit-allel`: https://scikits.appspot.com/scikit-allel
