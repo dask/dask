@@ -1,3 +1,4 @@
+import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -3634,6 +3635,12 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
+
+    if platform.architecture()[0] == "32bit":
+        memory_usage = "312.0"
+    else:
+        memory_usage = "496.0"
+
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
@@ -3644,7 +3651,7 @@ def test_categorize_info():
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
         "dtypes: category(1), object(1), int64(1)\n"
-        "memory usage: 496.0 bytes\n"
+        "memory usage: {} bytes\n".format(memory_usage)
     )
     assert buf.getvalue() == expected
 
