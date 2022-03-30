@@ -1,5 +1,6 @@
 import itertools
 import importlib.metadata
+import logging
 import random
 import sys
 from array import array
@@ -13,6 +14,9 @@ except (AttributeError, TypeError):  # Monkey patch
 
     def getsizeof(x):  # type: ignore
         return 100
+
+
+logger = logging.getLogger(__name__)
 
 
 sizeof = Dispatch(name="sizeof")
