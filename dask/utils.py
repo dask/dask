@@ -1570,7 +1570,7 @@ timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
-def parse_timedelta(s: float | str | timedelta | None, default: str = "seconds") -> float | None:
+def parse_timedelta(s: float | str | timedelta | None, default: str = "seconds"):
     """Parse timedelta string to number of seconds
 
     Examples
