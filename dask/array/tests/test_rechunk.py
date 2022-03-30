@@ -212,6 +212,10 @@ def test_rechunk_with_dict():
     y = x.rechunk(chunks={0: -1})
     assert y.chunks == ((24,), (8, 8, 8))
 
+    x = da.ones((24, 24), chunks=(4, 8))
+    y = x.rechunk(chunks={0: None, 1: 'auto'})
+    assert y.chunks == ((4, 4, 4, 4, 4, 4), (24,))
+
 
 def test_rechunk_with_empty_input():
     x = da.ones((24, 24), chunks=(4, 8))
