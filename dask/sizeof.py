@@ -227,8 +227,7 @@ def _register_entry_point_plugins(entry_points=None):
     if entry_points is None:
         entry_points = importlib.metadata.entry_points()
 
-    # Python 3.10+ / importlib_metadata >= 3.9.0
-    if hasattr(entry_points, "select"):
+    if sys.version_info >= (3, 10):
         sizeof_entry_points = entry_points.select(group="dask.sizeof")
     else:
         sizeof_entry_points = entry_points.get("dask.sizeof", [])
