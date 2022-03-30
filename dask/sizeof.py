@@ -222,9 +222,10 @@ def register_pyarrow():
         return int(_get_col_size(data)) + 1000
 
 
-def _register_entry_point_plugins():
+def _register_entry_point_plugins(entry_points=None):
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    entry_points = importlib.metadata.entry_points()
+    if entry_points is None:
+        entry_points = importlib.metadata.entry_points()
 
     # Python 3.10+ / importlib_metadata >= 3.9.0
     if hasattr(entry_points, "select"):
