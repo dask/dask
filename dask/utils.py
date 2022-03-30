@@ -1349,7 +1349,7 @@ def factors(n):
     return set(functools.reduce(list.__add__, seq))
 
 
-def parse_bytes(s) -> int:
+def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 
     >>> from dask.utils import parse_bytes
