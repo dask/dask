@@ -1,9 +1,11 @@
 import itertools
+import importlib_metadata
 import random
 import sys
 from array import array
 
 from dask.utils import Dispatch
+import importlib_metadata
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
@@ -215,3 +217,21 @@ def register_pyarrow():
     @sizeof.register(pa.ChunkedArray)
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
+
+
+ENTRY_POINT_GROUP_NAME = "dask.sizeof"
+
+
+def _register_entry_point_plugins():
+    """Register sizeof implementations exposed by the entry_point mechanism."""
+    for entry_point in importlib_metadata.entry_points(group=ENTRY_POINT_GROUP_NAME):
+        registrar = entry_point.load()
+        try:
+            registrar(sizeof)
+        except Exception:
+            logger.exception(
+                "Failed to register sizeof entrypoing {}".format(entry_point.name)
+            )
+
+
+_register_entry_point_plugins()
