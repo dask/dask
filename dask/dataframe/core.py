@@ -1531,8 +1531,7 @@ Dask Name: {name}, {task} tasks"""
         return self.fillna(method="bfill", limit=limit, axis=axis)
 
     def sample(self, n=None, frac=None, replace=False, random_state=None):
-        """Random sample of items
-              
+        """Random sample of items              
 
         Parameters
         ----------
@@ -1545,8 +1544,7 @@ Dask Name: {name}, {task} tasks"""
             Sample with or without replacement. Default = False.
         random_state : int or ``np.random.RandomState``
             If int we create a new RandomState with this as the seed
-            Otherwise we draw from the passed RandomState
-            
+            Otherwise we draw from the passed RandomState            
         
         !!! Limitation:  
          Use only if frac * length(df) >= number_of_partitions
@@ -1558,8 +1556,7 @@ Dask Name: {name}, {task} tasks"""
         
         Case 2: frac * length(df) < number_of_partitions
             Sample does not work correctly and does not return
-            a sample of sample_size = frac * length 
-        
+            a sample of sample_size = frac * length         
         
         Example of limitation:
         
@@ -1572,10 +1569,8 @@ Dask Name: {name}, {task} tasks"""
             print(f'--------------------')
             for numerator in (1, 5, 9, 10, 20, 30, 50):
                 sample = df.sample(frac= numerator/100)
-                print(f'{numerator:^11} | {len(sample):^7}')
-            
-            
-        
+                print(f'{numerator:^11} | {len(sample):^7}')       
+                    
         See Also
         --------
         DataFrame.random_split
