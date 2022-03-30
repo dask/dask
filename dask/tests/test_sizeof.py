@@ -157,9 +157,11 @@ def _get_sizeof_on_path(path, size):
     # Dask will have already called _register_entry_point_plugins
     # before we can modify sys.path, so we re-register here.
     import dask.sizeof
+
     dask.sizeof._register_entry_point_plugins()
 
     import class_impl
+
     cls = class_impl.Impl(size)
     return sizeof(cls)
 
@@ -167,19 +169,17 @@ def _get_sizeof_on_path(path, size):
 def test_register_backend_entrypoint(tmp_path):
     # Create special sizeof implemetnation for a dummy class
     (tmp_path / "impl_sizeof.py").write_bytes(
-        b'def sizeof_plugin(sizeof):\n'
+        b"def sizeof_plugin(sizeof):\n"
         b'    print("REG")\n'
         b'    @sizeof.register_lazy("class_impl")\n'
-        b'    def register_impl():\n'
-        b'        import class_impl\n'
-        b'        @sizeof.register(class_impl.Impl)\n'
-        b'        def sizeof_impl(obj):\n'
-        b'            return obj.size \n'
+        b"    def register_impl():\n"
+        b"        import class_impl\n"
+        b"        @sizeof.register(class_impl.Impl)\n"
+        b"        def sizeof_impl(obj):\n"
+        b"            return obj.size \n"
     )
     (tmp_path / "class_impl.py").write_bytes(
-        b"class Impl:\n"
-        b"    def __init__(self, size):\n"
-        b"        self.size = size"
+        b"class Impl:\n" b"    def __init__(self, size):\n" b"        self.size = size"
     )
     dist_info = tmp_path / "impl_sizeof-0.0.0.dist-info"
     dist_info.mkdir()
@@ -188,5 +188,7 @@ def test_register_backend_entrypoint(tmp_path):
     )
 
     with get_context().Pool(1) as pool:
-        assert pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
+        assert (
+            pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
+        )
     pool.join()
