@@ -213,7 +213,7 @@ def test_rechunk_with_dict():
     assert y.chunks == ((24,), (8, 8, 8))
 
     x = da.ones((24, 24), chunks=(4, 8))
-    y = x.rechunk(chunks={0: None, 1: 'auto'})
+    y = x.rechunk(chunks={0: None, 1: "auto"})
     assert y.chunks == ((4, 4, 4, 4, 4, 4), (24,))
 
 
