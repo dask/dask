@@ -902,19 +902,6 @@ def merge_asof(
             " 'forward', or 'nearest'"
         )
 
-    if left is None or right is None:
-        raise ValueError("Cannot merge_asof on None")
-
-    if (left_on is not None or right_on is not None) and on is not None:
-        raise ValueError(
-            "Can only pass argument 'on' OR 'left_on' and 'right_on', not a combination of both."
-        )
-
-    if (left_by is not None or right_by is not None) and by is not None:
-        raise ValueError(
-            "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
-        )
-
     kwargs = {
         "on": on,
         "left_on": left_on,
@@ -930,12 +917,25 @@ def merge_asof(
         "direction": direction,
     }
 
+    if left is None or right is None:
+        raise ValueError("Cannot merge_asof on None")
+
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
         return pd.merge_asof(left, right, **kwargs)
 
     if on is not None:
+        if left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
+                "combination of both."
+            )
         left_on = right_on = on
+    if left_on is None and right_on is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_on is not None and right_on is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+
     for o in [left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -959,7 +959,15 @@ def merge_asof(
         right = right.set_index(right_on, sorted=True)
 
     if by is not None:
+        if left_by is not None or right_by is not None:
+            raise ValueError(
+                "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+            )
         kwargs["left_by"] = kwargs["right_by"] = by
+    if left_by is None and right_by is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_by is not None and right_by is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
 
     del kwargs["on"], kwargs["left_on"], kwargs["right_on"], kwargs["by"]
     kwargs["left_index"] = kwargs["right_index"] = True
