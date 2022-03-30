@@ -1546,20 +1546,20 @@ Dask Name: {name}, {task} tasks"""
             If int we create a new RandomState with this as the seed
             Otherwise we draw from the passed RandomState
         
-        !!! Limitation:
+        !!! Limitation
+        --------------
             Use only if frac * length(df) >= number_of_partitions
             is satisfied.
 
         Case 1:  frac * length(df) >= number_of_partitions
             Sample works correctly and returns a sample of
-            sample_size = frac * length
-        
+            sample_size = frac * length        
         Case 2: frac * length(df) < number_of_partitions
             Sample does not work correctly and does not return
             a sample of sample_size = frac * length
         
-        Example of limitation:
-        
+        Example of limitation
+        ---------------------
             import pandas as pd
             import dask.dataframe as dd
 
