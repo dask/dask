@@ -38,6 +38,7 @@ install_requires = [
     "partd >= 0.3.10",
     "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
+    "importlib_metadata >= 3.6.0"
 ]
 
 packages = [
