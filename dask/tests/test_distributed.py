@@ -17,7 +17,6 @@ import dask.bag as db
 from dask import compute, delayed, persist
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
 
 if "should_check_state" in get_named_args(gen_cluster):
@@ -553,7 +552,6 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
@@ -641,35 +639,6 @@ def test_map_partitions_df_input():
     ) as cluster:
         with distributed.Client(cluster, asynchronous=False):
             main()
-
-
-@gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-
-    annotations = {"workers": ("alice",)}
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
-
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
-async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a, b):
-    fut = c.submit(inc, 1)
-
-    hlg = HighLevelGraph(
-        {"l1": MaterializedLayer({"x": fut, "y": (inc, "x"), "z": (inc, "y")})},
-        {"l1": set()},
-    )
-    # fill hlg.key_dependencies cache. This excludes known futures, so only
-    # includes a subset of all dependencies. Previously if the cache was present
-    # the future dependencies would be missing when packed.
-    hlg.get_all_dependencies()
-    packed = hlg.__dask_distributed_pack__(c, ["z"], {})
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(packed)
-    assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
 @pytest.mark.filterwarnings(
