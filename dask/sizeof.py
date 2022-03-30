@@ -1,5 +1,5 @@
-import itertools
 import importlib.metadata
+import itertools
 import logging
 import random
 import sys
@@ -238,7 +238,7 @@ def _register_entry_point_plugins(entry_points=None):
             registrar(sizeof)
         except Exception:
             logger.exception(
-                "Failed to register sizeof entry point {}".format(entry_point.name)
+                f"Failed to register sizeof entry point {entry_point.name}"
             )
 
 
