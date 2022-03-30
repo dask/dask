@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import ClassVar, TypeVar, overload
+from typing import Any, ClassVar, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -852,7 +852,7 @@ def funcname(func) -> str:
         return str(func)[:50]
 
 
-def typename(typ, short=False) -> str:
+def typename(typ: Any, short: bool = False) -> str:
     """
     Return the name of a type
 
