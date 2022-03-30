@@ -1,12 +1,13 @@
 import sys
+import os
 import types
 from array import array
 
 import pytest
-from importlib_metadata import EntryPoint, EntryPoints
 
-from dask.sizeof import _register_entry_point_plugins, getsizeof, sizeof
+from dask.sizeof import getsizeof, sizeof
 from dask.utils import funcname
+from dask.multiprocessing import get_context
 
 
 def test_base():
@@ -151,32 +152,42 @@ def test_dict():
     assert isinstance(sizeof(d), int)
 
 
-def test_plugin_hook():
-    class _CustomType:
-        pass
+def _get_sizeof_on_path(path, size):
+    sys.path.append(os.fsdecode(path))
 
-    def hook(obj):
-        raise NotImplementedError("This hook should not be called")
+    # Dask will have already called _register_entry_point_plugins 
+    # before we can modify sys.path, so we re-register here.
+    import dask.sizeof
+    dask.sizeof._register_entry_point_plugins()
 
-    def plugin(dispatch):
-        dispatch.register(_CustomType, hook)
+    import class_impl
+    cls = class_impl.Impl(size)
+    return sizeof(cls)
 
-    mod_name = "dask_sizeof"
-    plugin_name = "plugin"
 
-    # Create test module
-    mod = types.ModuleType(mod_name)
-    setattr(mod, plugin_name, plugin)
-    sys.modules[mod_name] = mod
-
-    # Hand craft the entry-points
-    entry_point = EntryPoint(
-        name=mod_name, value=f"{mod_name}:{plugin_name}", group="dask.sizeof"
+def test_register_backend_entrypoint(tmp_path):
+    # Create special sizeof implemetnation for a dummy class
+    (tmp_path / "impl_sizeof.py").write_bytes(
+        b'def sizeof_plugin(sizeof):\n'
+        b'    print("REG")\n'
+        b'    @sizeof.register_lazy("class_impl")\n'
+        b'    def register_impl():\n'
+        b'        import class_impl\n'
+        b'        @sizeof.register(class_impl.Impl)\n'
+        b'        def sizeof_impl(obj):\n'
+        b'            return obj.size \n'
     )
-    entry_points = EntryPoints([entry_point])
+    (tmp_path / "class_impl.py").write_bytes(
+        b"class Impl:\n"
+        b"    def __init__(self, size):\n"
+        b"        self.size = size"
+    )
+    dist_info = tmp_path / "impl_sizeof-0.0.0.dist-info"
+    dist_info.mkdir()
+    (dist_info / "entry_points.txt").write_bytes(
+        b"[dask.sizeof]\nimpl = impl_sizeof:sizeof_plugin\n"
+    )
 
-    # Register entry point
-    _register_entry_point_plugins(entry_points=entry_points)
-
-    # Ensure we get the right implementation for this type
-    assert sizeof.dispatch(_CustomType) is hook
+    with get_context().Pool(1) as pool:
+        assert pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
+    pool.join()
