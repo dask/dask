@@ -863,6 +863,7 @@ def test_auto_chunks():
         x = da.ones((10000, 10000))
         assert 4 < x.npartitions < 32
 
+
 def test_string_auto_chunk():
     with pytest.raises(ValueError):
         da.full((10000, 10000), "auto_chunk", chunks="auto")
