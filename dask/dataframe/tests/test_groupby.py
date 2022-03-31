@@ -1091,6 +1091,58 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+def test_dataframe_fillna():
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [np.nan, 3, np.nan, np.nan],
+            "c": [4, np.nan, 5, np.nan],
+            "d": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("a").fillna(0),
+        ddf.groupby("a").fillna(0),
+    )
+    assert_eq(
+        df.groupby("a").fillna(method="ffill"),
+        ddf.groupby("a").fillna(method="ffill"),
+    )
+
+
+def test_ffill():
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [np.nan, 3, np.nan, np.nan],
+            "c": [4, np.nan, 5, np.nan],
+            "d": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("a").ffill(),
+        ddf.groupby("a").ffill(),
+    )
+
+
+def test_bfill():
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [np.nan, 3, np.nan, np.nan],
+            "c": [np.nan, 4, np.nan, 5],
+            "d": [np.nan, 6, np.nan, 7],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("a").bfill(),
+        ddf.groupby("a").bfill(),
+    )
+
+
 @pytest.mark.parametrize(
     "grouper",
     [

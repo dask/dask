@@ -1984,6 +1984,24 @@ class _GroupBy:
             axis=axis,
         )
 
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        fn = lambda g: g.fillna(
+            value=value,
+            method=method,
+            limit=limit,
+            axis=axis,
+        )
+        meta = self._meta_nonempty.transform(fn)
+        return self.transform(fn, meta=meta)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def ffill(self, axis=None, limit=None):
+        return self.fillna(method="ffill", limit=limit, axis=axis)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def bfill(self, axis=None, limit=None):
+        return self.fillna(method="bfill", limit=limit, axis=axis)
+
 
 class DataFrameGroupBy(_GroupBy):
     _token_prefix = "dataframe-groupby-"
