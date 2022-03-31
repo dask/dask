@@ -18,15 +18,13 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
-    MutableSequence,
-    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import numpy as np
 from fsspec import get_mapper
@@ -44,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import _numpy_120, _Recurser
+from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -1007,9 +1005,9 @@ def broadcast_chunks(*chunkss):
 
 def store(
     sources: Array | Collection[Array],
-    targets: Array | Collection[Array],
+    targets: ArrayLike | Delayed | Collection[ArrayLike | Delayed],
     lock: bool | Lock = True,
-    regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
+    regions: tuple[slice, ...] | Collection[tuple[slice, ...] | None] | None = None,
     compute: bool = True,
     return_stored: bool = False,
     **kwargs,
@@ -1076,6 +1074,7 @@ def store(
     if isinstance(sources, Array):
         sources = [sources]
         targets = [targets]  # type: ignore
+    targets = cast("Collection[ArrayLike | Delayed]", targets)
 
     if any(not isinstance(s, Array) for s in sources):
         raise ValueError("All sources must be dask array objects")
@@ -1087,7 +1086,7 @@ def store(
         )
 
     if isinstance(regions, tuple) or regions is None:
-        regions = [regions]  # type: ignore
+        regions = [regions]
 
     if len(sources) > 1 and len(regions) == 1:
         regions = list(regions) * len(sources)
@@ -1105,7 +1104,7 @@ def store(
     )
     sources_name = "store-sources-" + tokenize(sources)
     layers = {sources_name: sources_layer}
-    dependencies: dict[str, set] = {sources_name: set()}
+    dependencies: dict[str, set[str]] = {sources_name: set()}
 
     # Optimize all targets together
     targets_keys = []
@@ -1130,7 +1129,7 @@ def store(
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
         for s, t, r in zip(sources, targets, regions)
     ]
-    map_keys: list[Hashable] = []
+    map_keys: list[tuple] = []
 
     for s, t, n, r in zip(sources, targets, map_names, regions):
         map_layer = insert_to_ooc(
@@ -4119,13 +4118,13 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def load_store_chunk(
-    x: MutableSequence | None,
-    out: MutableSequence,
+    x: ArrayLike | None,
+    out: ArrayLike,
     index: slice,
     lock: Any,
     return_stored: bool,
     load_stored: bool,
-) -> MutableSequence | None:
+):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -4134,7 +4133,7 @@ def load_store_chunk(
     x: array-like
         An array (potentially a NumPy one)
     out: array-like
-        Where to store results too.
+        Where to store results to.
     index: slice-like
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
@@ -4162,11 +4161,11 @@ def load_store_chunk(
     try:
         if x is not None:
             if is_arraylike(x):
-                out[index] = x
+                out[index] = x  # type: ignore
             else:
-                out[index] = np.asanyarray(x)
+                out[index] = np.asanyarray(x)  # type: ignore
         if return_stored and load_stored:
-            result = out[index]
+            result = out[index]  # type: ignore
     finally:
         if lock:
             lock.release()
@@ -4174,18 +4173,23 @@ def load_store_chunk(
     return result
 
 
-def store_chunk(x, out, index, lock, return_stored) -> Sequence | None:
+def store_chunk(
+    x: ArrayLike, out: ArrayLike, index: slice, lock: Any, return_stored: bool
+):
     return load_store_chunk(x, out, index, lock, return_stored, False)
 
 
-def load_chunk(out, index, lock) -> Sequence | None:
+A = TypeVar("A", bound=ArrayLike)
+
+
+def load_chunk(out: A, index: slice, lock: Any) -> A:
     return load_store_chunk(None, out, index, lock, True, True)
 
 
 def insert_to_ooc(
     keys: list,
     chunks: tuple[tuple[int, ...], ...],
-    out,
+    out: ArrayLike,
     name: str,
     *,
     lock: Lock | bool = True,
@@ -5560,29 +5564,27 @@ class BlockView:
     def __init__(self, array: Array):
         self._array = array
 
-    def __getitem__(
-        self, index: int | Sequence[int] | slice | Sequence[slice]
-    ) -> Array:  # type: ignore
+    def __getitem__(self, index: Any) -> Array:
         from dask.array.slicing import normalize_index
 
         if not isinstance(index, tuple):
-            new_index = (index,)
-        else:
-            new_index = index  # type: ignore
-        if sum(isinstance(ind, (np.ndarray, list)) for ind in new_index) > 1:  # type: ignore
+            index = (index,)
+        if sum(isinstance(ind, (np.ndarray, list)) for ind in index) > 1:
             raise ValueError("Can only slice with a single list")
-        if any(ind is None for ind in new_index):  # type: ignore
+        if any(ind is None for ind in index):
             raise ValueError("Slicing with np.newaxis or None is not supported")
+        index = normalize_index(index, self._array.numblocks)
+        index = tuple(
+            slice(k, k + 1) if isinstance(k, Number) else k  # type: ignore
+            for k in index
+        )
 
-        new_index = normalize_index(new_index, self._array.numblocks)  # type: ignore
-        new_index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in new_index)  # type: ignore
+        name = "blocks-" + tokenize(self._array, index)
 
-        name = "blocks-" + tokenize(self._array, new_index)
-
-        new_keys = self._array._key_array[new_index]
+        new_keys = self._array._key_array[index]
 
         chunks = tuple(
-            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, new_index)  # type: ignore
+            tuple(np.array(c)[i].tolist()) for c, i in zip(self._array.chunks, index)
         )
 
         keys = product(*(range(len(c)) for c in chunks))
