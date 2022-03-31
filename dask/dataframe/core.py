@@ -1538,38 +1538,34 @@ Dask Name: {name}, {task} tasks"""
         n : int, optional
             Number of items to return is not supported by dask. Use frac
             instead.
-        frac : float, optional
+        frac : frac : float, optional
             Fraction of axis items to return.
+            .. warning::
+            Since `sample` is mapped to each partition, `frac` should be greater
+            or equal to the number of partitions divided by the length of the
+            DataFrame or Series object (see below).
         replace : boolean, optional
             Sample with or without replacement. Default = False.
         random_state : int or ``np.random.RandomState``
             If int we create a new RandomState with this as the seed
             Otherwise we draw from the passed RandomState
 
-        !!! Limitation
-        --------------
-            Use only if frac * length(df) >= number_of_partitions
-            is satisfied.
+        Notes
+        -----
+        If `frac` is less than the number of partitions divided by the length
+        of the object, you may see unexpected results. As an example:
 
-        Case 1:  frac * length(df) >= number_of_partitions
-            Sample works correctly and returns a sample of
-            sample_size = frac * length
-        Case 2: frac * length(df) < number_of_partitions
-            Sample does not work correctly and does not return
-            a sample of sample_size = frac * length
-
-        Example of limitation
-        ---------------------
-            import pandas as pd
-            import dask.dataframe as dd
-
-            df = dd.from_pandas(pd.DataFrame({'test':range(0,100)}),
-                                npartitions= 10)
-            print(f'Expectation | Result')
-            print(f'--------------------')
-            for numerator in (1, 5, 9, 10, 20, 30, 50):
-                sample = df.sample(frac= numerator/100)
-                print(f'{numerator:^11} | {len(sample):^7}')
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'test': range(0, 100)})
+        >>> ddf = dd.from_pandas(df, npartitions=10)
+        >>> numerators = [1, 9, 10, 20]
+        >>> # expected length after sampling
+        >>> numerators
+        [1, 9, 10, 20]
+        >>> # result of sample
+        >>> [len(ddf.sample(frac=numerator/100)) for numerator in numerators]
+        [0, 10, 10, 20]
 
         See Also
         --------
