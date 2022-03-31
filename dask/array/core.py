@@ -797,6 +797,11 @@ def map_blocks(
                 f"but output is {ndim_out}d)."
             )
         drop_axis = [i % ndim_out for i in drop_axis]
+        for axis in drop_axis:
+            if arrs and arrs[0].numblocks[axis] > 1:
+                raise ValueError(
+                    "drop_axis cannot be used on axes along which the array is chunked."
+                )
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
     if new_axis is None and chunks is not None and len(out_ind) < len(chunks):
         new_axis = range(len(chunks) - len(out_ind))
