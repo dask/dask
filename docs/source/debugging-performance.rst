@@ -8,8 +8,8 @@ This section contains resources to help you debug and understand performance.
    :maxdepth: 1
 
    how-to/debug.rst
-   Visualize Task graphs <graphviz.rst>
-   Diagnostics Local <diagnostics-local.rst>
+   Visualize task graphs <graphviz.rst>
    Dashboard <dashboard.rst> 
-   Diagnostics Distributed <diagnostics-distributed.rst>
+   diagnostics-local.rst
+   diagnostics-distributed.rst
    Phases of computation <phases-of-computation.rst>
