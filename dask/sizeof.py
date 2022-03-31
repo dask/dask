@@ -5,21 +5,12 @@ from array import array
 
 from dask.utils import Dispatch
 
-try:  # PyPy does not support sys.getsizeof
-    sys.getsizeof(1)
-    getsizeof = sys.getsizeof
-except (AttributeError, TypeError):  # Monkey patch
-
-    def getsizeof(x):  # type: ignore
-        return 100
-
-
 sizeof = Dispatch(name="sizeof")
 
 
 @sizeof.register(object)
 def sizeof_default(o):
-    return getsizeof(o)
+    return sys.getsizeof(o)
 
 
 @sizeof.register(bytes)
@@ -53,9 +44,11 @@ def sizeof_python_collection(seq):
             samples = itertools.islice(seq, num_samples)
         else:
             samples = random.sample(seq, num_samples)
-        return getsizeof(seq) + int(num_items / num_samples * sum(map(sizeof, samples)))
+        return sys.getsizeof(seq) + int(
+            num_items / num_samples * sum(map(sizeof, samples))
+        )
     else:
-        return getsizeof(seq) + sum(map(sizeof, seq))
+        return sys.getsizeof(seq) + sum(map(sizeof, seq))
 
 
 class SimpleSizeof:
@@ -78,13 +71,13 @@ class SimpleSizeof:
 
 @sizeof.register(SimpleSizeof)
 def sizeof_blocked(d):
-    return getsizeof(d)
+    return sys.getsizeof(d)
 
 
 @sizeof.register(dict)
 def sizeof_python_dict(d):
     return (
-        getsizeof(d)
+        sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
         - 2 * sizeof(list())
