@@ -153,7 +153,7 @@ messy situations in everyday problems.
    futures.rst
    scheduling.rst
    graphs.rst
-   diagnostics-performance.rst
+   debugging-performance.rst
    deploying.rst
    internals.rst
 

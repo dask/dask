@@ -1,8 +1,7 @@
-Diagnostic and Performance
+Debugging and Performance
 ==========================
 
-This section contains resources to help you debug, obtain diagnostic and understand
-performance.
+This section contains resources to help you debug and understand performance.
 
 
 .. toctree::
