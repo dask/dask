@@ -1985,12 +1985,7 @@ class _GroupBy:
         )
 
     def fillna(self, value=None, method=None, limit=None, axis=None):
-        fn = lambda g: g.fillna(
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-        )
+        fn = lambda g: g.fillna(value=value, method=method, limit=limit, axis=axis)
         meta = self._meta_nonempty.transform(fn)
         return self.transform(fn, meta=meta)
 
