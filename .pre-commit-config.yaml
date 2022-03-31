@@ -32,11 +32,14 @@ repos:
     rev: v0.931
     hooks:
       - id: mypy
+        # Override default --ignore-missing-imports
+        args: []
         additional_dependencies:
           # Type stubs
           - types-docutils
           - types-PyYAML
           - types-requests
+          - types-setuptools
           # Libraries exclusively imported under `if TYPE_CHECKING:`
           - typing_extensions  # To be reviewed after dropping Python 3.7
           # Typed libraries

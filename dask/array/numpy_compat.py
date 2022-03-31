@@ -271,3 +271,11 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, method=method)
     else:
         return np.percentile(a, q, interpolation=method)
+
+
+if _numpy_120:
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    from typing import Any
+
+    ArrayLike = DTypeLike = Any  # type: ignore
