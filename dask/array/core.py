@@ -618,6 +618,12 @@ def map_blocks(
     If ``chunks`` is specified but ``new_axis`` is not, then it is inferred to
     add the necessary number of axes on the left.
 
+    Note that ``map_blocks()`` will concatenate chunks along axes specified by
+    the keyword parameter ``drop_axis`` prior to applying the function.
+    This is illustrated in the figure below:
+
+    .. image:: /images/map_blocks_drop_axis.png
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
