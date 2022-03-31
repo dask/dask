@@ -259,7 +259,7 @@ def test_local_scheduler():
         z = await y.persist()
         assert len(z.dask) == 1
 
-    asyncio.get_event_loop().run_until_complete(f())
+    asyncio.run(f())
 
 
 @gen_cluster(client=True)
