@@ -636,6 +636,31 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
+def test_merge_asof_on_left_right():
+    df1 = pd.DataFrame(
+        {
+            "endofweek": [1, 1, 2, 2, 3, 4],
+            "GroupCol": [1234, 8679, 1234, 8679, 1234, 8679],
+        }
+    )
+    df2 = pd.DataFrame(
+        {"timestamp": [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]}
+    )
+
+    # pandas
+    result_df = pd.merge_asof(df1, df2, left_on="endofweek", right_on="timestamp")
+
+    # dask
+    result_dd = dd.merge_asof(
+        dd.from_pandas(df1, npartitions=2),
+        dd.from_pandas(df2, npartitions=2),
+        left_on="endofweek",
+        right_on="timestamp",
+    )
+
+    assert_eq(result_df, result_dd, check_index=False)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
@@ -2233,7 +2258,7 @@ def test_multi_duplicate_divisions():
 
     ddf1 = dd.from_pandas(df1, npartitions=2).set_index("x")
     ddf2 = dd.from_pandas(df2, npartitions=1).set_index("x")
-    assert ddf1.npartitions == 2
+    assert ddf1.npartitions <= 2
     assert len(ddf1) == len(df1)
 
     r1 = ddf1.merge(ddf2, how="left", left_index=True, right_index=True)
