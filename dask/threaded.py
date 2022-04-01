@@ -84,7 +84,7 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
     """
     # Older versions of dask supported configuring a ThreadPool to use across
     # invocations, we preserve that here (even though we use
-    # concurrent.futures.Executor` instances now).
+    # `concurrent.futures.Executor` instances now).
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None)
 
