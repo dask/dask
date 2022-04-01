@@ -1538,7 +1538,7 @@ Dask Name: {name}, {task} tasks"""
         n : int, optional
             Number of items to return is not supported by dask. Use frac
             instead.
-        frac : frac : float, optional
+        frac : float, optional
             Fraction of axis items to return.
             .. warning::
             Since `sample` is mapped to each partition, `frac` should be greater
