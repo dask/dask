@@ -864,6 +864,11 @@ def test_auto_chunks():
         assert 4 < x.npartitions < 32
 
 
+def test_string_auto_chunk():
+    with pytest.raises(ValueError):
+        da.full((10000, 10000), "auto_chunk", chunks="auto")
+
+
 def test_diagonal_zero_chunks():
     x = da.ones((8, 8), chunks=(4, 4))
     dd = da.ones((8, 8), chunks=(4, 4))
