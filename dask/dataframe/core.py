@@ -1539,14 +1539,11 @@ Dask Name: {name}, {task} tasks"""
             Number of items to return is not supported by dask. Use frac
             instead.
         frac : float, optional
-            Fraction of axis items to return.
-            
-            .. warning::
-            
+            Fraction of axis items to return.            
+            .. warning::            
                Since ``sample`` is mapped to each partition, ``frac`` should be greater
                or equal to the number of partitions divided by the length of the
-               DataFrame or Series object (see below).
-            
+               DataFrame or Series object (see below).            
         replace : boolean, optional
             Sample with or without replacement. Default = False.
         random_state : int or ``np.random.RandomState``
