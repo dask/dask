@@ -7,13 +7,14 @@ API
 Array
 ~~~~~
 
+.. autoclass:: Array
+
 .. autosummary::
     :toctree: generated
     :recursive:
     :template: custom-class-template.rst
 
     Array
-
 
 Fast Fourier Transforms
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -91,7 +92,19 @@ Slightly Overlapping Computations
 Create and Store Arrays
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-.. come back to this section, they're in dask.array.core
+.. autosummary::
+   :toctree: generated/
+
+   from_array
+   from_delayed
+   from_npy_stack
+   from_zarr
+   from_tiledb
+   store
+   to_hdf5
+   to_zarr
+   to_npy_stack
+   to_tiledb
 
 Generalized Ufuncs
 ~~~~~~~~~~~~~~~~~~
@@ -106,9 +119,11 @@ Generalized Ufuncs
 Internal functions
 ~~~~~~~~~~~~~~~~~~
 
+.. currentmodule:: dask.array.core
+
 .. autosummary::
    :toctree: generated/
-   :template: custom-module-template.rst
-   :recursive:
 
-   core
+   blockwise
+   normalize_chunks
+   unify_chunks
