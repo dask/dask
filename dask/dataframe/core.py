@@ -1539,33 +1539,17 @@ Dask Name: {name}, {task} tasks"""
             Number of items to return is not supported by dask. Use frac
             instead.
         frac : float, optional
-            Fraction of axis items to return.            
-            .. warning::            
-               Since ``sample`` is mapped to each partition, ``frac`` should be greater
-               or equal to the number of partitions divided by the length of the
-               DataFrame or Series object (see below).            
+            Approximate fraction of items to return. This sampling fraction is
+            applied to all partitions equally. Note that this is an
+            **approximate fraction**. You should not expect exactly ``len(df) * frac``
+            items to be returned, as the exact number of elements selected will
+            depend on how your data is partitioned (but should be pretty close
+            in practice).
         replace : boolean, optional
             Sample with or without replacement. Default = False.
         random_state : int or ``np.random.RandomState``
-            If int we create a new RandomState with this as the seed
-            Otherwise we draw from the passed RandomState
-
-        Notes
-        -----
-        If `frac` is less than the number of partitions divided by the length
-        of the object, you may see unexpected results. As an example:
-
-        >>> import pandas as pd
-        >>> import dask.dataframe as dd
-        >>> df = pd.DataFrame({'test': range(0, 100)})
-        >>> ddf = dd.from_pandas(df, npartitions=10)
-        >>> numerators = [1, 9, 10, 20]
-        >>> # expected length after sampling
-        >>> numerators
-        [1, 9, 10, 20]
-        >>> # result of sample
-        >>> [len(ddf.sample(frac=numerator/100)) for numerator in numerators]
-        [0, 10, 10, 20]
+            If an int, we create a new RandomState with this as the seed;
+            Otherwise we draw from the passed RandomState.
 
         See Also
         --------
