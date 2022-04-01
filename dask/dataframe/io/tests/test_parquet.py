@@ -3690,7 +3690,7 @@ def test_unsupported_extension_file(tmpdir, engine):
     # (See: https://github.com/dask/dask/issues/8349)
     fn = os.path.join(str(tmpdir), "multi.foo")
     df0 = pd.DataFrame({"a": range(10)})
-    df0.to_parquet(fn, engine=engine.split("-")[0])
+    df0.to_parquet(fn, engine=engine)
     assert_eq(df0, dd.read_parquet(fn, engine=engine, index=False))
 
 
