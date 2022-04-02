@@ -946,10 +946,7 @@ def merge_asof(
     if not is_dask_collection(right):
         right = from_pandas(right, npartitions=1)
     if right_on is not None:
-        if on:
-            right = right.set_index(right_on, sorted=True)
-        else:
-            right = right.set_index(right_on, drop=False, sorted=True)
+        right = right.set_index(right_on, drop=(left_on == right_on), sorted=True)
 
     if by is not None:
         kwargs["left_by"] = kwargs["right_by"] = by
