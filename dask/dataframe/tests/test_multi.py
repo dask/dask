@@ -636,6 +636,32 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
+@pytest.mark.parametrize(
+    "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
+)
+def test_merge_asof_on_left_right(left_col, right_col):
+    df1 = pd.DataFrame(
+        {
+            left_col: [1, 1, 2, 2, 3, 4],
+            "GroupCol": [1234, 8679, 1234, 8679, 1234, 8679],
+        }
+    )
+    df2 = pd.DataFrame({right_col: [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]})
+
+    # pandas
+    result_df = pd.merge_asof(df1, df2, left_on=left_col, right_on=right_col)
+
+    # dask
+    result_dd = dd.merge_asof(
+        dd.from_pandas(df1, npartitions=2),
+        dd.from_pandas(df2, npartitions=2),
+        left_on=left_col,
+        right_on=right_col,
+    )
+
+    assert_eq(result_df, result_dd, check_index=False)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(

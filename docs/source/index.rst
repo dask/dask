@@ -163,7 +163,10 @@ messy situations in everyday problems.
    :caption: Scheduling
 
    scheduling.rst
-   Distributed Scheduling <https://distributed.dask.org/>
+   graphs.rst
+   debugging-performance.rst
+   deploying.rst
+   internals.rst
 
 .. toctree::
    :maxdepth: 1

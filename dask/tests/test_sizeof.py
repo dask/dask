@@ -5,12 +5,12 @@ from array import array
 import pytest
 
 from dask.multiprocessing import get_context
-from dask.sizeof import getsizeof, sizeof
+from dask.sizeof import sizeof
 from dask.utils import funcname
 
 
 def test_base():
-    assert sizeof(1) == getsizeof(1)
+    assert sizeof(1) == sys.getsizeof(1)
 
 
 def test_name():
@@ -18,7 +18,7 @@ def test_name():
 
 
 def test_containers():
-    assert sizeof([1, 2, [3]]) > (getsizeof(3) * 3 + getsizeof([]))
+    assert sizeof([1, 2, [3]]) > (sys.getsizeof(3) * 3 + sys.getsizeof([]))
 
 
 def test_bytes_like():
