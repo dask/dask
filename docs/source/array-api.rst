@@ -8,6 +8,7 @@ Array
 ~~~~~
 
 .. autoclass:: Array
+   :noindex:
 
 .. autosummary::
     :toctree: generated
