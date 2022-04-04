@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -852,7 +852,7 @@ def funcname(func) -> str:
         return str(func)[:50]
 
 
-def typename(typ, short=False) -> str:
+def typename(typ: Any, short: bool = False) -> str:
     """
     Return the name of a type
 
@@ -1311,7 +1311,7 @@ def is_cupy_type(x) -> bool:
     return "cupy" in str(type(x))
 
 
-def natural_sort_key(s):
+def natural_sort_key(s: str) -> list[str | int]:
     """
     Sorting `key` function for performing a natural sort on a collection of
     strings
@@ -1340,7 +1340,7 @@ def natural_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
-def factors(n):
+def factors(n: int) -> set[int]:
     """Return the factors of an integer
 
     https://stackoverflow.com/a/6800214/616616
@@ -1425,7 +1425,7 @@ byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and "i" not in k}
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
-def format_time(n):
+def format_time(n: float) -> str:
     """format integers as time
 
     >>> from dask.utils import format_time
@@ -1570,7 +1570,17 @@ timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
-def parse_timedelta(s: float | str | timedelta | None, default: str = "seconds"):
+@overload
+def parse_timedelta(s: None, default: str = "seconds") -> None:
+    ...
+
+
+@overload
+def parse_timedelta(s: str | float | timedelta, default: str = "seconds") -> float:
+    ...
+
+
+def parse_timedelta(s, default="seconds"):
     """Parse timedelta string to number of seconds
 
     Examples
