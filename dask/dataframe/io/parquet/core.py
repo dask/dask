@@ -17,7 +17,7 @@ from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply, import_required, natural_sort_key, parse_bytes
+from dask.utils import apply, import_required, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -300,19 +300,38 @@ def read_parquet(
                 └── └── 04.parquet
 
         Note that the default behavior of ``aggregate_files`` is False.
-    **kwargs: dict (of dicts)
-        Passthrough key-word arguments for read backend.
-        The top-level keys correspond to the appropriate operation type, and
-        the second level corresponds to the kwargs that will be passed on to
-        the underlying ``pyarrow`` or ``fastparquet`` function.
-        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
-        (for the backend read function), 'arrow_to_pandas' (for controlling the
-        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
-        Any element of kwargs that is not defined under these top-level keys
-        will be passed through to the `engine.read_partitions` classmethod as a
-        stand-alone argument (and will be ignored by the engine implementations
-        defined in ``dask.dataframe``).
+    require_extension: str or tuple(str), default (".parq", ".parquet". ".pq")
+        Required file extension for all parquet data files. Other file
+        extensions will be ignored. Note that ``require_extension=False``
+        will skip the file-extension check altogether.
+    dataset_options: dict, default None
+        Dictionary of engine-specific key-word arguments for initializing a
+        "dataset" object for metadata processing and possibly for reading data.
+        For the "pyarrow" engine, these arguments will be used to initialize a
+        ``pyarrow.dataset.Dataset`` object using the ``pyarrow.dataset.dataset``
+        function (or ``pyarrow.dataset.parquet_dataset`` if a ``_metadata`` file
+        is detected). For "fastparquet", these arguments will be used with the
+        ``fastparquet.ParquetFile`` constructor. See ``validate_dataset_options``
+        in ``arrow.ArrowDatasetOptions``  and ``fastparquet.FastParquetOptions``
+        for more details.
+    read_options: dict, default None
+        Dictionary of engine-specific key-word arguments to be passed through
+        to the backend-IO function when reading data. Since the specific IO
+        function may vary (depending on dataset properties and other options),
+        passing options in this way is NOT typically recommended. However,
+        specific read options with explicit support may be documented in
+        ``validate_read_options`` in ``arrow.ArrowDatasetOptions`` and
+        ``fastparquet.FastParquetOptions``.
+    **kwargs: dict, default None
+        Dictionary of key-word arguments to be be passed through to the engine
+        backend. For example, 'arrow_to_pandas' can be used with the "pyarrow"
+        engine to control the arguments used to convert from ``pyarrow.Table``
+        to pandas (with ``pyarrow.Table.to_pandas()``). By default, these
+        arguments will be passed through to the ``engine.read_partition``
+        classmethod, but will not be passed through to the backend IO function.
+        Options with known support will be documented in
+        ``validate_other_options`` in ``arrow.ArrowDatasetOptions``
+        and ``fastparquet.FastParquetOptions``.
 
     Examples
     --------
@@ -321,7 +340,8 @@ def read_parquet(
     See Also
     --------
     to_parquet
-    pyarrow.parquet.ParquetDataset
+    arrow.ArrowDatasetEngine
+    fastparquet.FastParquetEngine
     """
 
     if "read_from_paths" in kwargs:
@@ -331,8 +351,10 @@ def read_parquet(
             FutureWarning,
         )
 
-    # Store initial function arguments
-    input_kwargs = {
+    # Store initial function arguments.
+    # Start with just the "core" arguments
+    core_options = {
+        "path": path,
         "columns": columns,
         "filters": filters,
         "categories": categories,
@@ -343,14 +365,14 @@ def read_parquet(
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
-        "chunksize=": chunksize,
+        "chunksize": chunksize,
         "aggregate_files": aggregate_files,
-        **kwargs,
     }
+    engine_options = kwargs.copy()
 
     if isinstance(columns, str):
-        input_kwargs["columns"] = [columns]
-        df = read_parquet(path, **input_kwargs)
+        core_options["columns"] = [columns]
+        df = read_parquet(**core_options, **engine_options)
         return df[columns]
 
     if columns is not None:
@@ -362,13 +384,14 @@ def read_parquet(
     if hasattr(path, "name"):
         path = stringify_path(path)
 
-    # Update input_kwargs and tokenize inputs
+    # Update core_options and tokenize inputs
     label = "read-parquet-"
-    input_kwargs.update({"columns": columns, "engine": engine})
-    output_name = label + tokenize(path, **input_kwargs)
+    core_options.update({"columns": columns, "engine": engine})
+    output_name = label + tokenize(path, **core_options, **engine_options)
 
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
+    # Extract EngineOptions and compatible filesystem and paths
+    valid_engine_options = engine.get_engine_options(core_options, **engine_options)
+    fs, paths = valid_engine_options.get_fs_and_paths()
 
     auto_index_allowed = False
     if index is None:
@@ -398,7 +421,7 @@ def read_parquet(
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
-        **kwargs,
+        **valid_engine_options.to_dict(),
     )
 
     # In the future, we may want to give the engine the
@@ -424,7 +447,6 @@ def read_parquet(
         index,
         chunksize,
         split_row_groups,
-        fs,
         aggregation_depth,
     )
 
@@ -464,8 +486,7 @@ def read_parquet(
             label=label,
             creation_info={
                 "func": read_parquet,
-                "args": (path,),
-                "kwargs": input_kwargs,
+                "kwargs": {**core_options, **engine_options},
             },
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
@@ -1191,7 +1212,6 @@ def process_statistics(
     index,
     chunksize,
     split_row_groups,
-    fs,
     aggregation_depth,
 ):
     """Process row-group column statistics in metadata
@@ -1229,7 +1249,7 @@ def process_statistics(
         # Aggregate parts/statistics if we are splitting by row-group
         if chunksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
+                parts, statistics, chunksize, split_row_groups, aggregation_depth
             )
 
         out = sorted_columns(statistics)
@@ -1335,9 +1355,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
-):
+def aggregate_row_groups(parts, stats, chunksize, split_row_groups, aggregation_depth):
     if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
 
@@ -1373,10 +1391,8 @@ def aggregate_row_groups(
                     multi_path_allowed = True
                 elif isinstance(aggregation_depth, int):
                     # Make sure files share the same directory
-                    root = stat["file_path_0"].split(fs.sep)[:-aggregation_depth]
-                    next_root = next_stat["file_path_0"].split(fs.sep)[
-                        :-aggregation_depth
-                    ]
+                    root = stat["file_path_0"].split("/")[:-aggregation_depth]
+                    next_root = next_stat["file_path_0"].split("/")[:-aggregation_depth]
                     multi_path_allowed = root == next_root
                 else:
                     raise ValueError(

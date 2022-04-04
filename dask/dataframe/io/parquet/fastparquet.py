@@ -8,6 +8,7 @@ from contextlib import ExitStack
 import numpy as np
 import pandas as pd
 import tlz as toolz
+from fsspec.core import expand_paths_if_needed
 from packaging.version import parse as parse_version
 
 try:
@@ -25,6 +26,7 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    EngineOptions,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
@@ -33,7 +35,6 @@ from dask.dataframe.io.parquet.utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
@@ -385,15 +386,12 @@ class FastParquetEngine(Engine):
         # dataset.  If _metadata is available, set `gather_statistics=True`
         # (if `gather_statistics=None`).
 
-        # Extract "supported" key-word arguments from `kwargs`.
-        # Split items into `dataset_kwargs` and `read_kwargs`
-        dataset_kwargs, read_kwargs, user_kwargs = _split_user_options(**kwargs)
+        # Extract "dataset" kwargs
+        dataset_kwargs = kwargs.get("dataset", {})
 
         parts = []
         _metadata_exists = False
-        require_extension = dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
+        require_extension = dataset_kwargs.pop("require_extension")
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -421,7 +419,6 @@ class FastParquetEngine(Engine):
                 # Using _metadata file (best-case scenario)
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
-                    open_with=fs.open,
                     **dataset_kwargs,
                 )
                 if gather_statistics is None:
@@ -439,9 +436,7 @@ class FastParquetEngine(Engine):
                             "No files satisfy the `require_extension` criteria "
                             f"(files must end with {require_extension})."
                         )
-                pf = ParquetFile(
-                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
-                )
+                pf = ParquetFile(paths[:1], root=base, **dataset_kwargs)
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
@@ -463,16 +458,13 @@ class FastParquetEngine(Engine):
                 # We have a _metadata file, lets use it
                 pf = ParquetFile(
                     fs.sep.join([base, "_metadata"]),
-                    open_with=fs.open,
                     **dataset_kwargs,
                 )
             else:
                 # Rely on metadata for 0th file.
                 # Will need to pass a list of paths to read_partition
                 scheme = get_file_scheme(fns)
-                pf = ParquetFile(
-                    paths[:1], open_with=fs.open, root=base, **dataset_kwargs
-                )
+                pf = ParquetFile(paths[:1], root=base, **dataset_kwargs)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
                 if not gather_statistics:
@@ -513,11 +505,7 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
-            "kwargs": {
-                "dataset": dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
-            },
+            "kwargs": kwargs,
         }
 
     @classmethod
@@ -718,6 +706,7 @@ class FastParquetEngine(Engine):
             "root_file_scheme": pf.file_scheme,
             "base_path": "" if base_path is None else base_path,
             "has_metadata_file": has_metadata_file,
+            "dataset_options": kwargs.get("dataset", {}),
         }
 
         if (
@@ -784,14 +773,15 @@ class FastParquetEngine(Engine):
         root_cats = dataset_info_kwargs.get("root_cats", None)
         root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
         has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+        dataset_options = dataset_info_kwargs["dataset_options"]
 
         # Get ParquetFile
         if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
             # Construct local `ParquetFile` object
             pf = ParquetFile(
                 pf_or_files,
-                open_with=fs.open,
                 root=base_path,
+                **dataset_options,
             )
             # Update hive-partitioning to match global cats/scheme
             pf.cats = root_cats or {}
@@ -840,6 +830,10 @@ class FastParquetEngine(Engine):
         )
 
         return parts, stats
+
+    @classmethod
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return FastparquetOptions(core_options, **engine_options)
 
     @classmethod
     def read_metadata(
@@ -955,7 +949,6 @@ class FastParquetEngine(Engine):
                 rg_offset = 0
                 parquet_file = ParquetFile(
                     [p[0] for p in pieces],
-                    open_with=fs.open,
                     root=base_path or False,
                     **kwargs.get("dataset", {}),
                 )
@@ -965,7 +958,6 @@ class FastParquetEngine(Engine):
                         if len(pieces) == 1
                         else ParquetFile(
                             piece[0],
-                            open_with=fs.open,
                             root=base_path or False,
                             **kwargs.get("dataset", {}),
                         )
@@ -1308,3 +1300,92 @@ class FastParquetEngine(Engine):
         # if appending, could skip this, but would need to check existence
         fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
+
+
+class FastparquetOptions(EngineOptions):
+    def validate_dataset_options(
+        self,
+        verify=False,
+        open_with=None,
+        sep=None,
+        fs=None,
+        pandas_nulls=True,
+        **dataset_options,
+    ):
+        """Return valid dataset options for FastparquetEngine
+
+        Parameters
+        ----------
+        verify : bool; optional
+        open_with : callable; optional
+        sep : str; optional
+        fs : fsspec-compatible filesystem; optional
+        pandas_nulls : bool; optional
+
+        Examples
+        --------
+        Supported parameters can be passed to ``read_parquet``
+        using the ``dataset_options`` argument. For example::
+
+        >>> df = dd.read_parquet(...,dataset_options={"pandas_nulls": False})  # doctest: +SKIP
+        """
+
+        # Extract require_extension
+        require_extension = dataset_options.pop("require_extension", None)
+        if require_extension is None:
+            require_extension = (".parquet", ".parq", ".pq")
+
+        #  Check if we the user has specified the filesystem
+        if fs:
+            path = self.core_options["path"]
+            if isinstance(path, (list, tuple, set)):
+                paths = expand_paths_if_needed(path, "rb", 1, fs, None)
+            else:
+                if "*" in path:
+                    paths = [f for f in sorted(fs.glob(path)) if not fs.isdir(f)]
+                else:
+                    paths = [path]
+            self._fs = fs
+            self._paths = sorted(paths, key=natural_sort_key)
+        else:
+            self._fs, self._paths = self.get_fs_and_paths()
+
+        # Pop supported dataset options
+        valid_dataset_options = {
+            "verify": verify,
+            "open_with": open_with,
+            "sep": sep,
+            "fs": self._fs,
+            "pandas_nulls": pandas_nulls,
+            # TODO: Support `root` argument
+        }
+        if dataset_options:
+            # There are more options that are not explicitly supported
+            raise ValueError(
+                f"{dataset_options} ParquetFile options are not "
+                f"currently compatible with read_parquet."
+            )
+
+        # Add missing entries to valid_dataset_options
+        valid_dataset_options["require_extension"] = require_extension
+
+        return valid_dataset_options
+
+    def validate_read_options(self, **read_options):
+        # Warn if the user is passing in read options
+        unrecognized = set(read_options) - {"open_file_options"}
+        if unrecognized:
+            warnings.warn(
+                f"Unrecognized read arguments: {set(unrecognized)}. "
+                f"These options might be silently ignored!"
+            )
+        return read_options
+
+    def validate_other_options(self, **other_options):
+        # Warn the user if any "other_options" are not recognized
+        if other_options:
+            warnings.warn(
+                f"Unrecognized key-word arguments: {other_options}. "
+                f"These options might be silently ignored!"
+            )
+        return other_options

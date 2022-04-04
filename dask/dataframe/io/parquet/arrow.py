@@ -14,6 +14,7 @@ from dask.core import flatten
 from dask.dataframe.io.parquet.core import create_metadata_file
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    EngineOptions,
     _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
@@ -22,7 +23,6 @@ from dask.dataframe.io.parquet.utils import (
     _row_groups_to_parts,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
-    _split_user_options,
 )
 from dask.dataframe.io.utils import (
     _get_pyarrow_dtypes,
@@ -36,7 +36,10 @@ from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
+
 from pyarrow import dataset as pa_ds
+from pyarrow.dataset import ParquetFileFormat
+from pyarrow.fs import FileSystem as PaFileSystem
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 del _pa_version
@@ -209,7 +212,6 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
-
     # Define file-opening options
     read_kwargs = kwargs.get("read", {}).copy()
     precache_options, open_file_options = _process_open_file_options(
@@ -230,6 +232,7 @@ def _read_table_from_path(
     )
 
     if partition_keys:
+        # TODO: Remove this when parquet-legacy is removed
         tables = []
         with _open_input_files(
             [path],
@@ -344,6 +347,10 @@ class ArrowDatasetEngine(Engine):
     #
     # Public Class Methods
     #
+
+    @classmethod
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return ArrowDatasetOptions(core_options, **engine_options)
 
     @classmethod
     def read_metadata(
@@ -811,107 +818,93 @@ class ArrowDatasetEngine(Engine):
         This method is overriden by `ArrowLegacyEngine`.
         """
 
-        # Use pyarrow.dataset API
-        ds = None
-        valid_paths = None  # Only used if `paths` is a list containing _metadata
-
-        # Extract "supported" key-word arguments from `kwargs`
-        (
-            _dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
-
-        # Discover Partitioning - Note that we need to avoid creating
-        # this factory until it is actually used.  The `partitioning`
-        # object can be overridden if a "partitioning" kwarg is passed
-        # in, containing a `dict` with a required "obj" argument and
-        # optional "arg" and "kwarg" elements.  Note that the "obj"
-        # value must support the "discover" attribute.
-        partitioning = _dataset_kwargs.pop(
-            "partitioning",
-            {"obj": pa_ds.HivePartitioning},
-        )
+        # Extract dataset kwargs
+        _dataset_kwargs = kwargs.get("dataset", {})
 
         # Set require_extension option
         require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
+            "_require_extension", (".parq", ".parquet", ".pq")
         )
 
-        # Case-dependent pyarrow.dataset creation
-        has_metadata_file = False
-        if len(paths) == 1 and fs.isdir(paths[0]):
+        # Extract dataset options that are not allowed when
+        # reading from a _metadata file
+        _inconsistent_options = _dataset_kwargs.pop("_inconsistent_options", {})
 
-            # Use _analyze_paths to avoid relative-path
-            # problems (see GH#5608)
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
-            paths = fs.sep.join([base, fns[0]])
+        # Use pyarrow.dataset API
+        ds = _dataset_kwargs.pop("_ds", None)
+        has_metadata_file = _dataset_kwargs.pop("_has_metadata_file", False)
+        valid_paths = None  # Only used if `paths` is a list containing _metadata
+        if ds is None:
+            # Case-dependent pyarrow.dataset creation
+            if len(paths) == 1 and fs.isdir(paths[0]):
 
-            meta_path = fs.sep.join([paths, "_metadata"])
-            if not ignore_metadata_file and fs.exists(meta_path):
-                # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                    **_dataset_kwargs,
-                )
-                has_metadata_file = True
-                if gather_statistics is None:
-                    gather_statistics = True
-            elif require_extension:
-                # Need to materialize all paths if we are missing the _metadata file
-                # Raise error if all files have been filtered by extension
-                len0 = len(paths)
-                paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
-                ]
-                if len0 and paths == []:
-                    raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
-                    )
+                # Use _analyze_paths to avoid relative-path
+                # problems (see GH#5608)
+                paths, base, fns = _sort_and_analyze_paths(paths, fs)
+                paths = fs.sep.join([base, fns[0]])
 
-        elif len(paths) > 1:
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
-            meta_path = fs.sep.join([base, "_metadata"])
-            if "_metadata" in fns:
-                # Pyarrow cannot handle "_metadata" when `paths` is a list
-                # Use _metadata file
-                if not ignore_metadata_file:
-                    ds = pa_ds.parquet_dataset(
-                        meta_path,
-                        filesystem=fs,
-                        partitioning=partitioning["obj"].discover(
-                            *partitioning.get("args", []),
-                            **partitioning.get("kwargs", {}),
-                        ),
-                        **_dataset_kwargs,
-                    )
+                meta_path = fs.sep.join([paths, "_metadata"])
+                if not ignore_metadata_file and fs.exists(meta_path):
+                    # Use _metadata file
+                    ds = (meta_path,)
                     has_metadata_file = True
                     if gather_statistics is None:
                         gather_statistics = True
+                elif require_extension:
+                    # Need to materialize all paths if we are missing the _metadata file
+                    # Raise error if all files have been filtered by extension
+                    len0 = len(paths)
+                    paths = [
+                        path
+                        for path in fs.find(paths)
+                        if path.endswith(require_extension)
+                    ]
+                    if len0 and paths == []:
+                        raise ValueError(
+                            "No files satisfy the `require_extension` criteria "
+                            f"(files must end with {require_extension})."
+                        )
 
-                # Populate valid_paths, since the original path list
-                # must be used to filter the _metadata-based dataset
-                fns.remove("_metadata")
-                valid_paths = fns
+            elif len(paths) > 1:
+                paths, base, fns = _sort_and_analyze_paths(paths, fs)
+                meta_path = fs.sep.join([base, "_metadata"])
+                if "_metadata" in fns:
+                    # Pyarrow cannot handle "_metadata" when `paths` is a list
+                    # Use _metadata file
+                    if not ignore_metadata_file:
+                        ds = (meta_path,)
+                        has_metadata_file = True
+                        if gather_statistics is None:
+                            gather_statistics = True
+
+                    # Populate valid_paths, since the original path list
+                    # must be used to filter the _metadata-based dataset
+                    fns.remove("_metadata")
+                    valid_paths = fns
+
+            # Check if we are intializing a dataset from _metadata
+            if isinstance(ds, tuple):
+                # Check "tricky" dataset options
+                if _dataset_kwargs["format"] == "parquet":
+                    raise ValueError(
+                        "Please pass a ParquetFileFormat object for the "
+                        "`format` pyarrow.dataset option. Passing a string "
+                        "is not supported when reading from a `_metadata` file."
+                    )
+                # Drop unsupported options for now if we are reading from _metadata
+                if _inconsistent_options:
+                    warnings.warn(
+                        "The `exclude_invalid_files` and `ignore_prefixes` arguments "
+                        "for `pyarrow.dataset` are not supported when reading from a "
+                        "`_metadata` file. Since a `_metadata` file is present, and "
+                        " `ignore_metadata_file=False` these arguments will be ignored."
+                    )
+                ds = pa_ds.parquet_dataset(*ds, **_dataset_kwargs)
 
         # Final "catch-all" pyarrow.dataset call
+        _dataset_kwargs.update(**_inconsistent_options)
         if ds is None:
-            ds = pa_ds.dataset(
-                paths,
-                filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
-                **_dataset_kwargs,
-            )
+            ds = pa_ds.dataset(paths, **_dataset_kwargs)
 
         # At this point, we know if `split_row_groups` should be
         # set to `True` by default.  If the user has not specified
@@ -971,9 +964,7 @@ class ArrowDatasetEngine(Engine):
             #        dict_keys(['c', 'b'])
             #
             cat_keys = [
-                part.split("=")[0]
-                for part in file_frag.path.split(fs.sep)
-                if "=" in part
+                part.split("=")[0] for part in file_frag.path.split("/") if "=" in part
             ]
             if set(hive_categories) == set(cat_keys):
                 hive_categories = {
@@ -1021,13 +1012,9 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "partitions": partition_obj,
             "partition_names": partition_names,
-            "partitioning": partitioning,
+            "partitioning": _dataset_kwargs["partitioning"],
             "metadata_task_size": metadata_task_size,
-            "kwargs": {
-                "dataset": _dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
-            },
+            "kwargs": kwargs,
         }
 
     @classmethod
@@ -1257,7 +1244,6 @@ class ArrowDatasetEngine(Engine):
             "fs": fs,
             "split_row_groups": split_row_groups,
             "gather_statistics": gather_statistics,
-            "partitioning": partitioning,
             "filters": filters,
             "ds_filters": ds_filters,
             "schema": schema,
@@ -1265,6 +1251,7 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "chunksize": chunksize,
             "partitions": partitions,
+            "dataset_options": kwargs.get("dataset", {}),
         }
 
         # Main parts/stats-construction
@@ -1340,6 +1327,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups = dataset_info_kwargs["split_row_groups"]
         gather_statistics = dataset_info_kwargs["gather_statistics"]
         partitions = dataset_info_kwargs["partitions"]
+        dataset_options = dataset_info_kwargs["dataset_options"]
 
         # Make sure we are processing a non-empty list
         if not isinstance(files_or_frags, list):
@@ -1360,16 +1348,10 @@ class ArrowDatasetEngine(Engine):
                 ], None
 
             # Need more information - convert the path to a fragment
-            partitioning = dataset_info_kwargs["partitioning"]
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
-                    filesystem=fs,
-                    format="parquet",
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
+                    **dataset_options,
                 ).get_fragments()
             )
         else:
@@ -1515,7 +1497,7 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Get full path (empty strings should be ignored)
-        full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
+        full_path = "/".join([p for p in [data_path, filename] if p != ""])
 
         pkeys = partition_keys.get(full_path, None)
         if partition_obj and pkeys is None:
@@ -1549,12 +1531,19 @@ class ArrowDatasetEngine(Engine):
             # Check if we have partitioning information.
             # Will only have this if the engine="pyarrow-dataset"
             partitioning = kwargs.pop("partitioning", None)
+            dataset_options = kwargs.get("dataset", {})
 
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
+            # We also need to generate a fragment if the user-specified
+            # dataset options include a custom filesystem or a non-default
+            # format option (which may have custom read options)
+            if (
+                (partitions and partition_keys is None)
+                or (partitioning and _need_fragments(filters, partition_keys))
+                or isinstance(fs, PaFileSystem)
+                or not ParquetFileFormat().equals(dataset_options["format"])
             ):
 
                 # We are filtering with "pyarrow-dataset".
@@ -1562,12 +1551,6 @@ class ArrowDatasetEngine(Engine):
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
-                    format="parquet",
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
                     **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())
@@ -1737,6 +1720,9 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 
 
 class ArrowLegacyEngine(ArrowDatasetEngine):
+    @classmethod
+    def get_engine_options(cls, core_options: dict, **engine_options):
+        return EngineOptions(core_options, **engine_options)
 
     #
     # Private Class Methods
@@ -1771,12 +1757,8 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if metadata_task_size:
             raise ValueError("metadata_task_size not supported in ArrowLegacyEngine")
 
-        # Extract "supported" key-word arguments from `kwargs`
-        (
-            dataset_kwargs,
-            read_kwargs,
-            user_kwargs,
-        ) = _split_user_options(**kwargs)
+        # Extract "dataset" kwargs
+        dataset_kwargs = kwargs.get("dataset", {})
 
         (
             schema,
@@ -1817,11 +1799,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             "partition_keys": partition_info["partition_keys"],
             "partition_names": partition_info["partition_names"],
             "partitions": partition_info["partitions"],
-            "kwargs": {
-                "dataset": dataset_kwargs,
-                "read": read_kwargs,
-                **user_kwargs,
-            },
+            "kwargs": kwargs,
         }
 
     @classmethod
@@ -2411,3 +2389,143 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 # Compatibility access to legacy ArrowEngine
 # (now called `ArrowLegacyEngine`)
 ArrowEngine = ArrowLegacyEngine
+
+
+class ArrowDatasetOptions(EngineOptions):
+    def validate_dataset_options(
+        self,
+        schema=None,
+        filesystem=None,
+        format=None,
+        partitioning=None,
+        partition_base_dir=None,
+        exclude_invalid_files=None,
+        ignore_prefixes=None,
+        **dataset_options,
+    ):
+        """Return valid dataset options for ArrowDatasetEngine
+
+        Parameters
+        ----------
+        schema : pyarrow.Schema; optional
+        filesystem : pyarrow.fs.FileSystem; optional
+        format : pyarrow.dataset.ParquetFileFormat; optional
+        partitioning : pyarrow.dataset.Partitioning or str; optional
+        partition_base_dir : str; optional
+        exclude_invalid_files : bool; optional
+            Not supported when reading from a _metadata file.
+        ignore_prefixes : list; optional
+            Not supported when reading from a _metadata file.
+
+        Examples
+        --------
+        Supported parameters can be passed to ``read_parquet``
+        using the ``dataset_options`` argument. For example::
+
+        >>> df = dd.read_parquet(...,dataset_options={"exclude_invalid_files": True})  # doctest: +SKIP
+        """
+
+        # Use pyarrow.dataset API
+        ds = None
+
+        # Extract require_extension
+        require_extension = dataset_options.pop("require_extension", None)
+        if require_extension is None:
+            require_extension = (
+                (".parquet", ".parq", ".pq") if filesystem is None else False
+            )
+
+        # Pop supported dataset options
+        valid_dataset_options = {
+            "schema": schema,
+            "filesystem": filesystem,
+            "format": format or pa_ds.ParquetFileFormat(),
+            "partitioning": partitioning or "hive",
+            "partition_base_dir": partition_base_dir,
+        }
+        inconsistent_options = {}
+        if exclude_invalid_files is not None:
+            inconsistent_options["exclude_invalid_files"] = exclude_invalid_files
+        if ignore_prefixes is not None:
+            inconsistent_options["ignore_prefixes"] = ignore_prefixes
+        if dataset_options:
+            # There are more options that are not explicitly supported
+            raise ValueError(
+                f"{dataset_options} pyarrow.dataset options are not "
+                f"currently compatible with read_parquet."
+            )
+
+        path = self.core_options.get("path")
+        filesystem = valid_dataset_options["filesystem"]
+        has_metadata_file = False
+        if filesystem:
+
+            if not isinstance(filesystem, PaFileSystem):
+                raise ValueError(
+                    "When specifying a `filesystem` argument for the "
+                    "pyarrow.dataset API, it must be a `FileSystem` object. "
+                    "Filesystem inference from a URI is not supported."
+                )
+
+            if require_extension:
+                raise ValueError(
+                    "`require_extension` not supported when the `filesystem` "
+                    "option is passed to `pyarrow.dataset.Dataset`."
+                )
+
+            if (
+                not self.core_options.get("ignore_metadata_file")
+                and isinstance(path, str)
+                and filesystem.get_file_info(path + "/" + "_metadata").is_file
+            ):
+                # Drop unsupported options for now if we are reading from _metadata
+                if inconsistent_options:
+                    warnings.warn(
+                        "The `exclude_invalid_files` and `ignore_prefixes` arguments "
+                        "for `pyarrow.dataset` are not supported when reading from a "
+                        "`_metadata` file. Since a `_metadata` file is present, and "
+                        " `ignore_metadata_file=False` these arguments will be ignored."
+                    )
+
+                ds = pa_ds.parquet_dataset(
+                    path + "/" + "_metadata",
+                    **valid_dataset_options,
+                )
+                has_metadata_file = True
+            else:
+                ds = pa_ds.dataset(
+                    path, **valid_dataset_options, **inconsistent_options
+                )
+
+            self._fs, self._paths = filesystem, ds.files
+        else:
+            self._fs, self._paths = self.get_fs_and_paths()
+        valid_dataset_options["filesystem"] = self._fs
+
+        # Add missing entries to valid_dataset_options
+        valid_dataset_options["_ds"] = ds
+        valid_dataset_options["_require_extension"] = require_extension
+        valid_dataset_options["_has_metadata_file"] = has_metadata_file
+        valid_dataset_options["_inconsistent_options"] = inconsistent_options
+
+        return valid_dataset_options
+
+    def validate_read_options(self, **read_options):
+        # Warn if the user is passing in read options
+        unrecognized = set(read_options) - {"open_file_options"}
+        if unrecognized:
+            warnings.warn(
+                f"Unrecognized read arguments: {set(unrecognized)}. "
+                f"These options might be silently ignored!"
+            )
+        return read_options
+
+    def validate_other_options(self, **other_options):
+        # Warn the user if any "other_options" are not recognized
+        unrecognized = set(other_options) - {"arrow_to_pandas"}
+        if unrecognized:
+            warnings.warn(
+                f"Unrecognized key-word arguments: {unrecognized}. "
+                f"These options might be silently ignored!"
+            )
+        return other_options
