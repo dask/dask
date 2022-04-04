@@ -606,6 +606,7 @@ async def test_map_partitions_da_input(c, s, a, b):
     await c.compute(df.map_partitions(f, arr, meta=df._meta))
 
 
+@pytest.mark.network
 def test_map_partitions_df_input():
     """
     Check that map_partitions can handle a delayed
