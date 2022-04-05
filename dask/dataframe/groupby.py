@@ -1984,10 +1984,21 @@ class _GroupBy:
             axis=axis,
         )
 
+    def _fillna_groups(self, groups, **kwargs):
+        return groups.fillna(**kwargs)
+
     def fillna(self, value=None, method=None, limit=None, axis=None):
-        fn = lambda g: g.fillna(value=value, method=method, limit=limit, axis=axis)
-        meta = self._meta_nonempty.transform(fn)
-        return self.transform(fn, meta=meta)
+        meta = self._meta_nonempty.transform(
+            self._fillna_groups, value=value, method=method, limit=limit, axis=axis
+        )
+        return self.transform(
+            self._fillna_groups,
+            value=value,
+            method=method,
+            limit=limit,
+            axis=axis,
+            meta=meta,
+        )
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, axis=None, limit=None):
