@@ -1988,6 +1988,8 @@ class _GroupBy:
         return groups.fillna(**kwargs)
 
     def fillna(self, value=None, method=None, limit=None, axis=None):
+        if not np.isscalar(value) and value is not None:
+            raise NotImplementedError("groupby-fillna with value=dict/Series/DataFrame is currently not supported")
         meta = self._meta_nonempty.transform(
             self._fillna_groups, value=value, method=method, limit=limit, axis=axis
         )
