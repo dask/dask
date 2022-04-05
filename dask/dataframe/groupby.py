@@ -1991,11 +1991,11 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, axis=None, limit=None):
-        return self.fillna(method="ffill", limit=limit, axis=axis)
+        return self.fillna(method="ffill", limit=limit)
 
     @derived_from(pd.core.groupby.GroupBy)
     def bfill(self, axis=None, limit=None):
-        return self.fillna(method="bfill", limit=limit, axis=axis)
+        return self.fillna(method="bfill", limit=limit)
 
 
 class DataFrameGroupBy(_GroupBy):
