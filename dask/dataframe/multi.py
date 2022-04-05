@@ -931,10 +931,6 @@ def merge_asof(
                 "combination of both."
             )
         left_on = right_on = on
-    if left_on is None and right_on is not None:
-        raise ValueError("Must specify both left_on and right_on if one is specified.")
-    if left_on is not None and right_on is None:
-        raise ValueError("Must specify both left_on and right_on if one is specified.")
 
     for o in [left_on, right_on]:
         if isinstance(o, _Frame):
