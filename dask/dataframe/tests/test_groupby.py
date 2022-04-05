@@ -1090,6 +1090,7 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result1.dask)
                 assert len(other.dask) == len(result2.dask)
 
+
 # @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("limit", [None, 1, 4])
