@@ -4856,7 +4856,7 @@ class DataFrame(_Frame):
         2  1  3    2
         3  2  4    1
 
-        Refer to column name using `backticks`:
+        Refer to column name using backticks:
 
         >>> ddf.query('`z z` > x').compute()
            x  y  z z
@@ -4864,18 +4864,18 @@ class DataFrame(_Frame):
         1  2  2    3
         2  1  3    2
 
-        Refer to variable name using f-strigs:
+        Refer to variable name using f-strings:
 
         >>> value = 1
         >>> ddf.query(f'x == {value}').compute()
-            x  y  z z
+           x  y  z z
         0  1  1    4
         2  1  3    2
 
         Refer to variable name using ``local_dict``:
 
         >>> ddf.query('x == @value', local_dict={"value": value}).compute()
-            x  y  z z
+           x  y  z z
         0  1  1    4
         2  1  3    2
         """
