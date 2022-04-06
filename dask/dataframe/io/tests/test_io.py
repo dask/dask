@@ -13,6 +13,7 @@ from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
 from dask.utils import tmpfile
+from dask.utils_test import hlg_layer_topological
 
 ####################
 # Arrays and BColz #
@@ -363,9 +364,18 @@ def test_DataFrame_from_dask_array():
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=["a", "b", "c"])
-    assert isinstance(df, dd.DataFrame)
-    tm.assert_index_equal(df2.columns, df.columns)
-    assert df2.divisions == df.divisions
+
+
+def test_DataFrame_from_dask_array_with_blockwise_ops():
+    x = da.ones((10, 3), chunks=(4, 2))
+    x *= 2
+    pdf = pd.DataFrame(np.ones((10, 3)) * 2, columns=["a", "b", "c"])
+    df = dd.from_dask_array(x, ["a", "b", "c"])
+    # The last layer is the conversion to DataFrame
+    assert not hlg_layer_topological(df.dask, -1).is_materialized()
+    # The second to last layer is the multiplication, which should still be blockwise
+    assert not hlg_layer_topological(df.dask, -2).is_materialized()
+    assert_eq(df, pdf)
 
 
 def test_Series_from_dask_array():

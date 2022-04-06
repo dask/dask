@@ -5,10 +5,10 @@ from threading import Lock
 
 import numpy as np
 import pandas as pd
-from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
+from dask.blockwise import blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -25,7 +25,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, ensure_dict
+from dask.utils import M, _deprecated
 
 lock = Lock()
 
@@ -454,11 +454,15 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     """
     meta = _meta_from_array(x, columns, index, meta=meta)
 
-    if x.ndim == 2 and len(x.chunks[1]) > 1:
-        x = x.rechunk({1: x.shape[1]})
+    name = "from-dask-array-" + tokenize(x, columns)
+    graph_dependencies = [x]
+    arrays_and_indices = [x.name, "ij" if x.ndim == 2 else "i"]
+    numblocks = {x.name: x.numblocks}
 
-    name = "from-dask-array" + tokenize(x, columns)
-    to_merge = []
+    if is_series_like(meta):
+        kwargs = {"dtype": x.dtype, "name": meta.name}
+    else:
+        kwargs = {"columns": meta.columns}
 
     if index is not None:
         if not isinstance(index, Index):
@@ -470,32 +474,41 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             )
             raise ValueError(msg)
         divisions = index.divisions
-        to_merge.append(ensure_dict(index.dask))
-        index = index.__dask_keys__()
+        graph_dependencies.append(index)
+        arrays_and_indices.extend([index.__dask_layers__()[0], "i"])
+        numblocks[index.__dask_layers__()[0]] = (index.npartitions,)
 
     elif np.isnan(sum(x.shape)):
         divisions = [None] * (len(x.chunks[0]) + 1)
-        index = [None] * len(x.chunks[0])
     else:
+        dsk = {}
         divisions = [0]
-        for c in x.chunks[0]:
-            divisions.append(divisions[-1] + c)
-        index = [
-            (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
-        ]
+        stop = 0
+        index_name = name + "-index-" + tokenize(x.chunks[0])
+        for i, increment in enumerate(x.chunks[0]):
+            stop += increment
+            dsk[(index_name, i)] = (pd.RangeIndex, divisions[i], stop)
+            divisions.append(stop)
         divisions[-1] -= 1
+        index = new_dd_object(dsk, index_name, pd.RangeIndex(0, 1), divisions)
+        arrays_and_indices.extend([index.__dask_layers__()[0], "i"])
+        graph_dependencies.append(index)
+        numblocks[index.__dask_layers__()[0]] = (index.npartitions,)
 
-    dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
-        if x.ndim == 2:
-            chunk = chunk[0]
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), chunk, ind, x.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), chunk, ind, meta.columns)
+    blk = blockwise(
+        type(meta),
+        name,
+        "i",
+        *arrays_and_indices,
+        numblocks=numblocks,
+        concatenate=True,
+        # kwargs passed through to the DataFrame/Series initializer
+        **kwargs,
+    )
 
-    to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+    df = new_dd_object(graph, name, meta, divisions)
+    return df
 
 
 def _link(token, result):
