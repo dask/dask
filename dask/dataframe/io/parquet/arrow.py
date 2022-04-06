@@ -179,8 +179,6 @@ def _read_table_from_path(
     columns,
     schema,
     filters,
-    partitions,
-    partition_keys,
     piece_to_arrow_func,
     **kwargs,
 ):
@@ -210,53 +208,27 @@ def _read_table_from_path(
         ),
     )
 
-    if partition_keys:
-        tables = []
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            for rg in row_groups:
-                piece = pq.ParquetDatasetPiece(
-                    path,
-                    row_group=rg,
-                    partition_keys=partition_keys,
-                    open_file_func=lambda _path, **_kwargs: fil,
-                )
-                arrow_table = piece_to_arrow_func(
-                    piece, columns, partitions, **read_kwargs
-                )
-                tables.append(arrow_table)
-
-        if len(row_groups) > 1:
-            # NOTE: Not covered by pytest
-            return pa.concat_tables(tables)
+    with _open_input_files(
+        [path],
+        fs=fs,
+        precache_options=precache_options,
+        **open_file_options,
+    )[0] as fil:
+        if row_groups == [None]:
+            return pq.ParquetFile(fil).read(
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
         else:
-            return tables[0]
-    else:
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            if row_groups == [None]:
-                return pq.ParquetFile(fil).read(
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
-            else:
-                return pq.ParquetFile(fil).read_row_groups(
-                    row_groups,
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
+            return pq.ParquetFile(fil).read_row_groups(
+                row_groups,
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
 
 
 def _get_rg_statistics(row_group, col_indices):
@@ -1576,8 +1548,6 @@ class ArrowDatasetEngine(Engine):
                 columns,
                 schema,
                 filters,
-                None,  # partitions,
-                [],  # partition_keys,
                 cls._parquet_piece_as_arrow,
                 **kwargs,
             )
