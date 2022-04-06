@@ -179,7 +179,6 @@ def _read_table_from_path(
     columns,
     schema,
     filters,
-    piece_to_arrow_func,
     **kwargs,
 ):
     """Read arrow table from file path.
@@ -1548,7 +1547,6 @@ class ArrowDatasetEngine(Engine):
                 columns,
                 schema,
                 filters,
-                cls._parquet_piece_as_arrow,
                 **kwargs,
             )
 
@@ -1579,19 +1577,6 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
-
-    @classmethod
-    def _parquet_piece_as_arrow(
-        cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs
-    ) -> pa.Table:
-        arrow_table = piece.read(
-            columns=columns,
-            partitions=partitions,
-            use_pandas_metadata=True,
-            use_threads=False,
-            **kwargs.get("read", {}),
-        )
-        return arrow_table
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):
