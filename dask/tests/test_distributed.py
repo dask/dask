@@ -31,7 +31,7 @@ if "should_check_state" in get_named_args(gen_cluster):
 # distributed codebase and is nested within other fixtures we use, it's hard to
 # patch it from the dask codebase. And since the error is during fixture
 # teardown, an xfail won't cut it. As a hack, for now we skip all these tests
-# on windows.
+# on windows. See https://github.com/dask/dask/issues/8877.
 pytestmark = pytest.mark.skipif(
     sys.platform == "win32",
     reason=(
@@ -360,7 +360,8 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     dd = pytest.importorskip("dask.dataframe")
 
     # TODO: this configuration is flaky on osx in CI
-    if from_futures is True and fuse is False and sys.platform == "darwin":
+    # See https://github.com/dask/dask/issues/8816
+    if from_futures and sys.platform == "darwin":
         pytest.xfail("This test sometimes fails on osx in CI")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
