@@ -1023,6 +1023,9 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
+def _fillna_groups(groups, **kwargs):
+    return groups.fillna(**kwargs)
+
 class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -1984,19 +1987,16 @@ class _GroupBy:
             axis=axis,
         )
 
-    def _fillna_groups(self, groups, **kwargs):
-        return groups.fillna(**kwargs)
-
     def fillna(self, value=None, method=None, limit=None, axis=None):
-        if not np.isscalar(value) and value is not None:
-            raise NotImplementedError(
-                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
-            )
+        # if not np.isscalar(value) and value is not None:
+            # raise NotImplementedError(
+            #     "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+            # )
         meta = self._meta_nonempty.transform(
-            self._fillna_groups, value=value, method=method, limit=limit, axis=axis
+            _fillna_groups, value=value, method=method, limit=limit, axis=axis
         )
         return self.transform(
-            self._fillna_groups,
+            _fillna_groups,
             value=value,
             method=method,
             limit=limit,
