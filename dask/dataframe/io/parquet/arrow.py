@@ -139,12 +139,13 @@ def _index_in_schema(index, schema):
 
 
 class PartitionObj:
-    """Simple object to provide a `name` and `keys` attribute
-    for a single partition column. `ArrowDatasetEngine` will use
-    a list of these objects to "duck type" a `ParquetPartitions`
-    object (used in `ArrowLegacyEngine`). The larger purpose of this
-    class is to allow the same `read_partition` definition to handle
-    both Engine instances.
+    """Simple class providing a `name` and `keys` attribute
+    for a single partition column.
+
+    This class was originally designed as a mechanism to build a
+    duck-typed version of pyarrow's deprecated `ParquetPartitions`
+    class. Now that `ArrowLegacyEngine` is deprecated, this class
+    can be modified/removed, but it is still used as a convenience.
     """
 
     def __init__(self, name, keys):
@@ -179,9 +180,6 @@ def _read_table_from_path(
     columns,
     schema,
     filters,
-    partitions,
-    partition_keys,
-    piece_to_arrow_func,
     **kwargs,
 ):
     """Read arrow table from file path.
@@ -210,53 +208,27 @@ def _read_table_from_path(
         ),
     )
 
-    if partition_keys:
-        tables = []
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            for rg in row_groups:
-                piece = pq.ParquetDatasetPiece(
-                    path,
-                    row_group=rg,
-                    partition_keys=partition_keys,
-                    open_file_func=lambda _path, **_kwargs: fil,
-                )
-                arrow_table = piece_to_arrow_func(
-                    piece, columns, partitions, **read_kwargs
-                )
-                tables.append(arrow_table)
-
-        if len(row_groups) > 1:
-            # NOTE: Not covered by pytest
-            return pa.concat_tables(tables)
+    with _open_input_files(
+        [path],
+        fs=fs,
+        precache_options=precache_options,
+        **open_file_options,
+    )[0] as fil:
+        if row_groups == [None]:
+            return pq.ParquetFile(fil).read(
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
         else:
-            return tables[0]
-    else:
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            if row_groups == [None]:
-                return pq.ParquetFile(fil).read(
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
-            else:
-                return pq.ParquetFile(fil).read_row_groups(
-                    row_groups,
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
+            return pq.ParquetFile(fil).read_row_groups(
+                row_groups,
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
 
 
 def _get_rg_statistics(row_group, col_indices):
@@ -966,21 +938,15 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
-        # Construct and return `datset_info`
-        #
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
         #          simple objects providing `name` and `keys` attributes
-        #          for each partition column. The list is designed to
-        #          "duck type" a `ParquetPartitions` object, so that the
-        #          same code path can be used for both legacy and
-        #          pyarrow.dataset-based logic.
-        #          TODO: Reconsider now that the legacy API is deprecated
+        #          for each partition column.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
         #    - "partitioning" : (dict) The `partitioning` options
-        #          used for file discovory by pyarrow.
+        #          used for file discovery by pyarrow.
         #
         return {
             "ds": ds,
@@ -1576,9 +1542,6 @@ class ArrowDatasetEngine(Engine):
                 columns,
                 schema,
                 filters,
-                None,  # partitions,
-                [],  # partition_keys,
-                cls._parquet_piece_as_arrow,
                 **kwargs,
             )
 
@@ -1609,19 +1572,6 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
-
-    @classmethod
-    def _parquet_piece_as_arrow(
-        cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs
-    ) -> pa.Table:
-        arrow_table = piece.read(
-            columns=columns,
-            partitions=partitions,
-            use_pandas_metadata=True,
-            use_threads=False,
-            **kwargs.get("read", {}),
-        )
-        return arrow_table
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):
