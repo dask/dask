@@ -161,6 +161,9 @@ class BlockwiseDepDict(BlockwiseDep):
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
         return self.mapping[idx]
 
+    def __len__(self) -> int:
+        return len(self.mapping)
+
     def __dask_distributed_pack__(
         self, required_indices: list[tuple[int, ...]] | None = None
     ):
