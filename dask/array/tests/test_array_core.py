@@ -2572,13 +2572,23 @@ def test_from_array_tasks_always_call_getter(x, chunks, inline_array):
     assert_eq(x, dx)
 
 
-def test_from_array_ndarray_onechunk():
+@pytest.mark.parametrize(
+    "x",
+    [
+        np.array([[1, 2], [3, 4]]),
+        np.ma.array([[1, 2], [3, 4]], mask=[[True, False], [False, False]]),
+        np.ma.array([1], mask=[True]),
+        np.ma.array([1.5], mask=[True]),
+        np.ma.array(1, mask=True),
+        np.ma.array(1.5, mask=True),
+    ],
+)
+def test_from_array_ndarray_onechunk(x):
     """ndarray with a single chunk produces a minimal single key dict"""
-    x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert dx.dask[dx.name, 0, 0] is x
+    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is x
 
 
 def test_from_array_ndarray_getitem():

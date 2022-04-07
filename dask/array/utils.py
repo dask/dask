@@ -88,6 +88,8 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.sum()
             else:
                 meta = meta.reshape((0,) * ndim)
+        if meta is np.ma.masked:
+            meta = np.ma.array(np.empty((0,) * ndim, dtype=dtype or x.dtype), mask=True)
     except Exception:
         meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
 
@@ -171,7 +173,10 @@ def allclose(a, b, equal_nan=False, **kwargs):
     a = normalize_to_array(a)
     b = normalize_to_array(b)
     if getattr(a, "dtype", None) != "O":
-        return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
+        if hasattr(a, "mask") or hasattr(b, "mask"):
+            return np.ma.allclose(a, b, masked_equal=True, **kwargs)
+        else:
+            return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
         return a.shape == b.shape and all(
             np.isnan(b) if np.isnan(a) else a == b for (a, b) in zip(a.flat, b.flat)
