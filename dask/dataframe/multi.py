@@ -375,20 +375,21 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
-    name = "hash-join-" + token
-
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    dsk = {
-        (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
-        for i in range(npartitions)
-    }
+    joined = map_partitions(
+        merge_chunk,
+        lhs2,
+        rhs2,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
 
-    divisions = [None] * (npartitions + 1)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def single_partition_join(left, right, **kwargs):
@@ -945,7 +946,7 @@ def merge_asof(
     if not is_dask_collection(right):
         right = from_pandas(right, npartitions=1)
     if right_on is not None:
-        right = right.set_index(right_on, sorted=True)
+        right = right.set_index(right_on, drop=(left_on == right_on), sorted=True)
 
     if by is not None:
         kwargs["left_by"] = kwargs["right_by"] = by
@@ -1049,6 +1050,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
+    astyped_dfs = []
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
@@ -1073,7 +1075,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+
+        astyped_dfs.append(df)
+
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
@@ -1098,7 +1102,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=astyped_dfs)
+
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def concat(

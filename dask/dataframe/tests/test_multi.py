@@ -233,12 +233,14 @@ def test_hash_join(how, shuffle_method):
 
     c = hash_join(a, "y", b, "y", how)
 
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     result = c.compute()
     expected = pd.merge(A, B, how, "y")
     list_eq(result, expected)
 
     # Different columns and npartitions
     c = hash_join(a, "x", b, "z", "outer", npartitions=3, shuffle=shuffle_method)
+    assert not hlg_layer_topological(c.dask, -1).is_materialized()
     assert c.npartitions == 3
 
     result = c.compute(scheduler="single-threaded")
@@ -634,6 +636,32 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
+@pytest.mark.parametrize(
+    "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
+)
+def test_merge_asof_on_left_right(left_col, right_col):
+    df1 = pd.DataFrame(
+        {
+            left_col: [1, 1, 2, 2, 3, 4],
+            "GroupCol": [1234, 8679, 1234, 8679, 1234, 8679],
+        }
+    )
+    df2 = pd.DataFrame({right_col: [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]})
+
+    # pandas
+    result_df = pd.merge_asof(df1, df2, left_on=left_col, right_on=right_col)
+
+    # dask
+    result_dd = dd.merge_asof(
+        dd.from_pandas(df1, npartitions=2),
+        dd.from_pandas(df2, npartitions=2),
+        left_on=left_col,
+        right_on=right_col,
+    )
+
+    assert_eq(result_df, result_dd, check_index=False)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
@@ -686,18 +714,56 @@ def test_concat(join):
         result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
 
-    # test outer only, inner has a problem on pandas side
+
+@pytest.mark.parametrize("join", ["inner", "outer"])
+def test_concat_series(join):
+    pdf1 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[8, 9, 10, 11, 12, 13]
+    )
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # different columns
+    pdf3 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "z": list("abcdef")}, index=[8, 9, 10, 11, 12, 13]
+    )
+    ddf3 = dd.from_pandas(pdf3, 2)
+
+    kwargs = {"sort": False}
+
     for (dd1, dd2, pd1, pd2) in [
-        (ddf1, ddf2, pdf1, pdf2),
-        (ddf1, ddf3, pdf1, pdf3),
-        (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
-        (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
         (ddf1.x, ddf2.x, pdf1.x, pdf2.x),
         (ddf1.x, ddf3.z, pdf1.x, pdf3.z),
     ]:
-        expected = pd.concat([pd1, pd2], **kwargs)
-        result = dd.concat([dd1, dd2], **kwargs)
+        expected = pd.concat([pd1, pd2], join=join, **kwargs)
+        result = dd.concat([dd1, dd2], join=join, **kwargs)
         assert_eq(result, expected)
+
+
+def test_concat_with_operation_remains_hlg():
+    pdf1 = pd.DataFrame(
+        {"x": [1, 2, 3, 4, 6, 7], "y": list("abcdef")}, index=[1, 2, 3, 4, 6, 7]
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+
+    pdf2 = pd.DataFrame({"y": list("abcdef")}, index=[8, 9, 10, 11, 12, 13])
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    # Do some operation which will remain blockwise in the dask case.
+    pdf2["x"] = range(len(pdf2["y"]))
+    # See https://stackoverflow.com/a/60852409
+    ddf2["x"] = ddf2.assign(partition_count=1).partition_count.cumsum() - 1
+    kwargs = {"sort": False}
+
+    expected = pd.concat([pdf1, pdf2], **kwargs)
+    result = dd.concat([ddf1, ddf2], **kwargs)
+    # The third layer is the assignment to column `x`, which should remain
+    # blockwise
+    assert not hlg_layer_topological(result.dask, 2).is_materialized()
+    assert_eq(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -2193,7 +2259,7 @@ def test_multi_duplicate_divisions():
 
     ddf1 = dd.from_pandas(df1, npartitions=2).set_index("x")
     ddf2 = dd.from_pandas(df2, npartitions=1).set_index("x")
-    assert ddf1.npartitions == 2
+    assert ddf1.npartitions <= 2
     assert len(ddf1) == len(df1)
 
     r1 = ddf1.merge(ddf2, how="left", left_index=True, right_index=True)

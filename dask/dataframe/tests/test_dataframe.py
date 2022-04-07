@@ -1,3 +1,4 @@
+import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -1078,15 +1079,19 @@ def test_align_dataframes():
     df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
 
-    def merge(a, b):
-        res = pd.merge(a, b, left_on="A", right_on="A", how="left")
-        return res
-
-    expected = merge(df1, df2)
-
     ddf1 = dd.from_pandas(df1, npartitions=2)
-    actual = ddf1.map_partitions(merge, df2, align_dataframes=False)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
 
+    actual = ddf1.map_partitions(
+        pd.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
+    )
+    expected = pd.merge(df1, df2, left_on="A", right_on="A", how="left")
+    assert_eq(actual, expected, check_index=False, check_divisions=False)
+
+    actual = ddf2.map_partitions(
+        pd.merge, ddf1, align_dataframes=False, left_on="A", right_on="A", how="right"
+    )
+    expected = pd.merge(df2, df1, left_on="A", right_on="A", how="right")
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
@@ -3630,6 +3635,12 @@ def test_categorize_info():
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
+
+    if platform.architecture()[0] == "32bit":
+        memory_usage = "312.0"
+    else:
+        memory_usage = "496.0"
+
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
@@ -3640,7 +3651,7 @@ def test_categorize_info():
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
         "dtypes: category(1), object(1), int64(1)\n"
-        "memory usage: 496.0 bytes\n"
+        "memory usage: {} bytes\n".format(memory_usage)
     )
     assert buf.getvalue() == expected
 
