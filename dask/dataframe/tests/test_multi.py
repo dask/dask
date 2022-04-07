@@ -316,7 +316,9 @@ def test_merge_asof_on_lefton_righton_error():
 
     with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", left_on="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", right_on="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", left_on="left_val", right_on="right_val")
 
 
@@ -330,7 +332,9 @@ def test_merge_asof_by_leftby_rightby_error():
 
     with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", by="b", left_by="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", by="b", right_by="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
         dd.merge_asof(a, b, on="a", by="b", left_by="left_val", right_by="right_val")
 
 
