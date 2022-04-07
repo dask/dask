@@ -2006,11 +2006,11 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def ffill(self, axis=None, limit=None):
+    def ffill(self, limit=None):
         return self.fillna(method="ffill", limit=limit)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def bfill(self, axis=None, limit=None):
+    def bfill(self, limit=None):
         return self.fillna(method="bfill", limit=limit)
 
 
