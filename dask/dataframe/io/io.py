@@ -648,7 +648,7 @@ def from_delayed(
         columns=None,
         inputs=BlockwiseDepDict(
             {(i,): inp.key for i, inp in enumerate(dfs)},
-            delayed=True,
+            valid=True,
         ),
         io_func=(lambda x: check_meta(x, meta, "from_delayed"))
         if verify_meta

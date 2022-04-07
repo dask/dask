@@ -34,11 +34,14 @@ class BlockwiseDep:
     This allows a new collection to be created (via IO) within a
     ``Blockwise`` layer.
 
-    All ``BlockwiseDep`` instances must define a ``numblocks``
-    attribute to speficy the number of blocks/partitions the
-    object can support along each dimension. The object should
-    also define a ``produces_tasks`` attribute to specify if
-    any nested tasks will be passed to the Blockwise function.
+    Parameters
+    ----------
+    numblocks: tuple[int, ...]
+        The number of blocks/partitions the object can support
+        along each dimension.
+    produces_tasks: bool
+        Whether any nested tasks will be passed to the Blockwise
+        function.
 
     See Also
     --------
@@ -63,14 +66,17 @@ class BlockwiseDep:
             return default
 
     @property
-    def delayed(self):
-        """Whether all dependencies are Delayed objects"""
-        return False
+    def valid(self) -> bool:
+        """Whether this object will return "valid" dependency keys.
 
-    @property
-    def delayed_deps(self) -> set:
-        """Return Delayed dependencies"""
-        return set()
+        A "valid" key correspond to a task or ``Delayed`` object that
+        does not originate from within the ``Blockwise`` layer that is
+        using this ``BlockwiseDep`` object in its ``indices`` list.
+        A ``BlockwiseDep`` object should only be designed to return
+        "valid" dependencies when those dependencies do not correspond
+        to an input collection.
+        """
+        return False
 
     def __dask_distributed_pack__(
         self, required_indices: list[tuple[int, ...]] | None = None
@@ -161,7 +167,7 @@ class BlockwiseDepDict(BlockwiseDep):
         mapping: dict,
         numblocks: tuple[int, ...] | None = None,
         produces_tasks: bool = False,
-        delayed: bool = False,
+        valid: bool = False,
     ):
         self.mapping = mapping
         self.produces_tasks = produces_tasks
@@ -169,18 +175,13 @@ class BlockwiseDepDict(BlockwiseDep):
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
-        # Whether `mapping` values are all Delayed objects
-        self._delayed = delayed
+        # Whether `mapping` values are real task dependencies
+        # (e.g. Delayed objects)
+        self._valid = valid
 
     @property
-    def delayed(self):
-        return self._delayed
-
-    @property
-    def delayed_deps(self) -> set:
-        if self._delayed:
-            return set(self.mapping.values())
-        return set()
+    def valid(self) -> bool:
+        return self._valid
 
     def __len__(self) -> int:
         return len(self.mapping)
@@ -200,6 +201,7 @@ class BlockwiseDepDict(BlockwiseDep):
             "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
+            "valid": self._valid,
         }
 
     @classmethod
@@ -735,13 +737,13 @@ class Blockwise(Layer):
                         deps.add(tups)
             key_deps[(self.output,) + out_coords] = deps | const_deps
 
-        # Add delayed dependencies
+        # Add valid-key dependencies from io_deps
         for key, io_dep in self.io_deps.items():
-            if io_dep.delayed:
+            if io_dep.valid:
                 for out_coords in output_blocks:
                     key = (self.output,) + out_coords
-                    delayed_key = io_dep.mapping[out_coords]
-                    key_deps[key] |= {delayed_key}
+                    valid_key_dep = io_dep[out_coords]
+                    key_deps[key] |= {valid_key_dep}
 
         return key_deps
 
@@ -1169,13 +1171,13 @@ def make_blockwise_graph(
 
     if return_key_deps:
 
-        # Add delayed dependencies
+        # Add valid-key dependencies from io_deps
         for key, io_dep in io_deps.items():
-            if io_dep.delayed:
+            if io_dep.valid:
                 for out_coords in output_blocks:
                     key = (output,) + out_coords
-                    delayed_key = io_dep.mapping[out_coords]
-                    key_deps[key] |= {delayed_key}
+                    valid_key_dep = io_dep[out_coords]
+                    key_deps[key] |= {valid_key_dep}
 
         return dsk, key_deps
     else:
@@ -1358,8 +1360,18 @@ def _optimize_blockwise(full_graph, keys=()):
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
                 elif k not in io_names:
                     new_deps.add(k)
-                elif layers[layer].io_deps[k].delayed:
-                    new_deps |= layers[layer].io_deps[k].delayed_deps
+                elif layers[layer].io_deps[k].valid:
+                    # Need to add valid key dependencies in io_deps[k].
+                    # Use required `numblocks` attribute to generate all possible input keys
+                    valid_keys = product(
+                        *(
+                            list(range(nbi))
+                            for nbi in layers[layer].io_deps[k].numblocks
+                        )
+                    )
+                    new_deps |= {
+                        layers[layer].io_deps[k][valid_key] for valid_key in valid_keys
+                    }
             dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]
