@@ -2643,19 +2643,24 @@ def test_from_array_no_asarray(asarray, cls, inline_array):
     assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
-def test_from_array_getitem():
+@pytest.mark.parametrize("wrap", [True, False])
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_getitem(wrap, inline_array):
     x = np.arange(10)
+    called = False
 
-    def my_getitem(x, ind):
-        return x[ind]
+    def my_getitem(a, ind):
+        nonlocal called
+        called = True
+        return a[ind]
 
-    y = da.from_array(x, chunks=(5,), getitem=my_getitem)
-
-    for k, v in y.dask.items():
-        if isinstance(v, tuple):
-            assert v[0] is my_getitem
+    xx = MyArray(x) if wrap else x
+    y = da.from_array(xx, chunks=(5,), getitem=my_getitem, inline_array=inline_array)
 
     assert_eq(x, y)
+    # If we have a raw numpy array we eagerly slice, so custom getters
+    # are not called.
+    assert called is wrap
 
 
 def test_from_array_minus_one():
