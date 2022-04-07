@@ -1,6 +1,4 @@
-.. _order:
-
-Object Sizes
+Extend `sizeof`
 ============
 
 When Dask needs to compute the size of an object in bytes, e.g. to determine which objects to spill to disk, it uses the ``dask.sizeof.sizeof`` registration mechanism. Users who need to define a ``sizeof`` implementation for their own objects can use ``sizeof.register``:
@@ -36,3 +34,5 @@ whilst ``numpy_sizeof_dask.py`` would contain
    ...        return array.nbytes 
 
 Dask calls the entrypoint (``sizeof_plugin``) with the ``dask.sizeof.sizeof`` object, which can then be used as usual.
+
+The `sizeof` entrypoint hooks are registered at import-time of the `dask.sizeof` module.
