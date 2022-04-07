@@ -878,7 +878,6 @@ def test_set_index_sorted_min_max_same():
 
 def test_set_index_empty_partition():
     test_vals = [1, 2, 3]
-
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
     for conv in converters:
@@ -906,11 +905,17 @@ def test_set_index_on_empty():
 
         assert ddf.npartitions > 1
 
-        ddf = ddf[ddf.y > df.y.max()].set_index("x")
-        expected_df = df[df.y > df.y.max()].set_index("x")
+        actual = ddf[ddf.y > df.y.max()].set_index("x")
+        expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df, **CHECK_FREQ)
-        assert ddf.npartitions == 1
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
+
+        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():

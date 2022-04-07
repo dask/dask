@@ -984,6 +984,14 @@ def fix_overlap(ddf, mins, maxes, lens):
     name = "fix-overlap-" + tokenize(ddf, mins, maxes, lens)
 
     non_empties = [i for i, l in enumerate(lens) if l != 0]
+
+    # If all empty, collapse into one partition
+    if len(non_empties) == 0:
+        divisions = (None, None)
+        dsk = {(name, 0): (ddf._name, 0)}
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+        return new_dd_object(graph, name, ddf._meta, divisions)
+
     # drop empty partitions by mapping each partition in a new graph to a particular
     # partition on the old graph.
     dsk = {(name, i): (ddf._name, div) for i, div in enumerate(non_empties)}
