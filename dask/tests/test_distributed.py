@@ -15,6 +15,7 @@ from distributed.utils_test import cluster, gen_cluster, inc, varying
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
@@ -76,6 +77,9 @@ def test_futures_to_delayed_dataframe(c):
     futures = c.scatter([df, df])
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
+
+    # Make sure from_delayed is Blockwise
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])

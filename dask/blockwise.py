@@ -69,12 +69,13 @@ class BlockwiseDep:
     def valid(self) -> bool:
         """Whether this object will return "valid" dependency keys.
 
-        A "valid" key correspond to a task or ``Delayed`` object that
+        A "valid" key corresponds to a task or ``Delayed`` object that
         does not originate from within the ``Blockwise`` layer that is
         using this ``BlockwiseDep`` object in its ``indices`` list.
-        A ``BlockwiseDep`` object should only be designed to return
-        "valid" dependencies when those dependencies do not correspond
-        to an input collection.
+        A ``BlockwiseDep`` object should only return "valid"
+        dependencies when those dependencies do not correspond to a
+        Dask collection (otherwise the collection name should just be
+        included in the ``indices`` list instead).
         """
         return False
 

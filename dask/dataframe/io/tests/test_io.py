@@ -8,6 +8,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
@@ -656,6 +657,9 @@ def test_from_delayed():
         assert ddf.known_divisions == (divisions is not None)
 
     meta2 = [(c, "f8") for c in df.columns]
+    # Make sure `from_delayed` is Blockwise
+    check_ddf = dd.from_delayed(dfs, meta=meta2)
+    assert isinstance(check_ddf.dask.layers[check_ddf._name], Blockwise)
     assert_eq(dd.from_delayed(dfs, meta=meta2), df)
     assert_eq(dd.from_delayed([d.a for d in dfs], meta=("a", "f8")), df.a)
 
