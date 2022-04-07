@@ -9,6 +9,8 @@ from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
 
+logger = logging.getLogger(__name__)
+
 
 @sizeof.register(object)
 def sizeof_default(o):
