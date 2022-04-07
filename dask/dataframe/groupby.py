@@ -1023,8 +1023,13 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-def _fillna_groups(groups, **kwargs):
-    return groups.fillna(**kwargs)
+def _fillna_groups(groups, axis, **kwargs):
+    if axis == 0:
+        return groups.fillna(axis=axis, **kwargs)
+    else:
+        return groups.drop(columns=groups.columns[0], axis=1).fillna(
+            axis=axis, **kwargs
+        )
 
 
 class _GroupBy:
@@ -1993,17 +1998,31 @@ class _GroupBy:
             raise NotImplementedError(
                 "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
             )
-        meta = self._meta_nonempty.transform(
-            _fillna_groups, value=value, method=method, limit=limit, axis=axis
-        )
-        return self.transform(
-            _fillna_groups,
-            value=value,
-            method=method,
-            limit=limit,
-            axis=axis,
-            meta=meta,
-        )
+        axis = DataFrame._validate_axis(axis)
+        if value is not None or axis == 0:
+            meta = self._meta_nonempty.transform(
+                _fillna_groups, value=value, method=method, limit=limit, axis=0
+            )
+            return self.transform(
+                _fillna_groups,
+                value=value,
+                method=method,
+                limit=limit,
+                axis=0,
+                meta=meta,
+            )
+        else:
+            meta = self._meta_nonempty.apply(
+                _fillna_groups, value=value, method=method, limit=limit, axis=1
+            )
+            return self.apply(
+                _fillna_groups,
+                value=value,
+                method=method,
+                limit=limit,
+                axis=1,
+                meta=meta,
+            )
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
