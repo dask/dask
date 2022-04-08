@@ -1098,9 +1098,10 @@ def test_fillna(axis, method, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
-            "B": [np.nan, 3, np.nan, 4],
-            "C": [4, np.nan, 5, np.nan],
-            "D": [6, np.nan, 7, np.nan],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
@@ -1113,8 +1114,16 @@ def test_fillna(axis, method, limit):
         ddf.groupby("A").B.fillna(0),
     )
     assert_eq(
+        df.groupby(["A", "B"]).fillna(0),
+        ddf.groupby(["A", "B"]).fillna(0),
+    )
+    assert_eq(
         df.groupby("A").fillna(method=method, limit=limit, axis=axis),
         ddf.groupby("A").fillna(method=method, limit=limit, axis=axis),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).fillna(method=method, limit=limit, axis=axis),
+        ddf.groupby(["A", "B"]).fillna(method=method, limit=limit, axis=axis),
     )
 
     with pytest.raises(NotImplementedError):
@@ -1127,45 +1136,53 @@ def test_fillna(axis, method, limit):
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
-@pytest.mark.parametrize("limit", [None, 1, 4])
 def test_ffill(limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
-            "B": [np.nan, 3, np.nan, np.nan],
-            "C": [4, np.nan, 5, np.nan],
-            "D": [6, np.nan, 7, np.nan],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").ffill(limit=limit),
-        ddf.groupby("A").ffill(limit=limit),
+        df.groupby("A").ffill(),
+        ddf.groupby("A").ffill(),
     )
     assert_eq(
-        df.groupby("A").B.ffill(limit=limit),
-        ddf.groupby("A").B.ffill(limit=limit),
+        df.groupby("A").B.ffill(),
+        ddf.groupby("A").B.ffill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).ffill(),
+        ddf.groupby(["A", "B"]).ffill(),
     )
 
 
-@pytest.mark.parametrize("limit", [None, 1, 4])
 def test_bfill(limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
-            "B": [np.nan, 3, np.nan, np.nan],
-            "C": [np.nan, 4, np.nan, 5],
-            "D": [np.nan, 6, np.nan, 7],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [np.nan, 4, np.nan, 5],
+            "E": [np.nan, 6, np.nan, 7],
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").bfill(limit=limit),
-        ddf.groupby("A").bfill(limit=limit),
+        df.groupby("A").bfill(),
+        ddf.groupby("A").bfill(),
     )
     assert_eq(
-        df.groupby("A").B.bfill(limit=limit),
-        ddf.groupby("A").B.bfill(limit=limit),
+        df.groupby("A").B.bfill(),
+        ddf.groupby("A").B.bfill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).bfill(),
+        ddf.groupby(["A", "B"]).bfill(),
     )
 
 
