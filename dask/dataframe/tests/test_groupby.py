@@ -1136,7 +1136,7 @@ def test_fillna(axis, method, limit):
         ddf.groupby("A").fillna(pd.DataFrame)
 
 
-def test_ffill(limit):
+def test_ffill():
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1161,7 +1161,7 @@ def test_ffill(limit):
     )
 
 
-def test_bfill(limit):
+def test_bfill():
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
