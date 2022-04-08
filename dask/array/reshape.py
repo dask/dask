@@ -44,7 +44,11 @@ def reshape_rechunk(inshape, outshape, inchunks):
             ):  # 4 < 64, 4*4 < 64, 4*4*4 == 64
                 ileft -= 1
             if reduce(mul, inshape[ileft : ii + 1]) != dout:
-                raise ValueError("Shapes not compatible")
+                raise NotImplementedError("""Dask reshaping currently only supports collapsing/merging array dimensions. For example, reshaping a 6x2 dimensional array into a 12x1 array.
+       
+                In the interim, if this operation is required, utilise the Numpy version of reshape.
+
+                Also note that performance of this reshape implementation varies depending on how the input array is chunked. Please read the official Dask array documentation section for further details on how Dask implements Reshaping""")
 
             # Special case to avoid intermediate rechunking:
             # When all the lower axis are completely chunked (chunksize=1) then
@@ -74,7 +78,11 @@ def reshape_rechunk(inshape, outshape, inchunks):
             while oleft >= 0 and reduce(mul, outshape[oleft : oi + 1]) < din:
                 oleft -= 1
             if reduce(mul, outshape[oleft : oi + 1]) != din:
-                raise ValueError("Shapes not compatible")
+                raise NotImplementedError("""Dask reshaping currently only supports collapsing/merging array dimensions. For example, reshaping a 6x2 dimensional array into a 12x1 array.
+       
+                In the interim, if this operation is required, utilise the Numpy version of reshape.
+
+                Also note that performance of this reshape implementation varies depending on how the input array is chunked. Please read the official Dask array documentation section for further details on how Dask implements Reshaping""")
 
             # TODO: don't coalesce shapes unnecessarily
             cs = reduce(mul, outshape[oleft + 1 : oi + 1])
