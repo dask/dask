@@ -1991,6 +1991,34 @@ class _GroupBy:
         )
 
     def fillna(self, value=None, method=None, limit=None, axis=None):
+        """Fill NA/NaN values using the specified method.
+
+        Parameters
+        ----------
+        value : scalar, default None
+            Value to use to fill holes (e.g. 0).
+        method : {'bfill', 'ffill', None}, default None
+            Method to use for filling holes in reindexed Series. ffill: propagate last
+            valid observation forward to next valid. bfill: use next valid observation
+            to fill gap.
+        axis : {0 or 'index', 1 or 'columns'}
+            Axis along which to fill missing values.
+        limit : int, default None
+            If method is specified, this is the maximum number of consecutive NaN values
+            to forward/backward fill. In other words, if there is a gap with more than
+            this number of consecutive NaNs, it will only be partially filled. If method
+            is not specified, this is the maximum number of entries along the entire
+            axis where NaNs will be filled. Must be greater than 0 if not None.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object with missing values filled
+
+        See also
+        --------
+        pandas.core.groupby.DataFrameGroupBy.fillna
+        """
         if not np.isscalar(value) and value is not None:
             raise NotImplementedError(
                 "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
