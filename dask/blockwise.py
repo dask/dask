@@ -66,16 +66,16 @@ class BlockwiseDep:
             return default
 
     @property
-    def valid(self) -> bool:
-        """Whether this object will return "valid" dependency keys.
+    def produces_keys(self) -> bool:
+        """Whether this object will produce "valid" key dependencies.
 
         A "valid" key corresponds to a task or ``Delayed`` object that
         does not originate from within the ``Blockwise`` layer that is
         using this ``BlockwiseDep`` object in its ``indices`` list.
         A ``BlockwiseDep`` object should only return "valid"
         dependencies when those dependencies do not correspond to a
-        Dask collection (otherwise the collection name should just be
-        included in the ``indices`` list instead).
+        blockwise-compatible Dask collection (otherwise the collection
+        name should just be included in ``indices`` list instead).
         """
         return False
 
@@ -168,7 +168,7 @@ class BlockwiseDepDict(BlockwiseDep):
         mapping: dict,
         numblocks: tuple[int, ...] | None = None,
         produces_tasks: bool = False,
-        valid: bool = False,
+        produces_keys: bool = False,
     ):
         self.mapping = mapping
         self.produces_tasks = produces_tasks
@@ -176,16 +176,13 @@ class BlockwiseDepDict(BlockwiseDep):
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
-        # Whether `mapping` values are real task dependencies
+        # Whether `mapping` values are real task keys
         # (e.g. Delayed objects)
-        self._valid = valid
+        self._produces_keys = produces_keys
 
     @property
-    def valid(self) -> bool:
-        return self._valid
-
-    def __len__(self) -> int:
-        return len(self.mapping)
+    def produces_keys(self) -> bool:
+        return self._produces_keys
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
         return self.mapping[idx]
@@ -202,7 +199,7 @@ class BlockwiseDepDict(BlockwiseDep):
             "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
-            "valid": self._valid,
+            "produces_keys": self._produces_keys,
         }
 
     @classmethod
@@ -740,7 +737,7 @@ class Blockwise(Layer):
 
         # Add valid-key dependencies from io_deps
         for key, io_dep in self.io_deps.items():
-            if io_dep.valid:
+            if io_dep.produces_keys:
                 for out_coords in output_blocks:
                     key = (self.output,) + out_coords
                     valid_key_dep = io_dep[out_coords]
@@ -1174,7 +1171,7 @@ def make_blockwise_graph(
 
         # Add valid-key dependencies from io_deps
         for key, io_dep in io_deps.items():
-            if io_dep.valid:
+            if io_dep.produces_keys:
                 for out_coords in output_blocks:
                     key = (output,) + out_coords
                     valid_key_dep = io_dep[out_coords]
@@ -1361,7 +1358,7 @@ def _optimize_blockwise(full_graph, keys=()):
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
                 elif k not in io_names:
                     new_deps.add(k)
-                elif layers[layer].io_deps[k].valid:
+                elif layers[layer].io_deps[k].produces_keys:
                     # Need to add valid key dependencies in io_deps[k].
                     # Use required `numblocks` attribute to generate all possible input keys
                     valid_keys = product(
