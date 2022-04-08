@@ -10,7 +10,7 @@ from typing import Any, Hashable, Iterable, Mapping, Sequence
 import tlz as toolz
 
 from dask.base import clone_key, get_name_from_key, tokenize
-from dask.core import flatten, reverse_dict
+from dask.core import flatten, keys_in_tasks, reverse_dict
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph, Layer
 from dask.optimization import SubgraphCallable, fuse
@@ -1288,6 +1288,7 @@ def _optimize_blockwise(full_graph, keys=()):
     out = {}
     dependencies = {}
     seen = set()
+    io_names = set()
 
     while stack:
         layer = stack.pop()
@@ -1299,6 +1300,7 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
+            io_names |= layers[layer].io_deps.keys()
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
 
@@ -1362,6 +1364,11 @@ def _optimize_blockwise(full_graph, keys=()):
                         if d not in blockwise_layers and d in full_graph.dependencies
                     }
                 )
+            for k, v in new_layer.indices:
+                if v is None:
+                    new_deps |= keys_in_tasks(full_graph.dependencies, [k])
+                elif k not in io_names:
+                    new_deps.add(k)
             dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]
