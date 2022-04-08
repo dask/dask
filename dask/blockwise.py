@@ -1352,24 +1352,23 @@ def _optimize_blockwise(full_graph, keys=()):
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
             out[layer] = new_layer
 
+            # Get the new (external) dependencies for this layer.
+            # Start with existing dependencies that are present in
+            # full_graph.dependencies and are not in blockwise_layers
             new_deps = set()
+            for l in blockwise_layers:
+                new_deps |= set(
+                    {
+                        d
+                        for d in full_graph.dependencies[l]
+                        if d not in blockwise_layers and d in full_graph.dependencies
+                    }
+                )
             for k, v in new_layer.indices:
                 if v is None:
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
                 elif k not in io_names:
                     new_deps.add(k)
-                elif layers[layer].io_deps[k].produces_keys:
-                    # Need to add valid key dependencies in io_deps[k].
-                    # Use required `numblocks` attribute to generate all possible input keys
-                    valid_keys = product(
-                        *(
-                            list(range(nbi))
-                            for nbi in layers[layer].io_deps[k].numblocks
-                        )
-                    )
-                    new_deps |= {
-                        layers[layer].io_deps[k][valid_key] for valid_key in valid_keys
-                    }
             dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]
