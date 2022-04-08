@@ -238,7 +238,6 @@ def read_parquet(
         if fastparquet is installed (and ArrowDatasetEngine otherwise). If
         'pyarrow' is specified, ArrowDatasetEngine (which leverages the
         pyarrow.dataset API) will be used.
-        NOTE: The 'pyarrow-legacy' option (ArrowLegacyEngine) is deprecated.
     gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -1018,15 +1017,15 @@ def get_engine(engine):
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
+    elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
 
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
-        if engine in ("pyarrow", "arrow"):
-            engine = "pyarrow-dataset"
+        if engine in ("pyarrow-dataset", "arrow"):
+            engine = "pyarrow"
 
-        if engine == "pyarrow-dataset":
+        if engine == "pyarrow":
             if pa_version.major < 1:
                 raise ImportError(
                     f"pyarrow-{pa_version.major} does not support the "
@@ -1036,17 +1035,6 @@ def get_engine(engine):
             from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
-        else:
-            from dask.dataframe.io.parquet.arrow import ArrowLegacyEngine
-
-            warnings.warn(
-                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
-                "and will be removed in the near future. Please use "
-                "`engine='pyarrow'` instead.",
-                FutureWarning,
-                stacklevel=3,
-            )
-            _ENGINES[engine] = eng = ArrowLegacyEngine
         return eng
 
     else:
