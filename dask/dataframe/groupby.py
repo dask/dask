@@ -1023,13 +1023,10 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-def _fillna_groups(groups, axis, **kwargs):
-    if axis == 0:
-        return groups.fillna(axis=axis, **kwargs)
-    else:
-        return groups.drop(columns=groups.columns[0], axis=1).fillna(
-            axis=axis, **kwargs
-        )
+def _fillna_group(group, by, value, method, limit, fillna_axis):
+    return group.drop(columns=by).fillna(
+        value=value, method=method, limit=limit, axis=fillna_axis
+    )
 
 
 class _GroupBy:
@@ -1998,31 +1995,23 @@ class _GroupBy:
             raise NotImplementedError(
                 "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
             )
-        axis = DataFrame._validate_axis(axis)
-        if value is not None or axis == 0:
-            meta = self._meta_nonempty.transform(
-                _fillna_groups, value=value, method=method, limit=limit, axis=0
-            )
-            return self.transform(
-                _fillna_groups,
-                value=value,
-                method=method,
-                limit=limit,
-                axis=0,
-                meta=meta,
-            )
-        else:
-            meta = self._meta_nonempty.apply(
-                _fillna_groups, value=value, method=method, limit=limit, axis=1
-            )
-            return self.apply(
-                _fillna_groups,
-                value=value,
-                method=method,
-                limit=limit,
-                axis=1,
-                meta=meta,
-            )
+        meta = self._meta_nonempty.apply(
+            _fillna_group,
+            by=self.by,
+            value=value,
+            method=method,
+            limit=limit,
+            fillna_axis=axis,
+        )
+        return self.apply(
+            _fillna_group,
+            by=self.by,
+            value=value,
+            method=method,
+            limit=limit,
+            fillna_axis=axis,
+            meta=meta,
+        )
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
