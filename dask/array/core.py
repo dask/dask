@@ -307,7 +307,7 @@ def graph_from_arraylike(
         layers = {}
         layers[original_name] = MaterializedLayer({original_name: arr})
         layers[name] = core_blockwise(
-            getter,
+            getitem,
             name,
             out_ind,
             original_name,
