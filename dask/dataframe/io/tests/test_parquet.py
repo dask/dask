@@ -15,6 +15,7 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe.eager_optimize import predicate_pushdown
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -2351,6 +2352,63 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a1, b1)
     assert_eq(a2, b2)
     assert_eq(a3, b3)
+
+
+@pytest.mark.parametrize(
+    "filter_func,filter_dnf",
+    [
+        (lambda x: x[x["b"] == 10], [("b", "==", 10)]),
+        (lambda x: x[x["b"] <= 10], [("b", "<=", 10)]),
+        (lambda x: x[x["b"] >= 10], [("b", ">=", 10)]),
+        (
+            lambda x: x[(x["a"] < 3) & ((x["b"] > 1) & (x["b"] < 5))],
+            [("a", "<", 3), ("b", ">", 1), ("b", "<", 5)],
+        ),
+        (
+            lambda x: x[((x["b"] > 5) & (x["b"] < 10)) | (x["a"] == 1)],
+            [[("b", ">", 5), ("b", "<", 10)], [("a", "==", 1)]],
+        ),
+        (
+            # PRedicate pushdown will faile here, because datetime accessors
+            # are not yet supported. However, the query should still succeed.
+            lambda x: x[x["d"].dt.year < 2015],
+            None,
+        ),
+    ],
+)
+def test_predicate_pushdown(tmpdir, filter_func, filter_dnf, engine):
+
+    # Write simple parquet dataset and read back
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3] * 5,
+            "b": range(15),
+            "c": ["A"] * 15,
+            "d": [
+                pd.Timestamp("2013-08-01 23:00:00"),
+                pd.Timestamp("2014-09-01 23:00:00"),
+                pd.Timestamp("2015-10-01 23:00:00"),
+            ]
+            * 5,
+            "index": range(15),
+        },
+    )
+    dd.from_pandas(pdf, npartitions=3).to_parquet(tmpdir, engine=engine)
+    pq_ddf_expect = filter_func(
+        dd.read_parquet(tmpdir, engine=engine, index="index", filters=filter_dnf)
+    )
+    pq_ddf_pp = predicate_pushdown(
+        filter_func(dd.read_parquet(tmpdir, engine=engine, index="index"))
+    )
+
+    # Check for predicate pushdown
+    assert (
+        hlg_layer(pq_ddf_expect.dask, "read-parquet").creation_info["kwargs"]["filters"]
+        == hlg_layer(pq_ddf_pp.dask, "read-parquet").creation_info["kwargs"]["filters"]
+    )
+
+    # Check computed result is correct
+    dd.assert_eq(pq_ddf_expect.compute(), pq_ddf_pp.compute())
 
 
 def test_getitem_optimization_after_filter(tmpdir, engine):
