@@ -143,12 +143,10 @@ def test_ufunc(pandas_input, ufunc):
 @pytest.mark.parametrize(
     "ufunc",
     [
-        pytest.param(
-            "isreal", marks=pytest.mark.filterwarnings("ignore::FutureWarning")
-        ),
+        "isreal",
         "iscomplex",
-        pytest.param("real", marks=pytest.mark.filterwarnings("ignore::FutureWarning")),
-        pytest.param("imag", marks=pytest.mark.filterwarnings("ignore::FutureWarning")),
+        "real",
+        "imag",
         "angle",
         "fix",
         "i0",
@@ -156,16 +154,18 @@ def test_ufunc(pandas_input, ufunc):
         "nan_to_num",
     ],
 )
-def test_ufunc_array_wrap(ufunc):
+def test_ufunc_wrapped(ufunc):
     """
     some np.ufuncs doesn't call __array_wrap__
     (or __array_ufunc__ starting from numpy v.1.13.0), it should work as below
 
-    - da.ufunc(dd.Series) => dd.Series
+    - da.ufunc(dd.Series) => da.Array
     - da.ufunc(pd.Series) => np.ndarray
     - np.ufunc(dd.Series) => np.ndarray
     - np.ufunc(pd.Series) => np.ndarray
     """
+    from dask.array.utils import assert_eq as da_assert_eq
+
     if ufunc == "fix":
         pytest.skip("fix calls floor in a way that we do not yet support")
 
@@ -178,8 +178,8 @@ def test_ufunc_array_wrap(ufunc):
     ds = dd.from_pandas(s, 3)
 
     # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(ds), dd.Series)
-    assert_eq(dafunc(ds), pd.Series(npfunc(s), index=s.index))
+    assert isinstance(dafunc(ds), da.Array)
+    da_assert_eq(dafunc(ds), npfunc(s))
 
     assert isinstance(npfunc(ds), np.ndarray)
     np.testing.assert_equal(npfunc(ds), npfunc(s))
@@ -198,10 +198,8 @@ def test_ufunc_array_wrap(ufunc):
     ddf = dd.from_pandas(df, 3)
 
     # applying Dask ufunc doesn't trigger computation
-    assert isinstance(dafunc(ddf), dd.DataFrame)
-    # result may be read-only ndarray
-    exp = pd.DataFrame(npfunc(df).copy(), columns=df.columns, index=df.index)
-    assert_eq(dafunc(ddf), exp)
+    assert isinstance(dafunc(ddf), da.Array)
+    da_assert_eq(dafunc(ddf), npfunc(df))
 
     assert isinstance(npfunc(ddf), np.ndarray)
     np.testing.assert_array_equal(npfunc(ddf), npfunc(df))
