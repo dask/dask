@@ -11,7 +11,6 @@ from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
-from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -31,6 +30,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
 from dask.utils import M, _deprecated, ensure_dict, funcname, is_arraylike
 
 lock = Lock()
@@ -784,22 +784,18 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
             apply_and_enforce,
             _func=func,
             _meta=meta,
+            **kwargs,
         )
         if enforce_metadata
-        else func
+        else partial(func, **kwargs)
     )
 
-    # Use Blockwise initializer
-    layer = blockwise(
-        io_func,
+    # Construct DataFrameIOLayer
+    layer = DataFrameIOLayer(
         name,
-        "i",
-        BlockwiseDepDict(
-            {(i,): inp for i, inp in enumerate(inputs)},
-        ),
-        "i",
-        numblocks={},
-        **kwargs,
+        kwargs.get("columns", None),
+        inputs,
+        io_func,
     )
 
     # Return new DataFrame-collection object
