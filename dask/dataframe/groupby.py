@@ -1024,6 +1024,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
 
 
 def _fillna_group(group, by, value, method, limit, fillna_axis):
+    # apply() conserves the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
     return group.drop(columns=by).fillna(
         value=value, method=method, limit=limit, axis=fillna_axis
     )
