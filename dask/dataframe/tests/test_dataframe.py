@@ -5115,8 +5115,8 @@ def test_is_monotonic_empty_partitions():
     # slice it to get empty partitions
     df = df[df["a"] >= 3]
     ddf = ddf[ddf["a"] >= 3]
-    assert_eq(df["a"].is_monotonic, ddf["a"].is_monotonic)
-    assert_eq(df.index.is_monotonic, ddf.index.is_monotonic)
+    assert_eq(df["a"].is_monotonic_increasing, ddf["a"].is_monotonic_increasing)
+    assert_eq(df.index.is_monotonic_increasing, ddf.index.is_monotonic_increasing)
     assert_eq(df["a"].is_monotonic_decreasing, ddf["a"].is_monotonic_decreasing)
     assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
 
