@@ -443,7 +443,7 @@ def assign_index(df, ind):
 
 
 def monotonic_increasing_chunk(x):
-    if len(x) == 0:
+    if x.empty:
         # if input is empty, return empty df for chunk
         data = None
     else:
@@ -460,7 +460,7 @@ def monotonic_increasing_aggregate(concatenated):
 
 
 def monotonic_decreasing_chunk(x):
-    if len(x) == 0:
+    if x.empty:
         # if input is empty, return empty df for chunk
         data = None
     else:

@@ -5111,10 +5111,14 @@ def test_index_is_monotonic_dt64():
 def test_is_monotonic_empty_partitions():
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 3, 2, 1]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert ddf[ddf["a"] >= 3]["a"].is_monotonic.compute()
-    assert ddf[ddf["a"] >= 3].index.is_monotonic.compute()
-    assert not ddf[ddf["a"] >= 3]["a"].is_monotonic_decreasing.compute()
-    assert not ddf[ddf["a"] >= 3].index.is_monotonic_decreasing.compute()
+
+    # slice it to get empty partitions
+    df = df[df["a"] >= 3]
+    ddf = ddf[ddf["a"] >= 3]
+    assert_eq(df["a"].is_monotonic, ddf["a"].is_monotonic)
+    assert_eq(df.index.is_monotonic, ddf.index.is_monotonic)
+    assert_eq(df["a"].is_monotonic_decreasing, ddf["a"].is_monotonic_decreasing)
+    assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
 
 
 def test_custom_map_reduce():
