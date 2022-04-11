@@ -1,5 +1,6 @@
 import os
 import warnings
+from collections.abc import Iterable
 from functools import partial
 from math import ceil
 from operator import getitem
@@ -719,11 +720,11 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
     ----------
     func : function
         Function used to create each partition.
-    inputs : list
-        List of arguments to pass to ``func``. The number of elements in
-        ``inputs`` will correspond to the number of partitions in the
-        output collection (only one element will be passed to ``func``
-        for each partition).
+    inputs : Iterable
+        Iterable object of arguments to pass to ``func``. The number of
+        elements in ``inputs`` will correspond to the number of partitions
+        in the output collection (only one element will be passed to
+        ``func`` for each partition).
     enforce_metadata : bool, default True
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
@@ -743,8 +744,11 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
 
     if not callable(func):
         raise ValueError("`func` argument must be `callable`")
-    if not isinstance(inputs, list) or not len(inputs):
-        raise ValueError("`inputs` must be a list with non-zero length")
+    if not isinstance(inputs, Iterable):
+        raise ValueError(f"`inputs` must be Iterable, got {type(inputs)}")
+    inputs = list(inputs)  # Always convert to list (for now)
+    if not len(inputs):
+        raise ValueError("`inputs` must have a non-zero length")
 
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
