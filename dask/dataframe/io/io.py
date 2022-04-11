@@ -1,4 +1,6 @@
 import os
+import warnings
+from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
@@ -9,10 +11,14 @@ from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
+from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
     Series,
+    _concat,
+    _emulate,
+    apply_and_enforce,
     has_parallel_type,
     new_dd_object,
 )
@@ -25,7 +31,7 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, ensure_dict
+from dask.utils import M, _deprecated, ensure_dict, funcname, is_arraylike
 
 lock = Lock()
 
@@ -705,95 +711,101 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
-# def from_map(func, inputs, meta=no_default, divisions=None, **kwargs):
-#     """Create a DataFrame collection from a custom function map
+@insert_meta_param_description
+def from_map(func, inputs, enforce_metadata, meta=None, divisions=None, **kwargs):
+    """Create a DataFrame collection from a custom function map
 
-#     Parameters
-#     ----------
-#     func : function
-#         Function used to create each partition.
-#     inputs : list or BlockwiseDep
-#         List of arguments to pass to ``func``. The number of elements in
-#         ``inputs`` will correspond to the number of partitions in the
-#         output collection (only one element will be passed to ``func``
-#         for each partition).
-#     enforce_metadata : bool, default True
-#         Whether to enforce at runtime that the structure of the DataFrame
-#         produced by ``func`` actually matches the structure of ``meta``.
-#         This will rename and reorder columns for each partition,
-#         and will raise an error if this doesn't work or types don't match.
-#     $META
-#     divisions : tuple, str, optional
-#         Partition boundaries along the index.
-#         For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
-#         For string 'sorted' will compute the delayed values to find index
-#         values.  Assumes that the indexes are mutually sorted.
-#         If None, then won't use index information
-#     """
+    Parameters
+    ----------
+    func : function
+        Function used to create each partition.
+    inputs : list
+        List of arguments to pass to ``func``. The number of elements in
+        ``inputs`` will correspond to the number of partitions in the
+        output collection (only one element will be passed to ``func``
+        for each partition).
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work or types don't match.
+    $META
+    divisions : tuple, str, optional
+        Partition boundaries along the index.
+        For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
+        For string 'sorted' will compute the delayed values to find index
+        values.  Assumes that the indexes are mutually sorted.
+        If None, then won't use index information
+    **kwargs:
+        Dictionary of key-word arguments to be passed to ``func`` for every
+        output partition.
+    """
 
-#     assert callable(func)
-#     name = kwargs.pop("token", None)
+    if not callable(func):
+        raise ValueError("`func` argument must be `callable`")
+    if not isinstance(inputs, list) or not len(inputs):
+        raise ValueError("`inputs` must be a list with non-zero length")
 
-#     if name is not None:
-#         token = tokenize(meta, *args, **kwargs)
-#     else:
-#         name = funcname(func)
-#         token = tokenize(func, meta, *args, **kwargs)
-#     name = f"{name}-{token}"
+    # NOTE: Most of the metadata-handling logic used here
+    # is copied directly from `map_partitions`
+    name = kwargs.pop("token", None)
+    if name is not None:
+        token = tokenize(meta, inputs, divisions, **kwargs)
+    else:
+        name = funcname(func)
+        token = tokenize(func, meta, inputs, divisions, **kwargs)
+    name = f"{name}-{token}"
 
-#     if meta is no_default:
-#         meta = _emulate(func, *args, udf=True, **kwargs)
-#         meta_is_emulated = True
-#     else:
-#         meta = make_meta(meta)
-#         meta_is_emulated = False
+    if meta is None:
+        meta = _emulate(func, inputs[0], udf=True, **kwargs)
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta)
+        meta_is_emulated = False
 
-#     if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-#         if not meta_is_emulated:
-#             warnings.warn(
-#                 "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-#                 "Try passing a pandas object as meta or a dict or tuple representing the "
-#                 "(name, dtype) of the columns. In the future the meta you passed will not work.",
-#                 FutureWarning,
-#             )
-#         # If `meta` is not a pandas object, the concatenated results will be a
-#         # different type
-#         meta = make_meta(_concat([meta]), index=meta_index)
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]))
 
-#     # Ensure meta is empty DataFrame
-#     meta = make_meta(meta)
+    # Ensure meta is empty DataFrame
+    meta = make_meta(meta)
 
-#     if not isinstance(inputs, BlockwiseDep):
-#         # Define mapping between key index and "part"
-#         io_arg_map = BlockwiseDepDict(
-#             {(i,): inp for i, inp in enumerate(inputs)},
-#         )
-#     else:
-#         # inputs is already a BlockwiseDep object
-#         io_arg_map = inputs
+    # Define io_func
+    io_func = (
+        partial(
+            apply_and_enforce,
+            _func=func,
+            _meta=meta,
+        )
+        if enforce_metadata
+        else func
+    )
 
-#     # Define io_func
-#     if enforce_metadata:
-#         io_func = partial(
-#             apply_and_enforce,
-#             _func=func,
-#             _meta=meta,
-#         )
-#     else:
-#         io_func = func
+    # Use Blockwise initializer
+    layer = blockwise(
+        io_func,
+        name,
+        "i",
+        BlockwiseDepDict(
+            {(i,): inp for i, inp in enumerate(inputs)},
+        ),
+        "i",
+        numblocks={},
+        **kwargs,
+    )
 
-#     # Use Blockwise initializer
-#     layer = Blockwise.__init__(
-#         output=name,
-#         output_indices="i",
-#         dsk={name: (io_func, blockwise_token(0))},
-#         indices=[(io_arg_map, "i")],
-#         numblocks={},
-#         **kwargs,
-#     )
-
-#     graph = HighLevelGraph.from_collections(name, layer, dependencies=[ddf])
-#     return new_dd_object(graph, name, meta, divisions)
+    # Return new DataFrame-collection object
+    divisions = divisions or [None] * (len(inputs) + 1)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__
