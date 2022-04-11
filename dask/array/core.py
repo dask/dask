@@ -307,7 +307,7 @@ def graph_from_arraylike(
         layers = {}
         layers[original_name] = MaterializedLayer({original_name: arr})
         layers[name] = core_blockwise(
-            getter,
+            getitem,
             name,
             out_ind,
             original_name,
@@ -3303,7 +3303,7 @@ def from_array(
     if lock is True:
         lock = SerializableLock()
 
-    is_ndarray = type(x) is np.ndarray
+    is_ndarray = type(x) in (np.ndarray, np.ma.core.MaskedArray)
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
