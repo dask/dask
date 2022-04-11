@@ -48,6 +48,7 @@ def orc_files():
 
 
 @pytest.mark.parametrize("split_stripes", [1, 2])
+@pytest.mark.network
 def test_orc_single(orc_files, split_stripes):
     fn = orc_files[0]
     d = dd.read_orc(fn, split_stripes=split_stripes)
@@ -68,6 +69,7 @@ def test_orc_single(orc_files, split_stripes):
     assert set(graph.layers[key].columns) == set(columns)
 
 
+@pytest.mark.network
 def test_orc_multiple(orc_files):
     d = dd.read_orc(orc_files[0])
     d2 = dd.read_orc(orc_files)
@@ -134,6 +136,7 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
     assert_eq(data, df2, check_index=False)
 
 
+@pytest.mark.network
 def test_orc_aggregate_files_offset(orc_files):
     # Default read should give back 16 partitions. Therefore,
     # specifying split_stripes=11 & aggregate_files=True should
@@ -148,6 +151,7 @@ def test_orc_aggregate_files_offset(orc_files):
     parse_version(pa.__version__) < parse_version("4.0.0"),
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
+@pytest.mark.network
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
     assert df._name.startswith("read-orc")

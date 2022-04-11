@@ -20,6 +20,7 @@ requirements:
   host:
     - python >=3.8
     - pip
+    - setuptools
 
   run:
     - python >=3.8
@@ -40,7 +41,6 @@ test:
 
 about:
   home: https://github.com/dask/dask/
-  summary: Parallel PyData with Task Scheduling
   license: BSD-3-Clause
   license_file: LICENSE.txt
   summary: Parallel Python with task scheduling
