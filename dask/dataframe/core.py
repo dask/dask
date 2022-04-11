@@ -21,13 +21,7 @@ from dask import core, threaded
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
-from dask.blockwise import (
-    Blockwise,
-    BlockwiseDep,
-    BlockwiseDepDict,
-    blockwise,
-    blockwise_token,
-)
+from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
@@ -6291,19 +6285,6 @@ def map_partitions(
     if parent_meta is None and dfs:
         parent_meta = dfs[0]._meta
 
-    # Check if this is the special case where args doesn't
-    # contain any Dask collections.
-    if not dfs:
-        if len(args) != 1:
-            raise ValueError(
-                "Args does not contain any Dask collections. "
-                "Only one list argument is allowed in this case."
-            )
-        io_args = args.pop(0)
-        args = io_args[:1]
-    else:
-        io_args = None
-
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
@@ -6338,39 +6319,6 @@ def map_partitions(
 
     # Ensure meta is empty series
     meta = make_meta(meta, parent_meta=parent_meta)
-
-    if not dfs:
-        # Handle special case that no Dask collections are
-        # passed to map_partitions. This means `func` will be
-        # used to create a new collection
-        assert io_args
-        io_arg_map = BlockwiseDepDict(
-            {(i,): inp for i, inp in enumerate(io_args)},
-        )
-
-        # Define io_func
-        if enforce_metadata:
-            io_func = partial(
-                apply_and_enforce,
-                _func=func,
-                _meta=meta,
-            )
-        else:
-            io_func = func
-
-        # Use Blockwise initializer
-        layer = Blockwise(
-            output=name,
-            output_indices="i",
-            dsk={name: (io_func, blockwise_token(0))},
-            indices=[(io_arg_map, "i")],
-            numblocks={},
-            **kwargs,
-        )
-
-        divisions = kwargs.pop("divisions", [None] * (len(io_args) + 1))
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
-        return new_dd_object(graph, name, meta, divisions)
 
     args2 = []
     dependencies = []
