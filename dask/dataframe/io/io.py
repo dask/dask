@@ -712,7 +712,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
 
 @insert_meta_param_description
-def from_map(func, inputs, enforce_metadata, meta=None, divisions=None, **kwargs):
+def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **kwargs):
     """Create a DataFrame collection from a custom function map
 
     Parameters
