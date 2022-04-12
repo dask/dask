@@ -3,9 +3,6 @@ from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
 
-from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
-
 try:
     import psutil
 except ImportError:
@@ -30,7 +27,7 @@ from pandas.api.types import (
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe.core import new_dd_object
+from dask.dataframe.io.io import from_map
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
@@ -375,13 +372,8 @@ def text_blocks_to_pandas(
     for i in range(len(blocks)):
         parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
-    # Create Blockwise layer
-    label = "read-csv-"
-    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
-    layer = DataFrameIOLayer(
-        name,
-        columns,
-        parts,
+    # Construct the output collection with from_map
+    return from_map(
         CSVFunctionWrapper(
             columns,
             None,
@@ -393,11 +385,14 @@ def text_blocks_to_pandas(
             enforce,
             kwargs,
         ),
-        label=label,
+        parts,
+        meta=head,
+        divisions=(None,) * (len(blocks) + 1),
+        label="read-csv-",
+        token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
+        enforce_metadata=False,
         produces_tasks=True,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
 
 
 def block_mask(block_lists):

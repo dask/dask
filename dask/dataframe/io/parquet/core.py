@@ -457,6 +457,7 @@ def read_parquet(
             common_kwargs,
         )
 
+    # Construct the output collection with from_map
     return from_map(
         io_func,
         parts,

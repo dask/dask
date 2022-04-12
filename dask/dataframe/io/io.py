@@ -719,6 +719,7 @@ def from_map(
     meta=None,
     divisions=None,
     label=None,
+    token=None,
     enforce_metadata=True,
     creation_info=None,
     **kwargs,
@@ -742,9 +743,10 @@ def from_map(
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
     label : str, optional
-        String to use as a prefix in the place-holder collection
-        name. If nothing is specified (default), "subset-" will
-        be used.
+        String to use as the function-name label in the output
+        collection-key names.
+    token : str, optional
+        String to use as the "token" in the output collection-key names.
     enforce_metadata : bool, default True
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
@@ -765,13 +767,19 @@ def from_map(
 
     # Define collection name
     label = label or funcname(func)
-    token = tokenize(func, meta, inputs, divisions, enforce_metadata, **kwargs)
+    token = token or tokenize(func, meta, inputs, divisions, enforce_metadata, **kwargs)
     name = f"{label}-{token}"
 
     # Get "projectable" column selection.
     # Note that this relies on the IO function
     # defining a `columns` attribue
     columns = func.columns if hasattr(func, "columns") else None
+    if columns is None and hasattr(func, "full_columns"):
+        # NOTE: This is a bit of a hack for read_csv
+        columns = func.full_columns
+
+    # Check for `produces_tasks`
+    produces_tasks = kwargs.pop("produces_tasks", False)
 
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
@@ -806,10 +814,7 @@ def from_map(
             **kwargs,
         )
         if enforce_metadata
-        else (
-            partial(func, **kwargs)
-            if kwargs else func
-        )
+        else (partial(func, **kwargs) if kwargs else func)
     )
 
     # Construct DataFrameIOLayer
@@ -819,6 +824,7 @@ def from_map(
         inputs,
         io_func,
         label=label,
+        produces_tasks=produces_tasks,
         creation_info=creation_info,
     )
 
