@@ -346,6 +346,13 @@ def tensordot(lhs, rhs, axes=2):
 
 @derived_from(np)
 def dot(a, b):
+    """
+    Notes
+    -----
+    The parameter `out` which appears in the documentation
+    for NumPy's `dot` is not available in `dask.array.dot`
+    at the moment.
+    """
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
 
