@@ -5,10 +5,10 @@ from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
-from dask.dataframe.core import DataFrame, Scalar, new_dd_object
+from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
 from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
 from dask.utils import apply
 
 
@@ -128,18 +128,15 @@ def read_orc(
         aggregate_files,
     )
 
-    # Construct and return a Blockwise layer
-    label = "read-orc-"
-    output_name = label + tokenize(fs_token, path, columns)
-    layer = DataFrameIOLayer(
-        output_name,
-        columns,
-        parts,
+    # Construct the output collection with from_map
+    return from_map(
         ORCFunctionWrapper(fs, columns, schema, engine, index),
-        label=label,
+        parts,
+        meta=meta,
+        divisions=[None] * (len(parts) + 1),
+        label="read-orc-",
+        enforce_metadata=False,
     )
-    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return new_dd_object(graph, output_name, meta, [None] * (len(parts) + 1))
 
 
 def to_orc(
