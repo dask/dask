@@ -3878,17 +3878,33 @@ def test_in_predicate_can_use_iterables(tmp_path, engine, filter_value):
     assert_eq(result, expected, check_index=False)
 
 
-def test_in_predicate_requires_an_iterable(tmp_path, engine):
+# Non-iterable filter value with `in` predicate
+# Test single nested and double nested lists of filters, as well as having multiple
+# filters to test against.
+@pytest.mark.parametrize(
+    "filter_value",
+    (
+        [("B", "in", 10)],
+        [[("B", "in", 10)]],
+        [("B", "<", 10), ("B", "in", 10)],
+        [[("B", "<", 10), ("B", "in", 10)]],
+    ),
+    ids=(
+        "one-item-single-nest",
+        "one-item-double-nest",
+        "two-item-double-nest",
+        "two-item-two-nest",
+    ),
+)
+def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
     """Regression test for https://github.com/dask/dask/issues/8720"""
     path = tmp_path / "gh_8720_pandas.parquet"
     df = pd.DataFrame(
         {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
     )
     df.to_parquet(path, engine=engine)
-    # Non-iterable filter value
-    filters = [("B", "in", 10)]
     with pytest.raises(TypeError, match="Value of 'in' filter"):
-        dd.read_parquet(path, engine=engine, filters=filters)
+        dd.read_parquet(path, engine=engine, filters=filter_value)
 
     # pandas to_parquet outputs a single file, dask outputs a folder with global
     # metadata that changes the filtering code path
@@ -3896,4 +3912,4 @@ def test_in_predicate_requires_an_iterable(tmp_path, engine):
     path = tmp_path / "gh_8720_dask.parquet"
     ddf.to_parquet(path, engine=engine)
     with pytest.raises(TypeError, match="Value of 'in' filter"):
-        dd.read_parquet(path, engine=engine, filters=filters)
+        dd.read_parquet(path, engine=engine, filters=filter_value)
