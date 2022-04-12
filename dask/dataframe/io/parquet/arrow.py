@@ -1145,16 +1145,17 @@ class ArrowDatasetEngine(Engine):
             gather_statistics = False
 
         # Make sure that any `in`-predicate filters have iterable values
+        filter_columns = set()
         if filters is not None:
-            for filter in filters:
-                _, op, val = filter
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
                 if op == "in" and not isinstance(val, (set, list, tuple)):
                     raise TypeError(
                         "Value of 'in' filter must be a list, set or tuple."
                     )
+                filter_columns.add(col)
 
         # Determine which columns need statistics.
-        filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
         for i, name in enumerate(schema.names):
             if name in index_cols or name in filter_columns:

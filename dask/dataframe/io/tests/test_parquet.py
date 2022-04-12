@@ -1408,7 +1408,7 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     filters = [[("aa", "<", aa_lim), ("bb", "==", bb_val)]]
     ddf2 = dd.read_parquet(fn, index=False, engine="pyarrow", filters=filters)
 
-    # Check that partitions are filetered for "aa" filter
+    # Check that partitions are filtered for "aa" filter
     nonempty = 0
     for part in ddf[ddf["aa"] < aa_lim].partitions:
         nonempty += int(len(part.compute()) > 0)
