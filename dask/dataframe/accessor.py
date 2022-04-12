@@ -320,7 +320,7 @@ class StringAccessor(Accessor):
         # If it exists in Pandas, it was bound above, so just call it
         if "removeprefix" in self._accessor_methods:
             return self._function_map("removeprefix", prefix)
-        # It it does not exist, do it with map
+        # It it does not exist, do it with map and startswith
         else:
             return self._series.map(
                 lambda s: s[len(prefix) :] if s.startswith(prefix) else s,
@@ -331,7 +331,7 @@ class StringAccessor(Accessor):
         # If it exists in Pandas, it was bound above, so just call it
         if "removesuffix" in self._accessor_methods:
             return self._function_map("removesuffix", suffix)
-        # It it does not exist, do it with map
+        # It it does not exist, do it with map and endswith
         else:
             return self._series.map(
                 lambda s: s[: -len(suffix)] if s.endswith(suffix) else s,
@@ -355,11 +355,12 @@ def str_cat(self, *others, **kwargs):
     return self.str.cat(others=others, **kwargs)
 
 
-# Ensure doc reflects Pandas one, even if we're using < 1.4
-# NOTE: again, if we require Pandas >= 1.4 this isn't needed, as derived_from takes care of everything
+# If it wasn't bound above with derived_from, use an ad-hoc docstring.
+# Observe that the doctring examples are written in Dask, because Pandas doesn't have the methods implemented.
+# NOTE: Again, if we required pandas >= 1.4 in the project, this wouldn't be necessary at all,
+# as we could use @derived_from(pd.core.strings.StringMethods), which would copy Pandas docs.
 if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
-    StringAccessor.removeprefix.__doc__ = """
-        Remove a prefix from an object series. If the prefix is not present,
+    StringAccessor.removeprefix.__doc__ = """Remove a prefix from an object series. If the prefix is not present,
         the original string will be returned.
 
         Parameters
@@ -378,21 +379,21 @@ if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
 
         Examples
         --------
-        >>> s = pd.Series(["str_foo", "str_bar", "no_prefix"])
-        >>> s
-        0    str_foo
-        1    str_bar
-        2    no_prefix
+        >>> from dask.dataframe import from_pandas
+        >>> s = from_pandas(pd.Series(["str_foo", "str_bar", "no_prefix"]), npartitions=1)
+        >>> s.compute()  # doctest: +NORMALIZE_WHITESPACE
+        0   str_foo
+        1   str_bar
+        2   no_prefix
         dtype: object
-        >>> s.str.removeprefix("str_")
-        0    foo
-        1    bar
-        2    no_prefix
+        >>> s.str.removeprefix("str_").compute()  # doctest: +NORMALIZE_WHITESPACE
+        0   foo
+        1   bar
+        2   no_prefix
         dtype: object
-    """
+        """
 if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
-    StringAccessor.removesuffix.__doc__ = """
-        Remove a suffix from an object series. If the suffix is not present,
+    StringAccessor.removesuffix.__doc__ = """Remove a suffix from an object series. If the suffix is not present,
         the original string will be returned.
 
         Parameters
@@ -411,18 +412,19 @@ if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
 
         Examples
         --------
-        >>> s = pd.Series(["foo_str", "bar_str", "no_suffix"])
-        >>> s
-        0    foo_str
-        1    bar_str
-        2    no_suffix
+        >>> from dask.dataframe import from_pandas
+        >>> s = from_pandas(pd.Series(["foo_str", "bar_str", "no_suffix"]), npartitions=1)
+        >>> s.compute()  # doctest: +NORMALIZE_WHITESPACE
+        0   foo_str
+        1   bar_str
+        2   no_suffix
         dtype: object
-        >>> s.str.removesuffix("_str")
-        0    foo
-        1    bar
-        2    no_suffix
+        >>> s.str.removesuffix("_str").compute()  # doctest: +NORMALIZE_WHITESPACE
+        0   foo
+        1   bar
+        2   no_suffix
         dtype: object
-    """
+        """
 
 
 # Ported from pandas
