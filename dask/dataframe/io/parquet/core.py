@@ -10,14 +10,13 @@ from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import BlockIndex
-from dask.dataframe.core import DataFrame, Scalar, new_dd_object
+from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import _is_local_fs
-from dask.dataframe.io.io import from_map
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
 from dask.utils import apply, import_required, natural_sort_key, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
