@@ -361,8 +361,7 @@ def read_parquet(
     if hasattr(path, "name"):
         path = stringify_path(path)
 
-    # Update input_kwargs and tokenize inputs
-    label = "read-parquet-"
+    # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
@@ -463,7 +462,8 @@ def read_parquet(
         parts,
         meta=meta,
         divisions=divisions,
-        label=label,
+        label="read-parquet-",
+        token=tokenize(path, **input_kwargs),
         enforce_metadata=False,
         creation_info={
             "func": read_parquet,

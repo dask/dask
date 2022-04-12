@@ -135,6 +135,7 @@ def read_orc(
         meta=meta,
         divisions=[None] * (len(parts) + 1),
         label="read-orc-",
+        token=tokenize(fs_token, path, columns),
         enforce_metadata=False,
     )
 
