@@ -13,6 +13,7 @@ from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar, new_dd_object
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import _is_local_fs
+from dask.dataframe.io.io import from_map
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
@@ -364,7 +365,6 @@ def read_parquet(
     # Update input_kwargs and tokenize inputs
     label = "read-parquet-"
     input_kwargs.update({"columns": columns, "engine": engine})
-    output_name = label + tokenize(path, **input_kwargs)
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -443,33 +443,34 @@ def read_parquet(
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
-        graph = {(output_name, 0): meta}
         divisions = (None, None)
+        io_func = lambda x: x
+        parts = [meta]
     else:
-        # Create Blockwise layer
-        layer = DataFrameIOLayer(
-            output_name,
+        # Use IO function wrapper
+        io_func = ParquetFunctionWrapper(
+            engine,
+            fs,
+            meta,
             columns,
-            parts,
-            ParquetFunctionWrapper(
-                engine,
-                fs,
-                meta,
-                columns,
-                index,
-                {},  # All kwargs should now be in `common_kwargs`
-                common_kwargs,
-            ),
-            label=label,
-            creation_info={
-                "func": read_parquet,
-                "args": (path,),
-                "kwargs": input_kwargs,
-            },
+            index,
+            {},  # All kwargs should now be in `common_kwargs`
+            common_kwargs,
         )
-        graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions)
+    return from_map(
+        io_func,
+        parts,
+        meta=meta,
+        divisions=divisions,
+        label=label,
+        enforce_metadata=False,
+        creation_info={
+            "func": read_parquet,
+            "args": (path,),
+            "kwargs": input_kwargs,
+        },
+    )
 
 
 def check_multi_support(engine):

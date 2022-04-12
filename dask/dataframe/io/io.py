@@ -713,7 +713,16 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
 
 @insert_meta_param_description
-def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **kwargs):
+def from_map(
+    func,
+    inputs,
+    meta=None,
+    divisions=None,
+    label=None,
+    enforce_metadata=True,
+    creation_info=None,
+    **kwargs,
+):
     """Create a DataFrame collection from a custom function map
 
     Parameters
@@ -725,11 +734,6 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
         elements in ``inputs`` will correspond to the number of partitions
         in the output collection (only one element will be passed to
         ``func`` for each partition).
-    enforce_metadata : bool, default True
-        Whether to enforce at runtime that the structure of the DataFrame
-        produced by ``func`` actually matches the structure of ``meta``.
-        This will rename and reorder columns for each partition,
-        and will raise an error if this doesn't work or types don't match.
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
@@ -737,6 +741,15 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
         For string 'sorted' will compute the delayed values to find index
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
+    label : str, optional
+        String to use as a prefix in the place-holder collection
+        name. If nothing is specified (default), "subset-" will
+        be used.
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work or types don't match.
     **kwargs:
         Dictionary of key-word arguments to be passed to ``func`` for every
         output partition.
@@ -750,16 +763,18 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
     if not len(inputs):
         raise ValueError("`inputs` must have a non-zero length")
 
+    # Define collection name
+    label = label or funcname(func)
+    token = tokenize(func, meta, inputs, divisions, enforce_metadata, **kwargs)
+    name = f"{label}-{token}"
+
+    # Get "projectable" column selection.
+    # Note that this relies on the IO function
+    # defining a `columns` attribue
+    columns = func.columns if hasattr(func, "columns") else None
+
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
-    name = kwargs.pop("token", None)
-    if name is not None:
-        token = tokenize(meta, inputs, divisions, **kwargs)
-    else:
-        name = funcname(func)
-        token = tokenize(func, meta, inputs, divisions, **kwargs)
-    name = f"{name}-{token}"
-
     if meta is None:
         meta = _emulate(func, inputs[0], udf=True, **kwargs)
         meta_is_emulated = True
@@ -791,15 +806,20 @@ def from_map(func, inputs, enforce_metadata=True, meta=None, divisions=None, **k
             **kwargs,
         )
         if enforce_metadata
-        else partial(func, **kwargs)
+        else (
+            partial(func, **kwargs)
+            if kwargs else func
+        )
     )
 
     # Construct DataFrameIOLayer
     layer = DataFrameIOLayer(
         name,
-        kwargs.get("columns", None),
+        columns,
         inputs,
         io_func,
+        label=label,
+        creation_info=creation_info,
     )
 
     # Return new DataFrame-collection object
