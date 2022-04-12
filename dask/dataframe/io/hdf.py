@@ -10,11 +10,9 @@ from tlz import merge
 
 from dask import config, multiprocessing
 from dask.base import compute_as_if_collection, get_scheduler, tokenize
-from dask.dataframe.core import DataFrame, new_dd_object
-from dask.dataframe.io.io import _link
+from dask.dataframe.core import DataFrame
+from dask.dataframe.io.io import _link, from_map
 from dask.delayed import Delayed, delayed
-from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
 from dask.utils import get_scheduler_lock
 
 
@@ -427,18 +425,16 @@ def read_hdf(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
-    # Construct Layer and Collection
-    label = "read-hdf-"
-    name = label + tokenize(paths, key, start, stop, sorted_index, chunksize, mode)
-    layer = DataFrameIOLayer(
-        name,
-        columns,
-        parts,
+    # Construct the output collection with from_map
+    return from_map(
         HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
-        label=label,
+        parts,
+        meta=meta,
+        divisions=divisions,
+        label="read-hdf-",
+        token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
+        enforce_metadata=False,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    return new_dd_object(graph, name, meta, divisions)
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
