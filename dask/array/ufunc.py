@@ -177,6 +177,7 @@ logaddexp2 = ufunc(np.logaddexp2)
 true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
+positive = ufunc(np.positive)
 power = ufunc(np.power)
 float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
@@ -237,6 +238,8 @@ bitwise_or = ufunc(np.bitwise_or)
 bitwise_xor = ufunc(np.bitwise_xor)
 bitwise_not = ufunc(np.bitwise_not)
 invert = bitwise_not
+left_shift = ufunc(np.left_shift)
+right_shift = ufunc(np.right_shift)
 
 # floating functions
 isfinite = ufunc(np.isfinite)
@@ -262,6 +265,7 @@ rint = ufunc(np.rint)
 fabs = ufunc(np.fabs)
 sign = ufunc(np.sign)
 absolute = ufunc(np.absolute)
+abs = absolute
 
 # non-ufunc elementwise functions
 clip = wrap_elemwise(np.clip)
