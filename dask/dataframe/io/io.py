@@ -721,7 +721,6 @@ def from_map(
     label=None,
     token=None,
     enforce_metadata=True,
-    creation_info=None,
     **kwargs,
 ):
     """Create a DataFrame collection from a custom function map
@@ -778,8 +777,9 @@ def from_map(
         # NOTE: This is a bit of a hack for read_csv
         columns = func.full_columns
 
-    # Check for `produces_tasks`
+    # Check for `produces_tasks` and `creation_info`
     produces_tasks = kwargs.pop("produces_tasks", False)
+    creation_info = kwargs.pop("creation_info", None)
 
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
