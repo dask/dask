@@ -378,6 +378,7 @@ if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
 
         Examples
         --------
+        >>> s = pd.Series(["str_foo", "str_bar", "no_prefix"])
         >>> s
         0    str_foo
         1    str_bar
@@ -387,17 +388,6 @@ if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
         0    foo
         1    bar
         2    no_prefix
-        dtype: object
-
-        >>> s
-        0    foo_str
-        1    bar_str
-        2    no_suffix
-        dtype: object
-        >>> s.str.removesuffix("_str")
-        0    foo
-        1    bar
-        2    no_suffix
         dtype: object
     """
 if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
@@ -421,17 +411,7 @@ if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
 
         Examples
         --------
-        >>> s
-        0    str_foo
-        1    str_bar
-        2    no_prefix
-        dtype: object
-        >>> s.str.removeprefix("str_")
-        0    foo
-        1    bar
-        2    no_prefix
-        dtype: object
-
+        >>> s = pd.Series(["foo_str", "bar_str", "no_suffix"])
         >>> s
         0    foo_str
         1    bar_str
