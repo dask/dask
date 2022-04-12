@@ -1144,6 +1144,15 @@ class ArrowDatasetEngine(Engine):
         elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure that any `in`-predicate filters have iterable values
+        if filters is not None:
+            for filter in filters:
+                _, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+
         # Determine which columns need statistics.
         filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
@@ -1189,15 +1198,7 @@ class ArrowDatasetEngine(Engine):
         # Get/transate filters
         ds_filters = None
         if filters is not None:
-            try:
-                ds_filters = pq._filters_to_expression(filters)
-            except TypeError as exc:
-                if "not iterable" in str(exc):
-                    raise TypeError(
-                        "Value of 'in' filter must be a list, set or tuple."
-                    ) from None
-                else:
-                    raise
+            ds_filters = pq._filters_to_expression(filters)
 
         # Define subset of `dataset_info` required by _collect_file_parts
         dataset_info_kwargs = {

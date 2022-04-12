@@ -3856,9 +3856,9 @@ def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
 
 
 @pytest.mark.parametrize("filter_value", ({1}, [1], (1,)), ids=("set", "list", "tuple"))
-def test_in_predicate_can_use_iterables(tmpdir, engine, filter_value):
-    """Fixes GH8720"""
-    path = os.path.join(str(tmpdir), "in_predicate_iterable.parquet")
+def test_in_predicate_can_use_iterables(tmp_path, engine, filter_value):
+    """Regression test for https://github.com/dask/dask/issues/8720"""
+    path = tmp_path / "in_predicate_iterable_pandas.parquet"
     df = pd.DataFrame(
         {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
     )
@@ -3868,10 +3868,19 @@ def test_in_predicate_can_use_iterables(tmpdir, engine, filter_value):
     expected = pd.read_parquet(path, engine=engine, filters=filters)
     assert_eq(result, expected)
 
+    # pandas to_parquet outputs a single file, dask outputs a folder with global
+    # metadata that changes the filtering code path
+    ddf = dd.from_pandas(df, npartitions=2)
+    path = tmp_path / "in_predicate_iterable_dask.parquet"
+    ddf.to_parquet(path, engine=engine)
+    result = dd.read_parquet(path, engine=engine, filters=filters)
+    expected = pd.read_parquet(path, engine=engine, filters=filters)
+    assert_eq(result, expected, check_index=False)
 
-def test_in_predicate_requires_an_iterable(tmpdir, engine):
-    """Fixes GH8720"""
-    path = os.path.join(str(tmpdir), "gh_8720.parquet")
+
+def test_in_predicate_requires_an_iterable(tmp_path, engine):
+    """Regression test for https://github.com/dask/dask/issues/8720"""
+    path = tmp_path / "gh_8720_pandas.parquet"
     df = pd.DataFrame(
         {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
     )
@@ -3879,4 +3888,12 @@ def test_in_predicate_requires_an_iterable(tmpdir, engine):
     # Non-iterable filter value
     filters = [("B", "in", 10)]
     with pytest.raises(TypeError, match="Value of 'in' filter"):
-        dd.read_parquet(path, engine=engine, filters=filters, gather_statistics=True)
+        dd.read_parquet(path, engine=engine, filters=filters)
+
+    # pandas to_parquet outputs a single file, dask outputs a folder with global
+    # metadata that changes the filtering code path
+    ddf = dd.from_pandas(df, npartitions=2)
+    path = tmp_path / "gh_8720_dask.parquet"
+    ddf.to_parquet(path, engine=engine)
+    with pytest.raises(TypeError, match="Value of 'in' filter"):
+        dd.read_parquet(path, engine=engine, filters=filters)
