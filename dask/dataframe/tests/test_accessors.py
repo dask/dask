@@ -198,6 +198,62 @@ def test_str_accessor_extractall(df_ddf):
     )
 
 
+def test_str_accessor_removeprefix(df_ddf):
+    df, ddf = df_ddf
+    # A prefix present
+    prefix = df.str_col.iloc[0][:2]  # "ab"
+    assert_eq(
+        ddf.str_col.str.removeprefix(prefix),  # dask version exists
+        (  # pandas may or may not exist
+            df.str_col.str.removeprefix(prefix)
+            if hasattr(df.str_col.str, "removeprefix")
+            else df.str_col.map(
+                lambda s: s[len(prefix) :] if s.startswith(prefix) else s
+            )
+        ),
+    )
+    # A prefix non-present
+    prefix = prefix[::-1]  # "ba"
+    assert_eq(
+        ddf.str_col.str.removeprefix(prefix),  # dask version exists
+        (  # pandas may or may not exist
+            df.str_col.str.removeprefix(prefix)
+            if hasattr(df.str_col.str, "removeprefix")
+            else df.str_col.map(
+                lambda s: s[len(prefix) :] if s.startswith(prefix) else s
+            )
+        ),
+    )
+
+
+def test_str_accessor_removesuffix(df_ddf):
+    df, ddf = df_ddf
+    # A suffix present
+    suffix = df.str_col.iloc[-1][-2:]  # "FG"
+    assert_eq(
+        ddf.str_col.str.removesuffix(suffix),  # dask version exists
+        (  # pandas may or may not exist
+            df.str_col.str.removesuffix(suffix)
+            if hasattr(df.str_col.str, "removesuffix")
+            else df.str_col.map(
+                lambda s: s[: -len(suffix)] if s.endswith(suffix) else s
+            )
+        ),
+    )
+    # A suffix non-present
+    suffix = suffix[::-1]  # "GF"
+    assert_eq(
+        ddf.str_col.str.removesuffix(suffix),  # dask version exists
+        (  # pandas may or may not exist
+            df.str_col.str.removesuffix(suffix)
+            if hasattr(df.str_col.str, "removesuffix")
+            else df.str_col.map(
+                lambda s: s[: -len(suffix)] if s.endswith(suffix) else s
+            )
+        ),
+    )
+
+
 def test_str_accessor_cat(df_ddf):
     df, ddf = df_ddf
     sol = df.str_col.str.cat(df.str_col.str.upper(), sep=":")

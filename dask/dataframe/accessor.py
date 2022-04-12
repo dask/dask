@@ -247,6 +247,15 @@ class StringAccessor(Accessor):
         "wrap",
         "zfill",
     )
+    # Bind if already present in Pandas
+    # It's more general to check for the attribute than checking pd.__version__ >= '1.4' (versioning scheme may change)
+    # NOTE: If we require pandas >= 1.4 in the project, then no check would be needed
+    # and we could just add these 2 methods to _accessor_methods
+    if hasattr(pd.core.strings.StringMethods, "removeprefix"):
+        _accessor_methods = _accessor_methods + ("removeprefix",)
+    if hasattr(pd.core.strings.StringMethods, "removesuffix"):
+        _accessor_methods = _accessor_methods + ("removesuffix",)
+
     _accessor_properties = ()
 
     def _split(self, method, pat=None, n=-1, expand=False):
@@ -307,6 +316,28 @@ class StringAccessor(Accessor):
             str_extractall, pat, flags, token="str-extractall"
         )
 
+    def removeprefix(self, prefix: str):
+        # If it exists in Pandas, it was bound above, so just call it
+        if "removeprefix" in self._accessor_methods:
+            return self._function_map("removeprefix", prefix)
+        # It it does not exist, do it with map
+        else:
+            return self._series.map(
+                lambda s: s[len(prefix) :] if s.startswith(prefix) else s,
+                meta=self._series,
+            )
+
+    def removesuffix(self, suffix: str):
+        # If it exists in Pandas, it was bound above, so just call it
+        if "removesuffix" in self._accessor_methods:
+            return self._function_map("removesuffix", suffix)
+        # It it does not exist, do it with map
+        else:
+            return self._series.map(
+                lambda s: s[: -len(suffix)] if s.endswith(suffix) else s,
+                meta=self._series,
+            )
+
     def __getitem__(self, index):
         return self._series.map_partitions(str_get, index, meta=self._series._meta)
 
@@ -322,6 +353,96 @@ def str_get(series, index):
 
 def str_cat(self, *others, **kwargs):
     return self.str.cat(others=others, **kwargs)
+
+
+# Ensure doc reflects Pandas one, even if we're using < 1.4
+# NOTE: again, if we require Pandas >= 1.4 this isn't needed, as derived_from takes care of everything
+if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
+    StringAccessor.removeprefix.__doc__ = """
+        Remove a prefix from an object series. If the prefix is not present,
+        the original string will be returned.
+
+        Parameters
+        ----------
+        prefix : str
+            Remove the prefix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given prefix removed.
+
+        See Also
+        --------
+        Series.str.removesuffix : Remove a suffix from an object series.
+
+        Examples
+        --------
+        >>> s
+        0    str_foo
+        1    str_bar
+        2    no_prefix
+        dtype: object
+        >>> s.str.removeprefix("str_")
+        0    foo
+        1    bar
+        2    no_prefix
+        dtype: object
+
+        >>> s
+        0    foo_str
+        1    bar_str
+        2    no_suffix
+        dtype: object
+        >>> s.str.removesuffix("_str")
+        0    foo
+        1    bar
+        2    no_suffix
+        dtype: object
+    """
+if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
+    StringAccessor.removesuffix.__doc__ = """
+        Remove a suffix from an object series. If the suffix is not present,
+        the original string will be returned.
+
+        Parameters
+        ----------
+        suffix : str
+            Remove the suffix of the string.
+
+        Returns
+        -------
+        Series/Index: object
+            The Series or Index with given suffix removed.
+
+        See Also
+        --------
+        Series.str.removeprefix : Remove a prefix from an object series.
+
+        Examples
+        --------
+        >>> s
+        0    str_foo
+        1    str_bar
+        2    no_prefix
+        dtype: object
+        >>> s.str.removeprefix("str_")
+        0    foo
+        1    bar
+        2    no_prefix
+        dtype: object
+
+        >>> s
+        0    foo_str
+        1    bar_str
+        2    no_suffix
+        dtype: object
+        >>> s.str.removesuffix("_str")
+        0    foo
+        1    bar
+        2    no_suffix
+        dtype: object
+    """
 
 
 # Ported from pandas
