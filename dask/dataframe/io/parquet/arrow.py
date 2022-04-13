@@ -72,6 +72,7 @@ def _write_partitioned(
     pandas_to_arrow_table,
     preserve_index,
     index_cols=(),
+    return_metadata=True,
     **kwargs,
 ):
     """Write table to a partitioned dataset with pyarrow.
@@ -119,8 +120,14 @@ def _write_partitioned(
         fs.mkdirs(prefix, exist_ok=True)
         full_path = fs.sep.join([prefix, filename])
         with fs.open(full_path, "wb") as f:
-            pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
-        md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
+            pq.write_table(
+                subtable,
+                f,
+                metadata_collector=md_list if return_metadata else None,
+                **kwargs,
+            )
+        if return_metadata:
+            md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
 
     return md_list
 
@@ -680,6 +687,7 @@ class ArrowDatasetEngine(Engine):
                 preserve_index,
                 index_cols=index_cols,
                 compression=compression,
+                return_metadata=return_metadata,
                 **kwargs,
             )
             if md_list:
@@ -693,7 +701,7 @@ class ArrowDatasetEngine(Engine):
                     t,
                     fil,
                     compression=compression,
-                    metadata_collector=md_list,
+                    metadata_collector=md_list if return_metadata else None,
                     **kwargs,
                 )
             if md_list:
