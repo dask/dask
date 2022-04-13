@@ -1775,9 +1775,11 @@ def test_concat2():
         with warnings.catch_warnings(record=True) as w:
             expected = pd.concat(pdcase, sort=False)
 
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
+        if w:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                result = dd.concat(case)
+        else:
             result = dd.concat(case)
 
         assert result.npartitions == case[0].npartitions + case[1].npartitions
@@ -1791,10 +1793,13 @@ def test_concat2():
         with warnings.catch_warnings(record=True) as w:
             expected = pd.concat(pdcase, join="inner", sort=False)
 
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
+        if w:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", FutureWarning)
+                result = dd.concat(case, join="inner")
+        else:
             result = dd.concat(case, join="inner")
+
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(result, result)
@@ -1821,9 +1826,11 @@ def test_concat3():
     with warnings.catch_warnings(record=True) as w:
         expected = pd.concat([pdf1, pdf2], sort=False)
 
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
+    if w:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            result = dd.concat([ddf1, ddf2])
+    else:
         result = dd.concat([ddf1, ddf2])
 
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
@@ -1839,10 +1846,13 @@ def test_concat3():
     with warnings.catch_warnings(record=True) as w:
         expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
 
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
+    if w:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", FutureWarning)
+            result = dd.concat([ddf1, ddf2, ddf3])
+    else:
         result = dd.concat([ddf1, ddf2, ddf3])
+
     assert result.divisions == (
         ddf1.divisions[:-1] + ddf2.divisions[:-1] + ddf3.divisions
     )
