@@ -602,9 +602,10 @@ def test_parquet_append(s3, engine, s3so):
     )
 
 
-def test_parquet_wstoragepars(s3, s3so):
+@pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+def test_parquet_wstoragepars(s3, s3so, engine):
+    pytest.importorskip(engine)
     dd = pytest.importorskip("dask.dataframe")
-    pytest.importorskip("fastparquet")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
 
@@ -612,15 +613,23 @@ def test_parquet_wstoragepars(s3, s3so):
 
     data = pd.DataFrame({"i32": np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, write_index=False, storage_options=s3so)
+    df.to_parquet(url, engine=engine, write_index=False, storage_options=s3so)
 
-    dd.read_parquet(url, storage_options=dict(**s3so, **{"default_fill_cache": False}))
+    dd.read_parquet(
+        url,
+        engine=engine,
+        storage_options=dict(**s3so, **{"default_fill_cache": False}),
+    )
     assert s3.current().default_fill_cache is False
-    dd.read_parquet(url, storage_options=dict(**s3so, **{"default_fill_cache": True}))
+    dd.read_parquet(
+        url, engine=engine, storage_options=dict(**s3so, **{"default_fill_cache": True})
+    )
     assert s3.current().default_fill_cache is True
 
     dd.read_parquet(
-        url, storage_options=dict(**s3so, **{"default_block_size": 2**20})
+        url,
+        engine=engine,
+        storage_options=dict(**s3so, **{"default_block_size": 2**20}),
     )
     assert s3.current().default_block_size == 2**20
     with s3.current().open(url + "/_metadata") as f:
