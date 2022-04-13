@@ -18,7 +18,7 @@ except ImportError:
 
 
 T = TypeVar("T")
-CollectionType = TypeVar("CollectionType", bound="DaskCollection")
+CollectionType = TypeVar("CollectionType", bound="DaskCollection", covariant=True)
 
 
 class PostComputeCallable(Protocol):
