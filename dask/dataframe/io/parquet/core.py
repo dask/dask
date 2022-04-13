@@ -808,10 +808,10 @@ def to_parquet(
 
     # Collect metadata and write _metadata.
     # TODO: Use tree-reduction layer (when available)
-    meta_name = "metadata-" + data_write._name
     if write_metadata_file:
+        final_name = "metadata-" + data_write._name
         dsk = {
-            (meta_name, 0): (
+            (final_name, 0): (
                 apply,
                 engine.write_metadata,
                 [
@@ -824,16 +824,17 @@ def to_parquet(
             )
         }
     else:
-        dsk = {(meta_name, 0): (lambda x: None, data_write.__dask_keys__())}
+        final_name = "store-" + data_write._name
+        dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
     # Convert data_write + dsk to computable collection
-    graph = HighLevelGraph.from_collections(meta_name, dsk, dependencies=(data_write,))
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
     if compute:
         return compute_as_if_collection(
-            Scalar, graph, [(meta_name, 0)], **compute_kwargs
+            Scalar, graph, [(final_name, 0)], **compute_kwargs
         )
     else:
-        return Scalar(graph, meta_name, "")
+        return Scalar(graph, final_name, "")
 
 
 def create_metadata_file(
