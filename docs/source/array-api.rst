@@ -9,6 +9,8 @@ Top level functions
 .. autosummary::
    :toctree: generated/
 
+   abs
+   absolute
    add
    all
    allclose
@@ -120,6 +122,7 @@ Top level functions
    isposinf
    isreal
    ldexp
+   left_shift
    less
    linspace
    log
@@ -172,6 +175,7 @@ Top level functions
    percentile
    ~core.PerformanceWarning
    piecewise
+   positive
    power
    prod
    ptp
@@ -187,6 +191,7 @@ Top level functions
    repeat
    reshape
    result_type
+   right_shift
    rint
    roll
    rollaxis
