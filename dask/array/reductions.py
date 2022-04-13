@@ -1059,7 +1059,7 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
     return result
 
 
-def arg_combine(func, argfunc, data, axis=None, **kwargs):
+def arg_combine(argfunc, data, axis=None, **kwargs):
     arg, vals = _arg_combine(data, axis, argfunc, keepdims=True)
 
     try:
@@ -1075,18 +1075,20 @@ def arg_combine(func, argfunc, data, axis=None, **kwargs):
     return result
 
 
-def arg_agg(func, argfunc, data, axis=None, **kwargs):
-    return _arg_combine(data, axis, argfunc, keepdims=False)[0]
+def arg_agg(argfunc, data, axis=None, keepdims=False, **kwargs):
+    return _arg_combine(data, axis, argfunc, keepdims=keepdims)[0]
 
 
-def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
-    arg, vals = _arg_combine(data, axis, argfunc, keepdims=False)
+def nanarg_agg(argfunc, data, axis=None, keepdims=False, **kwargs):
+    arg, vals = _arg_combine(data, axis, argfunc, keepdims=keepdims)
     if np.any(np.isnan(vals)):
         raise ValueError("All NaN slice encountered")
     return arg
 
 
-def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None):
+def arg_reduction(
+    x, chunk, combine, agg, axis=None, keepdims=False, split_every=None, out=None
+):
     """Generic function for argreduction.
 
     Parameters
@@ -1149,35 +1151,16 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
     tmp = Array(graph, name, chunks, dtype=dtype, meta=meta)
 
-    result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
+    result = _tree_reduce(
+        tmp,
+        agg,
+        axis,
+        keepdims=keepdims,
+        dtype=dtype,
+        split_every=split_every,
+        combine=combine,
+    )
     return handle_out(out, result)
-
-
-def make_arg_reduction(func, argfunc, is_nan_func=False):
-    """Create an argreduction callable
-
-    Parameters
-    ----------
-    func : callable
-        The reduction (e.g. ``min``)
-    argfunc : callable
-        The argreduction (e.g. ``argmin``)
-    """
-    chunk = partial(arg_chunk, func, argfunc)
-    combine = partial(arg_combine, func, argfunc)
-    if is_nan_func:
-        agg = partial(nanarg_agg, func, argfunc)
-    else:
-        agg = partial(arg_agg, func, argfunc)
-
-    def wrapped(x, axis=None, split_every=None, out=None):
-        return arg_reduction(
-            x, chunk, combine, agg, axis, split_every=split_every, out=out
-        )
-
-    wrapped.__name__ = func.__name__
-
-    return derived_from(np)(wrapped)
 
 
 def _nanargmin(x, axis, **kwargs):
@@ -1194,10 +1177,60 @@ def _nanargmax(x, axis, **kwargs):
         return chunk.nanargmax(np.where(np.isnan(x), -np.inf, x), axis, **kwargs)
 
 
-argmin = make_arg_reduction(chunk.min, chunk.argmin)
-argmax = make_arg_reduction(chunk.max, chunk.argmax)
-nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
-nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
+@derived_from(np)
+def argmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    return arg_reduction(
+        a,
+        partial(arg_chunk, chunk.max, chunk.argmax),
+        partial(arg_combine, chunk.argmax),
+        partial(arg_agg, chunk.argmax),
+        axis=axis,
+        keepdims=keepdims,
+        split_every=split_every,
+        out=out,
+    )
+
+
+@derived_from(np)
+def argmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    return arg_reduction(
+        a,
+        partial(arg_chunk, chunk.min, chunk.argmin),
+        partial(arg_combine, chunk.argmin),
+        partial(arg_agg, chunk.argmin),
+        axis=axis,
+        keepdims=keepdims,
+        split_every=split_every,
+        out=out,
+    )
+
+
+@derived_from(np)
+def nanargmax(a, axis=None, keepdims=False, split_every=None, out=None):
+    return arg_reduction(
+        a,
+        partial(arg_chunk, chunk.nanmax, _nanargmax),
+        partial(arg_combine, _nanargmax),
+        partial(nanarg_agg, _nanargmax),
+        axis=axis,
+        keepdims=keepdims,
+        split_every=split_every,
+        out=out,
+    )
+
+
+@derived_from(np)
+def nanargmin(a, axis=None, keepdims=False, split_every=None, out=None):
+    return arg_reduction(
+        a,
+        partial(arg_chunk, chunk.nanmin, _nanargmin),
+        partial(arg_combine, _nanargmin),
+        partial(nanarg_agg, _nanargmin),
+        axis=axis,
+        keepdims=keepdims,
+        split_every=split_every,
+        out=out,
+    )
 
 
 def _prefixscan_combine(func, binop, pre, x, axis, dtype):
