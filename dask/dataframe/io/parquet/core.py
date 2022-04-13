@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import math
 import warnings
 
@@ -232,12 +233,12 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
-    engine : str, default 'auto'
-        Parquet reader library to use. Options include: 'auto', 'fastparquet',
-        and 'pyarrow'. Defaults to 'auto', which selects FastParquetEngine
-        if fastparquet is installed (and ArrowDatasetEngine otherwise). If
-        'pyarrow' is specified, ArrowDatasetEngine (which leverages the
-        pyarrow.dataset API) will be used.
+    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
     gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -356,7 +357,7 @@ def read_parquet(
         columns = list(columns)
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -547,8 +548,11 @@ def to_parquet(
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet library to use. If only one library is installed, it will use
-        that one; if both, it will use 'fastparquet'.
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
@@ -660,7 +664,7 @@ def to_parquet(
         )
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -987,18 +991,19 @@ def create_metadata_file(
 _ENGINES: dict[str, Engine] = {}
 
 
-def get_engine(engine):
+# TODO: remove _warn_engine_default_changing once the default has changed to
+# pyarrow.
+def get_engine(engine, _warn_engine_default_changing=False):
     """Get the parquet engine backend implementation.
 
     Parameters
     ----------
     engine : str, default 'auto'
-        Backend parquet library to use. Options include: 'auto', 'fastparquet',
-        and 'pyarrow'. Defaults to 'auto', which selects the FastParquetEngine
-        if fastparquet is installed (and ArrowDatasetEngine otherwise).
-        If 'pyarrow' is specified, the ArrowDatasetEngine (which leverages the
-        pyarrow.dataset API) will be used.
-    gather_statistics : bool or None (default).
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
 
     Returns
     -------
@@ -1008,13 +1013,24 @@ def get_engine(engine):
         return _ENGINES[engine]
 
     if engine == "auto":
-        for eng in ["fastparquet", "pyarrow"]:
-            try:
-                return get_engine(eng)
-            except RuntimeError:
-                pass
-        else:
-            raise RuntimeError("Please install either fastparquet or pyarrow")
+        try:
+            engine = get_engine("fastparquet")
+            if _warn_engine_default_changing and importlib.util.find_spec("pyarrow"):
+                warnings.warn(
+                    "engine='auto' will switch to using pyarrow by default in "
+                    "a future version. To continue using fastparquet even if "
+                    "pyarrow is installed in the future please explicitly "
+                    "specify engine='fastparquet'.",
+                    FutureWarning,
+                )
+            return engine
+        except RuntimeError:
+            pass
+
+        try:
+            return get_engine("pyarrow")
+        except RuntimeError:
+            raise RuntimeError("Please install either fastparquet or pyarrow") from None
 
     elif engine == "fastparquet":
         import_required("fastparquet", "`fastparquet` not installed")
@@ -1024,7 +1040,6 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
