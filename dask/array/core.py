@@ -624,6 +624,12 @@ def map_blocks(
 
     .. image:: /images/map_blocks_drop_axis.png
 
+    Due to memory-size-constraints, it is often not advisable to use ``drop_axis``
+    on an axis that is chunked.  In that case, it is better not to use
+    ``map_blocks`` but rather
+    ``dask.array.reduction(..., axis=dropped_axes, concatenate=False)`` which
+    maintains a leaner memory footprint while it drops any axis.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
