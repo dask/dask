@@ -8,7 +8,7 @@ import pandas as pd
 from dask.utils import derived_from
 
 
-def _bind_method(cls, pd_cls, attr):
+def _bind_method(cls, pd_cls, attr, min_version=None):
     def func(self, *args, **kwargs):
         return self._function_map(attr, *args, **kwargs)
 
@@ -18,10 +18,10 @@ def _bind_method(cls, pd_cls, attr):
         func.__wrapped__ = getattr(pd_cls, attr)
     except Exception:
         pass
-    setattr(cls, attr, derived_from(pd_cls)(func))
+    setattr(cls, attr, derived_from(pd_cls, version=min_version)(func))
 
 
-def _bind_property(cls, pd_cls, attr):
+def _bind_property(cls, pd_cls, attr, min_version=None):
     def func(self):
         return self._property_map(attr)
 
@@ -31,7 +31,7 @@ def _bind_property(cls, pd_cls, attr):
         func.__wrapped__ = getattr(pd_cls, attr)
     except Exception:
         pass
-    setattr(cls, attr, property(derived_from(pd_cls)(func)))
+    setattr(cls, attr, property(derived_from(pd_cls, version=min_version)(func)))
 
 
 def maybe_wrap_pandas(obj, x):
@@ -70,12 +70,14 @@ class Accessor:
         """Bind all auto-generated methods & properties"""
         super().__init_subclass__(**kwargs)
         pd_cls = getattr(pd.Series, cls._accessor_name)
-        for attr in cls._accessor_methods:
+        for item in cls._accessor_methods:
+            attr, min_version = item if isinstance(item, tuple) else (item, None)
             if not hasattr(cls, attr):
-                _bind_method(cls, pd_cls, attr)
-        for attr in cls._accessor_properties:
+                _bind_method(cls, pd_cls, attr, min_version)
+        for item in cls._accessor_properties:
+            attr, min_version = item if isinstance(item, tuple) else (item, None)
             if not hasattr(cls, attr):
-                _bind_property(cls, pd_cls, attr)
+                _bind_property(cls, pd_cls, attr, min_version)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
@@ -229,6 +231,8 @@ class StringAccessor(Accessor):
         "normalize",
         "pad",
         "partition",
+        ("removeprefix", "1.14"),
+        ("removesuffix", "1.14"),
         "repeat",
         "replace",
         "rfind",
@@ -247,15 +251,6 @@ class StringAccessor(Accessor):
         "wrap",
         "zfill",
     )
-    # Bind if already present in Pandas
-    # It's more general to check for the attribute than checking pd.__version__ >= '1.4' (versioning scheme may change)
-    # NOTE: If we require pandas >= 1.4 in the project, then no check would be needed
-    # and we could just add these 2 methods to _accessor_methods
-    if hasattr(pd.core.strings.StringMethods, "removeprefix"):
-        _accessor_methods = _accessor_methods + ("removeprefix",)
-    if hasattr(pd.core.strings.StringMethods, "removesuffix"):
-        _accessor_methods = _accessor_methods + ("removesuffix",)
-
     _accessor_properties = ()
 
     def _split(self, method, pat=None, n=-1, expand=False):
@@ -316,28 +311,6 @@ class StringAccessor(Accessor):
             str_extractall, pat, flags, token="str-extractall"
         )
 
-    def removeprefix(self, prefix: str):
-        # If it exists in Pandas, it was bound above, so just call it
-        if "removeprefix" in self._accessor_methods:
-            return self._function_map("removeprefix", prefix)
-        # It it does not exist, do it with map and startswith
-        else:
-            return self._series.map(
-                lambda s: s[len(prefix) :] if s.startswith(prefix) else s,
-                meta=self._series,
-            )
-
-    def removesuffix(self, suffix: str):
-        # If it exists in Pandas, it was bound above, so just call it
-        if "removesuffix" in self._accessor_methods:
-            return self._function_map("removesuffix", suffix)
-        # It it does not exist, do it with map and endswith
-        else:
-            return self._series.map(
-                lambda s: s[: -len(suffix)] if s.endswith(suffix) else s,
-                meta=self._series,
-            )
-
     def __getitem__(self, index):
         return self._series.map_partitions(str_get, index, meta=self._series._meta)
 
@@ -353,78 +326,6 @@ def str_get(series, index):
 
 def str_cat(self, *others, **kwargs):
     return self.str.cat(others=others, **kwargs)
-
-
-# If it wasn't bound above with derived_from, use an ad-hoc docstring.
-# Observe that the doctring examples are written in Dask, because Pandas doesn't have the methods implemented.
-# NOTE: Again, if we required pandas >= 1.4 in the project, this wouldn't be necessary at all,
-# as we could use @derived_from(pd.core.strings.StringMethods), which would copy Pandas docs.
-if not hasattr(pd.core.strings.StringMethods, "removeprefix"):
-    StringAccessor.removeprefix.__doc__ = """Remove a prefix from an object series. If the prefix is not present,
-        the original string will be returned.
-
-        Parameters
-        ----------
-        prefix : str
-            Remove the prefix of the string.
-
-        Returns
-        -------
-        Series/Index: object
-            The Series or Index with given prefix removed.
-
-        See Also
-        --------
-        Series.str.removesuffix : Remove a suffix from an object series.
-
-        Examples
-        --------
-        >>> from dask.dataframe import from_pandas
-        >>> s = from_pandas(pd.Series(["str_foo", "str_bar", "no_prefix"]), npartitions=1)
-        >>> s.compute()  # doctest: +NORMALIZE_WHITESPACE
-        0   str_foo
-        1   str_bar
-        2   no_prefix
-        dtype: object
-        >>> s.str.removeprefix("str_").compute()  # doctest: +NORMALIZE_WHITESPACE
-        0   foo
-        1   bar
-        2   no_prefix
-        dtype: object
-        """
-if not hasattr(pd.core.strings.StringMethods, "removesuffix"):
-    StringAccessor.removesuffix.__doc__ = """Remove a suffix from an object series. If the suffix is not present,
-        the original string will be returned.
-
-        Parameters
-        ----------
-        suffix : str
-            Remove the suffix of the string.
-
-        Returns
-        -------
-        Series/Index: object
-            The Series or Index with given suffix removed.
-
-        See Also
-        --------
-        Series.str.removeprefix : Remove a prefix from an object series.
-
-        Examples
-        --------
-        >>> from dask.dataframe import from_pandas
-        >>> s = from_pandas(pd.Series(["foo_str", "bar_str", "no_suffix"]), npartitions=1)
-        >>> s.compute()  # doctest: +NORMALIZE_WHITESPACE
-        0   foo_str
-        1   bar_str
-        2   no_suffix
-        dtype: object
-        >>> s.str.removesuffix("_str").compute()  # doctest: +NORMALIZE_WHITESPACE
-        0   foo
-        1   bar
-        2   no_suffix
-        dtype: object
-        """
 
 
 # Ported from pandas

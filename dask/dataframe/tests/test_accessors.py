@@ -198,32 +198,22 @@ def test_str_accessor_extractall(df_ddf):
     )
 
 
-def test_str_accessor_removeprefix(df_ddf):
+@pytest.mark.parametrize("method", ["removeprefix", "removesuffix"])
+def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
     df, ddf = df_ddf
-    # A prefix present
-    prefix = df.str_col.iloc[0][:2]  # "ab"
-    assert_eq(
-        ddf.str_col.str.removeprefix(prefix),  # dask version exists
-        (  # pandas may or may not exist
-            df.str_col.str.removeprefix(prefix)
-            if hasattr(df.str_col.str, "removeprefix")
-            else df.str_col.map(
-                lambda s: s[len(prefix) :] if s.startswith(prefix) else s
-            )
-        ),
-    )
-    # A prefix non-present
-    prefix = prefix[::-1]  # "ba"
-    assert_eq(
-        ddf.str_col.str.removeprefix(prefix),  # dask version exists
-        (  # pandas may or may not exist
-            df.str_col.str.removeprefix(prefix)
-            if hasattr(df.str_col.str, "removeprefix")
-            else df.str_col.map(
-                lambda s: s[len(prefix) :] if s.startswith(prefix) else s
-            )
-        ),
-    )
+    if not hasattr(df.str_col.str, method):
+        pytest.skip("requires pandas >= 1.4.0")
+
+    prefix = df.str_col.iloc[0][:2]
+    suffix = df.str_col.iloc[0][-2:]
+    missing = "definitely a missing prefix/suffix"
+
+    def call(df, arg):
+        return getattr(df.str_col.str, method)(arg)
+
+    assert_eq(call(ddf, prefix), call(df, prefix))
+    assert_eq(call(ddf, suffix), call(df, suffix))
+    assert_eq(call(ddf, missing), call(df, missing))
 
 
 def test_str_accessor_removesuffix(df_ddf):
