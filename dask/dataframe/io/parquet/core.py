@@ -357,7 +357,7 @@ def read_parquet(
         columns = list(columns)
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -664,7 +664,7 @@ def to_parquet(
         )
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -985,7 +985,9 @@ def create_metadata_file(
 _ENGINES: dict[str, Engine] = {}
 
 
-def get_engine(engine):
+# TODO: remove _warn_engine_default_changing once the default has changed to
+# pyarrow.
+def get_engine(engine, _warn_engine_default_changing=False):
     """Get the parquet engine backend implementation.
 
     Parameters
@@ -1007,12 +1009,12 @@ def get_engine(engine):
     if engine == "auto":
         try:
             engine = get_engine("fastparquet")
-            if importlib.util.find_spec("pyarrow"):
+            if _warn_engine_default_changing and importlib.util.find_spec("pyarrow"):
                 warnings.warn(
-                    "engine='auto' will switch to using `pyarrow` by default in "
-                    "a future version. To continue using `fastparquet` even if "
-                    "`pyarrow` is installed in the future please explicitly "
-                    "specify `engine='fastparquet'`.",
+                    "engine='auto' will switch to using pyarrow by default in "
+                    "a future version. To continue using fastparquet even if "
+                    "pyarrow is installed in the future please explicitly "
+                    "specify engine='fastparquet'.",
                     FutureWarning,
                 )
             return engine

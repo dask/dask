@@ -168,7 +168,7 @@ def test_get_engine_auto_warning_if_both_installed():
     from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
 
     with pytest.warns(FutureWarning, match="engine='auto' will switch"):
-        engine = get_engine("auto")
+        engine = get_engine("auto", True)
         assert engine == FastParquetEngine
 
 
