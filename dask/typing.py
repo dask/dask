@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import (
     Any,
+    Callable,
     Hashable,
     Mapping,
     MutableMapping,
@@ -169,7 +170,7 @@ class DaskCollection(Protocol):
     def __dask_optimize__(
         dsk: MutableMapping,
         keys: Sequence[Hashable],
-        **kwargs,
+        **kwargs: Any,
     ) -> MutableMapping:
         """Given a graph and keys, return a new optimized graph.
 
@@ -202,7 +203,11 @@ class DaskCollection(Protocol):
         """
 
     @staticmethod
-    def __dask_scheduler__(dsk: Mapping, keys: Sequence[Hashable], **kwargs) -> Any:
+    def __dask_scheduler__(
+        dsk: Mapping,
+        keys: Sequence[Hashable],
+        **kwargs: Any,
+    ) -> Callable:
         """The default scheduler ``get`` to use for this object.
 
         Usually attached to the class as a staticmethod, e.g.:
@@ -214,7 +219,7 @@ class DaskCollection(Protocol):
 
         """
 
-    def compute(self, **kwargs) -> Any:
+    def compute(self: CollectionType, **kwargs: Any) -> Any:
         """Compute this dask collection.
 
         This turns a lazy Dask collection into its in-memory
@@ -246,7 +251,7 @@ class DaskCollection(Protocol):
 
         """
 
-    def persist(self: CollectionType, **kwargs) -> CollectionType:
+    def persist(self: CollectionType, **kwargs: Any) -> CollectionType:
         """Persist this dask collection into memory
 
         This turns a lazy Dask collection into a Dask collection with
@@ -347,5 +352,7 @@ class DaskCollection(Protocol):
 
 @runtime_checkable
 class HLGDaskCollection(DaskCollection):
+    """Protocal defining a Dask collection that uses HighLevelGraphs."""
+
     def __dask_layers__(self) -> Sequence[str]:
         """Names of the HighLevelGraph layers."""
