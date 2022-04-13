@@ -1870,11 +1870,8 @@ def roll(array, shift, axis=None):
         raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
-        if result.shape[i] == 0:
-            s = 0
-        else:
-            s = -s
-            s %= result.shape[i]
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
 
         sl1 = result.ndim * [slice(None)]
         sl2 = result.ndim * [slice(None)]
