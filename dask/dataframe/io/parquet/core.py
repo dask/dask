@@ -824,6 +824,11 @@ def to_parquet(
             )
         }
     else:
+        # NOTE: We still define a single task to tie everything together
+        # when we are not writing a _metadata file. We do not want to
+        # return `data_write` (or a `data_write.to_bag()`), because calling
+        # `compute()` on a multi-partition collection requires the overhead
+        # of trying to concatenate results on the client.
         final_name = "store-" + data_write._name
         dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
