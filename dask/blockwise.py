@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import itertools
 import os
-from collections.abc import Hashable, Iterable, Mapping, Sequence
+from collections.abc import Hashable, Iterable, Mapping, MutableMapping, Sequence
 from itertools import product
 from math import prod
-from typing import Any, Hashable, Iterable, Mapping, MutableMapping, Sequence
+from typing import Any
 
 import tlz as toolz
 
@@ -162,15 +162,15 @@ class BlockwiseDepDict(BlockwiseDep):
         return self.mapping[idx]
 
     def __dask_distributed_pack__(
-        self, required_indices: list[tuple[int, ...]] | None = None
+        self, required_indices: tuple | list[tuple[int, ...]] | None = None
     ):
         from distributed.protocol import to_serialize
 
         if required_indices is None:
-            required_indices = tuple(self.mapping.keys())  # type: ignore
+            required_indices = tuple(self.mapping.keys())
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},  # type: ignore
+            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
         }
@@ -417,14 +417,15 @@ class Blockwise(Layer):
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
         self.indices = []
-        self.numblocks = numblocks
+        self.numblocks = dict(numblocks)
         self.io_deps = io_deps or {}
         for dep, ind in indices:
-            name = dep
             if isinstance(dep, BlockwiseDep):
                 name = tokenize(dep)
-                self.io_deps[name] = dep  # type: ignore
-                self.numblocks[name] = dep.numblocks  # type: ignore
+                self.io_deps[name] = dep
+                self.numblocks[name] = dep.numblocks
+            else:
+                name = dep
             self.indices.append((name, tuple(ind) if ind is not None else ind))
         self.indices = tuple(self.indices)
 
