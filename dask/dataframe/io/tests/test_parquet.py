@@ -3648,7 +3648,8 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-def test_extra_file(tmpdir, engine):
+@pytest.mark.parametrize("dataset_kwarg", [True, False])
+def test_extra_file(tmpdir, engine, dataset_kwarg):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
@@ -3665,24 +3666,28 @@ def test_extra_file(tmpdir, engine):
     # expected file extension, or avoid checking file extensions
     # by passing False. Check here that this works:
 
+    def _require_extension(val):
+        # This test uses `dataset_kwarg` parameter to test
+        # that `require_extension` can be specified directly,
+        # or within the `dataset`-argument dictionary.
+        return (
+            {"dataset": {"require_extension": val}}
+            if dataset_kwarg
+            else {"require_extension": val}
+        )
+
     # Should Work
-    out = dd.read_parquet(
-        tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
-    )
+    out = dd.read_parquet(tmpdir, engine=engine, **_require_extension(".parquet"))
     assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
-        dd.read_parquet(
-            tmpdir, engine=engine, dataset={"require_extension": False}
-        ).compute()
+        dd.read_parquet(tmpdir, engine=engine, **_require_extension(False)).compute()
 
     # Should Fail (for filtering out all files)
     # (Related to: https://github.com/dask/dask/issues/8349)
     with pytest.raises(ValueError):
-        dd.read_parquet(
-            tmpdir, engine=engine, dataset={"require_extension": ".foo"}
-        ).compute()
+        dd.read_parquet(tmpdir, engine=engine, **_require_extension(".foo")).compute()
 
 
 def test_unsupported_extension_file(tmpdir, engine):

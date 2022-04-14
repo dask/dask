@@ -392,7 +392,7 @@ class FastParquetEngine(Engine):
         parts = []
         _metadata_exists = False
         require_extension = dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
+            "require_extension", (".parq", ".parquet", ".pq")
         )
         if len(paths) == 1 and fs.isdir(paths[0]):
 

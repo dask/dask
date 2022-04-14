@@ -300,6 +300,10 @@ def read_parquet(
                 └── └── 04.parquet
 
         Note that the default behavior of ``aggregate_files`` is False.
+    require_extension: str or tuple(str), default (".parq", ".parquet", ".pq")
+        Required file extension for all parquet data files. Other file
+        extensions will be ignored. Note that ``require_extension=False``
+        will skip the file-extension check altogether.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -330,6 +334,14 @@ def read_parquet(
             "`read_from_paths` is no longer supported and will be ignored.",
             FutureWarning,
         )
+
+    # We allow the user to pass a `require_extension` kwarg, but
+    # need to "move" it into the engine-specific "dataset" kwargs
+    # (since the engine handles path inspection)
+    if "require_extension" in kwargs:
+        if "dataset" not in kwargs:
+            kwargs["dataset"] = {}
+        kwargs["dataset"]["require_extension"] = kwargs.pop("require_extension")
 
     # Store initial function arguments
     input_kwargs = {

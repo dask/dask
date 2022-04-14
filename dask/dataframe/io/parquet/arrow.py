@@ -792,7 +792,7 @@ class ArrowDatasetEngine(Engine):
 
         # Set require_extension option
         require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
+            "require_extension", (".parq", ".parquet", ".pq")
         )
 
         # Case-dependent pyarrow.dataset creation
