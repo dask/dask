@@ -301,12 +301,12 @@ def read_parquet(
 
         Note that the default behavior of ``aggregate_files`` is False.
     require_extension: str or tuple(str), default (".parq", ".parquet", ".pq")
-        Required file extension for discovered parquet data files. Other
-        file extensions will be ignored. This argument only applies when
-        ``paths`` corresponds to a directory path, and that directory does
-        not contain a '_metadata' file (or ``ignore_metadata_file=True``).
-        Note that ``require_extension=False`` will skip this file-extension
-        check altogether.
+        A file extension (or an iterable of extensions) to use when finding
+        parquet files in a directory. Files that don't match this extension(s)
+        will be ignored. This argument only applies when ``paths`` corresponds
+        to a directory and no ``_metadata`` file is present (or
+        ``ignore_metadata_file=True``). Passing in ``require_extension=False``
+        will treat all files in the directory as parquet files.
 
         The purpose of this argument is to ensure that the engine will ignore
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
