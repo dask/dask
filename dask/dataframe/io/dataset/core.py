@@ -49,7 +49,7 @@ class ReadArrowFileFragment:
         return df
 
 
-class ArrowEngine:
+class ArrowDataset(DatasetEngine):
     def __init__(
         self,
         partitioning="hive",
@@ -130,7 +130,7 @@ class ArrowEngine:
         return io_func, fragments, meta, divisions
 
 
-class ArrowParquetEngine(ArrowEngine):
+class ArrowParquetDataset(ArrowDataset):
     def __init__(self, **kwargs):
         super().__init__(format="parquet", **kwargs)
 
@@ -141,10 +141,12 @@ class ArrowParquetEngine(ArrowEngine):
 
 
 def get_engine(engine, **engine_options):
-    if engine in ("parquet", "pyarrow-parquet"):
-        return ArrowParquetEngine(**engine_options)
+    if engine == "pyarrow":
+        return ArrowDataset(**engine_options)
     elif engine in ("orc", "pyarrow-orc"):
-        return ArrowEngine(format="orc", **engine_options)
+        return ArrowDataset(format="orc", **engine_options)
+    elif engine in ("parquet", "pyarrow-parquet"):
+        return ArrowParquetDataset(**engine_options)
     elif not isinstance(engine, DatasetEngine):
         raise ValueError
     return engine
@@ -156,7 +158,7 @@ def from_dataset(
     filters=None,
     index=None,
     calculate_divisions=False,
-    engine="pyarrow-parquet",
+    engine="pyarrow",
     engine_options=None,
     storage_options=None,
 ):
