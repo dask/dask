@@ -42,8 +42,7 @@ or GCS_) by prepending the path with a protocol.
 Note that for remote filesystems you many need to configure credentials. When
 possible we recommend handling these external to Dask through
 filesystem-specific configuration files/environment variables. For example, you
-may wish to store S3 credentials using `the standard AWS credentials file
-<https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#shared-credentials-file>`_.
+may wish to store S3 credentials using the `AWS credentials file`_.
 Alternatively, you can pass configuration on to the fsspec_ backend through the
 ``storage_options`` keyword argument:
 
@@ -147,9 +146,8 @@ Dask dataframe provides a :func:`to_parquet` function and method for writing
 parquet files and datasets.
 
 In its simplest usage, this takes a path to the directory in which to write the
-dataset. Just as with :func:`read_parquet`, this path may be local, or point to
-some remote filesystem (e.g. S3, GCS_, ...) by prepending the path with a
-protocol.
+dataset. This path may be local, or point to some remote filesystem (for
+example S3_ or GCS_) by prepending the path with a protocol.
 
 .. code-block:: python
 
@@ -161,9 +159,10 @@ protocol.
 
 Note that for remote filesystems you many need to configure credentials. When
 possible we recommend handling these external to Dask through
-filesystem-specific configuration files/environment variables (e.g. the
-``~/.aws/config`` file for S3). Alternatively, you can pass configuration on to
-the fsspec_ backend through the ``storage_options`` keyword argument:
+filesystem-specific configuration files/environment variables For example, you
+may wish to store S3 credentials using the `AWS credentials file`_.
+Alternatively, you can pass configuration on to the fsspec_ backend through the
+``storage_options`` keyword argument:
 
 .. code-block:: python
 
@@ -178,8 +177,9 @@ For more information on connecting to remote data, see
 Dask will write one file per Dask dataframe partition to this directory. To
 optimize access for downstream consumers, we recommend aiming for an in-memory
 size of 10-250 MiB per partition. This helps balance worker memory usage
-against Dask overhead. You may find the `DataFrame.memory_usage_per_partition`
-method useful for determining if your data is partitioned optimally.
+against Dask overhead. You may find the
+:meth:`DataFrame.memory_usage_per_partition` method useful for determining if
+your data is partitioned optimally.
 
 :func:`to_parquet` has many configuration options affecting both behavior and
 performance. Here we highlight a few common options.
@@ -244,3 +244,4 @@ their partition indices.
 .. _fsspec: https://filesystem-spec.readthedocs.io
 .. _s3: https://aws.amazon.com/s3/
 .. _gcs: https://cloud.google.com/storage
+.. _AWS credentials file: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#shared-credentials-file>`_.
