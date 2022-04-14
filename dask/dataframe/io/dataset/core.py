@@ -104,7 +104,10 @@ class ArrowDataset(DatasetEngine):
         ds_filters = None
         if filters is not None:
             ds_filters = pq._filters_to_expression(filters)
-        return dataset.get_fragments(ds_filters)
+        return list(dataset.get_fragments(ds_filters))
+
+    def get_divisions(self, fragments, index):
+        raise ValueError(f"calculate_divisions=True not supported for {type(self)}")
 
     def get_collection_mapping(
         self, path, columns, filters, index, calculate_divisions, storage_options
@@ -119,13 +122,14 @@ class ArrowDataset(DatasetEngine):
         # Get fragments
         fragments = self.get_fragments(dataset, filters)
 
-        # Get IO function
-        io_func = self.get_read_function(columns, filters, index)
-
         # Extract divisions
         if calculate_divisions:
-            raise ValueError("calculate_divisions=True is not supported.")
-        divisions = (None,) * (len(dataset.files) + 1)
+            divisions = self.get_divisions(fragments, index)
+        else:
+            divisions = (None,) * (len(fragments) + 1)
+
+        # Get IO function
+        io_func = self.get_read_function(columns, filters, index)
 
         return io_func, fragments, meta, divisions
 
