@@ -1,0 +1,5 @@
+# .git-blame-ignore-revs
+# Apply black formatting to the entire codebase
+7e4beffb339c69278091d4e305c2ae18ddf8c74f
+# Use newer Black version
+64e2a9b3b9992503221a074a547827501927d1fa
