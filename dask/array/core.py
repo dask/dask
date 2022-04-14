@@ -1079,7 +1079,10 @@ def store(
 
     if isinstance(sources, Array):
         sources = [sources]
-        targets = [targets]  # type: ignore
+
+    if isinstance(targets, Array):
+        targets = [targets]
+
     targets = cast("Collection[ArrayLike | Delayed]", targets)
 
     if any(not isinstance(s, Array) for s in sources):
@@ -1157,7 +1160,7 @@ def store(
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk: HighLevelGraph | dict = store_dsk
+        load_store_dsk: HighLevelGraph | dict[Hashable, Any] = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
@@ -4129,8 +4132,8 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def load_store_chunk(
-    x: ArrayLike | None,
-    out: ArrayLike,
+    x: Any,
+    out: Any,
     index: slice,
     lock: Any,
     return_stored: bool,
@@ -4270,7 +4273,7 @@ def insert_to_ooc(
 
 def retrieve_from_ooc(
     keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
-) -> dict[Hashable, Any]:
+) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
