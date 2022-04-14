@@ -15,8 +15,8 @@ Reading Parquet Files
 .. autosummary::
     read_parquet
 
-Dask dataframe provides a :func:`read_parquet` function for reading parquet
-files and datasets. Its first argument is one of:
+Dask dataframe provides a :func:`read_parquet` function for reading one or more
+parquet files. Its first argument is one of:
 
 - A path to a single parquet file
 - A path to a directory of parquet files (files with ``.parquet`` or ``.parq`` extension)
@@ -39,7 +39,7 @@ or GCS_) by prepending the path with a protocol.
     # Load a directory of parquet files from S3
     >>> df = dd.read_parquet("s3://bucket-name/my/parquet/")
 
-Note that for remote filesystems you many need to configure credentials. When
+Note that for remote filesystems you may need to configure credentials. When
 possible we recommend handling these external to Dask through
 filesystem-specific configuration files/environment variables. For example, you
 may wish to store S3 credentials using the `AWS credentials file`_.
@@ -143,7 +143,7 @@ Writing
     DataFrame.to_parquet
 
 Dask dataframe provides a :func:`to_parquet` function and method for writing
-parquet files and datasets.
+parquet files.
 
 In its simplest usage, this takes a path to the directory in which to write the
 dataset. This path may be local, or point to some remote filesystem (for
@@ -157,7 +157,7 @@ example S3_ or GCS_) by prepending the path with a protocol.
     # Write to S3
     >>> df.to_parquet("s3://bucket-name/my/parquet/")
 
-Note that for remote filesystems you many need to configure credentials. When
+Note that for remote filesystems you may need to configure credentials. When
 possible we recommend handling these external to Dask through
 filesystem-specific configuration files/environment variables For example, you
 may wish to store S3 credentials using the `AWS credentials file`_.
