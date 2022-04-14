@@ -3,9 +3,8 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable, Mapping, MutableMapping, Set
-from typing import Any, KeysView
-
+from collections.abc import Hashable, Iterable,  KeysView, Mapping, MutableMapping, Set
+from typing import Any
 import tlz as toolz
 
 from dask import config
@@ -405,6 +404,8 @@ class Layer(Mapping):
             dependencies = {k: v - alias_keys for k, v in dependencies.items()}
         # - Add in deps for any missing keys
         missing_keys = dsk.keys() - dependencies.keys()
+
+        # TODO: add some overloads to keys_in_task to get the return types right.
         dependencies.update(  # type: ignore
             (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
