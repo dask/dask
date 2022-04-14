@@ -1346,6 +1346,8 @@ def factors(n: int) -> set[int]:
     https://stackoverflow.com/a/6800214/616616
     """
     seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
+
+    # XXX: bug in mypy?
     return set(functools.reduce(list.__add__, seq))  # type: ignore
 
 
