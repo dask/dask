@@ -583,6 +583,7 @@ def to_records(df):
     return df.map_partitions(M.to_records)
 
 
+# TODO: type this -- causes lots of papercuts
 @insert_meta_param_description
 def from_delayed(
     dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
