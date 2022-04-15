@@ -1,3 +1,4 @@
+import pyarrow as pa
 import pyarrow.dataset as ds
 import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
@@ -17,17 +18,34 @@ class ReadArrowFileFragment(ReadFunction):
         self.index = index
         self.dataset_options = dataset_options
 
-    def __call__(self, fragment):
-        if isinstance(fragment, str):
-            df = (
-                ds.dataset(fragment, **self.dataset_options)
-                .to_table(filter=self.filters, columns=self.columns)
-                .to_pandas()
-            )
-        else:
-            df = fragment.to_table(
+    def _make_table(self, fragment):
+
+        if isinstance(fragment, list):
+            # fragment is actually a list of fragments
+            tables = [self._make_table(frag) for frag in fragment]
+            return pa.concat_tables(tables)
+        elif isinstance(fragment, str):
+            # fragment is a path name
+            return ds.dataset(fragment, **self.dataset_options).to_table(
                 filter=self.filters, columns=self.columns
-            ).to_pandas()
+            )
+        elif isinstance(fragment, tuple):
+            # fragment is a (path, row_groups) tuple
+            path, row_groups = fragment
+            old_frag = list(ds.dataset(path, **self.dataset_options).get_fragments())[0]
+            return old_frag.format.make_fragment(
+                old_frag.path,
+                old_frag.filesystem,
+                old_frag.partition_expression,
+                row_groups=row_groups,
+            ).to_table(filter=self.filters, columns=self.columns)
+        else:
+            # fragment is a pyarrow Fragment object
+            return fragment.to_table(filter=self.filters, columns=self.columns)
+
+    def __call__(self, fragment):
+        # Convert fragment to pandas DataFrame
+        df = self._make_table(fragment).to_pandas()
 
         if len(df.index.names) > 1:
             # Dask-DataFrame cannot handle multi-index
@@ -48,11 +66,13 @@ class ArrowDataset(DatasetEngine):
         self,
         partitioning="hive",
         filesystem=None,
+        aggregate_files=False,
         **dataset_options,
     ):
         self.dataset_options = dataset_options
         self.partitioning = partitioning
         self.filesystem = filesystem
+        self.aggregate_files = aggregate_files
 
     def get_dataset(self, path, columns, filters, storage_options, mode="rb"):
         """Returns an engine-specific dataset object"""
@@ -106,17 +126,40 @@ class ArrowDataset(DatasetEngine):
         )
 
     def get_fragments(self, dataset, filters, meta, index, calculate_divisions):
-        ds_filters = None
-        if filters is not None:
-            ds_filters = pq._filters_to_expression(filters)
-        fragments = list(dataset.get_fragments(ds_filters))
+        """Returns dataset fragments and divisions"""
 
+        # Raise error for calculate_divisions=True
+        # (Must be implemented in ArrowDataset sub-classes)
         if calculate_divisions:
             raise ValueError(f"calculate_divisions=True not supported for {type(self)}")
+
+        ds_filters = None
+        if filters is not None:
+            # Filters are defined - Use real fragments
+            ds_filters = pq._filters_to_expression(filters)
+            fragments = list(dataset.get_fragments(ds_filters))
+        else:
+            # Just use list of files
+            fragments = dataset.files
+
+        # Check if we are aggregating files
+        aggregate_files = int(self.aggregate_files)
+        if aggregate_files:
+            aggregated_fragments = []
+            for i in range(0, len(fragments), aggregate_files):
+                aggregated_fragments.append(fragments[i : i + aggregate_files])
+            fragments = aggregated_fragments
+
         return fragments, None
 
     def get_collection_mapping(
-        self, path, columns, filters, index, calculate_divisions, storage_options
+        self,
+        path,
+        columns=None,
+        filters=None,
+        index=None,
+        calculate_divisions=False,
+        storage_options=None,
     ):
 
         # Get dataset
@@ -140,6 +183,10 @@ class ArrowParquetDataset(ArrowDataset):
     def __init__(self, split_row_groups=False, **kwargs):
         super().__init__(format="parquet", **kwargs)
         self.split_row_groups = split_row_groups
+        if bool(self.split_row_groups) and bool(self.aggregate_files):
+            raise ValueError(
+                "aggregate_files only supported when split_row_groups=False"
+            )
 
     def _caclulate_divisions(self, fragments, index):
         divisions = None
@@ -176,38 +223,71 @@ class ArrowParquetDataset(ArrowDataset):
 
     def get_fragments(self, dataset, filters, meta, index, calculate_divisions):
 
+        # Avoid index handling/divisions for default multi-index
         if index is None and len(meta.index.names) > 1:
             index = False
 
-        file_fragments, file_divisions = super().get_fragments(
-            dataset, filters, meta, index, False
-        )
-        if self.split_row_groups:
-            raise ValueError("split_row_groups is not yet supported")
+        ds_filters = None
+        if filters is not None:
+            ds_filters = pq._filters_to_expression(filters)
+        if ds_filters is not None or self.split_row_groups or calculate_divisions:
+            # One or more options require real fragments
+            file_fragments = list(dataset.get_fragments(ds_filters))
+        else:
+            # Just use list of files
+            file_fragments = dataset.files
+        file_divisions = None
+
+        def _new_frag(old_frag, row_groups):
+            return old_frag.format.make_fragment(
+                old_frag.path,
+                old_frag.filesystem,
+                old_frag.partition_expression,
+                row_groups=row_groups,
+            )
+
+        # Check if we are splitting the file by row-groups
+        split_row_groups = int(self.split_row_groups)
+        if split_row_groups:
             fragments = []
+            path_fragments = []
             ds_filters = None
             if filters is not None:
                 ds_filters = pq._filters_to_expression(filters)
             for file_frag in file_fragments:
-                for frag in file_frag.split_by_row_group(
-                    ds_filters, schema=dataset.schema
-                ):
+                row_groups = [rg.id for rg in file_frag.row_groups]
+                for i in range(0, len(row_groups), split_row_groups):
+                    rgs = row_groups[i : i + split_row_groups]
+                    frag = _new_frag(file_frag, rgs)
                     fragments.append(frag)
+                    path_fragments.append((frag.path, rgs))
             divisions = [None] * (len(fragments) + 1)
         else:
+            # For Parquet, we can convert fragments back to paths
+            # to avoid large graph sizes
             fragments = file_fragments
             divisions = file_divisions
-
-        # For Parquet, we can convert fragments back to paths
-        # to avoid large graph sizes
-        path_fragments = [f.path for f in fragments]
+            path_fragments = [f.path for f in fragments]
 
         # Check if we have an index column
         # to calculate statistics for
         if index is None and meta.index.name in dataset.schema.names:
             index = meta.index.name
 
+        # Calculate divisions if necessary
         if index and calculate_divisions:
             divisions = self._caclulate_divisions(fragments, index) or divisions
+        divisions = divisions or (None,) * (len(path_fragments) + 1)
+
+        # Check if we are aggregating files
+        aggregate_files = int(self.aggregate_files)
+        if aggregate_files:
+            aggregated_fragments = []
+            aggregated_divisions = []
+            for i in range(0, len(path_fragments), aggregate_files):
+                aggregated_fragments.append(path_fragments[i : i + aggregate_files])
+                aggregated_divisions.append(divisions[i])
+            aggregated_divisions.append(divisions[-1])
+            return aggregated_fragments, aggregated_divisions
 
         return path_fragments, divisions

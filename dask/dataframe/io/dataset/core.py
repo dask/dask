@@ -19,6 +19,7 @@ class ReadFunction:
 class DatasetEngine:
     def get_collection_mapping(
         self,
+        path,
         columns=None,
         filters=None,
         index=None,
