@@ -17,6 +17,7 @@ try:
         from_array,
         from_bcolz,
         from_dask_array,
+        from_dataset,
         from_delayed,
         from_pandas,
         read_csv,
