@@ -1,6 +1,54 @@
 Changelog
 =========
 
+.. _v2022.04.1:
+
+2022.04.1
+---------
+
+Released on April 15, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add missing NumPy ufuncs: ``abs``, ``left_shift``, ``right_shift``, ``positive``. (:pr:`8920`) `Tom White`_
+
+Enhancements
+^^^^^^^^^^^^
+- Avoid collecting parquet metadata in pyarrow when ``write_metadata_file=False`` (:pr:`8906`) `Richard (Rick) Zamora`_
+- Better error for failed wildcard path in ``dd.read_csv()`` (fixes #8878) (:pr:`8908`) `Roger Filmyer`_
+- Return ``da.Array`` rather than ``dd.Series`` for non-ufunc elementwise functions on ``dd.Series`` (:pr:`8558`) `Julia Signell`_
+- Let ``get_dummies`` use ``meta`` computation in ``map_partitions`` (:pr:`8898`) `Julia Signell`_
+- Masked scalars input to ``da.from_array`` (:pr:`8895`) `David Hassell`_
+- Raise ``ValueError`` in ``merge_asof`` for duplicate ``kwargs`` (:pr:`8861`) `Bryan Weber`_
+
+Bug Fixes
+^^^^^^^^^
+- Make ``is_monotonic`` work when some partitions are empty (:pr:`8897`) `Julia Signell`_
+- Fix custom getter in ``da.from_array`` when ``inline_array=False`` (:pr:`8903`) `Ian Rose`_
+- Correctly handle dict-specification for rechunk. (:pr:`8859`) `Richard`_
+- Fix ``merge_asof``: drop index column if ``left_on == right_on`` (:pr:`8874`) `Gil Forsyth`_
+
+Deprecations
+^^^^^^^^^^^^
+- Warn users that ``engine='auto'`` will change in future (:pr:`8907`) `Jim Crist-Harif`_
+- Remove ``pyarrow-legacy`` engine from parquet API (:pr:`8835`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add note on missing parameter ``out`` for ``dask.array.dot`` (:pr:`8913`) `Francesco Andreuzzi`_
+- Update ``DataFrame.query`` docstring (:pr:`8890`) `Pavithra Eswaramoorthy`_
+
+Maintenance
+^^^^^^^^^^^
+- Don't test ``da.prod`` on large integer data (:pr:`8893`) `Jim Crist-Harif`_
+- Add ``network`` marks to tests that fail without an internet connection (:pr:`8881`) `Paul Hobson`_
+- Fix gpuCI GHA version (:pr:`8891`) `Charles Blackmon-Luca`_
+- ``xfail``/``skip`` some flaky ``distributed`` tests (:pr:`8887`) `Jim Crist-Harif`_
+- Remove unused (deprecated) code from ``ArrowDatasetEngine`` (:pr:`8885`) `Richard (Rick) Zamora`_
+- Add mild typing to common utils functions, part 2 (:pr:`8867`) `crusaderky`_
+- Documentation of Limitation of ``sample()`` (:pr:`8858`) `Nadiem Sissouno`_
+
+
 .. _v2022.04.0:
 
 2022.04.0
@@ -5354,3 +5402,7 @@ Other
 .. _`lrjball`: https://github.com/lrjball
 .. _`Davide Gavio`: https://github.com/davidegavio
 .. _`Ben Greiner`: https://github.com/bnavigator
+.. _`Roger Filmyer`: https://github.com/rfilmyer
+.. _`Richard`: https://github.com/richarms
+.. _`Francesco Andreuzzi`: https://github.com/fAndreuzzi
+.. _`Nadiem Sissouno`: https://github.com/sissnad
