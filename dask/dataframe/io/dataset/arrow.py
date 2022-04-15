@@ -62,25 +62,41 @@ class ReadArrowFileFragment(ReadFunction):
 
 
 class ArrowDataset(DatasetEngine):
+    """
+    Dataset Engine backed by the ``pyarrow.dataset`` API
+
+    Parameters
+    ----------
+    calculate_divisions : dict, default False
+        Whether file metadata should be used to calculate output divisions.
+        This option is not currently supported for the default engine.
+    storage_options : dict, default None
+        Key/value pairs to be passed on to the file-system backend, if any.
+    **dataset_options :
+        Key-value arguments to pass along to the ``pyarrow.dataset`` API.
+    """
+
     def __init__(
         self,
         partitioning="hive",
         filesystem=None,
         aggregate_files=False,
+        storage_options=None,
         **dataset_options,
     ):
-        self.dataset_options = dataset_options
         self.partitioning = partitioning
         self.filesystem = filesystem
         self.aggregate_files = aggregate_files
+        self.storage_options = storage_options or {}
+        self.dataset_options = dataset_options
 
-    def get_dataset(self, path, columns, filters, storage_options, mode="rb"):
+    def get_dataset(self, path, columns, filters, mode="rb"):
         """Returns an engine-specific dataset object"""
 
         # Check if we already have a file-system object
         if self.filesystem is None:
             self.filesystem = get_fs_token_paths(
-                path, mode=mode, storage_options=storage_options
+                path, mode=mode, storage_options=self.storage_options
             )[0]
 
         return ds.dataset(
@@ -125,13 +141,8 @@ class ArrowDataset(DatasetEngine):
             },
         )
 
-    def get_fragments(self, dataset, filters, meta, index, calculate_divisions):
+    def get_fragments(self, dataset, filters, meta, index):
         """Returns dataset fragments and divisions"""
-
-        # Raise error for calculate_divisions=True
-        # (Must be implemented in ArrowDataset sub-classes)
-        if calculate_divisions:
-            raise ValueError(f"calculate_divisions=True not supported for {type(self)}")
 
         ds_filters = None
         if filters is not None:
@@ -158,20 +169,16 @@ class ArrowDataset(DatasetEngine):
         columns=None,
         filters=None,
         index=None,
-        calculate_divisions=False,
-        storage_options=None,
     ):
 
         # Get dataset
-        dataset = self.get_dataset(path, columns, filters, storage_options)
+        dataset = self.get_dataset(path, columns, filters)
 
         # Create meta
         meta = self.create_meta(dataset, index, columns)
 
         # Get fragments and divisions
-        fragments, divisions = self.get_fragments(
-            dataset, filters, meta, index, calculate_divisions
-        )
+        fragments, divisions = self.get_fragments(dataset, filters, meta, index)
 
         # Get IO function
         io_func = self.get_read_function(columns, filters, index)
@@ -180,9 +187,10 @@ class ArrowDataset(DatasetEngine):
 
 
 class ArrowParquetDataset(ArrowDataset):
-    def __init__(self, split_row_groups=False, **kwargs):
+    def __init__(self, split_row_groups=False, calculate_divisions=False, **kwargs):
         super().__init__(format="parquet", **kwargs)
         self.split_row_groups = split_row_groups
+        self.calculate_divisions = calculate_divisions
         if bool(self.split_row_groups) and bool(self.aggregate_files):
             raise ValueError(
                 "aggregate_files only supported when split_row_groups=False"
@@ -221,7 +229,7 @@ class ArrowParquetDataset(ArrowDataset):
             pass
         return divisions
 
-    def get_fragments(self, dataset, filters, meta, index, calculate_divisions):
+    def get_fragments(self, dataset, filters, meta, index):
 
         # Avoid index handling/divisions for default multi-index
         if index is None and len(meta.index.names) > 1:
@@ -230,7 +238,7 @@ class ArrowParquetDataset(ArrowDataset):
         ds_filters = None
         if filters is not None:
             ds_filters = pq._filters_to_expression(filters)
-        if ds_filters is not None or self.split_row_groups or calculate_divisions:
+        if ds_filters is not None or self.split_row_groups or self.calculate_divisions:
             # One or more options require real fragments
             file_fragments = list(dataset.get_fragments(ds_filters))
         else:
@@ -275,7 +283,7 @@ class ArrowParquetDataset(ArrowDataset):
             index = meta.index.name
 
         # Calculate divisions if necessary
-        if index and calculate_divisions:
+        if index and self.calculate_divisions:
             divisions = self._caclulate_divisions(fragments, index) or divisions
         divisions = divisions or (None,) * (len(path_fragments) + 1)
 
