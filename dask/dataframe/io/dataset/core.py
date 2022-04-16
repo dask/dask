@@ -1,7 +1,9 @@
 from dask.base import tokenize
 from dask.dataframe.core import new_dd_object
+from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
+from dask.utils import apply
 
 
 class ReadFunction:
@@ -16,6 +18,12 @@ class ReadFunction:
         raise NotImplementedError
 
 
+class DatasetSource:
+    def __init__(self, path, partition_base_dir=None):
+        self.path = path  # Directory path, file path, list of paths, or glob
+        self.partition_base_dir = partition_base_dir  # Required if this DatasetSource is part of partitioned dataset
+
+
 class DatasetEngine:
     def get_collection_mapping(
         self,
@@ -23,6 +31,7 @@ class DatasetEngine:
         columns=None,
         filters=None,
         index=None,
+        full_return=True,
     ):
         """Returns required inputs to from_map"""
         raise NotImplementedError
@@ -50,12 +59,32 @@ def get_engine(engine, **engine_options):
     return engine(**engine_options)
 
 
+def _finalize_plan(plan_list):
+    fragments, divisions, meta, io_func = plan_list[0]
+
+    if None in divisions:
+        divisions = None
+    else:
+        divisions = list(divisions)
+
+    for frags, divs in plan_list[1:]:
+        fragments += frags
+        if divisions:
+            if divisions[-1] is None or divs[0] is None or (divs[0] < divisions[-1]):
+                divisions = None
+            else:
+                divisions += list(divs[1:])
+
+    return fragments, divisions or (None,) * (len(fragments) + 1), meta, io_func
+
+
 def from_dataset(
     path,
     columns=None,
     filters=None,
     index=None,
     engine="pyarrow",
+    compute_options=None,
     **engine_options,
 ):
     """Create a Dask-DataFrame collection from a stored dataset
@@ -92,6 +121,9 @@ def from_dataset(
         file format should be specified with the ``format=`` argument). For
         Parquet-formatted data, `engine="pyarrow-parquet"` is recommended
         (which is the same as `engine=ArrowParquetDataset`).
+    compute_options : dict, optional
+        Dictionary of compute options for internal metadata parsing. This option
+        only applies when ``path`` is a list of ``DatasetSource`` objects.
     **engine_options :
         Engine-specific options to use to initialize ``engine``.
 
@@ -110,18 +142,50 @@ def from_dataset(
         "engine": engine,
         "engine_options": engine_options,
     }
-    output_name = label + tokenize(path, **input_kwargs)
+    token = tokenize(path, **input_kwargs)
+    output_name = label + token
 
     # Get dataset engine
     engine = get_engine(engine, **(engine_options or {}))
 
+    # If path is DatasetSource, covernt to single-lngth
+    # list to execute on worker
+    if isinstance(path, DatasetSource):
+        path = [path]
+
     # Get collection-mapping information
-    io_func, fragments, meta, divisions = engine.get_collection_mapping(
-        path,
-        columns=columns,
-        filters=filters,
-        index=index,
-    )
+    if isinstance(path, list) and all(isinstance(v, DatasetSource) for v in path):
+        # We have a list of DatasetSource objects,
+        # so we can parallelize over these objects and
+        # construct the collection plan on the workers
+        meta_name = "parse-metadata-" + token
+        dsk = {}
+        for i, source in enumerate(path):
+            dsk[(meta_name, i)] = (
+                apply,
+                engine.get_collection_mapping,
+                [source],
+                {
+                    "columns": columns,
+                    "filters": filters,
+                    "index": index,
+                    "full_return": i == 0,
+                },
+            )
+        dsk["final-" + meta_name] = (_finalize_plan, list(dsk.keys()))
+        fragments, divisions, meta, io_func = Delayed(
+            "final-" + meta_name, dsk
+        ).compute(**(compute_options or {}))
+    else:
+        # Not operating on a list of DatasetSource objects,
+        # wo we will construct our collection plan on the client
+        fragments, divisions, meta, io_func = engine.get_collection_mapping(
+            path if isinstance(path, DatasetSource) else DatasetSource(path),
+            columns=columns,
+            filters=filters,
+            index=index,
+            full_return=True,
+        )
 
     # Special Case (Empty DataFrame)
     if len(divisions) < 2:

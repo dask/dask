@@ -117,11 +117,16 @@ class ArrowDataset(DatasetEngine):
         self.storage_options = storage_options or {}
         self.dataset_options = dataset_options
 
-    def get_dataset(self, path, columns, filters, mode="rb"):
+    def get_dataset(self, source, columns, filters, mode="rb"):
         """Returns an engine-specific dataset object"""
 
         # TODO: Handle glob ordering? Apply sorting only for
         # glob or directory?
+
+        # Convert source to path
+        path = source.path
+        if source.partition_base_dir:
+            self.dataset_options["partition_base_dir"] = source.partition_base_dir
 
         # Check if we already have a file-system object
         if self.filesystem is None:
@@ -228,25 +233,29 @@ class ArrowDataset(DatasetEngine):
 
     def get_collection_mapping(
         self,
-        path,
+        source,
         columns=None,
         filters=None,
         index=None,
+        full_return=True,
     ):
 
         # Get dataset
-        dataset = self.get_dataset(path, columns, filters)
+        dataset = self.get_dataset(source, columns, filters)
 
         # Create meta
         meta = self.create_meta(dataset, index, columns)
 
         # Get fragments and divisions
         fragments, divisions = self.get_fragments(dataset, filters, meta, index)
+        divisions = divisions or (None,) * (len(fragments) + 1)
 
-        # Get IO function
-        io_func = self.get_read_function(dataset.schema, columns, filters, index)
-
-        return io_func, fragments, meta, divisions or (None,) * (len(fragments) + 1)
+        if full_return:
+            # Get IO function
+            io_func = self.get_read_function(dataset.schema, columns, filters, index)
+            return fragments, divisions, meta, io_func
+        else:
+            return fragments, divisions
 
 
 class ArrowParquetDataset(ArrowDataset):
@@ -285,7 +294,12 @@ class ArrowParquetDataset(ArrowDataset):
                 "aggregate_files only supported when split_row_groups=False"
             )
 
-    def get_dataset(self, path, columns, filters, mode="rb"):
+    def get_dataset(self, source, columns, filters, mode="rb"):
+
+        # Convert source to path
+        path = source.path
+        if source.partition_base_dir:
+            self.dataset_options["partition_base_dir"] = source.partition_base_dir
 
         # Check if we already have a file-system object
         if self.filesystem is None:
