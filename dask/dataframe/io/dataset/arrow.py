@@ -15,8 +15,8 @@ from dask.utils import natural_sort_key
 class ReadArrowFileFragment(ReadFunction):
     """Wrapper-function class for reading pyarrow fragments"""
 
-    def __init__(self, dataset, columns, filters, index, dataset_options):
-        self.schema = dataset.schema
+    def __init__(self, schema, columns, filters, index, dataset_options):
+        self.schema = schema
         self.columns = columns
         ds_filters = None
         if filters is not None:
@@ -158,11 +158,11 @@ class ArrowDataset(DatasetEngine):
             return meta[columns]
         return meta
 
-    def get_read_function(self, dataset, columns, filters, index):
+    def get_read_function(self, schema, columns, filters, index):
         """Returns a function to convert a fragment to a DataFrame partition"""
 
         return ReadArrowFileFragment(
-            dataset,
+            schema,
             columns,
             filters,
             index,
@@ -244,7 +244,7 @@ class ArrowDataset(DatasetEngine):
         fragments, divisions = self.get_fragments(dataset, filters, meta, index)
 
         # Get IO function
-        io_func = self.get_read_function(dataset, columns, filters, index)
+        io_func = self.get_read_function(dataset.schema, columns, filters, index)
 
         return io_func, fragments, meta, divisions or (None,) * (len(fragments) + 1)
 
