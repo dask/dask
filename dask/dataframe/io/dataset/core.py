@@ -140,7 +140,7 @@ def from_dataset(
         "filters": filters,
         "index": index,
         "engine": engine,
-        "engine_options": engine_options,
+        **engine_options,
     }
     token = tokenize(path, **input_kwargs)
     output_name = label + token
