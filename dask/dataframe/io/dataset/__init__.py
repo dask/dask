@@ -1,1 +1,1 @@
-from dask.dataframe.io.dataset.core import DatasetSource, from_dataset
+from dask.dataframe.io.dataset.core import from_dataset

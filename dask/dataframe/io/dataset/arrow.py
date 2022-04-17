@@ -1,3 +1,4 @@
+import math
 from itertools import chain
 
 import numpy as np
@@ -8,7 +9,9 @@ import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
 from pyarrow.fs import FileSystem as PaFileSystem
 
+from dask.base import tokenize
 from dask.dataframe.io.dataset.core import DatasetEngine, ReadFunction
+from dask.delayed import Delayed
 from dask.utils import natural_sort_key
 
 
@@ -117,16 +120,11 @@ class ArrowDataset(DatasetEngine):
         self.storage_options = storage_options or {}
         self.dataset_options = dataset_options
 
-    def get_dataset(self, source, columns, filters, mode="rb"):
+    def get_dataset(self, path, columns, filters, mode="rb"):
         """Returns an engine-specific dataset object"""
 
         # TODO: Handle glob ordering? Apply sorting only for
         # glob or directory?
-
-        # Convert source to path
-        path = source.path
-        if source.partition_base_dir:
-            self.dataset_options["partition_base_dir"] = source.partition_base_dir
 
         # Check if we already have a file-system object
         if self.filesystem is None:
@@ -210,13 +208,10 @@ class ArrowDataset(DatasetEngine):
 
         return fragments
 
-    def get_fragments(self, dataset, filters, meta, index):
-        """Returns dataset fragments and divisions"""
-
-        ds_filters = None
-        if filters is not None:
+    def get_fragments(self, dataset, ds_filters, meta, index):
+        """Returns fragments aand divisions"""
+        if ds_filters is not None:
             # Filters are defined - Use real fragments
-            ds_filters = pq._filters_to_expression(filters)
             fragments = list(dataset.get_fragments(ds_filters))
             # TODO: How to sort paths when .path is not available
             # on the fragment?
@@ -226,7 +221,7 @@ class ArrowDataset(DatasetEngine):
             if self.sort_paths:
                 fragments = sorted(fragments, key=natural_sort_key)
 
-        # Check if we are aggregating files
+        # Aggregate files if necessary
         fragments = self._aggregate_files(fragments)
 
         return fragments, (None,) * (len(fragments) + 1)
@@ -237,7 +232,6 @@ class ArrowDataset(DatasetEngine):
         columns=None,
         filters=None,
         index=None,
-        full_return=True,
     ):
 
         # Get dataset
@@ -246,16 +240,18 @@ class ArrowDataset(DatasetEngine):
         # Create meta
         meta = self.create_meta(dataset, index, columns)
 
+        # Get filters
+        ds_filters = None
+        if filters is not None:
+            ds_filters = pq._filters_to_expression(filters)
+
         # Get fragments and divisions
-        fragments, divisions = self.get_fragments(dataset, filters, meta, index)
+        fragments, divisions = self.get_fragments(dataset, ds_filters, meta, index)
         divisions = divisions or (None,) * (len(fragments) + 1)
 
-        if full_return:
-            # Get IO function
-            io_func = self.get_read_function(dataset.schema, columns, filters, index)
-            return fragments, divisions, meta, io_func
-        else:
-            return fragments, divisions
+        # Get IO function
+        io_func = self.get_read_function(dataset.schema, columns, filters, index)
+        return fragments, divisions, meta, io_func
 
 
 class ArrowParquetDataset(ArrowDataset):
@@ -282,6 +278,7 @@ class ArrowParquetDataset(ArrowDataset):
         split_row_groups=False,
         calculate_divisions=False,
         ignore_metadata_file=False,
+        metadata_task_size=128,
         format=None,
         **dataset_options,
     ):
@@ -289,17 +286,14 @@ class ArrowParquetDataset(ArrowDataset):
         self.split_row_groups = split_row_groups
         self.calculate_divisions = calculate_divisions
         self.ignore_metadata_file = ignore_metadata_file
+        self.using_global_metadata = False
+        self.metadata_task_size = metadata_task_size
         if bool(self.split_row_groups) and bool(self.aggregate_files):
             raise ValueError(
                 "aggregate_files only supported when split_row_groups=False"
             )
 
-    def get_dataset(self, source, columns, filters, mode="rb"):
-
-        # Convert source to path
-        path = source.path
-        if source.partition_base_dir:
-            self.dataset_options["partition_base_dir"] = source.partition_base_dir
+    def get_dataset(self, path, columns, filters, mode="rb"):
 
         # Check if we already have a file-system object
         if self.filesystem is None:
@@ -324,7 +318,10 @@ class ArrowParquetDataset(ArrowDataset):
         # If path is a _metadata file, use ds.parquet_dataset
         ds_api = ds.dataset
         if isinstance(path, str) and path.endswith("_metadata"):
+            self.using_global_metadata = True
             ds_api = ds.parquet_dataset
+        else:
+            self.using_global_metadata = False
 
         return ds_api(
             path,
@@ -379,7 +376,7 @@ class ArrowParquetDataset(ArrowDataset):
             pass
         return divisions
 
-    def get_fragments(self, dataset, filters, meta, index):
+    def get_fragments(self, dataset, ds_filters, meta, index):
 
         # Avoid index handling/divisions for default multi-index
         if index is None and len(meta.index.names) > 1:
@@ -390,9 +387,6 @@ class ArrowParquetDataset(ArrowDataset):
             index = meta.index.name
 
         # Collect fragments
-        ds_filters = None
-        if filters is not None:
-            ds_filters = pq._filters_to_expression(filters)
         if ds_filters is not None or self.split_row_groups or self.calculate_divisions:
             # One or more options require real fragments
             file_fragments = list(dataset.get_fragments(ds_filters))
@@ -405,6 +399,39 @@ class ArrowParquetDataset(ArrowDataset):
             file_fragments = dataset.files
             if self.sort_paths:
                 file_fragments = sorted(file_fragments, key=natural_sort_key)
+
+        # Process the parquet metadata in parallel
+        if (
+            not self.using_global_metadata
+            and (self.split_row_groups or self.calculate_divisions)
+            and (len(file_fragments) >= self.metadata_task_size)
+        ):
+            ntasks = math.ceil(len(file_fragments) / self.metadata_task_size)
+            task_size = len(file_fragments) // ntasks
+
+            dsk = {}
+            meta_name = "parse-metadata-" + tokenize(
+                file_fragments, ds_filters, index, task_size
+            )
+            for i in range(0, len(file_fragments), task_size):
+                dsk[(meta_name, i)] = (
+                    self.process_fragments,
+                    file_fragments[i : i + task_size],
+                    ds_filters,
+                    index,
+                )
+            dsk["final-" + meta_name] = (_finalize_plan, list(dsk.keys()))
+            return Delayed("final-" + meta_name, dsk).compute()
+
+        # Process on the client
+        return self.process_fragments(
+            file_fragments,
+            ds_filters,
+            index,
+        )
+
+    def process_fragments(self, file_fragments, ds_filters, index):
+        """Returns processed fragments and divisions"""
 
         def _new_frag(old_frag, row_groups):
             return old_frag.format.make_fragment(
@@ -419,9 +446,6 @@ class ArrowParquetDataset(ArrowDataset):
         if split_row_groups:
             fragments = []
             path_fragments = []
-            ds_filters = None
-            if filters is not None:
-                ds_filters = pq._filters_to_expression(filters)
             for file_frag in file_fragments:
                 row_groups = [rg.id for rg in file_frag.row_groups]
                 for i in range(0, len(row_groups), split_row_groups):
@@ -458,3 +482,22 @@ class ArrowParquetDataset(ArrowDataset):
             divisions = self._calculate_divisions(fragments, index)
 
         return path_fragments, divisions or (None,) * (len(path_fragments) + 1)
+
+
+def _finalize_plan(plan_list):
+    fragments, divisions = plan_list[0]
+
+    if None in divisions:
+        divisions = None
+    else:
+        divisions = list(divisions)
+
+    for frags, divs in plan_list[1:]:
+        fragments += frags
+        if divisions:
+            if divisions[-1] is None or divs[0] is None or (divs[0] < divisions[-1]):
+                divisions = None
+            else:
+                divisions += list(divs[1:])
+
+    return fragments, divisions or (None,) * (len(fragments) + 1)

@@ -1,6 +1,6 @@
 from dask.dataframe.io import demo
 from dask.dataframe.io.csv import read_csv, read_fwf, read_table, to_csv
-from dask.dataframe.io.dataset import DatasetSource, from_dataset
+from dask.dataframe.io.dataset import from_dataset
 from dask.dataframe.io.hdf import read_hdf, to_hdf
 from dask.dataframe.io.io import (
     dataframe_from_ctable,
