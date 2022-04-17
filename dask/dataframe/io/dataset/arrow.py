@@ -1,4 +1,5 @@
 import math
+import re
 from itertools import chain
 
 import numpy as np
@@ -94,6 +95,10 @@ class ArrowDataset(DatasetEngine):
     aggregate_files : int, default None
         How many adjacent files should be aggregated into the same
         output partition.
+    aggregation_boundary : list[str], default None
+        List of partitioned-column names that must have matching values in
+        adjacent files for aggregation to occur. By default, any two files
+        may be aggregated if ``aggregate_files>1``.
     sort_paths : bool, default True
         Whether to apply natural sorting order to dataset paths.
     storage_options : dict, default None
@@ -108,6 +113,7 @@ class ArrowDataset(DatasetEngine):
         partitioning="hive",
         filesystem=None,
         aggregate_files=False,
+        aggregation_boundary=None,
         sort_paths=True,
         storage_options=None,
         **dataset_options,
@@ -117,6 +123,7 @@ class ArrowDataset(DatasetEngine):
         self.filesystem = filesystem
         self.aggregate_files = aggregate_files
         self.sort_paths = sort_paths
+        self.aggregation_boundary = aggregation_boundary or []
         self.storage_options = storage_options or {}
         self.dataset_options = dataset_options
 
@@ -183,12 +190,25 @@ class ArrowDataset(DatasetEngine):
             # Assume we can only aggregate files within the same
             # directory. Custom Engines will be required for
             # more-complex logic here (this is just basic aggregation)
-            if isinstance(fragments[0], str):
-                exprs = ["/".join(frag.split("/")[:-1]) for frag in fragments]
-            elif isinstance(fragments[0], tuple):
-                exprs = ["/".join(frag[0].split("/")[:-1]) for frag in fragments]
+            if self.aggregation_boundary:
+                assert not isinstance(fragments[0], (str, tuple))
+
+                def _make_str(frag):
+                    expr = ""
+                    for field in self.aggregation_boundary:
+                        next_expr = re.findall(
+                            field + r" == [^{\)}]*",
+                            str(frag.partition_expression),
+                        )
+                        if next_expr:
+                            expr += next_expr[0].split(" == ")[-1]
+
+                    return expr
+
+                exprs = [_make_str(frag) for frag in fragments]
             else:
-                exprs = [str(frag.partition_expression) for frag in fragments]
+                exprs = [True] * len(fragments)
+
             frag_df = pd.DataFrame(
                 {
                     "fragments": range(len(fragments)),
@@ -210,7 +230,7 @@ class ArrowDataset(DatasetEngine):
 
     def get_fragments(self, dataset, ds_filters, meta, index):
         """Returns fragments aand divisions"""
-        if ds_filters is not None:
+        if ds_filters is not None or self.aggregation_boundary:
             # Filters are defined - Use real fragments
             fragments = list(dataset.get_fragments(ds_filters))
             # TODO: How to sort paths when .path is not available
@@ -387,7 +407,12 @@ class ArrowParquetDataset(ArrowDataset):
             index = meta.index.name
 
         # Collect fragments
-        if ds_filters is not None or self.split_row_groups or self.calculate_divisions:
+        if (
+            ds_filters is not None
+            or self.split_row_groups
+            or self.calculate_divisions
+            or self.aggregation_boundary
+        ):
             # One or more options require real fragments
             file_fragments = list(dataset.get_fragments(ds_filters))
             if self.sort_paths:
