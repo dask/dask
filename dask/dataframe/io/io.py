@@ -479,22 +479,25 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     elif np.isnan(sum(x.shape)):
         divisions = [None] * (len(x.chunks[0]) + 1)
     else:
-        dsk = {}
         divisions = [0]
         stop = 0
-        index_name = name + "-index-" + tokenize(x.chunks[0])
+        index_mapping = {}
         for i, increment in enumerate(x.chunks[0]):
             stop += increment
-            dsk[(index_name, i)] = (pd.RangeIndex, divisions[i], stop)
+            index_mapping[(i,)] = (divisions[i], stop)
             divisions.append(stop)
         divisions[-1] -= 1
-        index = new_dd_object(dsk, index_name, pd.RangeIndex(0, 1), divisions)
-        arrays_and_indices.extend([index.__dask_layers__()[0], "i"])
-        graph_dependencies.append(index)
-        numblocks[index.__dask_layers__()[0]] = (index.npartitions,)
+        arrays_and_indices.extend(
+            [BlockwiseDepDict(mapping=index_mapping), "i"]
+        )
+
+    def _partition_from_array(data, index=None, **kwargs):
+        if isinstance(index, tuple):
+            index = pd.RangeIndex(*index)
+        return type(meta)(data, index=index, **kwargs)
 
     blk = blockwise(
-        type(meta),
+        _partition_from_array,
         name,
         "i",
         *arrays_and_indices,
