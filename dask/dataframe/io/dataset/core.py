@@ -24,11 +24,13 @@ class DatasetEngine:
         filters=None,
         index=None,
     ):
-        """Returns required inputs to from_map"""
+        """Returns required inputs for a DataFrame collection"""
         raise NotImplementedError
 
 
 def get_engine(engine, **engine_options):
+    """Returns an initialized DatasetEngine instance"""
+
     if engine == "pyarrow":
         from dask.dataframe.io.dataset.arrow import ArrowDataset
 
@@ -50,30 +52,12 @@ def get_engine(engine, **engine_options):
     return engine(**engine_options)
 
 
-def _finalize_plan(plan_list):
-    fragments, divisions, meta, io_func = plan_list[0]
-
-    if None in divisions:
-        divisions = None
-    else:
-        divisions = list(divisions)
-
-    for frags, divs in plan_list[1:]:
-        fragments += frags
-        if divisions:
-            if divisions[-1] is None or divs[0] is None or (divs[0] < divisions[-1]):
-                divisions = None
-            else:
-                divisions += list(divs[1:])
-
-    return fragments, divisions or (None,) * (len(fragments) + 1), meta, io_func
-
-
 def from_dataset(
     path,
     columns=None,
     filters=None,
     index=None,
+    calculate_divisions=False,
     engine="pyarrow",
     **engine_options,
 ):
@@ -83,12 +67,14 @@ def from_dataset(
 
     Parameters
     ----------
-    path : str or list
+    path : str or list[str] or list[list[str]]
         Source directory for data, or path(s) to individual parquet files.
         Prefix with a protocol like ``s3://`` to read from alternative
-        filesystems. To read from multiple files you can pass a globstring or a
-        list of paths, with the caveat that they must all have the same
-        protocol.
+        filesystems. To read from multiple files you can pass a list of paths,
+        with the caveat that they must all have the same protocol. In order to
+        directly map groups of files to output dataframe partitions, ``path``
+        may also be a list of path lists. In this case, the paths within each
+        inner list will be aggregated into the same output partition.
     columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
@@ -105,6 +91,11 @@ def from_dataset(
         Field name to use as the output frame index. By default, the index may
         be inferred from file metadata (if present). Use False to read all
         fields as columns.
+    calculate_divisions : bool, default False
+        Whether parquet metadata should be used to calculate output divisions.
+        This argument will be ignored if there is no active index column.
+        WARNING: Setting this option to True may be expensive for large datasets
+        stored in remote storage!
     engine : str or DatasetEngine, default 'pyarrow'
         DatasetEngine class to use. Defaults to `ArrowDataset`, which supports
         “parquet”, “ipc”/”arrow”/”feather”, “csv”, and “orc” (the specific
@@ -127,6 +118,7 @@ def from_dataset(
         "filters": filters,
         "index": index,
         "engine": engine,
+        "calculate_divisions": calculate_divisions,
         **engine_options,
     }
     token = tokenize(path, **input_kwargs)
@@ -141,6 +133,7 @@ def from_dataset(
         columns=columns,
         filters=filters,
         index=index,
+        calculate_divisions=calculate_divisions,
     )
 
     # Special Case (Empty DataFrame)
