@@ -141,18 +141,18 @@ class ArrowDataset(DatasetEngine):
 
         # Check if source is a list of lists
         if isinstance(path, list) and path and isinstance(path[0], list):
+
+            def _get_msg(option):
+                return (
+                    f"{option} argument not supported when file "
+                    f"aggregation is already encoded in the source input. "
+                    f"(i.e. When the `path` input is a list of lists)."
+                )
+
             if self.aggregate_files > 1:
-                raise ValueError(
-                    "aggregate_files argument not supported when file "
-                    "aggregation is already encoded in the source input. "
-                    "(i.e. When the `path` input is a list of lists)."
-                )
+                _get_msg("aggregate_files")
             if self.aggregation_boundary:
-                raise ValueError(
-                    "aggregation_boundary argument not supported when file "
-                    "aggregation is already encoded in the source input. "
-                    "(i.e. When the `path` input is a list of lists)."
-                )
+                _get_msg("aggregation_boundary")
             # Define aggregate_files to be a list and flatten source
             self.aggregate_files = [len(paths) for paths in path]
             path = list(chain(*path))
@@ -211,9 +211,10 @@ class ArrowDataset(DatasetEngine):
     def _aggregate_files(self, fragments):
         """Aggregate adjacent file fragments into the same output partition"""
 
-        if fragments and (
-            isinstance(self.aggregate_files, list) and self.aggregate_files
-        ):
+        if not fragments:
+            return []
+
+        if isinstance(self.aggregate_files, list) and self.aggregate_files:
             # The file-aggregation plan was already encoded in the
             # source input, so we do not need to handle the
             # `aggregation_boundary` option
@@ -223,9 +224,8 @@ class ArrowDataset(DatasetEngine):
                 aggregated_fragments.append(fragments[cumsum : cumsum + agg_size])
                 cumsum += agg_size
             return aggregated_fragments
-        elif fragments and (
-            isinstance(self.aggregate_files, int) and self.aggregate_files > 1
-        ):
+
+        elif isinstance(self.aggregate_files, int) and self.aggregate_files > 1:
             # Aggregating files by integer "stride". However, we
             # also need to satisfy the `aggregation_boundary` option
             if self.aggregation_boundary:
@@ -350,6 +350,14 @@ class ArrowParquetDataset(ArrowDataset):
         partition will correspond to that number of parquet row-groups (or fewer).
         This option cannot be combined with ``aggregate_files``, or be used when
         file aggregation is already encoded in the source input.
+    max_partition_size : int, default None
+        The desired maximum size of each output ``DataFrame`` partition in terms of
+        total row count. If specified, row-groups will be aggregated into the same
+        output partition until the cumulative row count reaches this value. Use
+        ``aggregation_boundary`` to determine if row-groups from different partition
+        directories should be agregated together. Note that this option will
+        override ``split_row_groups`` and ``aggregate_files``, and is not supported
+        when file aggregation is encoded in the ``path`` input.
     ignore_metadata_file : bool, default False
         Whether to ignore the global Parquet _metadata file (if one is present).
     storage_options : dict, default None
@@ -362,12 +370,14 @@ class ArrowParquetDataset(ArrowDataset):
     def __init__(
         self,
         split_row_groups=False,
+        max_partition_size=None,
         ignore_metadata_file=False,
         metadata_task_size=32,
         format=None,
         **dataset_options,
     ):
         super().__init__(format=format or ds.ParquetFileFormat(), **dataset_options)
+        self.max_partition_size = max_partition_size
         self.split_row_groups = split_row_groups
         self.ignore_metadata_file = ignore_metadata_file
         self.using_global_metadata = False
@@ -376,29 +386,29 @@ class ArrowParquetDataset(ArrowDataset):
             raise ValueError(
                 "aggregate_files only supported when split_row_groups=False"
             )
+        if self.max_partition_size:
+            self.split_row_groups = True
 
     def get_dataset(self, path, columns, filters, mode="rb"):
 
         # Check if source is a list of lists
         if isinstance(path, list) and path and isinstance(path[0], list):
+
+            def _get_msg(option):
+                return (
+                    f"{option} argument not supported when file "
+                    f"aggregation is already encoded in the source input. "
+                    f"(i.e. When the `path` input is a list of lists)."
+                )
+
             if self.aggregate_files > 1:
-                raise ValueError(
-                    "aggregate_files argument not supported when file "
-                    "aggregation is already encoded in the source input. "
-                    "(i.e. When the `path` input is a list of lists)."
-                )
+                _get_msg("aggregate_files")
             if self.aggregation_boundary:
-                raise ValueError(
-                    "aggregation_boundary argument not supported when file "
-                    "aggregation is already encoded in the source input. "
-                    "(i.e. When the `path` input is a list of lists)."
-                )
+                _get_msg("aggregation_boundary")
+            if bool(self.max_partition_size):
+                _get_msg("max_partition_size")
             if bool(self.split_row_groups):
-                raise ValueError(
-                    "split_row_groups argument not supported when file "
-                    "aggregation is already encoded in the source input. "
-                    "(i.e. When the `path` input is a list of lists)."
-                )
+                _get_msg("split_row_groups")
             # Define aggregate_files to be a list and flatten source
             self.aggregate_files = [len(paths) for paths in path]
             path = list(chain(*path))
@@ -483,6 +493,75 @@ class ArrowParquetDataset(ArrowDataset):
         except ValueError:
             pass
         return divisions
+
+    def _aggregate_files(self, fragments):
+        """Aggregate adjacent file fragments into the same output partition"""
+
+        if not fragments:
+            return []
+
+        if self.max_partition_size:
+
+            # Aggregating files by integer "stride". However, we
+            # also need to satisfy the `aggregation_boundary` option
+            if self.aggregation_boundary:
+
+                def _make_str(frag):
+                    expr = ""
+                    for field in self.aggregation_boundary:
+                        next_expr = re.findall(
+                            field + r" == [^{\)}]*",
+                            str(frag.partition_expression),
+                        )
+                        if next_expr:
+                            expr += next_expr[0].split(" == ")[-1]
+
+                    return expr
+
+                exprs = [_make_str(frag) for frag in fragments]
+            else:
+                exprs = [True] * len(fragments)
+
+            frag_df = pd.DataFrame(
+                {
+                    "fragments": range(len(fragments)),
+                    "partition": exprs,
+                }
+            )
+            frag_groups = frag_df.groupby("partition").agg(list)["fragments"]
+
+            def row_aggregation(fragments):
+                # Aggregating partitions according to total row-count
+                nfrags = len(fragments)
+                sizes = np.cumsum(
+                    [fragment.metadata.num_rows for fragment in fragments],
+                    dtype="int64",
+                )
+                ideal = np.arange(
+                    self.max_partition_size,
+                    self.max_partition_size * nfrags,
+                    self.max_partition_size,
+                    dtype="int64",
+                )
+                offsets = sizes.searchsorted(ideal, side="left")
+                offsets = [
+                    ind
+                    for i, ind in enumerate(offsets)
+                    if i == 0 or ind != offsets[i - 1]
+                ]
+                _aggregated_fragments = []
+                for i, offset in enumerate(offsets):
+                    last = 0 if i == 0 else offsets[i - 1]
+                    _aggregated_fragments.append(fragments[last:offset])
+                return _aggregated_fragments
+
+            aggregated_fragments = []
+            for group in frag_groups:
+                new_items = row_aggregation([fragments[ind] for ind in group])
+                aggregated_fragments.extend(new_items)
+            return aggregated_fragments
+
+        return super()._aggregate_files(fragments)
 
     def get_fragments(self, dataset, ds_filters, meta, index, calculate_divisions):
 
@@ -579,19 +658,24 @@ class ArrowParquetDataset(ArrowDataset):
 
         # Aggregate files
         if fragments and (
-            (isinstance(self.aggregate_files, int) and self.aggregate_files > 1)
+            self.max_partition_size
+            or (isinstance(self.aggregate_files, int) and self.aggregate_files > 1)
             or (isinstance(self.aggregate_files, list) and self.aggregate_files)
         ):
-            fragments = self._aggregate_files(fragments)
-            if isinstance(fragments[0], str):
-                path_fragments = fragments
-            elif isinstance(fragments[0], list):
-                if fragments[0] and not isinstance(fragments[0][0], str):
-                    path_fragments = [[f.path for f in frag] for frag in fragments]
+
+            def _get_path(frag):
+                if isinstance(frag, str):
+                    return frag
+                elif isinstance(frag, tuple):
+                    return _get_path(frag[0])
+                elif isinstance(frag, list):
+                    return [_get_path(f) for f in frag]
                 else:
-                    path_fragments = fragments
-            else:
-                path_fragments = [f.path for f in fragments]
+                    if self.split_row_groups:
+                        return frag.path, [rg.id for rg in frag.row_groups]
+                    return frag.path
+
+            path_fragments = [_get_path(f) for f in self._aggregate_files(fragments)]
 
         # Calculate divisions
         divisions = None
