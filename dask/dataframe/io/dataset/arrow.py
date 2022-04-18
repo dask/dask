@@ -597,6 +597,7 @@ class ArrowParquetDataset(ArrowDataset):
             not self.using_global_metadata
             and (self.split_row_groups or calculate_divisions)
             and (len(file_fragments) >= self.metadata_task_size)
+            and self.metadata_task_size  # metadata_task_size=0 to skip
         ):
             ntasks = math.ceil(len(file_fragments) / self.metadata_task_size)
             task_size = len(file_fragments) // ntasks
