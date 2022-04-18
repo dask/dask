@@ -133,6 +133,24 @@ class ArrowDataset(DatasetEngine):
         # TODO: Handle glob ordering? Apply sorting only for
         # glob or directory?
 
+        # Check if source is a list of lists
+        if isinstance(path, list) and path and isinstance(path[0], list):
+            if int(self.aggregate_files) > 1:
+                raise ValueError(
+                    "aggregate_files argument not supported when file "
+                    "aggregation is already encoded in the source input. "
+                    "(i.e. When the `path` input is a list of lists)."
+                )
+            if self.aggregation_boundary:
+                raise ValueError(
+                    "aggregation_boundary argument not supported when file "
+                    "aggregation is already encoded in the source input. "
+                    "(i.e. When the `path` input is a list of lists)."
+                )
+            # Define aggregate_files to be a list and flatten source
+            self.aggregate_files = [len(paths) for paths in path]
+            path = list(chain(*path))
+
         # Check if we already have a file-system object
         if self.filesystem is None:
             self.filesystem = get_fs_token_paths(
@@ -185,11 +203,25 @@ class ArrowDataset(DatasetEngine):
         )
 
     def _aggregate_files(self, fragments):
-        aggregate_files = int(self.aggregate_files)
-        if aggregate_files > 1 and fragments:
-            # Assume we can only aggregate files within the same
-            # directory. Custom Engines will be required for
-            # more-complex logic here (this is just basic aggregation)
+
+        if fragments and (
+            isinstance(self.aggregate_files, list) and self.aggregate_files
+        ):
+            # The file-aggregation plan was already encoded in the
+            # source input, so we do not need to handle the
+            # `aggregation_boundary` option
+            cumsum = 0
+            aggregated_fragments = []
+            for i, agg_size in enumerate(self.aggregate_files):
+                aggregated_fragments.append(fragments[cumsum : cumsum + agg_size])
+                cumsum += agg_size
+            return aggregated_fragments
+        elif fragments and (
+            isinstance(self.aggregate_files, int) and self.aggregate_files > 1
+        ):
+            # Aggregating files by integer "stride". However, we
+            # also need to satisfy the `aggregation_boundary` option
+            aggregate_files = int(self.aggregate_files)
             if self.aggregation_boundary:
                 assert not isinstance(fragments[0], (str, tuple))
 
@@ -285,7 +317,8 @@ class ArrowParquetDataset(ArrowDataset):
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        Cannot be combined with ``aggregate_files``.
+        This option cannot be combined with ``aggregate_files``, or be used when
+        file aggregation is already encoded in the source input.
     calculate_divisions : bool, default False
         Whether parquet metadata should be used to calculate output divisions.
         This argument will be ignored if there is no active index column.
@@ -298,7 +331,7 @@ class ArrowParquetDataset(ArrowDataset):
         split_row_groups=False,
         calculate_divisions=False,
         ignore_metadata_file=False,
-        metadata_task_size=128,
+        metadata_task_size=32,
         format=None,
         **dataset_options,
     ):
@@ -314,6 +347,30 @@ class ArrowParquetDataset(ArrowDataset):
             )
 
     def get_dataset(self, path, columns, filters, mode="rb"):
+
+        # Check if source is a list of lists
+        if isinstance(path, list) and path and isinstance(path[0], list):
+            if int(self.aggregate_files) > 1:
+                raise ValueError(
+                    "aggregate_files argument not supported when file "
+                    "aggregation is already encoded in the source input. "
+                    "(i.e. When the `path` input is a list of lists)."
+                )
+            if self.aggregation_boundary:
+                raise ValueError(
+                    "aggregation_boundary argument not supported when file "
+                    "aggregation is already encoded in the source input. "
+                    "(i.e. When the `path` input is a list of lists)."
+                )
+            if bool(self.split_row_groups):
+                raise ValueError(
+                    "split_row_groups argument not supported when file "
+                    "aggregation is already encoded in the source input. "
+                    "(i.e. When the `path` input is a list of lists)."
+                )
+            # Define aggregate_files to be a list and flatten source
+            self.aggregate_files = [len(paths) for paths in path]
+            path = list(chain(*path))
 
         # Check if we already have a file-system object
         if self.filesystem is None:
@@ -488,8 +545,10 @@ class ArrowParquetDataset(ArrowDataset):
                 path_fragments = [f.path for f in fragments]
 
         # Aggregate files
-        aggregate_files = int(self.aggregate_files)
-        if aggregate_files > 1 and fragments:
+        if fragments and (
+            (isinstance(self.aggregate_files, int) and self.aggregate_files > 1)
+            or (isinstance(self.aggregate_files, list) and self.aggregate_files)
+        ):
             fragments = self._aggregate_files(fragments)
             if isinstance(fragments[0], str):
                 path_fragments = fragments
