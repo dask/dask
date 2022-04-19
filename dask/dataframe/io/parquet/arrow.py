@@ -36,6 +36,7 @@ _pa_version = parse_version(pa.__version__)
 from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
+pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -214,7 +215,11 @@ def _read_table_from_path(
         ),
     )
 
-    pre_buffer = read_kwargs.pop("pre_buffer", True)
+    pre_buffer = (
+        {"pre_buffer": read_kwargs.pop("pre_buffer", True)}
+        if pre_buffer_supported
+        else {}
+    )
     with _open_input_files(
         [path],
         fs=fs,
@@ -222,14 +227,14 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil, pre_buffer=pre_buffer).read(
+            return pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil, pre_buffer=pre_buffer).read_row_groups(
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
