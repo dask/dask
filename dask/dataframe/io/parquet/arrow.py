@@ -12,7 +12,6 @@ from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -1153,11 +1152,21 @@ class ArrowDatasetEngine(Engine):
         elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure that any `in`-predicate filters have iterable values
+        filter_columns = set()
+        if filters is not None:
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+                filter_columns.add(col)
+
         # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
         stat_col_indices = {}
         for i, name in enumerate(schema.names):
-            if name in index_cols or name in flat_filters:
+            if name in index_cols or name in filter_columns:
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue

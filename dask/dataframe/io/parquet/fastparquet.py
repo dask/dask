@@ -10,6 +10,8 @@ import pandas as pd
 import tlz as toolz
 from packaging.version import parse as parse_version
 
+from dask.core import flatten
+
 try:
     import fastparquet
     from fastparquet import ParquetFile
@@ -25,7 +27,6 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -663,10 +664,10 @@ class FastParquetEngine(Engine):
                 gather_statistics = True
 
         # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
+        filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
         for i, name in enumerate(pf.columns):
-            if name in index_cols or name in flat_filters:
+            if name in index_cols or name in filter_columns:
                 stat_col_indices[name] = i
 
         # If the user has not specified `gather_statistics`,
