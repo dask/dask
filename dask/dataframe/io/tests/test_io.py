@@ -371,10 +371,12 @@ def test_DataFrame_from_dask_array_with_blockwise_ops():
     x *= 2
     pdf = pd.DataFrame(np.ones((10, 3)) * 2, columns=["a", "b", "c"])
     df = dd.from_dask_array(x, ["a", "b", "c"])
-    # The last layer is the conversion to DataFrame
-    assert not hlg_layer_topological(df.dask, -1).is_materialized()
-    # The second to last layer is the multiplication, which should still be blockwise
-    assert not hlg_layer_topological(df.dask, -2).is_materialized()
+    # None of the layers in this graph should be materialized, everything should
+    # be a HighLevelGraph still.
+    assert all(
+        not hlg_layer_topological(df.dask, i).is_materialized()
+        for i in range(len(df.dask.layers))
+    )
     assert_eq(df, pdf)
 
 

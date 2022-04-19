@@ -8,7 +8,7 @@ import pandas as pd
 
 import dask.array as da
 from dask.base import tokenize
-from dask.blockwise import blockwise
+from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -459,12 +459,9 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     arrays_and_indices = [x.name, "ij" if x.ndim == 2 else "i"]
     numblocks = {x.name: x.numblocks}
 
-    if is_series_like(meta):
-        kwargs = {"dtype": x.dtype, "name": meta.name}
-    else:
-        kwargs = {"columns": meta.columns}
-
     if index is not None:
+        # An index is explicitly given by the caller, so we can pass it through to the
+        # initializer after a few checks.
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
@@ -473,12 +470,19 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             raise ValueError(msg)
         divisions = index.divisions
         graph_dependencies.append(index)
-        arrays_and_indices.extend([index.__dask_layers__()[0], "i"])
-        numblocks[index.__dask_layers__()[0]] = (index.npartitions,)
+        arrays_and_indices.extend([index._name, "i"])
+        numblocks[index._name] = (index.npartitions,)
 
     elif np.isnan(sum(x.shape)):
+        # The shape of the incoming array is not known in at least one dimension. As
+        # such, we can't create an index for the entire output DataFrame and we set
+        # the divisions to None to represent that.
         divisions = [None] * (len(x.chunks[0]) + 1)
     else:
+        # The shape of the incoming array is known and we don't have an explicit index.
+        # Create a mapping of chunk number in the incoming array to
+        # (start row, stop row) tuples. These tuples will be used to create a sequential
+        # RangeIndex later on that is continuous over the whole DataFrame.
         divisions = [0]
         stop = 0
         index_mapping = {}
@@ -487,9 +491,12 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             index_mapping[(i,)] = (divisions[i], stop)
             divisions.append(stop)
         divisions[-1] -= 1
-        arrays_and_indices.extend(
-            [BlockwiseDepDict(mapping=index_mapping), "i"]
-        )
+        arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
+
+    if is_series_like(meta):
+        kwargs = {"dtype": x.dtype, "name": meta.name}
+    else:
+        kwargs = {"columns": meta.columns}
 
     def _partition_from_array(data, index=None, **kwargs):
         if isinstance(index, tuple):
@@ -508,8 +515,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     )
 
     graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
-    df = new_dd_object(graph, name, meta, divisions)
-    return df
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def _link(token, result):
