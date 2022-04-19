@@ -221,14 +221,14 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil).read(
+            return pq.ParquetFile(fil, pre_buffer=True).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil).read_row_groups(
+            return pq.ParquetFile(fil, pre_buffer=True).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
