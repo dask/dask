@@ -407,7 +407,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
-def _partition_from_array(data, index=None, **kwargs):
+def _partition_from_array(data, index=None, initializer=None, **kwargs):
     """Create a Dask partition for either a DataFrame or Series.
 
     Designed to be used with :func:`dask.blockwise.blockwise`. ``data`` is the array
@@ -417,14 +417,13 @@ def _partition_from_array(data, index=None, **kwargs):
     2. a `tuple` with two elements, the start and stop values for a RangeIndex for
        this partition, which gives a continuously varying RangeIndex over the
        whole Dask DataFrame
-    3. or an instance of a :class:`dask.dataframe.Index`.
+    3. an instance of a ``pandas.Index`` or a subclass thereof
 
     The ``kwargs`` _must_ contain an ``initializer`` key which is set by calling
     ``type(meta)``.
     """
     if isinstance(index, tuple):
         index = pd.RangeIndex(*index)
-    initializer = kwargs.pop("initializer")
     return initializer(data, index=index, **kwargs)
 
 
