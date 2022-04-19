@@ -158,7 +158,7 @@ def _groupby_raise_unaligned(df, **kwargs):
 
 
 def _groupby_slice_apply(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, func, *args, group_keys=None, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -171,7 +171,7 @@ def _groupby_slice_apply(
 
 
 def _groupby_slice_transform(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, func, *args, group_keys=None, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -189,7 +189,7 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
+    df, grouper, key, shuffled, group_keys=None, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -1035,7 +1035,7 @@ class _GroupBy:
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
-    group_keys: bool
+    group_keys: bool | None
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
@@ -1053,7 +1053,7 @@ class _GroupBy:
         df,
         by=None,
         slice=None,
-        group_keys=True,
+        group_keys=None,
         dropna=None,
         sort=None,
         observed=None,

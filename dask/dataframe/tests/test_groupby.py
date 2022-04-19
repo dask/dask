@@ -1873,7 +1873,8 @@ def test_with_min_count(min_count):
         )
 
 
-def test_groupby_group_keys():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+def test_groupby_group_keys(group_keys):
     df = pd.DataFrame({"a": [1, 2, 2, 3], "b": [2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2).set_index("a")
     pdf = df.set_index("a")
@@ -1882,8 +1883,10 @@ def test_groupby_group_keys():
     expected = pdf.groupby("a").apply(func)
     assert_eq(expected, ddf.groupby("a").apply(func, meta=expected))
 
-    expected = pdf.groupby("a", group_keys=False).apply(func)
-    assert_eq(expected, ddf.groupby("a", group_keys=False).apply(func, meta=expected))
+    expected = pdf.groupby("a", group_keys=group_keys).apply(func)
+    assert_eq(
+        expected, ddf.groupby("a", group_keys=group_keys).apply(func, meta=expected)
+    )
 
 
 @pytest.mark.parametrize(
