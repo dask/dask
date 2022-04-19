@@ -248,6 +248,10 @@ def test_arg_reductions(dfunc, func):
     assert_eq(dfunc(a2, 0), func(x2, 0))
     assert_eq(dfunc(a2, 0, split_every=2), func(x2, 0))
 
+    x3 = np.array(1)
+    a3 = da.from_array(x3)
+    assert_eq(dfunc(a3), func(x3))
+
 
 @pytest.mark.parametrize(
     ["dfunc", "func"], [(da.nanargmin, np.nanargmin), (da.nanargmax, np.nanargmax)]
