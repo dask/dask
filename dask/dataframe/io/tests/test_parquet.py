@@ -1417,7 +1417,7 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     filters = [[("aa", "<", aa_lim), ("bb", "==", bb_val)]]
     ddf2 = dd.read_parquet(fn, index=False, engine="pyarrow", filters=filters)
 
-    # Check that partitions are filetered for "aa" filter
+    # Check that partitions are filtered for "aa" filter
     nonempty = 0
     for part in ddf[ddf["aa"] < aa_lim].partitions:
         nonempty += int(len(part.compute()) > 0)
@@ -3858,3 +3858,63 @@ def test_roundtrip_partitioned_pyarrow_dataset(tmpdir, engine):
     df_read_dask = dd.read_parquet(pa_path, engine=engine)
     df_read_pa = pq.read_table(pa_path).to_pandas()
     assert_eq(_prep(df_read_dask), _prep(df_read_pa), check_index=False)
+
+
+@pytest.mark.parametrize("filter_value", ({1}, [1], (1,)), ids=("set", "list", "tuple"))
+def test_in_predicate_can_use_iterables(tmp_path, engine, filter_value):
+    """Regression test for https://github.com/dask/dask/issues/8720"""
+    path = tmp_path / "in_predicate_iterable_pandas.parquet"
+    df = pd.DataFrame(
+        {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
+    )
+    df.to_parquet(path, engine=engine)
+    filters = [("B", "in", filter_value)]
+    result = dd.read_parquet(path, engine=engine, filters=filters)
+    expected = pd.read_parquet(path, engine=engine, filters=filters)
+    assert_eq(result, expected)
+
+    # pandas to_parquet outputs a single file, dask outputs a folder with global
+    # metadata that changes the filtering code path
+    ddf = dd.from_pandas(df, npartitions=2)
+    path = tmp_path / "in_predicate_iterable_dask.parquet"
+    ddf.to_parquet(path, engine=engine)
+    result = dd.read_parquet(path, engine=engine, filters=filters)
+    expected = pd.read_parquet(path, engine=engine, filters=filters)
+    assert_eq(result, expected, check_index=False)
+
+
+# Non-iterable filter value with `in` predicate
+# Test single nested and double nested lists of filters, as well as having multiple
+# filters to test against.
+@pytest.mark.parametrize(
+    "filter_value",
+    (
+        [("B", "in", 10)],
+        [[("B", "in", 10)]],
+        [("B", "<", 10), ("B", "in", 10)],
+        [[("B", "<", 10), ("B", "in", 10)]],
+    ),
+    ids=(
+        "one-item-single-nest",
+        "one-item-double-nest",
+        "two-item-double-nest",
+        "two-item-two-nest",
+    ),
+)
+def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
+    """Regression test for https://github.com/dask/dask/issues/8720"""
+    path = tmp_path / "gh_8720_pandas.parquet"
+    df = pd.DataFrame(
+        {"A": [1, 2, 3, 4], "B": [1, 1, 2, 2]},
+    )
+    df.to_parquet(path, engine=engine)
+    with pytest.raises(TypeError, match="Value of 'in' filter"):
+        dd.read_parquet(path, engine=engine, filters=filter_value)
+
+    # pandas to_parquet outputs a single file, dask outputs a folder with global
+    # metadata that changes the filtering code path
+    ddf = dd.from_pandas(df, npartitions=2)
+    path = tmp_path / "gh_8720_dask.parquet"
+    ddf.to_parquet(path, engine=engine)
+    with pytest.raises(TypeError, match="Value of 'in' filter"):
+        dd.read_parquet(path, engine=engine, filters=filter_value)
