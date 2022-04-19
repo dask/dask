@@ -1539,12 +1539,17 @@ Dask Name: {name}, {task} tasks"""
             Number of items to return is not supported by dask. Use frac
             instead.
         frac : float, optional
-            Fraction of axis items to return.
+            Approximate fraction of items to return. This sampling fraction is
+            applied to all partitions equally. Note that this is an
+            **approximate fraction**. You should not expect exactly ``len(df) * frac``
+            items to be returned, as the exact number of elements selected will
+            depend on how your data is partitioned (but should be pretty close
+            in practice).
         replace : boolean, optional
             Sample with or without replacement. Default = False.
         random_state : int or ``np.random.RandomState``
-            If int we create a new RandomState with this as the seed
-            Otherwise we draw from the passed RandomState
+            If an int, we create a new RandomState with this as the seed;
+            Otherwise we draw from the passed RandomState.
 
         See Also
         --------
@@ -4809,6 +4814,17 @@ class DataFrame(_Frame):
 
         Blocked version of pd.DataFrame.query
 
+        Parameters
+        ----------
+        expr: str
+            The query string to evaluate.
+            You can refer to column names that are not valid Python variable names
+            by surrounding them in backticks.
+            Dask does not fully support referring to variables using the '@' character,
+            use f-strings or the ``local_dict`` keyword argument instead.
+
+        Notes
+        -----
         This is like the sequential version except that this will also happen
         in many threads.  This may conflict with ``numexpr`` which will use
         multiple threads itself.  We recommend that you set ``numexpr`` to use a
@@ -4822,6 +4838,46 @@ class DataFrame(_Frame):
         See also
         --------
         pandas.DataFrame.query
+        pandas.eval
+
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> df = pd.DataFrame({'x': [1, 2, 1, 2],
+        ...                    'y': [1, 2, 3, 4],
+        ...                    'z z': [4, 3, 2, 1]})
+        >>> ddf = dd.from_pandas(df, npartitions=2)
+
+        Refer to column names directly:
+
+        >>> ddf.query('y > x').compute()
+           x  y  z z
+        2  1  3    2
+        3  2  4    1
+
+        Refer to column name using backticks:
+
+        >>> ddf.query('`z z` > x').compute()
+           x  y  z z
+        0  1  1    4
+        1  2  2    3
+        2  1  3    2
+
+        Refer to variable name using f-strings:
+
+        >>> value = 1
+        >>> ddf.query(f'x == {value}').compute()
+           x  y  z z
+        0  1  1    4
+        2  1  3    2
+
+        Refer to variable name using ``local_dict``:
+
+        >>> ddf.query('x == @value', local_dict={"value": value}).compute()
+           x  y  z z
+        0  1  1    4
+        2  1  3    2
         """
         return self.map_partitions(M.query, expr, **kwargs)
 

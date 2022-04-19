@@ -308,6 +308,36 @@ def test_merge_asof_on_basic():
     assert_eq(c, C)
 
 
+def test_merge_asof_on_lefton_righton_error():
+    A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({"a": [1, 2, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", left_on="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", right_on="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", left_on="left_val", right_on="right_val")
+
+
+def test_merge_asof_by_leftby_rightby_error():
+    A = pd.DataFrame({"a": [1, 5, 10], "b": [3, 6, 9], "left_val": ["a", "b", "c"]})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame(
+        {"a": [1, 2, 3, 6, 7], "b": [3, 6, 9, 12, 15], "right_val": [1, 2, 3, 6, 7]}
+    )
+    b = dd.from_pandas(B, npartitions=2)
+
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", left_by="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", right_by="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", left_by="left_val", right_by="right_val")
+
+
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 def test_merge_asof_on(allow_exact_matches, direction):
@@ -636,26 +666,27 @@ def test_merge_asof_with_empty():
     assert_eq(result_dd, result_df, check_index=False)
 
 
-def test_merge_asof_on_left_right():
+@pytest.mark.parametrize(
+    "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
+)
+def test_merge_asof_on_left_right(left_col, right_col):
     df1 = pd.DataFrame(
         {
-            "endofweek": [1, 1, 2, 2, 3, 4],
+            left_col: [1, 1, 2, 2, 3, 4],
             "GroupCol": [1234, 8679, 1234, 8679, 1234, 8679],
         }
     )
-    df2 = pd.DataFrame(
-        {"timestamp": [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]}
-    )
+    df2 = pd.DataFrame({right_col: [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]})
 
     # pandas
-    result_df = pd.merge_asof(df1, df2, left_on="endofweek", right_on="timestamp")
+    result_df = pd.merge_asof(df1, df2, left_on=left_col, right_on=right_col)
 
     # dask
     result_dd = dd.merge_asof(
         dd.from_pandas(df1, npartitions=2),
         dd.from_pandas(df2, npartitions=2),
-        left_on="endofweek",
-        right_on="timestamp",
+        left_on=left_col,
+        right_on=right_col,
     )
 
     assert_eq(result_df, result_dd, check_index=False)

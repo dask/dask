@@ -925,7 +925,13 @@ def merge_asof(
         return pd.merge_asof(left, right, **kwargs)
 
     if on is not None:
+        if left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
+                "combination of both."
+            )
         left_on = right_on = on
+
     for o in [left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -946,13 +952,18 @@ def merge_asof(
     if not is_dask_collection(right):
         right = from_pandas(right, npartitions=1)
     if right_on is not None:
-        if on:
-            right = right.set_index(right_on, sorted=True)
-        else:
-            right = right.set_index(right_on, drop=False, sorted=True)
+        right = right.set_index(right_on, drop=(left_on == right_on), sorted=True)
 
     if by is not None:
+        if left_by is not None or right_by is not None:
+            raise ValueError(
+                "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+            )
         kwargs["left_by"] = kwargs["right_by"] = by
+    if left_by is None and right_by is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_by is not None and right_by is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
 
     del kwargs["on"], kwargs["left_on"], kwargs["right_on"], kwargs["by"]
     kwargs["left_index"] = kwargs["right_index"] = True

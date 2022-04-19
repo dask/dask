@@ -156,7 +156,7 @@ def read_sql_query(
             divisions[0] = mini
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
-            divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+            divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
             raise TypeError(
                 'Provided index column is of type "{}".  If divisions is not provided the '

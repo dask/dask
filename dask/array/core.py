@@ -307,7 +307,7 @@ def graph_from_arraylike(
         layers = {}
         layers[original_name] = MaterializedLayer({original_name: arr})
         layers[name] = core_blockwise(
-            getter,
+            getitem,
             name,
             out_ind,
             original_name,
@@ -617,6 +617,12 @@ def map_blocks(
 
     If ``chunks`` is specified but ``new_axis`` is not, then it is inferred to
     add the necessary number of axes on the left.
+
+    Note that ``map_blocks()`` will concatenate chunks along axes specified by
+    the keyword parameter ``drop_axis`` prior to applying the function.
+    This is illustrated in the figure below:
+
+    .. image:: /images/map_blocks_drop_axis.png
 
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
@@ -3065,6 +3071,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         return tuple(chunks)
 
     else:
+        # Check if dtype.itemsize is greater than 0
+        if dtype.itemsize == 0:
+            raise ValueError(
+                "auto-chunking with dtype.itemsize == 0 is not supported, please pass in `chunks` explicitly"
+            )
         size = (limit / dtype.itemsize / largest_block) ** (1 / len(autos))
         small = [i for i in autos if shape[i] < size]
         if small:
@@ -3292,7 +3303,7 @@ def from_array(
     if lock is True:
         lock = SerializableLock()
 
-    is_ndarray = type(x) is np.ndarray
+    is_ndarray = type(x) in (np.ndarray, np.ma.core.MaskedArray)
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
