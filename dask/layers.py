@@ -12,16 +12,9 @@ from tlz.curried import map
 
 from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
-from dask.core import flatten, keys_in_tasks
-from dask.highlevelgraph import Layer
-from dask.utils import (
-    apply,
-    cached_cumsum,
-    concrete,
-    insert,
-    stringify,
-    stringify_collection_keys,
-)
+from dask.core import flatten
+from dask.highlevelgraph import PartitionedLayer
+from dask.utils import apply, cached_cumsum, concrete, insert, stringify
 
 #
 ##
@@ -61,24 +54,13 @@ class ArrayBlockwiseDep(BlockwiseDep):
 
     chunks: tuple[tuple[int, ...], ...]
     numblocks: tuple[int, ...]
-    produces_tasks: bool = False
 
     def __init__(self, chunks: tuple[tuple[int, ...], ...]):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
-        self.produces_tasks = False
 
     def __getitem__(self, idx: tuple[int, ...]):
         raise NotImplementedError("Subclasses must implement __getitem__")
-
-    def __dask_distributed_pack__(
-        self, required_indices: list[tuple[int, ...]] | None = None
-    ):
-        return {"chunks": self.chunks}
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 class ArrayChunkShapeDep(ArrayBlockwiseDep):
@@ -102,7 +84,7 @@ class ArraySliceDep(ArrayBlockwiseDep):
         return tuple(slice(*s, None) for s in loc)
 
 
-class ArrayOverlapLayer(Layer):
+class ArrayOverlapLayer(PartitionedLayer):
     """Simple HighLevelGraph array overlap layer.
 
     Lazily computed High-level graph layer for a array overlap operations.
@@ -126,40 +108,25 @@ class ArrayOverlapLayer(Layer):
         token,
     ):
         super().__init__()
-        self.name = name
+        self._name = name
         self.axes = axes
         self.chunks = chunks
         self.numblocks = numblocks
         self.token = token
         self._cached_keys = None
 
+    @property
+    def layer_state(self):
+        return {
+            "name": self.name,
+            "axes": self.axes,
+            "chunks": self.chunks,
+            "numblocks": self.numblocks,
+            "token": self.token,
+        }
+
     def __repr__(self):
         return f"ArrayOverlapLayer<name='{self.name}'"
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
 
     def _dask_keys(self):
         if self._cached_keys is not None:
@@ -180,8 +147,11 @@ class ArrayOverlapLayer(Layer):
         self._cached_keys = result = keys()
         return result
 
-    def _construct_graph(self, deserializing=False):
+    def construct_graph(self):
         """Construct graph for a simple overlap operation."""
+
+        from dask.array.core import concatenate3
+
         axes = self.axes
         chunks = self.chunks
         name = self.name
@@ -189,14 +159,6 @@ class ArrayOverlapLayer(Layer):
 
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
-
-        if deserializing:
-            # Use CallableLazyImport objects to avoid importing dataframe
-            # module on the scheduler
-            concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
-        else:
-            # Not running on distributed scheduler - Use explicit functions
-            from dask.array.core import concatenate3
 
         dims = list(map(len, chunks))
         expand_key2 = functools.partial(
@@ -222,10 +184,6 @@ class ArrayOverlapLayer(Layer):
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)._construct_graph(deserializing=True)
 
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
@@ -343,7 +301,7 @@ def fractional_slice(task, axes):
 #
 
 
-class SimpleShuffleLayer(Layer):
+class SimpleShuffleLayer(PartitionedLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -366,7 +324,7 @@ class SimpleShuffleLayer(Layer):
         Name of input collection.
     meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations
@@ -381,18 +339,20 @@ class SimpleShuffleLayer(Layer):
         ignore_index,
         name_input,
         meta_input,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
     ):
-        super().__init__(annotations=annotations)
-        self.name = name
+        super().__init__(
+            annotations=annotations,
+            output_blocks=output_blocks or range(npartitions),
+        )
+        self._name = name
         self.column = column
         self.npartitions = npartitions
         self.npartitions_input = npartitions_input
         self.ignore_index = ignore_index
         self.name_input = name_input
         self.meta_input = meta_input
-        self.parts_out = parts_out or range(npartitions)
         self.split_name = "split-" + self.name
 
         # The scheduling policy of Dask is generally depth-first,
@@ -412,121 +372,12 @@ class SimpleShuffleLayer(Layer):
         if "priority" not in self.annotations:
             self.annotations["priority"] = {}
         self.annotations["priority"]["__expanded_annotations__"] = None
-        self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
-
-    def get_split_keys(self):
-        # Return SimpleShuffleLayer "split" keys
-        return [
-            stringify((self.split_name, part_out, part_in))
-            for part_in in range(self.npartitions_input)
-            for part_out in self.parts_out
-        ]
-
-    def get_output_keys(self):
-        return {(self.name, part) for part in self.parts_out}
-
-    def __repr__(self):
-        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
-            self.name, self.npartitions
+        self.annotations["priority"].update(
+            {_key: 1 for _key in self._get_split_keys()}
         )
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
 
     @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def _keys_to_parts(self, keys):
-        """Simple utility to convert keys to partition indices."""
-        parts = set()
-        for key in keys:
-            try:
-                _name, _part = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            parts.add(_part)
-        return parts
-
-    def _cull_dependencies(self, keys, parts_out=None):
-        """Determine the necessary dependencies to produce `keys`.
-
-        For a simple shuffle, output partitions always depend on
-        all input partitions. This method does not require graph
-        materialization.
-        """
-        deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
-        for part in parts_out:
-            deps[(self.name, part)] |= {
-                (self.name_input, i) for i in range(self.npartitions_input)
-            }
-        return deps
-
-    def _cull(self, parts_out):
-        return SimpleShuffleLayer(
-            self.name,
-            self.column,
-            self.npartitions,
-            self.npartitions_input,
-            self.ignore_index,
-            self.name_input,
-            self.meta_input,
-            parts_out=parts_out,
-        )
-
-    def cull(self, keys, all_keys):
-        """Cull a SimpleShuffleLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != set(self.parts_out):
-            culled_layer = self._cull(parts_out)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
-
-    def __reduce__(self):
-        attrs = [
-            "name",
-            "column",
-            "npartitions",
-            "npartitions_input",
-            "ignore_index",
-            "name_input",
-            "meta_input",
-            "parts_out",
-            "annotations",
-        ]
-        return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def __dask_distributed_pack__(
-        self, all_hlg_keys, known_key_dependencies, client, client_keys
-    ):
-        from distributed.protocol.serialize import to_serialize
-
+    def layer_state(self):
         return {
             "name": self.name,
             "column": self.column,
@@ -534,60 +385,43 @@ class SimpleShuffleLayer(Layer):
             "npartitions_input": self.npartitions_input,
             "ignore_index": self.ignore_index,
             "name_input": self.name_input,
-            "meta_input": to_serialize(self.meta_input),
-            "parts_out": list(self.parts_out),
+            "meta_input": self.meta_input,
+            "output_blocks": list(self.output_blocks),
         }
 
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
+    def layer_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`.
 
-        # msgpack will convert lists into tuples, here
-        # we convert them back to lists
-        if isinstance(state["column"], tuple):
-            state["column"] = list(state["column"])
-        if "inputs" in state:
-            state["inputs"] = list(state["inputs"])
+        For a simple shuffle, output partitions always depend on
+        all input partitions. This method does not require graph
+        materialization.
+        """
+        deps = defaultdict(set)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
+        for part in output_blocks:
+            deps[(self.name, part)] |= {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+        return deps
 
-        # Materialize the layer
-        layer_dsk = cls(**state)._construct_graph(deserializing=True)
-
-        # Convert all keys to strings and dump tasks
-        layer_dsk = {
-            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
-        }
-        keys = layer_dsk.keys() | dsk.keys()
-
-        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
-
-        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
-
-    def _construct_graph(self, deserializing=False):
+    def construct_graph(self):
         """Construct graph for a simple shuffle operation."""
+
+        from dask.dataframe.core import _concat
+        from dask.dataframe.shuffle import shuffle_group
 
         shuffle_group_name = "group-" + self.name
 
-        if deserializing:
-            # Use CallableLazyImport objects to avoid importing dataframe
-            # module on the scheduler
-            concat_func = CallableLazyImport("dask.dataframe.core._concat")
-            shuffle_group_func = CallableLazyImport(
-                "dask.dataframe.shuffle.shuffle_group"
-            )
-        else:
-            # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.core import _concat as concat_func
-            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
-
         dsk = {}
-        for part_out in self.parts_out:
+        for part_out in self.output_blocks:
             _concat_list = [
                 (self.split_name, part_out, part_in)
                 for part_in in range(self.npartitions_input)
             ]
             dsk[(self.name, part_out)] = (
-                concat_func,
+                _concat,
                 _concat_list,
                 self.ignore_index,
             )
@@ -599,7 +433,7 @@ class SimpleShuffleLayer(Layer):
                 )
                 if (shuffle_group_name, _part_in) not in dsk:
                     dsk[(shuffle_group_name, _part_in)] = (
-                        shuffle_group_func,
+                        shuffle_group,
                         (self.name_input, _part_in),
                         self.column,
                         0,
@@ -610,6 +444,19 @@ class SimpleShuffleLayer(Layer):
                     )
 
         return dsk
+
+    def __repr__(self):
+        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
+            self.name, self.npartitions
+        )
+
+    def _get_split_keys(self):
+        # Return SimpleShuffleLayer "split" keys
+        return [
+            stringify((self.split_name, part_out, part_in))
+            for part_in in range(self.npartitions_input)
+            for part_out in self.output_blocks
+        ]
 
 
 class ShuffleLayer(SimpleShuffleLayer):
@@ -643,7 +490,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         Name of input collection.
     meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations
@@ -661,7 +508,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         ignore_index,
         name_input,
         meta_input,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
     ):
         self.inputs = inputs
@@ -675,66 +522,37 @@ class ShuffleLayer(SimpleShuffleLayer):
             ignore_index,
             name_input,
             meta_input,
-            parts_out=parts_out or range(len(inputs)),
+            output_blocks=output_blocks or range(len(inputs)),
             annotations=annotations,
         )
 
-    def get_split_keys(self):
-        # Return ShuffleLayer "split" keys
-        keys = []
-        for part in self.parts_out:
-            out = self.inputs[part]
-            for i in range(self.nsplits):
-                keys.append(
-                    stringify(
-                        (
-                            self.split_name,
-                            out[self.stage],
-                            insert(out, self.stage, i),
-                        )
-                    )
-                )
-        return keys
+    @property
+    def layer_state(self):
+        return {
+            "name": self.name,
+            "column": self.column,
+            "inputs": self.inputs,
+            "stage": self.stage,
+            "npartitions": self.npartitions,
+            "npartitions_input": self.npartitions_input,
+            "nsplits": self.nsplits,
+            "ignore_index": self.ignore_index,
+            "name_input": self.name_input,
+            "meta_input": self.meta_input,
+            "output_blocks": list(self.output_blocks),
+        }
 
-    def __repr__(self):
-        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
-            self.name, self.stage, self.nsplits, self.npartitions
-        )
-
-    def __reduce__(self):
-        attrs = [
-            "name",
-            "column",
-            "inputs",
-            "stage",
-            "npartitions",
-            "npartitions_input",
-            "nsplits",
-            "ignore_index",
-            "name_input",
-            "meta_input",
-            "parts_out",
-            "annotations",
-        ]
-
-        return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        ret = super().__dask_distributed_pack__(*args, **kwargs)
-        ret["inputs"] = self.inputs
-        ret["stage"] = self.stage
-        ret["nsplits"] = self.nsplits
-        return ret
-
-    def _cull_dependencies(self, keys, parts_out=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         Does not require graph materialization.
         """
         deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in parts_out:
+        for part in output_blocks:
             out = self.inputs[part]
             for k in range(self.nsplits):
                 _inp = insert(out, self.stage, k)
@@ -745,41 +563,16 @@ class ShuffleLayer(SimpleShuffleLayer):
                     deps[(self.name, part)].add((self.name_input, _part))
         return deps
 
-    def _cull(self, parts_out):
-        return ShuffleLayer(
-            self.name,
-            self.column,
-            self.inputs,
-            self.stage,
-            self.npartitions,
-            self.npartitions_input,
-            self.nsplits,
-            self.ignore_index,
-            self.name_input,
-            self.meta_input,
-            parts_out=parts_out,
-        )
-
-    def _construct_graph(self, deserializing=False):
+    def construct_graph(self):
         """Construct graph for a "rearrange-by-column" stage."""
+        from dask.dataframe.core import _concat
+        from dask.dataframe.shuffle import shuffle_group
 
         shuffle_group_name = "group-" + self.name
 
-        if deserializing:
-            # Use CallableLazyImport objects to avoid importing dataframe
-            # module on the scheduler
-            concat_func = CallableLazyImport("dask.dataframe.core._concat")
-            shuffle_group_func = CallableLazyImport(
-                "dask.dataframe.shuffle.shuffle_group"
-            )
-        else:
-            # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.core import _concat as concat_func
-            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
-
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in self.parts_out:
+        for part in self.output_blocks:
 
             out = self.inputs[part]
 
@@ -792,7 +585,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             # concatenate those pieces together, with their friends
             dsk[(self.name, part)] = (
-                concat_func,
+                _concat,
                 _concat_list,
                 self.ignore_index,
             )
@@ -821,7 +614,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
-                        shuffle_group_func,
+                        shuffle_group,
                         input_key,
                         self.column,
                         self.stage,
@@ -833,8 +626,30 @@ class ShuffleLayer(SimpleShuffleLayer):
 
         return dsk
 
+    def __repr__(self):
+        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
+            self.name, self.stage, self.nsplits, self.npartitions
+        )
 
-class BroadcastJoinLayer(Layer):
+    def _get_split_keys(self):
+        # Return ShuffleLayer "split" keys
+        keys = []
+        for part in self.output_blocks:
+            out = self.inputs[part]
+            for i in range(self.nsplits):
+                keys.append(
+                    stringify(
+                        (
+                            self.split_name,
+                            out[self.stage],
+                            insert(out, self.stage, i),
+                        )
+                    )
+                )
+        return keys
+
+
+class BroadcastJoinLayer(PartitionedLayer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -853,7 +668,7 @@ class BroadcastJoinLayer(Layer):
         "Right" DataFrame collection to join.
     rhs_npartitions: int
         Number of partitions in "right" DataFrame collection.
-    parts_out : list of int (optional)
+    output_blocks : list of int (optional)
         List of required output-partition indices.
     annotations : dict (optional)
         Layer annotations.
@@ -869,18 +684,20 @@ class BroadcastJoinLayer(Layer):
         lhs_npartitions,
         rhs_name,
         rhs_npartitions,
-        parts_out=None,
+        output_blocks=None,
         annotations=None,
         **merge_kwargs,
     ):
-        super().__init__(annotations=annotations)
-        self.name = name
+        super().__init__(
+            annotations=annotations,
+            output_blocks=output_blocks or set(range(npartitions)),
+        )
+        self._name = name
         self.npartitions = npartitions
         self.lhs_name = lhs_name
         self.lhs_npartitions = lhs_npartitions
         self.rhs_name = rhs_name
         self.rhs_npartitions = rhs_npartitions
-        self.parts_out = parts_out or set(range(self.npartitions))
         self.merge_kwargs = merge_kwargs
         self.how = self.merge_kwargs.get("how")
         self.left_on = self.merge_kwargs.get("left_on")
@@ -890,48 +707,8 @@ class BroadcastJoinLayer(Layer):
         if isinstance(self.right_on, list):
             self.right_on = (list, tuple(self.right_on))
 
-    def get_output_keys(self):
-        return {(self.name, part) for part in self.parts_out}
-
-    def __repr__(self):
-        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
-            self.name, self.how, self.lhs_name, self.rhs_name
-        )
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
     @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        import pickle
-
-        # Pickle complex merge_kwargs elements. Also
-        # tuples, which may be confused with keys.
-        _merge_kwargs = {}
-        for k, v in self.merge_kwargs.items():
-            if not isinstance(v, (str, list, bool)):
-                _merge_kwargs[k] = pickle.dumps(v)
-            else:
-                _merge_kwargs[k] = v
-
+    def layer_state(self):
         return {
             "name": self.name,
             "npartitions": self.npartitions,
@@ -939,68 +716,11 @@ class BroadcastJoinLayer(Layer):
             "lhs_npartitions": self.lhs_npartitions,
             "rhs_name": self.rhs_name,
             "rhs_npartitions": self.rhs_npartitions,
-            "parts_out": self.parts_out,
-            "merge_kwargs": _merge_kwargs,
+            "output_blocks": self.output_blocks,
+            **self.merge_kwargs,
         }
 
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
-
-        # Expand merge_kwargs
-        merge_kwargs = state.pop("merge_kwargs", {})
-        state.update(merge_kwargs)
-
-        # Materialize the layer
-        raw = cls(**state)._construct_graph(deserializing=True)
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
-
-        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
-
-    def _keys_to_parts(self, keys):
-        """Simple utility to convert keys to partition indices."""
-        parts = set()
-        for key in keys:
-            try:
-                _name, _part = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            parts.add(_part)
-        return parts
-
-    @property
-    def _broadcast_plan(self):
-        # Return structure (tuple):
-        # (
-        #     <broadcasted-collection-name>,
-        #     <broadcasted-collection-npartitions>,
-        #     <other-collection-npartitions>,
-        #     <other-collection-on>,
-        # )
-        if self.lhs_npartitions < self.rhs_npartitions:
-            # Broadcasting the left
-            return (
-                self.lhs_name,
-                self.lhs_npartitions,
-                self.rhs_name,
-                self.right_on,
-            )
-        else:
-            # Broadcasting the right
-            return (
-                self.rhs_name,
-                self.rhs_npartitions,
-                self.lhs_name,
-                self.left_on,
-            )
-
-    def _cull_dependencies(self, keys, parts_out=None):
+    def layer_dependencies(self, keys, output_blocks=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For a broadcast join, output partitions always depend on
@@ -1011,64 +731,27 @@ class BroadcastJoinLayer(Layer):
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
 
         deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
-        for part in parts_out:
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
+        for part in output_blocks:
             deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
             deps[(self.name, part)] |= {
                 (other_name, part),
             }
         return deps
 
-    def _cull(self, parts_out):
-        return BroadcastJoinLayer(
-            self.name,
-            self.npartitions,
-            self.lhs_name,
-            self.lhs_npartitions,
-            self.rhs_name,
-            self.rhs_npartitions,
-            annotations=self.annotations,
-            parts_out=parts_out,
-            **self.merge_kwargs,
-        )
-
-    def cull(self, keys, all_keys):
-        """Cull a BroadcastJoinLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != set(self.parts_out):
-            culled_layer = self._cull(parts_out)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
-
-    def _construct_graph(self, deserializing=False):
+    def construct_graph(self):
         """Construct graph for a broadcast join operation."""
+
+        from dask.dataframe.multi import (
+            _concat_wrapper,
+            _merge_chunk_wrapper,
+            _split_partition,
+        )
 
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
-
-        if deserializing:
-            # Use CallableLazyImport objects to avoid importing dataframe
-            # module on the scheduler
-            split_partition_func = CallableLazyImport(
-                "dask.dataframe.multi._split_partition"
-            )
-            concat_func = CallableLazyImport("dask.dataframe.multi._concat_wrapper")
-            merge_chunk_func = CallableLazyImport(
-                "dask.dataframe.multi._merge_chunk_wrapper"
-            )
-        else:
-            # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.multi import _concat_wrapper as concat_func
-            from dask.dataframe.multi import _merge_chunk_wrapper as merge_chunk_func
-            from dask.dataframe.multi import _split_partition as split_partition_func
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
@@ -1077,14 +760,14 @@ class BroadcastJoinLayer(Layer):
         # Loop over output partitions, which should be a 1:1
         # mapping with the input partitions of "other".
         # Culling should allow us to avoid generating tasks for
-        # any output partitions that are not requested (via `parts_out`)
+        # any output partitions that are not requested (via `output_blocks`)
         dsk = {}
-        for i in self.parts_out:
+        for i in self.output_blocks:
 
             # Split each "other" partition by hash
             if self.how != "inner":
                 dsk[(split_name, i)] = (
-                    split_partition_func,
+                    _split_partition,
                     (other_name, i),
                     other_on,
                     bcast_size,
@@ -1117,16 +800,47 @@ class BroadcastJoinLayer(Layer):
                 inter_key = (inter_name, i, j)
                 dsk[inter_key] = (
                     apply,
-                    merge_chunk_func,
+                    _merge_chunk_wrapper,
                     _merge_args,
                     self.merge_kwargs,
                 )
                 _concat_list.append(inter_key)
 
             # Concatenate the merged results for each output partition
-            dsk[(self.name, i)] = (concat_func, _concat_list)
+            dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
 
         return dsk
+
+    def __repr__(self):
+        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
+            self.name, self.how, self.lhs_name, self.rhs_name
+        )
+
+    @property
+    def _broadcast_plan(self):
+        # Return structure (tuple):
+        # (
+        #     <broadcasted-collection-name>,
+        #     <broadcasted-collection-npartitions>,
+        #     <other-collection-npartitions>,
+        #     <other-collection-on>,
+        # )
+        if self.lhs_npartitions < self.rhs_npartitions:
+            # Broadcasting the left
+            return (
+                self.lhs_name,
+                self.lhs_npartitions,
+                self.rhs_name,
+                self.right_on,
+            )
+        else:
+            # Broadcasting the right
+            return (
+                self.rhs_name,
+                self.rhs_npartitions,
+                self.lhs_name,
+                self.left_on,
+            )
 
 
 class DataFrameIOLayer(Blockwise):
@@ -1150,11 +864,6 @@ class DataFrameIOLayer(Blockwise):
         String to use as a prefix in the place-holder collection
         name. If nothing is specified (default), "subset-" will
         be used.
-    produces_tasks : bool (optional)
-        Whether one or more elements of `inputs` is expected to
-        contain a nested task. This argument in only used for
-        serialization purposes, and will be deprecated in the
-        future. Default is False.
     creation_info: dict (optional)
         Dictionary containing the callable function ('func'),
         positional arguments ('args'), and key-word arguments
@@ -1171,23 +880,20 @@ class DataFrameIOLayer(Blockwise):
         inputs,
         io_func,
         label=None,
-        produces_tasks=False,
         creation_info=None,
         annotations=None,
     ):
-        self.name = name
+        self._name = name
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
         self.label = label
-        self.produces_tasks = produces_tasks
         self.annotations = annotations
         self.creation_info = creation_info
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
             {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
         )
 
         # Use Blockwise initializer
@@ -1220,7 +926,6 @@ class DataFrameIOLayer(Blockwise):
                 self.inputs,
                 io_func,
                 label=self.label,
-                produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
             return layer
@@ -1234,7 +939,7 @@ class DataFrameIOLayer(Blockwise):
         )
 
 
-class DataFrameTreeReduction(Layer):
+class DataFrameTreeReduction(PartitionedLayer):
     """DataFrame Tree-Reduction Layer
 
     Parameters
@@ -1265,7 +970,7 @@ class DataFrameTreeReduction(Layer):
         reduction tree. If ``split_out`` is set to an integer >=1, the
         input tasks must contain data that can be indexed by a ``getitem``
         operation with a key in the range ``[0, split_out)``.
-    output_partitions : list, optional
+    output_blocks : list, optional
         List of required output partitions. This parameter is used
         internally by Dask for high-level culling.
     tree_node_name : str, optional
@@ -1280,7 +985,7 @@ class DataFrameTreeReduction(Layer):
     finalize_func: callable | None
     split_every: int
     split_out: int
-    output_partitions: list[int]
+    output_blocks: list[int]
     tree_node_name: str
     widths: list[int]
     height: int
@@ -1295,12 +1000,17 @@ class DataFrameTreeReduction(Layer):
         finalize_func: callable | None = None,
         split_every: int = 32,
         split_out: int | None = None,
-        output_partitions: list[int] | None = None,
+        output_blocks: list[int] | None = None,
         tree_node_name: str | None = None,
         annotations: dict[str, Any] | None = None,
     ):
-        super().__init__(annotations=annotations)
-        self.name = name
+        super().__init__(
+            annotations=annotations,
+            output_blocks=(
+                list(range(split_out or 1)) if output_blocks is None else output_blocks
+            ),
+        )
+        self._name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
         self.concat_func = concat_func
@@ -1308,11 +1018,6 @@ class DataFrameTreeReduction(Layer):
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out
-        self.output_partitions = (
-            list(range(self.split_out or 1))
-            if output_partitions is None
-            else output_partitions
-        )
         self.tree_node_name = tree_node_name or "tree_node-" + self.name
 
         # Calculate tree widths and height
@@ -1324,25 +1029,40 @@ class DataFrameTreeReduction(Layer):
             self.widths.append(parts)
         self.height = len(self.widths)
 
-    def _make_key(self, *name_parts, split=0):
-        # Helper function construct a key
-        # with a "split" element when
-        # bool(split_out) is True
-        return name_parts + (split,) if self.split_out else name_parts
+    @property
+    def layer_state(self):
+        return {
+            "name": self.name,
+            "name_input": self.name_input,
+            "npartitions_input": self.npartitions_input,
+            "concat_func": self.concat_func,
+            "tree_node_func": self.tree_node_func,
+            "finalize_func": self.finalize_func,
+            "split_every": self.split_every,
+            "split_out": self.split_out,
+            "output_blocks": self.output_blocks,
+            "tree_node_name": self.tree_node_name,
+        }
 
-    def _define_task(self, input_keys, final_task=False):
-        # Define nested concatenation and func task
-        if final_task and self.finalize_func:
-            outer_func = self.finalize_func
-        else:
-            outer_func = self.tree_node_func
-        return (toolz.pipe, input_keys, self.concat_func, outer_func)
+    def layer_dependencies(self, keys, output_blocks=None):
+        """Determine the necessary dependencies to produce `keys`."""
 
-    def _construct_graph(self):
+        output_blocks = output_blocks or self.output_blocks
+        if output_blocks is None:
+            output_blocks = self._keys_to_indices(keys)
+        deps = {
+            (self.name, b): {
+                (self.name_input, i) for i in range(self.npartitions_input)
+            }
+            for b in output_blocks
+        }
+        return deps
+
+    def construct_graph(self):
         """Construct graph for a tree reduction."""
 
         dsk = {}
-        if not self.output_partitions:
+        if not self.output_blocks:
             return dsk
 
         # Deal with `bool(split_out) == True`.
@@ -1354,7 +1074,7 @@ class DataFrameTreeReduction(Layer):
         name_input_use = self.name_input
         if self.split_out:
             name_input_use += "-split"
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 for p in range(self.npartitions_input):
                     dsk[self._make_key(name_input_use, p, split=s)] = (
                         operator.getitem,
@@ -1364,7 +1084,7 @@ class DataFrameTreeReduction(Layer):
 
         if self.height >= 2:
             # Loop over output splits
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 # Loop over reduction levels
                 for depth in range(1, self.height):
                     # Loop over reduction groups
@@ -1406,7 +1126,7 @@ class DataFrameTreeReduction(Layer):
                             ] = self._define_task(input_keys, final_task=False)
         else:
             # Deal with single-partition case
-            for s in self.output_partitions:
+            for s in self.output_blocks:
                 input_keys = [self._make_key(name_input_use, 0, split=s)]
                 dsk[(self.name, s)] = self._define_task(input_keys, final_task=True)
 
@@ -1417,128 +1137,24 @@ class DataFrameTreeReduction(Layer):
             self.name, self.name_input, self.split_out
         )
 
-    def _output_keys(self):
-        return {(self.name, s) for s in self.output_partitions}
-
-    def get_output_keys(self):
-        if hasattr(self, "_cached_output_keys"):
-            return self._cached_output_keys
-        else:
-            output_keys = self._output_keys()
-            self._cached_output_keys = output_keys
-        return self._cached_output_keys
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
     def __len__(self):
         # Start with "base" tree-reduction size
         tree_size = (sum(self.widths[1:]) or 1) * (self.split_out or 1)
         if self.split_out:
             # Add on "split-*" tasks used for `getitem` ops
-            return tree_size + self.npartitions_input * len(self.output_partitions)
+            return tree_size + self.npartitions_input * len(self.output_blocks)
         return tree_size
 
-    def _keys_to_output_partitions(self, keys):
-        """Simple utility to convert keys to output partition indices."""
-        splits = set()
-        for key in keys:
-            try:
-                _name, _split = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            splits.add(_split)
-        return splits
+    def _make_key(self, *name_parts, split=0):
+        # Helper function construct a key
+        # with a "split" element when
+        # bool(split_out) is True
+        return name_parts + (split,) if self.split_out else name_parts
 
-    def _cull(self, output_partitions):
-        return DataFrameTreeReduction(
-            self.name,
-            self.name_input,
-            self.npartitions_input,
-            self.concat_func,
-            self.tree_node_func,
-            finalize_func=self.finalize_func,
-            split_every=self.split_every,
-            split_out=self.split_out,
-            output_partitions=output_partitions,
-            tree_node_name=self.tree_node_name,
-            annotations=self.annotations,
-        )
-
-    def cull(self, keys, all_keys):
-        """Cull a DataFrameTreeReduction HighLevelGraph layer"""
-        deps = {
-            (self.name, 0): {
-                (self.name_input, i) for i in range(self.npartitions_input)
-            }
-        }
-        output_partitions = self._keys_to_output_partitions(keys)
-        if output_partitions != set(self.output_partitions):
-            culled_layer = self._cull(output_partitions)
-            return culled_layer, deps
+    def _define_task(self, input_keys, final_task=False):
+        # Define nested concatenation and func task
+        if final_task and self.finalize_func:
+            outer_func = self.finalize_func
         else:
-            return self, deps
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        from distributed.protocol.serialize import to_serialize
-
-        # Pickle the (possibly) user-defined functions here
-        _concat_func = to_serialize(self.concat_func)
-        _tree_node_func = to_serialize(self.tree_node_func)
-        if self.finalize_func:
-            _finalize_func = to_serialize(self.finalize_func)
-        else:
-            _finalize_func = None
-
-        return {
-            "name": self.name,
-            "name_input": self.name_input,
-            "npartitions_input": self.npartitions_input,
-            "concat_func": _concat_func,
-            "tree_node_func": _tree_node_func,
-            "finalize_func": _finalize_func,
-            "split_every": self.split_every,
-            "split_out": self.split_out,
-            "output_partitions": self.output_partitions,
-            "tree_node_name": self.tree_node_name,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.protocol.serialize import to_serialize
-
-        # Materialize the layer
-        raw = cls(**state)._construct_graph()
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
-
-        # Must use `to_serialize` on the entire task.
-        # This is required because the task-tuples contain `Serialized`
-        # function objects instead of real functions. Using `dumps_task`
-        # may or may not correctly wrap the entire tuple in `to_serialize`.
-        # So we use `to_serialize` here to be explicit. When the task
-        # arrives at a worker, both the `Serialized` task-tuples and the
-        # `Serialized` functions nested within them should be deserialzed
-        # automatically by the comm.
-        return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
+            outer_func = self.tree_node_func
+        return (toolz.pipe, input_keys, self.concat_func, outer_func)
