@@ -194,7 +194,9 @@ def test_reductions_2D(dtype):
     assert b.__dask_keys__() == [[(b.name, 0, 0)]]
 
     reduction_2d_test(da.sum, a, np.sum, x)
-    reduction_2d_test(da.prod, a, np.prod, x)
+    if x.dtype.kind != "i":
+        # prod overflows integers at this size
+        reduction_2d_test(da.prod, a, np.prod, x)
     reduction_2d_test(da.mean, a, np.mean, x)
     reduction_2d_test(da.var, a, np.var, x, False)  # Difference in dtype algo
     reduction_2d_test(da.std, a, np.std, x, False)  # Difference in dtype algo
@@ -204,7 +206,9 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.all, a, np.all, x, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x)
-    reduction_2d_test(da.nanprod, a, np.nanprod, x)
+    if x.dtype.kind != "i":
+        # prod overflows integers at this size
+        reduction_2d_test(da.nanprod, a, np.nanprod, x)
     reduction_2d_test(da.nanmean, a, np.mean, x)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
@@ -243,6 +247,10 @@ def test_arg_reductions(dfunc, func):
     assert_eq(dfunc(a2), func(x2))
     assert_eq(dfunc(a2, 0), func(x2, 0))
     assert_eq(dfunc(a2, 0, split_every=2), func(x2, 0))
+
+    x3 = np.array(1)
+    a3 = da.from_array(x3)
+    assert_eq(dfunc(a3), func(x3))
 
 
 @pytest.mark.parametrize(

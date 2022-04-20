@@ -5108,6 +5108,19 @@ def test_index_is_monotonic_dt64():
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
 
+def test_is_monotonic_empty_partitions():
+    df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # slice it to get empty partitions
+    df = df[df["a"] >= 3]
+    ddf = ddf[ddf["a"] >= 3]
+    assert_eq(df["a"].is_monotonic_increasing, ddf["a"].is_monotonic_increasing)
+    assert_eq(df.index.is_monotonic_increasing, ddf.index.is_monotonic_increasing)
+    assert_eq(df["a"].is_monotonic_decreasing, ddf["a"].is_monotonic_decreasing)
+    assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
+
+
 def test_custom_map_reduce():
     # Make sure custom map-reduce workflows can use
     # the universal ACA code path with metadata

@@ -12,7 +12,6 @@ from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -37,6 +36,7 @@ _pa_version = parse_version(pa.__version__)
 from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
+pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -72,6 +72,7 @@ def _write_partitioned(
     pandas_to_arrow_table,
     preserve_index,
     index_cols=(),
+    return_metadata=True,
     **kwargs,
 ):
     """Write table to a partitioned dataset with pyarrow.
@@ -119,8 +120,14 @@ def _write_partitioned(
         fs.mkdirs(prefix, exist_ok=True)
         full_path = fs.sep.join([prefix, filename])
         with fs.open(full_path, "wb") as f:
-            pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
-        md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
+            pq.write_table(
+                subtable,
+                f,
+                metadata_collector=md_list if return_metadata else None,
+                **kwargs,
+            )
+        if return_metadata:
+            md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
 
     return md_list
 
@@ -139,12 +146,13 @@ def _index_in_schema(index, schema):
 
 
 class PartitionObj:
-    """Simple object to provide a `name` and `keys` attribute
-    for a single partition column. `ArrowDatasetEngine` will use
-    a list of these objects to "duck type" a `ParquetPartitions`
-    object (used in `ArrowLegacyEngine`). The larger purpose of this
-    class is to allow the same `read_partition` definition to handle
-    both Engine instances.
+    """Simple class providing a `name` and `keys` attribute
+    for a single partition column.
+
+    This class was originally designed as a mechanism to build a
+    duck-typed version of pyarrow's deprecated `ParquetPartitions`
+    class. Now that `ArrowLegacyEngine` is deprecated, this class
+    can be modified/removed, but it is still used as a convenience.
     """
 
     def __init__(self, name, keys):
@@ -179,9 +187,6 @@ def _read_table_from_path(
     columns,
     schema,
     filters,
-    partitions,
-    partition_keys,
-    piece_to_arrow_func,
     **kwargs,
 ):
     """Read arrow table from file path.
@@ -210,53 +215,37 @@ def _read_table_from_path(
         ),
     )
 
-    if partition_keys:
-        tables = []
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            for rg in row_groups:
-                piece = pq.ParquetDatasetPiece(
-                    path,
-                    row_group=rg,
-                    partition_keys=partition_keys,
-                    open_file_func=lambda _path, **_kwargs: fil,
-                )
-                arrow_table = piece_to_arrow_func(
-                    piece, columns, partitions, **read_kwargs
-                )
-                tables.append(arrow_table)
+    # Use `pre_buffer=True` if the option is supported and an optimized
+    # "pre-caching" method isn't already specified in `precache_options`
+    # (The distinct fsspec and pyarrow optimizations will conflict)
+    pre_buffer_default = precache_options.get("method", None) is None
+    pre_buffer = (
+        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
+        if pre_buffer_supported
+        else {}
+    )
 
-        if len(row_groups) > 1:
-            # NOTE: Not covered by pytest
-            return pa.concat_tables(tables)
+    with _open_input_files(
+        [path],
+        fs=fs,
+        precache_options=precache_options,
+        **open_file_options,
+    )[0] as fil:
+        if row_groups == [None]:
+            return pq.ParquetFile(fil, **pre_buffer).read(
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
         else:
-            return tables[0]
-    else:
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            if row_groups == [None]:
-                return pq.ParquetFile(fil).read(
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
-            else:
-                return pq.ParquetFile(fil).read_row_groups(
-                    row_groups,
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
+                row_groups,
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
 
 
 def _get_rg_statistics(row_group, col_indices):
@@ -340,6 +329,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -356,6 +346,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -708,6 +699,7 @@ class ArrowDatasetEngine(Engine):
                 preserve_index,
                 index_cols=index_cols,
                 compression=compression,
+                return_metadata=return_metadata,
                 **kwargs,
             )
             if md_list:
@@ -721,7 +713,7 @@ class ArrowDatasetEngine(Engine):
                     t,
                     fil,
                     compression=compression,
-                    metadata_collector=md_list,
+                    metadata_collector=md_list if return_metadata else None,
                     **kwargs,
                 )
             if md_list:
@@ -781,6 +773,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -810,11 +803,6 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Set require_extension option
-        require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
-
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -839,17 +827,19 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
-            elif require_extension:
+            elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
                 len0 = len(paths)
                 paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
+                    path
+                    for path in fs.find(paths)
+                    if path.endswith(parquet_file_extension)
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
+                        "No files satisfy the `parquet_file_extension` criteria "
+                        f"(files must end with {parquet_file_extension})."
                     )
 
         elif len(paths) > 1:
@@ -966,21 +956,15 @@ class ArrowDatasetEngine(Engine):
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
 
-        # Construct and return `datset_info`
-        #
         # Note on (hive) partitioning information:
         #
         #    - "partitions" : (list of PartitionObj) This is a list of
         #          simple objects providing `name` and `keys` attributes
-        #          for each partition column. The list is designed to
-        #          "duck type" a `ParquetPartitions` object, so that the
-        #          same code path can be used for both legacy and
-        #          pyarrow.dataset-based logic.
-        #          TODO: Reconsider now that the legacy API is deprecated
+        #          for each partition column.
         #    - "partition_names" : (list)  This is a list containing the
         #          names of partitioned columns.
         #    - "partitioning" : (dict) The `partitioning` options
-        #          used for file discovory by pyarrow.
+        #          used for file discovery by pyarrow.
         #
         return {
             "ds": ds,
@@ -1179,11 +1163,21 @@ class ArrowDatasetEngine(Engine):
         elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure that any `in`-predicate filters have iterable values
+        filter_columns = set()
+        if filters is not None:
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+                filter_columns.add(col)
+
         # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
         stat_col_indices = {}
         for i, name in enumerate(schema.names):
-            if name in index_cols or name in flat_filters:
+            if name in index_cols or name in filter_columns:
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue
@@ -1576,9 +1570,6 @@ class ArrowDatasetEngine(Engine):
                 columns,
                 schema,
                 filters,
-                None,  # partitions,
-                [],  # partition_keys,
-                cls._parquet_piece_as_arrow,
                 **kwargs,
             )
 
@@ -1609,19 +1600,6 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
-
-    @classmethod
-    def _parquet_piece_as_arrow(
-        cls, piece: pq.ParquetDatasetPiece, columns, partitions, **kwargs
-    ) -> pa.Table:
-        arrow_table = piece.read(
-            columns=columns,
-            partitions=partitions,
-            use_pandas_metadata=True,
-            use_threads=False,
-            **kwargs.get("read", {}),
-        )
-        return arrow_table
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):
