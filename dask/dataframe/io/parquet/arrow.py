@@ -215,11 +215,16 @@ def _read_table_from_path(
         ),
     )
 
+    # Use `pre_buffer=True` if the option is supported and an optimized
+    # "pre-caching" method isn't already specified in `precache_options`
+    # (The distinct fsspec and pyarrow optimizations will conflict)
+    pre_buffer_default = precache_options.get("method", None) is None
     pre_buffer = (
-        {"pre_buffer": read_kwargs.pop("pre_buffer", True)}
+        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
         if pre_buffer_supported
         else {}
     )
+
     with _open_input_files(
         [path],
         fs=fs,
