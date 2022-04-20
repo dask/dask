@@ -3,7 +3,6 @@ import re
 import pandas as pd
 
 from dask import config
-from dask.core import flatten
 from dask.dataframe.io.utils import _is_local_fs
 from dask.utils import natural_sort_key
 
@@ -487,15 +486,6 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
-
-
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
 
 
 def _aggregate_stats(

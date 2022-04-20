@@ -512,6 +512,10 @@ def read_pandas(
             2
         ]
 
+        # Check for at least one valid path
+        if len(paths) == 0:
+            raise OSError(f"{urlpath} resolved to no files")
+
         # Infer compression from first path
         compression = infer_compression(paths[0])
 
