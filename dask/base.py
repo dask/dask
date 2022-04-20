@@ -10,7 +10,7 @@ import threading
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from functools import partial
@@ -964,7 +964,7 @@ function_cache_lock = threading.Lock()
 
 def normalize_function(
     func: Callable,
-) -> Callable[..., Any] | Sequence[Callable]:
+) -> Callable[..., Any] | tuple | str | bytes:
     try:
         return function_cache[func]
     except KeyError:
@@ -982,7 +982,7 @@ def normalize_function(
 
 def _normalize_function(
     func: Callable,
-) -> Callable | Sequence[Callable] | Sequence[Any]:
+) -> tuple | str | bytes:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
