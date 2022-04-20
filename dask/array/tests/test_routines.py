@@ -7,6 +7,7 @@ from numbers import Number
 import pytest
 from numpy import AxisError
 
+import dask
 from dask.delayed import delayed
 
 np = pytest.importorskip("numpy")
@@ -2012,7 +2013,7 @@ def test_unravel_index():
         for i in range(len(indices)):
             assert_eq(d_indices[i], indices[i])
 
-        assert_eq(darr.vindex[d_indices], arr[indices])
+        assert_eq(darr.vindex[dask.compute(*d_indices)], arr[indices])
 
 
 @pytest.mark.parametrize(
