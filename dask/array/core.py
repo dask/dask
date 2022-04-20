@@ -1929,6 +1929,11 @@ class Array(DaskMethodsMixin):
                 "when the slices are not over the entire array (i.e, x[:]). "
                 "Use normal slicing instead when only using slices. Got: {}".format(key)
             )
+        elif any(is_dask_collection(k) for k in key):
+            raise IndexError(
+                "vindex does not support indexing with dask objects. Call compute "
+                "on the indexer first to get an evalurated array. Got: {}".format(key)
+            )
         return _vindex(self, *key)
 
     @property
