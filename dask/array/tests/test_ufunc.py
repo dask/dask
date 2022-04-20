@@ -62,6 +62,7 @@ binary_ufuncs = [
     "greater_equal",
     "hypot",
     "ldexp",
+    "left_shift",
     "less",
     "less_equal",
     "logaddexp",
@@ -77,12 +78,14 @@ binary_ufuncs = [
     "not_equal",
     "power",
     "remainder",
+    "right_shift",
     "subtract",
     "true_divide",
     "float_power",
 ]
 
 unary_ufuncs = [
+    "abs",
     "absolute",
     "arccos",
     "arccosh",
@@ -114,6 +117,7 @@ unary_ufuncs = [
     "log2",
     "logical_not",
     "negative",
+    "positive",
     "rad2deg",
     "radians",
     "reciprocal",

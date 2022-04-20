@@ -344,7 +344,7 @@ def tensordot(lhs, rhs, axes=2):
         return intermediate.sum(axis=left_axes)
 
 
-@derived_from(np)
+@derived_from(np, ua_args=["out"])
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 

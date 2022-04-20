@@ -146,7 +146,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     }
     ... )
 
-    Construct a Blockwise Layer with ``dep`` speficied
+    Construct a Blockwise Layer with ``dep`` specified
     in the ``indices`` list:
 
     >>> layer = Blockwise(
