@@ -9,7 +9,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.Blockwise import Blockwise
+from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
