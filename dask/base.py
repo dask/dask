@@ -10,13 +10,13 @@ import threading
 import uuid
 import warnings
 from collections import OrderedDict
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from concurrent.futures import Executor
 from contextlib import contextmanager
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Any, Sequence
+from typing import Any
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -964,7 +964,7 @@ function_cache_lock = threading.Lock()
 
 def normalize_function(
     func: Callable,
-) -> Callable[..., Any] | Sequence[Callable] | dict[Callable, Callable]:
+) -> Callable[..., Any] | Sequence[Callable]:
     try:
         return function_cache[func]
     except KeyError:
