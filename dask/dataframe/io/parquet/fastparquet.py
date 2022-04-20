@@ -372,6 +372,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
 
@@ -391,9 +392,6 @@ class FastParquetEngine(Engine):
 
         parts = []
         _metadata_exists = False
-        parquet_file_extension = dataset_kwargs.pop(
-            "parquet_file_extension", (".parq", ".parquet", ".pq")
-        )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -857,6 +855,7 @@ class FastParquetEngine(Engine):
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=None,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -873,6 +872,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 

@@ -3648,8 +3648,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-@pytest.mark.parametrize("dataset_kwarg", [True, False])
-def test_extra_file(tmpdir, engine, dataset_kwarg):
+def test_extra_file(tmpdir, engine):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
@@ -3667,26 +3666,26 @@ def test_extra_file(tmpdir, engine, dataset_kwarg):
     # by passing False. Check here that this works:
 
     def _parquet_file_extension(val, legacy=False):
-        # This test uses `dataset_kwarg` parameter to test
-        # that `parquet_file_extension` can be specified directly,
-        # or within the `dataset`-argument dictionary. We also
-        # use the old `require_extension` kwarg name if `legacy=True`.
-        arg_name = "require_extension" if legacy else "parquet_file_extension"
-        return {"dataset": {arg_name: val}} if dataset_kwarg else {arg_name: val}
+        # This function allows us to switch between "new"
+        # and "legacy" parquet_file_extension behavior
+        return (
+            {"dataset": {"require_extension": val}}
+            if legacy
+            else {"parquet_file_extension": val}
+        )
 
     # Should Work
     out = dd.read_parquet(tmpdir, engine=engine, **_parquet_file_extension(".parquet"))
     assert_eq(out, df)
 
     # Should Work (with FutureWarning)
-    if dataset_kwarg:
-        with pytest.warns(FutureWarning, match="require_extension is deprecated"):
-            out = dd.read_parquet(
-                tmpdir,
-                engine=engine,
-                **_parquet_file_extension(".parquet", legacy=True),
-            )
-            assert_eq(out, df)
+    with pytest.warns(FutureWarning, match="require_extension is deprecated"):
+        out = dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            **_parquet_file_extension(".parquet", legacy=True),
+        )
+        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):

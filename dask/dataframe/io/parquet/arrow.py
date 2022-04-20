@@ -319,6 +319,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -335,6 +336,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -761,6 +763,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -788,11 +791,6 @@ class ArrowDatasetEngine(Engine):
         partitioning = _dataset_kwargs.pop(
             "partitioning",
             {"obj": pa_ds.HivePartitioning},
-        )
-
-        # Set parquet_file_extension option
-        parquet_file_extension = _dataset_kwargs.pop(
-            "parquet_file_extension", (".parq", ".parquet", ".pq")
         )
 
         # Case-dependent pyarrow.dataset creation

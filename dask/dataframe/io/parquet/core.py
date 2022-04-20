@@ -172,6 +172,7 @@ def read_parquet(
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
+    parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
     """
@@ -345,13 +346,14 @@ def read_parquet(
 
     # We support a top-level `parquet_file_extension` kwarg, but
     # must check if the deprecated `require_extension` option is
-    # being passed to the engine. For either case, we "move" the
-    # top-level option into the engine-specific "dataset" kwargs
-    # (since the engine handles path inspection).
-    if "dataset" not in kwargs:
-        kwargs["dataset"] = {}
-    parquet_file_extension = (".parq", ".parquet", ".pq")  # Default
-    if "require_extension" in kwargs["dataset"]:
+    # being passed to the engine. If `parquet_file_extension` is
+    # set to the default value, and `require_extension` was also
+    # specified, we will use `require_extension` but warn the user.
+    if (
+        "dataset" in kwargs
+        and "require_extension" in kwargs["dataset"]
+        and parquet_file_extension == (".parq", ".parquet", ".pq")
+    ):
         parquet_file_extension = kwargs["dataset"].pop("require_extension")
         warnings.warn(
             "require_extension is deprecated, and will be removed from "
@@ -359,13 +361,6 @@ def read_parquet(
             "parquet_file_extension argument instead.",
             FutureWarning,
         )
-    if "parquet_file_extension" in kwargs:
-        # Top-level argument takes prominence if specified
-        kwargs["dataset"]["parquet_file_extension"] = kwargs.pop(
-            "parquet_file_extension"
-        )
-    elif "parquet_file_extension" not in kwargs["dataset"]:
-        kwargs["dataset"]["parquet_file_extension"] = parquet_file_extension
 
     # Store initial function arguments
     input_kwargs = {
@@ -381,6 +376,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize=": chunksize,
         "aggregate_files": aggregate_files,
+        "parquet_file_extension": parquet_file_extension,
         **kwargs,
     }
 
@@ -434,6 +430,7 @@ def read_parquet(
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
+        parquet_file_extension=parquet_file_extension,
         **kwargs,
     )
 
