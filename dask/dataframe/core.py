@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -5,7 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, Callable, Set
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -3355,7 +3357,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = "series-"
-    _accessors: Set[Any] = set()
+    _accessors: ClassVar[set[str]]
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -4027,7 +4029,7 @@ class Index(Series):
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
-    _accessors: Set[Any] = set()
+    _accessors: ClassVar[set[str]]
 
     _dt_attributes = {
         "nanosecond",
@@ -4086,8 +4088,8 @@ class Index(Series):
             out.extend(self._cat_attributes)
         return out
 
-    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
-    @property  # type: ignore
+    # # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
+    # @property  # type: ignore
     def index(self):
         raise AttributeError(
             f"{self.__class__.__name__!r} object has no attribute 'index'"
@@ -4203,7 +4205,7 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
+    # Typing: https://github.com/python/mypy/issues/4125
     @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic(self):
@@ -4251,7 +4253,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
-    _accessors: Set[Callable] = set()
+    _accessors: ClassVar[set[str]]
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
