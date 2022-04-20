@@ -4152,7 +4152,7 @@ def load_store_chunk(
     x: array-like
         An array (potentially a NumPy one)
     out: array-like
-        Where to store results to.
+        Where to store results.
     index: slice-like
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False

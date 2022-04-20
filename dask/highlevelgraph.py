@@ -3,8 +3,9 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable,  KeysView, Mapping, MutableMapping, Set
+from collections.abc import Hashable, Iterable, KeysView, Mapping, MutableMapping, Set
 from typing import Any, cast
+
 import tlz as toolz
 
 from dask import config
@@ -181,7 +182,9 @@ class Layer(Mapping):
         packed_annotations : dict
             Packed annotations.
         """
-        annotations = cast(Mapping[str, Any], toolz.merge(self.annotations or {}, annotations or {}))
+        annotations = cast(
+            Mapping[str, Any], toolz.merge(self.annotations or {}, annotations or {})
+        )
         packed = {}
         for a, v in annotations.items():
             if callable(v):
