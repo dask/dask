@@ -790,9 +790,9 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Set require_extension option
-        require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet", ".pq")
+        # Set parquet_file_extension option
+        parquet_file_extension = _dataset_kwargs.pop(
+            "parquet_file_extension", (".parq", ".parquet", ".pq")
         )
 
         # Case-dependent pyarrow.dataset creation
@@ -819,17 +819,19 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
-            elif require_extension:
+            elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
                 len0 = len(paths)
                 paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
+                    path
+                    for path in fs.find(paths)
+                    if path.endswith(parquet_file_extension)
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
+                        "No files satisfy the `parquet_file_extension` criteria "
+                        f"(files must end with {parquet_file_extension})."
                     )
 
         elif len(paths) > 1:

@@ -3666,28 +3666,40 @@ def test_extra_file(tmpdir, engine, dataset_kwarg):
     # expected file extension, or avoid checking file extensions
     # by passing False. Check here that this works:
 
-    def _require_extension(val):
+    def _parquet_file_extension(val, legacy=False):
         # This test uses `dataset_kwarg` parameter to test
-        # that `require_extension` can be specified directly,
-        # or within the `dataset`-argument dictionary.
-        return (
-            {"dataset": {"require_extension": val}}
-            if dataset_kwarg
-            else {"require_extension": val}
-        )
+        # that `parquet_file_extension` can be specified directly,
+        # or within the `dataset`-argument dictionary. We also
+        # use the old `require_extension` kwarg name if `legacy=True`.
+        arg_name = "require_extension" if legacy else "parquet_file_extension"
+        return {"dataset": {arg_name: val}} if dataset_kwarg else {arg_name: val}
 
     # Should Work
-    out = dd.read_parquet(tmpdir, engine=engine, **_require_extension(".parquet"))
+    out = dd.read_parquet(tmpdir, engine=engine, **_parquet_file_extension(".parquet"))
     assert_eq(out, df)
+
+    # Should Work (with FutureWarning)
+    if dataset_kwarg:
+        with pytest.warns(FutureWarning, match="require_extension is deprecated"):
+            out = dd.read_parquet(
+                tmpdir,
+                engine=engine,
+                **_parquet_file_extension(".parquet", legacy=True),
+            )
+            assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
-        dd.read_parquet(tmpdir, engine=engine, **_require_extension(False)).compute()
+        dd.read_parquet(
+            tmpdir, engine=engine, **_parquet_file_extension(None)
+        ).compute()
 
     # Should Fail (for filtering out all files)
     # (Related to: https://github.com/dask/dask/issues/8349)
     with pytest.raises(ValueError):
-        dd.read_parquet(tmpdir, engine=engine, **_require_extension(".foo")).compute()
+        dd.read_parquet(
+            tmpdir, engine=engine, **_parquet_file_extension(".foo")
+        ).compute()
 
 
 def test_unsupported_extension_file(tmpdir, engine):

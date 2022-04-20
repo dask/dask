@@ -300,12 +300,12 @@ def read_parquet(
                 └── └── 04.parquet
 
         Note that the default behavior of ``aggregate_files`` is False.
-    require_extension: str or tuple(str), default (".parq", ".parquet", ".pq")
-        A file extension (or an iterable of extensions) to use when finding
-        parquet files in a directory. Files that don't match this extension(s)
+    parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
+        A file extension (or an iterable of extensions) to use when discovering
+        parquet files in a directory. Files that don't match these extensions
         will be ignored. This argument only applies when ``paths`` corresponds
         to a directory and no ``_metadata`` file is present (or
-        ``ignore_metadata_file=True``). Passing in ``require_extension=False``
+        ``ignore_metadata_file=True``). Passing in ``parquet_file_extension=None``
         will treat all files in the directory as parquet files.
 
         The purpose of this argument is to ensure that the engine will ignore
@@ -343,13 +343,29 @@ def read_parquet(
             FutureWarning,
         )
 
-    # We allow the user to pass a `require_extension` kwarg, but
-    # need to "move" it into the engine-specific "dataset" kwargs
-    # (since the engine handles path inspection)
-    if "require_extension" in kwargs:
-        if "dataset" not in kwargs:
-            kwargs["dataset"] = {}
-        kwargs["dataset"]["require_extension"] = kwargs.pop("require_extension")
+    # We support a top-level `parquet_file_extension` kwarg, but
+    # must check if the deprecated `require_extension` option is
+    # being passed to the engine. For either case, we "move" the
+    # top-level option into the engine-specific "dataset" kwargs
+    # (since the engine handles path inspection).
+    if "dataset" not in kwargs:
+        kwargs["dataset"] = {}
+    parquet_file_extension = (".parq", ".parquet", ".pq")  # Default
+    if "require_extension" in kwargs["dataset"]:
+        parquet_file_extension = kwargs["dataset"].pop("require_extension")
+        warnings.warn(
+            "require_extension is deprecated, and will be removed from "
+            "read_parquet in a future release. Please use the top-level "
+            "parquet_file_extension argument instead.",
+            FutureWarning,
+        )
+    if "parquet_file_extension" in kwargs:
+        # Top-level argument takes prominence if specified
+        kwargs["dataset"]["parquet_file_extension"] = kwargs.pop(
+            "parquet_file_extension"
+        )
+    elif "parquet_file_extension" not in kwargs["dataset"]:
+        kwargs["dataset"]["parquet_file_extension"] = parquet_file_extension
 
     # Store initial function arguments
     input_kwargs = {

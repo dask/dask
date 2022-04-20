@@ -391,8 +391,8 @@ class FastParquetEngine(Engine):
 
         parts = []
         _metadata_exists = False
-        require_extension = dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet", ".pq")
+        parquet_file_extension = dataset_kwargs.pop(
+            "parquet_file_extension", (".parq", ".parquet", ".pq")
         )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -430,14 +430,16 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
-                if require_extension:
+                if parquet_file_extension:
                     # Raise error if all files have been filtered by extension
                     len0 = len(paths)
-                    paths = [path for path in paths if path.endswith(require_extension)]
+                    paths = [
+                        path for path in paths if path.endswith(parquet_file_extension)
+                    ]
                     if len0 and paths == []:
                         raise ValueError(
-                            "No files satisfy the `require_extension` criteria "
-                            f"(files must end with {require_extension})."
+                            "No files satisfy the `parquet_file_extension` criteria "
+                            f"(files must end with {parquet_file_extension})."
                         )
                 pf = ParquetFile(
                     paths[:1], open_with=fs.open, root=base, **dataset_kwargs
