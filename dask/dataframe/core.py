@@ -1462,11 +1462,7 @@ Dask Name: {name}, {task} tasks"""
         axis = self._validate_axis(axis)
         if method is None and limit is not None:
             raise NotImplementedError("fillna with set limit and method=None")
-        if isinstance(value, Series):
-            test_value = value._meta_nonempty.values[0]
-        elif isinstance(value, DataFrame):
-            test_value = value._meta_nonempty.values[0][0]
-        elif isinstance(value, Scalar):
+        if isinstance(value, (_Frame, Scalar)):
             test_value = value._meta_nonempty
         else:
             test_value = value

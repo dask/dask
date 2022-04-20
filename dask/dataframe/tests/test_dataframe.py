@@ -2405,11 +2405,11 @@ def test_fillna_dask_dataframe_input():
     df1 = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=5)
     ddf1 = dd.from_pandas(df1, npartitions=3)
-    ddf_unknown = dd.from_pandas(df1, npartitions=3, sort=False)
 
     assert_eq(ddf.fillna(ddf1), df.fillna(df1))
 
-    with pytest.raises(ValueError):
+    ddf_unknown = dd.from_pandas(df1, npartitions=3, sort=False)
+    with pytest.raises(ValueError, match="Not all divisions are known"):
         # Fails when divisions are unknown
         assert_eq(ddf.fillna(ddf_unknown), df.fillna(df1))
 
