@@ -11,6 +11,7 @@ import dask.dataframe as dd
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
+from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
 from dask.utils import tmpfile
@@ -681,6 +682,22 @@ def test_from_delayed():
     with pytest.raises(ValueError) as e:
         dd.from_delayed(dfs, meta=meta.a).compute()
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
+
+
+def test_from_delayed_optimize_fusion():
+    # Test that DataFrame optimization fuses a `from_delayed`
+    # layer with other Blockwise layers and input Delayed tasks.
+    # See: https://github.com/dask/dask/pull/8852
+    ddf = (
+        dd.from_delayed(
+            map(delayed(lambda x: pd.DataFrame({"x": [x] * 10})), range(10)),
+            meta=pd.DataFrame({"x": [0] * 10}),
+        )
+        + 1
+    )
+    # NOTE: Fusion requires `optimize_blockwise`` and `fuse_roots`
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
 
 
 def test_from_delayed_preserves_hlgs():
