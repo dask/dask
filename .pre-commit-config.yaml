@@ -41,6 +41,5 @@ repos:
           - types-requests
           - types-setuptools
           # Libraries exclusively imported under `if TYPE_CHECKING:`
-          - typing_extensions  # To be reviewed after dropping Python 3.7
           # Typed libraries
           - numpy
