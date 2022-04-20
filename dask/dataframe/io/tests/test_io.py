@@ -1,5 +1,6 @@
 import contextlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from threading import Lock
 
 import numpy as np
@@ -8,6 +9,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.Blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
@@ -788,3 +790,98 @@ def test_from_dask_array_index_dtype():
 
     assert ddf.index.dtype == ddf2.index.dtype
     assert ddf.index.name == ddf2.index.name
+
+
+@pytest.mark.parametrize(
+    "vals",
+    [
+        ("A", "B"),
+        (3, 4),
+        (datetime(2020, 10, 1), datetime(2022, 12, 31)),
+    ],
+)
+def test_from_map_simple(vals):
+    # Simple test to ensure required inputs (func & inputs)
+    # and basic kwargs work as expected for `from_map`
+
+    def func(input, size=0):
+        # Simple function to create Series with a
+        # repeated value and index
+        value, index = input
+        return pd.Series([value] * size, index=[index] * size)
+
+    inputs = [(vals[0], 1), (vals[1], 2)]
+    ser = dd.from_map(func, inputs, size=2)
+    expect = pd.Series(
+        [vals[0], vals[0], vals[1], vals[1]],
+        index=[1, 1, 2, 2],
+    )
+
+    # Make sure `from_map` produces single `Blockwise` layer
+    layers = ser.dask.layers
+    assert len(layers) == 1
+    assert isinstance(layers[ser._name], Blockwise)
+
+    # Check that result and partition count make sense
+    assert ser.npartitions == len(inputs)
+    assert_eq(ser, expect)
+
+
+def test_from_map_divisions():
+    # Test that `divisions` argument works as expected for `from_map`
+
+    func = lambda x: pd.Series([x[0]] * 2, index=range(x[1], x[1] + 2))
+    inputs = [("B", 0), ("C", 2)]
+    divisions = (0, 2, 4)
+    ser = dd.from_map(func, inputs, divisions=divisions)
+    expect = pd.Series(
+        ["B", "B", "C", "C"],
+        index=[0, 1, 2, 3],
+    )
+
+    assert ser.divisions == divisions
+    assert_eq(ser, expect)
+
+
+def test_from_map_meta():
+    # Test that `meta` can be specified to `from_map`,
+    # and that `enforce_metadata` works as expected
+
+    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    inputs = ["A", "B"]
+
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    # First Check - Pass in valid metadata
+    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, inputs, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf, expect)
+
+    # Second Check - Pass in invalid metadata
+    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, inputs, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    with pytest.raises(ValueError, match="The columns in the computed data"):
+        assert_eq(ddf.compute(), expect)
+
+    # Third Check - Pass in invalid metadata,
+    # but use `enforce_metadata=False`
+    ddf = dd.from_map(func, inputs, meta=meta, enforce_metadata=False, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf.compute(), expect)
+
+
+def test_from_map_custom_name():
+    # Test that `label` and `token` arguments to
+    # `from_map` works as expected
+
+    func = lambda x: pd.DataFrame({"x": [x] * 2})
+    inputs = ["A", "B"]
+    label = "my-label"
+    token = "8675309"
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, inputs, label=label, token=token)
+    assert ddf._name == label + "-" + token
+    assert_eq(ddf, expect)

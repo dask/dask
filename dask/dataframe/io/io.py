@@ -789,6 +789,24 @@ def from_map(
     **kwargs:
         Dictionary of key-word arguments to be passed to ``func`` for every
         output partition.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> import dask.dataframe as dd
+    >>> func = lambda x, size=0: pd.Series([x] * size)
+    >>> inputs = ["A", "B"]
+    >>> dd.from_map(func, inputs, size=2).compute()
+    0    A
+    1    A
+    0    B
+    1    B
+    dtype: object
+
+    See Also
+    --------
+    dask.dataframe.from_delayed
+    dask.layers.DataFrameIOLayer
     """
 
     if not callable(func):
