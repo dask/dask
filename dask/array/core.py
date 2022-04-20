@@ -1013,7 +1013,7 @@ def store(
     sources: Array | Collection[Array],
     targets: ArrayLike | Delayed | Collection[ArrayLike | Delayed],
     lock: bool | Lock = True,
-    regions: tuple[slice, ...] | Collection[tuple[slice, ...] | None] | None = None,
+    regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
     compute: bool = True,
     return_stored: bool = False,
     **kwargs,

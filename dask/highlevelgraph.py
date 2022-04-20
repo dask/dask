@@ -4,7 +4,7 @@ import abc
 import copy
 import html
 from collections.abc import Hashable, Iterable,  KeysView, Mapping, MutableMapping, Set
-from typing import Any
+from typing import Any, cast
 import tlz as toolz
 
 from dask import config
@@ -181,15 +181,14 @@ class Layer(Mapping):
         packed_annotations : dict
             Packed annotations.
         """
-        annotations = toolz.merge(self.annotations or {}, annotations or {})
+        annotations = cast(Mapping[str, Any], toolz.merge(self.annotations or {}, annotations or {}))
         packed = {}
-        if annotations:
-            for a, v in annotations.items():
-                if callable(v):
-                    packed[a] = {stringify(k): v(k) for k in self}
-                    packed[a]["__expanded_annotations__"] = True
-                else:
-                    packed[a] = v
+        for a, v in annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
         return packed
 
     @staticmethod
@@ -394,7 +393,7 @@ class Layer(Mapping):
 
         # Calculate dependencies without re-calculating already known dependencies
         # - Start with known dependencies
-        dependencies = copy.deepcopy(known_key_dependencies)
+        dependencies = ensure_dict(known_key_dependencies, copy=True)
         # - Remove aliases for any tasks that depend on both an alias and a future.
         #   These can only be found in the known_key_dependencies cache, since
         #   any dependencies computed in this method would have already had the
@@ -406,7 +405,7 @@ class Layer(Mapping):
         missing_keys = dsk.keys() - dependencies.keys()
 
         # TODO: add some overloads to keys_in_task to get the return types right.
-        dependencies.update(  # type: ignore
+        dependencies.update(
             (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
         )

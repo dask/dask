@@ -4,8 +4,9 @@ import functools
 import math
 import operator
 from collections import defaultdict
+from collections.abc import Callable
 from itertools import product
-from typing import Any, Callable
+from typing import Any
 
 import tlz as toolz
 from tlz.curried import map

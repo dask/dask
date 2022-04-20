@@ -387,7 +387,7 @@ class Blockwise(Layer):
     output: str
     output_indices: tuple[str, ...]
     dsk: Mapping[str, tuple]
-    indices: tuple[tuple[str, tuple[str, ...] | None], ...] | list[Any]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
     concatenate: bool | None
     new_axes: Mapping[str, int]
@@ -416,7 +416,7 @@ class Blockwise(Layer):
         # and add them to `self.io_deps`.
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
-        self.indices = []
+        _tmp_indices = []
         self.numblocks = dict(numblocks)
         self.io_deps = io_deps or {}
         for dep, ind in indices:
@@ -426,8 +426,8 @@ class Blockwise(Layer):
                 self.numblocks[name] = dep.numblocks
             else:
                 name = dep
-            self.indices.append((name, tuple(ind) if ind is not None else ind))
-        self.indices = tuple(self.indices)
+            _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
+        self.indices = tuple(_tmp_indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
