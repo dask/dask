@@ -2578,6 +2578,8 @@ def test_groupby_with_pd_grouper():
         ddf.groupby(["key1", pd.Grouper(key="key2")])
 
 
+# TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
+@pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 def test_groupby_empty_partitions_with_rows_operation(operation):
 
