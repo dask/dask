@@ -14,6 +14,10 @@ from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
+
 AGG_FUNCS = [
     "sum",
     "mean",
@@ -2183,7 +2187,7 @@ def test_groupby_shift_with_freq():
     assert_eq(
         df_result,
         ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result),
-        check_freq=(not PANDAS_GT_150),
+        **CHECK_FREQ,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
