@@ -183,7 +183,7 @@ class Layer(Mapping):
             Packed annotations.
         """
         annotations = cast(
-            dict[str, Any], toolz.merge(self.annotations or {}, annotations or {})
+            "dict[str, Any]", toolz.merge(self.annotations or {}, annotations or {})
         )
         packed = {}
         for a, v in annotations.items():
