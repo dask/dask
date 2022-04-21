@@ -46,8 +46,8 @@ def optimize(
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
 
     dsk = optimize_blockwise(dsk, keys=keys)
-    dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
+    dsk = fuse_roots(dsk, keys=keys)
 
     # Perform low-level fusion unless the user has
     # specified False explicitly.
