@@ -846,6 +846,7 @@ def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs)
 ############
 
 # Pass `usedforsecurity=False` for Python 3.9+ to support FIPS builds of Python
+_md5: Callable
 if _PY_VERSION >= parse_version("3.9"):
 
     def _md5(x, _hashlib_md5=hashlib.md5):
@@ -956,11 +957,11 @@ def normalize_object(o):
     )
 
 
-function_cache: dict[Callable, Callable] = {}
+function_cache: dict[Callable, Callable | tuple | str | bytes] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(func: Callable) -> Callable:
+def normalize_function(func: Callable) -> Callable | tuple | str | bytes:
     try:
         return function_cache[func]
     except KeyError:
@@ -976,7 +977,7 @@ def normalize_function(func: Callable) -> Callable:
         return _normalize_function(func)
 
 
-def _normalize_function(func: Callable) -> Callable:
+def _normalize_function(func: Callable) -> tuple | str | bytes:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs

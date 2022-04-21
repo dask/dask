@@ -138,7 +138,7 @@ def _is_getter_task(
     if type(value) is not tuple:
         return None
     first = value[0]
-    get = None
+    get: Callable | None = None
     if first in GETTERS:
         get = first
     # We only accept SubgraphCallables with a single sub-task right now as it's
@@ -156,7 +156,7 @@ def _is_getter_task(
         # getter defaults to asarray=True, getitem is semantically False
         return get, value[1], value[2], get is not getitem, None
     elif length == 5:
-        return get, *value[1:]
+        return get, *value[1:]  # type: ignore
 
     return None
 

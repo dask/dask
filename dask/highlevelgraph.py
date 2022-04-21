@@ -3,15 +3,15 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable, Mapping, MutableMapping, Set
-from typing import Any
+from collections.abc import Hashable, Iterable, KeysView, Mapping, MutableMapping, Set
+from typing import Any, cast
 
 import tlz as toolz
 
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, key_split, stringify
+from dask.utils import ensure_dict, ensure_set, key_split, stringify
 from dask.widgets import get_template
 
 
@@ -182,7 +182,9 @@ class Layer(Mapping):
         packed_annotations : dict
             Packed annotations.
         """
-        annotations = toolz.merge(self.annotations or {}, annotations or {})
+        annotations = cast(
+            "dict[str, Any]", toolz.merge(self.annotations or {}, annotations or {})
+        )
         packed = {}
         for a, v in annotations.items():
             if callable(v):
@@ -318,7 +320,7 @@ class Layer(Mapping):
     def __dask_distributed_pack__(
         self,
         all_hlg_keys: Iterable[Hashable],
-        known_key_dependencies: Mapping[Hashable, set],
+        known_key_dependencies: Mapping[Hashable, Set],
         client,
         client_keys: Iterable[Hashable],
     ) -> Any:
@@ -344,7 +346,7 @@ class Layer(Mapping):
         ----------
         all_hlg_keys: Iterable[Hashable]
             All keys in the high level graph
-        known_key_dependencies: Mapping[Hashable, set]
+        known_key_dependencies: Mapping[Hashable, Set]
             Already known dependencies
         client: distributed.Client
             The client calling this function.
@@ -394,7 +396,7 @@ class Layer(Mapping):
 
         # Calculate dependencies without re-calculating already known dependencies
         # - Start with known dependencies
-        dependencies = known_key_dependencies.copy()
+        dependencies = ensure_dict(known_key_dependencies, copy=True)
         # - Remove aliases for any tasks that depend on both an alias and a future.
         #   These can only be found in the known_key_dependencies cache, since
         #   any dependencies computed in this method would have already had the
@@ -404,13 +406,17 @@ class Layer(Mapping):
             dependencies = {k: v - alias_keys for k, v in dependencies.items()}
         # - Add in deps for any missing keys
         missing_keys = dsk.keys() - dependencies.keys()
+
         dependencies.update(
             (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
         )
         # - Add in deps for any tasks that depend on futures
         for k, futures in fut_deps.items():
-            dependencies[k].update(f.key for f in futures)
+            if futures:
+                d = ensure_set(dependencies[k], copy=True)
+                d.update(f.key for f in futures)
+                dependencies[k] = d
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -751,7 +757,7 @@ class HighLevelGraph(Mapping):
             out = self._to_dict = ensure_dict(self)
             return out
 
-    def keys(self) -> Set:
+    def keys(self) -> KeysView:
         """Get all keys of all the layers.
 
         This will in many cases materialize layers, which makes it a relatively
@@ -927,8 +933,8 @@ class HighLevelGraph(Mapping):
         keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
-        ret_layers = {}
-        ret_key_deps = {}
+        ret_layers: dict = {}
+        ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             # Let's cull the layer to produce its part of `keys`.
@@ -1091,9 +1097,9 @@ class HighLevelGraph(Mapping):
         """
         from distributed.protocol.serialize import import_allowed_module
 
-        dsk = {}
-        deps = {}
-        anno = {}
+        dsk: dict = {}
+        deps: dict = {}
+        anno: dict = {}
 
         # Unpack each layer (in topological order)
         for layer in hlg["layers"]:

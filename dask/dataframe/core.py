@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -5,6 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -3354,7 +3357,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = "series-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -3983,7 +3986,7 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -3994,7 +3997,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
         return self.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic_increasing(self):
         return aca(
@@ -4005,7 +4008,7 @@ Dask Name: {name}, {task} tasks""".format(
             token="monotonic_increasing",
         )
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic_decreasing(self):
         return aca(
@@ -4026,7 +4029,7 @@ class Index(Series):
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     _dt_attributes = {
         "nanosecond",
@@ -4085,7 +4088,8 @@ class Index(Series):
             out.extend(self._cat_attributes)
         return out
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/4125
+    @property  # type: ignore
     def index(self):
         raise AttributeError(
             f"{self.__class__.__name__!r} object has no attribute 'index'"
@@ -4201,7 +4205,8 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/4125
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -4212,12 +4217,13 @@ class Index(Series):
             )
         return super().is_monotonic_increasing
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
         return super().is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
@@ -4247,7 +4253,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
@@ -5728,6 +5734,7 @@ class DataFrame(_Frame):
 
 
 # bind operators
+# TODO: dynamically bound operators are defeating type annotations
 for op in [
     operator.abs,
     operator.add,
