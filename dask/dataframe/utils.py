@@ -11,7 +11,7 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from pandas.core.dtypes.api import is_categorical_dtype, is_dtype_equal
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
 from dask.base import get_scheduler, is_dask_collection
 from dask.core import get_deps
@@ -33,6 +33,9 @@ from dask.utils import (
     is_series_like,
     typename,
 )
+
+# from pandas.core.dtypes.api import is_categorical_dtype, is_dtype_equal
+
 
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
