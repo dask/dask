@@ -414,9 +414,9 @@ class Layer(Mapping):
         # - Add in deps for any tasks that depend on futures
         for k, futures in fut_deps.items():
             if futures:
-                dependencies[k] = ensure_set(dependencies[k], copy=True) | {
-                    f.key for f in futures
-                }
+                d = ensure_set(dependencies[k], copy=True)
+                d.update(f.key for f in futures)
+                dependencies[k] = d
 
         # The scheduler expect all keys to be strings
         dependencies = {
