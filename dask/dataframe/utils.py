@@ -403,6 +403,26 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     )
 
 
+class _MaybeCheckMeta:
+    """Callable wrapper class for optional check_meta usage"""
+
+    def __init__(self, meta, funcname=None, numeric_equal=True, verify_meta=False):
+        self.meta = meta
+        self.funcname = funcname
+        self.numeric_equal = numeric_equal
+        self.verify_meta = verify_meta
+
+    def __call__(self, x):
+        # If self.verify_meta is False, just return the input
+        return (
+            check_meta(
+                x, self.meta, funcname=self.funcname, numeric_equal=self.numeric_equal
+            )
+            if self.verify_meta
+            else x
+        )
+
+
 def check_matching_columns(meta, actual):
     # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
