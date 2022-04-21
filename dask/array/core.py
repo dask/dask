@@ -4169,9 +4169,9 @@ def load_store_chunk(
     If return_stored=True and load_stored=False
         out
     If return_stored=True and load_stored=True
-        None
+        out[index]
     If return_stored=False and compute=False
-        Delayed
+        None
 
     Examples
     --------
