@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, ClassVar, TypeVar, overload
+from typing import Any, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -1587,17 +1587,26 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str = "seconds") -> None:
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
     ...
 
 
 @overload
-def parse_timedelta(s: str | float | timedelta, default: str = "seconds") -> float:
+def parse_timedelta(
+    s: str | float | timedelta, default: str | Literal[False] = "seconds"
+) -> float:
     ...
 
 
 def parse_timedelta(s, default="seconds"):
     """Parse timedelta string to number of seconds
+
+    Parameters
+    ----------
+    s : str, float, timedelta, or None
+    default: str or False, optional
+        Unit of measure if s  does not specify one. Defaults to seconds.
+        Set to False to require s to explicitly specify its own unit.
 
     Examples
     --------
@@ -1630,6 +1639,10 @@ def parse_timedelta(s, default="seconds"):
 
     prefix = s[:index]
     suffix = s[index:] or default
+    if suffix is False:
+        raise ValueError(f"Missing time unit: {s}")
+    if not isinstance(suffix, str):
+        raise TypeError(f"default must be str or False, got {default!r}")
 
     n = float(prefix)
 
