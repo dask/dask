@@ -3143,6 +3143,8 @@ def test_vindex_errors():
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
     pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
     pytest.raises(IndexError, lambda: d.vindex[[0], [-6]])
+    with pytest.raises(IndexError, match="does not support indexing with dask objects"):
+        d.vindex[[0], [0], da.array([0])]
 
 
 def test_vindex_merge():
