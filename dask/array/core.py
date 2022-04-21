@@ -4163,6 +4163,16 @@ def load_store_chunk(
         Whether to return the array stored in ``out``.
         Ignored if ``return_stored`` is not ``True``.
 
+    Returns
+    -------
+
+    If return_stored=True and load_stored=False
+        out
+    If return_stored=True and load_stored=True
+        None
+    If return_stored=False and compute=False
+        Delayed
+
     Examples
     --------
 
@@ -4170,26 +4180,24 @@ def load_store_chunk(
     >>> b = np.empty(a.shape)
     >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
     """
-
-    result = None
-    if return_stored and not load_stored:
-        result = out
-
     if lock:
         lock.acquire()
     try:
         if x is not None:
             if is_arraylike(x):
-                out[index] = x  # type: ignore
+                out[index] = x
             else:
-                out[index] = np.asanyarray(x)  # type: ignore
+                out[index] = np.asanyarray(x)
+
         if return_stored and load_stored:
-            result = out[index]  # type: ignore
+            return out[index]
+        elif return_stored and not load_stored:
+            return out
+        else:
+            return None
     finally:
         if lock:
             lock.release()
-
-    return result
 
 
 def store_chunk(

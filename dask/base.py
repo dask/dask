@@ -16,7 +16,6 @@ from contextlib import contextmanager
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Any
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -962,9 +961,7 @@ function_cache: dict[Callable, Callable | tuple | str | bytes] = {}
 function_cache_lock = threading.Lock()
 
 
-def normalize_function(
-    func: Callable,
-) -> Callable[..., Any] | tuple | str | bytes:
+def normalize_function(func: Callable) -> Callable | tuple | str | bytes:
     try:
         return function_cache[func]
     except KeyError:
@@ -980,9 +977,7 @@ def normalize_function(
         return _normalize_function(func)
 
 
-def _normalize_function(
-    func: Callable,
-) -> tuple | str | bytes:
+def _normalize_function(func: Callable) -> tuple | str | bytes:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs

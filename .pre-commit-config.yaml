@@ -29,7 +29,7 @@ repos:
       - id: flake8
         language_version: python3
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v0.931
+    rev: v0.942
     hooks:
       - id: mypy
         # Override default --ignore-missing-imports
