@@ -1,4 +1,5 @@
 import os
+from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
@@ -18,7 +19,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
-    _MaybeCheckMeta,
+    check_meta,
     insert_meta_param_description,
     is_series_like,
     make_meta,
@@ -684,11 +685,9 @@ def from_delayed(
             {(i,): inp.key for i, inp in enumerate(dfs)},
             produces_keys=True,
         ),
-        io_func=_MaybeCheckMeta(
-            meta=meta if verify_meta else None,
-            funcname="from_delayed" if verify_meta else None,
-            verify_meta=verify_meta,
-        ),
+        io_func=partial(check_meta, meta=meta, funcname="from_delayed")
+        if verify_meta
+        else lambda x: x,
     )
     df = new_dd_object(
         HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
