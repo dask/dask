@@ -619,6 +619,18 @@ def to_records(df):
     return df.map_partitions(M.to_records)
 
 
+class _CheckMetaFunc:
+    """Callable function-wrapper class for optional metadata validation"""
+
+    def __init__(self, meta=None, name=None, verify_meta=False):
+        self.meta = meta
+        self.name = name
+        self.verify_meta = verify_meta
+
+    def __call__(self, x):
+        return check_meta(x, self.meta, self.name) if self.verify_meta else x
+
+
 @insert_meta_param_description
 def from_delayed(
     dfs,
@@ -684,9 +696,11 @@ def from_delayed(
             {(i,): inp.key for i, inp in enumerate(dfs)},
             produces_keys=True,
         ),
-        io_func=(lambda x: check_meta(x, meta, "from_delayed"))
-        if verify_meta
-        else (lambda x: x),
+        io_func=_CheckMetaFunc(
+            meta=meta if verify_meta else None,
+            name="from_delayed" if verify_meta else None,
+            verify_meta=verify_meta,
+        ),
     )
     df = new_dd_object(
         HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs

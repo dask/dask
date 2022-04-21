@@ -67,12 +67,12 @@ class BlockwiseDep:
 
     @property
     def produces_keys(self) -> bool:
-        """Whether this object will produce "valid" key dependencies.
+        """Whether this object will produce external key dependencies.
 
-        A "valid" key corresponds to a task or ``Delayed`` object that
-        does not originate from within the ``Blockwise`` layer that is
-        using this ``BlockwiseDep`` object in its ``indices`` list.
-        A ``BlockwiseDep`` object should only return "valid"
+        An external key corresponds to a task key or ``Delayed``-object
+        key that does not originate from within the ``Blockwise`` layer
+        that is including this ``BlockwiseDep`` object in its ``indices``.
+        A ``BlockwiseDep`` object should only return external-key
         dependencies when those dependencies do not correspond to a
         blockwise-compatible Dask collection (otherwise the collection
         name should just be included in ``indices`` list instead).
