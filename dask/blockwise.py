@@ -418,18 +418,19 @@ class Blockwise(Layer):
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
         _tmp_indices = []
-        numblocks = ensure_dict(numblocks, copy=bool(indices))
-        io_deps = ensure_dict(io_deps or {}, copy=bool(indices))
-        for dep, ind in indices:
-            if isinstance(dep, BlockwiseDep):
-                name = tokenize(dep)
-                io_deps[name] = dep
-                numblocks[name] = dep.numblocks
-            else:
-                name = dep
-            _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
+        if indices:
+            numblocks = ensure_dict(numblocks, copy=True)
+            io_deps = ensure_dict(io_deps or {}, copy=True)
+            for dep, ind in indices:
+                if isinstance(dep, BlockwiseDep):
+                    name = tokenize(dep)
+                    io_deps[name] = dep
+                    numblocks[name] = dep.numblocks
+                else:
+                    name = dep
+                _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
         self.numblocks = numblocks
-        self.io_deps = io_deps
+        self.io_deps = io_deps or {}
         self.indices = tuple(_tmp_indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
