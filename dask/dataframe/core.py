@@ -3357,7 +3357,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = "series-"
-    _accessors: ClassVar[set[str]]
+    _accessors: ClassVar[set[str]] = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -4029,7 +4029,7 @@ class Index(Series):
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
-    _accessors: ClassVar[set[str]]
+    _accessors: ClassVar[set[str]] = set()
 
     _dt_attributes = {
         "nanosecond",
@@ -4253,7 +4253,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
-    _accessors: ClassVar[set[str]]
+    _accessors: ClassVar[set[str]] = set()
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
