@@ -1365,11 +1365,6 @@ def factors(n: int) -> set[int]:
     return {j for l in seq for j in l}
 
 
-def f() -> list[int]:
-    it: Iterable[list[int]]
-    return functools.reduce(list.__add__, it)
-
-
 def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 
