@@ -11,7 +11,7 @@ import tlz as toolz
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, key_split, stringify
+from dask.utils import ensure_dict, ensure_set, key_split, stringify
 from dask.widgets import get_template
 
 
@@ -183,7 +183,7 @@ class Layer(Mapping):
             Packed annotations.
         """
         annotations = cast(
-            Mapping[str, Any], toolz.merge(self.annotations or {}, annotations or {})
+            "dict[str, Any]", toolz.merge(self.annotations or {}, annotations or {})
         )
         packed = {}
         for a, v in annotations.items():
@@ -320,7 +320,7 @@ class Layer(Mapping):
     def __dask_distributed_pack__(
         self,
         all_hlg_keys: Iterable[Hashable],
-        known_key_dependencies: Mapping[Hashable, set],
+        known_key_dependencies: Mapping[Hashable, Set],
         client,
         client_keys: Iterable[Hashable],
     ) -> Any:
@@ -346,7 +346,7 @@ class Layer(Mapping):
         ----------
         all_hlg_keys: Iterable[Hashable]
             All keys in the high level graph
-        known_key_dependencies: Mapping[Hashable, set]
+        known_key_dependencies: Mapping[Hashable, Set]
             Already known dependencies
         client: distributed.Client
             The client calling this function.
@@ -407,14 +407,16 @@ class Layer(Mapping):
         # - Add in deps for any missing keys
         missing_keys = dsk.keys() - dependencies.keys()
 
-        # TODO: add some overloads to keys_in_task to get the return types right.
         dependencies.update(
             (k, keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False))
             for k in missing_keys
         )
         # - Add in deps for any tasks that depend on futures
         for k, futures in fut_deps.items():
-            dependencies[k].update(f.key for f in futures)
+            if futures:
+                d = ensure_set(dependencies[k], copy=True)
+                d.update(f.key for f in futures)
+                dependencies[k] = d
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -1059,7 +1061,7 @@ class HighLevelGraph(Mapping):
                     "__name__": type(layer).__name__,
                     "state": layer.__dask_distributed_pack__(
                         self.get_all_external_keys(),
-                        self.key_dependencies,  # type: ignore
+                        self.key_dependencies,
                         client,
                         client_keys,
                     ),

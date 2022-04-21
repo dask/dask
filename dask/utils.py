@@ -9,7 +9,7 @@ import sys
 import tempfile
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -27,6 +27,7 @@ from dask.core import get_deps
 
 K = TypeVar("K")
 V = TypeVar("V")
+T = TypeVar("T")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -1161,7 +1162,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
         otherwise it may be the input itself.
     """
     if type(d) is dict:
-        return d.copy() if copy else d  # type: ignore
+        return d.copy() if copy else d
     try:
         layers = d.layers  # type: ignore
     except AttributeError:
@@ -1171,6 +1172,21 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
+
+
+def ensure_set(s: Set[T], *, copy: bool = False) -> set[T]:
+    """Convert a generic Set into a set.
+
+    Parameters
+    ----------
+    s : Set
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of s;
+        otherwise it may be the input itself.
+    """
+    if type(s) is set:
+        return s.copy() if copy else s
+    return set(s)
 
 
 class OperatorMethodMixin:
@@ -1346,9 +1362,7 @@ def factors(n: int) -> set[int]:
     https://stackoverflow.com/a/6800214/616616
     """
     seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-
-    # XXX: bug in mypy?
-    return set(functools.reduce(list.__add__, seq))  # type: ignore
+    return {j for l in seq for j in l}
 
 
 def parse_bytes(s: float | str) -> int:
