@@ -2411,7 +2411,7 @@ def test_fillna_dask_dataframe_input():
     ddf_unknown = dd.from_pandas(df, npartitions=5, sort=False)
     with pytest.raises(ValueError, match="Not all divisions are known"):
         # Fails when divisions are unknown
-        assert_eq(ddf.fillna(ddf_unknown), df.fillna(df1))
+        assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
 
 
 def test_ffill_bfill():
