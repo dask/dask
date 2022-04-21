@@ -5108,6 +5108,10 @@ class DataFrame(_Frame):
         3. Joining both on columns. In this case a hash join is performed using
            ``dask.dataframe.multi.hash_join``.
 
+        While joining on indices or columns, make sure every row with same index/column
+        value can fit on a single partition, otherwise it can cause a ``MemoryError``.
+        For example, merging large DataFrames on a column which has very few unique
+        values can lead to this error.
         """
 
         if not is_dataframe_like(right):
