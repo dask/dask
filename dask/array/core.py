@@ -1033,12 +1033,14 @@ def store(
 
     sources: Array or collection of Arrays
     targets: array-like or Delayed or collection of array-likes and/or Delayeds
-        These should support setitem syntax ``target[10:20] = ...``
+        These should support setitem syntax ``target[10:20] = ...``.
+        If sources is a single item, targets must be a single item; if sources is a
+        collection of arrays, targets must be a matching collection.
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular :class:`threading.Lock` object to be shared among all writes.
-    regions: tuple of slices or collection of tuples of slices
+    regions: tuple of slices or collection of tuples of slices, optional
         Each ``region`` tuple in ``regions`` should be such that
         ``target[region].shape = source.shape``
         for the corresponding source and target in sources and targets,
@@ -1079,10 +1081,9 @@ def store(
 
     if isinstance(sources, Array):
         sources = [sources]
-
-    if isinstance(targets, Array):
-        targets = [targets]
-
+        # There's no way to test that targets is a single array-like.
+        # We need to trust the user.
+        targets = [targets]  # type: ignore
     targets = cast("Collection[ArrayLike | Delayed]", targets)
 
     if any(not isinstance(s, Array) for s in sources):
@@ -1095,16 +1096,15 @@ def store(
         )
 
     if isinstance(regions, tuple) or regions is None:
-        regions = [regions]
-
-    if len(sources) > 1 and len(regions) == 1:
-        regions = list(regions) * len(sources)
-
-    if len(sources) != len(regions):
-        raise ValueError(
-            "Different number of sources [%d] and targets [%d] than regions [%d]"
-            % (len(sources), len(targets), len(regions))
-        )
+        regions_list = [regions] * len(sources)
+    else:
+        regions_list = list(regions)
+        if len(sources) != len(regions_list):
+            raise ValueError(
+                f"Different number of sources [{len(sources)}] and "
+                f"targets [{len(targets)}] than regions [{len(regions_list)}]"
+            )
+    del regions
 
     # Optimize all sources together
     sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
@@ -1136,11 +1136,11 @@ def store(
 
     map_names = [
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
-        for s, t, r in zip(sources, targets, regions)
+        for s, t, r in zip(sources, targets, regions_list)
     ]
     map_keys: list[tuple] = []
 
-    for s, t, n, r in zip(sources, targets, map_names, regions):
+    for s, t, n, r in zip(sources, targets, map_names, regions_list):
         map_layer = insert_to_ooc(
             keys=s.__dask_keys__(),
             chunks=s.chunks,
@@ -1160,7 +1160,7 @@ def store(
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk: HighLevelGraph | dict[Hashable, Any] = store_dsk
+        load_store_dsk: HighLevelGraph | dict[tuple, Any] = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)

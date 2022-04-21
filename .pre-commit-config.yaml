@@ -40,6 +40,5 @@ repos:
           - types-PyYAML
           - types-requests
           - types-setuptools
-          # Libraries exclusively imported under `if TYPE_CHECKING:`
           # Typed libraries
           - numpy

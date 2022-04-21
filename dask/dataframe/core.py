@@ -4088,8 +4088,8 @@ class Index(Series):
             out.extend(self._cat_attributes)
         return out
 
-    # # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
-    # @property  # type: ignore
+    # Typing: https://github.com/python/mypy/issues/4125
+    @property  # type: ignore
     def index(self):
         raise AttributeError(
             f"{self.__class__.__name__!r} object has no attribute 'index'"

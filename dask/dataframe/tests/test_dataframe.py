@@ -2335,18 +2335,18 @@ def test_fillna():
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_delayed_roundtrip(optimize: bool):
-    df1 = d + 1 + 1  # type: ignore
-    delayed = df1.to_delayed(optimize_graph=optimize)  # type: ignore
+def test_delayed_roundtrip(optimize):
+    df1 = d + 1 + 1
+    delayed = df1.to_delayed(optimize_graph=optimize)
 
     for x in delayed:
         assert x.__dask_layers__() == (
-            "delayed-" + df1._name if optimize else df1._name,  # type: ignore
+            "delayed-" + df1._name if optimize else df1._name,
         )
         x.dask.validate()
 
-    assert len(delayed) == df1.npartitions  # type: ignore
-    assert len(delayed[0].dask.layers) == (1 if optimize else 3)  # type: ignore
+    assert len(delayed) == df1.npartitions
+    assert len(delayed[0].dask.layers) == (1 if optimize else 3)
 
     dm = d.a.mean().to_delayed(optimize_graph=optimize)
 
@@ -2355,7 +2355,7 @@ def test_delayed_roundtrip(optimize: bool):
     for x in delayed2:
         x.dask.validate()
 
-    df3 = dd.from_delayed(delayed2, meta=df1, divisions=df1.divisions)  # type: ignore
+    df3 = dd.from_delayed(delayed2, meta=df1, divisions=df1.divisions)
     df4 = df3 - 1 - 1
 
     df4.dask.validate()
