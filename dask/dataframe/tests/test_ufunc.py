@@ -94,7 +94,7 @@ def test_ufunc(pandas_input, ufunc):
 
     # applying Dask ufunc doesn't trigger computation
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         # Some cause warnings (arcsine)
         assert isinstance(dafunc(dask_input), dask_type)
         assert_eq(dafunc(dask_input), npfunc(pandas_input))
@@ -117,7 +117,7 @@ def test_ufunc(pandas_input, ufunc):
         return
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         assert isinstance(dafunc(dask_input.index), dd.Index)
         assert_eq(
             dafunc(dask_input.index),
@@ -139,7 +139,7 @@ def test_ufunc(pandas_input, ufunc):
 
     # applying Dask ufunc to normal Series triggers computation
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         # some (da.log) cause warnings
         assert isinstance(dafunc(pandas_input.index), pd.Index)
         assert_eq(dafunc(pandas_input), npfunc(pandas_input))
@@ -335,13 +335,13 @@ def test_frame_ufunc_out(ufunc):
     ddf_out_da = dd.from_pandas(df_out, 3)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         npfunc(ddf, out=ddf_out_np)
         dafunc(ddf, out=ddf_out_da)
         assert_eq(ddf_out_np, ddf_out_da)
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
         expected = pd.DataFrame(npfunc(input_matrix), columns=["A", "B"])
         assert_eq(ddf_out_np, expected)
 
@@ -507,7 +507,8 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
         pytest.xfail("'prod' overflowing with integer columns in pandas 1.2.0")
 
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("ignore", RuntimeWarning)
+        warnings.simplefilter("ignore", FutureWarning)
         assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
         assert_eq(np_redfunc(np_ufunc(dask)), np_redfunc(np_ufunc(pandas)))
 
