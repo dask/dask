@@ -34,6 +34,9 @@ from dask.utils import (
     typename,
 )
 
+# from pandas.core.dtypes.api import is_categorical_dtype, is_dtype_equal
+
+
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp

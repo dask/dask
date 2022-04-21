@@ -958,7 +958,7 @@ def normalize_object(o):
     )
 
 
-function_cache: dict[Callable, Callable] = {}
+function_cache: dict[Callable, Callable | tuple | str | bytes] = {}
 function_cache_lock = threading.Lock()
 
 
@@ -974,7 +974,7 @@ def normalize_function(
                 if len(function_cache) >= 500:
                     for k in list(function_cache)[::2]:
                         del function_cache[k]
-        function_cache[func] = result  # type: ignore
+        function_cache[func] = result
         return result
     except TypeError:  # not hashable
         return _normalize_function(func)
