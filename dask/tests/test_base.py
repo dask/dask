@@ -415,7 +415,7 @@ def test_tokenize_ordered_dict():
 
 
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])  # type: ignore
 
 
 def test_tokenize_dataclass():

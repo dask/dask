@@ -624,9 +624,14 @@ def to_records(df):
     return df.map_partitions(M.to_records)
 
 
+# TODO: type this -- causes lots of papercuts
 @insert_meta_param_description
 def from_delayed(
-    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
+    dfs,
+    meta=None,
+    divisions=None,
+    prefix="from-delayed",
+    verify_meta=True,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
 
@@ -670,15 +675,6 @@ def from_delayed(
     if not dfs:
         dfs = [delayed(make_meta)(meta)]
 
-    name = prefix + "-" + tokenize(*dfs)
-    dsk = {}
-    if verify_meta:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-    else:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = df.key
-
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
     else:
@@ -686,8 +682,20 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
+    name = prefix + "-" + tokenize(*dfs)
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=BlockwiseDepDict(
+            {(i,): inp.key for i, inp in enumerate(dfs)},
+            produces_keys=True,
+        ),
+        io_func=partial(check_meta, meta=meta, funcname="from_delayed")
+        if verify_meta
+        else lambda x: x,
+    )
     df = new_dd_object(
-        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+        HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
     )
 
     if divisions == "sorted":

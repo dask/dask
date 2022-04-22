@@ -2335,7 +2335,7 @@ def test_fillna():
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_delayed_roundtrip(optimize: bool):
+def test_delayed_roundtrip(optimize):
     df1 = d + 1 + 1
     delayed = df1.to_delayed(optimize_graph=optimize)
 
