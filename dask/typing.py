@@ -351,7 +351,7 @@ class DaskCollection(Protocol):
 
 
 @runtime_checkable
-class HLGDaskCollection(DaskCollection):
+class HLGDaskCollection(DaskCollection, Protocol):
     """Protocal defining a Dask collection that uses HighLevelGraphs."""
 
     def __dask_layers__(self) -> Sequence[str]:
