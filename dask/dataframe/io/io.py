@@ -786,8 +786,7 @@ def from_map(
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
     **kwargs:
-        Dictionary of key-word arguments to be passed to ``func`` for every
-        output partition.
+        Key-word arguments to be passed to ``func`` for every output partition.
 
     Examples
     --------
@@ -829,7 +828,9 @@ def from_map(
         # NOTE: This is a bit of a hack for read_csv
         columns = func.full_columns
 
-    # Check for `produces_tasks` and `creation_info`
+    # Check for `produces_tasks` and `creation_info`.
+    # These options are included in the function signature,
+    # because they are not intended for "public" use.
     produces_tasks = kwargs.pop("produces_tasks", False)
     creation_info = kwargs.pop("creation_info", None)
 

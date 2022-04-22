@@ -1215,7 +1215,7 @@ class DataFrameIOLayer(Blockwise):
                 io_func = self.io_func
 
             layer = DataFrameIOLayer(
-                (self.label or "subset-") + tokenize(self.name, columns),
+                (self.label or "subset") + "-" + tokenize(self.name, columns),
                 list(columns),
                 self.inputs,
                 io_func,
