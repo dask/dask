@@ -4,6 +4,7 @@ import functools
 import math
 import operator
 from collections import defaultdict
+from collections.abc import Callable
 from itertools import product
 from typing import Any
 
@@ -1277,10 +1278,10 @@ class DataFrameTreeReduction(Layer):
 
     name: str
     name_input: str
-    npartitions_input: str
-    concat_func: callable
-    tree_node_func: callable
-    finalize_func: callable | None
+    npartitions_input: int
+    concat_func: Callable
+    tree_node_func: Callable
+    finalize_func: Callable | None
     split_every: int
     split_out: int
     output_partitions: list[int]
@@ -1292,10 +1293,10 @@ class DataFrameTreeReduction(Layer):
         self,
         name: str,
         name_input: str,
-        npartitions_input: str,
-        concat_func: callable,
-        tree_node_func: callable,
-        finalize_func: callable | None = None,
+        npartitions_input: int,
+        concat_func: Callable,
+        tree_node_func: Callable,
+        finalize_func: Callable | None = None,
         split_every: int = 32,
         split_out: int | None = None,
         output_partitions: list[int] | None = None,
@@ -1306,11 +1307,11 @@ class DataFrameTreeReduction(Layer):
         self.name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
-        self.concat_func = concat_func
-        self.tree_node_func = tree_node_func
+        self.concat_func = concat_func  # type: ignore
+        self.tree_node_func = tree_node_func  # type: ignore
         self.finalize_func = finalize_func
         self.split_every = split_every
-        self.split_out = split_out
+        self.split_out = split_out  # type: ignore
         self.output_partitions = (
             list(range(self.split_out or 1))
             if output_partitions is None
@@ -1324,7 +1325,7 @@ class DataFrameTreeReduction(Layer):
         self.widths = [parts]
         while parts > 1:
             parts = math.ceil(parts / self.split_every)
-            self.widths.append(parts)
+            self.widths.append(int(parts))
         self.height = len(self.widths)
 
     def _make_key(self, *name_parts, split=0):

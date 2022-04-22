@@ -5,7 +5,7 @@ import os
 from collections.abc import Hashable, Iterable, Mapping, Sequence
 from itertools import product
 from math import prod
-from typing import Any, Hashable, Iterable, Mapping, Sequence
+from typing import Any
 
 import tlz as toolz
 
@@ -188,12 +188,12 @@ class BlockwiseDepDict(BlockwiseDep):
         return self.mapping[idx]
 
     def __dask_distributed_pack__(
-        self, required_indices: list[tuple[int, ...]] | None = None
+        self, required_indices: tuple | list[tuple[int, ...]] | None = None
     ):
         from distributed.protocol import to_serialize
 
         if required_indices is None:
-            required_indices = self.mapping.keys()
+            required_indices = tuple(self.mapping.keys())
 
         return {
             "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
@@ -419,6 +419,7 @@ class Blockwise(Layer):
     concatenate: bool | None
     new_axes: Mapping[str, int]
     output_blocks: set[tuple[int, ...]] | None
+    io_deps: Mapping[str, BlockwiseDep]
 
     def __init__(
         self,
@@ -443,17 +444,21 @@ class Blockwise(Layer):
         # and add them to `self.io_deps`.
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
-        self.indices = []
+        _tmp_indices = []
+        if indices:
+            numblocks = ensure_dict(numblocks, copy=True)
+            io_deps = ensure_dict(io_deps or {}, copy=True)
+            for dep, ind in indices:
+                if isinstance(dep, BlockwiseDep):
+                    name = tokenize(dep)
+                    io_deps[name] = dep
+                    numblocks[name] = dep.numblocks
+                else:
+                    name = dep
+                _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
         self.numblocks = numblocks
         self.io_deps = io_deps or {}
-        for dep, ind in indices:
-            name = dep
-            if isinstance(dep, BlockwiseDep):
-                name = tokenize(dep)
-                self.io_deps[name] = dep
-                self.numblocks[name] = dep.numblocks
-            self.indices.append((name, tuple(ind) if ind is not None else ind))
-        self.indices = tuple(self.indices)
+        self.indices = tuple(_tmp_indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.

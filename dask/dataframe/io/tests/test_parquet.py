@@ -3665,23 +3665,39 @@ def test_extra_file(tmpdir, engine):
     # expected file extension, or avoid checking file extensions
     # by passing False. Check here that this works:
 
+    def _parquet_file_extension(val, legacy=False):
+        # This function allows us to switch between "new"
+        # and "legacy" parquet_file_extension behavior
+        return (
+            {"dataset": {"require_extension": val}}
+            if legacy
+            else {"parquet_file_extension": val}
+        )
+
     # Should Work
-    out = dd.read_parquet(
-        tmpdir, engine=engine, dataset={"require_extension": ".parquet"}
-    )
+    out = dd.read_parquet(tmpdir, engine=engine, **_parquet_file_extension(".parquet"))
     assert_eq(out, df)
+
+    # Should Work (with FutureWarning)
+    with pytest.warns(FutureWarning, match="require_extension is deprecated"):
+        out = dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            **_parquet_file_extension(".parquet", legacy=True),
+        )
+        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
         dd.read_parquet(
-            tmpdir, engine=engine, dataset={"require_extension": False}
+            tmpdir, engine=engine, **_parquet_file_extension(None)
         ).compute()
 
     # Should Fail (for filtering out all files)
     # (Related to: https://github.com/dask/dask/issues/8349)
     with pytest.raises(ValueError):
         dd.read_parquet(
-            tmpdir, engine=engine, dataset={"require_extension": ".foo"}
+            tmpdir, engine=engine, **_parquet_file_extension(".foo")
         ).compute()
 
 
