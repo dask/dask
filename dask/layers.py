@@ -1139,7 +1139,7 @@ class DataFrameIOLayer(Blockwise):
         Name to use for the constructed layer.
     columns : str, list or None
         Field name(s) to read in as columns in the output.
-    inputs : list[tuple]
+    inputs : list or BlockwiseDep
         List of arguments to be passed to ``io_func`` so
         that the materialized task to produce partition ``i``
         will be: ``(<io_func>, inputs[i])``.  Note that each
@@ -1185,11 +1185,14 @@ class DataFrameIOLayer(Blockwise):
         self.annotations = annotations
         self.creation_info = creation_info
 
-        # Define mapping between key index and "part"
-        io_arg_map = BlockwiseDepDict(
-            {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
-        )
+        if not isinstance(inputs, BlockwiseDep):
+            # Define mapping between key index and "part"
+            io_arg_map = BlockwiseDepDict(
+                {(i,): inp for i, inp in enumerate(self.inputs)},
+                produces_tasks=self.produces_tasks,
+            )
+        else:
+            io_arg_map = inputs
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
