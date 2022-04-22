@@ -1,16 +1,7 @@
 from __future__ import annotations
 
-from typing import (
-    Any,
-    Callable,
-    Hashable,
-    Mapping,
-    MutableMapping,
-    Protocol,
-    Sequence,
-    TypeVar,
-    runtime_checkable,
-)
+from collections.abc import Hashable, Mapping, MutableMapping, Sequence
+from typing import Any, Protocol, TypeVar, runtime_checkable
 
 try:
     from IPython.display import DisplayObject
@@ -20,6 +11,34 @@ except ImportError:
 
 T = TypeVar("T")
 CollectionType = TypeVar("CollectionType", bound="DaskCollection", covariant=True)
+
+
+class SchedulerStaticMethod(Protocol):
+    """Protocol for defining the __dask_scheduler__ staticmethod attribute."""
+
+    def __call__(
+        self,
+        dsk: Mapping,
+        keys: Sequence[Hashable] | Hashable,
+        **kwargs: Any,
+    ) -> Any:
+        """Default dask.get method.
+
+        Parameters
+        ----------
+        dsk : Mapping
+            The task graph.
+        keys : Sequence[Hashable] | Hashable
+            The keys of the task graph to get.
+        **kwargs : Any
+            Arguments passed to the get method.
+
+        Returns
+        -------
+        Any
+            The result.
+
+        """
 
 
 class PostComputeCallable(Protocol):
@@ -202,22 +221,17 @@ class DaskCollection(Protocol):
 
         """
 
-    @staticmethod
-    def __dask_scheduler__(
-        dsk: Mapping,
-        keys: Sequence[Hashable],
-        **kwargs: Any,
-    ) -> Callable:
-        """The default scheduler ``get`` to use for this object.
+    __dask_scheduler__: staticmethod[SchedulerStaticMethod]
+    """The default scheduler ``get`` to use for this object.
 
-        Usually attached to the class as a staticmethod, e.g.:
+    Usually attached to the class as a staticmethod, e.g.:
 
-        >>> import dask.threaded
-        >>> class MyCollection:
-        ...     # Use the threaded scheduler by default
-        ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
+    >>> import dask.threaded
+    >>> class MyCollection:
+    ...     # Use the threaded scheduler by default
+    ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
-        """
+    """
 
     def compute(self: CollectionType, **kwargs: Any) -> Any:
         """Compute this dask collection.
