@@ -620,6 +620,14 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
 
+    assert parse_timedelta("1ms", default=False) == 0.001
+    with pytest.raises(ValueError):
+        parse_timedelta(1, default=False)
+    with pytest.raises(ValueError):
+        parse_timedelta("1", default=False)
+    with pytest.raises(TypeError):
+        parse_timedelta("1", default=None)
+
 
 def test_is_arraylike():
     np = pytest.importorskip("numpy")
