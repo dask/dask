@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping, MutableMapping, Sequence
 from typing import Any
 
-import pandas as pd
 import pytest
 
 import dask.array as da
@@ -18,6 +17,8 @@ from dask.typing import (
     PostComputeCallable,
     PostPersistCallable,
 )
+
+pandas = pytest.importorskip("pandas")
 
 
 class HLGCollection(DaskMethodsMixin):
@@ -89,7 +90,7 @@ def test_isinstance_core(protocol: Any) -> None:
     arr = da.ones(10)
     bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
     df = dd.from_pandas(
-        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
+        pandas.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
         npartitions=2,
     )
     dobj = increment(2)
