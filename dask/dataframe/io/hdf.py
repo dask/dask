@@ -431,7 +431,7 @@ def read_hdf(
         parts,
         meta=meta,
         divisions=divisions,
-        label="read-hdf-",
+        label="read-hdf",
         token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
         enforce_metadata=False,
     )

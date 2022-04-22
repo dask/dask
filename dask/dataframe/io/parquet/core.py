@@ -463,7 +463,7 @@ def read_parquet(
         parts,
         meta=meta,
         divisions=divisions,
-        label="read-parquet-",
+        label="read-parquet",
         token=tokenize(path, **input_kwargs),
         enforce_metadata=False,
         creation_info={

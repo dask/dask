@@ -178,7 +178,7 @@ def make_timeseries(
         parts,
         meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
         divisions=divisions,
-        label="make-timeseries-",
+        label="make-timeseries",
         token=tokenize(start, end, dtypes, freq, partition_freq, state_data),
         enforce_metadata=False,
     )

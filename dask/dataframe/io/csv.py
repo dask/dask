@@ -388,7 +388,7 @@ def text_blocks_to_pandas(
         parts,
         meta=head,
         divisions=(None,) * (len(blocks) + 1),
-        label="read-csv-",
+        label="read-csv",
         token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
         enforce_metadata=False,
         produces_tasks=True,

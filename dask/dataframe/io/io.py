@@ -1,5 +1,4 @@
 import os
-import warnings
 from collections.abc import Iterable
 from functools import partial
 from math import ceil
@@ -845,11 +844,10 @@ def from_map(
 
     if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         if not meta_is_emulated:
-            warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+            raise TypeError(
+                "Meta is not valid, `from_map` expects output to be a pandas object. "
                 "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns. In the future the meta you passed will not work.",
-                FutureWarning,
+                "(name, dtype) of the columns."
             )
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
