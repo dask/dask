@@ -101,6 +101,18 @@ def test_futures_to_delayed_dataframe(c):
         ddf = dd.from_delayed([1, 2])
 
 
+def test_from_delayed_dataframe(c):
+    # Check that Delayed keys in the form of a tuple
+    # are properly serialized in `from_delayed`
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(20)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_delayed(ddf.to_delayed())
+    dd.utils.assert_eq(ddf, df, scheduler=c)
+
+
 @pytest.mark.parametrize("fuse", [True, False])
 def test_fused_blockwise_dataframe_merge(c, fuse):
     pd = pytest.importorskip("pandas")
@@ -578,7 +590,7 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
-@pytest.mark.flaky(reruns=5, reruns_delay=5)
+# @pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")

@@ -196,7 +196,12 @@ class BlockwiseDepDict(BlockwiseDep):
             required_indices = tuple(self.mapping.keys())
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "mapping": {
+                k: stringify(self.mapping[k])
+                if self.produces_keys
+                else to_serialize(self.mapping[k])
+                for k in required_indices
+            },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
             "produces_keys": self._produces_keys,
@@ -1098,8 +1103,8 @@ def make_blockwise_graph(
 
     # Apply Culling.
     # Only need to construct the specified set of output blocks
-    output_blocks = output_blocks or itertools.product(
-        *[range(dims[i]) for i in out_indices]
+    output_blocks = output_blocks or list(
+        itertools.product(*[range(dims[i]) for i in out_indices])
     )
 
     dsk = {}
