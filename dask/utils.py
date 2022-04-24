@@ -9,7 +9,7 @@ import sys
 import tempfile
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import Any, ClassVar, TypeVar, overload
+from typing import Any, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -27,6 +27,7 @@ from dask.core import get_deps
 
 K = TypeVar("K")
 V = TypeVar("V")
+T = TypeVar("T")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -1161,7 +1162,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
         otherwise it may be the input itself.
     """
     if type(d) is dict:
-        return d.copy() if copy else d  # type: ignore
+        return d.copy() if copy else d
     try:
         layers = d.layers  # type: ignore
     except AttributeError:
@@ -1171,6 +1172,21 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
+
+
+def ensure_set(s: Set[T], *, copy: bool = False) -> set[T]:
+    """Convert a generic Set into a set.
+
+    Parameters
+    ----------
+    s : Set
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of s;
+        otherwise it may be the input itself.
+    """
+    if type(s) is set:
+        return s.copy() if copy else s
+    return set(s)
 
 
 class OperatorMethodMixin:
@@ -1346,7 +1362,7 @@ def factors(n: int) -> set[int]:
     https://stackoverflow.com/a/6800214/616616
     """
     seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return set(functools.reduce(list.__add__, seq))
+    return {j for l in seq for j in l}
 
 
 def parse_bytes(s: float | str) -> int:
@@ -1571,17 +1587,26 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 @overload
-def parse_timedelta(s: None, default: str = "seconds") -> None:
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
     ...
 
 
 @overload
-def parse_timedelta(s: str | float | timedelta, default: str = "seconds") -> float:
+def parse_timedelta(
+    s: str | float | timedelta, default: str | Literal[False] = "seconds"
+) -> float:
     ...
 
 
 def parse_timedelta(s, default="seconds"):
     """Parse timedelta string to number of seconds
+
+    Parameters
+    ----------
+    s : str, float, timedelta, or None
+    default: str or False, optional
+        Unit of measure if s  does not specify one. Defaults to seconds.
+        Set to False to require s to explicitly specify its own unit.
 
     Examples
     --------
@@ -1614,6 +1639,10 @@ def parse_timedelta(s, default="seconds"):
 
     prefix = s[:index]
     suffix = s[index:] or default
+    if suffix is False:
+        raise ValueError(f"Missing time unit: {s}")
+    if not isinstance(suffix, str):
+        raise TypeError(f"default must be str or False, got {default!r}")
 
     n = float(prefix)
 

@@ -36,6 +36,7 @@ _pa_version = parse_version(pa.__version__)
 from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
+pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -214,6 +215,16 @@ def _read_table_from_path(
         ),
     )
 
+    # Use `pre_buffer=True` if the option is supported and an optimized
+    # "pre-caching" method isn't already specified in `precache_options`
+    # (The distinct fsspec and pyarrow optimizations will conflict)
+    pre_buffer_default = precache_options.get("method", None) is None
+    pre_buffer = (
+        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
+        if pre_buffer_supported
+        else {}
+    )
+
     with _open_input_files(
         [path],
         fs=fs,
@@ -221,14 +232,14 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil).read(
+            return pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil).read_row_groups(
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
@@ -318,6 +329,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -334,6 +346,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -760,6 +773,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -789,11 +803,6 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Set require_extension option
-        require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
-
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -818,17 +827,19 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
-            elif require_extension:
+            elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
                 len0 = len(paths)
                 paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
+                    path
+                    for path in fs.find(paths)
+                    if path.endswith(parquet_file_extension)
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
+                        "No files satisfy the `parquet_file_extension` criteria "
+                        f"(files must end with {parquet_file_extension})."
                     )
 
         elif len(paths) > 1:

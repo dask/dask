@@ -3,7 +3,7 @@ from __future__ import annotations
 import abc
 import copy
 import html
-from collections.abc import Hashable, Iterable, Mapping, Set
+from collections.abc import Hashable, Iterable, KeysView, Mapping, Set
 from typing import Any
 
 import tlz as toolz
@@ -524,7 +524,7 @@ class HighLevelGraph(Mapping):
             out = self._to_dict = ensure_dict(self)
             return out
 
-    def keys(self) -> Set:
+    def keys(self) -> KeysView:
         """Get all keys of all the layers.
 
         This will in many cases materialize layers, which makes it a relatively
@@ -700,8 +700,8 @@ class HighLevelGraph(Mapping):
         keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
-        ret_layers = {}
-        ret_key_deps = {}
+        ret_layers: dict = {}
+        ret_key_deps: dict = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             # Let's cull the layer to produce its part of `keys`.
