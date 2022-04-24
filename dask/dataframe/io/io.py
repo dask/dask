@@ -1,14 +1,15 @@
 import os
+from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
 
 import numpy as np
 import pandas as pd
-from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
+from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -25,7 +26,8 @@ from dask.dataframe.utils import (
 )
 from dask.delayed import delayed
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, ensure_dict
+from dask.layers import DataFrameIOLayer
+from dask.utils import M, _deprecated
 
 lock = Lock()
 
@@ -407,6 +409,26 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
+def _partition_from_array(data, index=None, initializer=None, **kwargs):
+    """Create a Dask partition for either a DataFrame or Series.
+
+    Designed to be used with :func:`dask.blockwise.blockwise`. ``data`` is the array
+    from which the partition will be created. ``index`` can be:
+
+    1. ``None``, in which case each partition has an independent RangeIndex
+    2. a `tuple` with two elements, the start and stop values for a RangeIndex for
+       this partition, which gives a continuously varying RangeIndex over the
+       whole Dask DataFrame
+    3. an instance of a ``pandas.Index`` or a subclass thereof
+
+    The ``kwargs`` _must_ contain an ``initializer`` key which is set by calling
+    ``type(meta)``.
+    """
+    if isinstance(index, tuple):
+        index = pd.RangeIndex(*index)
+    return initializer(data, index=index, **kwargs)
+
+
 def from_dask_array(x, columns=None, index=None, meta=None):
     """Create a Dask DataFrame from a Dask Array.
 
@@ -454,15 +476,14 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     """
     meta = _meta_from_array(x, columns, index, meta=meta)
 
-    if x.ndim == 2 and len(x.chunks[1]) > 1:
-        x = x.rechunk({1: x.shape[1]})
-
-    name = "from-dask-array" + tokenize(x, columns)
-    to_merge = []
+    name = "from-dask-array-" + tokenize(x, columns)
+    graph_dependencies = [x]
+    arrays_and_indices = [x.name, "ij" if x.ndim == 2 else "i"]
+    numblocks = {x.name: x.numblocks}
 
     if index is not None:
-        if not isinstance(index, Index):
-            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        # An index is explicitly given by the caller, so we can pass it through to the
+        # initializer after a few checks.
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
@@ -470,32 +491,48 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             )
             raise ValueError(msg)
         divisions = index.divisions
-        to_merge.append(ensure_dict(index.dask))
-        index = index.__dask_keys__()
+        graph_dependencies.append(index)
+        arrays_and_indices.extend([index._name, "i"])
+        numblocks[index._name] = (index.npartitions,)
 
     elif np.isnan(sum(x.shape)):
+        # The shape of the incoming array is not known in at least one dimension. As
+        # such, we can't create an index for the entire output DataFrame and we set
+        # the divisions to None to represent that.
         divisions = [None] * (len(x.chunks[0]) + 1)
-        index = [None] * len(x.chunks[0])
     else:
+        # The shape of the incoming array is known and we don't have an explicit index.
+        # Create a mapping of chunk number in the incoming array to
+        # (start row, stop row) tuples. These tuples will be used to create a sequential
+        # RangeIndex later on that is continuous over the whole DataFrame.
         divisions = [0]
-        for c in x.chunks[0]:
-            divisions.append(divisions[-1] + c)
-        index = [
-            (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
-        ]
+        stop = 0
+        index_mapping = {}
+        for i, increment in enumerate(x.chunks[0]):
+            stop += increment
+            index_mapping[(i,)] = (divisions[i], stop)
+            divisions.append(stop)
         divisions[-1] -= 1
+        arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
-    dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
-        if x.ndim == 2:
-            chunk = chunk[0]
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), chunk, ind, x.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), chunk, ind, meta.columns)
+    if is_series_like(meta):
+        kwargs = {"dtype": x.dtype, "name": meta.name, "initializer": type(meta)}
+    else:
+        kwargs = {"columns": meta.columns, "initializer": type(meta)}
 
-    to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+    blk = blockwise(
+        _partition_from_array,
+        name,
+        "i",
+        *arrays_and_indices,
+        numblocks=numblocks,
+        concatenate=True,
+        # kwargs passed through to the DataFrame/Series initializer
+        **kwargs,
+    )
+
+    graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def _link(token, result):
@@ -583,9 +620,14 @@ def to_records(df):
     return df.map_partitions(M.to_records)
 
 
+# TODO: type this -- causes lots of papercuts
 @insert_meta_param_description
 def from_delayed(
-    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
+    dfs,
+    meta=None,
+    divisions=None,
+    prefix="from-delayed",
+    verify_meta=True,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
 
@@ -629,15 +671,6 @@ def from_delayed(
     if not dfs:
         dfs = [delayed(make_meta)(meta)]
 
-    name = prefix + "-" + tokenize(*dfs)
-    dsk = {}
-    if verify_meta:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-    else:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = df.key
-
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
     else:
@@ -645,8 +678,20 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
+    name = prefix + "-" + tokenize(*dfs)
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=BlockwiseDepDict(
+            {(i,): inp.key for i, inp in enumerate(dfs)},
+            produces_keys=True,
+        ),
+        io_func=partial(check_meta, meta=meta, funcname="from_delayed")
+        if verify_meta
+        else lambda x: x,
+    )
     df = new_dd_object(
-        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+        HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
     )
 
     if divisions == "sorted":

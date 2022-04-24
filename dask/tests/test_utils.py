@@ -18,7 +18,9 @@ from dask.utils import (
     cached_cumsum,
     derived_from,
     ensure_dict,
+    ensure_set,
     extra_titles,
+    factors,
     format_bytes,
     funcname,
     getargspec,
@@ -466,6 +468,22 @@ def test_ensure_dict():
         assert di == d
 
 
+def test_ensure_set():
+    s = {1}
+    assert ensure_set(s) is s
+
+    class myset(set):
+        pass
+
+    s2 = ensure_set(s, copy=True)
+    s3 = ensure_set(myset(s))
+
+    for si in (s2, s3):
+        assert type(si) is set
+        assert si is not s
+        assert si == s
+
+
 def test_itemgetter():
     data = [1, 2, 3]
     g = itemgetter(1)
@@ -601,6 +619,14 @@ def test_parse_timedelta():
     assert parse_timedelta("1", default="seconds") == 1
     assert parse_timedelta("1", default="ms") == 0.001
     assert parse_timedelta(1, default="ms") == 0.001
+
+    assert parse_timedelta("1ms", default=False) == 0.001
+    with pytest.raises(ValueError):
+        parse_timedelta(1, default=False)
+    with pytest.raises(ValueError):
+        parse_timedelta("1", default=False)
+    with pytest.raises(TypeError):
+        parse_timedelta("1", default=None)
 
 
 def test_is_arraylike():
@@ -791,3 +817,11 @@ def test_cached_cumsum_non_tuple():
     assert cached_cumsum(a) == (1, 3, 6)
     a[1] = 4
     assert cached_cumsum(a) == (1, 5, 8)
+
+
+def test_factors():
+    assert factors(0) == set()
+    assert factors(1) == {1}
+    assert factors(2) == {1, 2}
+    assert factors(12) == {1, 2, 3, 4, 6, 12}
+    assert factors(15) == {1, 3, 5, 15}

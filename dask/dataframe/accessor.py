@@ -8,7 +8,7 @@ import pandas as pd
 from dask.utils import derived_from
 
 
-def _bind_method(cls, pd_cls, attr):
+def _bind_method(cls, pd_cls, attr, min_version=None):
     def func(self, *args, **kwargs):
         return self._function_map(attr, *args, **kwargs)
 
@@ -18,10 +18,10 @@ def _bind_method(cls, pd_cls, attr):
         func.__wrapped__ = getattr(pd_cls, attr)
     except Exception:
         pass
-    setattr(cls, attr, derived_from(pd_cls)(func))
+    setattr(cls, attr, derived_from(pd_cls, version=min_version)(func))
 
 
-def _bind_property(cls, pd_cls, attr):
+def _bind_property(cls, pd_cls, attr, min_version=None):
     def func(self):
         return self._property_map(attr)
 
@@ -31,7 +31,7 @@ def _bind_property(cls, pd_cls, attr):
         func.__wrapped__ = getattr(pd_cls, attr)
     except Exception:
         pass
-    setattr(cls, attr, property(derived_from(pd_cls)(func)))
+    setattr(cls, attr, property(derived_from(pd_cls, version=min_version)(func)))
 
 
 def maybe_wrap_pandas(obj, x):
@@ -70,12 +70,14 @@ class Accessor:
         """Bind all auto-generated methods & properties"""
         super().__init_subclass__(**kwargs)
         pd_cls = getattr(pd.Series, cls._accessor_name)
-        for attr in cls._accessor_methods:
+        for item in cls._accessor_methods:
+            attr, min_version = item if isinstance(item, tuple) else (item, None)
             if not hasattr(cls, attr):
-                _bind_method(cls, pd_cls, attr)
-        for attr in cls._accessor_properties:
+                _bind_method(cls, pd_cls, attr, min_version)
+        for item in cls._accessor_properties:
+            attr, min_version = item if isinstance(item, tuple) else (item, None)
             if not hasattr(cls, attr):
-                _bind_property(cls, pd_cls, attr)
+                _bind_property(cls, pd_cls, attr, min_version)
 
     @staticmethod
     def _delegate_property(obj, accessor, attr):
@@ -229,6 +231,8 @@ class StringAccessor(Accessor):
         "normalize",
         "pad",
         "partition",
+        ("removeprefix", "1.4"),
+        ("removesuffix", "1.4"),
         "repeat",
         "replace",
         "rfind",
