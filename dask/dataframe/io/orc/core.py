@@ -37,7 +37,7 @@ class ORCFunctionWrapper(DataFrameIOFunction):
         if columns == self.columns:
             return self
         func = copy.deepcopy(self)
-        func.columns = columns
+        func._columns = columns
         return func
 
     def __call__(self, parts):

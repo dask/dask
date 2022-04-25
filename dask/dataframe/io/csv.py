@@ -116,14 +116,14 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         # Deal with column projection
         columns = self.full_columns
         project_after_read = False
-        if self.columns is not None:
+        if self._columns is not None:
             if self.kwargs:
                 # To be safe, if any kwargs are defined, avoid
                 # changing `usecols` here. Instead, we can just
                 # select columns after the read
                 project_after_read = True
             else:
-                columns = self.columns
+                columns = self._columns
                 rest_kwargs["usecols"] = columns
 
         # Call `pandas_read_text`
@@ -139,7 +139,7 @@ class CSVFunctionWrapper(DataFrameIOFunction):
             path_info,
         )
         if project_after_read:
-            return df[self.columns]
+            return df[self._columns]
         return df
 
 
