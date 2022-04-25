@@ -1092,9 +1092,10 @@ def test_aggregate_dask():
 
 
 @pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
 @pytest.mark.parametrize("limit", [None, 1, 4])
-def test_fillna(axis, method, limit):
+def test_fillna(axis, group_keys, method, limit):
     df = pd.DataFrame(
         {
             "A": [1, 1, 2, 2],
@@ -1106,24 +1107,24 @@ def test_fillna(axis, method, limit):
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(
-        df.groupby("A").fillna(0, axis=axis),
-        ddf.groupby("A").fillna(0, axis=axis),
+        df.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+        ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
     )
     assert_eq(
-        df.groupby("A").B.fillna(0),
-        ddf.groupby("A").B.fillna(0),
+        df.groupby("A", group_keys=group_keys).B.fillna(0),
+        ddf.groupby("A", group_keys=group_keys).B.fillna(0),
     )
     assert_eq(
-        df.groupby(["A", "B"]).fillna(0),
-        ddf.groupby(["A", "B"]).fillna(0),
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
     assert_eq(
-        df.groupby("A").fillna(method=method, limit=limit, axis=axis),
-        ddf.groupby("A").fillna(method=method, limit=limit, axis=axis),
+        df.groupby("A", group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
+        ddf.groupby("A", group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
     )
     assert_eq(
-        df.groupby(["A", "B"]).fillna(method=method, limit=limit, axis=axis),
-        ddf.groupby(["A", "B"]).fillna(method=method, limit=limit, axis=axis),
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
     )
 
     with pytest.raises(NotImplementedError):
