@@ -757,5 +757,5 @@ def test_set_index_no_resursion_error(c):
         )
         ddf = ddf.set_index("timestamp", sorted=True)
         ddf.compute()
-    except RecursionError as re:
-        raise (re)
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")
