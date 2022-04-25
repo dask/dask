@@ -987,26 +987,25 @@ def test_categories(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, categories=["y"], engine=engine)
 
-    ddf2.y.compute(scheduler="synchronous")
-    # # Shouldn't need to specify categories explicitly
-    # ddf3 = dd.read_parquet(fn, engine=engine)
-    # assert_eq(ddf3, ddf2)
+    # Shouldn't need to specify categories explicitly
+    ddf3 = dd.read_parquet(fn, engine=engine)
+    assert_eq(ddf3, ddf2)
 
-    # with pytest.raises(NotImplementedError):
-    #     ddf2.y.cat.categories
-    # assert set(ddf2.y.compute().cat.categories) == {"a", "b", "c"}
-    # cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories.sort_values()).compute()
-    # assert cats_set.tolist() == ["a", "c", "a", "b"]
+    with pytest.raises(NotImplementedError):
+        ddf2.y.cat.categories
+    assert set(ddf2.y.compute().cat.categories) == {"a", "b", "c"}
+    cats_set = ddf2.map_partitions(lambda x: x.y.cat.categories.sort_values()).compute()
+    assert cats_set.tolist() == ["a", "c", "a", "b"]
 
-    # if engine == "fastparquet":
-    #     assert_eq(ddf.y, ddf2.y, check_names=False)
-    #     with pytest.raises(TypeError):
-    #         # attempt to load as category that which is not so encoded
-    #         ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
+    if engine == "fastparquet":
+        assert_eq(ddf.y, ddf2.y, check_names=False)
+        with pytest.raises(TypeError):
+            # attempt to load as category that which is not so encoded
+            ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
 
-    # with pytest.raises((ValueError, FutureWarning)):
-    #     # attempt to load as category unknown column
-    #     ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
+    with pytest.raises((ValueError, FutureWarning)):
+        # attempt to load as category unknown column
+        ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
 def test_categories_unnamed_index(tmpdir, engine):

@@ -765,12 +765,21 @@ class _PackedArgCallable(DataFrameIOFunction):
     (when ``func`` satisfies the ``DataFrameIOFunction`` protocol).
     """
 
-    def __init__(self, func, args=None, kwargs=None, meta=None, enforce_metadata=False):
+    def __init__(
+        self,
+        func,
+        args=None,
+        kwargs=None,
+        meta=None,
+        packed=False,
+        enforce_metadata=False,
+    ):
         self.func = func
         self.args = args
         self.kwargs = kwargs
         self.meta = meta
         self.enforce_metadata = enforce_metadata
+        self.packed = packed
         self.is_dataframe_io_func = isinstance(self.func, DataFrameIOFunction)
 
     @property
@@ -791,6 +800,8 @@ class _PackedArgCallable(DataFrameIOFunction):
         return self
 
     def __call__(self, packed_arg, **kwargs):
+        if not self.packed:
+            packed_arg = [packed_arg]
         if self.enforce_metadata:
             return apply_and_enforce(
                 *packed_arg,
@@ -896,7 +907,25 @@ def from_map(
         raise ValueError("All `iterables` must have the same length")
     if lengths == {0}:
         raise ValueError("All `iterables` must have a non-zero length")
-    inputs = list(zip(*iterables))
+
+    # Check for `produces_tasks` and `creation_info`.
+    # These options are included in the function signature,
+    # because they are not intended for "public" use.
+    produces_tasks = kwargs.pop("produces_tasks", False)
+    creation_info = kwargs.pop("creation_info", None)
+
+    if produces_tasks:
+        if len(iterables) > 1:
+            # Tasks are not detected correctly when they are "packed"
+            # within an outer list/tuple
+            raise ValueError(
+                "Multiple iterables not supported when produces_tasks=True"
+            )
+        inputs = iterables[0]
+        packed = False
+    else:
+        inputs = list(zip(*iterables))
+        packed = True
 
     # Define collection name
     label = label or funcname(func)
@@ -908,16 +937,13 @@ def from_map(
     # ducktyping with DataFrameIOFunction
     column_projection = func.columns if isinstance(func, DataFrameIOFunction) else None
 
-    # Check for `produces_tasks` and `creation_info`.
-    # These options are included in the function signature,
-    # because they are not intended for "public" use.
-    produces_tasks = kwargs.pop("produces_tasks", False)
-    creation_info = kwargs.pop("creation_info", None)
-
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
     if meta is None:
-        meta = _emulate(func, *inputs[0], *(args or []), udf=True, **kwargs)
+        if packed:
+            meta = _emulate(func, *inputs[0], *(args or []), udf=True, **kwargs)
+        else:
+            meta = _emulate(func, inputs[0], *(args or []), udf=True, **kwargs)
         meta_is_emulated = True
     else:
         meta = make_meta(meta)
@@ -944,6 +970,7 @@ def from_map(
         kwargs=kwargs,
         meta=meta if enforce_metadata else None,
         enforce_metadata=enforce_metadata,
+        packed=packed,
     )
 
     # Construct DataFrameIOLayer
