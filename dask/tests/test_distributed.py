@@ -748,8 +748,6 @@ async def test_non_recursive_df_reduce(c, s, a, b):
 
 def test_set_index_no_resursion_error(c):
     # see: https://github.com/dask/dask/issues/8955
-    pytest.importorskip("numpy")
-    pytest.importorskip("pandas")
     pytest.importorskip("dask.dataframe")
     try:
         ddf = (
