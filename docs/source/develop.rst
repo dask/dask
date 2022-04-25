@@ -107,7 +107,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-3.9.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.10.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
@@ -132,7 +132,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.8, and 3.9.
+Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
