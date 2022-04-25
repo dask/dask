@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Hashable, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, runtime_checkable
-
-from dask.context import GlobalMethod
 
 try:
     from IPython.display import DisplayObject
@@ -14,6 +12,9 @@ except ImportError:
 
 T = TypeVar("T")
 CollectionType = TypeVar("CollectionType", bound="DaskCollection")
+CovariantCollection = TypeVar(
+    "CovariantCollection", bound="DaskCollection", covariant=True
+)
 
 
 class SchedulerGetMethod(Protocol):
@@ -48,7 +49,8 @@ class SchedulerGetMethod(Protocol):
 class PostComputeCallable(Protocol):
     """Protocol defining the signature of a __dask_postcompute__ method."""
 
-    def __call__(self, parts: Sequence[Any], *args: Any) -> Any:
+    @staticmethod
+    def __call__(parts: Sequence[Any], *args: Any) -> Any:
         """Method called after the keys of a collection are computed.
 
         Parameters
@@ -71,15 +73,15 @@ class PostComputeCallable(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
 
-class PostPersistCallable(Protocol[CollectionType]):
+class PostPersistCallable(Protocol[CovariantCollection]):
     """Protocol defining the signature of a __dask_postpersist__ method."""
 
+    @staticmethod
     def __call__(
-        self,
         dsk: Mapping,
-        *args,
+        *args: Any,
         rename: Mapping[str, str] | None = None,
-    ) -> CollectionType:
+    ) -> CovariantCollection:
         """Method called to rebuild a persisted collection.
 
         Parameters
@@ -103,7 +105,7 @@ class PostPersistCallable(Protocol[CollectionType]):
 
         Returns
         -------
-        CollectionType
+        Collection
             An equivalent Dask collection with the same keys as
             computed through a different graph.
 
@@ -199,7 +201,7 @@ class DaskCollection(Protocol):
         """Value that must fully represent the object."""
         raise NotImplementedError("Inheriting class must implement this method.")
 
-    __dask_optimize__: GlobalMethod | Callable
+    __dask_optimize__: Any
     """Given a graph and keys, return a new optimized graph.
 
     This method can be either a ``staticmethod`` or a
@@ -230,7 +232,7 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: SchedulerGetMethod
+    __dask_scheduler__: Any
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
