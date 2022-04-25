@@ -746,7 +746,7 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     assert (await c.compute(result)).val == 170
 
 
-def test_set_index_no_resursion_error(client):
+def test_set_index_no_resursion_error(c):
     # see: https://github.com/dask/dask/issues/8955
     try:
         ddf = (
