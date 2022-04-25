@@ -14,9 +14,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-# import fixtures from distributed (need them all to use `client`)
-from distributed.utils_test import client, cluster_fixture, loop  # noqa: F401
-
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
@@ -1462,21 +1459,3 @@ def test_sort_values_bool_ascending():
     # attempt to sort with list of ascending booleans
     with pytest.raises(NotImplementedError):
         ddf.sort_values(by="a", ascending=[True, False])
-
-
-def test_set_index_no_resursion_error(client):
-    # see: https://github.com/dask/dask/issues/8955
-    try:
-        ddf = (
-            dask.datasets.timeseries(
-                start="2000-01-01",
-                end="2000-07-01",
-                freq="12h"
-            )
-            .reset_index()
-            .astype({"timestamp": str})
-        )
-        ddf = ddf.set_index("timestamp", sorted=True)
-        ddf.compute()
-    except RecursionError as re:
-        raise(re)
