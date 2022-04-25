@@ -821,7 +821,7 @@ def test_from_dask_array_index_dtype():
     ],
 )
 def test_from_map_simple(vals):
-    # Simple test to ensure required inputs (func & inputs)
+    # Simple test to ensure required inputs (func & iterable)
     # and basic kwargs work as expected for `from_map`
 
     def func(input, size=0):
@@ -830,8 +830,8 @@ def test_from_map_simple(vals):
         value, index = input
         return pd.Series([value] * size, index=[index] * size)
 
-    inputs = [(vals[0], 1), (vals[1], 2)]
-    ser = dd.from_map(func, inputs, size=2)
+    iterable = [(vals[0], 1), (vals[1], 2)]
+    ser = dd.from_map(func, iterable, size=2)
     expect = pd.Series(
         [vals[0], vals[0], vals[1], vals[1]],
         index=[1, 1, 2, 2],
@@ -843,17 +843,39 @@ def test_from_map_simple(vals):
     assert isinstance(layers[ser._name], Blockwise)
 
     # Check that result and partition count make sense
-    assert ser.npartitions == len(inputs)
+    assert ser.npartitions == len(iterable)
     assert_eq(ser, expect)
+
+
+def test_from_map_multi():
+    # Test that `iterables` can contain multiple Iterables
+
+    func = lambda x, y: pd.DataFrame({"add": x + y})
+    iterables = ([np.arange(2), np.arange(2)], [np.array([2, 2]), np.array([2, 2])])
+    expect = pd.DataFrame({"add": [2, 3, 2, 3]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, *iterables)
+    assert_eq(ddf, expect)
+
+
+def test_from_map_args():
+    # Test that the optional `args` argument works as expected
+
+    func = lambda x, y, z: pd.DataFrame({"add": x + y + z})
+    iterable = [np.arange(2), np.arange(2)]
+    expect = pd.DataFrame({"add": [5, 6, 5, 6]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, iterable, args=[2, 3])
+    assert_eq(ddf, expect)
 
 
 def test_from_map_divisions():
     # Test that `divisions` argument works as expected for `from_map`
 
     func = lambda x: pd.Series([x[0]] * 2, index=range(x[1], x[1] + 2))
-    inputs = [("B", 0), ("C", 2)]
+    iterable = [("B", 0), ("C", 2)]
     divisions = (0, 2, 4)
-    ser = dd.from_map(func, inputs, divisions=divisions)
+    ser = dd.from_map(func, iterable, divisions=divisions)
     expect = pd.Series(
         ["B", "B", "C", "C"],
         index=[0, 1, 2, 3],
@@ -868,26 +890,26 @@ def test_from_map_meta():
     # and that `enforce_metadata` works as expected
 
     func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
-    inputs = ["A", "B"]
+    iterable = ["A", "B"]
 
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
     # First Check - Pass in valid metadata
     meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
-    ddf = dd.from_map(func, inputs, meta=meta, s=2)
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     assert_eq(ddf, expect)
 
     # Second Check - Pass in invalid metadata
     meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
-    ddf = dd.from_map(func, inputs, meta=meta, s=2)
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
     assert_eq(ddf._meta, meta)
     with pytest.raises(ValueError, match="The columns in the computed data"):
         assert_eq(ddf.compute(), expect)
 
     # Third Check - Pass in invalid metadata,
     # but use `enforce_metadata=False`
-    ddf = dd.from_map(func, inputs, meta=meta, enforce_metadata=False, s=2)
+    ddf = dd.from_map(func, iterable, meta=meta, enforce_metadata=False, s=2)
     assert_eq(ddf._meta, meta)
     assert_eq(ddf.compute(), expect)
 
@@ -897,11 +919,11 @@ def test_from_map_custom_name():
     # `from_map` works as expected
 
     func = lambda x: pd.DataFrame({"x": [x] * 2})
-    inputs = ["A", "B"]
+    iterable = ["A", "B"]
     label = "my-label"
     token = "8675309"
     expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
 
-    ddf = dd.from_map(func, inputs, label=label, token=token)
+    ddf = dd.from_map(func, iterable, label=label, token=token)
     assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)

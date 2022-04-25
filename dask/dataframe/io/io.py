@@ -755,10 +755,55 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     return values, positions
 
 
+class _PackedArgCallable(DataFrameIOFunction):
+    def __init__(self, func, args=None, kwargs=None, meta=None, enforce_metadata=False):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.meta = meta
+        self.enforce_metadata = enforce_metadata
+        self.is_dataframe_io_func = isinstance(self.func, DataFrameIOFunction)
+
+    @property
+    def columns(self):
+        if self.is_dataframe_io_func:
+            return self.func.columns
+        return None
+
+    def project_columns(self, columns):
+        if self.is_dataframe_io_func:
+            return _PackedArgCallable(
+                self.func.project_columns(columns),
+                args=self.args,
+                kwargs=self.kwargs,
+                meta=self.meta,
+                enforce_metadata=self.enforce_metadata,
+            )
+        return self
+
+    def __call__(self, packed_arg, **kwargs):
+        if self.enforce_metadata:
+            return apply_and_enforce(
+                *packed_arg,
+                *(self.args or []),
+                _func=self.func,
+                _meta=self.meta,
+                **(self.kwargs or {}),
+                **kwargs,
+            )
+        return self.func(
+            *packed_arg,
+            *(self.args or []),
+            **(self.kwargs or {}),
+            **kwargs,
+        )
+
+
 @insert_meta_param_description
 def from_map(
     func,
-    inputs,
+    *iterables,
+    args=None,
     meta=None,
     divisions=None,
     label=None,
@@ -773,11 +818,15 @@ def from_map(
     func : callable
         Function used to create each partition. If ``func`` satisfies the
         ``DataFrameIOFunction`` protocol, column projection will be enabled.
-    inputs : Iterable
-        Iterable object of arguments to pass to ``func``. The number of
-        elements in ``inputs`` will correspond to the number of partitions
-        in the output collection (only one element will be passed to
-        ``func`` for each partition).
+    *iterables : Iterable objects
+        Iterable objects to map to each output partition. all iterables must
+        be the same length. This length determines the number of partitions
+        in the output collection (only one element of each iterable will
+        be passed to ``func`` for each partition).
+    args : list or tuple, optional
+        Positional arguments to broadcast to each output partition. Note
+        that these arguments will always be passed to ``func`` after the
+        ``iterables`` positional arguments.
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
@@ -796,7 +845,8 @@ def from_map(
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
     **kwargs:
-        Key-word arguments to be passed to ``func`` for every output partition.
+        Key-word arguments to broadcast to each output partition. These
+        same arguments will be passed to ``func`` for every output partition.
 
     Examples
     --------
@@ -817,13 +867,27 @@ def from_map(
     dask.layers.DataFrameIOLayer
     """
 
+    # Input validation
     if not callable(func):
         raise ValueError("`func` argument must be `callable`")
-    if not isinstance(inputs, Iterable):
-        raise ValueError(f"`inputs` must be Iterable, got {type(inputs)}")
-    inputs = list(inputs)  # Always convert to list (for now)
-    if not len(inputs):
-        raise ValueError("`inputs` must have a non-zero length")
+    lengths = set()
+    for i, iterable in enumerate(iterables):
+        if not isinstance(iterable, Iterable):
+            raise ValueError(
+                f"All elements of `iterables` must be Iterable, got {type(iterable)}"
+            )
+        try:
+            lengths.add(len(iterable))
+        except AttributeError:
+            iterables[i] = list(iterable)
+            lengths.add(len(iterables[i]))
+    if len(lengths) == 0:
+        raise ValueError("`from_map` requires at least one Iterable input")
+    elif len(lengths) > 1:
+        raise ValueError("All `iterables` must have the same length")
+    if lengths == {0}:
+        raise ValueError("All `iterables` must have a non-zero length")
+    inputs = list(zip(*iterables))
 
     # Define collection name
     label = label or funcname(func)
@@ -844,7 +908,7 @@ def from_map(
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
     if meta is None:
-        meta = _emulate(func, inputs[0], udf=True, **kwargs)
+        meta = _emulate(func, *inputs[0], *(args or []), udf=True, **kwargs)
         meta_is_emulated = True
     else:
         meta = make_meta(meta)
@@ -865,15 +929,12 @@ def from_map(
     meta = make_meta(meta)
 
     # Define io_func
-    io_func = (
-        partial(
-            apply_and_enforce,
-            _func=func,
-            _meta=meta,
-            **kwargs,
-        )
-        if enforce_metadata
-        else (partial(func, **kwargs) if kwargs else func)
+    io_func = _PackedArgCallable(
+        func,
+        args=args,
+        kwargs=kwargs,
+        meta=meta if enforce_metadata else None,
+        enforce_metadata=enforce_metadata,
     )
 
     # Construct DataFrameIOLayer

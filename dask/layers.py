@@ -1148,7 +1148,7 @@ class DataFrameIOLayer(Blockwise):
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
         Column projection will be supported for functions
-        that satisfy the ``DataFrameIOFunciton`` protocol.
+        that satisfy the ``DataFrameIOFunction`` protocol.
     label : str (optional)
         String to use as a prefix in the place-holder collection
         name. If nothing is specified (default), "subset-" will
