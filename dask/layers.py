@@ -1226,9 +1226,6 @@ class DataFrameIOLayer(Blockwise):
             if isinstance(self.io_func, DataFrameIOFunction):
                 io_func = self.io_func.project_columns(list(columns))
             else:
-                import pdb
-
-                pdb.set_trace()
                 io_func = self.io_func
 
             layer = DataFrameIOLayer(
