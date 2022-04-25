@@ -1119,12 +1119,20 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
     )
     assert_eq(
-        df.groupby("A", group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
-        ddf.groupby("A", group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
+        df.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
     )
     assert_eq(
-        df.groupby(["A", "B"], group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
-        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(method=method, limit=limit, axis=axis),
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
     )
 
     with pytest.raises(NotImplementedError):
