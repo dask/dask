@@ -2032,7 +2032,8 @@ class _GroupBy:
             limit=limit,
             fillna_axis=axis,
         )
-        return self.apply(
+
+        result = self.apply(
             _fillna_group,
             by=self.by,
             value=value,
@@ -2041,6 +2042,11 @@ class _GroupBy:
             fillna_axis=axis,
             meta=meta,
         )
+
+        if self.group_keys:
+            return result.map_partitions(lambda df: df.droplevel(self.by))
+        else:
+            return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
