@@ -1466,10 +1466,17 @@ def test_sort_values_bool_ascending():
 
 def test_set_index_no_resursion_error(client):
     # see: https://github.com/dask/dask/issues/8955
-    ddf = (
-        dask.datasets.timeseries(end="2000-07-01")
-        .reset_index()
-        .astype({"timestamp": str})
-    )
-    ddf = ddf.set_index("timestamp", sorted=True)
-    ddf.compute()
+    try:
+        ddf = (
+            dask.datasets.timeseries(
+                start="2000-01-01",
+                end="2000-07-01",
+                freq="12h"
+            )
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError as re:
+        raise(re)
