@@ -8,11 +8,12 @@ from dask.base import compute_as_if_collection, tokenize
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import apply
 
 
-class ORCFunctionWrapper:
+class ORCFunctionWrapper(DataFrameIOFunction):
     """
     ORC Function-Wrapper Class
     Reads ORC data from disk to produce a partition.
@@ -20,10 +21,14 @@ class ORCFunctionWrapper:
 
     def __init__(self, fs, columns, schema, engine, index):
         self.fs = fs
-        self.columns = columns
+        self._columns = columns
         self.schema = schema
         self.engine = engine
         self.index = index
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new ORCFunctionWrapper object with

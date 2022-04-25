@@ -21,6 +21,7 @@ from dask.dataframe.core import (
     has_parallel_type,
     new_dd_object,
 )
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
@@ -769,8 +770,9 @@ def from_map(
 
     Parameters
     ----------
-    func : function
-        Function used to create each partition.
+    func : callable or DataFrameIOFunction
+        Function used to create each partition. If ``func`` inherits from
+        ``DataFrameIOFunction``, column projection will be enabled.
     inputs : Iterable
         Iterable object of arguments to pass to ``func``. The number of
         elements in ``inputs`` will correspond to the number of partitions
@@ -830,11 +832,8 @@ def from_map(
 
     # Get "projectable" column selection.
     # Note that this relies on the IO function
-    # defining a `columns` attribue
-    columns = func.columns if hasattr(func, "columns") else None
-    if columns is None and hasattr(func, "full_columns"):
-        # NOTE: This is a bit of a hack for read_csv
-        columns = func.full_columns
+    # inheriting from DataFrameIOFunction
+    column_projection = func.columns if isinstance(func, DataFrameIOFunction) else None
 
     # Check for `produces_tasks` and `creation_info`.
     # These options are included in the function signature,
@@ -880,7 +879,7 @@ def from_map(
     # Construct DataFrameIOLayer
     layer = DataFrameIOLayer(
         name,
-        columns,
+        column_projection,
         inputs,
         io_func,
         label=label,

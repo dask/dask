@@ -3,6 +3,7 @@ import pandas as pd
 
 from dask.dataframe.core import tokenize
 from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
@@ -63,17 +64,21 @@ make = {
 }
 
 
-class MakeTimeseriesPart:
+class MakeTimeseriesPart(DataFrameIOFunction):
     """
     Wrapper Class for ``make_timeseries_part``
     Makes a timeseries partition.
     """
 
     def __init__(self, dtypes, freq, kwargs, columns=None):
-        self.columns = columns or list(dtypes.keys())
+        self._columns = columns or list(dtypes.keys())
         self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
         self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new MakeTimeseriesPart object with

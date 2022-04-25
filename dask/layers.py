@@ -3,6 +3,7 @@ from __future__ import annotations
 import functools
 import math
 import operator
+import warnings
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
@@ -1177,7 +1178,7 @@ class DataFrameIOLayer(Blockwise):
         annotations=None,
     ):
         self.name = name
-        self.columns = columns
+        self._columns = columns
         self.inputs = inputs
         self.io_func = io_func
         self.label = label
@@ -1205,18 +1206,36 @@ class DataFrameIOLayer(Blockwise):
             annotations=annotations,
         )
 
+    @property
+    def columns(self):
+        """Current column projection for this layer"""
+        return self._columns
+
     def project_columns(self, columns):
         """Produce a column projection for this IO layer.
         Given a list of required output columns, this method
         returns the projected layer.
         """
+        from dask.dataframe.io.utils import DataFrameIOFunction
+
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
-            try:
+            if isinstance(self.io_func, DataFrameIOFunction):
                 io_func = self.io_func.project_columns(list(columns))
-            except AttributeError:
-                io_func = self.io_func
+            else:
+                # Allow column projections for other layers, but
+                # raise a FutureWarning
+                try:
+                    io_func = self.io_func.project_columns(list(columns))
+
+                    warnings.warn(
+                        "IO functions must inherit from DataFrameIOFunction "
+                        "to enable column projection in the future.",
+                        FutureWarning,
+                    )
+                except AttributeError:
+                    io_func = self.io_func
 
             layer = DataFrameIOLayer(
                 (self.label or "subset") + "-" + tokenize(self.name, columns),

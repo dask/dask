@@ -12,6 +12,7 @@ from dask import config, multiprocessing
 from dask.base import compute_as_if_collection, get_scheduler, tokenize
 from dask.dataframe.core import DataFrame
 from dask.dataframe.io.io import _link, from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.delayed import Delayed, delayed
 from dask.utils import get_scheduler_lock
 
@@ -268,7 +269,7 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 
-class HDFFunctionWrapper:
+class HDFFunctionWrapper(DataFrameIOFunction):
     """
     HDF5 Function-Wrapper Class
 
@@ -276,12 +277,16 @@ class HDFFunctionWrapper:
     """
 
     def __init__(self, columns, dim, lock, common_kwargs):
-        self.columns = columns
+        self._columns = columns
         self.lock = lock
         self.common_kwargs = common_kwargs
         self.dim = dim
         if columns and dim > 1:
             self.common_kwargs = merge(common_kwargs, {"columns": columns})
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new HDFFunctionWrapper object with

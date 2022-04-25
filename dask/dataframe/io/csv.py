@@ -28,12 +28,13 @@ from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
 
 
-class CSVFunctionWrapper:
+class CSVFunctionWrapper(DataFrameIOFunction):
     """
     CSV Function-Wrapper Class
     Reads CSV data from disk to produce a partition (given a key).
@@ -52,7 +53,7 @@ class CSVFunctionWrapper:
         kwargs,
     ):
         self.full_columns = full_columns
-        self.columns = columns
+        self._columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -60,6 +61,10 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self.full_columns if self._columns is None else self._columns
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with

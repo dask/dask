@@ -14,7 +14,7 @@ from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
-from dask.dataframe.io.utils import _is_local_fs
+from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
@@ -28,7 +28,7 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetFunctionWrapper:
+class ParquetFunctionWrapper(DataFrameIOFunction):
     """
     Parquet Function-Wrapper Class
     Reads parquet data from disk to produce a partition
@@ -48,7 +48,7 @@ class ParquetFunctionWrapper:
         self.engine = engine
         self.fs = fs
         self.meta = meta
-        self.columns = columns
+        self._columns = columns
         self.index = index
 
         # `kwargs` = user-defined kwargs to be passed
@@ -58,6 +58,10 @@ class ParquetFunctionWrapper:
         #                   passed identically for all
         #                   partitions.
         self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new ParquetFunctionWrapper object

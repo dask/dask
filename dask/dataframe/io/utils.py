@@ -195,3 +195,25 @@ def _open_input_files(
     elif fs is not None:
         return [_set_context(fs.open(path, **kwargs), context_stack) for path in paths]
     return [_set_context(open(path, **kwargs), context_stack) for path in paths]
+
+
+class DataFrameIOFunction:
+    """DataFrame IO function with projectable columns
+
+    Enables column projection in ``DataFrameIOLayer``.
+    """
+
+    @property
+    def columns(self):
+        """Return the current column projection"""
+        raise NotImplementedError
+
+    def project_columns(self, columns):
+        """Return a new DataFrameIOFunction object
+        with a new column projection
+        """
+        raise NotImplementedError
+
+    def __call__(self, *args, **kwargs):
+        """Return a new DataFrame partition"""
+        raise NotImplementedError
