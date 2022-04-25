@@ -1102,7 +1102,11 @@ def make_blockwise_graph(
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to construct the specified set of output blocks
+    # Only need to construct the specified set of output blocks.
+    # Note that we must convert itertools.product to list,
+    # because we may need to loop through output_blocks more than
+    # once below (itertools.product already uses an internal list,
+    # so this is not a memory regression)
     output_blocks = output_blocks or list(
         itertools.product(*[range(dims[i]) for i in out_indices])
     )
