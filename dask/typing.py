@@ -6,7 +6,7 @@ from typing import Any, Protocol, TypeVar, runtime_checkable
 try:
     from IPython.display import DisplayObject
 except ImportError:
-    DisplayObject = object
+    DisplayObject = Any
 
 
 T = TypeVar("T")
