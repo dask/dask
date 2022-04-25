@@ -756,6 +756,15 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
 
 class _PackedArgCallable(DataFrameIOFunction):
+    """Packed-argument wrapper for DataFrameIOFunction
+
+    This is a private helper class for ``from_map``. This class
+    ensures that packed positional arguments will be expanded
+    before the underlying function (``func``) is called. This class
+    also handles optional metadata enforcement and column projection
+    (when ``func`` satisfies the ``DataFrameIOFunction`` protocol).
+    """
+
     def __init__(self, func, args=None, kwargs=None, meta=None, enforce_metadata=False):
         self.func = func
         self.args = args
