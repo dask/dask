@@ -770,9 +770,9 @@ def from_map(
 
     Parameters
     ----------
-    func : callable or DataFrameIOFunction
-        Function used to create each partition. If ``func`` inherits from
-        ``DataFrameIOFunction``, column projection will be enabled.
+    func : callable
+        Function used to create each partition. If ``func`` satisfies the
+        ``DataFrameIOFunction`` protocol, column projection will be enabled.
     inputs : Iterable
         Iterable object of arguments to pass to ``func``. The number of
         elements in ``inputs`` will correspond to the number of partitions
@@ -832,7 +832,7 @@ def from_map(
 
     # Get "projectable" column selection.
     # Note that this relies on the IO function
-    # inheriting from DataFrameIOFunction
+    # ducktyping with DataFrameIOFunction
     column_projection = func.columns if isinstance(func, DataFrameIOFunction) else None
 
     # Check for `produces_tasks` and `creation_info`.

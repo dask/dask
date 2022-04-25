@@ -3,7 +3,6 @@ from __future__ import annotations
 import functools
 import math
 import operator
-import warnings
 from collections import defaultdict
 from collections.abc import Callable
 from itertools import product
@@ -1148,6 +1147,8 @@ class DataFrameIOLayer(Blockwise):
     io_func : callable
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
+        Column projection will be supported for functions
+        that satisfy the ``DataFrameIOFunciton`` protocol.
     label : str (optional)
         String to use as a prefix in the place-holder collection
         name. If nothing is specified (default), "subset-" will
@@ -1220,22 +1221,15 @@ class DataFrameIOLayer(Blockwise):
 
         if columns and (self.columns is None or columns < set(self.columns)):
 
-            # Apply column projection in IO function
+            # Apply column projection in IO function.
+            # Must satisfy `DataFrameIOFunction` protocol
             if isinstance(self.io_func, DataFrameIOFunction):
                 io_func = self.io_func.project_columns(list(columns))
             else:
-                # Allow column projections for other layers, but
-                # raise a FutureWarning
-                try:
-                    io_func = self.io_func.project_columns(list(columns))
+                import pdb
 
-                    warnings.warn(
-                        "IO functions must inherit from DataFrameIOFunction "
-                        "to enable column projection in the future.",
-                        FutureWarning,
-                    )
-                except AttributeError:
-                    io_func = self.io_func
+                pdb.set_trace()
+                io_func = self.io_func
 
             layer = DataFrameIOLayer(
                 (self.label or "subset") + "-" + tokenize(self.name, columns),

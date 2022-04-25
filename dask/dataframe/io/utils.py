@@ -1,4 +1,5 @@
 import json
+from typing import Protocol, runtime_checkable
 from uuid import uuid4
 
 import fsspec
@@ -197,7 +198,8 @@ def _open_input_files(
     return [_set_context(open(path, **kwargs), context_stack) for path in paths]
 
 
-class DataFrameIOFunction:
+@runtime_checkable
+class DataFrameIOFunction(Protocol):
     """DataFrame IO function with projectable columns
 
     Enables column projection in ``DataFrameIOLayer``.
