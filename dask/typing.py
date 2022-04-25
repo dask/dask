@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Hashable, Mapping, MutableMapping, Sequence
+import abc
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, runtime_checkable
+
+from dask.context import GlobalMethod
 
 try:
     from IPython.display import DisplayObject
@@ -10,14 +13,14 @@ except ImportError:
 
 
 T = TypeVar("T")
-CollectionType = TypeVar("CollectionType", bound="DaskCollection", covariant=True)
+CollectionType = TypeVar("CollectionType", bound="DaskCollection")
 
 
-class SchedulerStaticMethod(Protocol):
-    """Protocol for defining the __dask_scheduler__ staticmethod attribute."""
+class SchedulerGetMethod(Protocol):
+    """Protocol for defining the __dask_scheduler__ attribute."""
 
+    @staticmethod
     def __call__(
-        self,
         dsk: Mapping,
         keys: Sequence[Hashable] | Hashable,
         **kwargs: Any,
@@ -39,6 +42,7 @@ class SchedulerStaticMethod(Protocol):
             The result.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
 
 class PostComputeCallable(Protocol):
@@ -64,6 +68,7 @@ class PostComputeCallable(Protocol):
             large NumPy array, which is then the result of compute.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
 
 class PostPersistCallable(Protocol[CollectionType]):
@@ -103,13 +108,15 @@ class PostPersistCallable(Protocol[CollectionType]):
             computed through a different graph.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
 
 @runtime_checkable
 class DaskCollection(Protocol):
     """Protocal defining the interface of a Dask collection."""
 
-    def __dask_graph__(self) -> Mapping | None:
+    @abc.abstractmethod
+    def __dask_graph__(self) -> Mapping:
         """The Dask task graph.
 
         The core Dask collections (Array, DatFrame, Bag, and Delayed)
@@ -119,15 +126,15 @@ class DaskCollection(Protocol):
 
         Returns
         -------
-        Mapping or None
-            The Dask task graph. If the task graph is ``None`` then
-            the instance will not be interpreted as a Dask collection.
-            If the instance returns a
+        Mapping
+            The Dask task graph. If the instance returns a
             :py:class:`dask.highlevelgraph.HighLevelGraph` then the
             :py:func:`__dask_layers__` method must be defined.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def __dask_keys__(self) -> list[Hashable]:
         """The output keys of the task graph.
 
@@ -137,7 +144,9 @@ class DaskCollection(Protocol):
             The output keys of the collection's task graph.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
         """Finalizer function and optional arguments to construct final result.
 
@@ -160,7 +169,9 @@ class DaskCollection(Protocol):
             be passed then this must be an empty tuple.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
         """Rebuilder function and optional arguments to contruct a persisted collection.
 
@@ -181,47 +192,45 @@ class DaskCollection(Protocol):
             empty tuple.
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def __dask_tokenize__(self) -> Hashable:
         """Value that must fully represent the object."""
+        raise NotImplementedError("Inheriting class must implement this method.")
 
-    @staticmethod
-    def __dask_optimize__(
-        dsk: MutableMapping,
-        keys: Sequence[Hashable],
-        **kwargs: Any,
-    ) -> MutableMapping:
-        """Given a graph and keys, return a new optimized graph.
+    __dask_optimize__: GlobalMethod | Callable
+    """Given a graph and keys, return a new optimized graph.
 
-        This method can be either a ``staticmethod`` or a
-        ``classmethod``, but not an ``instancemethod``.
+    This method can be either a ``staticmethod`` or a
+    ``classmethod``, but not an ``instancemethod``.
 
-        Note that graphs and keys are merged before calling
-        ``__dask_optimize__``; as such, the graph and keys passed to
-        this method may represent more than one collection sharing the
-        same optimize method.
+    Note that graphs and keys are merged before calling
+    ``__dask_optimize__``; as such, the graph and keys passed to
+    this method may represent more than one collection sharing the
+    same optimize method.
 
-        Parameters
-        ----------
-        dsk : MutableMapping
-            The merged graphs from all collections sharing the same
-            ``__dask_optimize__`` method.
-        keys : Sequence[Hashable]
-            A list of the outputs from ``__dask_keys__`` from all
-            collections sharing the same ``__dask_optimize__`` method.
-        **kwargs : Any
-            Extra keyword arguments forwarded from the call to
-           ``compute`` or ``persist``. Can be used or ignored as
-           needed.
+    Parameters
+    ----------
+    dsk : MutableMapping
+        The merged graphs from all collections sharing the same
+        ``__dask_optimize__`` method.
+    keys : Sequence[Hashable]
+        A list of the outputs from ``__dask_keys__`` from all
+        collections sharing the same ``__dask_optimize__`` method.
+    **kwargs : Any
+        Extra keyword arguments forwarded from the call to
+        ``compute`` or ``persist``. Can be used or ignored as
+        needed.
 
-        Returns
-        -------
-        MutableMapping
-            The optimized Dask graph.
+    Returns
+    -------
+    MutableMapping
+        The optimized Dask graph.
 
-        """
+    """
 
-    __dask_scheduler__: staticmethod[SchedulerStaticMethod]
+    __dask_scheduler__: SchedulerGetMethod
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
@@ -233,7 +242,8 @@ class DaskCollection(Protocol):
 
     """
 
-    def compute(self: CollectionType, **kwargs: Any) -> Any:
+    @abc.abstractmethod
+    def compute(self, **kwargs: Any) -> Any:
         """Compute this dask collection.
 
         This turns a lazy Dask collection into its in-memory
@@ -264,7 +274,9 @@ class DaskCollection(Protocol):
         dask.base.compute
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def persist(self: CollectionType, **kwargs: Any) -> CollectionType:
         """Persist this dask collection into memory
 
@@ -310,7 +322,9 @@ class DaskCollection(Protocol):
         dask.base.persist
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
+    @abc.abstractmethod
     def visualize(
         self,
         filename: str = "mydask",
@@ -362,11 +376,14 @@ class DaskCollection(Protocol):
         https://docs.dask.org/en/latest/optimize.html
 
         """
+        raise NotImplementedError("Inheriting class must implement this method.")
 
 
 @runtime_checkable
 class HLGDaskCollection(DaskCollection, Protocol):
     """Protocal defining a Dask collection that uses HighLevelGraphs."""
 
+    @abc.abstractmethod
     def __dask_layers__(self) -> Sequence[str]:
         """Names of the HighLevelGraph layers."""
+        raise NotImplementedError("Inheriting class must implement this method.")

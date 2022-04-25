@@ -10,7 +10,7 @@ import dask.bag as db
 import dask.dataframe as dd
 import dask.threaded
 from dask.base import DaskMethodsMixin, dont_optimize, tokenize
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.typing import (
     DaskCollection,
     HLGDaskCollection,
@@ -25,7 +25,7 @@ class HLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: HLGDaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping | None:
+    def __dask_graph__(self) -> Mapping:
         return self.based_on.__dask_graph__()
 
     def __dask_layers__(self) -> Sequence[str]:
@@ -56,7 +56,7 @@ class NotHLGCollection(DaskMethodsMixin):
     def __init__(self, based_on: DaskCollection) -> None:
         self.based_on = based_on
 
-    def __dask_graph__(self) -> Mapping | None:
+    def __dask_graph__(self) -> Mapping:
         return self.based_on.__dask_graph__()
 
     def __dask_keys__(self) -> list[Hashable]:
@@ -80,9 +80,11 @@ class NotHLGCollection(DaskMethodsMixin):
         return dont_optimize(dsk, keys, **kwargs)
 
 
-@delayed
-def increment(x: int) -> int:
+def increment_(x):
     return x + 1
+
+
+increment: Delayed = delayed(increment_)
 
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
@@ -117,9 +119,9 @@ def test_parameter_passing() -> None:
     def compute(coll: DaskCollection) -> Any:
         return coll.compute()
 
-    a = increment(2)
+    a: Delayed = increment(2)
     hlgc = HLGCollection(a)
     assert compute(hlgc) == 3
 
-    d = increment(3)
+    d: Delayed = increment(3)
     assert compute(d) == 4
