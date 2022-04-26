@@ -1771,37 +1771,19 @@ def test_concat2():
     assert dd.concat([a]) is a
     for case in cases:
         pdcase = [_c.compute() for _c in case]
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case)
-
+        expected = pd.concat(pdcase, sort=False)
+        result = dd.concat(case)
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(expected, result)
+        assert set(result.dask) == set(dd.concat(case).dask)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case).dask)
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join="inner", sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case, join="inner")
+        expected = pd.concat(pdcase, join="inner", sort=False)
+        result = dd.concat(case, join="inner")
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(result, result)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case, join="inner").dask)
+        assert set(result.dask) == set(dd.concat(case, join="inner").dask)
 
 
 def test_concat3():
@@ -1818,31 +1800,18 @@ def test_concat3():
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2])
-
+    expected = pd.concat([pdf1, pdf2], sort=False)
+    result = dd.concat([ddf1, ddf2])
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
+    )
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2, ddf3])
+    expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
+    result = dd.concat([ddf1, ddf2, ddf3])
     assert result.divisions == (
         ddf1.divisions[:-1] + ddf2.divisions[:-1] + ddf3.divisions
     )
@@ -1851,12 +1820,10 @@ def test_concat3():
     )
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
-            pd.concat([pdf1, pdf2, pdf3]),
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+        pd.concat([pdf1, pdf2, pdf3]),
+    )
 
 
 def test_concat4_interleave_partitions():
