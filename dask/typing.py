@@ -104,8 +104,8 @@ class DaskCollection(Protocol):
         -------
         PostComputeCallable
             Callable that recieves the sequence of the results of each
-            final key along with optional arguments. The signure must
-            be ``finalize(results: Sequence[Any], *args)``.
+            final key along with optional arguments. An example signature
+            would be ``finalize(results: Sequence[Any], *args)``.
         tuple[Any, ...]
             Optional arguments passed to the function following the
             key results (the `*args` part of the
@@ -146,8 +146,10 @@ class DaskCollection(Protocol):
     __dask_optimize__: Any
     """Given a graph and keys, return a new optimized graph.
 
-    This method can be either a ``staticmethod`` or a
-    ``classmethod``, but not an ``instancemethod``.
+    This method can be either a ``staticmethod`` or a ``classmethod``,
+    but not an ``instancemethod``. For example implementations see the
+    definitions of ``__dask_optimize__`` in the core Dask collections:
+    ``dask.array.Array``, ``dask.dataframe.DataFrame``, etc.
 
     Note that graphs and keys are merged before calling
     ``__dask_optimize__``; as such, the graph and keys passed to
