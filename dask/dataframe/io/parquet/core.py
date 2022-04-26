@@ -166,7 +166,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    gather_statistics=None,
+    calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
     split_row_groups=False,
@@ -240,11 +240,13 @@ def read_parquet(
         installed, and falls back to ``pyarrow`` otherwise. Note that in the
         future this default ordering for 'auto' will switch, with ``pyarrow``
         being used if it is installed, and falling back to ``fastparquet``.
-    gather_statistics : bool, default None
-        Gather the statistics for each dataset partition. By default,
-        this will only be done if the _metadata file is available. Otherwise,
-        statistics will only be gathered if True, because the footer of
-        every file will be parsed (which is very slow on some systems).
+    calculate_divisions : bool, default False
+        Whether to use Parquet metadata statistics (when available) to
+        calculate divisions for the output DataFrame collection. This option
+        will be ignored if ``index`` is not specified and there is no physical
+        index column specified in the custom "pandas" Parquet metadata. Note
+        that ``calculate_divisions=True`` may be extremely slow on some systems,
+        and should be avoided when reading from remote storage.
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
@@ -271,11 +273,10 @@ def read_parquet(
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter requires `gather_statistics=True`, and is
-        only used when `chunksize` is specified or when `split_row_groups` is
-        an integer >1. A setting of True means that any two file paths may be
-        aggregated into the same output partition, while False means that
-        inter-file aggregation is prohibited.
+        partition. This parameter is only used when `chunksize` is specified
+        or when `split_row_groups` is an integer >1. A setting of True means
+        that any two file paths may be aggregated into the same output partition,
+        while False means that inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
         specified. In this case, we allow the aggregation of any two files
@@ -342,6 +343,23 @@ def read_parquet(
             FutureWarning,
         )
 
+    # Handle gather_statistics deprecation
+    if "gather_statistics" in kwargs:
+        if calculate_divisions is None:
+            calculate_divisions = kwargs.pop("gather_statistics")
+            warnings.warn(
+                "``gather_statistics`` is deprecated and will be removed in a "
+                "future release. Please use ``calculate_divisions`` instead.",
+                FutureWarning,
+            )
+        else:
+            warnings.warn(
+                f"``gather_statistics`` is deprecated. Ignoring this option "
+                f"in favor of ``calculate_divisions={calculate_divisions}``",
+                FutureWarning,
+            )
+    calculate_divisions = calculate_divisions or False
+
     # We support a top-level `parquet_file_extension` kwarg, but
     # must check if the deprecated `require_extension` option is
     # being passed to the engine. If `parquet_file_extension` is
@@ -368,7 +386,7 @@ def read_parquet(
         "index": index,
         "storage_options": storage_options,
         "engine": engine,
-        "gather_statistics": gather_statistics,
+        "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
@@ -407,21 +425,12 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    if chunksize or (
-        split_row_groups and int(split_row_groups) > 1 and aggregate_files
-    ):
-        # Require `gather_statistics=True` if `chunksize` is used,
-        # or if `split_row_groups>1` and we are aggregating files.
-        if gather_statistics is False:
-            raise ValueError("read_parquet options require gather_statistics=True")
-        gather_statistics = True
-
     read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
         index=index,
-        gather_statistics=gather_statistics,
+        gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
         chunksize=chunksize,

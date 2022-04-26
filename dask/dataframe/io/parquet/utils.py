@@ -38,9 +38,8 @@ class Engine:
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
         gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
-            gather statistics data if there is a _metadata file available to
-            query (cheaply)
+            Whether or not to gather statistics to calculate divisions
+            for the output DataFrame collection.
         filters: list
             List of filters to apply, like ``[('x', '>', 0), ...]``.
         **kwargs: dict (of dicts)

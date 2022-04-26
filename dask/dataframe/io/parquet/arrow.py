@@ -825,8 +825,6 @@ class ArrowDatasetEngine(Engine):
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
-                if gather_statistics is None:
-                    gather_statistics = True
             elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
@@ -859,8 +857,6 @@ class ArrowDatasetEngine(Engine):
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
-                    if gather_statistics is None:
-                        gather_statistics = True
 
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
@@ -879,24 +875,6 @@ class ArrowDatasetEngine(Engine):
                 ),
                 **_dataset_kwargs,
             )
-
-        # At this point, we know if `split_row_groups` should be
-        # set to `True` by default.  If the user has not specified
-        # this option, we will only collect statistics if there is
-        # a global "_metadata" file available, otherwise we will
-        # opt for `gather_statistics=False`. For `ArrowDatasetEngine`,
-        # statistics are only required to calculate divisions
-        # and/or aggregate row-groups using `chunksize` (not for
-        # filtering).
-        #
-        # By default, we will create an output partition for each
-        # row group in the dataset (`split_row_groups=True`).
-        # However, we will NOT split by row-group if
-        # `gather_statistics=False`, because this can be
-        # interpreted as an indication that metadata overhead should
-        # be avoided at all costs.
-        if gather_statistics is None:
-            gather_statistics = False
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -1142,20 +1120,6 @@ class ArrowDatasetEngine(Engine):
             dataset_info["metadata_task_size"], fs
         )
 
-        # Cannot gather_statistics if our `metadata` is a list
-        # of paths, or if we are building a multiindex (for now).
-        # We also don't "need" to gather statistics if we don't
-        # want to apply any filters or calculate divisions. Note
-        # that the `ArrowDatasetEngine` doesn't even require
-        # `gather_statistics=True` for filtering.
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
-        )
-        if len(index_cols) > 1:
-            gather_statistics = False
-        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
-            gather_statistics = False
-
         # Make sure that any `in`-predicate filters have iterable values
         filter_columns = set()
         if filters is not None:
@@ -1168,23 +1132,34 @@ class ArrowDatasetEngine(Engine):
                 filter_columns.add(col)
 
         # Determine which columns need statistics.
+        # At this point, gather_statistics is only True if
+        # the user specified calculate_divisions=True
         stat_col_indices = {}
+        _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
         for i, name in enumerate(schema.names):
-            if name in index_cols or name in filter_columns:
+            if name in _index_cols or name in filter_columns:
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue
                 stat_col_indices[name] = i
 
-        # If the user has not specified `gather_statistics`,
-        # we will only do so if there are specific columns in
-        # need of statistics.
-        # NOTE: We cannot change `gather_statistics` from True
-        # to False (even if `stat_col_indices` is empty), in
-        # case a `chunksize` was specified, and the row-group
-        # statistics are needed for part aggregation.
-        if gather_statistics is None:
-            gather_statistics = bool(stat_col_indices)
+        # We now have enough info to set the final gather_statistics
+        gather_statistics = None if not gather_statistics else True
+        if (
+            chunksize
+            or (int(split_row_groups) > 1 and aggregation_depth)
+            or filter_columns.intersection(stat_col_indices)
+        ):
+            # Need to gather statistics if we are aggregating files
+            # or filtering
+            # NOTE: Should avoid gathering statistics when the agg
+            # does not depend on a row-group statistic
+            gather_statistics = True
+        elif not stat_col_indices or gather_statistics is None:
+            # Not aggregating files/row-groups.
+            # We only need to gather statistics if `stat_col_indices`
+            # is populated
+            gather_statistics = False
 
         # Add common kwargs
         common_kwargs = {

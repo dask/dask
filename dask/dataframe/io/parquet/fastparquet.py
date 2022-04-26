@@ -381,11 +381,6 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated later).
-        #
-        # This logic is mostly to handle `gather_statistics=False` cases,
-        # because this also means we should avoid scanning every file in the
-        # dataset.  If _metadata is available, set `gather_statistics=True`
-        # (if `gather_statistics=None`).
 
         # Extract "supported" key-word arguments from `kwargs`.
         # Split items into `dataset_kwargs` and `read_kwargs`
@@ -423,8 +418,6 @@ class FastParquetEngine(Engine):
                     open_with=fs.open,
                     **dataset_kwargs,
                 )
-                if gather_statistics is None:
-                    gather_statistics = True
             else:
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
@@ -636,47 +629,33 @@ class FastParquetEngine(Engine):
             dataset_info["metadata_task_size"], fs
         )
 
-        # We don't "need" to gather statistics if we don't
-        # want to apply filters, aggregate files, or calculate
-        # divisions.
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
-        )
-        if len(index_cols) > 1:
-            gather_statistics = False
-        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
-            gather_statistics = False
-
-        # Make sure gather_statistics allows filtering
-        # (if filters are desired)
-        if filters:
-            # Filters may require us to gather statistics
-            if gather_statistics is False and pf.cats:
-                warnings.warn(
-                    "Filtering with gather_statistics=False. "
-                    "Only partition columns will be filtered correctly."
-                )
-            elif gather_statistics is False:
-                raise ValueError("Cannot apply filters with gather_statistics=False")
-            elif not gather_statistics:
-                gather_statistics = True
-
         # Determine which columns need statistics.
+        # At this point, gather_statistics is only True if
+        # the user specified calculate_divisions=True
         filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
+        _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
         for i, name in enumerate(pf.columns):
-            if name in index_cols or name in filter_columns:
+            if name in _index_cols or name in filter_columns:
                 stat_col_indices[name] = i
 
-        # If the user has not specified `gather_statistics`,
-        # we will only do so if there are specific columns in
-        # need of statistics.
-        # NOTE: We cannot change `gather_statistics` from True
-        # to False (even if `stat_col_indices` is empty), in
-        # case a `chunksize` was specified, and the row-group
-        # statistics are needed for part aggregation.
-        if gather_statistics is None:
-            gather_statistics = bool(stat_col_indices)
+        # We now have enough info to set the final gather_statistics
+        gather_statistics = None if not gather_statistics else True
+        if (
+            chunksize
+            or (int(split_row_groups) > 1 and aggregation_depth)
+            or filter_columns.intersection(stat_col_indices)
+        ):
+            # Need to gather statistics if we are aggregating files
+            # or filtering
+            # NOTE: Should avoid gathering statistics when the agg
+            # does not depend on a row-group statistic
+            gather_statistics = True
+        elif not stat_col_indices or gather_statistics is None:
+            # Not aggregating files/row-groups.
+            # We only need to gather statistics if `stat_col_indices`
+            # is populated
+            gather_statistics = False
 
         # Define common_kwargs
         common_kwargs = {
