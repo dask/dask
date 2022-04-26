@@ -12,7 +12,7 @@ except ImportError:
 
 CollType_co = TypeVar("CollType_co", bound="DaskCollection")
 CollType_contra = TypeVar("CollType_contra", bound="DaskCollection", covariant=True)
-PostComputeCallable = Callable[..., Any]
+PostComputeCallable = Callable
 
 
 class PostPersistCallable(Protocol[CollType_contra]):
