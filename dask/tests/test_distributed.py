@@ -760,3 +760,18 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     )
 
     assert (await c.compute(result)).val == 170
+
+
+def test_set_index_no_resursion_error(c):
+    # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("dask.dataframe")
+    try:
+        ddf = (
+            dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")
