@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 
 from dask.base import tokenize
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.core import (
     DataFrame,
     Series,
@@ -2043,10 +2044,10 @@ class _GroupBy:
             meta=meta,
         )
 
-        if self.group_keys:
+        if PANDAS_GT_150 and self.group_keys:
             return result.map_partitions(lambda df: df.droplevel(self.by))
-        else:
-            return result
+
+        return result
 
     @derived_from(pd.core.groupby.GroupBy)
     def ffill(self, limit=None):
