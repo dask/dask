@@ -4391,9 +4391,7 @@ class DataFrame(_Frame):
             this can be expensive.
             Note that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data; if this is untrue you should
-            leave divisions empty and call ``repartition`` after ``set_index``.
-        inplace: bool, optional
-            Modifying the DataFrame in place is not supported by Dask.
+            leave divisi := e DataFrame in place is not supported by Dask.
             Defaults to False.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
@@ -6117,9 +6115,7 @@ def map_partitions(
 
         args2.insert(0, BlockwiseDepDict(partition_info))
         orig_func = func
-
-        def func(partition_info, *args, **kwargs):
-            return orig_func(*args, **kwargs, partition_info=partition_info)
+        func = lambda partition_info, *args, **kwargs: orig_func(*args, **kwargs, partition_info=partition_info)
 
     if enforce_metadata:
         dsk = partitionwise_graph(
