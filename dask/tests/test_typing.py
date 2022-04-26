@@ -20,7 +20,6 @@ da = pytest.importorskip("dask.array")
 db = pytest.importorskip("dask.bag")
 dds = pytest.importorskip("dask.datasets")
 dd = pytest.importorskip("dask.dataframe")
-pandas = pytest.importorskip("pandas")
 
 
 def finalize(x: Sequence[Any]) -> Any:
