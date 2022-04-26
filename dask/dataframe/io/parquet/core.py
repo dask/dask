@@ -9,7 +9,7 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from dask.base import compute_as_if_collection, tokenize
+from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar, new_dd_object
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
@@ -871,12 +871,10 @@ def to_parquet(
 
     # Convert data_write + dsk to computable collection
     graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
+    out = Scalar(graph, final_name, "")
     if compute:
-        return compute_as_if_collection(
-            Scalar, graph, [(final_name, 0)], **compute_kwargs
-        )
-    else:
-        return Scalar(graph, final_name, "")
+        return out.compute(**compute_kwargs)
+    return out
 
 
 def create_metadata_file(
