@@ -914,7 +914,7 @@ def from_map(
     produces_tasks = kwargs.pop("produces_tasks", False)
     creation_info = kwargs.pop("creation_info", None)
 
-    if produces_tasks:
+    if produces_tasks or len(iterables) == 1:
         if len(iterables) > 1:
             # Tasks are not detected correctly when they are "packed"
             # within an outer list/tuple
@@ -940,10 +940,13 @@ def from_map(
     # NOTE: Most of the metadata-handling logic used here
     # is copied directly from `map_partitions`
     if meta is None:
-        if packed:
-            meta = _emulate(func, *inputs[0], *(args or []), udf=True, **kwargs)
-        else:
-            meta = _emulate(func, inputs[0], *(args or []), udf=True, **kwargs)
+        meta = _emulate(
+            func,
+            *(inputs[0] if packed else inputs[:1]),
+            *(args or []),
+            udf=True,
+            **kwargs,
+        )
         meta_is_emulated = True
     else:
         meta = make_meta(meta)
