@@ -4391,7 +4391,9 @@ class DataFrame(_Frame):
             this can be expensive.
             Note that if ``sorted=True``, specified divisions are assumed to match
             the existing partitions in the data; if this is untrue you should
-            leave divisi := e DataFrame in place is not supported by Dask.
+            leave divisions empty and call ``repartition`` after ``set_index``.
+        inplace: bool, optional
+            Modifying the DataFrame in place is not supported by Dask.
             Defaults to False.
         shuffle: string, 'disk' or 'tasks', optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
