@@ -132,4 +132,4 @@ def test_parameter_passing() -> None:
     assert compute(d) == 4
 
     array: da.Array = da.ones(10)
-    assert compute(array).shape == (1,)
+    assert compute(array).shape == (10,)
