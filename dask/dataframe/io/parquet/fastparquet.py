@@ -1161,11 +1161,13 @@ class FastParquetEngine(Engine):
                 "because this required data in memory."
             )
 
+        metadata_file_exists = False
         if append:
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
+                metadata_file_exists = fs.exists(fs.sep.join([path, "_metadata"]))
             except (OSError, ValueError):
                 # append for create
                 append = False
@@ -1224,8 +1226,8 @@ class FastParquetEngine(Engine):
             )
             fmd.key_value_metadata = kvm
 
-        schema = None  # ArrowEngine compatibility
-        return (fmd, schema, i_offset)
+        extra_write_kwargs = {"fmd": fmd}
+        return i_offset, fmd, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def write_partition(

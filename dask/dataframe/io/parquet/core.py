@@ -616,8 +616,10 @@ def to_parquet(
         Custom key/value metadata to include in all footer metadata (and
         in the global "_metadata" file, if applicable).  Note that the custom
         metadata may not contain the reserved b"pandas" key.
-    write_metadata_file : bool, default True
-        Whether to write the special "_metadata" file.
+    write_metadata_file : bool or None, default None
+        Whether to write the special ``_metadata`` file. If ``None`` (the
+        default), a ``_metadata`` file will only be written if ``append=True``
+        and the dataset already has a ``_metadata`` file.
     compute : bool, default True
         If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
         then a ``dask.dataframe.Scalar`` object is returned for future computation.
@@ -721,6 +723,10 @@ def to_parquet(
             # (3) The path is not the current working directory
             fs.rm(path, recursive=True)
 
+    # Always skip divisions checks if divisions are unknown
+    if not df.known_divisions:
+        ignore_divisions = True
+
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
     division_info = {"divisions": df.divisions, "name": df.index.name}
@@ -770,31 +776,17 @@ def to_parquet(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    _to_parquet_kwargs = {
-        "engine",
-        "compression",
-        "write_index",
-        "append",
-        "ignore_divisions",
-        "partition_on",
-        "storage_options",
-        "write_metadata_file",
-        "compute",
-    }
-    kwargs_pass = {k: v for k, v in kwargs.items() if k not in _to_parquet_kwargs}
+    if custom_metadata and b"pandas" in custom_metadata.keys():
+        raise ValueError(
+            "User-defined key/value metadata (custom_metadata) can not "
+            "contain a b'pandas' key.  This key is reserved by Pandas, "
+            "and overwriting the corresponding value can render the "
+            "entire dataset unreadable."
+        )
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
-    if custom_metadata:
-        if b"pandas" in custom_metadata.keys():
-            raise ValueError(
-                "User-defined key/value metadata (custom_metadata) can not "
-                "contain a b'pandas' key.  This key is reserved by Pandas, "
-                "and overwriting the corresponding value can render the "
-                "entire dataset unreadable."
-            )
-        kwargs_pass["custom_metadata"] = custom_metadata
-    meta, schema, i_offset = engine.initialize_write(
+    i_offset, fmd, metadata_file_exists, extra_write_kwargs = engine.initialize_write(
         df,
         fs,
         path,
@@ -804,8 +796,14 @@ def to_parquet(
         division_info=division_info,
         index_cols=index_cols,
         schema=schema,
-        **kwargs_pass,
+        custom_metadata=custom_metadata,
+        **kwargs,
     )
+
+    # By default we only write a metadata file when appending if one already
+    # exists
+    if append and write_metadata_file is None:
+        write_metadata_file = metadata_file_exists
 
     # Check that custom name_function is valid,
     # and that it will produce unique names
@@ -817,10 +815,6 @@ def to_parquet(
             raise ValueError("``name_function`` must produce unique filenames.")
 
     # Create Blockwise layer for parquet-data write
-    kwargs_pass["fmd"] = meta
-    kwargs_pass["compression"] = compression
-    kwargs_pass["index_cols"] = index_cols
-    kwargs_pass["schema"] = schema
     data_write = df.map_partitions(
         ToParquetFunctionWrapper(
             engine,
@@ -830,7 +824,11 @@ def to_parquet(
             write_metadata_file,
             i_offset,
             name_function,
-            kwargs_pass,
+            toolz.merge(
+                kwargs,
+                {"compression": compression, "custom_metadata": custom_metadata},
+                extra_write_kwargs,
+            ),
         ),
         BlockIndex((df.npartitions,)),
         # Pass in the original metadata to avoid
@@ -853,7 +851,7 @@ def to_parquet(
                 engine.write_metadata,
                 [
                     data_write.__dask_keys__(),
-                    meta,
+                    fmd,
                     fs,
                     path,
                 ],
