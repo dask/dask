@@ -639,8 +639,6 @@ class FastParquetEngine(Engine):
         # We don't "need" to gather statistics if we don't
         # want to apply filters, aggregate files, or calculate
         # divisions.
-        if split_row_groups is None:
-            split_row_groups = False
         _need_aggregation_stats = chunksize or (
             int(split_row_groups) > 1 and aggregation_depth
         )
@@ -851,7 +849,7 @@ class FastParquetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=True,
+        split_row_groups=False,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
