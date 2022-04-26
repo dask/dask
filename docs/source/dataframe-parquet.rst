@@ -103,18 +103,20 @@ disable loading the ``_metadata`` file by specifying
    ...      ignore_metadata_file=True  # don't read the _metadata file
    ... )
 
-If no ``_metadata`` file is present, Dask will load each parquet file
-individually as a partition in the Dask dataframe. This is performant provided
-all files are of reasonable size.
+Partition Size
+~~~~~~~~~~~~~~
+
+By default, Dask will load each parquet file individually as a partition in
+the Dask dataframe. This is performant provided all files are of reasonable size.
 
 We recommend aiming for 10-250 MiB in-memory size per file once loaded into
 pandas. Too large files can lead to excessive memory usage on a single worker,
 while too small files can lead to poor performance as the overhead of Dask
-dominates. If you need to read a parquet dataset composed of many large files
-and lacking a ``_metadata`` file, you can pass ``split_row_groups=True`` to
-have Dask partition your data by *row group* instead of by *file*. Note that
-this can be *extremely* slow in large datasets, as the a footer needs to be
-loaded from every file in the dataset.
+dominates. If you need to read a parquet dataset composed of many large files,
+you can pass ``split_row_groups=True`` to have Dask partition your data by
+*row group* instead of by *file*. Note that this can be *extremely* slow in
+large datasets, as the a footer needs to be loaded from every file in the
+dataset if a global ``_metadata`` file is not available.
 
 Column Selection
 ~~~~~~~~~~~~~~~~
