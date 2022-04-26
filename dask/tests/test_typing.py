@@ -5,8 +5,6 @@ from typing import Any
 
 import pytest
 
-import dask.array as da
-import dask.bag as db
 import dask.threaded
 from dask.base import DaskMethodsMixin, dont_optimize, tokenize
 from dask.context import globalmethod
@@ -18,6 +16,8 @@ from dask.typing import (
     PostPersistCallable,
 )
 
+da = pytest.importorskip("dask.array")
+db = pytest.importorskip("dask.bag")
 dds = pytest.importorskip("dask.datasets")
 dd = pytest.importorskip("dask.dataframe")
 pandas = pytest.importorskip("pandas")
@@ -99,10 +99,12 @@ def assert_isinstance(coll: DaskCollection, protocol: Any):
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
 def test_isinstance_core(protocol: Any) -> None:
+    from dask.array import Array
+    from dask.bag import Bag
     from dask.dataframe import DataFrame
 
-    arr: da.Array = da.ones(10)
-    bag: db.Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    arr: Array = da.ones(10)
+    bag: Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
     df: DataFrame = dds.timeseries()
     dobj: Delayed = increment(2)
 
@@ -125,6 +127,8 @@ def test_isinstance_custom() -> None:
 
 
 def test_parameter_passing() -> None:
+    from dask.array import Array
+
     def compute(coll: DaskCollection) -> Any:
         return coll.compute()
 
@@ -135,5 +139,5 @@ def test_parameter_passing() -> None:
     d: Delayed = increment(3)
     assert compute(d) == 4
 
-    array: da.Array = da.ones(10)
+    array: Array = da.ones(10)
     assert compute(array).shape == (10,)
