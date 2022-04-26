@@ -367,11 +367,7 @@ def test_set_index_with_explicit_divisions():
 
     ddf = dd.from_pandas(df, npartitions=2)
 
-    def throw(*args, **kwargs):
-        raise Exception()
-
-    with dask.config.set(get=throw):
-        ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
+    ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
     df2 = df.set_index("x")
@@ -431,15 +427,10 @@ def test_set_index_divisions_sorted():
     )
     df = ddf.compute()
 
-    def throw(*args, **kwargs):
-        raise Exception("Shouldn't have computed")
-
-    with dask.config.set(get=throw):
-        res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
+    res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index("x"))
 
-    with dask.config.set(get=throw):
-        res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
+    res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
     assert_eq(res, df.set_index("y"))
 
     # with sorted=True, divisions must be same length as df.divisions
@@ -1042,7 +1033,9 @@ def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
 
     ddf.set_index("x", npartitions=npartitions)
     ntimes = next(count)
-    assert ntimes == nparts
+    assert (
+        ntimes == 2 * nparts
+    )  # twice because of the aditional .compute() for checking nulls
 
 
 def test_set_index_errors_with_inplace_kwarg():

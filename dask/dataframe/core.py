@@ -7,7 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import ClassVar, Literal
+from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -400,7 +400,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._divisions = value
 
     @property
-    def npartitions(self):
+    def npartitions(self) -> int:
         """Return number of partitions"""
         return len(self.divisions) - 1
 
@@ -4283,14 +4283,14 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by,
-        npartitions=None,
-        ascending=True,
-        na_position="last",
-        sort_function=None,
-        sort_function_kwargs=None,
+        by: str,
+        npartitions: int | Literal["auto"] | None = None,
+        ascending: bool = True,
+        na_position: Literal["first"] | Literal["last"] = "last",
+        sort_function: Callable | None = None,
+        sort_function_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -6115,7 +6115,9 @@ def map_partitions(
 
         args2.insert(0, BlockwiseDepDict(partition_info))
         orig_func = func
-        func = lambda partition_info, *args, **kwargs: orig_func(*args, **kwargs, partition_info=partition_info)
+
+        def func(partition_info, *args, **kwargs):
+            return orig_func(*args, **kwargs, partition_info=partition_info)
 
     if enforce_metadata:
         dsk = partitionwise_graph(
@@ -6266,10 +6268,16 @@ def quantile(df, q, method="default"):
     if is_series_like(meta):
         # Index.quantile(list-like) must be pd.Series, not pd.Index
         df_name = df.name
-        finalize_tsk = lambda tsk: (series_typ, tsk, q, None, df_name)
+
+        def finalize_tsk(tsk):
+            return (series_typ, tsk, q, None, df_name)
+
         return_type = Series
     else:
-        finalize_tsk = lambda tsk: (getitem, tsk, 0)
+
+        def finalize_tsk(tsk):
+            return (getitem, tsk, 0)
+
         return_type = Scalar
         q = [q]
 

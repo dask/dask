@@ -5,6 +5,8 @@ import shutil
 import tempfile
 import uuid
 import warnings
+from collections.abc import Sequence
+from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
@@ -25,13 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 def _calculate_divisions(
-    df,
-    partition_col,
-    repartition,
-    npartitions,
-    upsample=1.0,
-    partition_size=128e6,
-):
+    df: DataFrame,
+    partition_col: Series,
+    repartition: bool,
+    npartitions: int,
+    upsample: float = 1.0,
+    partition_size: float = 128e6,
+) -> Tuple[List, List, List]:
     """
     Utility function to calculate divisions for calls to `map_partitions`
     """
@@ -76,17 +78,17 @@ def _calculate_divisions(
 
 
 def sort_values(
-    df,
-    by,
-    npartitions=None,
-    ascending=True,
-    na_position="last",
-    upsample=1.0,
-    partition_size=128e6,
-    sort_function=None,
-    sort_function_kwargs=None,
+    df: DataFrame,
+    by: Union[str, List[str]],
+    npartitions: Optional[Union[int, Literal["auto"]]] = None,
+    ascending: Union[bool, List[bool]] = True,
+    na_position: Union[Literal["first"], Literal["last"]] = "last",
+    upsample: float = 1.0,
+    partition_size: float = 128e6,
+    sort_function: Optional[Callable] = None,
+    sort_function_kwargs: Optional[Mapping[str, Any]] = None,
     **kwargs,
-):
+) -> DataFrame:
     """See DataFrame.sort_values for docstring"""
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
@@ -174,17 +176,17 @@ def sort_values(
 
 
 def set_index(
-    df,
-    index,
-    npartitions=None,
-    shuffle=None,
-    compute=False,
-    drop=True,
-    upsample=1.0,
-    divisions=None,
-    partition_size=128e6,
+    df: DataFrame,
+    index: Union[str, Series],
+    npartitions: Optional[Union[int, Literal["auto"]]] = None,
+    shuffle: Optional[str] = None,
+    compute: bool = False,
+    drop: bool = True,
+    upsample: float = 1.0,
+    divisions: Optional[Sequence] = None,
+    partition_size: float = 128e6,
     **kwargs,
-):
+) -> DataFrame:
     """See _Frame.set_index for docstring"""
     if isinstance(index, Series) and index._name == df.index._name:
         return df
@@ -236,7 +238,7 @@ def set_index(
     )
 
 
-def remove_nans(divisions):
+def remove_nans(divisions: Sequence) -> List:
     """Remove nans from divisions
 
     These sometime pop up when we call min/max on an empty partition
@@ -266,8 +268,14 @@ def remove_nans(divisions):
 
 
 def set_partition(
-    df, index, divisions, max_branch=32, drop=True, shuffle=None, compute=None
-):
+    df: DataFrame,
+    index: Union[str, Series],
+    divisions: Sequence,
+    max_branch: int = 32,
+    drop: bool = True,
+    shuffle: Optional[str] = None,
+    compute: Optional[bool] = None,
+) -> DataFrame:
     """Group DataFrame by index
 
     Sets a new index and partitions data along that index according to
@@ -304,7 +312,7 @@ def set_partition(
         # pd.isna considers tuples to be scalars. Convert to a list.
         divisions = list(divisions)
 
-    if np.isscalar(index):
+    if not isinstance(index, Series):
         dtype = df[index].dtype
     else:
         dtype = index.dtype
@@ -321,7 +329,7 @@ def set_partition(
     else:
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
-    if np.isscalar(index):
+    if not isinstance(index, Series):
         partitions = df[index].map_partitions(
             set_partitions_pre, divisions=divisions, meta=meta
         )
@@ -342,7 +350,7 @@ def set_partition(
         ignore_index=True,
     )
 
-    if np.isscalar(index):
+    if not isinstance(index, Series):
         df4 = df3.map_partitions(
             set_index_post_scalar,
             index_name=index,
@@ -983,7 +991,7 @@ def fix_overlap(ddf, mins, maxes, lens):
     """
     name = "fix-overlap-" + tokenize(ddf, mins, maxes, lens)
 
-    non_empties = [i for i, l in enumerate(lens) if l != 0]
+    non_empties = [i for i, length in enumerate(lens) if length != 0]
     # drop empty partitions by mapping each partition in a new graph to a particular
     # partition on the old graph.
     dsk = {(name, i): (ddf._name, div) for i, div in enumerate(non_empties)}
@@ -1016,7 +1024,9 @@ def fix_overlap(ddf, mins, maxes, lens):
     return new_dd_object(graph, name, ddf._meta, divisions)
 
 
-def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
+def _compute_partition_stats(
+    column: Series, allow_overlap: bool = False, **kwargs
+) -> Tuple[List, List, List[int]]:
     """For a given column, compute the min, max, and len of each partition.
 
     And make sure that the partitions are sorted relative to each other.
@@ -1028,8 +1038,8 @@ def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
     mins, maxes, lens = compute(mins, maxes, lens, **kwargs)
     mins = remove_nans(mins)
     maxes = remove_nans(maxes)
-    non_empty_mins = [m for m, l in zip(mins, lens) if l != 0]
-    non_empty_maxes = [m for m, l in zip(maxes, lens) if l != 0]
+    non_empty_mins = [m for m, length in zip(mins, lens) if length != 0]
+    non_empty_maxes = [m for m, length in zip(maxes, lens) if length != 0]
     if (
         sorted(non_empty_mins) != non_empty_mins
         or sorted(non_empty_maxes) != non_empty_maxes
@@ -1049,20 +1059,21 @@ def _compute_partition_stats(column, allow_overlap=False, **kwargs) -> tuple:
             f"for each partition are : {list(zip(mins, maxes, lens))}",
             UserWarning,
         )
+    lens = methods.tolist(lens)
     if not allow_overlap:
         return (mins, maxes, lens)
     else:
         return (non_empty_mins, non_empty_maxes, lens)
 
 
-def compute_divisions(df, col=None, **kwargs) -> tuple:
+def compute_divisions(df: DataFrame, col: Optional[Any] = None, **kwargs) -> Tuple:
     column = df.index if col is None else df[col]
     mins, maxes, _ = _compute_partition_stats(column, allow_overlap=False, **kwargs)
 
     return tuple(mins) + (maxes[-1],)
 
 
-def compute_and_set_divisions(df, **kwargs):
+def compute_and_set_divisions(df: DataFrame, **kwargs) -> DataFrame:
     mins, maxes, lens = _compute_partition_stats(df.index, allow_overlap=True, **kwargs)
     if len(mins) == len(df.divisions) - 1:
         df._divisions = tuple(mins) + (maxes[-1],)
@@ -1072,8 +1083,15 @@ def compute_and_set_divisions(df, **kwargs):
     return fix_overlap(df, mins, maxes, lens)
 
 
-def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
-    if isinstance(index, _Frame):
+def set_sorted_index(
+    df: DataFrame,
+    index: Union[str, Series],
+    drop: bool = True,
+    divisions: Optional[Sequence] = None,
+    **kwargs,
+) -> DataFrame:
+
+    if isinstance(index, Series):
         meta = df._meta.set_index(index._meta, drop=drop)
     else:
         meta = df._meta.set_index(index, drop=drop)
