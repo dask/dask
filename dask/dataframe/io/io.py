@@ -800,7 +800,7 @@ class _PackedArgCallable(DataFrameIOFunction):
             )
         return self
 
-    def __call__(self, packed_arg, **kwargs):
+    def __call__(self, packed_arg):
         if not self.packed:
             packed_arg = [packed_arg]
         if self.enforce_metadata:
@@ -810,13 +810,11 @@ class _PackedArgCallable(DataFrameIOFunction):
                 _func=self.func,
                 _meta=self.meta,
                 **(self.kwargs or {}),
-                **kwargs,
             )
         return self.func(
             *packed_arg,
             *(self.args or []),
             **(self.kwargs or {}),
-            **kwargs,
         )
 
 
@@ -968,14 +966,17 @@ def from_map(
     meta = make_meta(meta)
 
     # Define io_func
-    io_func = _PackedArgCallable(
-        func,
-        args=args,
-        kwargs=kwargs,
-        meta=meta if enforce_metadata else None,
-        enforce_metadata=enforce_metadata,
-        packed=packed,
-    )
+    if packed or args or kwargs or enforce_metadata:
+        io_func = _PackedArgCallable(
+            func,
+            args=args,
+            kwargs=kwargs,
+            meta=meta if enforce_metadata else None,
+            enforce_metadata=enforce_metadata,
+            packed=packed,
+        )
+    else:
+        io_func = func
 
     # Construct DataFrameIOLayer
     layer = DataFrameIOLayer(

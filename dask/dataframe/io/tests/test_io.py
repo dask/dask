@@ -851,8 +851,12 @@ def test_from_map_multi():
     # Test that `iterables` can contain multiple Iterables
 
     func = lambda x, y: pd.DataFrame({"add": x + y})
-    iterables = ([np.arange(2), np.arange(2)], [np.array([2, 2]), np.array([2, 2])])
-    expect = pd.DataFrame({"add": [2, 3, 2, 3]}, index=[0, 1, 0, 1])
+    iterables = (
+        [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")],
+        [np.array([2, 2], dtype="int64"), np.array([2, 2], dtype="int64")],
+    )
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([2, 3, 2, 3], dtype="int64")}, index=index)
 
     ddf = dd.from_map(func, *iterables)
     assert_eq(ddf, expect)
@@ -862,8 +866,9 @@ def test_from_map_args():
     # Test that the optional `args` argument works as expected
 
     func = lambda x, y, z: pd.DataFrame({"add": x + y + z})
-    iterable = [np.arange(2), np.arange(2)]
-    expect = pd.DataFrame({"add": [5, 6, 5, 6]}, index=[0, 1, 0, 1])
+    iterable = [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")]
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([5, 6, 5, 6], dtype="int64")}, index=index)
 
     ddf = dd.from_map(func, iterable, args=[2, 3])
     assert_eq(ddf, expect)
