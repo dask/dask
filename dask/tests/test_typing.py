@@ -7,11 +7,9 @@ import pytest
 
 import dask.array as da
 import dask.bag as db
-import dask.dataframe as dd
 import dask.threaded
 from dask.base import DaskMethodsMixin, dont_optimize, tokenize
 from dask.context import globalmethod
-from dask.datasets import timeseries
 from dask.delayed import Delayed, delayed
 from dask.typing import (
     DaskCollection,
@@ -20,6 +18,8 @@ from dask.typing import (
     PostPersistCallable,
 )
 
+dds = pytest.importorskip("dask.datasets")
+dd = pytest.importorskip("dask.dataframe")
 pandas = pytest.importorskip("pandas")
 
 
@@ -99,9 +99,11 @@ def assert_isinstance(coll: DaskCollection, protocol: Any):
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
 def test_isinstance_core(protocol: Any) -> None:
+    from dask.dataframe import DataFrame
+
     arr: da.Array = da.ones(10)
     bag: db.Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df: dd.DataFrame = timeseries()
+    df: DataFrame = dds.timeseries()
     dobj: Delayed = increment(2)
 
     assert_isinstance(arr, protocol)
