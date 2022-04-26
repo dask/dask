@@ -158,12 +158,9 @@ def annotate(**annotations):
         yield
 
 
-def is_dask_collection(x):
+def is_dask_collection(x) -> bool:
     """Returns ``True`` if ``x`` is a dask collection"""
-    try:
-        return x.__dask_graph__() is not None
-    except (AttributeError, TypeError):
-        return False
+    return hasattr(x, "__dask_graph__")
 
 
 class DaskMethodsMixin:
