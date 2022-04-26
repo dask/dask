@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import abc
-from collections.abc import Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Mapping, Sequence
 from typing import Any, Protocol, TypeVar, runtime_checkable
 
 try:
@@ -10,78 +10,20 @@ except ImportError:
     DisplayObject = Any
 
 
-T = TypeVar("T")
-CollectionType = TypeVar("CollectionType", bound="DaskCollection")
-CovariantCollection = TypeVar(
-    "CovariantCollection", bound="DaskCollection", covariant=True
-)
+CollType_co = TypeVar("CollType_co", bound="DaskCollection")
+CollType_contra = TypeVar("CollType_contra", bound="DaskCollection", covariant=True)
+PostComputeCallable = Callable[..., Any]
 
 
-class SchedulerGetMethod(Protocol):
-    """Protocol for defining the __dask_scheduler__ attribute."""
-
-    @staticmethod
-    def __call__(
-        dsk: Mapping,
-        keys: Sequence[Hashable] | Hashable,
-        **kwargs: Any,
-    ) -> Any:
-        """Default dask.get method.
-
-        Parameters
-        ----------
-        dsk : Mapping
-            The task graph.
-        keys : Sequence[Hashable] | Hashable
-            The keys of the task graph to get.
-        **kwargs : Any
-            Arguments passed to the get method.
-
-        Returns
-        -------
-        Any
-            The result.
-
-        """
-        raise NotImplementedError("Inheriting class must implement this method.")
-
-
-class PostComputeCallable(Protocol):
-    """Protocol defining the signature of a __dask_postcompute__ method."""
-
-    @staticmethod
-    def __call__(parts: Sequence[Any], *args: Any) -> Any:
-        """Method called after the keys of a collection are computed.
-
-        Parameters
-        ----------
-        parts : Sequence[Any]
-            The sequence of computed results on each partition (key).
-        *args : Any
-            Additional optional arguments If no extra arguments are
-            necessary, it must be an empty tuple.
-
-        Returns
-        -------
-        Any
-            The final result of the computed collection. For example,
-            the finalize function for ``dask.array.Array``
-            concatenates all the individual array chunks into one
-            large NumPy array, which is then the result of compute.
-
-        """
-        raise NotImplementedError("Inheriting class must implement this method.")
-
-
-class PostPersistCallable(Protocol[CovariantCollection]):
+class PostPersistCallable(Protocol[CollType_contra]):
     """Protocol defining the signature of a __dask_postpersist__ method."""
 
-    @staticmethod
     def __call__(
+        self,
         dsk: Mapping,
         *args: Any,
         rename: Mapping[str, str] | None = None,
-    ) -> CovariantCollection:
+    ) -> CollType_contra:
         """Method called to rebuild a persisted collection.
 
         Parameters
@@ -232,7 +174,7 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: Any
+    __dask_scheduler__: staticmethod
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
@@ -279,7 +221,7 @@ class DaskCollection(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def persist(self: CollectionType, **kwargs: Any) -> CollectionType:
+    def persist(self: CollType_co, **kwargs: Any) -> CollType_co:
         """Persist this dask collection into memory
 
         This turns a lazy Dask collection into a Dask collection with

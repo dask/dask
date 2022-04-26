@@ -11,6 +11,7 @@ import dask.dataframe as dd
 import dask.threaded
 from dask.base import DaskMethodsMixin, dont_optimize, tokenize
 from dask.context import globalmethod
+from dask.datasets import timeseries
 from dask.delayed import Delayed, delayed
 from dask.typing import (
     DaskCollection,
@@ -20,6 +21,10 @@ from dask.typing import (
 )
 
 pandas = pytest.importorskip("pandas")
+
+
+def finalize(x: Sequence[Any]) -> Any:
+    return x[0]
 
 
 class HLGCollection(DaskMethodsMixin):
@@ -36,7 +41,7 @@ class HLGCollection(DaskMethodsMixin):
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
-        return self.based_on.__dask_postcompute__()
+        return finalize, ()
 
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
         return self.based_on.__dask_postpersist__()
@@ -64,7 +69,7 @@ class NotHLGCollection(DaskMethodsMixin):
         return self.based_on.__dask_keys__()
 
     def __dask_postcompute__(self) -> tuple[PostComputeCallable, tuple]:
-        return self.based_on.__dask_postcompute__()
+        return finalize, ()
 
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
         return self.based_on.__dask_postpersist__()
@@ -96,10 +101,7 @@ def assert_isinstance(coll: DaskCollection, protocol: Any):
 def test_isinstance_core(protocol: Any) -> None:
     arr: da.Array = da.ones(10)
     bag: db.Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df: dd.DataFrame = dd.from_pandas(
-        pandas.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
-        npartitions=2,
-    )
+    df: dd.DataFrame = timeseries()
     dobj: Delayed = increment(2)
 
     assert_isinstance(arr, protocol)
