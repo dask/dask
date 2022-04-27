@@ -1352,6 +1352,12 @@ def test_roll_always_results_in_a_new_array():
     assert y is not x
 
 
+def test_roll_works_even_if_shape_is_0():
+    expected = np.roll(np.zeros(0), 0)
+    actual = da.roll(da.zeros(0), 0)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
 def test_shape_and_ndim(shape):
     x = da.random.random(shape)
