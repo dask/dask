@@ -569,7 +569,9 @@ class ArrowDatasetEngine(Engine):
                     metadata_file_exists = True
                 except OSError:
                     try:
-                        with fs.open(sorted(ds.files)[-1], mode="rb") as fil:
+                        with fs.open(
+                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                        ) as fil:
                             tail_metadata = pq.read_metadata(fil)
                     except OSError:
                         pass
