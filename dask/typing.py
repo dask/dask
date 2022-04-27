@@ -10,20 +10,44 @@ except ImportError:
     DisplayObject = Any
 
 
-CollType_co = TypeVar("CollType_co", bound="DaskCollection")
-CollType_contra = TypeVar("CollType_contra", bound="DaskCollection", covariant=True)
+CollType = TypeVar("CollType", bound="DaskCollection")
+CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
 
 
-class PostPersistCallable(Protocol[CollType_contra]):
-    """Protocol defining the signature of a __dask_postpersist__ method."""
+class SchedulerGetCallable(Protocol):
+    """Protocol defining the signature of a __dask_scheduler__ callable."""
+
+    def __call__(self, dask: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs) -> Any:
+        """Method called as the default scheduler for a collection.
+
+        Parameters
+        ----------
+        dsk : Mapping
+            The task graph.
+        keys : Sequence[Hashable] | Hashable
+            Key(s) corresponding to the desired data.
+        **kwargs : Any
+            Additional arguments.
+
+        Returns
+        -------
+        Any
+            Result(s) associated with `keys`
+
+        """
+        raise NotImplementedError("Inheriting class must implement this method.")
+
+
+class PostPersistCallable(Protocol[CollType_co]):
+    """Protocol defining the signature of a __dask_postpersist__ callable."""
 
     def __call__(
         self,
         dsk: Mapping,
         *args: Any,
         rename: Mapping[str, str] | None = None,
-    ) -> CollType_contra:
+    ) -> CollType_co:
         """Method called to rebuild a persisted collection.
 
         Parameters
@@ -176,7 +200,7 @@ class DaskCollection(Protocol):
 
     """
 
-    __dask_scheduler__: staticmethod
+    __dask_scheduler__: staticmethod[SchedulerGetCallable]
     """The default scheduler ``get`` to use for this object.
 
     Usually attached to the class as a staticmethod, e.g.:
@@ -223,7 +247,7 @@ class DaskCollection(Protocol):
         raise NotImplementedError("Inheriting class must implement this method.")
 
     @abc.abstractmethod
-    def persist(self: CollType_co, **kwargs: Any) -> CollType_co:
+    def persist(self: CollType, **kwargs: Any) -> CollType:
         """Persist this dask collection into memory
 
         This turns a lazy Dask collection into a Dask collection with
