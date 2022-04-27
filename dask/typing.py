@@ -86,7 +86,7 @@ class PostPersistCallable(Protocol[CollType_co]):
 
 @runtime_checkable
 class DaskCollection(Protocol):
-    """Protocal defining the interface of a Dask collection."""
+    """Protocol defining the interface of a Dask collection."""
 
     @abc.abstractmethod
     def __dask_graph__(self) -> Mapping:
@@ -246,7 +246,7 @@ class DaskCollection(Protocol):
 
         See Also
         --------
-        dask.base.compute
+        dask.compute
 
         """
         raise NotImplementedError("Inheriting class must implement this method.")
@@ -294,7 +294,7 @@ class DaskCollection(Protocol):
 
         See Also
         --------
-        dask.base.persist
+        dask.persist
 
         """
         raise NotImplementedError("Inheriting class must implement this method.")
@@ -341,7 +341,7 @@ class DaskCollection(Protocol):
 
         See Also
         --------
-        dask.base.visualize
+        dask.visualize
         dask.dot.dot_graph
 
         Notes
