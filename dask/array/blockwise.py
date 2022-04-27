@@ -49,6 +49,13 @@ def blockwise(
         Dictionary mapping index to function to be applied to chunk sizes
     new_axes : dict, keyword only
         New indexes and their dimension lengths
+    align_arrays: bool
+        Whether or not to align chunks along equally sized dimensions when
+        multiple arrays are provided.  This allows for larger chunks in some
+        arrays to be broken into smaller ones that match chunk sizes in other
+        arrays such that they are compatible for block function mapping. If
+        this is false, then an error will be thrown if arrays do not already
+        have the same number of blocks in each dimension.
 
     Examples
     --------
