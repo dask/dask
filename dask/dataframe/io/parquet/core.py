@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import math
 import warnings
 
@@ -8,7 +9,7 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from dask.base import compute_as_if_collection, tokenize
+from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar, new_dd_object
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
@@ -171,6 +172,7 @@ def read_parquet(
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
+    parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
     """
@@ -195,25 +197,25 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will NOT result in row-wise filtering of the final
-        partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
-        other engines, filtering is only performed at the partition level, i.e.,
+        partitions unless ``engine="pyarrow"`` is also specified.  For
+        other engines, filtering is only performed at the partition level, that is,
         to prevent the loading of some row-groups and/or files.
 
-        For the "pyarrow" engines, predicates can be expressed in disjunctive
-        normal form (DNF). This means that the innermost tuple describes a single
+        For the "pyarrow" engine, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the inner-most tuple describes a single
         column predicate. These inner predicates are combined with an AND
         conjunction into a larger predicate. The outer-most list then combines all
         of the combined filters with an OR disjunction.
 
-        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
         as an AND conjunction. To express OR in predictates, one must use the
-        (preferred for "pyarrow") List[List[Tuple]] notation.
+        (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
-        the filtering of partitioned columns (List[Tuple] is required).
+        the filtering of partitioned columns (``List[Tuple]`` is required).
     index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
-        inferred from the pandas parquet file metadata (if present). Use False
+        inferred from the pandas parquet file metadata, if present. Use ``False``
         to read all fields as columns.
     categories : list or dict, default None
         For any fields listed here, if the parquet encoding is Dictionary,
@@ -232,12 +234,12 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
-    engine : str, default 'auto'
-        Parquet reader library to use. Options include: 'auto', 'fastparquet',
-        and 'pyarrow'. Defaults to 'auto', which selects FastParquetEngine
-        if fastparquet is installed (and ArrowDatasetEngine otherwise). If
-        'pyarrow' is specified, ArrowDatasetEngine (which leverages the
-        pyarrow.dataset API) will be used.
+    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
     gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -257,8 +259,8 @@ def read_parquet(
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
     split_row_groups : bool or int, default None
-        Default is True if a _metadata file is available or if
-        the dataset is composed of a single file (otherwise defult is False).
+        Default is ``True`` if a _metadata file is available or if
+        the dataset is composed of a single file (otherwise default is ``False``).
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
@@ -271,10 +273,10 @@ def read_parquet(
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter requires `gather_statistics=True`, and is
-        only used when `chunksize` is specified or when `split_row_groups` is
-        an integer >1. A setting of True means that any two file paths may be
-        aggregated into the same output partition, while False means that
+        partition. This parameter requires ``gather_statistics=True``, and is
+        only used when ``chunksize`` is specified or when ``split_row_groups`` is
+        an integer > 1. A setting of ``True`` means that any two file paths may be
+        aggregated into the same output partition, while ``False`` means that
         inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
@@ -298,7 +300,19 @@ def read_parquet(
                 │   ├── 03.parquet
                 └── └── 04.parquet
 
-        Note that the default behavior of ``aggregate_files`` is False.
+        Note that the default behavior of ``aggregate_files`` is ``False``.
+    parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
+        A file extension or an iterable of extensions to use when discovering
+        parquet files in a directory. Files that don't match these extensions
+        will be ignored. This argument only applies when ``paths`` corresponds
+        to a directory and no ``_metadata`` file is present (or
+        ``ignore_metadata_file=True``). Passing in ``parquet_file_extension=None``
+        will treat all files in the directory as parquet files.
+
+        The purpose of this argument is to ensure that the engine will ignore
+        unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
+        It may be necessary to change this argument if the data files in your
+        parquet dataset do not end in ".parq", ".parquet", or ".pq".
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -330,6 +344,24 @@ def read_parquet(
             FutureWarning,
         )
 
+    # We support a top-level `parquet_file_extension` kwarg, but
+    # must check if the deprecated `require_extension` option is
+    # being passed to the engine. If `parquet_file_extension` is
+    # set to the default value, and `require_extension` was also
+    # specified, we will use `require_extension` but warn the user.
+    if (
+        "dataset" in kwargs
+        and "require_extension" in kwargs["dataset"]
+        and parquet_file_extension == (".parq", ".parquet", ".pq")
+    ):
+        parquet_file_extension = kwargs["dataset"].pop("require_extension")
+        warnings.warn(
+            "require_extension is deprecated, and will be removed from "
+            "read_parquet in a future release. Please use the top-level "
+            "parquet_file_extension argument instead.",
+            FutureWarning,
+        )
+
     # Store initial function arguments
     input_kwargs = {
         "columns": columns,
@@ -344,6 +376,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize=": chunksize,
         "aggregate_files": aggregate_files,
+        "parquet_file_extension": parquet_file_extension,
         **kwargs,
     }
 
@@ -356,7 +389,7 @@ def read_parquet(
         columns = list(columns)
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -397,6 +430,7 @@ def read_parquet(
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
+        parquet_file_extension=parquet_file_extension,
         **kwargs,
     )
 
@@ -547,8 +581,11 @@ def to_parquet(
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet library to use. If only one library is installed, it will use
-        that one; if both, it will use 'fastparquet'.
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
@@ -660,7 +697,7 @@ def to_parquet(
         )
 
     if isinstance(engine, str):
-        engine = get_engine(engine)
+        engine = get_engine(engine, bool(kwargs))
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -808,10 +845,10 @@ def to_parquet(
 
     # Collect metadata and write _metadata.
     # TODO: Use tree-reduction layer (when available)
-    meta_name = "metadata-" + data_write._name
     if write_metadata_file:
+        final_name = "metadata-" + data_write._name
         dsk = {
-            (meta_name, 0): (
+            (final_name, 0): (
                 apply,
                 engine.write_metadata,
                 [
@@ -824,16 +861,20 @@ def to_parquet(
             )
         }
     else:
-        dsk = {(meta_name, 0): (lambda x: None, data_write.__dask_keys__())}
+        # NOTE: We still define a single task to tie everything together
+        # when we are not writing a _metadata file. We do not want to
+        # return `data_write` (or a `data_write.to_bag()`), because calling
+        # `compute()` on a multi-partition collection requires the overhead
+        # of trying to concatenate results on the client.
+        final_name = "store-" + data_write._name
+        dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
     # Convert data_write + dsk to computable collection
-    graph = HighLevelGraph.from_collections(meta_name, dsk, dependencies=(data_write,))
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
+    out = Scalar(graph, final_name, "")
     if compute:
-        return compute_as_if_collection(
-            Scalar, graph, [(meta_name, 0)], **compute_kwargs
-        )
-    else:
-        return Scalar(graph, meta_name, "")
+        return out.compute(**compute_kwargs)
+    return out
 
 
 def create_metadata_file(
@@ -981,18 +1022,19 @@ def create_metadata_file(
 _ENGINES: dict[str, Engine] = {}
 
 
-def get_engine(engine):
+# TODO: remove _warn_engine_default_changing once the default has changed to
+# pyarrow.
+def get_engine(engine, _warn_engine_default_changing=False):
     """Get the parquet engine backend implementation.
 
     Parameters
     ----------
     engine : str, default 'auto'
-        Backend parquet library to use. Options include: 'auto', 'fastparquet',
-        and 'pyarrow'. Defaults to 'auto', which selects the FastParquetEngine
-        if fastparquet is installed (and ArrowDatasetEngine otherwise).
-        If 'pyarrow' is specified, the ArrowDatasetEngine (which leverages the
-        pyarrow.dataset API) will be used.
-    gather_statistics : bool or None (default).
+        Parquet library to use. Options include: 'auto', 'fastparquet', and
+        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
+        installed, and falls back to ``pyarrow`` otherwise. Note that in the
+        future this default ordering for 'auto' will switch, with ``pyarrow``
+        being used if it is installed, and falling back to ``fastparquet``.
 
     Returns
     -------
@@ -1002,13 +1044,24 @@ def get_engine(engine):
         return _ENGINES[engine]
 
     if engine == "auto":
-        for eng in ["fastparquet", "pyarrow"]:
-            try:
-                return get_engine(eng)
-            except RuntimeError:
-                pass
-        else:
-            raise RuntimeError("Please install either fastparquet or pyarrow")
+        try:
+            engine = get_engine("fastparquet")
+            if _warn_engine_default_changing and importlib.util.find_spec("pyarrow"):
+                warnings.warn(
+                    "engine='auto' will switch to using pyarrow by default in "
+                    "a future version. To continue using fastparquet even if "
+                    "pyarrow is installed in the future please explicitly "
+                    "specify engine='fastparquet'.",
+                    FutureWarning,
+                )
+            return engine
+        except RuntimeError:
+            pass
+
+        try:
+            return get_engine("pyarrow")
+        except RuntimeError:
+            raise RuntimeError("Please install either fastparquet or pyarrow") from None
 
     elif engine == "fastparquet":
         import_required("fastparquet", "`fastparquet` not installed")
@@ -1018,7 +1071,6 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
-
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
@@ -1124,6 +1176,8 @@ def apply_filters(parts, statistics, filters):
 
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
+            if operator == "in" and not isinstance(value, (list, set, tuple)):
+                raise TypeError("Value of 'in' filter must be a list, set, or tuple.")
             out_parts = []
             out_statistics = []
             for part, stats in zip(parts, statistics):

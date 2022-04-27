@@ -12,7 +12,6 @@ from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -37,6 +36,7 @@ _pa_version = parse_version(pa.__version__)
 from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
+pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -72,6 +72,7 @@ def _write_partitioned(
     pandas_to_arrow_table,
     preserve_index,
     index_cols=(),
+    return_metadata=True,
     **kwargs,
 ):
     """Write table to a partitioned dataset with pyarrow.
@@ -119,8 +120,14 @@ def _write_partitioned(
         fs.mkdirs(prefix, exist_ok=True)
         full_path = fs.sep.join([prefix, filename])
         with fs.open(full_path, "wb") as f:
-            pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
-        md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
+            pq.write_table(
+                subtable,
+                f,
+                metadata_collector=md_list if return_metadata else None,
+                **kwargs,
+            )
+        if return_metadata:
+            md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
 
     return md_list
 
@@ -208,6 +215,16 @@ def _read_table_from_path(
         ),
     )
 
+    # Use `pre_buffer=True` if the option is supported and an optimized
+    # "pre-caching" method isn't already specified in `precache_options`
+    # (The distinct fsspec and pyarrow optimizations will conflict)
+    pre_buffer_default = precache_options.get("method", None) is None
+    pre_buffer = (
+        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
+        if pre_buffer_supported
+        else {}
+    )
+
     with _open_input_files(
         [path],
         fs=fs,
@@ -215,14 +232,14 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil).read(
+            return pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil).read_row_groups(
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
@@ -312,6 +329,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -328,6 +346,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -680,6 +699,7 @@ class ArrowDatasetEngine(Engine):
                 preserve_index,
                 index_cols=index_cols,
                 compression=compression,
+                return_metadata=return_metadata,
                 **kwargs,
             )
             if md_list:
@@ -693,7 +713,7 @@ class ArrowDatasetEngine(Engine):
                     t,
                     fil,
                     compression=compression,
-                    metadata_collector=md_list,
+                    metadata_collector=md_list if return_metadata else None,
                     **kwargs,
                 )
             if md_list:
@@ -753,6 +773,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -782,11 +803,6 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Set require_extension option
-        require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
-
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -811,17 +827,19 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
-            elif require_extension:
+            elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
                 len0 = len(paths)
                 paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
+                    path
+                    for path in fs.find(paths)
+                    if path.endswith(parquet_file_extension)
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
+                        "No files satisfy the `parquet_file_extension` criteria "
+                        f"(files must end with {parquet_file_extension})."
                     )
 
         elif len(paths) > 1:
@@ -1145,11 +1163,21 @@ class ArrowDatasetEngine(Engine):
         elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure that any `in`-predicate filters have iterable values
+        filter_columns = set()
+        if filters is not None:
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+                filter_columns.add(col)
+
         # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
         stat_col_indices = {}
         for i, name in enumerate(schema.names):
-            if name in index_cols or name in flat_filters:
+            if name in index_cols or name in filter_columns:
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue

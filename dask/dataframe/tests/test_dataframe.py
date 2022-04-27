@@ -2335,7 +2335,7 @@ def test_fillna():
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_delayed_roundtrip(optimize: bool):
+def test_delayed_roundtrip(optimize):
     df1 = d + 1 + 1
     delayed = df1.to_delayed(optimize_graph=optimize)
 
@@ -5106,6 +5106,19 @@ def test_index_is_monotonic_dt64():
     s_2 = pd.Series(1, index=list(reversed(s)))
     ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_is_monotonic_empty_partitions():
+    df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # slice it to get empty partitions
+    df = df[df["a"] >= 3]
+    ddf = ddf[ddf["a"] >= 3]
+    assert_eq(df["a"].is_monotonic_increasing, ddf["a"].is_monotonic_increasing)
+    assert_eq(df.index.is_monotonic_increasing, ddf.index.is_monotonic_increasing)
+    assert_eq(df["a"].is_monotonic_decreasing, ddf["a"].is_monotonic_decreasing)
+    assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
 
 
 def test_custom_map_reduce():

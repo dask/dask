@@ -13,6 +13,7 @@ DataFrame
    dataframe-indexing.rst
    dataframe-categoricals.rst
    dataframe-extend.rst
+   dataframe-parquet.rst
    dataframe-sql.rst
 
 A Dask DataFrame is a large parallel DataFrame composed of many smaller Pandas
