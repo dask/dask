@@ -1412,6 +1412,10 @@ def test_empty_quantile(method):
     assert_eq(result, exp)
 
 
+# TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
+@pytest.mark.filterwarnings(
+    "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
+)
 @pytest.mark.parametrize(
     "method,expected",
     [
