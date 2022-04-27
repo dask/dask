@@ -355,6 +355,13 @@ def test_from_pandas_with_datetime_index():
     assert_eq(df, ddf)
 
 
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA, np.nan, float("nan")])
+def test_from_pandas_with_index_nulls(null_value):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[3, null_value, 2])
+    with pytest.raises(NotImplementedError, match="contains nulls"):
+        dd.from_pandas(df, npartitions=2, sort=False)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])

@@ -227,9 +227,15 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if sort and not data.index.is_monotonic_increasing:
-        data = data.sort_index(ascending=True)
+    if data.index.isna().any():
+        raise NotImplementedError(
+            "Index in passed data contains nulls, but Dask does not currently support nulls in the index.\n"
+            "Consider passing `data.loc[data.notna()]` instead."
+        )
+
     if sort:
+        if not data.index.is_monotonic_increasing:
+            data = data.sort_index(ascending=True)
         divisions, locations = sorted_division_locations(
             data.index, chunksize=chunksize
         )
