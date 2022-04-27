@@ -561,7 +561,7 @@ def to_parquet(
     partition_on=None,
     storage_options=None,
     custom_metadata=None,
-    write_metadata_file=True,
+    write_metadata_file=None,
     compute=True,
     compute_kwargs=None,
     schema=None,
