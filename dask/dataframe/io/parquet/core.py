@@ -694,6 +694,9 @@ def to_parquet(
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
 
+    if df.columns.inferred_type not in {"string", "empty"}:
+        raise ValueError("parquet doesn't support non-string column names")
+
     if isinstance(engine, str):
         engine = get_engine(engine, bool(kwargs))
 
