@@ -2303,7 +2303,21 @@ def test_groupby_dropna_pandas(dropna):
 @pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
-def test_groupby_dropna_cudf(dropna, by):
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+    ],
+)
+def test_groupby_dropna_cudf(dropna, by, group_keys):
 
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
@@ -2323,11 +2337,11 @@ def test_groupby_dropna_cudf(dropna, by):
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 
     if dropna is None:
-        dask_result = ddf.groupby(by).e.sum()
-        cudf_result = df.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, group_keys=group_keys).e.sum()
     else:
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
-        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
     if by in ["c", "d"]:
         # Lose string/category index name in cudf...
         dask_result = dask_result.compute()
