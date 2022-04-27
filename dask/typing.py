@@ -18,7 +18,12 @@ PostComputeCallable = Callable
 class SchedulerGetCallable(Protocol):
     """Protocol defining the signature of a __dask_scheduler__ callable."""
 
-    def __call__(self, dask: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs) -> Any:
+    def __call__(
+        self,
+        dask: Mapping,
+        keys: Sequence[Hashable] | Hashable,
+        **kwargs: Any,
+    ) -> Any:
         """Method called as the default scheduler for a collection.
 
         Parameters
