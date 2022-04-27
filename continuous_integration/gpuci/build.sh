@@ -43,6 +43,9 @@ python -m pip install git+https://github.com/dask/distributed
 gpuci_logger "Install dask"
 python setup.py install
 
+gpuci_logger "Install pytest-timeout"
+python -m pip install pytest-timeout
+
 gpuci_logger "Check Python version"
 python --version
 
