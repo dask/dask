@@ -1,6 +1,7 @@
 import contextlib
 import copy
 import pathlib
+import re
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -47,6 +48,7 @@ from dask.array.core import (
     stack,
     store,
 )
+from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
@@ -1215,7 +1217,9 @@ def test_reshape_splat():
 def test_reshape_not_implemented_error():
     a = da.ones((4, 5, 6), chunks=(2, 2, 3))
     for new_shape in [(2, 10, 6), (5, 4, 6), (6, 5, 4)]:
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(
+            NotImplementedError, match=re.escape(_not_implemented_message)
+        ):
             a.reshape(new_shape)
 
 
