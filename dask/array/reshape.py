@@ -14,6 +14,20 @@ from dask.core import flatten
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, parse_bytes
 
+_not_implemented_message = """
+Dask's reshape only supports operations that merge or split existing dimensions
+evenly. For example:
+
+>>> x = da.ones((6, 5, 4), chunks=(3, 2, 2))
+>>> x.reshape((3, 2, 5, 4))  # supported, splits 6 into 3 & 2
+>>> x.reshape((30, 4))       # supported, merges 6 & 5 into 30
+>>> x.reshape((4, 5, 6))     # unsupported, existing dimensions split unevenly
+
+To work around this you may call reshape in multiple passes, or (if your data
+is small enough) call ``compute`` first and handle reshaping in ``numpy``
+directly.
+"""
+
 
 def reshape_rechunk(inshape, outshape, inchunks):
     assert all(isinstance(c, tuple) for c in inchunks)
@@ -44,12 +58,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             ):  # 4 < 64, 4*4 < 64, 4*4*4 == 64
                 ileft -= 1
             if reduce(mul, inshape[ileft : ii + 1]) != dout:
-                raise NotImplementedError("""Dask reshaping currently only supports collapsing/merging array dimensions. For example, reshaping a 6x2 dimensional array into a 12x1 array.
-       
-                In the interim, if this operation is required, utilise the Numpy version of reshape.
-
-                Also note that performance of this reshape implementation varies depending on how the input array is chunked. Please read the official Dask array documentation section for further details on how Dask implements Reshaping""")
-
+                raise NotImplementedError(_not_implemented_message)
             # Special case to avoid intermediate rechunking:
             # When all the lower axis are completely chunked (chunksize=1) then
             # we're simply moving around blocks.
@@ -78,12 +87,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             while oleft >= 0 and reduce(mul, outshape[oleft : oi + 1]) < din:
                 oleft -= 1
             if reduce(mul, outshape[oleft : oi + 1]) != din:
-                raise NotImplementedError("""Dask reshaping currently only supports collapsing/merging array dimensions. For example, reshaping a 6x2 dimensional array into a 12x1 array.
-       
-                In the interim, if this operation is required, utilise the Numpy version of reshape.
-
-                Also note that performance of this reshape implementation varies depending on how the input array is chunked. Please read the official Dask array documentation section for further details on how Dask implements Reshaping""")
-
+                raise NotImplementedError(_not_implemented_message)
             # TODO: don't coalesce shapes unnecessarily
             cs = reduce(mul, outshape[oleft + 1 : oi + 1])
 
