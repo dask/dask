@@ -3463,6 +3463,13 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
 
 
+def test_to_parquet_errors_non_string_column_names(tmpdir, engine):
+    df = pd.DataFrame({"x": range(10), 1: range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(ValueError, match="non-string column names"):
+        ddf.to_parquet(str(tmpdir.join("temp")), engine=engine)
+
+
 def test_dir_filter(tmpdir, engine):
     # github #6898
     df = pd.DataFrame.from_dict(
