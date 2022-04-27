@@ -169,7 +169,7 @@ def read_parquet(
     gather_statistics=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
-    split_row_groups=None,
+    split_row_groups=False,
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
@@ -258,9 +258,7 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : bool or int, default None
-        Default is ``True`` if a _metadata file is available or if
-        the dataset is composed of a single file (otherwise default is ``False``).
+    split_row_groups : bool or int, default False
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe

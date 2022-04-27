@@ -324,7 +324,7 @@ class ArrowDatasetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=None,
+        split_row_groups=False,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -897,11 +897,6 @@ class ArrowDatasetEngine(Engine):
         # be avoided at all costs.
         if gather_statistics is None:
             gather_statistics = False
-        if split_row_groups is None:
-            if gather_statistics:
-                split_row_groups = True
-            else:
-                split_row_groups = False
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -1153,8 +1148,6 @@ class ArrowDatasetEngine(Engine):
         # want to apply any filters or calculate divisions. Note
         # that the `ArrowDatasetEngine` doesn't even require
         # `gather_statistics=True` for filtering.
-        if split_row_groups is None:
-            split_row_groups = False
         _need_aggregation_stats = chunksize or (
             int(split_row_groups) > 1 and aggregation_depth
         )
@@ -1403,6 +1396,16 @@ class ArrowDatasetEngine(Engine):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
+                                cmin = (
+                                    pd.Timestamp(cmin)
+                                    if isinstance(cmin, datetime)
+                                    else cmin
+                                )
+                                cmax = (
+                                    pd.Timestamp(cmax)
+                                    if isinstance(cmax, datetime)
+                                    else cmax
+                                )
                                 last = cmax_last.get(name, None)
                                 if not (filters or chunksize or aggregation_depth):
                                     # Only think about bailing if we don't need
@@ -1423,12 +1426,8 @@ class ArrowDatasetEngine(Engine):
                                     s["columns"].append(
                                         {
                                             "name": name,
-                                            "min": pd.Timestamp(cmin)
-                                            if isinstance(cmin, datetime)
-                                            else cmin,
-                                            "max": pd.Timestamp(cmax)
-                                            if isinstance(cmax, datetime)
-                                            else cmax,
+                                            "min": cmin,
+                                            "max": cmax,
                                         }
                                     )
                                 else:
