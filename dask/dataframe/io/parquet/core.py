@@ -197,25 +197,25 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will NOT result in row-wise filtering of the final
-        partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
-        other engines, filtering is only performed at the partition level, i.e.,
+        partitions unless ``engine="pyarrow"`` is also specified.  For
+        other engines, filtering is only performed at the partition level, that is,
         to prevent the loading of some row-groups and/or files.
 
-        For the "pyarrow" engines, predicates can be expressed in disjunctive
-        normal form (DNF). This means that the innermost tuple describes a single
+        For the "pyarrow" engine, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the inner-most tuple describes a single
         column predicate. These inner predicates are combined with an AND
         conjunction into a larger predicate. The outer-most list then combines all
         of the combined filters with an OR disjunction.
 
-        Predicates can also be expressed as a List[Tuple]. These are evaluated
+        Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
         as an AND conjunction. To express OR in predictates, one must use the
-        (preferred for "pyarrow") List[List[Tuple]] notation.
+        (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
-        the filtering of partitioned columns (List[Tuple] is required).
+        the filtering of partitioned columns (``List[Tuple]`` is required).
     index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
-        inferred from the pandas parquet file metadata (if present). Use False
+        inferred from the pandas parquet file metadata, if present. Use ``False``
         to read all fields as columns.
     categories : list or dict, default None
         For any fields listed here, if the parquet encoding is Dictionary,
@@ -259,8 +259,8 @@ def read_parquet(
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
     split_row_groups : bool or int, default None
-        Default is True if a _metadata file is available or if
-        the dataset is composed of a single file (otherwise defult is False).
+        Default is ``True`` if a _metadata file is available or if
+        the dataset is composed of a single file (otherwise default is ``False``).
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
@@ -273,10 +273,10 @@ def read_parquet(
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter requires `gather_statistics=True`, and is
-        only used when `chunksize` is specified or when `split_row_groups` is
-        an integer >1. A setting of True means that any two file paths may be
-        aggregated into the same output partition, while False means that
+        partition. This parameter requires ``gather_statistics=True``, and is
+        only used when ``chunksize`` is specified or when ``split_row_groups`` is
+        an integer > 1. A setting of ``True`` means that any two file paths may be
+        aggregated into the same output partition, while ``False`` means that
         inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
@@ -300,9 +300,9 @@ def read_parquet(
                 │   ├── 03.parquet
                 └── └── 04.parquet
 
-        Note that the default behavior of ``aggregate_files`` is False.
+        Note that the default behavior of ``aggregate_files`` is ``False``.
     parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
-        A file extension (or an iterable of extensions) to use when discovering
+        A file extension or an iterable of extensions to use when discovering
         parquet files in a directory. Files that don't match these extensions
         will be ignored. This argument only applies when ``paths`` corresponds
         to a directory and no ``_metadata`` file is present (or
