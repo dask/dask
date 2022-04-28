@@ -1139,7 +1139,7 @@ class ArrowDatasetEngine(Engine):
                     continue
                 stat_col_indices[name] = i
 
-        # Decide final `gather_statistics` setting.
+        # Decide final `gather_statistics` setting
         gather_statistics = _set_gather_statistics(
             gather_statistics,
             chunksize,
