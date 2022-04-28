@@ -185,7 +185,19 @@ class BlockwiseDepDict(BlockwiseDep):
         return self._produces_keys
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
-        return self.mapping[idx]
+        try:
+            return self.mapping[idx]
+        except KeyError as err:
+            # If a DataFrame collection was converted
+            # to an Array collection, the dimesion of
+            # `idx` may not agree with the keys in
+            # `self.mapping`. In this case, we can
+            # use `self.numblocks` to check for a key
+            # match in the leading elements of `idx`
+            flat_idx = idx[: len(self.numblocks)]
+            if flat_idx in self.mapping:
+                return self.mapping[flat_idx]
+            raise err
 
     def __dask_distributed_pack__(
         self, required_indices: tuple | list[tuple[int, ...]] | None = None
@@ -204,7 +216,7 @@ class BlockwiseDepDict(BlockwiseDep):
             },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
-            "produces_keys": self._produces_keys,
+            "produces_keys": self.produces_keys,
         }
 
     @classmethod
