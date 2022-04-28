@@ -10,6 +10,7 @@ import itertools
 
 import dask.array as da
 import dask.config as config
+from dask.array.numpy_compat import _numpy_122
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
 
@@ -238,6 +239,8 @@ def test_arg_reductions(dfunc, func):
         assert_eq(dfunc(a, 0), func(x, 0))
         assert_eq(dfunc(a, 1), func(x, 1))
         assert_eq(dfunc(a, 2), func(x, 2))
+    if _numpy_122:
+        assert_eq(dfunc(a, keepdims=True), func(x, keepdims=True))
 
     pytest.raises(ValueError, lambda: dfunc(a, 3))
     pytest.raises(TypeError, lambda: dfunc(a, (0, 1)))
