@@ -781,11 +781,11 @@ def test_set_index_no_resursion_error(c):
 @gen_cluster(client=True)
 async def test_gh_8991(c, s, a, b):
     # Test illustrating something amiss with HighLevelGraph.key_dependencies.
-    # The intention is for this to be a chache, so if we clear it, things
+    # The intention is for this to be a cache, so if we clear it, things
     # should still work.
 
-    # This is a bad test, and we should rethink/remove it as soon as the issue is,
-    # resolved whether it's fixing the underlying problem or removing
+    # This is a bad test, and we should rethink/remove it as soon as the issue is
+    # resolved whether, it's fixing the underlying problem or removing
     # HighLevelGraph.key_dependencies alltogether.
     datasets = pytest.importorskip("dask.datasets")
     result = datasets.timeseries().shuffle("x").to_orc("tmp", compute=False)
