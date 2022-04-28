@@ -32,6 +32,7 @@ from dask.dataframe.io.parquet.utils import (
     _parse_pandas_metadata,
     _process_open_file_options,
     _row_groups_to_parts,
+    _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
     _split_user_options,
@@ -639,23 +640,17 @@ class FastParquetEngine(Engine):
             if name in _index_cols or name in filter_columns:
                 stat_col_indices[name] = i
 
-        # We now have enough info to set the final gather_statistics
-        gather_statistics = None if not gather_statistics else True
-        if (
-            chunksize
-            or (int(split_row_groups) > 1 and aggregation_depth)
-            or filter_columns.intersection(stat_col_indices)
-        ):
-            # Need to gather statistics if we are aggregating files
-            # or filtering
-            # NOTE: Should avoid gathering statistics when the agg
-            # does not depend on a row-group statistic
-            gather_statistics = True
-        elif not stat_col_indices or gather_statistics is None:
-            # Not aggregating files/row-groups.
-            # We only need to gather statistics if `stat_col_indices`
-            # is populated
-            gather_statistics = False
+        # Decide final `gather_statistics` setting.
+        # NOTE: The "fastparquet" engine requires statistics for
+        # filtering even if the filter is on a paritioned column
+        gather_statistics = _set_gather_statistics(
+            gather_statistics,
+            chunksize,
+            split_row_groups,
+            aggregation_depth,
+            filter_columns,
+            set(stat_col_indices) | filter_columns,
+        )
 
         # Define common_kwargs
         common_kwargs = {
@@ -1138,11 +1133,13 @@ class FastParquetEngine(Engine):
                 "because this required data in memory."
             )
 
+        metadata_file_exists = False
         if append:
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
+                metadata_file_exists = fs.exists(fs.sep.join([path, "_metadata"]))
             except (OSError, ValueError):
                 # append for create
                 append = False
@@ -1201,8 +1198,8 @@ class FastParquetEngine(Engine):
             )
             fmd.key_value_metadata = kvm
 
-        schema = None  # ArrowEngine compatibility
-        return (fmd, schema, i_offset)
+        extra_write_kwargs = {"fmd": fmd}
+        return i_offset, fmd, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def write_partition(

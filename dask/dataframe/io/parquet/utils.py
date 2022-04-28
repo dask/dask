@@ -732,3 +732,36 @@ def _split_user_options(**kwargs):
         read_options,
         user_kwargs,
     )
+
+
+def _set_gather_statistics(
+    gather_statistics,
+    chunksize,
+    split_row_groups,
+    aggregation_depth,
+    filter_columns,
+    stat_columns,
+):
+    # Use available information about the current read options
+    # and target dataset to decide if we need to gather metadata
+    # statistics to construct the graph for a `read_parquet` op.
+
+    # If the user has specified `calculate_divisions=True`, then
+    # we will be starting with `gather_statistics=True` here.
+    if (
+        chunksize
+        or (int(split_row_groups) > 1 and aggregation_depth)
+        or filter_columns.intersection(stat_columns)
+    ):
+        # Need to gather statistics if we are aggregating files
+        # or filtering
+        # NOTE: Should avoid gathering statistics when the agg
+        # does not depend on a row-group statistic
+        gather_statistics = True
+    elif not stat_columns:
+        # Not aggregating files/row-groups.
+        # We only need to gather statistics if `stat_columns`
+        # is populated
+        gather_statistics = False
+
+    return bool(gather_statistics)

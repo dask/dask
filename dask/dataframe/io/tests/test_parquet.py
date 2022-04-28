@@ -173,7 +173,8 @@ def test_get_engine_auto_warning_if_both_installed():
 
 
 @write_read_engines()
-def test_local(tmpdir, write_engine, read_engine):
+@pytest.mark.parametrize("has_metadata", [False, True])
+def test_local(tmpdir, write_engine, read_engine, has_metadata):
     tmp = str(tmpdir)
     data = pd.DataFrame(
         {
@@ -187,11 +188,12 @@ def test_local(tmpdir, write_engine, read_engine):
     )
     df = dd.from_pandas(data, chunksize=500)
 
-    df.to_parquet(tmp, write_index=False, engine=write_engine)
+    kwargs = {"write_metadata_file": True} if has_metadata else {}
+    df.to_parquet(tmp, write_index=False, engine=write_engine, **kwargs)
 
     files = os.listdir(tmp)
-    assert "_common_metadata" in files
-    assert "_metadata" in files
+    assert ("_common_metadata" in files) == has_metadata
+    assert ("_metadata" in files) == has_metadata
     assert "part.0.parquet" in files
 
     df2 = dd.read_parquet(tmp, index=False, engine=read_engine)
@@ -213,7 +215,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
         df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
 
-    ddf.to_parquet(fn, write_index=index, engine=write_engine)
+    ddf.to_parquet(fn, write_index=index, engine=write_engine, write_metadata_file=True)
     read_df = dd.read_parquet(fn, engine=read_engine)
     assert_eq(ddf, read_df)
 
@@ -316,7 +318,6 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
-    # XFAIL, auto index selection no longer supported (for simplicity)
     # ### Empty columns ###
     # With divisions if supported
     assert_eq(
@@ -640,7 +641,8 @@ def test_categorical(tmpdir, write_engine, read_engine):
     assert (df.x == ddf2.x.compute()).all()
 
 
-def test_append(tmpdir, engine):
+@pytest.mark.parametrize("metadata_file", [False, True])
+def test_append(tmpdir, engine, metadata_file):
     """Test that appended parquet equal to the original one."""
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -658,8 +660,15 @@ def test_append(tmpdir, engine):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-    ddf1.to_parquet(tmp, engine=engine)
+    ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
+    if metadata_file:
+        with open(str(tmpdir.join("_metadata")), "rb") as f:
+            metadata1 = f.read()
     ddf2.to_parquet(tmp, append=True, engine=engine)
+    if metadata_file:
+        with open(str(tmpdir.join("_metadata")), "rb") as f:
+            metadata2 = f.read()
+        assert metadata2 != metadata1  # 2nd write updated the metadata file
 
     ddf3 = dd.read_parquet(tmp, engine=engine)
     assert_eq(df, ddf3)
@@ -798,7 +807,8 @@ def test_partition_on_cats_2(tmpdir, engine):
     assert set(df.cat.categories) == {"x", "y", "z"}
 
 
-def test_append_wo_index(tmpdir, engine):
+@pytest.mark.parametrize("metadata_file", [False, True])
+def test_append_wo_index(tmpdir, engine, metadata_file):
     """Test append with write_index=False."""
     tmp = str(tmpdir.join("tmp1.parquet"))
     df = pd.DataFrame(
@@ -814,21 +824,24 @@ def test_append_wo_index(tmpdir, engine):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half:], chunksize=100)
-    ddf1.to_parquet(tmp, engine=engine)
+    ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
 
     with pytest.raises(ValueError) as excinfo:
         ddf2.to_parquet(tmp, write_index=False, append=True, engine=engine)
     assert "Appended columns" in str(excinfo.value)
 
     tmp = str(tmpdir.join("tmp2.parquet"))
-    ddf1.to_parquet(tmp, write_index=False, engine=engine)
+    ddf1.to_parquet(
+        tmp, write_index=False, engine=engine, write_metadata_file=metadata_file
+    )
     ddf2.to_parquet(tmp, write_index=False, append=True, engine=engine)
 
     ddf3 = dd.read_parquet(tmp, index="f", engine=engine)
     assert_eq(df.set_index("f"), ddf3)
 
 
-def test_append_overlapping_divisions(tmpdir, engine):
+@pytest.mark.parametrize("metadata_file", [False, True])
+def test_append_overlapping_divisions(tmpdir, engine, metadata_file):
     """Test raising of error when divisions overlapping."""
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -844,7 +857,7 @@ def test_append_overlapping_divisions(tmpdir, engine):
     half = len(df) // 2
     ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
     ddf2 = dd.from_pandas(df.iloc[half - 10 :], chunksize=100)
-    ddf1.to_parquet(tmp, engine=engine)
+    ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
 
     with pytest.raises(ValueError) as excinfo:
         ddf2.to_parquet(tmp, engine=engine, append=True)
@@ -853,7 +866,8 @@ def test_append_overlapping_divisions(tmpdir, engine):
     ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
 
-def test_append_different_columns(tmpdir, engine):
+@pytest.mark.parametrize("metadata_file", [False, True])
+def test_append_different_columns(tmpdir, engine, metadata_file):
     """Test raising of error when non equal columns."""
     tmp = str(tmpdir)
     df1 = pd.DataFrame({"i32": np.arange(100, dtype=np.int32)})
@@ -864,7 +878,7 @@ def test_append_different_columns(tmpdir, engine):
     ddf2 = dd.from_pandas(df2, chunksize=2)
     ddf3 = dd.from_pandas(df3, chunksize=2)
 
-    ddf1.to_parquet(tmp, engine=engine)
+    ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
 
     with pytest.raises(ValueError) as excinfo:
         ddf2.to_parquet(tmp, engine=engine, append=True)
@@ -1019,9 +1033,9 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if str(ddf2.dtypes.get("x")) == "UInt16" and engine == "fastparquet":
         # fastparquet choooses to use masked type to be able to get true repr of
         # 16-bit int
-        assert_eq(ddf.astype("UInt16"), ddf2)
+        assert_eq(ddf.astype("UInt16"), ddf2, check_divisions=False)
     else:
-        assert_eq(ddf, ddf2)
+        assert_eq(ddf, ddf2, check_divisions=False)
 
 
 def test_categories(tmpdir, engine):
@@ -1089,12 +1103,13 @@ def test_empty_partition(tmpdir, engine):
     assert_eq(sol, ddf3, check_names=False, check_index=False)
 
 
-def test_timestamp_index(tmpdir, engine):
+@pytest.mark.parametrize("write_metadata", [True, False])
+def test_timestamp_index(tmpdir, engine, write_metadata):
     fn = str(tmpdir)
     df = dd._compat.makeTimeDataFrame()
     df.index.name = "foo"
     ddf = dd.from_pandas(df, npartitions=5)
-    ddf.to_parquet(fn, engine=engine)
+    ddf.to_parquet(fn, engine=engine, write_metadata_file=write_metadata)
     ddf2 = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
     assert_eq(ddf, ddf2)
 
@@ -1233,17 +1248,7 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
 
     df.to_parquet(tmpdir, engine="pyarrow", schema=schema)
     df_out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
-    df_out.compute()
-
-    if index and engine == "fastparquet":
-        # Fastparquet fails to detect int64 from _metadata
-        df_out["amount"] = df_out["amount"].astype("int64")
-
-        # Fastparquet not handling divisions for
-        # pyarrow-written dataset with string index
-        assert_eq(df, df_out, check_divisions=False)
-    else:
-        assert_eq(df, df_out)
+    assert_eq(df, df_out)
 
 
 def test_partition_on(tmpdir, engine):
@@ -1343,6 +1348,7 @@ def test_filters_categorical(tmpdir, write_engine, read_engine):
         index="dummy",
         engine=read_engine,
         filters=[(("DatePart", "<=", "2018-01-02"))],
+        calculate_divisions=True,
     )
     assert len(ddftest_read) == 2
 
@@ -1354,7 +1360,7 @@ def test_filters(tmpdir, write_engine, read_engine):
     ddf = dd.from_pandas(df, npartitions=5)
     assert ddf.npartitions == 5
 
-    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=True)
 
     a = dd.read_parquet(tmp_path, engine=read_engine, filters=[("x", ">", 4)])
     assert a.npartitions == 3
@@ -1458,7 +1464,7 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"aa": range(100), "bb": ["cat", "dog"] * 50})
     ddf = dd.from_pandas(df, npartitions=10)
-    ddf.to_parquet(fn, write_index=False, engine=engine)
+    ddf.to_parquet(fn, write_index=False, engine=engine, write_metadata_file=True)
 
     # Filtered read
     aa_lim = 40
@@ -1640,7 +1646,7 @@ def test_to_parquet_lazy(tmpdir, scheduler, engine):
 
     ddf2 = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
 
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, check_divisions=False)
 
 
 @FASTPARQUET_MARK
@@ -1750,7 +1756,9 @@ def test_explicit_compression_default_deprecated(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=3)
 
     with pytest.warns(FutureWarning, match="compression='default'"):
-        ddf.to_parquet(fn, compression="default", engine=engine)
+        ddf.to_parquet(
+            fn, compression="default", engine=engine, write_metadata_file=True
+        )
     out = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
     assert_eq(out, ddf)
     check_compression(engine, fn, "default")
@@ -1764,7 +1772,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ddf.to_parquet(fn, compression=compression, engine=engine)
+    ddf.to_parquet(fn, compression=compression, engine=engine, write_metadata_file=True)
     out = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
     assert_eq(out, ddf)
     check_compression(engine, fn, compression)
@@ -1778,7 +1786,13 @@ def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, 
     df.index.name = "index"
     ddf = dd.from_pandas(df, npartitions=3)
 
-    ddf.to_parquet(fn, compression=compression, engine=engine, partition_on=["x"])
+    ddf.to_parquet(
+        fn,
+        compression=compression,
+        engine=engine,
+        partition_on=["x"],
+        write_metadata_file=True,
+    )
     check_compression(engine, fn, compression)
 
 
@@ -2283,7 +2297,7 @@ def test_read_glob_no_meta(tmpdir, write_engine, read_engine):
 @write_read_engines()
 def test_read_glob_yes_meta(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
-    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=True)
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
     ddf2 = dd.read_parquet(paths, engine=read_engine, calculate_divisions=False)
@@ -2295,7 +2309,7 @@ def test_read_glob_yes_meta(tmpdir, write_engine, read_engine):
 @write_read_engines()
 def test_read_dir_nometa(tmpdir, write_engine, read_engine, divisions, remove_common):
     tmp_path = str(tmpdir)
-    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=True)
     if os.path.exists(os.path.join(tmp_path, "_metadata")):
         os.unlink(os.path.join(tmp_path, "_metadata"))
     files = os.listdir(tmp_path)
@@ -2722,7 +2736,7 @@ def test_optimize_and_not(tmpdir, engine):
 def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
-    ddf1.to_parquet(tmpdir, engine=write_engine)
+    ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
     ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
     assert_eq(ddf1, ddf2, check_index=False)
 
@@ -3243,7 +3257,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(fn, engine=engine, partition_on="b")
+    ddf.to_parquet(fn, engine=engine, partition_on="b", write_metadata_file=True)
     read_df = dd.read_parquet(
         fn,
         engine="pyarrow",
@@ -3328,17 +3342,13 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     )
 
     df = dd.from_delayed([df_a, df_b, df_c])
-
-    try:
-        df.to_parquet(
-            tmpdir,
-            engine="pyarrow",
-            partition_on=["x"],
-            append=False,
-        )
-
-    except AttributeError:
-        pytest.fail("Unexpected AttributeError")
+    df.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=False,
+        write_metadata_file=True,
+    )
 
     # Check that metadata files where written
     files = os.listdir(tmpdir)
@@ -3372,6 +3382,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         engine="pyarrow",
         partition_on=["x"],
         append=False,
+        write_metadata_file=True,
     )
 
     df_c = dask.delayed(pd.DataFrame.from_dict)(
@@ -3388,6 +3399,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         partition_on=["x"],
         append=True,
         ignore_divisions=True,
+        write_metadata_file=True,
     )
 
 
@@ -3612,6 +3624,7 @@ def test_custom_metadata(tmpdir, engine):
         path,
         engine=engine,
         custom_metadata=custom_metadata,
+        write_metadata_file=True,
     )
 
     # Check that data is correct
@@ -3723,7 +3736,7 @@ def test_extra_file(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmpdir, engine=engine)
+    ddf.to_parquet(tmpdir, engine=engine, write_metadata_file=True)
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
@@ -3794,7 +3807,12 @@ def test_unsupported_extension_dir(tmpdir, engine):
     # (Related to: https://github.com/dask/dask/issues/8349)
     path = str(tmpdir)
     ddf0 = dd.from_pandas(pd.DataFrame({"a": range(10)}), 1)
-    ddf0.to_parquet(path, engine=engine, name_function=lambda i: f"part.{i}.foo")
+    ddf0.to_parquet(
+        path,
+        engine=engine,
+        name_function=lambda i: f"part.{i}.foo",
+        write_metadata_file=True,
+    )
     assert_eq(ddf0, dd.read_parquet(path, engine=engine, calculate_divisions=True))
 
 
@@ -3804,7 +3822,12 @@ def test_custom_filename(tmpdir, engine):
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
     )
     df = dd.from_pandas(pdf, npartitions=2)
-    df.to_parquet(fn, name_function=lambda x: f"hi-{x}.parquet", engine=engine)
+    df.to_parquet(
+        fn,
+        write_metadata_file=True,
+        name_function=lambda x: f"hi-{x}.parquet",
+        engine=engine,
+    )
 
     files = os.listdir(fn)
     assert "_common_metadata" in files
@@ -3820,7 +3843,12 @@ def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
     )
     df = dd.from_pandas(pdf, npartitions=2)
-    df.to_parquet(fn, name_function=lambda x: f"hi-{x * 2}.parquet", engine=engine)
+    df.to_parquet(
+        fn,
+        write_metadata_file=True,
+        name_function=lambda x: f"hi-{x * 2}.parquet",
+        engine=engine,
+    )
 
     pdf = pd.DataFrame(
         {"num1": [33], "num2": [44]},
@@ -4011,3 +4039,20 @@ def test_in_predicate_requires_an_iterable(tmp_path, engine, filter_value):
     ddf.to_parquet(path, engine=engine)
     with pytest.raises(TypeError, match="Value of 'in' filter"):
         dd.read_parquet(path, engine=engine, filters=filter_value)
+
+
+def test_deprecate_gather_statistics(tmp_path, engine):
+    # The `gather_statistics` deprecation warning
+    # (and this test) should be removed after a
+    # "sufficient" deprecation period.
+    # See: https://github.com/dask/dask/pull/8992
+    df = pd.DataFrame({"a": range(10)})
+    path = tmp_path / "test_deprecate_gather_statistics.parquet"
+    df.to_parquet(path, engine=engine)
+    with pytest.warns(FutureWarning, match="deprecated"):
+        out = dd.read_parquet(
+            path,
+            engine=engine,
+            gather_statistics=True,
+        )
+    assert_eq(out, df)
