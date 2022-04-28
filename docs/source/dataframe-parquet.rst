@@ -66,8 +66,7 @@ Engine
 ``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
 is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 ``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``. No matter the preferred engine, passing the option
-explicitly is strongly encouraged.
+``engine="pyarrow"``.
 
 .. code-block:: python
 
@@ -137,7 +136,34 @@ reasons:
     ...     columns=["a", "b", "c"]  # Only read columns 'a', 'b', and 'c'
     ... )
 
+Calculating Divisions
+~~~~~~~~~~~~~~~~~~~~~
 
+By default, :func:`read_parquet` will **not** produce a collection with
+known divisions. However, you can pass ``calculate_divisions=True`` to
+tell Dask that you want to use row-group statistics from the footer
+metadata (or global ``_metadata`` file) to calculate the divisions at
+graph-creation time. Using this option will not produce known
+divisions if any of the necessary row-group statistics are missing,
+or if no index column is detected. Using the ``index`` argument is the
+best way to ensure that the desired field will be treated as the index.
+
+.. code-block:: python
+
+    >>> dd.read_parquet(
+    ...     "s3://path/to/myparquet/",
+    ...     index="timestamp",  # Specify a specific index column
+    ...     calculate_divisions=True,  # Calculate divisions from metadata
+    ... )
+
+Although using ``calculate_divisions=True`` does not require any *real*
+data to be read from the parquet file(s), it does require Dask to load
+and process metadata for every row-group in the dataset. For this reason,
+calculating divisions should be avoided for large datasets without a
+global ``_metadata`` file. This is especially true for remote storage.
+
+For more information about divisions, see :ref:`dataframe.design`.
+ 
 Writing
 -------
 
@@ -194,8 +220,7 @@ Engine
 ``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
 is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 ``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``. No matter the preferred engine, passing the option
-explicitly is strongly encouraged.
+``engine="pyarrow"``.
 
 .. code-block:: python
 
