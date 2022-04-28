@@ -881,8 +881,15 @@ def to_parquet(
     # Convert data_write + dsk to computable collection
     graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
     out = Scalar(graph, final_name, "")
+
     if compute:
-        return out.compute(**compute_kwargs)
+        out = out.compute(**compute_kwargs)
+
+    # Invalidate the filesystem listing cache for the output path after write.
+    # We do this before returning, even if `compute=False`. This helps ensure
+    # that reading files that were just written succeeds.
+    fs.invalidate_cache(path)
+
     return out
 
 
