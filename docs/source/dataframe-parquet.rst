@@ -136,7 +136,34 @@ reasons:
     ...     columns=["a", "b", "c"]  # Only read columns 'a', 'b', and 'c'
     ... )
 
+Calculating Divisions
+~~~~~~~~~~~~~~~~~~~~~
 
+By default, :func:`read_parquet` will **not** produce a collection with
+known divisions. However, you can pass ``calculate_divisions=True`` to
+tell Dask that you want to use row-group statistics from the footer
+metadata (or global ``_metadata`` file) to calculate the divisions at
+graph-creation time. Using this option will not produce known
+divisions if any of the necessary row-group statistics are missing,
+or if no index column is detected. Using the ``index`` argument is the
+best way to ensure that the desired field will be treated as the index.
+
+.. code-block:: python
+
+    >>> dd.read_parquet(
+    ...     "s3://path/to/myparquet/",
+    ...     index="timestamp",  # Specify a specific index column
+    ...     calculate_divisions=True,  # Calculate divisions from metadata
+    ... )
+
+Although using ``calculate_divisions=True`` does not require any *real*
+data to be read from the parquet file(s), it does require Dask to load
+and process metadata for every row-group in the dataset. For this reason,
+calculating divisions should be avoided for large datasets without a
+global ``_metadata`` file. This is especially true for remote storage.
+
+For more information about divisions, see :ref:`dataframe.design`.
+ 
 Writing
 -------
 
@@ -205,18 +232,19 @@ is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 Metadata
 ~~~~~~~~
 
-By default Dask will write a ``_metadata`` file aggregating row-group metadata
-from all files together. While potentially useful when reading data later with
-Dask, for large datasets the generation of this file may result in excessive
-memory usage (and potentially killed Dask workers). As such, we generally
-recommend disabling creation of this file by passing in
-``write_metadata_file=False``.
+In order to improve *read* performance, Dask can optionally write out
+a global ``_metadata`` file at write time by aggregating the row-group
+metadata from every file in the dataset. While potentially useful at
+read time, the generation of this file may result in excessive memory
+usage at scale (and potentially killed Dask workers). As such,
+enabling the writing of this file is only recommended for small to
+moderate dataset sizes.
 
 .. code-block:: python
 
    >>> df.to_parquet(
    ...     "s3://bucket-name/my/parquet/",
-   ...     write_metadata_file=False  # disable writing the _metadata file
+   ...     write_metadata_file=True  # enable writing the _metadata file
    ... )
 
 File Names
