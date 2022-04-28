@@ -1140,8 +1140,6 @@ class ArrowDatasetEngine(Engine):
                 stat_col_indices[name] = i
 
         # Decide final `gather_statistics` setting.
-        # NOTE: The "fastparquet" engine requires statistics for
-        # filtering even if the filter is on a paritioned column
         gather_statistics = _set_gather_statistics(
             gather_statistics,
             chunksize,
