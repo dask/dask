@@ -66,7 +66,8 @@ Engine
 ``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
 is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 ``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``.
+``engine="pyarrow"``. No matter the preferred engine, passing the option
+explicitly is strongly encouraged.
 
 .. code-block:: python
 
@@ -193,7 +194,8 @@ Engine
 ``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
 is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 ``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``.
+``engine="pyarrow"``. No matter the preferred engine, passing the option
+explicitly is strongly encouraged.
 
 .. code-block:: python
 
@@ -205,18 +207,19 @@ is installed, and falls back to ``pyarrow`` otherwise. We recommend using
 Metadata
 ~~~~~~~~
 
-By default Dask will write a ``_metadata`` file aggregating row-group metadata
-from all files together. While potentially useful when reading data later with
-Dask, for large datasets the generation of this file may result in excessive
-memory usage (and potentially killed Dask workers). As such, we generally
-recommend disabling creation of this file by passing in
-``write_metadata_file=False``.
+In order to improve *read* performance, Dask can optionally write out
+a global ``_metadata`` file at write time by aggregating the row-group
+metadata from every file in the dataset. While potentially useful at
+read time, the generation of this file may result in excessive memory
+usage at scale (and potentially killed Dask workers). As such,
+enabling the writing of this file is only recommended for small to
+moderate dataset sizes.
 
 .. code-block:: python
 
    >>> df.to_parquet(
    ...     "s3://bucket-name/my/parquet/",
-   ...     write_metadata_file=False  # disable writing the _metadata file
+   ...     write_metadata_file=True  # enable writing the _metadata file
    ... )
 
 File Names
