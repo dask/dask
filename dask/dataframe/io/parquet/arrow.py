@@ -494,35 +494,6 @@ class ArrowDatasetEngine(Engine):
         return df
 
     @classmethod
-    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
-        fmd = None
-        i_offset = 0
-        if append:
-            # Make sure there are existing file fragments.
-            # Otherwise there is no need to set `append=True`
-            i_offset = len(
-                list(
-                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
-                )
-            )
-            if i_offset == 0:
-                # No dataset to append to
-                return fmd, i_offset, False
-            try:
-                with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
-                    fmd = pq.read_metadata(fil)
-            except OSError:
-                # No _metadata file present - No appending allowed (for now)
-                if not ignore_divisions:
-                    # TODO: Be more flexible about existing metadata.
-                    raise NotImplementedError(
-                        "_metadata file needed to `append` "
-                        "with `engine='pyarrow-dataset'` "
-                        "unless `ignore_divisions` is `True`"
-                    )
-        return fmd, i_offset, append
-
-    @classmethod
     def initialize_write(
         cls,
         df,
@@ -582,14 +553,34 @@ class ArrowDatasetEngine(Engine):
         if append and division_info is None:
             ignore_divisions = True
 
-        # Extract metadata and get file offset if appending
-        fmd, i_offset, append = cls._get_dataset_offset(
-            path, fs, append, ignore_divisions
-        )
-
-        # Inspect the intial metadata if appending
+        full_metadata = None  # metadata for the full dataset, from _metadata
+        tail_metadata = None  # metadata for at least the last file in the dataset
+        i_offset = 0
+        metadata_file_exists = False
         if append:
-            arrow_schema = fmd.schema.to_arrow_schema()
+            # Extract metadata and get file offset if appending
+            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            i_offset = len(ds.files)
+            if i_offset > 0:
+                try:
+                    with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
+                        full_metadata = pq.read_metadata(fil)
+                    tail_metadata = full_metadata
+                    metadata_file_exists = True
+                except OSError:
+                    try:
+                        with fs.open(
+                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                        ) as fil:
+                            tail_metadata = pq.read_metadata(fil)
+                    except OSError:
+                        pass
+            else:
+                append = False  # No existing files, can skip the append logic
+
+        # If appending, validate against the initial metadata file (if present)
+        if append and tail_metadata is not None:
+            arrow_schema = tail_metadata.schema.to_arrow_schema()
             names = arrow_schema.names
             has_pandas_metadata = (
                 arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
@@ -624,7 +615,10 @@ class ArrowDatasetEngine(Engine):
                 ignore_divisions = True
             if not ignore_divisions:
                 old_end = None
-                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
+                row_groups = (
+                    tail_metadata.row_group(i)
+                    for i in range(tail_metadata.num_row_groups)
+                )
                 for row_group in row_groups:
                     for i, name in enumerate(names):
                         if name != division_info["name"]:
@@ -645,7 +639,8 @@ class ArrowDatasetEngine(Engine):
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
 
-        return fmd, schema, i_offset
+        extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
+        return i_offset, full_metadata, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def _pandas_to_arrow_table(
