@@ -308,6 +308,36 @@ def test_merge_asof_on_basic():
     assert_eq(c, C)
 
 
+def test_merge_asof_on_lefton_righton_error():
+    A = pd.DataFrame({"a": [1, 5, 10], "left_val": ["a", "b", "c"]})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame({"a": [1, 2, 3, 6, 7], "right_val": [1, 2, 3, 6, 7]})
+    b = dd.from_pandas(B, npartitions=2)
+
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", left_on="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", right_on="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", left_on="left_val", right_on="right_val")
+
+
+def test_merge_asof_by_leftby_rightby_error():
+    A = pd.DataFrame({"a": [1, 5, 10], "b": [3, 6, 9], "left_val": ["a", "b", "c"]})
+    a = dd.from_pandas(A, npartitions=2)
+    B = pd.DataFrame(
+        {"a": [1, 2, 3, 6, 7], "b": [3, 6, 9, 12, 15], "right_val": [1, 2, 3, 6, 7]}
+    )
+    b = dd.from_pandas(B, npartitions=2)
+
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", left_by="left_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", right_by="right_val")
+    with pytest.raises(ValueError, match="combination of both"):
+        dd.merge_asof(a, b, on="a", by="b", left_by="left_val", right_by="right_val")
+
+
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
 @pytest.mark.parametrize("direction", ["backward", "forward", "nearest"])
 def test_merge_asof_on(allow_exact_matches, direction):
@@ -634,6 +664,32 @@ def test_merge_asof_with_empty():
         right_index=True,
     )
     assert_eq(result_dd, result_df, check_index=False)
+
+
+@pytest.mark.parametrize(
+    "left_col, right_col", [("endofweek", "timestamp"), ("endofweek", "endofweek")]
+)
+def test_merge_asof_on_left_right(left_col, right_col):
+    df1 = pd.DataFrame(
+        {
+            left_col: [1, 1, 2, 2, 3, 4],
+            "GroupCol": [1234, 8679, 1234, 8679, 1234, 8679],
+        }
+    )
+    df2 = pd.DataFrame({right_col: [0, 0, 1, 3], "GroupVal": [1234, 1234, 8679, 1234]})
+
+    # pandas
+    result_df = pd.merge_asof(df1, df2, left_on=left_col, right_on=right_col)
+
+    # dask
+    result_dd = dd.merge_asof(
+        dd.from_pandas(df1, npartitions=2),
+        dd.from_pandas(df2, npartitions=2),
+        left_on=left_col,
+        right_on=right_col,
+    )
+
+    assert_eq(result_df, result_dd, check_index=False)
 
 
 @pytest.mark.parametrize("join", ["inner", "outer"])
@@ -1715,37 +1771,19 @@ def test_concat2():
     assert dd.concat([a]) is a
     for case in cases:
         pdcase = [_c.compute() for _c in case]
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case)
-
+        expected = pd.concat(pdcase, sort=False)
+        result = dd.concat(case)
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(expected, result)
+        assert set(result.dask) == set(dd.concat(case).dask)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case).dask)
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join="inner", sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case, join="inner")
+        expected = pd.concat(pdcase, join="inner", sort=False)
+        result = dd.concat(case, join="inner")
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(result, result)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case, join="inner").dask)
+        assert set(result.dask) == set(dd.concat(case, join="inner").dask)
 
 
 def test_concat3():
@@ -1762,31 +1800,18 @@ def test_concat3():
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2])
-
+    expected = pd.concat([pdf1, pdf2], sort=False)
+    result = dd.concat([ddf1, ddf2])
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
+    )
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2, ddf3])
+    expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
+    result = dd.concat([ddf1, ddf2, ddf3])
     assert result.divisions == (
         ddf1.divisions[:-1] + ddf2.divisions[:-1] + ddf3.divisions
     )
@@ -1795,12 +1820,10 @@ def test_concat3():
     )
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
-            pd.concat([pdf1, pdf2, pdf3]),
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+        pd.concat([pdf1, pdf2, pdf3]),
+    )
 
 
 def test_concat4_interleave_partitions():

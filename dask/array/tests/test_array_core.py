@@ -1,6 +1,7 @@
 import contextlib
 import copy
 import pathlib
+import re
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -47,6 +48,7 @@ from dask.array.core import (
     stack,
     store,
 )
+from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
@@ -1212,14 +1214,13 @@ def test_reshape_splat():
     assert_eq(x.reshape((25,)), x.reshape(25))
 
 
-def test_reshape_fails_for_dask_only():
-    cases = [((3, 4), (4, 3), 2)]
-    for original_shape, new_shape, chunks in cases:
-        x = np.random.randint(10, size=original_shape)
-        a = from_array(x, chunks=chunks)
-        assert x.reshape(new_shape).shape == new_shape
-        with pytest.raises(ValueError):
-            da.reshape(a, new_shape)
+def test_reshape_not_implemented_error():
+    a = da.ones((4, 5, 6), chunks=(2, 2, 3))
+    for new_shape in [(2, 10, 6), (5, 4, 6), (6, 5, 4)]:
+        with pytest.raises(
+            NotImplementedError, match=re.escape(_not_implemented_message)
+        ):
+            a.reshape(new_shape)
 
 
 def test_reshape_unknown_dimensions():
@@ -2572,13 +2573,23 @@ def test_from_array_tasks_always_call_getter(x, chunks, inline_array):
     assert_eq(x, dx)
 
 
-def test_from_array_ndarray_onechunk():
+@pytest.mark.parametrize(
+    "x",
+    [
+        np.array([[1, 2], [3, 4]]),
+        np.ma.array([[1, 2], [3, 4]], mask=[[True, False], [False, False]]),
+        np.ma.array([1], mask=[True]),
+        np.ma.array([1.5], mask=[True]),
+        np.ma.array(1, mask=True),
+        np.ma.array(1.5, mask=True),
+    ],
+)
+def test_from_array_ndarray_onechunk(x):
     """ndarray with a single chunk produces a minimal single key dict"""
-    x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=-1)
     assert_eq(x, dx)
     assert len(dx.dask) == 1
-    assert dx.dask[dx.name, 0, 0] is x
+    assert dx.dask[(dx.name,) + (0,) * dx.ndim] is x
 
 
 def test_from_array_ndarray_getitem():
@@ -2643,19 +2654,24 @@ def test_from_array_no_asarray(asarray, cls, inline_array):
     assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
-def test_from_array_getitem():
+@pytest.mark.parametrize("wrap", [True, False])
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_getitem(wrap, inline_array):
     x = np.arange(10)
+    called = False
 
-    def my_getitem(x, ind):
-        return x[ind]
+    def my_getitem(a, ind):
+        nonlocal called
+        called = True
+        return a[ind]
 
-    y = da.from_array(x, chunks=(5,), getitem=my_getitem)
-
-    for k, v in y.dask.items():
-        if isinstance(v, tuple):
-            assert v[0] is my_getitem
+    xx = MyArray(x) if wrap else x
+    y = da.from_array(xx, chunks=(5,), getitem=my_getitem, inline_array=inline_array)
 
     assert_eq(x, y)
+    # If we have a raw numpy array we eagerly slice, so custom getters
+    # are not called.
+    assert called is wrap
 
 
 def test_from_array_minus_one():
@@ -3128,6 +3144,8 @@ def test_vindex_errors():
     pytest.raises(IndexError, lambda: d.vindex[[True] * 5])
     pytest.raises(IndexError, lambda: d.vindex[[0], [5]])
     pytest.raises(IndexError, lambda: d.vindex[[0], [-6]])
+    with pytest.raises(IndexError, match="does not support indexing with dask objects"):
+        d.vindex[[0], [0], da.array([0])]
 
 
 def test_vindex_merge():

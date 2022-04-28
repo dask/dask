@@ -9,7 +9,7 @@ import sys
 import tempfile
 import uuid
 import warnings
-from collections.abc import Hashable, Iterable, Iterator, Mapping
+from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
 from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
@@ -18,7 +18,7 @@ from importlib import import_module
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
-from typing import ClassVar, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
 
 import tlz as toolz
@@ -27,6 +27,7 @@ from dask.core import get_deps
 
 K = TypeVar("K")
 V = TypeVar("V")
+T = TypeVar("T")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -344,7 +345,7 @@ def concrete(seq):
     return seq
 
 
-def pseudorandom(n, p, random_state=None):
+def pseudorandom(n: int, p, random_state=None):
     """Pseudorandom array of integer indexes
 
     >>> pseudorandom(5, [0.5, 0.5], random_state=123)
@@ -371,7 +372,7 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def random_state_data(n, random_state=None):
+def random_state_data(n: int, random_state=None) -> list:
     """Return a list of arrays that can initialize
     ``np.random.RandomState``.
 
@@ -395,7 +396,7 @@ def random_state_data(n, random_state=None):
     return l
 
 
-def is_integer(i):
+def is_integer(i) -> bool:
     """
     >>> is_integer(6)
     True
@@ -529,7 +530,7 @@ def takes_multiple_arguments(func, varargs=True):
     return len(spec.args) - ndefaults - is_constructor > 1
 
 
-def get_named_args(func):
+def get_named_args(func) -> list[str]:
     """Get all non ``*args/**kwargs`` arguments for a function"""
     s = inspect.signature(func)
     return [
@@ -613,7 +614,7 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
-def ensure_not_exists(filename):
+def ensure_not_exists(filename) -> None:
     """
     Ensure that a file does not exist.
     """
@@ -820,7 +821,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     return wrapper
 
 
-def funcname(func):
+def funcname(func) -> str:
     """Get the name of a function."""
     # functools.partial
     if isinstance(func, functools.partial):
@@ -852,7 +853,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ, short=False):
+def typename(typ: Any, short: bool = False) -> str:
     """
     Return the name of a type
 
@@ -882,7 +883,7 @@ def typename(typ, short=False):
         return str(typ)
 
 
-def ensure_bytes(s):
+def ensure_bytes(s) -> bytes:
     """Turn string or bytes to bytes
 
     >>> ensure_bytes('123')
@@ -900,8 +901,8 @@ def ensure_bytes(s):
     raise TypeError(msg % s)
 
 
-def ensure_unicode(s):
-    """Turn string or bytes to bytes
+def ensure_unicode(s) -> str:
+    """Turn string or bytes to string
 
     >>> ensure_unicode('123')
     '123'
@@ -1161,7 +1162,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
         otherwise it may be the input itself.
     """
     if type(d) is dict:
-        return d.copy() if copy else d  # type: ignore
+        return d.copy() if copy else d
     try:
         layers = d.layers  # type: ignore
     except AttributeError:
@@ -1171,6 +1172,21 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
     for layer in toolz.unique(layers.values(), key=id):
         result.update(layer)
     return result
+
+
+def ensure_set(s: Set[T], *, copy: bool = False) -> set[T]:
+    """Convert a generic Set into a set.
+
+    Parameters
+    ----------
+    s : Set
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of s;
+        otherwise it may be the input itself.
+    """
+    if type(s) is set:
+        return s.copy() if copy else s
+    return set(s)
 
 
 class OperatorMethodMixin:
@@ -1228,7 +1244,7 @@ def partial_by_order(*args, **kwargs):
     return function(*args2, **kwargs)
 
 
-def is_arraylike(x):
+def is_arraylike(x) -> bool:
     """Is this object a numpy array or something similar?
 
     This function tests specifically for an object that already has
@@ -1271,7 +1287,7 @@ def is_arraylike(x):
     )
 
 
-def is_dataframe_like(df):
+def is_dataframe_like(df) -> bool:
     """Looks like a Pandas DataFrame"""
     if (df.__class__.__module__, df.__class__.__name__) == (
         "pandas.core.frame",
@@ -1287,7 +1303,7 @@ def is_dataframe_like(df):
     )
 
 
-def is_series_like(s):
+def is_series_like(s) -> bool:
     """Looks like a Pandas Series"""
     typ = s.__class__
     return (
@@ -1297,7 +1313,7 @@ def is_series_like(s):
     )
 
 
-def is_index_like(s):
+def is_index_like(s) -> bool:
     """Looks like a Pandas Index"""
     typ = s.__class__
     return (
@@ -1306,12 +1322,12 @@ def is_index_like(s):
     )
 
 
-def is_cupy_type(x):
+def is_cupy_type(x) -> bool:
     # TODO: avoid explicit reference to CuPy
     return "cupy" in str(type(x))
 
 
-def natural_sort_key(s):
+def natural_sort_key(s: str) -> list[str | int]:
     """
     Sorting `key` function for performing a natural sort on a collection of
     strings
@@ -1340,16 +1356,16 @@ def natural_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
-def factors(n):
+def factors(n: int) -> set[int]:
     """Return the factors of an integer
 
     https://stackoverflow.com/a/6800214/616616
     """
     seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return set(functools.reduce(list.__add__, seq))
+    return {j for l in seq for j in l}
 
 
-def parse_bytes(s):
+def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 
     >>> from dask.utils import parse_bytes
@@ -1425,7 +1441,7 @@ byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and "i" not in k}
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
-def format_time(n):
+def format_time(n: float) -> str:
     """format integers as time
 
     >>> from dask.utils import format_time
@@ -1570,8 +1586,27 @@ timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
+@overload
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
+    ...
+
+
+@overload
+def parse_timedelta(
+    s: str | float | timedelta, default: str | Literal[False] = "seconds"
+) -> float:
+    ...
+
+
 def parse_timedelta(s, default="seconds"):
     """Parse timedelta string to number of seconds
+
+    Parameters
+    ----------
+    s : str, float, timedelta, or None
+    default: str or False, optional
+        Unit of measure if s  does not specify one. Defaults to seconds.
+        Set to False to require s to explicitly specify its own unit.
 
     Examples
     --------
@@ -1604,6 +1639,10 @@ def parse_timedelta(s, default="seconds"):
 
     prefix = s[:index]
     suffix = s[index:] or default
+    if suffix is False:
+        raise ValueError(f"Missing time unit: {s}")
+    if not isinstance(suffix, str):
+        raise TypeError(f"default must be str or False, got {default!r}")
 
     n = float(prefix)
 

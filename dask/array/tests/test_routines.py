@@ -7,6 +7,7 @@ from numbers import Number
 import pytest
 from numpy import AxisError
 
+import dask
 from dask.delayed import delayed
 
 np = pytest.importorskip("numpy")
@@ -1351,6 +1352,12 @@ def test_roll_always_results_in_a_new_array():
     assert y is not x
 
 
+def test_roll_works_even_if_shape_is_0():
+    expected = np.roll(np.zeros(0), 0)
+    actual = da.roll(da.zeros(0), 0)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
 def test_shape_and_ndim(shape):
     x = da.random.random(shape)
@@ -2012,7 +2019,7 @@ def test_unravel_index():
         for i in range(len(indices)):
             assert_eq(d_indices[i], indices[i])
 
-        assert_eq(darr.vindex[d_indices], arr[indices])
+        assert_eq(darr.vindex[dask.compute(*d_indices)], arr[indices])
 
 
 @pytest.mark.parametrize(

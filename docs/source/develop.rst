@@ -132,7 +132,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.8, and 3.9.
+Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -263,10 +263,10 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses several code linters (flake8, black, isort, pyupgrade), which are enforced by
-CI. Developers should run them locally before they submit a PR, through the single
-command ``pre-commit run --all-files``. This makes sure that linter versions and options
-are aligned for all developers.
+Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
+enforced by CI. Developers should run them locally before they submit a PR, through the
+single command ``pre-commit run --all-files``. This makes sure that linter versions and
+options are aligned for all developers.
 
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::

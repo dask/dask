@@ -158,6 +158,7 @@ try:
     )
     from dask.array.tiledb_io import from_tiledb, to_tiledb
     from dask.array.ufunc import (
+        abs,
         absolute,
         add,
         angle,
@@ -211,6 +212,7 @@ try:
         isposinf,
         isreal,
         ldexp,
+        left_shift,
         less,
         less_equal,
         log,
@@ -232,12 +234,14 @@ try:
         negative,
         nextafter,
         not_equal,
+        positive,
         power,
         rad2deg,
         radians,
         real,
         reciprocal,
         remainder,
+        right_shift,
         rint,
         sign,
         signbit,

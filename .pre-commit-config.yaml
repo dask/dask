@@ -16,7 +16,7 @@ repos:
         args:
           - --py38-plus
   -   repo: https://github.com/psf/black
-      rev: 22.1.0
+      rev: 22.3.0
       hooks:
       - id: black
         language_version: python3
@@ -28,3 +28,17 @@ repos:
       hooks:
       - id: flake8
         language_version: python3
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v0.942
+    hooks:
+      - id: mypy
+        # Override default --ignore-missing-imports
+        args: []
+        additional_dependencies:
+          # Type stubs
+          - types-docutils
+          - types-PyYAML
+          - types-requests
+          - types-setuptools
+          # Typed libraries
+          - numpy

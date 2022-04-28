@@ -14,6 +14,10 @@ from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
+
 AGG_FUNCS = [
     "sum",
     "mean",
@@ -1977,7 +1981,8 @@ def test_with_min_count(min_count):
         )
 
 
-def test_groupby_group_keys():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+def test_groupby_group_keys(group_keys):
     df = pd.DataFrame({"a": [1, 2, 2, 3], "b": [2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2).set_index("a")
     pdf = df.set_index("a")
@@ -1986,8 +1991,10 @@ def test_groupby_group_keys():
     expected = pdf.groupby("a").apply(func)
     assert_eq(expected, ddf.groupby("a").apply(func, meta=expected))
 
-    expected = pdf.groupby("a", group_keys=False).apply(func)
-    assert_eq(expected, ddf.groupby("a", group_keys=False).apply(func, meta=expected))
+    expected = pdf.groupby("a", group_keys=group_keys).apply(func)
+    assert_eq(
+        expected, ddf.groupby("a", group_keys=group_keys).apply(func, meta=expected)
+    )
 
 
 @pytest.mark.parametrize(
@@ -2278,8 +2285,13 @@ def test_groupby_shift_with_freq():
 
     # just pass the pandas result as meta for convenience
     df_result = pdf.groupby(pdf.index).shift(periods=-2, freq="D")
+    # Groupby/shift on the index should avoid shuffle and let the `freq` pass
+    # unmodified, but that is currently broken: https://github.com/dask/dask/issues/8959
+    # TODO: remove check_freq condition once fixed.
     assert_eq(
-        df_result, ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result)
+        df_result,
+        ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result),
+        **CHECK_FREQ,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
@@ -2395,7 +2407,21 @@ def test_groupby_dropna_pandas(dropna):
 @pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
-def test_groupby_dropna_cudf(dropna, by):
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+    ],
+)
+def test_groupby_dropna_cudf(dropna, by, group_keys):
 
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
@@ -2415,11 +2441,11 @@ def test_groupby_dropna_cudf(dropna, by):
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 
     if dropna is None:
-        dask_result = ddf.groupby(by).e.sum()
-        cudf_result = df.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, group_keys=group_keys).e.sum()
     else:
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
-        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
     if by in ["c", "d"]:
         # Lose string/category index name in cudf...
         dask_result = dask_result.compute()
@@ -2674,6 +2700,8 @@ def test_groupby_with_pd_grouper():
         ddf.groupby(["key1", pd.Grouper(key="key2")])
 
 
+# TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
+@pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 def test_groupby_empty_partitions_with_rows_operation(operation):
 

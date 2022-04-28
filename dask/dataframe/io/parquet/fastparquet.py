@@ -10,6 +10,8 @@ import pandas as pd
 import tlz as toolz
 from packaging.version import parse as parse_version
 
+from dask.core import flatten
+
 try:
     import fastparquet
     from fastparquet import ParquetFile
@@ -25,7 +27,6 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _flatten_filters,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -372,6 +373,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
 
@@ -391,9 +393,6 @@ class FastParquetEngine(Engine):
 
         parts = []
         _metadata_exists = False
-        require_extension = dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -430,14 +429,16 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
-                if require_extension:
+                if parquet_file_extension:
                     # Raise error if all files have been filtered by extension
                     len0 = len(paths)
-                    paths = [path for path in paths if path.endswith(require_extension)]
+                    paths = [
+                        path for path in paths if path.endswith(parquet_file_extension)
+                    ]
                     if len0 and paths == []:
                         raise ValueError(
-                            "No files satisfy the `require_extension` criteria "
-                            f"(files must end with {require_extension})."
+                            "No files satisfy the `parquet_file_extension` criteria "
+                            f"(files must end with {parquet_file_extension})."
                         )
                 pf = ParquetFile(
                     paths[:1], open_with=fs.open, root=base, **dataset_kwargs
@@ -638,8 +639,6 @@ class FastParquetEngine(Engine):
         # We don't "need" to gather statistics if we don't
         # want to apply filters, aggregate files, or calculate
         # divisions.
-        if split_row_groups is None:
-            split_row_groups = False
         _need_aggregation_stats = chunksize or (
             int(split_row_groups) > 1 and aggregation_depth
         )
@@ -663,10 +662,10 @@ class FastParquetEngine(Engine):
                 gather_statistics = True
 
         # Determine which columns need statistics.
-        flat_filters = _flatten_filters(filters)
+        filter_columns = {t[0] for t in flatten(filters or [], container=list)}
         stat_col_indices = {}
         for i, name in enumerate(pf.columns):
-            if name in index_cols or name in flat_filters:
+            if name in index_cols or name in filter_columns:
                 stat_col_indices[name] = i
 
         # If the user has not specified `gather_statistics`,
@@ -850,11 +849,12 @@ class FastParquetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=True,
+        split_row_groups=False,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=None,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -871,6 +871,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
