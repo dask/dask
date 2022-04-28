@@ -1620,8 +1620,9 @@ def test_to_parquet_calls_invalidate_cache(tmpdir, monkeypatch, compute):
     invalidate_cache = MagicMock()
     monkeypatch.setattr(LocalFileSystem, "invalidate_cache", invalidate_cache)
     ddf.to_parquet(tmpdir, compute=compute, engine="pyarrow")
+    path = LocalFileSystem._strip_protocol(str(tmpdir))
     assert invalidate_cache.called
-    assert invalidate_cache.call_args.args[0] == str(tmpdir)
+    assert invalidate_cache.call_args.args[0] == path
 
 
 @FASTPARQUET_MARK
