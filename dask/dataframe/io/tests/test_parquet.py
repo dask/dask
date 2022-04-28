@@ -4,6 +4,7 @@ import os
 import sys
 import warnings
 from decimal import Decimal
+from unittest.mock import MagicMock
 
 import numpy as np
 import pandas as pd
@@ -1609,6 +1610,18 @@ def test_to_parquet_lazy(tmpdir, scheduler, engine):
     ddf2 = dd.read_parquet(tmpdir, engine=engine)
 
     assert_eq(ddf, ddf2, check_divisions=False)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("compute", [False, True])
+def test_to_parquet_calls_invalidate_cache(tmpdir, monkeypatch, compute):
+    from fsspec.implementations.local import LocalFileSystem
+
+    invalidate_cache = MagicMock()
+    monkeypatch.setattr(LocalFileSystem, "invalidate_cache", invalidate_cache)
+    ddf.to_parquet(tmpdir, compute=compute, engine="pyarrow")
+    assert invalidate_cache.called
+    assert invalidate_cache.call_args.args[0] == str(tmpdir)
 
 
 @FASTPARQUET_MARK
