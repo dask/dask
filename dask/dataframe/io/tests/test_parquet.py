@@ -857,8 +857,6 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
 def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offset):
     """Test raising of error when divisions overlapping."""
     tmp = str(tmpdir)
-    # index = pd.date_range("2022-01-01", "2022-01-02", periods=500, inclusive="both")
-    # offset = pd.Timedelta(days=1)
 
     df = pd.DataFrame(
         {
