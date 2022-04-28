@@ -18,14 +18,13 @@ from collections.abc import (
     Iterator,
     Mapping,
     MutableMapping,
-    Sequence,
 )
 from functools import partial, reduce, wraps
 from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any
+from typing import Any, TypeVar, cast
 
 import numpy as np
 from fsspec import get_mapper
@@ -43,7 +42,7 @@ from dask.array.dispatch import (  # noqa: F401
     einsum_lookup,
     tensordot_lookup,
 )
-from dask.array.numpy_compat import _numpy_120, _Recurser
+from dask.array.numpy_compat import ArrayLike, _numpy_120, _Recurser
 from dask.array.slicing import replace_ellipsis, setitem_array, slice_array
 from dask.base import (
     DaskMethodsMixin,
@@ -624,6 +623,12 @@ def map_blocks(
 
     .. image:: /images/map_blocks_drop_axis.png
 
+    Due to memory-size-constraints, it is often not advisable to use ``drop_axis``
+    on an axis that is chunked.  In that case, it is better not to use
+    ``map_blocks`` but rather
+    ``dask.array.reduction(..., axis=dropped_axes, concatenate=False)`` which
+    maintains a leaner memory footprint while it drops any axis.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
@@ -1012,7 +1017,7 @@ def broadcast_chunks(*chunkss):
 
 def store(
     sources: Array | Collection[Array],
-    targets,
+    targets: ArrayLike | Delayed | Collection[ArrayLike | Delayed],
     lock: bool | Lock = True,
     regions: tuple[slice, ...] | Collection[tuple[slice, ...]] | None = None,
     compute: bool = True,
@@ -1034,12 +1039,14 @@ def store(
 
     sources: Array or collection of Arrays
     targets: array-like or Delayed or collection of array-likes and/or Delayeds
-        These should support setitem syntax ``target[10:20] = ...``
+        These should support setitem syntax ``target[10:20] = ...``.
+        If sources is a single item, targets must be a single item; if sources is a
+        collection of arrays, targets must be a matching collection.
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
         particular :class:`threading.Lock` object to be shared among all writes.
-    regions: tuple of slices or collection of tuples of slices
+    regions: tuple of slices or collection of tuples of slices, optional
         Each ``region`` tuple in ``regions`` should be such that
         ``target[region].shape = source.shape``
         for the corresponding source and target in sources and targets,
@@ -1080,7 +1087,10 @@ def store(
 
     if isinstance(sources, Array):
         sources = [sources]
-        targets = [targets]
+        # There's no way to test that targets is a single array-like.
+        # We need to trust the user.
+        targets = [targets]  # type: ignore
+    targets = cast("Collection[ArrayLike | Delayed]", targets)
 
     if any(not isinstance(s, Array) for s in sources):
         raise ValueError("All sources must be dask array objects")
@@ -1092,16 +1102,15 @@ def store(
         )
 
     if isinstance(regions, tuple) or regions is None:
-        regions = [regions]
-
-    if len(sources) > 1 and len(regions) == 1:
-        regions *= len(sources)
-
-    if len(sources) != len(regions):
-        raise ValueError(
-            "Different number of sources [%d] and targets [%d] than regions [%d]"
-            % (len(sources), len(targets), len(regions))
-        )
+        regions_list = [regions] * len(sources)
+    else:
+        regions_list = list(regions)
+        if len(sources) != len(regions_list):
+            raise ValueError(
+                f"Different number of sources [{len(sources)}] and "
+                f"targets [{len(targets)}] than regions [{len(regions_list)}]"
+            )
+    del regions
 
     # Optimize all sources together
     sources_hlg = HighLevelGraph.merge(*[e.__dask_graph__() for e in sources])
@@ -1110,7 +1119,7 @@ def store(
     )
     sources_name = "store-sources-" + tokenize(sources)
     layers = {sources_name: sources_layer}
-    dependencies = {sources_name: set()}
+    dependencies: dict[str, set[str]] = {sources_name: set()}
 
     # Optimize all targets together
     targets_keys = []
@@ -1133,11 +1142,11 @@ def store(
 
     map_names = [
         "store-map-" + tokenize(s, t if isinstance(t, Delayed) else id(t), r)
-        for s, t, r in zip(sources, targets, regions)
+        for s, t, r in zip(sources, targets, regions_list)
     ]
-    map_keys = []
+    map_keys: list[tuple] = []
 
-    for s, t, n, r in zip(sources, targets, map_names, regions):
+    for s, t, n, r in zip(sources, targets, map_names, regions_list):
         map_layer = insert_to_ooc(
             keys=s.__dask_keys__(),
             chunks=s.chunks,
@@ -1157,7 +1166,7 @@ def store(
 
     if return_stored:
         store_dsk = HighLevelGraph(layers, dependencies)
-        load_store_dsk = store_dsk
+        load_store_dsk: HighLevelGraph | dict[tuple, Any] = store_dsk
         if compute:
             store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
             store_dlyds = persist(*store_dlyds, **kwargs)
@@ -1929,6 +1938,11 @@ class Array(DaskMethodsMixin):
                 "when the slices are not over the entire array (i.e, x[:]). "
                 "Use normal slicing instead when only using slices. Got: {}".format(key)
             )
+        elif any(is_dask_collection(k) for k in key):
+            raise IndexError(
+                "vindex does not support indexing with dask objects. Call compute "
+                "on the indexer first to get an evalurated array. Got: {}".format(key)
+            )
         return _vindex(self, *key)
 
     @property
@@ -2343,16 +2357,20 @@ class Array(DaskMethodsMixin):
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
-    def argmin(self, axis=None, split_every=None, out=None):
+    def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmin
 
-        return argmin(self, axis=axis, split_every=split_every, out=out)
+        return argmin(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
-    def argmax(self, axis=None, split_every=None, out=None):
+    def argmax(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmax
 
-        return argmax(self, axis=axis, split_every=split_every, out=out)
+        return argmax(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
@@ -4128,7 +4146,14 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     return Array(graph, name, chunks, meta=meta)
 
 
-def load_store_chunk(x, out, index, lock, return_stored, load_stored):
+def load_store_chunk(
+    x: Any,
+    out: Any,
+    index: slice,
+    lock: Any,
+    return_stored: bool,
+    load_stored: bool,
+):
     """
     A function inserted in a Dask graph for storing a chunk.
 
@@ -4137,7 +4162,7 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     x: array-like
         An array (potentially a NumPy one)
     out: array-like
-        Where to store results too.
+        Where to store results.
     index: slice-like
         Where to store result from ``x`` in ``out``.
     lock: Lock-like or False
@@ -4148,6 +4173,16 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
         Whether to return the array stored in ``out``.
         Ignored if ``return_stored`` is not ``True``.
 
+    Returns
+    -------
+
+    If return_stored=True and load_stored=False
+        out
+    If return_stored=True and load_stored=True
+        out[index]
+    If return_stored=False and compute=False
+        None
+
     Examples
     --------
 
@@ -4155,11 +4190,6 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     >>> b = np.empty(a.shape)
     >>> load_store_chunk(a, b, (slice(None), slice(None)), False, False, False)
     """
-
-    result = None
-    if return_stored and not load_stored:
-        result = out
-
     if lock:
         lock.acquire()
     try:
@@ -4168,31 +4198,39 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
                 out[index] = x
             else:
                 out[index] = np.asanyarray(x)
+
         if return_stored and load_stored:
-            result = out[index]
+            return out[index]
+        elif return_stored and not load_stored:
+            return out
+        else:
+            return None
     finally:
         if lock:
             lock.release()
 
-    return result
 
-
-def store_chunk(x, out, index, lock, return_stored):
+def store_chunk(
+    x: ArrayLike, out: ArrayLike, index: slice, lock: Any, return_stored: bool
+):
     return load_store_chunk(x, out, index, lock, return_stored, False)
 
 
-def load_chunk(out, index, lock):
+A = TypeVar("A", bound=ArrayLike)
+
+
+def load_chunk(out: A, index: slice, lock: Any) -> A:
     return load_store_chunk(None, out, index, lock, True, True)
 
 
 def insert_to_ooc(
     keys: list,
     chunks: tuple[tuple[int, ...], ...],
-    out,
+    out: ArrayLike,
     name: str,
     *,
     lock: Lock | bool = True,
-    region: slice | None = None,
+    region: tuple[slice, ...] | slice | None = None,
     return_stored: bool = False,
     load_stored: bool = False,
 ) -> dict:
@@ -4246,8 +4284,8 @@ def insert_to_ooc(
         func = load_store_chunk
         args = (load_stored,)
     else:
-        func = store_chunk
-        args = ()
+        func = store_chunk  # type: ignore
+        args = ()  # type: ignore
 
     dsk = {
         (name,) + t[1:]: (func, t, out, slc, lock, return_stored) + args
@@ -4258,7 +4296,7 @@ def insert_to_ooc(
 
 def retrieve_from_ooc(
     keys: Collection[Hashable], dsk_pre: Mapping, dsk_post: Mapping
-) -> dict:
+) -> dict[tuple, Any]:
     """
     Creates a Dask graph for loading stored ``keys`` from ``dsk``.
 
@@ -4280,7 +4318,7 @@ def retrieve_from_ooc(
     >>> retrieve_from_ooc(g.keys(), g, {k: k for k in g.keys()})  # doctest: +SKIP
     """
     load_dsk = {
-        ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]
+        ("load-" + k[0],) + k[1:]: (load_chunk, dsk_post[k]) + dsk_pre[k][3:-1]  # type: ignore
         for k in keys
     }
 
@@ -5560,12 +5598,10 @@ class BlockView:
     An instance of ``da.array.Blockview``
     """
 
-    def __init__(self, array: Array) -> BlockView:
+    def __init__(self, array: Array):
         self._array = array
 
-    def __getitem__(
-        self, index: int | Sequence[int] | slice | Sequence[slice]
-    ) -> Array:
+    def __getitem__(self, index: Any) -> Array:
         from dask.array.slicing import normalize_index
 
         if not isinstance(index, tuple):
@@ -5575,7 +5611,10 @@ class BlockView:
         if any(ind is None for ind in index):
             raise ValueError("Slicing with np.newaxis or None is not supported")
         index = normalize_index(index, self._array.numblocks)
-        index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
+        index = tuple(
+            slice(k, k + 1) if isinstance(k, Number) else k  # type: ignore
+            for k in index
+        )
 
         name = "blocks-" + tokenize(self._array, index)
 

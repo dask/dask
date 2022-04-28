@@ -10,12 +10,9 @@ import sys
 import threading
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any, Literal
 
 import yaml
-
-if TYPE_CHECKING:
-    from typing_extensions import Literal
 
 no_default = "__no_default__"
 

@@ -8,11 +8,14 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
+from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
 from dask.utils import tmpfile
+from dask.utils_test import hlg_layer_topological
 
 ####################
 # Arrays and BColz #
@@ -354,36 +357,45 @@ def test_from_pandas_with_datetime_index():
 
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
-
+    pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
     df = dd.from_dask_array(x, ["a", "b", "c"])
-    assert isinstance(df, dd.DataFrame)
-    tm.assert_index_equal(df.columns, pd.Index(["a", "b", "c"]))
-    assert list(df.divisions) == [0, 4, 8, 9]
-    assert (df.compute(scheduler="sync").values == x.compute(scheduler="sync")).all()
+    assert not hlg_layer_topological(df.dask, -1).is_materialized()
+    assert_eq(df, pdf)
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=["a", "b", "c"])
-    assert isinstance(df, dd.DataFrame)
-    tm.assert_index_equal(df2.columns, df.columns)
-    assert df2.divisions == df.divisions
+    assert not hlg_layer_topological(df2.dask, -1).is_materialized()
+    assert_eq(df, df2)
+
+
+def test_DataFrame_from_dask_array_with_blockwise_ops():
+    x = da.ones((10, 3), chunks=(4, 2))
+    x *= 2
+    pdf = pd.DataFrame(np.ones((10, 3)) * 2, columns=["a", "b", "c"])
+    df = dd.from_dask_array(x, ["a", "b", "c"])
+    # None of the layers in this graph should be materialized, everything should
+    # be a HighLevelGraph still.
+    assert all(
+        not hlg_layer_topological(df.dask, i).is_materialized()
+        for i in range(len(df.dask.layers))
+    )
+    assert_eq(df, pdf)
 
 
 def test_Series_from_dask_array():
     x = da.ones(10, chunks=4)
+    pser = pd.Series(np.ones(10), name="a")
 
     ser = dd.from_dask_array(x, "a")
-    assert isinstance(ser, dd.Series)
-    assert ser.name == "a"
-    assert list(ser.divisions) == [0, 4, 8, 9]
-    assert (ser.compute(scheduler="sync").values == x.compute(scheduler="sync")).all()
+    assert_eq(ser, pser)
 
+    # Not passing a name should result in the name == None
+    pser = pd.Series(np.ones(10))
     ser = dd.from_dask_array(x)
-    assert isinstance(ser, dd.Series)
-    assert ser.name is None
+    assert_eq(ser, pser)
 
     # dd.from_array should re-route to from_dask_array
     ser2 = dd.from_array(x)
-    assert isinstance(ser2, dd.Series)
     assert_eq(ser, ser2)
 
 
@@ -398,91 +410,91 @@ def test_from_dask_array_index(as_frame):
 
 def test_from_dask_array_index_raises():
     x = da.random.uniform(size=(10,), chunks=(5,))
-    with pytest.raises(ValueError) as m:
+    with pytest.raises(ValueError, match="must be an instance"):
         dd.from_dask_array(x, index=pd.Index(np.arange(10)))
-    assert m.match("must be an instance")
 
     a = dd.from_pandas(pd.Series(range(12)), npartitions=2)
     b = dd.from_pandas(pd.Series(range(12)), npartitions=4)
-    with pytest.raises(ValueError) as m:
+    with pytest.raises(ValueError, match=".*index.*numbers of blocks.*4 != 2"):
         dd.from_dask_array(a.values, index=b.index)
 
-    assert m.match("index")
-    assert m.match("number")
-    assert m.match("blocks")
-    assert m.match("4 != 2")
+
+def test_from_array_raises_more_than_2D():
+    x = da.ones((3, 3, 3), chunks=2)
+    y = np.ones((3, 3, 3))
+
+    with pytest.raises(ValueError, match="more than 2D array"):
+        dd.from_dask_array(x)  # dask
+
+    with pytest.raises(ValueError, match="more than 2D array"):
+        dd.from_array(y)  # numpy
 
 
 def test_from_dask_array_compat_numpy_array():
-    x = da.ones((3, 3, 3), chunks=2)
-
-    with pytest.raises(ValueError):
-        dd.from_dask_array(x)  # dask
-
-    with pytest.raises(ValueError):
-        dd.from_array(x.compute())  # numpy
-
     x = da.ones((10, 3), chunks=(3, 3))
+    y = np.ones((10, 3))
     d1 = dd.from_dask_array(x)  # dask
-    assert isinstance(d1, dd.DataFrame)
-    assert (d1.compute().values == x.compute()).all()
-    tm.assert_index_equal(d1.columns, pd.Index([0, 1, 2]))
+    p1 = pd.DataFrame(y)
+    assert_eq(d1, p1)
 
-    d2 = dd.from_array(x.compute())  # numpy
-    assert isinstance(d1, dd.DataFrame)
-    assert (d2.compute().values == x.compute()).all()
-    tm.assert_index_equal(d2.columns, pd.Index([0, 1, 2]))
+    d2 = dd.from_array(y)  # numpy
+    assert_eq(d2, d1)
 
-    with pytest.raises(ValueError):
+
+def test_from_array_wrong_column_shape_error():
+    x = da.ones((10, 3), chunks=(3, 3))
+    with pytest.raises(ValueError, match="names must match width"):
         dd.from_dask_array(x, columns=["a"])  # dask
 
-    with pytest.raises(ValueError):
-        dd.from_array(x.compute(), columns=["a"])  # numpy
+    y = np.ones((10, 3))
+    with pytest.raises(ValueError, match="names must match width"):
+        dd.from_array(y, columns=["a"])  # numpy
 
+
+def test_from_array_with_column_names():
+    x = da.ones((10, 3), chunks=(3, 3))
+    y = np.ones((10, 3))
     d1 = dd.from_dask_array(x, columns=["a", "b", "c"])  # dask
-    assert isinstance(d1, dd.DataFrame)
-    assert (d1.compute().values == x.compute()).all()
-    tm.assert_index_equal(d1.columns, pd.Index(["a", "b", "c"]))
+    p1 = pd.DataFrame(y, columns=["a", "b", "c"])
+    assert_eq(d1, p1)
 
-    d2 = dd.from_array(x.compute(), columns=["a", "b", "c"])  # numpy
-    assert isinstance(d1, dd.DataFrame)
-    assert (d2.compute().values == x.compute()).all()
-    tm.assert_index_equal(d2.columns, pd.Index(["a", "b", "c"]))
+    d2 = dd.from_array(y, columns=["a", "b", "c"])  # numpy
+    assert_eq(d1, d2)
 
 
 def test_from_dask_array_compat_numpy_array_1d():
 
     x = da.ones(10, chunks=3)
+    y = np.ones(10)
     d1 = dd.from_dask_array(x)  # dask
-    assert isinstance(d1, dd.Series)
-    assert (d1.compute().values == x.compute()).all()
-    assert d1.name is None
+    p1 = pd.Series(y)
+    assert_eq(d1, p1)
 
-    d2 = dd.from_array(x.compute())  # numpy
-    assert isinstance(d1, dd.Series)
-    assert (d2.compute().values == x.compute()).all()
-    assert d2.name is None
+    d2 = dd.from_array(y)  # numpy
+    assert_eq(d2, d1)
 
+
+def test_from_array_1d_with_column_names():
+    x = da.ones(10, chunks=3)
+    y = np.ones(10)
     d1 = dd.from_dask_array(x, columns="name")  # dask
-    assert isinstance(d1, dd.Series)
-    assert (d1.compute().values == x.compute()).all()
-    assert d1.name == "name"
+    p1 = pd.Series(y, name="name")
+    assert_eq(d1, p1)
 
     d2 = dd.from_array(x.compute(), columns="name")  # numpy
-    assert isinstance(d1, dd.Series)
-    assert (d2.compute().values == x.compute()).all()
-    assert d2.name == "name"
+    assert_eq(d2, d1)
 
+
+def test_from_array_1d_list_of_columns_gives_dataframe():
+    x = da.ones(10, chunks=3)
+    y = np.ones(10)
     # passing list via columns results in DataFrame
     d1 = dd.from_dask_array(x, columns=["name"])  # dask
-    assert isinstance(d1, dd.DataFrame)
-    assert (d1.compute().values == x.compute()).all()
-    tm.assert_index_equal(d1.columns, pd.Index(["name"]))
+    p1 = pd.DataFrame(y, columns=["name"])
+    assert_eq(d1, p1)
 
-    d2 = dd.from_array(x.compute(), columns=["name"])  # numpy
-    assert isinstance(d1, dd.DataFrame)
-    assert (d2.compute().values == x.compute()).all()
-    tm.assert_index_equal(d2.columns, pd.Index(["name"]))
+    d2 = dd.from_array(y, columns=["name"])  # numpy
+    assert_eq(d2, d1)
 
 
 def test_from_dask_array_struct_dtype():
@@ -518,10 +530,12 @@ def test_from_dask_array_unknown_chunks():
     assert not df.known_divisions
     assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
 
-    # Unknown width
+
+def test_from_dask_array_unknown_width_error():
+    dsk = {("x", 0, 0): np.random.random((2, 3)), ("x", 1, 0): np.random.random((5, 3))}
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)
-    with pytest.raises(ValueError):
-        df = dd.from_dask_array(dx)
+    with pytest.raises(ValueError, match="Shape along axis 1 must be known"):
+        dd.from_dask_array(dx)
 
 
 def test_to_bag():
@@ -656,6 +670,9 @@ def test_from_delayed():
         assert ddf.known_divisions == (divisions is not None)
 
     meta2 = [(c, "f8") for c in df.columns]
+    # Make sure `from_delayed` is Blockwise
+    check_ddf = dd.from_delayed(dfs, meta=meta2)
+    assert isinstance(check_ddf.dask.layers[check_ddf._name], Blockwise)
     assert_eq(dd.from_delayed(dfs, meta=meta2), df)
     assert_eq(dd.from_delayed([d.a for d in dfs], meta=("a", "f8")), df.a)
 
@@ -665,6 +682,46 @@ def test_from_delayed():
     with pytest.raises(ValueError) as e:
         dd.from_delayed(dfs, meta=meta.a).compute()
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
+
+
+def test_from_delayed_optimize_fusion():
+    # Test that DataFrame optimization fuses a `from_delayed`
+    # layer with other Blockwise layers and input Delayed tasks.
+    # See: https://github.com/dask/dask/pull/8852
+    ddf = (
+        dd.from_delayed(
+            map(delayed(lambda x: pd.DataFrame({"x": [x] * 10})), range(10)),
+            meta=pd.DataFrame({"x": [0] * 10}),
+        )
+        + 1
+    )
+    # NOTE: Fusion requires `optimize_blockwise`` and `fuse_roots`
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
+
+
+def test_from_delayed_to_dask_array():
+    # Check that `from_delayed`` can be followed
+    # by `to_dask_array` without breaking
+    # optimization behavior
+    # See: https://github.com/dask-contrib/dask-sql/issues/497
+    from dask.blockwise import optimize_blockwise
+
+    dfs = [delayed(pd.DataFrame)(np.ones((3, 2))) for i in range(3)]
+    ddf = dd.from_delayed(dfs)
+    arr = ddf.to_dask_array()
+
+    # If we optimize this graph without calling
+    # `fuse_roots`, the underlying `BlockwiseDep`
+    # `mapping` keys will be 1-D (e.g. `(4,)`),
+    # while the collection keys will be 2-D
+    # (e.g. `(4, 0)`)
+    keys = [k[0] for k in arr.__dask_keys__()]
+    dsk = optimize_blockwise(arr.dask, keys=keys)
+    dsk.cull(keys)
+
+    result = arr.compute()
+    assert result.shape == (9, 2)
 
 
 def test_from_delayed_preserves_hlgs():

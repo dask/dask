@@ -373,6 +373,7 @@ class FastParquetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
 
@@ -392,9 +393,6 @@ class FastParquetEngine(Engine):
 
         parts = []
         _metadata_exists = False
-        require_extension = dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # This is a directory.
@@ -431,14 +429,16 @@ class FastParquetEngine(Engine):
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
-                if require_extension:
+                if parquet_file_extension:
                     # Raise error if all files have been filtered by extension
                     len0 = len(paths)
-                    paths = [path for path in paths if path.endswith(require_extension)]
+                    paths = [
+                        path for path in paths if path.endswith(parquet_file_extension)
+                    ]
                     if len0 and paths == []:
                         raise ValueError(
-                            "No files satisfy the `require_extension` criteria "
-                            f"(files must end with {require_extension})."
+                            "No files satisfy the `parquet_file_extension` criteria "
+                            f"(files must end with {parquet_file_extension})."
                         )
                 pf = ParquetFile(
                     paths[:1], open_with=fs.open, root=base, **dataset_kwargs
@@ -639,8 +639,6 @@ class FastParquetEngine(Engine):
         # We don't "need" to gather statistics if we don't
         # want to apply filters, aggregate files, or calculate
         # divisions.
-        if split_row_groups is None:
-            split_row_groups = False
         _need_aggregation_stats = chunksize or (
             int(split_row_groups) > 1 and aggregation_depth
         )
@@ -851,11 +849,12 @@ class FastParquetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=True,
+        split_row_groups=False,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=None,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -872,6 +871,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -1159,11 +1159,13 @@ class FastParquetEngine(Engine):
                 "because this required data in memory."
             )
 
+        metadata_file_exists = False
         if append:
             try:
                 # to append to a dataset without _metadata, need to load
                 # _common_metadata or any data file here
                 pf = fastparquet.api.ParquetFile(path, open_with=fs.open)
+                metadata_file_exists = fs.exists(fs.sep.join([path, "_metadata"]))
             except (OSError, ValueError):
                 # append for create
                 append = False
@@ -1222,8 +1224,8 @@ class FastParquetEngine(Engine):
             )
             fmd.key_value_metadata = kvm
 
-        schema = None  # ArrowEngine compatibility
-        return (fmd, schema, i_offset)
+        extra_write_kwargs = {"fmd": fmd}
+        return i_offset, fmd, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def write_partition(

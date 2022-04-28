@@ -36,6 +36,7 @@ _pa_version = parse_version(pa.__version__)
 from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
+pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -214,6 +215,16 @@ def _read_table_from_path(
         ),
     )
 
+    # Use `pre_buffer=True` if the option is supported and an optimized
+    # "pre-caching" method isn't already specified in `precache_options`
+    # (The distinct fsspec and pyarrow optimizations will conflict)
+    pre_buffer_default = precache_options.get("method", None) is None
+    pre_buffer = (
+        {"pre_buffer": read_kwargs.pop("pre_buffer", pre_buffer_default)}
+        if pre_buffer_supported
+        else {}
+    )
+
     with _open_input_files(
         [path],
         fs=fs,
@@ -221,14 +232,14 @@ def _read_table_from_path(
         **open_file_options,
     )[0] as fil:
         if row_groups == [None]:
-            return pq.ParquetFile(fil).read(
+            return pq.ParquetFile(fil, **pre_buffer).read(
                 columns=columns,
                 use_threads=False,
                 use_pandas_metadata=True,
                 **read_kwargs,
             )
         else:
-            return pq.ParquetFile(fil).read_row_groups(
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
                 row_groups,
                 columns=columns,
                 use_threads=False,
@@ -313,11 +324,12 @@ class ArrowDatasetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=None,
+        split_row_groups=False,
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
         metadata_task_size=0,
+        parquet_file_extension=None,
         **kwargs,
     ):
 
@@ -334,6 +346,7 @@ class ArrowDatasetEngine(Engine):
             aggregate_files,
             ignore_metadata_file,
             metadata_task_size,
+            parquet_file_extension,
             kwargs,
         )
 
@@ -481,35 +494,6 @@ class ArrowDatasetEngine(Engine):
         return df
 
     @classmethod
-    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
-        fmd = None
-        i_offset = 0
-        if append:
-            # Make sure there are existing file fragments.
-            # Otherwise there is no need to set `append=True`
-            i_offset = len(
-                list(
-                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
-                )
-            )
-            if i_offset == 0:
-                # No dataset to append to
-                return fmd, i_offset, False
-            try:
-                with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
-                    fmd = pq.read_metadata(fil)
-            except OSError:
-                # No _metadata file present - No appending allowed (for now)
-                if not ignore_divisions:
-                    # TODO: Be more flexible about existing metadata.
-                    raise NotImplementedError(
-                        "_metadata file needed to `append` "
-                        "with `engine='pyarrow-dataset'` "
-                        "unless `ignore_divisions` is `True`"
-                    )
-        return fmd, i_offset, append
-
-    @classmethod
     def initialize_write(
         cls,
         df,
@@ -569,14 +553,34 @@ class ArrowDatasetEngine(Engine):
         if append and division_info is None:
             ignore_divisions = True
 
-        # Extract metadata and get file offset if appending
-        fmd, i_offset, append = cls._get_dataset_offset(
-            path, fs, append, ignore_divisions
-        )
-
-        # Inspect the intial metadata if appending
+        full_metadata = None  # metadata for the full dataset, from _metadata
+        tail_metadata = None  # metadata for at least the last file in the dataset
+        i_offset = 0
+        metadata_file_exists = False
         if append:
-            arrow_schema = fmd.schema.to_arrow_schema()
+            # Extract metadata and get file offset if appending
+            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            i_offset = len(ds.files)
+            if i_offset > 0:
+                try:
+                    with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
+                        full_metadata = pq.read_metadata(fil)
+                    tail_metadata = full_metadata
+                    metadata_file_exists = True
+                except OSError:
+                    try:
+                        with fs.open(
+                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                        ) as fil:
+                            tail_metadata = pq.read_metadata(fil)
+                    except OSError:
+                        pass
+            else:
+                append = False  # No existing files, can skip the append logic
+
+        # If appending, validate against the initial metadata file (if present)
+        if append and tail_metadata is not None:
+            arrow_schema = tail_metadata.schema.to_arrow_schema()
             names = arrow_schema.names
             has_pandas_metadata = (
                 arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
@@ -611,7 +615,10 @@ class ArrowDatasetEngine(Engine):
                 ignore_divisions = True
             if not ignore_divisions:
                 old_end = None
-                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
+                row_groups = (
+                    tail_metadata.row_group(i)
+                    for i in range(tail_metadata.num_row_groups)
+                )
                 for row_group in row_groups:
                     for i, name in enumerate(names):
                         if name != division_info["name"]:
@@ -632,7 +639,8 @@ class ArrowDatasetEngine(Engine):
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
 
-        return fmd, schema, i_offset
+        extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
+        return i_offset, full_metadata, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def _pandas_to_arrow_table(
@@ -760,6 +768,7 @@ class ArrowDatasetEngine(Engine):
         aggregate_files,
         ignore_metadata_file,
         metadata_task_size,
+        parquet_file_extension,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -789,11 +798,6 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Set require_extension option
-        require_extension = _dataset_kwargs.pop(
-            "require_extension", (".parq", ".parquet")
-        )
-
         # Case-dependent pyarrow.dataset creation
         has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -818,17 +822,19 @@ class ArrowDatasetEngine(Engine):
                 has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
-            elif require_extension:
+            elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
                 len0 = len(paths)
                 paths = [
-                    path for path in fs.find(paths) if path.endswith(require_extension)
+                    path
+                    for path in fs.find(paths)
+                    if path.endswith(parquet_file_extension)
                 ]
                 if len0 and paths == []:
                     raise ValueError(
-                        "No files satisfy the `require_extension` criteria "
-                        f"(files must end with {require_extension})."
+                        "No files satisfy the `parquet_file_extension` criteria "
+                        f"(files must end with {parquet_file_extension})."
                     )
 
         elif len(paths) > 1:
@@ -886,11 +892,6 @@ class ArrowDatasetEngine(Engine):
         # be avoided at all costs.
         if gather_statistics is None:
             gather_statistics = False
-        if split_row_groups is None:
-            if gather_statistics:
-                split_row_groups = True
-            else:
-                split_row_groups = False
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -1142,8 +1143,6 @@ class ArrowDatasetEngine(Engine):
         # want to apply any filters or calculate divisions. Note
         # that the `ArrowDatasetEngine` doesn't even require
         # `gather_statistics=True` for filtering.
-        if split_row_groups is None:
-            split_row_groups = False
         _need_aggregation_stats = chunksize or (
             int(split_row_groups) > 1 and aggregation_depth
         )
@@ -1392,6 +1391,16 @@ class ArrowDatasetEngine(Engine):
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]
+                                cmin = (
+                                    pd.Timestamp(cmin)
+                                    if isinstance(cmin, datetime)
+                                    else cmin
+                                )
+                                cmax = (
+                                    pd.Timestamp(cmax)
+                                    if isinstance(cmax, datetime)
+                                    else cmax
+                                )
                                 last = cmax_last.get(name, None)
                                 if not (filters or chunksize or aggregation_depth):
                                     # Only think about bailing if we don't need
@@ -1412,12 +1421,8 @@ class ArrowDatasetEngine(Engine):
                                     s["columns"].append(
                                         {
                                             "name": name,
-                                            "min": pd.Timestamp(cmin)
-                                            if isinstance(cmin, datetime)
-                                            else cmin,
-                                            "max": pd.Timestamp(cmax)
-                                            if isinstance(cmax, datetime)
-                                            else cmax,
+                                            "min": cmin,
+                                            "max": cmax,
                                         }
                                     )
                                 else:

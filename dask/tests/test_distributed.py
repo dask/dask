@@ -16,6 +16,7 @@ from distributed.utils_test import cluster, gen_cluster, inc, varying
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
@@ -93,8 +94,23 @@ def test_futures_to_delayed_dataframe(c):
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
+    # Make sure from_delayed is Blockwise
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
+
+
+def test_from_delayed_dataframe(c):
+    # Check that Delayed keys in the form of a tuple
+    # are properly serialized in `from_delayed`
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(20)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_delayed(ddf.to_delayed())
+    dd.utils.assert_eq(ddf, df, scheduler=c)
 
 
 @pytest.mark.parametrize("fuse", [True, False])
@@ -744,3 +760,18 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     )
 
     assert (await c.compute(result)).val == 170
+
+
+def test_set_index_no_resursion_error(c):
+    # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("dask.dataframe")
+    try:
+        ddf = (
+            dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")
