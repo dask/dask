@@ -842,22 +842,37 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
 
 
 @pytest.mark.parametrize("metadata_file", [False, True])
-def test_append_overlapping_divisions(tmpdir, engine, metadata_file):
+@pytest.mark.parametrize(
+    ("index", "offset"),
+    [
+        (
+            pd.date_range("2022-01-01", "2022-01-02", periods=500, inclusive="both")
+            .to_series()
+            .astype("datetime64[ms]"),
+            pd.Timedelta(days=1),
+        ),
+        (pd.RangeIndex(0, 500, 1), 499),
+    ],
+)
+def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offset):
     """Test raising of error when divisions overlapping."""
     tmp = str(tmpdir)
+    # index = pd.date_range("2022-01-01", "2022-01-02", periods=500, inclusive="both")
+    # offset = pd.Timedelta(days=1)
+
     df = pd.DataFrame(
         {
-            "i32": np.arange(1000, dtype=np.int32),
-            "i64": np.arange(1000, dtype=np.int64),
-            "f": np.arange(1000, dtype=np.float64),
-            "bhello": np.random.choice(["hello", "yo", "people"], size=1000).astype(
-                "O"
-            ),
-        }
+            "i32": np.arange(len(index), dtype=np.int32),
+            "i64": np.arange(len(index), dtype=np.int64),
+            "f": np.arange(len(index), dtype=np.float64),
+            "bhello": np.random.choice(
+                ["hello", "yo", "people"], size=len(index)
+            ).astype("O"),
+        },
+        index=index,
     )
-    half = len(df) // 2
-    ddf1 = dd.from_pandas(df.iloc[:half], chunksize=100)
-    ddf2 = dd.from_pandas(df.iloc[half - 10 :], chunksize=100)
+    ddf1 = dd.from_pandas(df, chunksize=100)
+    ddf2 = dd.from_pandas(df.set_index(df.index + offset), chunksize=100)
     ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
 
     with pytest.raises(ValueError) as excinfo:
