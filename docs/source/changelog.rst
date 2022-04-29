@@ -1,6 +1,68 @@
 Changelog
 =========
 
+.. _v2022.04.2:
+
+2022.04.2
+---------
+
+Released on April 29, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``removeprefix`` and ``removesuffix`` as ``StringMethods`` (:pr:`8912`) `Jorge López`_
+
+Enhancements
+^^^^^^^^^^^^
+- Call ``fs.invalidate_cache`` in ``to_parquet`` (:pr:`8994`) `Jim Crist-Harif`_
+- Change ``to_parquet`` default to ``write_metadata_file=None`` (:pr:`8988`) `Jim Crist-Harif`_
+- Let arg reductions pass ``keepdims`` (:pr:`8926`) `Julia Signell`_
+- Change ``split_row_groups`` default to ``False`` in ``read_parquet`` (:pr:`8981`) `Richard (Rick) Zamora`_
+- Improve ``NotImplementedError`` message for ``da.reshape`` (:pr:`8987`) `Jim Crist-Harif`_
+- Simplify ``to_parquet`` compute path (:pr:`8982`) `Jim Crist-Harif`_
+- Raise an error if you try to use ``vindex`` with a Dask object (:pr:`8945`) `Julia Signell`_
+- Avoid ``pre_buffer=True`` when a precache method is specified (:pr:`8957`) `Richard (Rick) Zamora`_
+- ``from_dask_array`` uses ``blockwise`` instead of merging graphs (:pr:`8889`) `Bryan Weber`_
+- Use ``pre_buffer=True`` for "pyarrow" Parquet engine (:pr:`8952`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Handle ``dtype=None`` correctly in ``da.full`` (:pr:`8954`) `Tom White`_
+- Fix ``dask-sql`` bug caused by ``blockwise`` fusion (:pr:`8989`) `Richard (Rick) Zamora`_
+- ``to_parquet`` errors for non-string column names (:pr:`8990`) `Jim Crist-Harif`_
+- Make sure ``da.roll`` works even if shape is 0 (:pr:`8925`) `Julia Signell`_
+- Fix recursion error issue with ``set_index`` (:pr:`8967`) `Paul Hobson`_
+- Stringify ``BlockwiseDepDict`` mapping values when ``produces_keys=True`` (:pr:`8972`) `Richard (Rick) Zamora`_
+- Use `DataFram`eIOLayer` in ``DataFrame.from_delayed`` (:pr:`8852`) `Richard (Rick) Zamora`_
+- Check that values for the ``in`` predicate in ``read_parquet`` are correct (:pr:`8846`) `Bryan Weber`_
+- Fix bug for reduction of zero dimensional arrays (:pr:`8930`) `Tom White`_
+- Specify ``dtype`` when deciding division using ``np.linspace`` in ``read_sql_query`` (:pr:`8940`) `Cheun Hong`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate ``gather_statistics`` from ``read_parquet`` (:pr:`8992`) `Richard (Rick) Zamora`_
+- Change ``require_extension`` to top-level ``parquet_file_extension`` ``read_parquet`` kwarg (:pr:`8935`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update ``write_metadata_file`` discussion in documentation (:pr:`8995`) `Richard (Rick) Zamora`_
+- Update ``DataFrame.merge`` docstring (:pr:`8966`) `Pavithra Eswaramoorthy`_
+- Added description for parameter ``align_arrays`` in ``array.blockwise()`` (:pr:`8977`) `ParticularMiner`_
+- ecommend not to use ``map_block(drop_axis=...)`` on chunked axes of an array (:pr:`8921`) `ParticularMiner`_
+- Add copy button to code snippets in docs (:pr:`8956`) `James Bourbeau`_
+
+Maintenance
+^^^^^^^^^^^
+- Pandas 1.5.0 compatibility (:pr:`8961`) `Ian Rose`_
+- Add ``pytest-timeout`` to distributed envs on CI (:pr:`8986`) `Julia Signell`_
+- Improve ``read_parquet`` docstring formatting (:pr:`8971`) `Bryan Weber`_
+- Remove ``pytest.warns(None)`` (:pr:`8924`) `Pavithra Eswaramoorthy`_
+- Document Python 3.10 as supported (:pr:`8976`) `Eray Aslan`_
+- ``parse_timedelta`` option to enforce explicit unit (:pr:`8969`) `crusaderky`_
+- ``mypy`` compatibility (:pr:`8854`) `Paul Hobson`_
+- Add a docs page for Dask & Parquet (:pr:`8899`) `Jim Crist-Harif`_
+- Adds configuration to ignore revs in blame (:pr:`8933`) `Bryan Weber`_
+
 .. _v2022.04.1:
 
 2022.04.1
@@ -5406,3 +5468,6 @@ Other
 .. _`Richard`: https://github.com/richarms
 .. _`Francesco Andreuzzi`: https://github.com/fAndreuzzi
 .. _`Nadiem Sissouno`: https://github.com/sissnad
+.. _`Jorge López`: https://github.com/jorloplaz
+.. _`Cheun Hong`: https://github.com/cheunhong
+.. _`Eray Aslan`: https://github.com/erayaslan
