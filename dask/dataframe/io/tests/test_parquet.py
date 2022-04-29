@@ -846,7 +846,7 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     ("index", "offset"),
     [
         (
-            pd.date_range("2022-01-01", "2022-01-02", periods=500, inclusive="both")
+            pd.date_range("2022-01-01", "2022-01-02", periods=500)
             .to_series()
             .astype("datetime64[ms]"),
             pd.Timedelta(days=1),
