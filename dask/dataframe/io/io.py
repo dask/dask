@@ -832,6 +832,9 @@ def from_map(
 ):
     """Create a DataFrame collection from a custom function map
 
+    WARNING: The ``from_map`` API is experimental, and stability is not
+    yet guaranteed. Use at your own risk!
+
     Parameters
     ----------
     func : callable
