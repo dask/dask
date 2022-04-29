@@ -13,31 +13,36 @@ from dask.multiprocessing import _dumps, _loads
 from dask.utils import key_split
 
 
-def test_RandomState():
-    state = da.random.RandomState(5)
+@pytest.fixture(params=[da.random.RandomState, da.random.Generator])
+def generator_class(request):
+    return request.param
+
+
+def test_generators(generator_class):
+    state = generator_class(5)
     x = state.normal(10, 1, size=10, chunks=5)
     assert_eq(x, x)
 
-    state = da.random.RandomState(5)
+    state = generator_class(5)
     y = state.normal(10, 1, size=10, chunks=5)
     assert_eq(x, y)
 
 
-def test_concurrency():
-    state = da.random.RandomState(5)
+def test_concurrency(generator_class):
+    state = generator_class(5)
     x = state.normal(10, 1, size=10, chunks=2)
 
-    state = da.random.RandomState(5)
+    state = generator_class(5)
     y = state.normal(10, 1, size=10, chunks=2)
     assert (x.compute(scheduler="processes") == y.compute(scheduler="processes")).all()
 
 
-def test_doc_randomstate():
-    assert "mean" in da.random.RandomState(5).normal.__doc__
+def test_doc_in_generators(generator_class):
+    assert "mean" in generator_class(5).normal.__doc__
 
 
-def test_serializability():
-    state = da.random.RandomState(5)
+def test_serializability(generator_class):
+    state = generator_class(5)
     x = state.normal(10, 1, size=10, chunks=5)
 
     y = _loads(_dumps(x))
@@ -45,17 +50,17 @@ def test_serializability():
     assert_eq(x, y)
 
 
-def test_determinisim_through_dask_values():
-    samples_1 = da.random.RandomState(42).normal(size=1000, chunks=10)
-    samples_2 = da.random.RandomState(42).normal(size=1000, chunks=10)
+def test_determinisim_through_dask_values(generator_class):
+    samples_1 = generator_class(42).normal(size=1000, chunks=10)
+    samples_2 = generator_class(42).normal(size=1000, chunks=10)
 
     assert set(samples_1.dask) == set(samples_2.dask)
     assert_eq(samples_1, samples_2)
 
 
-def test_randomstate_consistent_names():
-    state1 = da.random.RandomState(42)
-    state2 = da.random.RandomState(42)
+def test_randomstate_consistent_names(generator_class):
+    state1 = generator_class(42)
+    state2 = generator_class(42)
     assert sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) == sorted(
         state2.normal(size=(100, 100), chunks=(10, 10)).dask
     )
@@ -127,10 +132,10 @@ def test_random_seed():
     assert_eq(y, b)
 
 
-def test_consistent_across_sizes():
-    x1 = da.random.RandomState(123).random(20, chunks=20)
-    x2 = da.random.RandomState(123).random(100, chunks=20)[:20]
-    x3 = da.random.RandomState(123).random(200, chunks=20)[:20]
+def test_consistent_across_sizes(generator_class):
+    x1 = generator_class(123).random(20, chunks=20)
+    x2 = generator_class(123).random(100, chunks=20)[:20]
+    x3 = generator_class(123).random(200, chunks=20)[:20]
     assert_eq(x1, x2)
     assert_eq(x1, x3)
 
@@ -322,7 +327,8 @@ def test_permutation():
     assert x.shape == (100,)
 
 
-def test_external_randomstate_class():
+# randomgen.RandomState and randomgen.Generator are deprecated
+def test_external_randomstate_class_with_RandomState():
     randomgen = pytest.importorskip("randomgen")
 
     rs = da.random.RandomState(
@@ -338,6 +344,30 @@ def test_external_randomstate_class():
     a = rs.normal(0, 1, size=10, chunks=(5,))
     rs = da.random.RandomState(
         RandomState=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123,
+    )
+    b = rs.normal(0, 1, size=10, chunks=(5,))
+    assert a.name == b.name
+    assert_eq(a, b)
+
+
+# randomgen.RandomState and randomgen.Generator are deprecated
+def test_external_randomstate_class_with_Generator():
+    randomgen = pytest.importorskip("randomgen")
+
+    rs = da.random.Generator(
+        Generator=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed))
+    )
+    x = rs.normal(0, 1, size=10, chunks=(5,))
+    assert_eq(x, x)
+
+    rs = da.random.Generator(
+        Generator=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
+        seed=123,
+    )
+    a = rs.normal(0, 1, size=10, chunks=(5,))
+    rs = da.random.Generator(
+        Generator=lambda seed: randomgen.RandomGenerator(randomgen.DSFMT(seed)),
         seed=123,
     )
     b = rs.normal(0, 1, size=10, chunks=(5,))
@@ -369,5 +399,9 @@ def test_randomstate_kwargs():
     cupy = pytest.importorskip("cupy")
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.standard_normal((10, 5), dtype=np.float32)
+    assert x.dtype == np.float32
+
+    rs = da.random.Generator(Generator=cupy.random.RandomState)
     x = rs.standard_normal((10, 5), dtype=np.float32)
     assert x.dtype == np.float32
