@@ -85,7 +85,7 @@ def sort_values(
     na_position: Union[Literal["first"], Literal["last"]] = "last",
     upsample: float = 1.0,
     partition_size: float = 128e6,
-    sort_function: Optional[Callable] = None,
+    sort_function: Optional[Callable[[pd.DataFrame], pd.DataFrame]] = None,
     sort_function_kwargs: Optional[Mapping[str, Any]] = None,
     **kwargs,
 ) -> DataFrame:

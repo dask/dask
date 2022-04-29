@@ -1413,7 +1413,9 @@ def test_empty_quantile(method):
 
 
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
-@pytest.mark.filterwarnings("ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning")
+@pytest.mark.filterwarnings(
+    "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
+)
 @pytest.mark.parametrize(
     "method,expected",
     [
@@ -3684,21 +3686,35 @@ def test_index_errors():
     with pytest.raises(KeyError, match="has no column"):
         ddf.set_index("foo")  # a column that doesn't exist
     with pytest.raises(KeyError, match="has no column"):
-        ddf.set_index(
-            0
-        )  # a column that doesn't exist, even if the column "name" isn't a string (Pandas admits this)
+        # column name doesn't need to be a string, but anyhow a KeyError should be raised if not found
+        ddf.set_index(0)
     with pytest.raises(ValueError, match="Length mismatch"):
         ddf.set_index(ddf.partitions[0]["A"])  # only 1st partition, so too short
 
 
 @pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA, np.nan, float("nan")])
 def test_index_nulls(null_value):
+    "Setting the index with some null raises error"
     df = _compat.makeTimeDataFrame()
-    ddf = dd.from_pandas(df.reset_index(), npartitions=2)
+    ddf = dd.from_pandas(df.reset_index(drop=False), npartitions=2).assign(
+        **{"foo": null_value}
+    )
     with pytest.raises(NotImplementedError, match="contains nulls"):
-        ddf.assign(**{"foo": null_value}).set_index(
-            "foo"
-        )  # now foo exists, but it's a null column
+        ddf.set_index("foo")  # a column all set to nulls
+    with pytest.raises(NotImplementedError, match="contains nulls"):
+        ddf.set_index(
+            ddf["index"].map({df.index[0]: 0, df.index[1]: 1})
+        )  # all nulls except two first positions
+
+
+def test_set_index_with_index():
+    "Setting the index with the existing index is a no-op (same object returned)"
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.set_index(ddf.index)
+    assert ddf2 is ddf
+    ddf = ddf.set_index("x")
+    assert ddf2 is ddf
 
 
 def test_column_assignment():
