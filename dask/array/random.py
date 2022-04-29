@@ -20,22 +20,30 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, random_state_data
 
 
-class RandomState:
+class Generator:
     """
-    Mersenne Twister pseudo-random number generator
+    The Generator provides access to a wide range of distributions, and serves
+    as a replacement for RandomState. The default BitGenerator used by
+    Generator is PCG64.
 
-    This object contains state to deterministically generate pseudo-random
-    numbers from a variety of probability distributions.  It is identical to
-    ``np.random.RandomState`` except that all functions also take a ``chunks=``
-    keyword argument.
+    Generator exposes a number of methods for generating random numbers drawn
+    from a variety of probability distributions. In addition to the
+    distribution-specific arguments, each method takes a keyword argument size
+    that defaults to None. If size is None, then a single value is generated
+    and returned. If size is an integer, then a 1-D array filled with generated
+    values is returned. If size is a tuple, then an array with that shape is
+    filled and returned.
+
+    This object is identical to ``np.random.Generator`` except that all
+    functions also take a ``chunks=`` keyword argument.
 
     Parameters
     ----------
     seed: Number
-        Object to pass to RandomState to serve as deterministic seed
-    RandomState: Callable[seed] -> RandomState
+        Object to pass to Generator to serve as deterministic seed
+    Generator: Callable[seed] -> Generator
         A callable that, when provided with a ``seed`` keyword provides an
-        object that operates identically to ``np.random.RandomState`` (the
+        object that operates identically to ``np.random.Generator`` (the
         default).  This might also be a function that returns a
         ``randomgen.RandomState``, ``mkl_random``, or
         ``cupy.random.RandomState`` object.
@@ -43,22 +51,22 @@ class RandomState:
     Examples
     --------
     >>> import dask.array as da
-    >>> state = da.random.RandomState(1234)  # a seed
+    >>> state = da.random.Generator(1234)  # a seed
     >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
     >>> x.compute()
-    array([10.01867852, 10.04812289,  9.89649746])
+    array([10.00539854,  9.99862834,  9.81492093])
 
     See Also
     --------
-    np.random.RandomState
+    np.random.Generator
     """
 
-    def __init__(self, seed=None, RandomState=None):
-        self._numpy_state = np.random.RandomState(seed)
-        self._RandomState = RandomState
+    def __init__(self, seed=None, Generator=None):
+        self._numpy_state = np.random.default_rng(seed)
+        self._Generator = Generator
 
     def seed(self, seed=None):
-        self._numpy_state.seed(seed)
+        self._numpy_state = np.random.default_rng(seed)
 
     def _wrap(
         self, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
@@ -160,11 +168,11 @@ class RandomState:
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append(
-                (_apply_random, self._RandomState, funcname, seed, size, arg, kwrg)
+                (_apply_random, self._Generator, funcname, seed, size, arg, kwrg)
             )
 
         meta = _apply_random(
-            self._RandomState,
+            self._Generator,
             funcname,
             seed,
             (0,) * len(size),
@@ -177,22 +185,31 @@ class RandomState:
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
         return Array(graph, name, chunks + extra_chunks, meta=meta)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def beta(self, a, b, size=None, chunks="auto", **kwargs):
         return self._wrap("beta", a, b, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def binomial(self, n, p, size=None, chunks="auto", **kwargs):
         return self._wrap("binomial", n, p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
     with contextlib.suppress(AttributeError):
 
-        @derived_from(np.random.RandomState, skipblocks=1)
-        def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
+        @derived_from(np.random.Generator, skipblocks=1)
+        def choice(
+            self,
+            a,
+            size=None,
+            replace=True,
+            p=None,
+            axis=0,
+            shuffle=True,
+            chunks="auto",
+        ):
             dependencies = []
             # Normalize and validate `a`
             if isinstance(a, Integral):
@@ -254,7 +271,7 @@ class RandomState:
             )
             keys = product([name], *(range(len(bd)) for bd in chunks))
             dsk = {
-                k: (_choice, state, a, size, replace, p)
+                k: (_choice, state, a, size, replace, p, axis, shuffle)
                 for k, state, size in zip(keys, state_data, sizes)
             }
 
@@ -263,52 +280,74 @@ class RandomState:
             )
             return Array(graph, name, chunks, dtype=dtype)
 
-    # @derived_from(np.random.RandomState, skipblocks=1)
+    # @derived_from(np.random.Generator, skipblocks=1)
     # def dirichlet(self, alpha, size=None, chunks="auto"):
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("exponential", scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def f(self, dfnum, dfden, size=None, chunks="auto", **kwargs):
         return self._wrap("f", dfnum, dfden, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def gamma(self, shape, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("gamma", shape, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def geometric(self, p, size=None, chunks="auto", **kwargs):
         return self._wrap("geometric", p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def gumbel(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("gumbel", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def hypergeometric(self, ngood, nbad, nsample, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "hypergeometric", ngood, nbad, nsample, size=size, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
+    def integers(
+        self,
+        low,
+        high=None,
+        size=None,
+        dtype=np.int64,
+        endpoint=False,
+        chunks="auto",
+        **kwargs,
+    ):
+        return self._wrap(
+            "integers",
+            low,
+            high=high,
+            size=size,
+            dtype=dtype,
+            endpoint=endpoint,
+            chunks=chunks,
+            **kwargs,
+        )
+
+    @derived_from(np.random.Generator, skipblocks=1)
     def laplace(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("laplace", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def logistic(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("logistic", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def lognormal(self, mean=0.0, sigma=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("lognormal", mean, sigma, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def logseries(self, p, size=None, chunks="auto", **kwargs):
         return self._wrap("logseries", p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def multinomial(self, n, pvals, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "multinomial",
@@ -319,31 +358,31 @@ class RandomState:
             extra_chunks=((len(pvals),),),
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def negative_binomial(self, n, p, size=None, chunks="auto", **kwargs):
         return self._wrap("negative_binomial", n, p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def noncentral_chisquare(self, df, nonc, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "noncentral_chisquare", df, nonc, size=size, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def noncentral_f(self, dfnum, dfden, nonc, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "noncentral_f", dfnum, dfden, nonc, size=size, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def normal(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("normal", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def pareto(self, a, size=None, chunks="auto", **kwargs):
         return self._wrap("pareto", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def permutation(self, x):
         from dask.array.slicing import shuffle_slice
 
@@ -354,101 +393,135 @@ class RandomState:
         self._numpy_state.shuffle(index)
         return shuffle_slice(x, index)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def poisson(self, lam=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("poisson", lam, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def power(self, a, size=None, chunks="auto", **kwargs):
         return self._wrap("power", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
-    def randint(self, low, high=None, size=None, chunks="auto", dtype="l", **kwargs):
+    @derived_from(np.random.Generator, skipblocks=1)
+    def random(self, size=None, dtype=np.float64, out=None, chunks="auto", **kwargs):
         return self._wrap(
-            "randint", low, high, size=size, chunks=chunks, dtype=dtype, **kwargs
+            "random", size=size, dtype=dtype, out=out, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
-    def random_integers(self, low, high=None, size=None, chunks="auto", **kwargs):
-        return self._wrap(
-            "random_integers", low, high, size=size, chunks=chunks, **kwargs
-        )
-
-    @derived_from(np.random.RandomState, skipblocks=1)
-    def random_sample(self, size=None, chunks="auto", **kwargs):
-        return self._wrap("random_sample", size=size, chunks=chunks, **kwargs)
-
-    random = random_sample
-
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def rayleigh(self, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("rayleigh", scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def standard_cauchy(self, size=None, chunks="auto", **kwargs):
         return self._wrap("standard_cauchy", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def standard_exponential(self, size=None, chunks="auto", **kwargs):
         return self._wrap("standard_exponential", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def standard_gamma(self, shape, size=None, chunks="auto", **kwargs):
         return self._wrap("standard_gamma", shape, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def standard_normal(self, size=None, chunks="auto", **kwargs):
         return self._wrap("standard_normal", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def standard_t(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("standard_t", df, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
-    def tomaxint(self, size=None, chunks="auto", **kwargs):
-        return self._wrap("tomaxint", size=size, chunks=chunks, **kwargs)
-
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def triangular(self, left, mode, right, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "triangular", left, mode, right, size=size, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def uniform(self, low=0.0, high=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("uniform", low, high, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def vonmises(self, mu, kappa, size=None, chunks="auto", **kwargs):
         return self._wrap("vonmises", mu, kappa, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def wald(self, mean, scale, size=None, chunks="auto", **kwargs):
         return self._wrap("wald", mean, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def weibull(self, a, size=None, chunks="auto", **kwargs):
         return self._wrap("weibull", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
+    @derived_from(np.random.Generator, skipblocks=1)
     def zipf(self, a, size=None, chunks="auto", **kwargs):
         return self._wrap("zipf", a, size=size, chunks=chunks, **kwargs)
 
 
-def _choice(state_data, a, size, replace, p):
-    state = np.random.RandomState(state_data)
-    return state.choice(a, size=size, replace=replace, p=p)
+class RandomState(Generator):
+    """
+    Mersenne Twister pseudo-random number generator
+
+    This object contains state to deterministically generate pseudo-random
+    numbers from a variety of probability distributions.  It is identical to
+    ``np.random.RandomState`` except that all functions also take a ``chunks=``
+    keyword argument.
+
+    Parameters
+    ----------
+    seed: Number
+        Object to pass to RandomState to serve as deterministic seed
+    RandomState: Callable[seed] -> RandomState
+        A callable that, when provided with a ``seed`` keyword provides an
+        object that operates identically to ``np.random.RandomState`` (the
+        default).  This might also be a function that returns a
+        ``randomgen.RandomState``, ``mkl_random``, or
+        ``cupy.random.RandomState`` object.
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> state = da.random.RandomState(1234)  # a seed
+    >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
+    >>> x.compute()
+    array([10.01867852, 10.04812289,  9.89649746])
+
+    See Also
+    --------
+    np.random.RandomState
+    """
+
+    def __init__(self, seed=None, RandomState=None):
+        super().__init__(seed=seed, Generator=RandomState)
+
+    def randint(self, *args, **kwargs):
+        return super().integers(*args, endpoint=False, **kwargs)
+
+    def random_integers(self, *args, **kwargs):
+        return super().integers(*args, endpoint=False, **kwargs)
+
+    def random_sample(self, *args, **kwargs):
+        return super().random(*args, **kwargs)
+
+    def tomaxint(self, size=None, chunks="auto", **kwargs):
+        return super().integers(0, np.iinfo(np.int_).max, endpoint=False)
 
 
-def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
-    """Apply RandomState method with seed"""
-    if RandomState is None:
-        RandomState = np.random.RandomState
-    state = RandomState(state_data)
+def _choice(state_data, a, size, replace, p, axis, shuffle):
+    state = np.random.default_rng(state_data)
+    return state.choice(a, size=size, replace=replace, p=p, axis=axis, shuffle=shuffle)
+
+
+def _apply_random(Generator, funcname, state_data, size, args, kwargs):
+    """Apply Generator method with seed"""
+    if Generator is None:
+        Generator = np.random.Generator
+    state = np.random.default_rng(state_data)
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
 
 
+# TODO: change to Generator() after deprecation period
 _state = RandomState()
 
 
@@ -466,6 +539,7 @@ gamma = _state.gamma
 geometric = _state.geometric
 gumbel = _state.gumbel
 hypergeometric = _state.hypergeometric
+integers = _state.integers
 laplace = _state.laplace
 logistic = _state.logistic
 lognormal = _state.lognormal
@@ -479,11 +553,8 @@ pareto = _state.pareto
 permutation = _state.permutation
 poisson = _state.poisson
 power = _state.power
+random = _state.random
 rayleigh = _state.rayleigh
-random_sample = _state.random_sample
-random = random_sample
-randint = _state.randint
-random_integers = _state.random_integers
 triangular = _state.triangular
 uniform = _state.uniform
 vonmises = _state.vonmises
@@ -500,3 +571,16 @@ standard_exponential = _state.standard_exponential
 standard_gamma = _state.standard_gamma
 standard_normal = _state.standard_normal
 standard_t = _state.standard_t
+
+
+"""
+Deprecated. Only for RandomState
+"""
+if hasattr(_state, "random_sample"):
+    random_sample = _state.random_sample
+if hasattr(_state, "randint"):
+    randint = _state.randint
+if hasattr(_state, "random_integers"):
+    random_integers = _state.random_integers
+if hasattr(_state, "tomaxint"):
+    tomaxint = _state.tomaxint
