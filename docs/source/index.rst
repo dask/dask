@@ -136,9 +136,9 @@ messy situations in everyday problems.
 
    install.rst
    10-minutes-to-dask.rst
+   deploying.rst
    presentations.rst
    best-practices.rst
-   how-to/index.rst
    faq.rst
 
 .. toctree::
@@ -151,10 +151,17 @@ messy situations in everyday problems.
    dataframe.rst
    delayed.rst
    futures.rst
+   how-to/connect-to-remote-data.rst
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Internals
+
+   understanding-performance.rst
    scheduling.rst
    graphs.rst
    debugging-performance.rst
-   deploying.rst
    internals.rst
 
 .. toctree::
@@ -166,6 +173,7 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
+   how-to/index.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
