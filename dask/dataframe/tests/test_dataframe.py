@@ -3701,19 +3701,20 @@ def test_index_nulls(null_value):
     )
     with pytest.raises(NotImplementedError, match="contains nulls"):
         ddf.set_index("foo")  # a column all set to nulls
+    aux = ddf["index"].map(
+        {df.index[0]: 0, df.index[1]: 1}
+    )  # all nulls except two first positions
     with pytest.raises(NotImplementedError, match="contains nulls"):
-        ddf.set_index(
-            ddf["index"].map({df.index[0]: 0, df.index[1]: 1})
-        )  # all nulls except two first positions
+        ddf.set_index(aux)
 
 
 def test_set_index_with_index():
-    "Setting the index with the existing index is a no-op (same object returned)"
+    "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    ddf = ddf.set_index("x")
+    ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
 

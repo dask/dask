@@ -3,6 +3,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -141,7 +142,13 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
+def from_pandas(
+    data: Union[pd.DataFrame, pd.Series],
+    npartitions: Optional[int] = None,
+    chunksize: Optional[int] = None,
+    sort: bool = True,
+    name: Optional[str] = None,
+) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -208,19 +215,27 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     from_array : Construct a dask.DataFrame from an array that has record dtype
     read_csv : Construct a dask.DataFrame from a CSV file
     """
-    if isinstance(getattr(data, "index", None), pd.MultiIndex):
+    if not has_parallel_type(data):
+        raise TypeError("Input must be a pandas DataFrame or Series.")
+
+    if isinstance(data.index, pd.MultiIndex):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
-    if not has_parallel_type(data):
-        raise TypeError("Input must be a pandas DataFrame or Series")
-
-    if (npartitions is None) == (chunksize is None):
+    if (npartitions is None) == (none_chunksize := (chunksize is None)):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
-    if chunksize is None:
+    if none_chunksize:
+        if not isinstance(npartitions, int):
+            raise TypeError(
+                "Please provide npartitions as an int, or possibly as None if you specify chunksize."
+            )
         chunksize = int(ceil(nrows / npartitions))
+    elif not isinstance(chunksize, int):
+        raise TypeError(
+            "Please provide chunksize as an int, or possibly as None if you specify npartitions."
+        )
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
@@ -230,7 +245,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     if data.index.isna().any():
         raise NotImplementedError(
             "Index in passed data contains nulls, but Dask does not currently support nulls in the index.\n"
-            "Consider passing `data.loc[data.notna()]` instead."
+            "Consider passing `data.loc[~data.isna()]` instead."
         )
 
     if sort:

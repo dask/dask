@@ -362,6 +362,20 @@ def test_from_pandas_with_index_nulls(null_value):
         dd.from_pandas(df, npartitions=2, sort=False)
 
 
+def test_from_pandas_with_wrong_args():
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 2, 1])
+    with pytest.raises(TypeError, match="must be a pandas DataFrame or Series"):
+        dd.from_pandas("foo")
+    with pytest.raises(
+        ValueError, match="one of npartitions and chunksize must be specified"
+    ):
+        dd.from_pandas(df)
+    with pytest.raises(TypeError, match="provide npartitions as an int"):
+        dd.from_pandas(df, npartitions=5.2, sort=False)
+    with pytest.raises(TypeError, match="provide chunksize as an int"):
+        dd.from_pandas(df, chunksize=18.27)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
