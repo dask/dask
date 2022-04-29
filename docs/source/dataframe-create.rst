@@ -83,8 +83,8 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    ...                      storage_options={'token': 'anon'})
 
 
-Mapping a Function
-~~~~~~~~~~~~~~~~~~
+Mapping from a function
+~~~~~~~~~~~~~~~~~~~~~~~
 
 For cases that are not covered by the functions above, but *can* be
 captured by a simple ``map`` operation, :doc:`from_map` is likely to be
