@@ -215,11 +215,11 @@ def from_pandas(
     from_array : Construct a dask.DataFrame from an array that has record dtype
     read_csv : Construct a dask.DataFrame from a CSV file
     """
+    if isinstance(getattr(data, "index", None), pd.MultiIndex):
+        raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
+
     if not has_parallel_type(data):
         raise TypeError("Input must be a pandas DataFrame or Series.")
-
-    if isinstance(data.index, pd.MultiIndex):
-        raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
     if (npartitions is None) == (none_chunksize := (chunksize is None)):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")

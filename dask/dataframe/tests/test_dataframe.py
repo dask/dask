@@ -3692,9 +3692,9 @@ def test_index_errors():
         ddf.set_index(ddf.partitions[0]["A"])  # only 1st partition, so too short
 
 
-@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA, np.nan, float("nan")])
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
 def test_index_nulls(null_value):
-    "Setting the index with some null raises error"
+    "Setting the index with some non-numeric null raises error"
     df = _compat.makeTimeDataFrame()
     ddf = dd.from_pandas(df.reset_index(drop=False), npartitions=2).assign(
         **{"foo": null_value}
@@ -3702,8 +3702,8 @@ def test_index_nulls(null_value):
     with pytest.raises(NotImplementedError, match="contains nulls"):
         ddf.set_index("foo")  # a column all set to nulls
     aux = ddf["index"].map(
-        {df.index[0]: 0, df.index[1]: 1}
-    )  # all nulls except two first positions
+        {df.index[0]: df.index[0], df.index[1]: df.index[1]}
+    )  # all nulls except first two values
     with pytest.raises(NotImplementedError, match="contains nulls"):
         ddf.set_index(aux)
 

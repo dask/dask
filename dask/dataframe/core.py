@@ -4711,17 +4711,16 @@ class DataFrame(_Frame):
                 )
 
         # If already a series
-        if is_series := isinstance(other, Series):
+        if isinstance(other, Series):
             # If it's already the index, there's nothing to do
             if other._name == self.index._name:
                 return self
             # Otherwise, check length matches when other isn't one of the data columns
-            s = other
-            if not any(s._name == self[c]._name for c in self.columns) and len(
-                s
+            if not any(other._name == self[c]._name for c in self) and len(
+                other
             ) != len(self):
                 raise ValueError(
-                    f"Length mismatch: series to become index has {len(s)} rows, but data have {len(self)} rows"
+                    f"Length mismatch: series to become index has {len(other)} rows, but data have {len(self)} rows"
                 )
 
         # If the name of a column/index
@@ -4734,18 +4733,6 @@ class DataFrame(_Frame):
                 raise KeyError(
                     f"Data has no column '{other}': use any column of {list(self.columns)}"
                 )
-            s = self[other]
-
-        if s.isna().any().compute():
-            suggested_method = (
-                f"`.dropna(subset=['{other}']).set_index('{other}')`"
-                if not is_series
-                else "`.loc[index[~index.isna()]]`"
-            )
-            raise NotImplementedError(
-                f"Column passed to set_index contains nulls, but Dask does not currently support nulls in the index.\n"
-                f"Consider calling {suggested_method} instead."
-            )
 
         # Check divisions
         if divisions is not None:

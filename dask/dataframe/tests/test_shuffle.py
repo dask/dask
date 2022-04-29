@@ -1033,8 +1033,7 @@ def test_set_index_does_not_repeat_work_due_to_optimizations(npartitions):
 
     ddf.set_index("x", npartitions=npartitions)
     ntimes = next(count)
-    # twice the time because of the aditional .compute() for checking nulls
-    assert ntimes == 2 * nparts
+    assert ntimes == nparts
 
 
 def test_set_index_errors_with_inplace_kwarg():
