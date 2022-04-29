@@ -43,6 +43,7 @@ Dask Collections:
 .. autosummary::
     from_delayed
     from_dask_array
+    from_map
     dask.bag.core.Bag.to_dataframe
     DataFrame.to_delayed
     to_records
@@ -80,6 +81,25 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    ...                  storage_options={'anon': True})
    >>> df = dd.read_parquet('gs://dask-nyc-taxi/yellowtrip.parquet',
    ...                      storage_options={'token': 'anon'})
+
+
+Mapping a Function
+~~~~~~~~~~~~~~~~~~
+
+For cases that are not covered by the functions above, but *can* be
+captured by a simple ``map`` operation, :doc:`from_map` is likely to be
+the most convenient means for DataFrame creation. For example, this
+API can be used to convert an arbitrary PyArrow ``Dataset`` object into a
+DataFrame collection by mapping fragments to DataFrame partitions:
+
+.. code-block:: python
+
+   >>> import pyarrow.dataset as ds
+   >>> dataset = ds.dataset("hive_data_path", format="orc", partitioning="hive")
+   >>> fragments = dataset.get_fragments()
+   >>> func = lambda frag: frag.to_table().to_pandas()
+   >>> df = dd.from_map(func, fragments)
+
 
 Dask Delayed
 ~~~~~~~~~~~~

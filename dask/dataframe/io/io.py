@@ -883,6 +883,57 @@ def from_map(
     1    B
     dtype: object
 
+    This API can also be used as an alternative to other file-based
+    IO functions, like ``read_parquet`` (which are already just
+    ``from_map`` wrapper functions):
+
+    >>> import pandas as pd
+    >>> import dask.dataframe as dd
+    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
+    >>> dd.from_map(pd.read_parquet, paths).head()  # doctest: +SKIP
+                        name
+    timestamp
+    2000-01-01 00:00:00   Laura
+    2000-01-01 00:00:01  Oliver
+    2000-01-01 00:00:02   Alice
+    2000-01-01 00:00:03  Victor
+    2000-01-01 00:00:04     Bob
+
+    Since ``from_map`` allows you to map an arbitrary function
+    to any number of iterable objects, it can be a very convenient
+    means of implementing functionality that may be missing from
+    from other DataFrame-creation methods. For example, if you
+    happen to have apriori knowledge about the number of rows
+    in each of the files in a dataset, you can generate a
+    DataFrame collection with a global RangeIndex:
+
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> import dask.dataframe as dd
+    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
+    >>> file_sizes = [86400, 86400, 86400]
+    >>> def func(path, row_offset):
+    ...     # Read parquet file and set RangeIndex offset
+    ...     df = pd.read_parquet(path)
+    ...     return df.set_index(
+    ...         pd.RangeIndex(row_offset, row_offset+len(df))
+    ...     )
+    >>> def get_ddf(paths, file_sizes):
+    ...     offsets = [0] + list(np.cumsum(file_sizes))
+    ...     return dd.from_map(
+    ...         func, paths, offsets[:-1], divisions=offsets
+    ...     )
+    >>> ddf = get_ddf(paths, file_sizes)  # doctest: +SKIP
+    >>> ddf.index  # doctest: +SKIP
+    Dask Index Structure:
+    npartitions=3
+    0         int64
+    86400       ...
+    172800      ...
+    259200      ...
+    dtype: int64
+    Dask Name: myfunc, 6 tasks
+
     See Also
     --------
     dask.dataframe.from_delayed
