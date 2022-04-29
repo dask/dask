@@ -155,6 +155,7 @@ def test_random_all():
     da.random.lognormal(size=5, chunks=3).compute()
     da.random.logseries(0.5, size=5, chunks=3).compute()
     da.random.multinomial(20, [1 / 6.0] * 6, size=5, chunks=3).compute()
+    da.random.multivariate_hypergeometric([16, 8, 4], 6, size=5, chunks=6).compute()
     da.random.negative_binomial(5, 0.5, size=5, chunks=3).compute()
     da.random.noncentral_chisquare(2, 2, size=5, chunks=3).compute()
 

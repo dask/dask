@@ -359,6 +359,20 @@ class Generator:
         )
 
     @derived_from(np.random.Generator, skipblocks=1)
+    def multivariate_hypergeometric(
+        self, colors, nsample, size=None, method="marginals", chunks="auto", **kwargs
+    ):
+        return self._wrap(
+            "multivariate_hypergeometric",
+            colors,
+            nsample,
+            size=size,
+            method=method,
+            chunks=chunks,
+            **kwargs,
+        )
+
+    @derived_from(np.random.Generator, skipblocks=1)
     def negative_binomial(self, n, p, size=None, chunks="auto", **kwargs):
         return self._wrap("negative_binomial", n, p, size=size, chunks=chunks, **kwargs)
 
@@ -545,6 +559,7 @@ logistic = _state.logistic
 lognormal = _state.lognormal
 logseries = _state.logseries
 multinomial = _state.multinomial
+multivariate_hypergeometric = _state.multivariate_hypergeometric
 negative_binomial = _state.negative_binomial
 noncentral_chisquare = _state.noncentral_chisquare
 noncentral_f = _state.noncentral_f
