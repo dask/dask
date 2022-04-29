@@ -782,7 +782,7 @@ def test_slicing_none_int_ellipses(a, b, c, d):
 
 def test_slicing_integer_no_warnings():
     # https://github.com/dask/dask/pull/2457/
-    X = da.random.random((100, 2), (2, 2))
+    X = da.random.random((100, 2), chunks=(2, 2))
     idx = np.array([0, 0, 1, 1])
     with warnings.catch_warnings(record=True) as record:
         X[idx].compute()
