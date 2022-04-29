@@ -2069,7 +2069,7 @@ class _GroupBy:
         )
 
         if PANDAS_GT_150 and self.group_keys:
-            return result.map_partitions(lambda df: df.droplevel(self.by))
+            return result.map_partitions(M.droplevel, self.by)
 
         return result
 
