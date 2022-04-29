@@ -11,6 +11,7 @@ from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
 import numpy as np
 import pandas as pd
 import tlz as toolz
+from pandas.api.types import is_numeric_dtype
 
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
@@ -46,14 +47,17 @@ def _calculate_divisions(
         divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
     except Exception as e:
         # Check if error was due to null values and if so, inform the user
-        if partition_col.isna().any().compute():
+        if (
+            not is_numeric_dtype(partition_col.dtype)
+            and partition_col.isna().any().compute()
+        ):
             suggested_method = (
                 f"`.dropna(subset=['{partition_col.name}'])`"
                 if any(partition_col._name == df[c]._name for c in df)
                 else "`.loc[index[~index.isna()]]`"
             )
             raise NotImplementedError(
-                f"Index being set contains nulls, but Dask does not currently support nulls in the index.\n"
+                f"Index being set contains nulls and is non-numeric, which Dask does not currently support.\n"
                 f"Consider calling {suggested_method} instead."
             ) from e
 

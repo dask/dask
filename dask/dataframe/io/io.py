@@ -242,9 +242,9 @@ def from_pandas(
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if data.index.isna().any():
+    if data.index.isna().any() and not data.index.is_numeric():
         raise NotImplementedError(
-            "Index in passed data contains nulls, but Dask does not currently support nulls in the index.\n"
+            "Index in passed data contains nulls and is non-numeric, which Dask does not currently support.\n"
             "Consider passing `data.loc[~data.isna()]` instead."
         )
 
