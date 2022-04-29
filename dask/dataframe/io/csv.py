@@ -139,7 +139,7 @@ class CSVFunctionWrapper(DataFrameIOFunction):
             path_info,
         )
         if project_after_read:
-            return df[self._columns]
+            return df[self.columns]
         return df
 
 
@@ -392,7 +392,6 @@ def text_blocks_to_pandas(
         ),
         parts,
         meta=head,
-        divisions=(None,) * (len(blocks) + 1),
         label="read-csv",
         token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
         enforce_metadata=False,

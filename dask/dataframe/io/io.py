@@ -841,7 +841,7 @@ def from_map(
         Function used to create each partition. If ``func`` satisfies the
         ``DataFrameIOFunction`` protocol, column projection will be enabled.
     *iterables : Iterable objects
-        Iterable objects to map to each output partition. all iterables must
+        Iterable objects to map to each output partition. All iterables must
         be the same length. This length determines the number of partitions
         in the output collection (only one element of each iterable will
         be passed to ``func`` for each partition).
@@ -931,7 +931,9 @@ def from_map(
 
     # Define collection name
     label = label or funcname(func)
-    token = token or tokenize(func, meta, inputs, divisions, enforce_metadata, **kwargs)
+    token = token or tokenize(
+        func, meta, inputs, args, divisions, enforce_metadata, **kwargs
+    )
     name = f"{label}-{token}"
 
     # Get "projectable" column selection.
