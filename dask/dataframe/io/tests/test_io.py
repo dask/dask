@@ -701,6 +701,30 @@ def test_from_delayed_optimize_fusion():
     assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
 
 
+def test_from_delayed_to_dask_array():
+    # Check that `from_delayed`` can be followed
+    # by `to_dask_array` without breaking
+    # optimization behavior
+    # See: https://github.com/dask-contrib/dask-sql/issues/497
+    from dask.blockwise import optimize_blockwise
+
+    dfs = [delayed(pd.DataFrame)(np.ones((3, 2))) for i in range(3)]
+    ddf = dd.from_delayed(dfs)
+    arr = ddf.to_dask_array()
+
+    # If we optimize this graph without calling
+    # `fuse_roots`, the underlying `BlockwiseDep`
+    # `mapping` keys will be 1-D (e.g. `(4,)`),
+    # while the collection keys will be 2-D
+    # (e.g. `(4, 0)`)
+    keys = [k[0] for k in arr.__dask_keys__()]
+    dsk = optimize_blockwise(arr.dask, keys=keys)
+    dsk.cull(keys)
+
+    result = arr.compute()
+    assert result.shape == (9, 2)
+
+
 def test_from_delayed_preserves_hlgs():
     df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
     parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
