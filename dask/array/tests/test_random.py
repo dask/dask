@@ -360,7 +360,7 @@ def test_randint_dtype():
 
 def test_raises_bad_kwarg():
     with pytest.raises(Exception) as info:
-        da.random.standard_normal(size=(10,), dtype="float64")
+        da.random.standard_cauchy(size=(10,), dtype="float64")
 
     assert "dtype" in str(info.value)
 
