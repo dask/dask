@@ -498,7 +498,7 @@ class RandomState(Generator):
     >>> state = da.random.RandomState(1234)  # a seed
     >>> x = state.normal(10, 0.1, size=3, chunks=(2,))
     >>> x.compute()
-    array([10.01867852, 10.04812289,  9.89649746])
+    array([10.00539854,  9.99862834,  9.81492093])
 
     See Also
     --------
@@ -508,15 +508,19 @@ class RandomState(Generator):
     def __init__(self, seed=None, RandomState=None):
         super().__init__(seed=seed, Generator=RandomState)
 
+    @derived_from(np.random.RandomState, skipblocks=1)
     def randint(self, *args, **kwargs):
         return super().integers(*args, endpoint=False, **kwargs)
 
+    @derived_from(np.random.RandomState, skipblocks=1)
     def random_integers(self, *args, **kwargs):
         return super().integers(*args, endpoint=False, **kwargs)
 
+    @derived_from(np.random.RandomState, skipblocks=1)
     def random_sample(self, *args, **kwargs):
         return super().random(*args, **kwargs)
 
+    @derived_from(np.random.RandomState, skipblocks=1)
     def tomaxint(self, size=None, chunks="auto", **kwargs):
         return super().integers(0, np.iinfo(np.int_).max, endpoint=False)
 
