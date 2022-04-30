@@ -187,7 +187,6 @@ def test_RandomState_only_funcs():
     da.random.randint(10, size=5, chunks=3).compute()
     da.random.random_integers(10, size=5, chunks=3).compute()
     da.random.random_sample(10, chunks=3).compute()
-    da.random.tomaxint(size=5, chunks=3).compute()
 
 
 @pytest.mark.skipif(

@@ -520,10 +520,6 @@ class RandomState(Generator):
     def random_sample(self, *args, **kwargs):
         return super().random(*args, **kwargs)
 
-    @derived_from(np.random.RandomState, skipblocks=1)
-    def tomaxint(self, size=None, chunks="auto", **kwargs):
-        return super().integers(0, np.iinfo(np.int_).max, endpoint=False)
-
 
 def _choice(state_data, a, size, replace, p, axis, shuffle):
     state = np.random.default_rng(state_data)
@@ -601,5 +597,3 @@ if hasattr(_state, "randint"):
     randint = _state.randint
 if hasattr(_state, "random_integers"):
     random_integers = _state.random_integers
-if hasattr(_state, "tomaxint"):
-    tomaxint = _state.tomaxint
