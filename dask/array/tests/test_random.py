@@ -58,7 +58,7 @@ def test_determinisim_through_dask_values(generator_class):
     assert_eq(samples_1, samples_2)
 
 
-def test_randomstate_consistent_names(generator_class):
+def test_generator_consistent_names(generator_class):
     state1 = generator_class(42)
     state2 = generator_class(42)
     assert sorted(state1.normal(size=(100, 100), chunks=(10, 10)).dask) == sorted(
@@ -167,7 +167,6 @@ def test_random_all(sz):
 
     da.random.power(1, size=sz, chunks=3).compute()
     da.random.rayleigh(size=sz, chunks=3).compute()
-    da.random.random_sample(size=sz, chunks=3).compute()
 
     da.random.triangular(1, 2, 3, size=sz, chunks=3).compute()
     da.random.uniform(size=sz, chunks=3).compute()
@@ -182,6 +181,13 @@ def test_random_all(sz):
     da.random.standard_gamma(2, size=sz, chunks=3).compute()
     da.random.standard_normal(size=sz, chunks=3).compute()
     da.random.standard_t(2, size=sz, chunks=3).compute()
+
+
+def test_RandomState_only_funcs():
+    da.random.randint(10, size=5, chunks=3).compute()
+    da.random.random_integers(10, size=5, chunks=3).compute()
+    da.random.random_sample(10, chunks=3).compute()
+    da.random.tomaxint(size=5, chunks=3).compute()
 
 
 @pytest.mark.skipif(
@@ -310,7 +316,7 @@ def test_names():
     assert len(key_split(name)) < 10
 
 
-def test_permutation():
+def test_permutation(generator_class):
     x = da.arange(12, chunks=3)
     y = da.random.permutation(x)
 
@@ -319,8 +325,8 @@ def test_permutation():
 
     y.compute()  # smoke test
 
-    a = da.random.RandomState(0)
-    b = da.random.RandomState(0)
+    a = generator_class(0)
+    b = generator_class(0)
     r1 = a.permutation(x)
     r2 = b.permutation(x)
     assert_eq(r1, r2)
@@ -329,7 +335,7 @@ def test_permutation():
     assert x.shape == (100,)
 
 
-# randomgen.RandomState and randomgen.Generator are deprecated
+# randomgen.RandomState and randomgen.Generator are deprecated since v1.19
 def test_external_randomstate_class_with_RandomState():
     randomgen = pytest.importorskip("randomgen")
 
@@ -353,7 +359,7 @@ def test_external_randomstate_class_with_RandomState():
     assert_eq(a, b)
 
 
-# randomgen.RandomState and randomgen.Generator are deprecated
+# randomgen.RandomState and randomgen.Generator are deprecated since v1.19
 def test_external_randomstate_class_with_Generator():
     randomgen = pytest.importorskip("randomgen")
 
@@ -397,7 +403,7 @@ def test_raises_bad_kwarg():
     assert "dtype" in str(info.value)
 
 
-def test_randomstate_kwargs():
+def test_generator_kwargs():
     cupy = pytest.importorskip("cupy")
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
