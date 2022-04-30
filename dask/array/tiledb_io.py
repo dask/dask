@@ -118,7 +118,7 @@ def to_tiledb(
 
     >>> import dask.array as da, tempfile
     >>> uri = tempfile.NamedTemporaryFile().name
-    >>> data = da.random.random(5,5)
+    >>> data = da.random.random(5, chunks=5)
     >>> da.to_tiledb(data, uri)
     >>> import tiledb
     >>> tdb_ar = tiledb.open(uri)
