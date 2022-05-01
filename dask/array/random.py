@@ -216,7 +216,7 @@ class Generator:
                 # On windows the output dtype differs if p is provided or
                 # absent, see https://github.com/numpy/numpy/issues/9867
                 dummy_p = np.array([1]) if p is not None else p
-                dtype = np.random.choice(1, size=(), p=dummy_p).dtype
+                dtype = np.random.default_rng().choice(1, size=(), p=dummy_p).dtype
                 len_a = a
                 if a < 0:
                     raise ValueError("a must be greater than 0")
