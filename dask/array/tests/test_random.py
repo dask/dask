@@ -239,7 +239,7 @@ def test_multinomial():
 
 
 def test_choice():
-    np_dtype = np.random.choice(1, size=()).dtype
+    np_dtype = np.random.default_rng().choice(1, size=()).dtype
     size = (10, 3)
     chunks = 4
     x = da.random.choice(3, size=size, chunks=chunks)
@@ -271,7 +271,7 @@ def test_choice():
         assert res.dtype == np_a.dtype
         assert set(np.unique(res)).issubset(np_a[1:])
 
-    np_dtype = np.random.choice(1, size=(), p=np.array([1])).dtype
+    np_dtype = np.random.default_rng().choice(1, size=(), p=np.array([1])).dtype
     x = da.random.choice(5, size=size, chunks=chunks, p=np_p)
     res = x.compute()
     assert x.dtype == np_dtype
