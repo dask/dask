@@ -623,6 +623,12 @@ def map_blocks(
 
     .. image:: /images/map_blocks_drop_axis.png
 
+    Due to memory-size-constraints, it is often not advisable to use ``drop_axis``
+    on an axis that is chunked.  In that case, it is better not to use
+    ``map_blocks`` but rather
+    ``dask.array.reduction(..., axis=dropped_axes, concatenate=False)`` which
+    maintains a leaner memory footprint while it drops any axis.
+
     Map_blocks aligns blocks by block positions without regard to shape. In the
     following example we have two arrays with the same number of blocks but
     with different shape and chunk sizes.
@@ -2351,16 +2357,20 @@ class Array(DaskMethodsMixin):
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
-    def argmin(self, axis=None, split_every=None, out=None):
+    def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmin
 
-        return argmin(self, axis=axis, split_every=split_every, out=out)
+        return argmin(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
-    def argmax(self, axis=None, split_every=None, out=None):
+    def argmax(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmax
 
-        return argmax(self, axis=axis, split_every=split_every, out=out)
+        return argmax(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):

@@ -101,6 +101,18 @@ def test_futures_to_delayed_dataframe(c):
         ddf = dd.from_delayed([1, 2])
 
 
+def test_from_delayed_dataframe(c):
+    # Check that Delayed keys in the form of a tuple
+    # are properly serialized in `from_delayed`
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(20)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_delayed(ddf.to_delayed())
+    dd.utils.assert_eq(ddf, df, scheduler=c)
+
+
 @pytest.mark.parametrize("fuse", [True, False])
 def test_fused_blockwise_dataframe_merge(c, fuse):
     pd = pytest.importorskip("pandas")
@@ -748,3 +760,18 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     )
 
     assert (await c.compute(result)).val == 170
+
+
+def test_set_index_no_resursion_error(c):
+    # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("dask.dataframe")
+    try:
+        ddf = (
+            dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")

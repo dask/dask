@@ -185,7 +185,19 @@ class BlockwiseDepDict(BlockwiseDep):
         return self._produces_keys
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
-        return self.mapping[idx]
+        try:
+            return self.mapping[idx]
+        except KeyError as err:
+            # If a DataFrame collection was converted
+            # to an Array collection, the dimesion of
+            # `idx` may not agree with the keys in
+            # `self.mapping`. In this case, we can
+            # use `self.numblocks` to check for a key
+            # match in the leading elements of `idx`
+            flat_idx = idx[: len(self.numblocks)]
+            if flat_idx in self.mapping:
+                return self.mapping[flat_idx]
+            raise err
 
     def __dask_distributed_pack__(
         self, required_indices: tuple | list[tuple[int, ...]] | None = None
@@ -196,10 +208,15 @@ class BlockwiseDepDict(BlockwiseDep):
             required_indices = tuple(self.mapping.keys())
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "mapping": {
+                k: stringify(self.mapping[k])
+                if self.produces_keys
+                else to_serialize(self.mapping[k])
+                for k in required_indices
+            },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
-            "produces_keys": self._produces_keys,
+            "produces_keys": self.produces_keys,
         }
 
     @classmethod
@@ -1097,9 +1114,13 @@ def make_blockwise_graph(
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to construct the specified set of output blocks
-    output_blocks = output_blocks or itertools.product(
-        *[range(dims[i]) for i in out_indices]
+    # Only need to construct the specified set of output blocks.
+    # Note that we must convert itertools.product to list,
+    # because we may need to loop through output_blocks more than
+    # once below (itertools.product already uses an internal list,
+    # so this is not a memory regression)
+    output_blocks = output_blocks or list(
+        itertools.product(*[range(dims[i]) for i in out_indices])
     )
 
     dsk = {}

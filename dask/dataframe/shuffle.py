@@ -991,17 +991,17 @@ def fix_overlap(ddf, mins, maxes, lens):
     # drop empty partitions by mapping each partition in a new graph to a particular
     # partition on the old graph.
     dsk = {(name, i): (ddf._name, div) for i, div in enumerate(non_empties)}
+    ddf_keys = list(dsk.values())
     divisions = tuple(mins) + (maxes[-1],)
 
     overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
 
     frames = []
     for i in overlap:
-
         # `frames` is a list of data from previous partitions that we may want to
         # move to partition i.  Here, we add "overlap" from the previous partition
         # (i-1) to this list.
-        frames.append((get_overlap, dsk[(name, i - 1)], divisions[i]))
+        frames.append((get_overlap, ddf_keys[i - 1], divisions[i]))
 
         # Make sure that any data added from partition i-1 to `frames` is removed
         # from partition i-1.
@@ -1012,7 +1012,7 @@ def fix_overlap(ddf, mins, maxes, lens):
         # to the next partition (i+1) anyway.  If we concatenate data too early,
         # we may lose rows (https://github.com/dask/dask/issues/6972).
         if i == len(mins) - 2 or divisions[i] != divisions[i + 1]:
-            frames.append(dsk[(name, i)])
+            frames.append(ddf_keys[i])
             dsk[(name, i)] = (methods.concat, frames)
             frames = []
 
