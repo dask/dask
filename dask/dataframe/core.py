@@ -7433,7 +7433,9 @@ def to_datetime(arg, meta=None, **kwargs):
 
 
 @wraps(pd.to_timedelta)
-def to_timedelta(arg, unit="ns", errors="raise"):
+def to_timedelta(arg, unit=None, errors="raise"):
+    if not PANDAS_GT_110 and unit is None:
+        unit = "ns"
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
