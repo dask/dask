@@ -1,6 +1,22 @@
 Changelog
 =========
 
+.. _v2022.05.0:
+
+2022.05.0
+---------
+
+Released on May 2, 2022
+
+Highlights
+^^^^^^^^^^
+This is a bugfix release for `this issue <https://github.com/dask/distributed/issues/6255>`_.
+
+Documentation
+^^^^^^^^^^^^^
+- Add highlights section to 2022.04.2 release notes (:pr:`9012`) `James Bourbeau`_
+
+
 .. _v2022.04.2:
 
 2022.04.2
