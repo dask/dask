@@ -2357,16 +2357,20 @@ class Array(DaskMethodsMixin):
         return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
-    def argmin(self, axis=None, split_every=None, out=None):
+    def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmin
 
-        return argmin(self, axis=axis, split_every=split_every, out=out)
+        return argmin(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
-    def argmax(self, axis=None, split_every=None, out=None):
+    def argmax(self, axis=None, *, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import argmax
 
-        return argmax(self, axis=axis, split_every=split_every, out=out)
+        return argmax(
+            self, axis=axis, keepdims=keepdims, split_every=split_every, out=out
+        )
 
     @derived_from(np.ndarray)
     def sum(self, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
