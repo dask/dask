@@ -244,7 +244,7 @@ def from_pandas(
 
     if data.index.isna().any() and not data.index.is_numeric():
         raise NotImplementedError(
-            "Index in passed data contains nulls and is non-numeric, which Dask does not currently support.\n"
+            "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
             "Consider passing `data.loc[~data.isna()]` instead."
         )
 

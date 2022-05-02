@@ -3699,12 +3699,12 @@ def test_index_nulls(null_value):
     ddf = dd.from_pandas(df.reset_index(drop=False), npartitions=2).assign(
         **{"foo": null_value}
     )
-    with pytest.raises(NotImplementedError, match="contains nulls and is non-numeric"):
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index("foo")  # a column all set to nulls
     aux = ddf["index"].map(
         {df.index[0]: df.index[0], df.index[1]: df.index[1]}
     )  # all nulls except first two values
-    with pytest.raises(NotImplementedError, match="contains nulls and is non-numeric"):
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index(aux)
 
 

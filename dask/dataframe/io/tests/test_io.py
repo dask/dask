@@ -357,8 +357,8 @@ def test_from_pandas_with_datetime_index():
 
 @pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
 def test_from_pandas_with_index_nulls(null_value):
-    df = pd.DataFrame({"x": [1, 2, 3]}, index=["3", null_value, "2"])
-    with pytest.raises(NotImplementedError, match="contains nulls and is non-numeric"):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=["C", null_value, "A"])
+    with pytest.raises(NotImplementedError, match="is non-numeric and contains nulls"):
         dd.from_pandas(df, npartitions=2, sort=False)
 
 

@@ -4716,9 +4716,8 @@ class DataFrame(_Frame):
             if other._name == self.index._name:
                 return self
             # Otherwise, check length matches when other isn't one of the data columns
-            if not any(other._name == self[c]._name for c in self) and len(
-                other
-            ) != len(self):
+            is_column = any(other._name == self[c]._name for c in self)
+            if not is_column and len(other) != len(self):
                 raise ValueError(
                     f"Length mismatch: series to become index has {len(other)} rows, but data have {len(self)} rows"
                 )

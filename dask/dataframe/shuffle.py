@@ -42,23 +42,24 @@ def _calculate_divisions(
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
     mins = partition_col.map_partitions(M.min)
     maxes = partition_col.map_partitions(M.max)
+    nulls_presence = partition_col.map_partitions(M.isna)
 
     try:
-        divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
+        divisions, sizes, mins, maxes, nulls_presence = compute(
+            divisions, sizes, mins, maxes, nulls_presence
+        )
     except Exception as e:
-        # Check if error was due to null values and if so, inform the user
-        if (
-            not is_numeric_dtype(partition_col.dtype)
-            and partition_col.isna().any().compute()
-        ):
-            suggested_method = (
-                f"`.dropna(subset=['{partition_col.name}'])`"
+        # Check if there are nulls and if so, inform the user about this probably being the cause behing the error
+        if nulls_presence.any().compute() and not is_numeric_dtype(partition_col.dtype):
+            obj, suggested_method = (
+                ("column", f"`.dropna(subset=['{partition_col.name}'])`")
                 if any(partition_col._name == df[c]._name for c in df)
-                else "`.loc[index[~index.isna()]]`"
+                else ("series", "`.loc[series[~series.isna()]]`")
             )
             raise NotImplementedError(
-                f"Index being set contains nulls and is non-numeric, which Dask does not currently support.\n"
-                f"Consider calling {suggested_method} instead."
+                f"Divisions calculation failed for non-numeric {obj} '{partition_col.name}'.\n"
+                f"This is probably due to the presence of nulls, which Dask does not entirely support in the index.\n"
+                f"We suggest you try with {suggested_method}."
             ) from e
 
     divisions = methods.tolist(divisions)
