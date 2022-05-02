@@ -631,4 +631,4 @@ Other functions
 
    to_datetime
    to_numeric
-
+   to_timedelta
