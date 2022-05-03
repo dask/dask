@@ -1662,7 +1662,7 @@ def check_compression(engine, filename, compression):
         else:
             assert md.total_compressed_size != md.total_uncompressed_size
     else:
-        metadata = pa.parquet.ParquetDataset(filename).metadata
+        metadata = pa.parquet.read_metadata(filename + "/_metadata")
         names = metadata.schema.names
         for i in range(metadata.num_row_groups):
             row_group = metadata.row_group(i)
