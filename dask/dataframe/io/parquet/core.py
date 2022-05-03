@@ -84,7 +84,7 @@ class ParquetFunctionWrapper:
             self.fs,
             self.engine,
             self.meta,
-            [(p["piece"], p.get("kwargs", {})) for p in part],
+            [(p.data["piece"], p.data.get("kwargs", {})) if hasattr(p, "data") else (p["piece"], p.get("kwargs", {}))  for p in part],
             self.columns,
             self.index,
             self.common_kwargs,
