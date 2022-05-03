@@ -452,11 +452,19 @@ def monotonic_increasing_chunk(x):
     return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
 
 
+def monotonic_increasing_combine(concatenated):
+    if concatenated.empty:
+        data = None
+    else:
+        s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
+        is_monotonic = concatenated["monotonic"].all() and s.is_monotonic_increasing
+        data = [[is_monotonic, s.iloc[0], s.iloc[-1]]]
+    return pd.DataFrame(data, columns=["monotonic", "first", "last"])
+
+
 def monotonic_increasing_aggregate(concatenated):
-    bounds_are_monotonic = pd.Series(
-        concatenated[["first", "last"]].to_numpy().ravel()
-    ).is_monotonic_increasing
-    return concatenated["monotonic"].all() and bounds_are_monotonic
+    s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
+    return concatenated["monotonic"].all() and s.is_monotonic_increasing
 
 
 def monotonic_decreasing_chunk(x):
@@ -469,8 +477,16 @@ def monotonic_decreasing_chunk(x):
     return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
 
 
+def monotonic_decreasing_combine(concatenated):
+    if concatenated.empty:
+        data = None
+    else:
+        s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
+        is_monotonic = concatenated["monotonic"].all() and s.is_monotonic_decreasing
+        data = [[is_monotonic, s.iloc[0], s.iloc[-1]]]
+    return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
+
+
 def monotonic_decreasing_aggregate(concatenated):
-    bounds_are_monotonic = pd.Series(
-        concatenated[["first", "last"]].to_numpy().ravel()
-    ).is_monotonic_decreasing
-    return concatenated["monotonic"].all() and bounds_are_monotonic
+    s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
+    return concatenated["monotonic"].all() and s.is_monotonic_decreasing

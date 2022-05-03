@@ -5113,12 +5113,12 @@ def test_index_is_monotonic_numeric():
 
 
 def test_index_is_monotonic_dt64():
-    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
-    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    s = pd.Series(1, index=pd.date_range("20130101", periods=20))
+    ds = dd.from_pandas(s, npartitions=10, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
 
     s_2 = pd.Series(1, index=list(reversed(s)))
-    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
 
 

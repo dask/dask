@@ -4011,6 +4011,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_increasing_chunk,
+            combine=methods.monotonic_increasing_combine,
             aggregate=methods.monotonic_increasing_aggregate,
             meta=bool,
             token="monotonic_increasing",
@@ -4022,6 +4023,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_decreasing_chunk,
+            combine=methods.monotonic_decreasing_combine,
             aggregate=methods.monotonic_decreasing_aggregate,
             meta=bool,
             token="monotonic_decreasing",
