@@ -8,6 +8,7 @@ from dask.dataframe.io.io import (
     from_dask_array,
     from_delayed,
     from_map,
+    from_dict,
     from_pandas,
     to_bag,
     to_records,

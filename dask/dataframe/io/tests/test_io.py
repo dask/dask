@@ -241,6 +241,15 @@ def test_from_bcolz_column_order():
     assert list(df.loc[0].compute().columns) == ["x", "y", "a"]
 
 
+def test_from_dict_dataframe():
+    actual = dd.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
+    pandas_df = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    expected = dd.from_pandas(pandas_df, npartitions=2)
+    assert_eq(actual, expected)
+
+
 def test_from_pandas_dataframe():
     a = list("aaaaaaabbbbbbbbccccccc")
     df = pd.DataFrame(
