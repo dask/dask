@@ -455,6 +455,9 @@ def test_parquet(s3, engine, s3so, metadata_file):
     ):
         pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
+    if engine == "pyarrow" and lib_version > parse_version("7.0.0"):
+        pytest.skip("#8993 - parquet dataset with s3 failing on pyarrow master")
+
     url = "s3://%s/test.parquet" % test_bucket_name
 
     data = pd.DataFrame(
@@ -555,6 +558,12 @@ def test_parquet_append(s3, engine, s3so):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
 
+    # TEMP
+    lib = pytest.importorskip(engine)
+    lib_version = parse_version(lib.__version__)
+    if engine == "pyarrow" and lib_version > parse_version("7.0.0"):
+        pytest.skip("#8993 - parquet dataset with s3 failing on pyarrow master")
+
     url = "s3://%s/test.parquet.append" % test_bucket_name
 
     data = pd.DataFrame(
@@ -608,6 +617,12 @@ def test_parquet_wstoragepars(s3, s3so, engine):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
+
+    # TEMP
+    lib = pytest.importorskip(engine)
+    lib_version = parse_version(lib.__version__)
+    if engine == "pyarrow" and lib_version > parse_version("7.0.0"):
+        pytest.skip("#8993 - parquet dataset with s3 failing on pyarrow master")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
