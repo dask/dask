@@ -505,6 +505,10 @@ def rearrange_by_column(
         if ignore_index:
             df2._meta = df2._meta.reset_index(drop=True)
         return df2
+    elif shuffle == "p2p":
+        from distributed.shuffle import rearrange_by_column_p2p
+
+        return rearrange_by_column_p2p(df, col, npartitions)
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
