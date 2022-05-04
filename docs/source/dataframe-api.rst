@@ -520,6 +520,7 @@ Create DataFrames
    from_bcolz
    from_dask_array
    from_delayed
+   from_map
    from_pandas
 
 .. currentmodule:: dask.bag
