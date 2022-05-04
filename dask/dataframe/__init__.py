@@ -41,6 +41,11 @@ try:
     from dask.dataframe.utils import assert_eq
 
     try:
+        import dask.dataframe._pyarrow_compat
+    except ImportError:
+        pass
+
+    try:
         from dask.dataframe.io import read_parquet, to_parquet
     except ImportError:
         pass
