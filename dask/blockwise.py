@@ -804,10 +804,9 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if idxv is not None:
-                if k in names:
-                    is_leaf = False
-                    k = clone_key(k, seed)
+            if idxv is not None and k in names:
+                is_leaf = False
+                k = clone_key(k, seed)
             indices.append((k, idxv))
 
         numblocks = {}
