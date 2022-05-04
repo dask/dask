@@ -2815,3 +2815,18 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_scalar_group():
+    df = pd.DataFrame(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+        ],
+        columns=[2, 1, 0],
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    groupby = ddf.groupby(2).cov()
+    assert list(groupby.cov().columns) == [1, 0]

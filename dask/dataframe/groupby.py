@@ -45,7 +45,7 @@ from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 #
 # The argument to ``.groupby`` (``by``), can be a ``str``, ``dd.DataFrame``,
 # ``dd.Series``, or a list thereof. In operations on the grouped object, the
-# divisions of the the grouped object and the items of ``by`` have to align.
+# divisions of the grouped object and the items of ``by`` have to align.
 # Currently, there is no support to shuffle the ``by`` values as part of the
 # groupby operation. Therefore, the alignment has to be guaranteed by the
 # caller.
@@ -65,6 +65,10 @@ from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 # ``_normalize_by``.
 #
 # #############################################
+
+
+def _as_list(x):
+    return list(x if isinstance(x, (tuple, list)) else [x])
 
 
 def _determine_levels(by):
@@ -1105,7 +1109,7 @@ class _GroupBy:
 
         partitions_aligned = all(
             item.npartitions == df.npartitions if isinstance(item, Series) else True
-            for item in (self.by if isinstance(self.by, (tuple, list)) else [self.by])
+            for item in _as_list(self.by)
         )
 
         if not partitions_aligned:
@@ -1540,21 +1544,20 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        by = _as_list(self.by)
 
-        levels = _determine_levels(self.by)
+        levels = _determine_levels(by)
 
-        is_mask = any(is_series_like(s) for s in self.by)
+        is_mask = any(is_series_like(s) for s in by)
         if self._slice:
             if is_mask:
                 self.obj = self.obj[self._slice]
             else:
-                sliced_plus = list(self._slice) + list(self.by)
+                sliced_plus = list(self._slice) + by
                 self.obj = self.obj[sliced_plus]
 
         result = aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            [self.obj, *by],
             chunk=_cov_chunk,
             aggregate=_cov_agg,
             combine=_cov_combine,
