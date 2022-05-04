@@ -4,11 +4,13 @@ Create and Store Dask DataFrames
 Dask can create DataFrames from various data storage formats like CSV, HDF,
 Apache Parquet, and others.  For most formats, this data can live on various
 storage systems including local disk, network file systems (NFS), the Hadoop
-File System (HDFS), Google Cloud Storage, and Amazon's S3
+Distributed File System (HDFS), Google Cloud Storage, and Amazon S3
 (excepting HDF, which is only available on POSIX like file systems).
 
 See the :doc:`DataFrame overview page <dataframe>` for more on
-``dask.dataframe`` scope, use, and limitations.
+``dask.dataframe`` scope, use, and limitations and
+:doc:`DataFrame Best Practices <dataframe-best-practices>` for more tips
+and solutions to common problems.
 
 API
 ---
@@ -64,29 +66,33 @@ You can use :func:`read_csv` to read one or more CSV files into a Dask DataFrame
 It supports loading multiple files at once:
   
 .. code-block:: python
+
    >>> df = dd.read_csv('myfiles.*.csv')
 
-Or you can break up large files with the ``blocksize`` parameter:
+Or you can break up a single large file with the ``blocksize`` parameter:
 
 .. code-block:: python
+
    >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks  
 
 Changing the ``blocksize`` parameter will change the number of partitions (see the explanation on
-:doc:`partitions <dataframe-design-partitions>`). A good rule of thumb when working with
+:ref:`partitions <dataframe-design-partitions>`). A good rule of thumb when working with
 Dask DataFrames is to keep your partitions under 100MB in size.
 
 Read from Parquet
 ~~~~~~~~~~~~~~~~~
 
-Similarly, you can use :func:`read_parquet` to reading one or more Parquet files.
+Similarly, you can use :func:`read_parquet` for reading one or more Parquet files.
 You can read in a single Parquet file:
 
 .. code-block:: python
+
    >>> df = dd.read_parquet("path/to/mydata.parquet")
 
 Or multiple Parquet files:
 
 .. code-block:: python
+
    >>> df = dd.read_parquet("path/to/my/parquet/")
 
 For more details on working with Parquet files, including tips and best practices, see the documentation
@@ -95,8 +101,9 @@ on :doc:`dataframe-parquet`.
 Read from cloud storage
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Dask can read data from a variety of data stores including network file systems, cloud object stores, and Hadoop.
-You can usually do this by prepending a protocol to the paths:
+Dask can read data from a variety of data stores including cloud object stores.
+You can do this by prepending a protocol like ``s3://`` to paths
+used in common data access functions like ``dd.read_csv``:
 
 .. code-block:: python
 
@@ -104,8 +111,9 @@ You can usually do this by prepending a protocol to the paths:
    >>> df = dd.read_parquet('gcs://bucket/path/to/data-*.parq')
 
 For remote systems like Amazon S3 or Google Cloud Storage, you may need to provide credentials.
-These are usually handled by a configuration file.
-In some cases you may want to pass storage-specific options through to the storage backend. You can do this with the ``storage_options=`` keyword:
+These are usually stored in a configuration file, but in some cases you may want to pass
+storage-specific options through to the storage backend.
+You can do this with the ``storage_options`` parameter:
 
 .. code-block:: python
 
@@ -114,8 +122,8 @@ In some cases you may want to pass storage-specific options through to the stora
    >>> df = dd.read_parquet('gs://dask-nyc-taxi/yellowtrip.parquet',
    ...                      storage_options={'token': 'anon'})
 
-See the documentation on connecting to :doc:`Amazon S3 <how-to/connect-to-remote-data-s3>` or
-:doc:`Google Cloud Storage <how-to/connect-to-remote-data-gc>`.
+See the documentation on connecting to :ref:`Amazon S3 <connect-to-remote-data-s3>` or
+:ref:`Google Cloud Storage <connect-to-remote-data-gc>`.
 
 Mapping from a function
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -148,7 +156,8 @@ Storing
 Writing files locally
 ~~~~~~~~~~~~~~~~~~~~~
 
-You can save files locally, assuming each worker can access the same file system. Either the workers are located on the same machine, or a network file system is mounted and referenced at the same path location for every worker node.
+You can save files locally, assuming each worker can access the same file system. The workers could be located on the same machine, or a network file system can be mounted and referenced at the same path location for every worker node.
+See the documentation on :ref:`accessing data locally <connect-to-remote-data-local>`.
 
 Writing to remote locations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -165,11 +174,4 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
    ...               storage_options={'account_name': 'ACCOUNT_NAME',
    ...                                'account_key': 'ACCOUNT_KEY'}
 
-See the :doc:`how to connect to remote data <how-to/connect-to-remote-data>`
-for more information.
-
-Next Steps
-----------
-
-See the :doc:`DataFrame Best Practices <dataframe-best-practices>` for more tips
-on how to use Dask DataFrame and solutions to common problems.
+See the :doc:`how-to guide on connecting to remote data <how-to/connect-to-remote-data>`.
