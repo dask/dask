@@ -133,6 +133,7 @@ variables. For more information on these, see the `PyArrow documentation`_.
 
 .. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems_deprecated.html#hadoop-file-system-hdfs
 
+.. _connect-to-remote-data-s3:
 
 Amazon S3
 ---------
@@ -209,6 +210,8 @@ for example, using `AlibabaCloud OSS`:
             #   `addressing_style` is required by AlibabaCloud, other services may not
             "config_kwargs": {"s3": {"addressing_style": "virtual"}},
         })
+
+.. _connect-to-remote-data-gc:
 
 Google Cloud Storage
 --------------------
