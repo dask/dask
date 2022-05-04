@@ -2830,3 +2830,26 @@ def test_groupby_scalar_group():
     ddf = dd.from_pandas(df, npartitions=2)
     groupby = ddf.groupby(2).cov()
     assert list(groupby.cov().columns) == [1, 0]
+
+
+def test_groupby_falsy_slice():
+    df = pd.DataFrame(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+        ],
+        columns=[2, 1, 0],
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    groupby = ddf.groupby([2])
+    # .agg
+    assert groupby[0].agg("sum").name == 0
+    assert groupby[1].agg("sum").name == 1
+    # .cov
+    assert groupby[0].cov().name == 0
+    assert groupby[1].cov().name == 1
+    # .var
+    assert groupby[0].var().name == 0
+    assert groupby[1].var().name == 1
