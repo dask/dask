@@ -3,14 +3,21 @@ import math
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
+
+try:
+    import pyarrow as pa
+except ImportError:
+    pa = None
 
 # Pickling of pyarrow arrays is effectively broken - pickling a slice of an
-# array ends up pickling the entire backing array. This comes up when using
-# pandas `string[pyarrow]` dtypes, which are backed by a `pyarrow.StringArray`.
-# To fix this, we register a *global* override for pickling
-# `pandas.core.arrays.ArrowStringArray` types. We do this at the pandas level
-# rather than the pyarrow level for efficiency reasons (a pandas
+# array ends up pickling the entire backing array.
+#
+# See https://issues.apache.org/jira/browse/ARROW-10739
+#
+# This comes up when using pandas `string[pyarrow]` dtypes, which are backed by
+# a `pyarrow.StringArray`.  To fix this, we register a *global* override for
+# pickling `pandas.core.arrays.ArrowStringArray` types. We do this at the
+# pandas level rather than the pyarrow level for efficiency reasons (a pandas
 # ArrowStringArray may contain many small pyarrow StringArray objects).
 #
 # This pickling implementation manually mucks with the backing buffers in a
@@ -74,8 +81,8 @@ def pyarrow_stringarray_to_parts(array):
         mask_stop = mask_start + math.ceil(nitems / 8)
         mask = mask[mask_start:mask_stop]
 
-    # Subtract the offset of the starting element from the every used offset in
-    # the offsets array, ensuring the first element in the serialized `offsets`
+    # Subtract the offset of the starting element from every used offset in the
+    # offsets array, ensuring the first element in the serialized `offsets`
     # array is always 0.
     offsets_array = np.frombuffer(offsets, dtype="i4")
     offsets_array = (
@@ -106,7 +113,7 @@ def rebuild_arrowstringarray(*chunk_parts):
     array = pa.chunked_array(
         [pyarrow_stringarray_from_parts(*parts) for parts in chunk_parts]
     )
-    return pd.core.arrays.ArrowStringArray(array)
+    return pd.arrays.ArrowStringArray(array)
 
 
 def reduce_arrowstringarray(x):
@@ -120,4 +127,5 @@ def reduce_arrowstringarray(x):
     return (rebuild_arrowstringarray, chunks)
 
 
-copyreg.dispatch_table[pd.core.arrays.ArrowStringArray] = reduce_arrowstringarray
+if hasattr(pd.arrays, "ArrowStringArray") and pa is not None:
+    copyreg.dispatch_table[pd.arrays.ArrowStringArray] = reduce_arrowstringarray

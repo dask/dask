@@ -1,4 +1,5 @@
 try:
+    import dask.dataframe._pyarrow_compat
     from dask.base import compute
     from dask.dataframe import backends, dispatch, rolling
     from dask.dataframe.core import (
@@ -39,11 +40,6 @@ try:
     from dask.dataframe.optimize import optimize
     from dask.dataframe.reshape import get_dummies, melt, pivot_table
     from dask.dataframe.utils import assert_eq
-
-    try:
-        import dask.dataframe._pyarrow_compat
-    except ImportError:
-        pass
 
     try:
         from dask.dataframe.io import read_parquet, to_parquet

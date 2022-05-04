@@ -13,6 +13,9 @@ from dask.dataframe._pyarrow_compat import (
     pyarrow_stringarray_to_parts,
 )
 
+if not hasattr(pd.arrays, "ArrowStringArray"):
+    pytestmark = pytest.mark.skip("pandas.arrays.ArrowStringArray is not available")
+
 
 def randstr(i):
     """A random string, prefixed with the index number to make it clearer what the data
@@ -55,7 +58,7 @@ def test_roundtrip_stringarray(length, slc, has_mask):
     assert x == x2
 
     # Test pickle roundtrip works
-    pd_x = pd.core.arrays.ArrowStringArray(x)
+    pd_x = pd.arrays.ArrowStringArray(x)
     pd_x2 = pickle.loads(pickle.dumps(pd_x))
     assert pd_x.equals(pd_x2)
 
