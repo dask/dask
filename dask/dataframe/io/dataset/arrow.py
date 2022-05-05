@@ -382,7 +382,7 @@ class ArrowParquetDataset(ArrowDataset):
         self.ignore_metadata_file = ignore_metadata_file
         self.using_global_metadata = False
         self.metadata_task_size = metadata_task_size
-        if bool(self.split_row_groups) and bool(self.aggregate_files):
+        if bool(self.split_row_groups) and int(self.aggregate_files) > 1:
             raise ValueError(
                 "aggregate_files only supported when split_row_groups=False"
             )
@@ -415,34 +415,39 @@ class ArrowParquetDataset(ArrowDataset):
 
         # Check if we already have a file-system object
         if self.filesystem is None:
-            self.filesystem = get_fs_token_paths(
+            self.filesystem, _, paths = get_fs_token_paths(
                 path, mode=mode, storage_options=self.storage_options
-            )[0]
+            )
+        else:
+            paths = [path] if isinstance(path, str) else path
 
         # Check for _metadata file if path is a directory name
         if (
             not self.ignore_metadata_file
-            and isinstance(path, str)
-            and not path.endswith("_metadata")
+            and (len(paths) == 1 and isinstance(paths[0], str))
+            and not paths[0].endswith("_metadata")
         ):
-            meta_path = "/".join([path, "_metadata"])
+            meta_path = "/".join([paths[0], "_metadata"])
             if isinstance(self.filesystem, PaFileSystem):
                 if self.filesystem.get_file_info(meta_path).is_file:
-                    path = meta_path
+                    paths[0] = meta_path
             else:
                 if self.filesystem.exists(meta_path):
-                    path = meta_path
+                    paths[0] = meta_path
 
         # If path is a _metadata file, use ds.parquet_dataset
         ds_api = ds.dataset
-        if isinstance(path, str) and path.endswith("_metadata"):
+        if (len(paths) == 1 and isinstance(paths[0], str)) and path.endswith("_metadata"):
             self.using_global_metadata = True
             ds_api = ds.parquet_dataset
         else:
             self.using_global_metadata = False
 
+        if len(paths) == 1:
+            paths = paths[0]
+
         return ds_api(
-            path,
+            paths,
             partitioning=self.partitioning,
             filesystem=self.filesystem,
             **self.dataset_options,
