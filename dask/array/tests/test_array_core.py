@@ -3882,6 +3882,10 @@ def test_setitem_1d():
 
     assert_eq(x, dx)
 
+    index = da.arange(3)
+    with pytest.raises(ValueError, match="Boolean index assignment in Dask"):
+        dx[index] = 1
+
 
 def test_setitem_2d():
     x = np.arange(24).reshape((4, 6))
