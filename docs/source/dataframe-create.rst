@@ -63,13 +63,13 @@ Read from CSV
 ~~~~~~~~~~~~~
 
 You can use :func:`read_csv` to read one or more CSV files into a Dask DataFrame.
-It supports loading multiple files at once:
+It supports loading multiple files at once using globstrings:
   
 .. code-block:: python
 
    >>> df = dd.read_csv('myfiles.*.csv')
 
-Or you can break up a single large file with the ``blocksize`` parameter:
+You can break up a single large file with the ``blocksize`` parameter:
 
 .. code-block:: python
 
@@ -89,7 +89,7 @@ You can read in a single Parquet file:
 
    >>> df = dd.read_parquet("path/to/mydata.parquet")
 
-Or multiple Parquet files:
+Or a directory of local Parquet files:
 
 .. code-block:: python
 
