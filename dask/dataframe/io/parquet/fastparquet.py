@@ -1171,9 +1171,15 @@ class FastParquetEngine(Engine):
                     ignore_divisions = True
             if not ignore_divisions:
                 minmax = fastparquet.api.sorted_partitioned_columns(pf)
-                old_end = minmax[index_cols[0]]["max"][-1]
+                # If fastparquet detects that a partitioned column isn't sorted, it won't
+                # appear in the resulting min/max dictionary
+                old_end = (
+                    minmax[index_cols[0]]["max"][-1]
+                    if index_cols[0] in minmax
+                    else None
+                )
                 divisions = division_info["divisions"]
-                if divisions[0] < old_end:
+                if old_end is None or divisions[0] <= old_end:
                     raise ValueError(
                         "Appended divisions overlapping with previous ones."
                         "\n"
