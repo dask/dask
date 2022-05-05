@@ -1294,7 +1294,7 @@ named_schedulers = {
 
 try:
     from dask import multiprocessing as dask_multiprocessing
-except ImportError:
+except (ImportError, ModuleNotFoundError):
     pass
 else:
     named_schedulers.update(
