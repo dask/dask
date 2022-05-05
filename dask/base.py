@@ -314,8 +314,13 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
+    from dask.highlevelgraph import HighLevelGraph
+
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
     dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
+    # see https://github.com/dask/dask/issues/8991.
+    # This merge should be removed once the underlying issue is fixed.
+    dsk2 = HighLevelGraph.merge(dsk2)
     return schedule(dsk2, keys, **kwargs)
 
 
