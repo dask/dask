@@ -1815,7 +1815,7 @@ class Array(DaskMethodsMixin):
 
     def __setitem__(self, key, value):
         if value is np.ma.masked:
-            value = np.ma.masked_all(())
+            value = np.ma.masked_all((), dtype=self.dtype)
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
