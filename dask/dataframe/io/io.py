@@ -146,7 +146,7 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
+def from_dict(data, *, npartitions, orient="columns", dtype=None, columns=None):
     """
     Construct a Dask DataFrame from a Python Dictionary
 
