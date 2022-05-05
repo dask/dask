@@ -147,7 +147,7 @@ consider so that Dask doesn't need to query for these. Alternatively,
 you can have Dask fetch the first few row (5 by default) and use
 them to guess the typical bytes/row, and base the partitioning size on
 this. Needless to say, the results will vary a lot for tables that are
-not uncommonly homogenous.
+not uncommonly homogeneous.
 
 Specific partitioning
 ^^^^^^^^^^^^^^^^^^^^^

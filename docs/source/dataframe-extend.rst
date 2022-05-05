@@ -194,9 +194,9 @@ So you (or your users) can now create and store a dask ``DataFrame`` or
    >>> import dask.dataframe as dd
    >>> import pandas as pd
    >>> from pandas.tests.extension.decimal import DecimalArray
-   >>> ser = pd.Series(DecimalArray([Decimal('0.0')] * 10))
-   >>> dser = dd.from_pandas(ser, 3)
-   >>> dser
+   >>> s = pd.Series(DecimalArray([Decimal('0.0')] * 10))
+   >>> ds = dd.from_pandas(s, 3)
+   >>> ds
    Dask Series Structure:
    npartitions=3
    0    decimal
