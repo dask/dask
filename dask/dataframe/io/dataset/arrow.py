@@ -437,12 +437,15 @@ class ArrowParquetDataset(ArrowDataset):
 
         # If path is a _metadata file, use ds.parquet_dataset
         ds_api = ds.dataset
-        if (len(paths) == 1 and isinstance(paths[0], str)) and path.endswith("_metadata"):
+        if (len(paths) == 1 and isinstance(paths[0], str)) and path.endswith(
+            "_metadata"
+        ):
             self.using_global_metadata = True
             ds_api = ds.parquet_dataset
         else:
             self.using_global_metadata = False
 
+        # Avoid list for single path
         if len(paths) == 1:
             paths = paths[0]
 
