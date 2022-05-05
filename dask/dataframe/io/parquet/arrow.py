@@ -38,6 +38,7 @@ from pyarrow import dataset as pa_ds
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
+partitioning_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
 
 #
@@ -860,6 +861,9 @@ class ArrowDatasetEngine(Engine):
         hive_categories = defaultdict(list)
         file_frag = None
         for file_frag in ds.get_fragments():
+            if partitioning_supported:
+                # Can avoid manual category discovery for pyarrow>=5.0.0
+                break
             keys = pa_ds._get_partition_keys(file_frag.partition_expression)
             if not (keys or hive_categories):
                 break  # Bail - This is not a hive-partitioned dataset
@@ -869,7 +873,10 @@ class ArrowDatasetEngine(Engine):
 
         physical_schema = ds.schema
         if file_frag is not None:
+            physical_schema = file_frag.physical_schema
+
             # Check/correct order of `categories` using last file_frag
+            # TODO: Remove this after pyarrow>=5.0.0 is required
             #
             # Note that `_get_partition_keys` does NOT preserve the
             # partition-hierarchy order of the keys. Therefore, we
@@ -898,11 +905,17 @@ class ArrowDatasetEngine(Engine):
                     k: hive_categories[k] for k in cat_keys if k in hive_categories
                 }
 
-            physical_schema = file_frag.physical_schema
-
-        partition_names = list(hive_categories)
-        for name in partition_names:
-            partition_obj.append(PartitionObj(name, hive_categories[name]))
+        if partitioning_supported and ds.partitioning.dictionaries:
+            # Use ds.partitioning for pyarrow>=5.0.0
+            partition_names = list(ds.partitioning.schema.names)
+            for i, name in enumerate(partition_names):
+                partition_obj.append(
+                    PartitionObj(name, ds.partitioning.dictionaries[i].to_pandas())
+                )
+        else:
+            partition_names = list(hive_categories)
+            for name in partition_names:
+                partition_obj.append(PartitionObj(name, hive_categories[name]))
 
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(aggregate_files, partition_names)
