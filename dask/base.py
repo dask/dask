@@ -22,7 +22,7 @@ from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from dask import config, local, threaded
+from dask import config, local
 from dask.compatibility import _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
@@ -1288,9 +1288,19 @@ named_schedulers = {
     "sync": local.get_sync,
     "synchronous": local.get_sync,
     "single-threaded": local.get_sync,
-    "threads": threaded.get,
-    "threading": threaded.get,
 }
+
+try:
+    from dask import threaded
+except (ImportError, ModuleNotFoundError):
+    pass
+else:
+    named_schedulers.update(
+        {
+            "threads": threaded.get,
+            "threading": threaded.get,
+        }
+    )
 
 try:
     from dask import multiprocessing as dask_multiprocessing

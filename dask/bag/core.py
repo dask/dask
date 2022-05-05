@@ -46,7 +46,6 @@ from dask.context import globalmethod
 from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
 from dask.delayed import Delayed, unpack_collections
 from dask.highlevelgraph import HighLevelGraph
-from dask.multiprocessing import get as mpget
 from dask.optimization import cull, fuse, inline
 from dask.sizeof import sizeof
 from dask.utils import (
@@ -63,6 +62,15 @@ from dask.utils import (
     system_encoding,
     takes_multiple_arguments,
 )
+
+try:
+    from dask import multiprocessing
+except (ImportError, ModuleNotFoundError):
+    from dask import local
+
+    DEFAULT_GET = local.get_sync
+else:
+    DEFAULT_GET = multiprocessing.get
 
 no_default = "__no__default__"
 no_result = type(
@@ -371,7 +379,7 @@ class Item(DaskMethodsMixin):
         return self.key
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize_item, ()
@@ -481,7 +489,7 @@ class Bag(DaskMethodsMixin):
         return self.name
 
     __dask_optimize__ = globalmethod(optimize, key="bag_optimize", falsey=dont_optimize)
-    __dask_scheduler__ = staticmethod(mpget)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()

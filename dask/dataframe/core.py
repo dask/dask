@@ -20,7 +20,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core, threaded
+from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
 from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
@@ -78,6 +78,15 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+try:
+    from dask import threaded
+except (ImportError, ModuleNotFoundError):
+    from dask import local
+
+    DEFAULT_GET = local.get_sync
+else:
+    DEFAULT_GET = threaded.get
 
 no_default = "__no_default__"
 
@@ -163,7 +172,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return first, ()
@@ -345,7 +354,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
