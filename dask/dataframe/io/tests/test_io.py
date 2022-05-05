@@ -241,13 +241,26 @@ def test_from_bcolz_column_order():
     assert list(df.loc[0].compute().columns) == ["x", "y", "a"]
 
 
-def test_from_dict_dataframe():
-    actual = dd.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
-    pandas_df = pd.DataFrame(
-        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
-    )
-    expected = dd.from_pandas(pandas_df, npartitions=2)
-    assert_eq(actual, expected)
+@pytest.mark.parametrize("dtype", [int, float])
+@pytest.mark.parametrize("orient", ["columns", "index"])
+@pytest.mark.parametrize("npartitions", [2, 5])
+def test_from_dict(dtype, orient, npartitions):
+    data = {"a": range(10), "b": range(10)}
+    expected = pd.DataFrame.from_dict(data, dtype=dtype, orient=orient)
+    result = dd.from_dict(data, npartitions=npartitions, dtype=dtype, orient=orient)
+    if orient == "index":
+        # DataFrame only has two rows with this orientation
+        assert result.npartitions == 1
+    else:
+        assert result.npartitions == npartitions
+    assert_eq(result, expected)
+
+
+def test_from_dict_raises():
+    s = pd.Series(range(10))
+    ds = dd.from_pandas(s, npartitions=2)
+    with pytest.raises(NotImplementedError, match="Dask collections as inputs"):
+        dd.from_dict({"a": ds}, npartitions=2)
 
 
 def test_from_pandas_dataframe():
