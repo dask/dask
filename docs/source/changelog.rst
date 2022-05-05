@@ -1,12 +1,47 @@
 Changelog
 =========
 
+.. _v2022.05.0:
+
+2022.05.0
+---------
+
+Released on May 2, 2022
+
+Highlights
+^^^^^^^^^^
+This is a bugfix release for `this issue <https://github.com/dask/distributed/issues/6255>`_.
+
+Documentation
+^^^^^^^^^^^^^
+- Add highlights section to 2022.04.2 release notes (:pr:`9012`) `James Bourbeau`_
+
+
 .. _v2022.04.2:
 
 2022.04.2
 ---------
 
 Released on April 29, 2022
+
+Highlights
+^^^^^^^^^^
+This release includes several deprecations/breaking API changes to
+``dask.dataframe.read_parquet`` and ``dask.dataframe.to_parquet``:
+
+- ``to_parquet`` no longer writes ``_metadata`` files by default. If you want to
+  write a ``_metadata`` file, you can pass in ``write_metadata_file=True``.
+- ``read_parquet`` now defaults to ``split_row_groups=False``, which results in one
+  Dask dataframe partition per parquet file when reading in a parquet dataset.
+  If you're working with large parquet files you may need to set
+  ``split_row_groups=True`` to reduce your partition size.
+- ``read_parquet`` no longer calculates divisions by default. If you require
+  ``read_parquet`` to return dataframes with known divisions, please set
+  ``calculate_divisions=True``.
+- ``read_parquet`` has deprecated the ``gather_statistics`` keyword argument.
+  Please use the ``calculate_divisions`` keyword argument instead.
+- ``read_parquet`` has deprecated the ``require_extensions`` keyword argument.
+  Please use the ``parquet_file_extension`` keyword argument instead.
 
 New Features
 ^^^^^^^^^^^^
