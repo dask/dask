@@ -329,14 +329,14 @@ Github Actions
 
 Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
 These CI builds will run the test suite across a variety of Python versions, operating
-systems, and package dependency versions.  Addtionally, if a commit message
+systems, and package dependency versions.  Additionally, if a commit message
 includes the phrase ``test-upstream``, then an additional CI build will be
 triggered which uses the development versions of several dependencies
 including: NumPy, pandas, fsspec, etc.
 
 The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
-with additonal scripts and metadata located in `continuous_integration
+with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 

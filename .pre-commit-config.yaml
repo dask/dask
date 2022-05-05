@@ -28,6 +28,12 @@ repos:
       hooks:
       - id: flake8
         language_version: python3
+  -   repo: https://github.com/codespell-project/codespell
+      rev: v2.1.0
+      hooks:
+      -   id: codespell
+          types_or: [rst, markdown]
+          files: docs
   - repo: https://github.com/pre-commit/mirrors-mypy
     rev: v0.942
     hooks:

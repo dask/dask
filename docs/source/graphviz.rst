@@ -74,7 +74,7 @@ The high level graph can be visualized using ``.dask.visualize()``.
 Hovering your mouse above each high level graph label will bring up
 a tooltip with more detailed information about that layer.
 Note that if you save the graph to disk using the ``filename=`` keyword argument
-in ``visualize``, then the tooltips wil only be preserved by the SVG image format.
+in ``visualize``, then the tooltips will only be preserved by the SVG image format.
 
 High level graph HTML representation
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
