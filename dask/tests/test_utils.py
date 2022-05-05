@@ -34,6 +34,7 @@ from dask.utils import (
     parse_bytes,
     parse_timedelta,
     partial_by_order,
+    random_rng_data,
     random_state_data,
     skip_doctest,
     stringify,
@@ -213,6 +214,38 @@ def test_random_state_data():
     # Consistent ordering
     states = random_state_data(10, 1234)
     states2 = random_state_data(20, 1234)[:10]
+
+    for s1, s2 in zip(states, states2):
+        assert (s1 == s2).all()
+
+
+def test_random_rng_data():
+    np = pytest.importorskip("numpy")
+    seed = 37
+    n = 10000
+
+    # use None
+    states = random_rng_data(n, None)
+    assert len(states) == n
+
+    # use int
+    states = random_rng_data(n, seed)
+    assert len(states) == n
+
+    # use BitGenerator state
+    x = np.random.PCG64()
+    state = x.state
+    states = random_rng_data(n, state)
+    assert len(states) == n
+
+    # use Generator
+    gen = np.random.default_rng()
+    states = random_rng_data(n, gen)
+    assert len(states) == n
+
+    # Consistent ordering
+    states = random_rng_data(10, 1234)
+    states2 = random_rng_data(20, 1234)[:10]
 
     for s1, s2 in zip(states, states2):
         assert (s1 == s2).all()
