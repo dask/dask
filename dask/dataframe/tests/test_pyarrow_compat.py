@@ -27,7 +27,8 @@ def randstr(i):
 
 @pytest.mark.parametrize("length", [6, 8, 12, 17])
 @pytest.mark.parametrize(
-    "slc", [slice(None), slice(0, 5), slice(2), slice(2, 5), slice(2, None, 2)]
+    "slc",
+    [slice(None), slice(0, 5), slice(2), slice(2, 5), slice(2, None, 2), slice(0, 0)],
 )
 @pytest.mark.parametrize("has_mask", [True, False])
 def test_roundtrip_stringarray(length, slc, has_mask):

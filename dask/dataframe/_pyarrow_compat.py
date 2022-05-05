@@ -42,12 +42,20 @@ def pyarrow_stringarray_to_parts(array):
     ``pyarrow_stringarray_from_parts(*components)`` to reconstruct the
     ``pyarrow.StringArray``.
     """
-    # Access the backing buffers
+    # Access the backing buffers.
+    #
     # - mask: None, or a bitmask of length ceil(nitems / 8). 0 bits mark NULL
     #   elements, only present if NULL data is present, commonly None.
     # - offsets: A uint32 array of nitems + 1 items marking the start/stop
     #   indices for the individual elements in `data`
     # - data: All the utf8 string data concatenated together
+    #
+    # The structure of these buffers comes from the arrow format, documented at
+    # https://arrow.apache.org/docs/format/Columnar.html#physical-memory-layout.
+    # In particular, this is a `StringArray` (4 byte offsets), rather than a
+    # `LargeStringArray` (8 byte offsets).
+    assert pa.types.is_string(array.type)
+
     mask, offsets, data = array.buffers()
     nitems = len(array)
 
@@ -111,7 +119,8 @@ def pyarrow_stringarray_from_parts(nitems, data_offsets, data, mask=None, offset
 def rebuild_arrowstringarray(*chunk_parts):
     """Rebuild a ``pandas.core.arrays.ArrowStringArray``"""
     array = pa.chunked_array(
-        [pyarrow_stringarray_from_parts(*parts) for parts in chunk_parts]
+        [pyarrow_stringarray_from_parts(*parts) for parts in chunk_parts],
+        type=pa.string(),
     )
     return pd.arrays.ArrowStringArray(array)
 
@@ -119,6 +128,9 @@ def rebuild_arrowstringarray(*chunk_parts):
 def reduce_arrowstringarray(x):
     """A pickle override for ``pandas.core.arrays.ArrowStringArray`` that avoids
     serializing unnecessary data, while also avoiding/minimizing data copies"""
+    # Decompose each chunk in the backing ChunkedArray into their individual
+    # components for serialization. We filter out 0-length chunks, since they
+    # add no meaningful value to the chunked array.
     chunks = tuple(
         pyarrow_stringarray_to_parts(chunk)
         for chunk in x._data.chunks
