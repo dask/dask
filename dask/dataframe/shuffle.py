@@ -48,9 +48,12 @@ def _calculate_divisions(
         divisions, sizes, mins, maxes, nulls_presence = compute(
             divisions, sizes, mins, maxes, nulls_presence
         )
-    except Exception as e:
-        # Check if there are nulls and if so, inform the user about this probably being the cause behing the error
-        if nulls_presence.any().compute() and not is_numeric_dtype(partition_col.dtype):
+    except TypeError as e:
+        # When there are nulls and a column is non-numeric, a TypeError is sometimes raised as a result of
+        # 1) computing mins/maxes above, 2) every null being switched to NaN, and 3) NaN being a float.
+        # Also, Pandas ExtensionDtypes may cause TypeErrors when dealing with special nulls such as pd.NaT or pd.NA.
+        # If this happens, we hint the user about eliminating nulls beforehand.
+        if not is_numeric_dtype(partition_col.dtype):
             obj, suggested_method = (
                 ("column", f"`.dropna(subset=['{partition_col.name}'])`")
                 if any(partition_col._name == df[c]._name for c in df)
@@ -61,6 +64,9 @@ def _calculate_divisions(
                 f"This is probably due to the presence of nulls, which Dask does not entirely support in the index.\n"
                 f"We suggest you try with {suggested_method}."
             ) from e
+        # For numeric types there shouldn't be problems with nulls, so we raise as-it-is this particular TypeError
+        else:
+            raise e
 
     divisions = methods.tolist(divisions)
     if type(sizes) is not list:
@@ -68,7 +74,7 @@ def _calculate_divisions(
     mins = methods.tolist(mins)
     maxes = methods.tolist(maxes)
 
-    empty_dataframe_detected = pd.isnull(divisions).all()
+    empty_dataframe_detected = pd.isna(divisions).all()
     if repartition or empty_dataframe_detected:
         total = sum(sizes)
         npartitions = max(math.ceil(total / partition_size), 1)
@@ -208,23 +214,6 @@ def set_index(
     **kwargs,
 ) -> DataFrame:
     """See _Frame.set_index for docstring"""
-    if isinstance(index, Series) and index._name == df.index._name:
-        return df
-    if isinstance(index, (DataFrame, tuple, list)):
-        # Accept ["a"], but not [["a"]]
-        if (
-            isinstance(index, list)
-            and len(index) == 1
-            and not isinstance(index[0], list)  # if index = [["a"]], leave it that way
-        ):
-            index = index[0]
-        else:
-            raise NotImplementedError(
-                "Dask dataframe does not yet support multi-indexes.\n"
-                "You tried to index with this index: %s\n"
-                "Indexes must be single columns only." % str(index)
-            )
-
     if npartitions == "auto":
         repartition = True
         npartitions = max(100, df.npartitions)
