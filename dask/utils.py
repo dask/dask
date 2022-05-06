@@ -415,19 +415,18 @@ def random_rng_data(n: int, random_state=None) -> list:
     ):
         # Generator
         gen = random_state
+    elif isinstance(random_state, dict):
+        # BitGenerator state
+        bit_generator = np.random.PCG64()
+        bit_generator.state = random_state  # type: ignore
+        gen = np.random.Generator(bit_generator)
+    elif isinstance(random_state, (int, type(None))):
+        # int or None to be used as seed
+        gen = np.random.default_rng(seed=random_state)
     else:
-        if isinstance(random_state, dict):
-            # BitGenerator state
-            bit_generator = np.random.PCG64()
-            bit_generator.state = random_state  # type: ignore
-            gen = np.random.Generator(bit_generator)
-        elif isinstance(random_state, (int, type(None))):
-            # int or None to be used as seed
-            gen = np.random.default_rng(seed=random_state)
-        else:
-            raise ValueError(
-                "random_state is not an int or a BitGenerator state or a Generator"
-            )
+        raise ValueError(
+            "random_state is not an int or a BitGenerator state or a Generator"
+        )
 
     random_data = gen.bytes(624 * n * 4)  # `n * 624` 32-bit integers
     l = list(np.frombuffer(random_data, dtype=np.uint32).reshape((n, -1)))
