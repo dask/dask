@@ -42,12 +42,9 @@ def _calculate_divisions(
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
     mins = partition_col.map_partitions(M.min)
     maxes = partition_col.map_partitions(M.max)
-    nulls_presence = partition_col.map_partitions(M.isna)
 
     try:
-        divisions, sizes, mins, maxes, nulls_presence = compute(
-            divisions, sizes, mins, maxes, nulls_presence
-        )
+        divisions, sizes, mins, maxes = compute(divisions, sizes, mins, maxes)
     except TypeError as e:
         # When there are nulls and a column is non-numeric, a TypeError is sometimes raised as a result of
         # 1) computing mins/maxes above, 2) every null being switched to NaN, and 3) NaN being a float.
