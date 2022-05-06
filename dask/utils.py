@@ -909,6 +909,8 @@ def ensure_bytes(s) -> bytes:
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
+    >>> ensure_bytes(bytearray(b'123'))
+    b'123'
     """
     if isinstance(s, bytes):
         return s
