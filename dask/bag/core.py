@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import io
 import itertools
 import math
@@ -5,7 +7,7 @@ import operator
 import uuid
 import warnings
 from collections import defaultdict
-from collections.abc import Iterable, Iterator
+from collections.abc import Hashable, Iterable, Iterator, Mapping
 from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
@@ -459,7 +461,7 @@ class Bag(DaskMethodsMixin):
     30
     """
 
-    def __init__(self, dsk, name, npartitions):
+    def __init__(self, dsk: Mapping, name: str, npartitions: int):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -469,7 +471,7 @@ class Bag(DaskMethodsMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self.name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):

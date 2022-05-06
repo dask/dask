@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Hashable, Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
@@ -333,7 +333,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
