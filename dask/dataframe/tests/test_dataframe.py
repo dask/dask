@@ -3695,17 +3695,17 @@ def test_index_errors():
 @pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
 def test_index_nulls(null_value):
     "Setting the index with some non-numeric null raises error"
-    df = _compat.makeTimeDataFrame()
-    ddf = dd.from_pandas(df.reset_index(drop=False), npartitions=2).assign(
-        **{"foo": null_value}
+    df = pd.DataFrame(
+        {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
     )
+    # an object column all set to nulls fails
+    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index("foo")  # a column all set to nulls
-    aux = ddf["index"].map(
-        {df.index[0]: df.index[0], df.index[1]: df.index[1]}
-    )  # all nulls except first two values
+        ddf.set_index("non_numeric")
+    # an object column with only some nulls also fails
+    ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index(aux)
+        ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
 
 
 def test_set_index_with_index():
