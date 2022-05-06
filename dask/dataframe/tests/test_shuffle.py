@@ -367,7 +367,11 @@ def test_set_index_with_explicit_divisions():
 
     ddf = dd.from_pandas(df, npartitions=2)
 
-    ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
+    def throw(*args, **kwargs):
+        raise Exception()
+
+    with dask.config.set(get=throw):
+        ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
     df2 = df.set_index("x")
@@ -427,10 +431,15 @@ def test_set_index_divisions_sorted():
     )
     df = ddf.compute()
 
-    res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
+    def throw(*args, **kwargs):
+        raise Exception("Shouldn't have computed")
+
+    with dask.config.set(get=throw):
+        res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index("x"))
 
-    res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
+    with dask.config.set(get=throw):
+        res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
     assert_eq(res, df.set_index("y"))
 
     # with sorted=True, divisions must be same length as df.divisions
