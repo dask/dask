@@ -541,7 +541,7 @@ def test_is_dask_collection():
     assert is_dask_collection(x)
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
-    assert not is_dask_collection(da.Array)
+    assert not is_dask_collection(DummyCollection)
 
 
 def test_unpack_collections():
