@@ -1,3 +1,4 @@
+import array
 import datetime
 import functools
 import operator
@@ -17,6 +18,7 @@ from dask.utils import (
     asciitable,
     cached_cumsum,
     derived_from,
+    ensure_bytes,
     ensure_dict,
     ensure_set,
     extra_titles,
@@ -43,6 +45,27 @@ from dask.utils import (
     typename,
 )
 from dask.utils_test import inc
+
+
+def test_ensure_bytes():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("b", [49])]
+    for d in data:
+        result = ensure_bytes(d)
+        assert isinstance(result, bytes)
+        assert result == b"1"
+
+
+def test_ensure_bytes_ndarray():
+    np = pytest.importorskip("numpy")
+    result = ensure_bytes(np.arange(12))
+    assert isinstance(result, bytes)
+
+
+def test_ensure_bytes_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_bytes(buf)
+    assert isinstance(result, bytes)
 
 
 def test_getargspec():

@@ -922,21 +922,45 @@ def typename(typ: Any, short: bool = False) -> str:
 
 
 def ensure_bytes(s) -> bytes:
-    """Turn string or bytes to bytes
+    """Attempt to turn `s` into bytes.
 
-    >>> ensure_bytes('123')
-    b'123'
+    Parameters
+    ----------
+    s : Any
+        The object to be converted. Will correctly handled
+        * str
+        * bytes
+        * objects implementing the buffer protocol (memoryview, ndarray, etc.)
+
+    Returns
+    -------
+    b : bytes
+
+    Raises
+    ------
+    TypeError
+        When `s` cannot be converted
+
+    Examples
+    --------
     >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
+    >>> ensure_bytes(bytearray(b'123'))
+    b'123'
     """
     if isinstance(s, bytes):
         return s
-    if hasattr(s, "encode"):
+    elif hasattr(s, "encode"):
         return s.encode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    else:
+        try:
+            return bytes(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a bytes object nor has an encode method"
+            ) from e
 
 
 def ensure_unicode(s) -> str:
