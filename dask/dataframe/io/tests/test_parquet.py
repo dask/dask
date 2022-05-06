@@ -2599,7 +2599,7 @@ def test_split_row_groups(tmpdir, engine):
         tmp, engine="pyarrow", row_group_size=100
     )
 
-    ddf3 = dd.read_parquet(tmp, engine=engine, split_row_groups=True, chunksize=1)
+    ddf3 = dd.read_parquet(tmp, engine=engine, split_row_groups=True)
     assert ddf3.npartitions == 4
 
     ddf3 = dd.read_parquet(
@@ -2616,7 +2616,6 @@ def test_split_row_groups(tmpdir, engine):
         engine=engine,
         calculate_divisions=True,
         split_row_groups=True,
-        chunksize=1,
     )
     assert ddf3.npartitions == 12
 
@@ -2678,12 +2677,13 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
     # Read back with both `split_row_groups>1` and
     # `aggregate_files=True`
-    ddf2 = dd.read_parquet(
-        str(tmpdir),
-        engine=engine,
-        split_row_groups=split_row_groups,
-        aggregate_files=True,
-    )
+    with pytest.warns(match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            split_row_groups=split_row_groups,
+            aggregate_files=True,
+        )
 
     # Check that we are aggregating files as expected
     npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
@@ -2764,7 +2764,8 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
-    ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+    with pytest.warns(match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
     assert_eq(ddf1, ddf2, check_index=False)
 
 
@@ -2798,12 +2799,13 @@ def test_chunksize_files(
         write_index=False,
     )
 
-    ddf2 = dd.read_parquet(
-        str(tmpdir),
-        engine=read_engine,
-        chunksize=chunksize,
-        aggregate_files=partition_on if partition_on else True,
-    )
+    with pytest.warns(match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(
+            str(tmpdir),
+            engine=read_engine,
+            chunksize=chunksize,
+            aggregate_files=partition_on if partition_on else True,
+        )
 
     # Check that files where aggregated as expected
     if chunksize == 4096:
@@ -2846,12 +2848,13 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
         partition_on=partition_on,
         write_index=False,
     )
-    ddf2 = dd.read_parquet(
-        str(tmpdir),
-        engine=read_engine,
-        chunksize=chunksize,
-        aggregate_files=aggregate_files,
-    )
+    with pytest.warns(match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(
+            str(tmpdir),
+            engine=read_engine,
+            chunksize=chunksize,
+            aggregate_files=aggregate_files,
+        )
 
     # Check that files where aggregated as expected
     if aggregate_files == "a":
@@ -2897,15 +2900,16 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         assert "_metadata" not in files
         path = os.path.join(dirname, "*.parquet")
 
-    ddf2 = dd.read_parquet(
-        path,
-        engine=engine,
-        chunksize=chunksize,
-        split_row_groups=True,
-        calculate_divisions=True,
-        index="index",
-        aggregate_files=True,
-    )
+    with pytest.warns(match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(
+            path,
+            engine=engine,
+            chunksize=chunksize,
+            split_row_groups=True,
+            calculate_divisions=True,
+            index="index",
+            aggregate_files=True,
+        )
 
     assert_eq(ddf1, ddf2, check_divisions=False)
 
@@ -2930,14 +2934,15 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
         path, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
     )
 
-    ddf_read = dd.read_parquet(
-        path,
-        engine=read_engine,
-        chunksize="10 kiB",
-        calculate_divisions=True,
-        split_row_groups=True,
-        index="index",
-    )
+    with pytest.warns(match="argument will be deprecated"):
+        ddf_read = dd.read_parquet(
+            path,
+            engine=read_engine,
+            chunksize="10 kiB",
+            calculate_divisions=True,
+            split_row_groups=True,
+            index="index",
+        )
 
     assert_eq(pdf, ddf_read)
 
