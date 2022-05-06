@@ -21,6 +21,7 @@ extras_require: dict[str, list[str]] = {
         "jinja2",
     ],
     "delayed": [],  # keeping for backwards compatibility
+    "pyodide": ["jinja2"],
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
