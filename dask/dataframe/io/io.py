@@ -19,7 +19,6 @@ from dask.dataframe.core import (
     _emulate,
     apply_and_enforce,
     has_parallel_type,
-    is_dask_collection,
     new_dd_object,
 )
 from dask.dataframe.io.utils import DataFrameIOFunction

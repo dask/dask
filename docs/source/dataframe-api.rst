@@ -521,7 +521,7 @@ Create DataFrames
    from_dask_array
    from_delayed
    from_map
-   from_dict
+   DataFrame.from_dict
    from_pandas
 
 .. currentmodule:: dask.bag

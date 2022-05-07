@@ -5172,7 +5172,9 @@ def test_custom_map_reduce():
 def test_from_dict(dtype, orient, npartitions):
     data = {"a": range(10), "b": range(10)}
     expected = pd.DataFrame.from_dict(data, dtype=dtype, orient=orient)
-    result = dd.DataFrame.from_dict(data, npartitions=npartitions, dtype=dtype, orient=orient)
+    result = dd.DataFrame.from_dict(
+        data, npartitions=npartitions, dtype=dtype, orient=orient
+    )
     if orient == "index":
         # DataFrame only has two rows with this orientation
         assert result.npartitions == 1
@@ -5186,4 +5188,3 @@ def test_from_dict_raises():
     ds = dd.from_pandas(s, npartitions=2)
     with pytest.raises(NotImplementedError, match="Dask collections as inputs"):
         dd.DataFrame.from_dict({"a": ds}, npartitions=2)
-

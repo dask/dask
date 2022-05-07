@@ -33,7 +33,7 @@ File Formats:
     read_fwf
     from_bcolz
     from_array
-    from_dict
+    DataFrame.from_dict
     to_csv
     to_parquet
     to_hdf

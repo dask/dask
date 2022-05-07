@@ -5751,7 +5751,9 @@ class DataFrame(_Frame):
         )
 
     @classmethod
-    def from_dict(cls, data, *, npartitions, orient="columns", dtype=None, columns=None):
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
         """
         Construct a Dask DataFrame from a Python Dictionary
 
@@ -5778,9 +5780,10 @@ class DataFrame(_Frame):
         Examples
         --------
         >>> import dask.dataframe as dd
-        >>> ddf = dd.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
+        >>> ddf = dd.DataFrame.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
         """
         from dask.dataframe.io import from_pandas
+
         collection_types = [type(v) for v in data.values() if is_dask_collection(v)]
         if collection_types:
             raise NotImplementedError(
