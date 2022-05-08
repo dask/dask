@@ -2817,7 +2817,7 @@ def test_groupby_iter_fails():
         list(ddf.groupby("A"))
 
 
-def test_groupby_scalar_group():
+def test_groupby_scalar_column():
     df = pd.DataFrame(
         [
             [0, 1, 2],
@@ -2828,11 +2828,20 @@ def test_groupby_scalar_group():
         columns=[2, 1, 0],
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    groupby = ddf.groupby(2).cov()
-    assert list(groupby.cov().columns) == [1, 0]
+    expected = df.groupby(2).cov()
+    result = ddf.groupby(2).cov()
+    assert_eq(result, expected)
 
 
-def test_groupby_falsy_slice():
+@pytest.mark.parametrize(
+    ["op"],
+    [
+        [lambda df: df.agg("sum")],
+        [lambda df: df.cov()],
+        [lambda df: df.var()],
+    ],
+)
+def test_groupby_falsy_slice(op):
     df = pd.DataFrame(
         [
             [0, 1, 2],
@@ -2843,13 +2852,6 @@ def test_groupby_falsy_slice():
         columns=[2, 1, 0],
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    groupby = ddf.groupby([2])
-    # .agg
-    assert groupby[0].agg("sum").name == 0
-    assert groupby[1].agg("sum").name == 1
-    # .cov
-    assert groupby[0].cov().name == 0
-    assert groupby[1].cov().name == 1
-    # .var
-    assert groupby[0].var().name == 0
-    assert groupby[1].var().name == 1
+    expected = op(df.groupby(2))
+    result = op(ddf.groupby(2))
+    assert_eq(result, expected)
