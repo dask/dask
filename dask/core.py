@@ -415,6 +415,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
                             cycle = "->".join(str(x) for x in cycle)
                             raise RuntimeError("Cycle detected in Dask: %s" % cycle)
                     next_nodes.append(nxt)
+                    break
 
             if next_nodes:
                 nodes.extend(next_nodes)
