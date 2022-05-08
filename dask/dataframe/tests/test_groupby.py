@@ -2836,9 +2836,9 @@ def test_groupby_scalar_column():
 @pytest.mark.parametrize(
     ["op"],
     [
-        [lambda df: df.agg("sum")],
-        [lambda df: df.cov()],
-        [lambda df: df.var()],
+        [lambda s: s.agg("sum")],
+        [lambda s: s.cov()],
+        [lambda s: s.var()],
     ],
 )
 def test_groupby_falsy_slice(op):
@@ -2852,6 +2852,6 @@ def test_groupby_falsy_slice(op):
         columns=[2, 1, 0],
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    expected = op(df.groupby(2))
-    result = op(ddf.groupby(2))
+    expected = op(df.groupby([2])[0])
+    result = op(ddf.groupby([2])[0])
     assert_eq(result, expected)
