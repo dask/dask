@@ -21,6 +21,7 @@ from dask.utils import (
     ensure_bytes,
     ensure_dict,
     ensure_set,
+    ensure_unicode,
     extra_titles,
     factors,
     format_bytes,
@@ -65,6 +66,30 @@ def test_ensure_bytes_pyarrow_buffer():
     buf = pa.py_buffer(b"123")
     result = ensure_bytes(buf)
     assert isinstance(result, bytes)
+
+
+def test_ensure_unicode():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("b", [49])]
+    for d in data:
+        result = ensure_unicode(d)
+        assert isinstance(result, str)
+        assert result == "1"
+
+
+def test_ensure_unicode_ndarray():
+    np = pytest.importorskip("numpy")
+    a = np.frombuffer(b"123", dtype="u1")
+    result = ensure_unicode(a)
+    assert isinstance(result, str)
+    assert result == "123"
+
+
+def test_ensure_unicode_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_unicode(buf)
+    assert isinstance(result, str)
+    assert result == "123"
 
 
 def test_getargspec():
