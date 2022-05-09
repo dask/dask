@@ -480,7 +480,7 @@ def test_parquet(s3, engine, s3so, metadata_file):
     assert "part.0.parquet" in files
 
     df2 = dd.read_parquet(
-        url, index="foo", gather_statistics=True, engine=engine, storage_options=s3so
+        url, index="foo", calculate_divisions=True, engine=engine, storage_options=s3so
     )
     assert len(df2.divisions) > 1
 
@@ -573,6 +573,7 @@ def test_parquet_append(s3, engine, s3so):
         engine=engine,
         storage_options=s3so,
         write_index=False,
+        write_metadata_file=True,
     )
     df.to_parquet(
         url,
@@ -613,7 +614,13 @@ def test_parquet_wstoragepars(s3, s3so, engine):
 
     data = pd.DataFrame({"i32": np.array([0, 5, 2, 5])})
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, engine=engine, write_index=False, storage_options=s3so)
+    df.to_parquet(
+        url,
+        engine=engine,
+        write_index=False,
+        storage_options=s3so,
+        write_metadata_file=True,
+    )
 
     dd.read_parquet(
         url,

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Hashable, Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
@@ -80,6 +80,8 @@ from dask.utils import (
 from dask.widgets import get_template
 
 no_default = "__no_default__"
+
+GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -331,7 +333,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
@@ -3615,7 +3617,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import SeriesGroupBy
 
@@ -4748,7 +4756,13 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import DataFrameGroupBy
 
@@ -5114,6 +5128,10 @@ class DataFrame(_Frame):
         3. Joining both on columns. In this case a hash join is performed using
            ``dask.dataframe.multi.hash_join``.
 
+        In some cases, you may see a ``MemoryError`` if the ``merge`` operation requires
+        an internal ``shuffle``, because shuffling places all rows that have the same
+        index in the same partition. To avoid this error, make sure all rows with the
+        same ``on``-column value can fit on a single partition.
         """
 
         if not is_dataframe_like(right):
@@ -7415,7 +7433,9 @@ def to_datetime(arg, meta=None, **kwargs):
 
 
 @wraps(pd.to_timedelta)
-def to_timedelta(arg, unit="ns", errors="raise"):
+def to_timedelta(arg, unit=None, errors="raise"):
+    if not PANDAS_GT_110 and unit is None:
+        unit = "ns"
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
