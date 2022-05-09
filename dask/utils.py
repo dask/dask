@@ -935,7 +935,7 @@ def ensure_unicode(s) -> str:
     """
     if isinstance(s, str):
         return s
-    if hasattr(s, "decode"):
+    elif hasattr(s, "decode"):
         return s.decode()
     raise TypeError(f"Object {s} is neither a str object nor has an decode method")
 
