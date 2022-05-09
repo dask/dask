@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import functools
 import inspect
 import os
@@ -937,7 +938,13 @@ def ensure_unicode(s) -> str:
         return s
     elif hasattr(s, "decode"):
         return s.decode()
-    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
+    else:
+        try:
+            return codecs.decode(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a str object nor has an decode method"
+            ) from e
 
 
 def digit(n, k, base):
