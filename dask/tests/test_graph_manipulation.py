@@ -226,7 +226,16 @@ def test_clone(layers):
 
 
 @pytest.mark.skipif("not da or not dd")
-@pytest.mark.parametrize("literal", [1, (1,), [1,], {1: 1}, {1}])
+@pytest.mark.parametrize(
+    "literal",
+    [
+        1,
+        (1,),
+        [1],
+        {1: 1},
+        {1},
+    ],
+)
 def test_blockwise_clone_with_literals(literal):
     arr = da.ones(10, chunks=1)
 
