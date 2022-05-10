@@ -954,7 +954,7 @@ Dask Name: {name}, {task} tasks"""
         """
         from dask.dataframe.rolling import map_overlap
 
-        return map_overlap(func, self, before, after, *args, **kwargs)
+        return map_overlap(func, before, after, self, *args, **kwargs)
 
     def memory_usage_per_partition(self, index=True, deep=False):
         """Return the memory usage of each partition
@@ -6306,20 +6306,10 @@ def map_partitions(
         args = _maybe_align_partitions(args)
 
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
-    if parent_meta is None and dfs:
-        parent_meta = dfs[0]._meta
+    
+    meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
 
-    if meta is no_default:
-        # Use non-normalized kwargs here, as we want the real values (not
-        # delayed values)
-        meta = _emulate(func, *args, udf=True, **kwargs)
-        meta_is_emulated = True
-    else:
-        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-        meta_is_emulated = False
-
-    if all(isinstance(arg, Scalar) for arg in args):
+    if _is_only_scalar(args):
         layer = {
             (name, 0): (
                 apply,
@@ -6330,20 +6320,6 @@ def map_partitions(
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        if not meta_is_emulated:
-            warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-                "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns. In the future the meta you passed will not work.",
-                FutureWarning,
-            )
-        # If `meta` is not a pandas object, the concatenated results will be a
-        # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
-
-    # Ensure meta is empty series
-    meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -6420,6 +6396,41 @@ def map_partitions(
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _is_only_scalar(args):
+    return all(isinstance(arg, Scalar) for arg in args)
+
+
+def _get_meta(args, dfs, func, kwargs, meta, parent_meta):
+    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
+    if meta is no_default:
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+        meta_is_emulated = False
+
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not _is_only_scalar(args):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]), index=meta_index)
+
+    # Ensure meta is empty series
+    meta = make_meta(meta, parent_meta=parent_meta)
+    
+    return meta
 
 
 def apply_and_enforce(*args, **kwargs):
