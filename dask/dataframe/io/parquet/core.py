@@ -271,12 +271,22 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
     chunksize : int or str, default None
+        WARNING: The ``chunksize`` argument will be deprecated in the future.
+        Please use ``split_row_groups`` to specify how many row-groups should be
+        mapped to each output partition. If you strongly oppose the deprecation of
+        ``chunksize``, please comment at https://github.com/dask/dask/issues/9043".
+
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
         and/or files will be aggregated into the same output partition until the
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
+        WARNING: The ``aggregate_files`` argument will be deprecated in the future.
+        Please consider using ``from_map`` to create a DataFrame collection with a
+        custom file-to-partition mapping. If you strongly oppose the deprecation of
+        ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
+
         Whether distinct file paths may be aggregated into the same output
         partition. This parameter is only used when `chunksize` is specified
         or when `split_row_groups` is an integer >1. A setting of True means
@@ -341,6 +351,28 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
+    # "Pre-deprecation" warning for `chunksize`
+    if chunksize:
+        warnings.warn(
+            "The `chunksize` argument will be deprecated in the future. "
+            "Please use `split_row_groups` to specify how many row-groups "
+            "should be mapped to each output partition.\n\n"
+            "If you strongly oppose the deprecation of `chunksize`, please "
+            "comment at https://github.com/dask/dask/issues/9043",
+            FutureWarning,
+        )
+
+    # "Pre-deprecation" warning for `aggregate_files`
+    if aggregate_files:
+        warnings.warn(
+            "The `aggregate_files` argument will be deprecated in the future. "
+            "Please consider using `from_map` to create a DataFrame collection "
+            "with a custom file-to-partition mapping.\n\n"
+            "If you strongly oppose the deprecation of `aggregate_files`, "
+            "please comment at https://github.com/dask/dask/issues/9051",
+            FutureWarning,
+        )
+
     if "read_from_paths" in kwargs:
         kwargs.pop("read_from_paths")
         warnings.warn(
@@ -395,7 +427,7 @@ def read_parquet(
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
-        "chunksize=": chunksize,
+        "chunksize": chunksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
         **kwargs,
