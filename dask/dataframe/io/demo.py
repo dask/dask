@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 
-from dask.dataframe.core import DataFrame, tokenize
-from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
+from dask.dataframe.core import tokenize
+from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
@@ -64,17 +64,21 @@ make = {
 }
 
 
-class MakeTimeseriesPart:
+class MakeTimeseriesPart(DataFrameIOFunction):
     """
     Wrapper Class for ``make_timeseries_part``
     Makes a timeseries partition.
     """
 
     def __init__(self, dtypes, freq, kwargs, columns=None):
-        self.columns = columns or list(dtypes.keys())
+        self._columns = columns or list(dtypes.keys())
         self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
         self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new MakeTimeseriesPart object with
@@ -167,22 +171,19 @@ def make_timeseries(
         state_data = np.random.randint(2e9, size=npartitions)
     else:
         state_data = random_state_data(npartitions, seed)
-    label = "make-timeseries-"
-    name = label + tokenize(start, end, dtypes, freq, partition_freq, state_data)
 
     # Build parts
     parts = []
     for i in range(len(divisions) - 1):
         parts.append((divisions[i : i + 2], state_data[i]))
 
-    # Construct Layer and Collection
-    layer = DataFrameIOLayer(
-        name=name,
-        columns=None,
-        inputs=parts,
-        io_func=MakeTimeseriesPart(dtypes, freq, kwargs),
-        label=label,
+    # Construct the output collection with from_map
+    return from_map(
+        MakeTimeseriesPart(dtypes, freq, kwargs),
+        parts,
+        meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
+        divisions=divisions,
+        label="make-timeseries",
+        token=tokenize(start, end, dtypes, freq, partition_freq, state_data),
+        enforce_metadata=False,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(graph, name, head, divisions)

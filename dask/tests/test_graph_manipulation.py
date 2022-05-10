@@ -225,6 +225,30 @@ def test_clone(layers):
     assert_no_common_keys(c8, t3, layers=layers)
 
 
+@pytest.mark.skipif("not da or not dd")
+@pytest.mark.parametrize(
+    "literal",
+    [
+        1,
+        (1,),
+        [1],
+        {1: 1},
+        {1},
+    ],
+)
+def test_blockwise_clone_with_literals(literal):
+    arr = da.ones(10, chunks=1)
+
+    def noop(arr, lit):
+        return arr
+
+    blk = da.blockwise(noop, "x", arr, "x", literal, None)
+
+    cln = clone(blk)
+
+    assert_no_common_keys(blk, cln, layers=True)
+
+
 @pytest.mark.parametrize("layers", [False, True])
 def test_bind(layers):
     dsk1 = {("a-1", h1): 1, ("a-1", h2): 2}

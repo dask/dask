@@ -1815,7 +1815,7 @@ class Array(DaskMethodsMixin):
 
     def __setitem__(self, key, value):
         if value is np.ma.masked:
-            value = np.ma.masked_all(())
+            value = np.ma.masked_all((), dtype=self.dtype)
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -1830,7 +1830,9 @@ class Array(DaskMethodsMixin):
                     "Boolean index assignment in Dask "
                     "expects equally shaped arrays.\nExample: da1[da2] = da3 "
                     "where da1.shape == (4,), da2.shape == (4,) "
-                    "and da3.shape == (4,)."
+                    "and da3.shape == (4,).\n"
+                    "Alternatively, you can use the extended API that supports"
+                    "indexing with tuples.\nExample: da1[(da2,)] = da3."
                 ) from e
             self._meta = y._meta
             self.dask = y.dask

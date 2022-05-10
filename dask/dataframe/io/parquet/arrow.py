@@ -17,6 +17,7 @@ from dask.dataframe.io.parquet.utils import (
     _parse_pandas_metadata,
     _process_open_file_options,
     _row_groups_to_parts,
+    _set_gather_statistics,
     _set_metadata_task_size,
     _sort_and_analyze_paths,
     _split_user_options,
@@ -494,35 +495,6 @@ class ArrowDatasetEngine(Engine):
         return df
 
     @classmethod
-    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
-        fmd = None
-        i_offset = 0
-        if append:
-            # Make sure there are existing file fragments.
-            # Otherwise there is no need to set `append=True`
-            i_offset = len(
-                list(
-                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
-                )
-            )
-            if i_offset == 0:
-                # No dataset to append to
-                return fmd, i_offset, False
-            try:
-                with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
-                    fmd = pq.read_metadata(fil)
-            except OSError:
-                # No _metadata file present - No appending allowed (for now)
-                if not ignore_divisions:
-                    # TODO: Be more flexible about existing metadata.
-                    raise NotImplementedError(
-                        "_metadata file needed to `append` "
-                        "with `engine='pyarrow-dataset'` "
-                        "unless `ignore_divisions` is `True`"
-                    )
-        return fmd, i_offset, append
-
-    @classmethod
     def initialize_write(
         cls,
         df,
@@ -582,14 +554,34 @@ class ArrowDatasetEngine(Engine):
         if append and division_info is None:
             ignore_divisions = True
 
-        # Extract metadata and get file offset if appending
-        fmd, i_offset, append = cls._get_dataset_offset(
-            path, fs, append, ignore_divisions
-        )
-
-        # Inspect the intial metadata if appending
+        full_metadata = None  # metadata for the full dataset, from _metadata
+        tail_metadata = None  # metadata for at least the last file in the dataset
+        i_offset = 0
+        metadata_file_exists = False
         if append:
-            arrow_schema = fmd.schema.to_arrow_schema()
+            # Extract metadata and get file offset if appending
+            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            i_offset = len(ds.files)
+            if i_offset > 0:
+                try:
+                    with fs.open(fs.sep.join([path, "_metadata"]), mode="rb") as fil:
+                        full_metadata = pq.read_metadata(fil)
+                    tail_metadata = full_metadata
+                    metadata_file_exists = True
+                except OSError:
+                    try:
+                        with fs.open(
+                            sorted(ds.files, key=natural_sort_key)[-1], mode="rb"
+                        ) as fil:
+                            tail_metadata = pq.read_metadata(fil)
+                    except OSError:
+                        pass
+            else:
+                append = False  # No existing files, can skip the append logic
+
+        # If appending, validate against the initial metadata file (if present)
+        if append and tail_metadata is not None:
+            arrow_schema = tail_metadata.schema.to_arrow_schema()
             names = arrow_schema.names
             has_pandas_metadata = (
                 arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
@@ -624,7 +616,10 @@ class ArrowDatasetEngine(Engine):
                 ignore_divisions = True
             if not ignore_divisions:
                 old_end = None
-                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
+                row_groups = (
+                    tail_metadata.row_group(i)
+                    for i in range(tail_metadata.num_row_groups)
+                )
                 for row_group in row_groups:
                     for i, name in enumerate(names):
                         if name != division_info["name"]:
@@ -638,14 +633,15 @@ class ArrowDatasetEngine(Engine):
                             break
 
                 divisions = division_info["divisions"]
-                if divisions[0] < old_end:
+                if divisions[0] <= old_end:
                     raise ValueError(
                         "Appended divisions overlapping with the previous ones"
                         " (set ignore_divisions=True to append anyway).\n"
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
 
-        return fmd, schema, i_offset
+        extra_write_kwargs = {"schema": schema, "index_cols": index_cols}
+        return i_offset, full_metadata, metadata_file_exists, extra_write_kwargs
 
     @classmethod
     def _pandas_to_arrow_table(
@@ -825,8 +821,6 @@ class ArrowDatasetEngine(Engine):
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
-                if gather_statistics is None:
-                    gather_statistics = True
             elif parquet_file_extension:
                 # Need to materialize all paths if we are missing the _metadata file
                 # Raise error if all files have been filtered by extension
@@ -859,8 +853,6 @@ class ArrowDatasetEngine(Engine):
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
-                    if gather_statistics is None:
-                        gather_statistics = True
 
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
@@ -879,24 +871,6 @@ class ArrowDatasetEngine(Engine):
                 ),
                 **_dataset_kwargs,
             )
-
-        # At this point, we know if `split_row_groups` should be
-        # set to `True` by default.  If the user has not specified
-        # this option, we will only collect statistics if there is
-        # a global "_metadata" file available, otherwise we will
-        # opt for `gather_statistics=False`. For `ArrowDatasetEngine`,
-        # statistics are only required to calculate divisions
-        # and/or aggregate row-groups using `chunksize` (not for
-        # filtering).
-        #
-        # By default, we will create an output partition for each
-        # row group in the dataset (`split_row_groups=True`).
-        # However, we will NOT split by row-group if
-        # `gather_statistics=False`, because this can be
-        # interpreted as an indication that metadata overhead should
-        # be avoided at all costs.
-        if gather_statistics is None:
-            gather_statistics = False
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -1142,20 +1116,6 @@ class ArrowDatasetEngine(Engine):
             dataset_info["metadata_task_size"], fs
         )
 
-        # Cannot gather_statistics if our `metadata` is a list
-        # of paths, or if we are building a multiindex (for now).
-        # We also don't "need" to gather statistics if we don't
-        # want to apply any filters or calculate divisions. Note
-        # that the `ArrowDatasetEngine` doesn't even require
-        # `gather_statistics=True` for filtering.
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
-        )
-        if len(index_cols) > 1:
-            gather_statistics = False
-        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
-            gather_statistics = False
-
         # Make sure that any `in`-predicate filters have iterable values
         filter_columns = set()
         if filters is not None:
@@ -1168,23 +1128,26 @@ class ArrowDatasetEngine(Engine):
                 filter_columns.add(col)
 
         # Determine which columns need statistics.
+        # At this point, gather_statistics is only True if
+        # the user specified calculate_divisions=True
         stat_col_indices = {}
+        _index_cols = index_cols if (gather_statistics and len(index_cols) == 1) else []
         for i, name in enumerate(schema.names):
-            if name in index_cols or name in filter_columns:
+            if name in _index_cols or name in filter_columns:
                 if name in partition_names:
                     # Partition columns wont have statistics
                     continue
                 stat_col_indices[name] = i
 
-        # If the user has not specified `gather_statistics`,
-        # we will only do so if there are specific columns in
-        # need of statistics.
-        # NOTE: We cannot change `gather_statistics` from True
-        # to False (even if `stat_col_indices` is empty), in
-        # case a `chunksize` was specified, and the row-group
-        # statistics are needed for part aggregation.
-        if gather_statistics is None:
-            gather_statistics = bool(stat_col_indices)
+        # Decide final `gather_statistics` setting
+        gather_statistics = _set_gather_statistics(
+            gather_statistics,
+            chunksize,
+            split_row_groups,
+            aggregation_depth,
+            filter_columns,
+            set(stat_col_indices),
+        )
 
         # Add common kwargs
         common_kwargs = {

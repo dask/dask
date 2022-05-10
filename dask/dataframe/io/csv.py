@@ -3,9 +3,6 @@ from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
 
-from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
-
 try:
     import psutil
 except ImportError:
@@ -30,13 +27,14 @@ from pandas.api.types import (
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe.core import new_dd_object
+from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
 
 
-class CSVFunctionWrapper:
+class CSVFunctionWrapper(DataFrameIOFunction):
     """
     CSV Function-Wrapper Class
     Reads CSV data from disk to produce a partition (given a key).
@@ -55,7 +53,7 @@ class CSVFunctionWrapper:
         kwargs,
     ):
         self.full_columns = full_columns
-        self.columns = columns
+        self._columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -63,6 +61,10 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self.full_columns if self._columns is None else self._columns
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
@@ -114,14 +116,14 @@ class CSVFunctionWrapper:
         # Deal with column projection
         columns = self.full_columns
         project_after_read = False
-        if self.columns is not None:
+        if self._columns is not None:
             if self.kwargs:
                 # To be safe, if any kwargs are defined, avoid
                 # changing `usecols` here. Instead, we can just
                 # select columns after the read
                 project_after_read = True
             else:
-                columns = self.columns
+                columns = self._columns
                 rest_kwargs["usecols"] = columns
 
         # Call `pandas_read_text`
@@ -375,13 +377,8 @@ def text_blocks_to_pandas(
     for i in range(len(blocks)):
         parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
-    # Create Blockwise layer
-    label = "read-csv-"
-    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
-    layer = DataFrameIOLayer(
-        name,
-        columns,
-        parts,
+    # Construct the output collection with from_map
+    return from_map(
         CSVFunctionWrapper(
             columns,
             None,
@@ -393,11 +390,13 @@ def text_blocks_to_pandas(
             enforce,
             kwargs,
         ),
-        label=label,
+        parts,
+        meta=head,
+        label="read-csv",
+        token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
+        enforce_metadata=False,
         produces_tasks=True,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
 
 
 def block_mask(block_lists):
