@@ -7,6 +7,7 @@ import os
 import pickle
 import sys
 import traceback
+from collections.abc import Hashable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
@@ -143,8 +144,9 @@ def get_context():
 
 
 def get(
-    dsk,
-    keys,
+    dsk: Mapping,
+    keys: Sequence[Hashable] | Hashable,
+    /,
     num_workers=None,
     func_loads=None,
     func_dumps=None,

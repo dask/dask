@@ -106,7 +106,10 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+from __future__ import annotations
+
 import os
+from collections.abc import Hashable, Mapping, Sequence
 from concurrent.futures import Executor, Future
 from functools import partial
 from queue import Empty, Queue
@@ -545,7 +548,7 @@ class SynchronousExecutor(Executor):
 synchronous_executor = SynchronousExecutor()
 
 
-def get_sync(dsk, keys, **kwargs):
+def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, /, **kwargs):
     """A naive synchronous version of get_async
 
     Can be useful for debugging.

@@ -20,8 +20,9 @@ class SchedulerGetCallable(Protocol):
 
     def __call__(
         self,
-        dask: Mapping,
+        dsk: Mapping,
         keys: Sequence[Hashable] | Hashable,
+        /,
         **kwargs: Any,
     ) -> Any:
         """Method called as the default scheduler for a collection.

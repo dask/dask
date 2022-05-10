@@ -30,6 +30,7 @@ from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
+from dask.typing import SchedulerGetCallable
 from dask.utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
@@ -1284,7 +1285,7 @@ def _colorize(t):
     return "#" + h
 
 
-named_schedulers = {
+named_schedulers: dict[str, SchedulerGetCallable] = {
     "sync": local.get_sync,
     "synchronous": local.get_sync,
     "single-threaded": local.get_sync,
