@@ -173,7 +173,7 @@ def is_dask_collection(x) -> bool:
 
     Notes
     -----
-    The Dask collection typing.Protocol implementation defines a Dask
+    The DaskCollection typing.Protocol implementation defines a Dask
     collection as a class that returns a Mapping from the
     ``__dask_graph__`` method. This helper function existed before the
     implementation of the protocol.
