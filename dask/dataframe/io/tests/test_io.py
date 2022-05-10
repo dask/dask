@@ -943,6 +943,21 @@ def test_from_map_meta():
     assert_eq(ddf.compute(), expect)
 
 
+def test_from_map_custom_name():
+    # Test that `label` and `token` arguments to
+    # `from_map` works as expected
+
+    func = lambda x: pd.DataFrame({"x": [x] * 2})
+    iterable = ["A", "B"]
+    label = "my-label"
+    token = "8675309"
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, iterable, label=label, token=token)
+    assert ddf._name == label + "-" + token
+    assert_eq(ddf, expect)
+
+
 def _generator():
     # Simple generator for test_from_map_other_iterables
     yield from enumerate(["A", "B", "C"])
