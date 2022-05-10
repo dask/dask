@@ -8,8 +8,7 @@ from pandas.core.window import Rolling as pd_Rolling
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import _emulate, _Frame, no_default
-from dask.dataframe.utils import make_meta
+from dask.dataframe.core import _Frame, no_default
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, derived_from, funcname, has_keyword
 
@@ -54,15 +53,17 @@ def overlap_chunk(
     return out.iloc[before:-after]
 
 
-def map_overlap(func,
-                before,
-                after,
-                *args,
-                meta=no_default,
-                enforce_metadata=True,
-                transform_divisions=True,
-                align_dataframes=True,
-                **kwargs):
+def map_overlap(
+    func,
+    before,
+    after,
+    *args,
+    meta=no_default,
+    enforce_metadata=True,
+    transform_divisions=True,
+    align_dataframes=True,
+    **kwargs,
+):
     """Apply a function to each partition, sharing rows with adjacent partitions.
 
     Parameters
@@ -112,8 +113,8 @@ def map_overlap(func,
         token = tokenize(func, meta, *args, **kwargs)
     name = f"{name}-{token}"
 
+    from dask.dataframe.core import _get_meta, _maybe_from_pandas
     from dask.dataframe.multi import _maybe_align_partitions
-    from dask.dataframe.core import _maybe_from_pandas, _get_meta
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
@@ -129,7 +130,9 @@ def map_overlap(func,
     # Pop the first dataframe for the moment
     args = args[1:]
 
-    for i, (prev, current, next) in enumerate(zip(prevs, dfs[0].__dask_keys__(), nexts)):
+    for i, (prev, current, next) in enumerate(
+        zip(prevs, dfs[0].__dask_keys__(), nexts)
+    ):
         dsk[(name, i)] = (
             overlap_chunk,
             func,

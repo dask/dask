@@ -6306,7 +6306,7 @@ def map_partitions(
         args = _maybe_align_partitions(args)
 
     dfs = [df for df in args if isinstance(df, _Frame)]
-    
+
     meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
 
     if _is_only_scalar(args):
@@ -6415,7 +6415,9 @@ def _get_meta(args, dfs, func, kwargs, meta, parent_meta):
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
         meta_is_emulated = False
 
-    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not _is_only_scalar(args):
+    if not (
+        has_parallel_type(meta) or is_arraylike(meta) and meta.shape
+    ) and not _is_only_scalar(args):
         if not meta_is_emulated:
             warnings.warn(
                 "Meta is not valid, `map_partitions` expects output to be a pandas object. "
@@ -6429,7 +6431,7 @@ def _get_meta(args, dfs, func, kwargs, meta, parent_meta):
 
     # Ensure meta is empty series
     meta = make_meta(meta, parent_meta=parent_meta)
-    
+
     return meta
 
 
