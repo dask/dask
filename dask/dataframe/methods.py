@@ -1,4 +1,5 @@
 import warnings
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -442,51 +443,44 @@ def assign_index(df, ind):
     return df
 
 
-def monotonic_increasing_chunk(x):
+def _monotonic_chunk(x, prop):
     if x.empty:
         # if input is empty, return empty df for chunk
         data = None
     else:
         data = x if is_index_like(x) else x.iloc
-        data = [[x.is_monotonic_increasing, data[0], data[-1]]]
+        data = [[getattr(x, prop), data[0], data[-1]]]
     return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
 
 
-def monotonic_increasing_combine(concatenated):
+def _monotonic_combine(concatenated, prop):
     if concatenated.empty:
         data = None
     else:
         s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
-        is_monotonic = concatenated["monotonic"].all() and s.is_monotonic_increasing
+        is_monotonic = concatenated["monotonic"].all() and getattr(s, prop)
         data = [[is_monotonic, s.iloc[0], s.iloc[-1]]]
     return pd.DataFrame(data, columns=["monotonic", "first", "last"])
 
 
-def monotonic_increasing_aggregate(concatenated):
+def _monotonic_aggregate(concatenated, prop):
     s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
-    return concatenated["monotonic"].all() and s.is_monotonic_increasing
+    return concatenated["monotonic"].all() and getattr(s, prop)
 
 
-def monotonic_decreasing_chunk(x):
-    if x.empty:
-        # if input is empty, return empty df for chunk
-        data = None
-    else:
-        data = x if is_index_like(x) else x.iloc
-        data = [[x.is_monotonic_decreasing, data[0], data[-1]]]
-    return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
+monotonic_increasing_chunk = partial(_monotonic_chunk, prop="is_monotonic_increasing")
+monotonic_decreasing_chunk = partial(_monotonic_chunk, prop="is_monotonic_decreasing")
 
+monotonic_increasing_combine = partial(
+    _monotonic_combine, prop="is_monotonic_increasing"
+)
+monotonic_decreasing_combine = partial(
+    _monotonic_combine, prop="is_monotonic_decreasing"
+)
 
-def monotonic_decreasing_combine(concatenated):
-    if concatenated.empty:
-        data = None
-    else:
-        s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
-        is_monotonic = concatenated["monotonic"].all() and s.is_monotonic_decreasing
-        data = [[is_monotonic, s.iloc[0], s.iloc[-1]]]
-    return pd.DataFrame(data=data, columns=["monotonic", "first", "last"])
-
-
-def monotonic_decreasing_aggregate(concatenated):
-    s = pd.Series(concatenated[["first", "last"]].to_numpy().ravel())
-    return concatenated["monotonic"].all() and s.is_monotonic_decreasing
+monotonic_increasing_aggregate = partial(
+    _monotonic_aggregate, prop="is_monotonic_increasing"
+)
+monotonic_decreasing_aggregate = partial(
+    _monotonic_aggregate, prop="is_monotonic_decreasing"
+)
