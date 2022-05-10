@@ -16,6 +16,7 @@ from distributed.utils_test import cluster, gen_cluster, inc, varying
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
@@ -93,8 +94,23 @@ def test_futures_to_delayed_dataframe(c):
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
+    # Make sure from_delayed is Blockwise
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
+
+
+def test_from_delayed_dataframe(c):
+    # Check that Delayed keys in the form of a tuple
+    # are properly serialized in `from_delayed`
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(20)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_delayed(ddf.to_delayed())
+    dd.utils.assert_eq(ddf, df, scheduler=c)
 
 
 @pytest.mark.parametrize("fuse", [True, False])
@@ -744,3 +760,51 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     )
 
     assert (await c.compute(result)).val == 170
+
+
+def test_set_index_no_resursion_error(c):
+    # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("dask.dataframe")
+    try:
+        ddf = (
+            dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")
+
+
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/8991", strict=True)
+@gen_cluster(client=True)
+async def test_gh_8991(c, s, a, b):
+    # Test illustrating something amiss with HighLevelGraph.key_dependencies.
+    # The intention is for this to be a cache, so if we clear it, things
+    # should still work.
+
+    # This is a bad test, and we should rethink/remove it as soon as the issue is
+    # resolved whether, it's fixing the underlying problem or removing
+    # HighLevelGraph.key_dependencies alltogether.
+    datasets = pytest.importorskip("dask.datasets")
+    result = datasets.timeseries().shuffle("x").to_orc("tmp", compute=False)
+
+    # Create a dsk and mock sending it to the scheduler.
+    dsk_opt = result.__dask_optimize__(result.dask, result.key)
+    unpacked = HighLevelGraph.__dask_distributed_unpack__(
+        dsk_opt.__dask_distributed_pack__(c, result.key)
+    )
+    deps = unpacked["deps"]
+
+    # Create a version of the dsk without the key_dependencies and mock sending it to
+    # the scheduler as well.
+    dsk_opt_nokeys = dsk_opt.copy()
+    dsk_opt_nokeys.key_dependencies.clear()
+    unpacked_nokeys = HighLevelGraph.__dask_distributed_unpack__(
+        dsk_opt_nokeys.__dask_distributed_pack__(c, result.key)
+    )
+    deps_nokeys = unpacked_nokeys["deps"]
+
+    # The recalculated dependencies should still be the same!
+    assert deps == deps_nokeys

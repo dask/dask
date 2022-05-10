@@ -132,7 +132,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.8, and 3.9.
+Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -263,10 +263,10 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses several code linters (flake8, black, isort, pyupgrade), which are enforced by
-CI. Developers should run them locally before they submit a PR, through the single
-command ``pre-commit run --all-files``. This makes sure that linter versions and options
-are aligned for all developers.
+Dask uses several code linters (flake8, black, isort, pyupgrade, mypy), which are
+enforced by CI. Developers should run them locally before they submit a PR, through the
+single command ``pre-commit run --all-files``. This makes sure that linter versions and
+options are aligned for all developers.
 
 Optionally, you may wish to setup the `pre-commit hooks <https://pre-commit.com/>`_ to
 run automatically when you make a git commit. This can be done by running::
@@ -329,14 +329,14 @@ Github Actions
 
 Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
 These CI builds will run the test suite across a variety of Python versions, operating
-systems, and package dependency versions.  Addtionally, if a commit message
+systems, and package dependency versions.  Additionally, if a commit message
 includes the phrase ``test-upstream``, then an additional CI build will be
 triggered which uses the development versions of several dependencies
 including: NumPy, pandas, fsspec, etc.
 
 The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
-with additonal scripts and metadata located in `continuous_integration
+with additional scripts and metadata located in `continuous_integration
 <https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 

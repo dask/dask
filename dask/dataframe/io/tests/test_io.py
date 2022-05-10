@@ -1,5 +1,6 @@
 import contextlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from threading import Lock
 
 import numpy as np
@@ -8,8 +9,10 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
+from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
 from dask.utils import tmpfile
@@ -668,6 +671,9 @@ def test_from_delayed():
         assert ddf.known_divisions == (divisions is not None)
 
     meta2 = [(c, "f8") for c in df.columns]
+    # Make sure `from_delayed` is Blockwise
+    check_ddf = dd.from_delayed(dfs, meta=meta2)
+    assert isinstance(check_ddf.dask.layers[check_ddf._name], Blockwise)
     assert_eq(dd.from_delayed(dfs, meta=meta2), df)
     assert_eq(dd.from_delayed([d.a for d in dfs], meta=("a", "f8")), df.a)
 
@@ -677,6 +683,46 @@ def test_from_delayed():
     with pytest.raises(ValueError) as e:
         dd.from_delayed(dfs, meta=meta.a).compute()
     assert str(e.value).startswith("Metadata mismatch found in `from_delayed`")
+
+
+def test_from_delayed_optimize_fusion():
+    # Test that DataFrame optimization fuses a `from_delayed`
+    # layer with other Blockwise layers and input Delayed tasks.
+    # See: https://github.com/dask/dask/pull/8852
+    ddf = (
+        dd.from_delayed(
+            map(delayed(lambda x: pd.DataFrame({"x": [x] * 10})), range(10)),
+            meta=pd.DataFrame({"x": [0] * 10}),
+        )
+        + 1
+    )
+    # NOTE: Fusion requires `optimize_blockwise`` and `fuse_roots`
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+    assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
+
+
+def test_from_delayed_to_dask_array():
+    # Check that `from_delayed`` can be followed
+    # by `to_dask_array` without breaking
+    # optimization behavior
+    # See: https://github.com/dask-contrib/dask-sql/issues/497
+    from dask.blockwise import optimize_blockwise
+
+    dfs = [delayed(pd.DataFrame)(np.ones((3, 2))) for i in range(3)]
+    ddf = dd.from_delayed(dfs)
+    arr = ddf.to_dask_array()
+
+    # If we optimize this graph without calling
+    # `fuse_roots`, the underlying `BlockwiseDep`
+    # `mapping` keys will be 1-D (e.g. `(4,)`),
+    # while the collection keys will be 2-D
+    # (e.g. `(4, 0)`)
+    keys = [k[0] for k in arr.__dask_keys__()]
+    dsk = optimize_blockwise(arr.dask, keys=keys)
+    dsk.cull(keys)
+
+    result = arr.compute()
+    assert result.shape == (9, 2)
 
 
 def test_from_delayed_preserves_hlgs():
@@ -788,3 +834,125 @@ def test_from_dask_array_index_dtype():
 
     assert ddf.index.dtype == ddf2.index.dtype
     assert ddf.index.name == ddf2.index.name
+
+
+@pytest.mark.parametrize(
+    "vals",
+    [
+        ("A", "B"),
+        (3, 4),
+        (datetime(2020, 10, 1), datetime(2022, 12, 31)),
+    ],
+)
+def test_from_map_simple(vals):
+    # Simple test to ensure required inputs (func & iterable)
+    # and basic kwargs work as expected for `from_map`
+
+    def func(input, size=0):
+        # Simple function to create Series with a
+        # repeated value and index
+        value, index = input
+        return pd.Series([value] * size, index=[index] * size)
+
+    iterable = [(vals[0], 1), (vals[1], 2)]
+    ser = dd.from_map(func, iterable, size=2)
+    expect = pd.Series(
+        [vals[0], vals[0], vals[1], vals[1]],
+        index=[1, 1, 2, 2],
+    )
+
+    # Make sure `from_map` produces single `Blockwise` layer
+    layers = ser.dask.layers
+    assert len(layers) == 1
+    assert isinstance(layers[ser._name], Blockwise)
+
+    # Check that result and partition count make sense
+    assert ser.npartitions == len(iterable)
+    assert_eq(ser, expect)
+
+
+def test_from_map_multi():
+    # Test that `iterables` can contain multiple Iterables
+
+    func = lambda x, y: pd.DataFrame({"add": x + y})
+    iterables = (
+        [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")],
+        [np.array([2, 2], dtype="int64"), np.array([2, 2], dtype="int64")],
+    )
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([2, 3, 2, 3], dtype="int64")}, index=index)
+
+    ddf = dd.from_map(func, *iterables)
+    assert_eq(ddf, expect)
+
+
+def test_from_map_args():
+    # Test that the optional `args` argument works as expected
+
+    func = lambda x, y, z: pd.DataFrame({"add": x + y + z})
+    iterable = [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")]
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([5, 6, 5, 6], dtype="int64")}, index=index)
+
+    ddf = dd.from_map(func, iterable, args=[2, 3])
+    assert_eq(ddf, expect)
+
+
+def test_from_map_divisions():
+    # Test that `divisions` argument works as expected for `from_map`
+
+    func = lambda x: pd.Series([x[0]] * 2, index=range(x[1], x[1] + 2))
+    iterable = [("B", 0), ("C", 2)]
+    divisions = (0, 2, 4)
+    ser = dd.from_map(func, iterable, divisions=divisions)
+    expect = pd.Series(
+        ["B", "B", "C", "C"],
+        index=[0, 1, 2, 3],
+    )
+
+    assert ser.divisions == divisions
+    assert_eq(ser, expect)
+
+
+def test_from_map_meta():
+    # Test that `meta` can be specified to `from_map`,
+    # and that `enforce_metadata` works as expected
+
+    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    iterable = ["A", "B"]
+
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    # First Check - Pass in valid metadata
+    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf, expect)
+
+    # Second Check - Pass in invalid metadata
+    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    with pytest.raises(ValueError, match="The columns in the computed data"):
+        assert_eq(ddf.compute(), expect)
+
+    # Third Check - Pass in invalid metadata,
+    # but use `enforce_metadata=False`
+    ddf = dd.from_map(func, iterable, meta=meta, enforce_metadata=False, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf.compute(), expect)
+
+
+def test_from_map_custom_name():
+    # Test that `label` and `token` arguments to
+    # `from_map` works as expected
+
+    func = lambda x: pd.DataFrame({"x": [x] * 2})
+    iterable = ["A", "B"]
+    label = "my-label"
+    token = "8675309"
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, iterable, label=label, token=token)
+    assert ddf._name == label + "-" + token
+    assert_eq(ddf, expect)

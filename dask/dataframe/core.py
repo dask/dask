@@ -1,10 +1,13 @@
+from __future__ import annotations
+
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Hashable, Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
@@ -77,6 +80,8 @@ from dask.utils import (
 from dask.widgets import get_template
 
 no_default = "__no_default__"
+
+GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -328,7 +333,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
@@ -3352,7 +3357,7 @@ class Series(_Frame):
     _partition_type = pd.Series
     _is_partition_type = staticmethod(is_series_like)
     _token_prefix = "series-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -3610,7 +3615,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import SeriesGroupBy
 
@@ -3981,7 +3992,7 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -3992,7 +4003,7 @@ Dask Name: {name}, {task} tasks""".format(
             )
         return self.is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic_increasing(self):
         return aca(
@@ -4003,7 +4014,7 @@ Dask Name: {name}, {task} tasks""".format(
             token="monotonic_increasing",
         )
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Series)
     def is_monotonic_decreasing(self):
         return aca(
@@ -4024,7 +4035,7 @@ class Index(Series):
     _partition_type = pd.Index
     _is_partition_type = staticmethod(is_index_like)
     _token_prefix = "index-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     _dt_attributes = {
         "nanosecond",
@@ -4083,7 +4094,8 @@ class Index(Series):
             out.extend(self._cat_attributes)
         return out
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/4125
+    @property  # type: ignore
     def index(self):
         raise AttributeError(
             f"{self.__class__.__name__!r} object has no attribute 'index'"
@@ -4199,7 +4211,8 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/4125
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -4210,12 +4223,13 @@ class Index(Series):
             )
         return super().is_monotonic_increasing
 
-    @property
+    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
         return super().is_monotonic_increasing
 
-    @property
+    @property  # type: ignore
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
@@ -4245,7 +4259,7 @@ class DataFrame(_Frame):
     _partition_type = pd.DataFrame
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
-    _accessors = set()
+    _accessors: ClassVar[set[str]] = set()
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
@@ -4740,7 +4754,13 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import DataFrameGroupBy
 
@@ -5106,6 +5126,10 @@ class DataFrame(_Frame):
         3. Joining both on columns. In this case a hash join is performed using
            ``dask.dataframe.multi.hash_join``.
 
+        In some cases, you may see a ``MemoryError`` if the ``merge`` operation requires
+        an internal ``shuffle``, because shuffling places all rows that have the same
+        index in the same partition. To avoid this error, make sure all rows with the
+        same ``on``-column value can fit on a single partition.
         """
 
         if not is_dataframe_like(right):
@@ -5726,6 +5750,7 @@ class DataFrame(_Frame):
 
 
 # bind operators
+# TODO: dynamically bound operators are defeating type annotations
 for op in [
     operator.abs,
     operator.add,
@@ -7406,7 +7431,9 @@ def to_datetime(arg, meta=None, **kwargs):
 
 
 @wraps(pd.to_timedelta)
-def to_timedelta(arg, unit="ns", errors="raise"):
+def to_timedelta(arg, unit=None, errors="raise"):
+    if not PANDAS_GT_110 and unit is None:
+        unit = "ns"
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 

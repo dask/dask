@@ -415,7 +415,7 @@ def test_tokenize_ordered_dict():
 
 
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])  # type: ignore
 
 
 def test_tokenize_dataclass():
@@ -541,7 +541,6 @@ def test_is_dask_collection():
     assert is_dask_collection(x)
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
-    assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
 
 
@@ -616,8 +615,6 @@ def test_get_collection_names():
 
     with pytest.raises(TypeError):
         get_collection_names(object())
-    with pytest.raises(TypeError):
-        get_collection_names(DummyCollection(None, []))
     # Keys must either be a string or a tuple where the first element is a string
     with pytest.raises(TypeError):
         get_collection_names(DummyCollection({1: 2}, [1]))
