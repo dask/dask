@@ -159,12 +159,30 @@ def annotate(**annotations):
 
 
 def is_dask_collection(x) -> bool:
-    """Returns ``True`` if ``x`` is a dask collection"""
-    return (
-        hasattr(x, "__dask_graph__")
-        and callable(x.__dask_graph__)
-        and not inspect.isclass(x)
-    )
+    """Returns ``True`` if ``x`` is a dask collection.
+
+    Parameters
+    ----------
+    x : Any
+        Object to test.
+
+    Returns
+    -------
+    result : bool
+        ``True`` if `x` is a Dask collection.
+
+    Notes
+    -----
+    The DaskCollection typing.Protocol implementation defines a Dask
+    collection as a class that returns a Mapping from the
+    ``__dask_graph__`` method. This helper function existed before the
+    implementation of the protocol.
+
+    """
+    try:
+        return x.__dask_graph__() is not None
+    except (AttributeError, TypeError):
+        return False
 
 
 class DaskMethodsMixin:
