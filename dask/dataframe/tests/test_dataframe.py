@@ -2404,6 +2404,20 @@ def test_fillna_multi_dataframe():
     assert_eq(ddf.B.fillna(ddf.A), df.B.fillna(df.A))
 
 
+def test_fillna_dask_dataframe_input():
+    df = _compat.makeMissingDataframe()
+    df1 = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5)
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+
+    assert_eq(ddf.fillna(ddf1), df.fillna(df1))
+
+    ddf_unknown = dd.from_pandas(df, npartitions=5, sort=False)
+    with pytest.raises(ValueError, match="Not all divisions are known"):
+        # Fails when divisions are unknown
+        assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
+
+
 def test_ffill_bfill():
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
