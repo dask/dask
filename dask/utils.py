@@ -922,7 +922,7 @@ def ensure_bytes(s) -> bytes:
             return bytes(s)
         except Exception as e:
             raise TypeError(
-                f"Object {s} is neither a bytes object nor has an encode method"
+                f"Object {s} is neither a bytes object nor can be encoded to bytes"
             ) from e
 
 
@@ -943,7 +943,7 @@ def ensure_unicode(s) -> str:
             return codecs.decode(s)
         except Exception as e:
             raise TypeError(
-                f"Object {s} is neither a str object nor has an decode method"
+                f"Object {s} is neither a str object nor can be decoded to str"
             ) from e
 
 
