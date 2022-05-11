@@ -4,6 +4,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -146,7 +147,13 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
+def from_pandas(
+    data: Union[pd.DataFrame, pd.Series],
+    npartitions: Optional[int] = None,
+    chunksize: Optional[int] = None,
+    sort: bool = True,
+    name: Optional[str] = None,
+) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -217,24 +224,38 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
     if not has_parallel_type(data):
-        raise TypeError("Input must be a pandas DataFrame or Series")
+        raise TypeError("Input must be a pandas DataFrame or Series.")
 
-    if (npartitions is None) == (chunksize is None):
+    if (npartitions is None) == (none_chunksize := (chunksize is None)):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
-    if chunksize is None:
+    if none_chunksize:
+        if not isinstance(npartitions, int):
+            raise TypeError(
+                "Please provide npartitions as an int, or possibly as None if you specify chunksize."
+            )
         chunksize = int(ceil(nrows / npartitions))
+    elif not isinstance(chunksize, int):
+        raise TypeError(
+            "Please provide chunksize as an int, or possibly as None if you specify npartitions."
+        )
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if sort and not data.index.is_monotonic_increasing:
-        data = data.sort_index(ascending=True)
+    if data.index.isna().any() and not data.index.is_numeric():
+        raise NotImplementedError(
+            "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
+            "Consider passing `data.loc[~data.isna()]` instead."
+        )
+
     if sort:
+        if not data.index.is_monotonic_increasing:
+            data = data.sort_index(ascending=True)
         divisions, locations = sorted_division_locations(
             data.index, chunksize=chunksize
         )
