@@ -55,6 +55,7 @@ Pandas:
 
 .. autosummary::
     from_pandas
+    DataFrame.from_dict
 
 Creating
 --------
