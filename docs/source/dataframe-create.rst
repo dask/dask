@@ -33,7 +33,6 @@ File Formats:
     read_fwf
     from_bcolz
     from_array
-    DataFrame.from_dict
     to_csv
     to_parquet
     to_hdf
@@ -54,6 +53,7 @@ Pandas:
 
 .. autosummary::
     from_pandas
+    DataFrame.from_dict
 
 Creating
 --------

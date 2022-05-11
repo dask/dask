@@ -5784,7 +5784,7 @@ class DataFrame(_Frame):
         """
         from dask.dataframe.io import from_pandas
 
-        collection_types = [type(v) for v in data.values() if is_dask_collection(v)]
+        collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
         if collection_types:
             raise NotImplementedError(
                 "from_dict doesn't currently support Dask collections as inputs. "
