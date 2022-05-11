@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import functools
 import inspect
 import os
@@ -959,7 +960,7 @@ def ensure_bytes(s) -> bytes:
             return bytes(s)
         except Exception as e:
             raise TypeError(
-                f"Object {s} is neither a bytes object nor has an encode method"
+                f"Object {s} is neither a bytes object nor can be encoded to bytes"
             ) from e
 
 
@@ -973,9 +974,15 @@ def ensure_unicode(s) -> str:
     """
     if isinstance(s, str):
         return s
-    if hasattr(s, "decode"):
+    elif hasattr(s, "decode"):
         return s.decode()
-    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
+    else:
+        try:
+            return codecs.decode(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a str object nor can be decoded to str"
+            ) from e
 
 
 def digit(n, k, base):
