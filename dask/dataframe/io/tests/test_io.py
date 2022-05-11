@@ -956,3 +956,34 @@ def test_from_map_custom_name():
     ddf = dd.from_map(func, iterable, label=label, token=token)
     assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)
+
+
+def _generator():
+    # Simple generator for test_from_map_other_iterables
+    yield from enumerate(["A", "B", "C"])
+
+
+@pytest.mark.parametrize(
+    "iterable",
+    [
+        enumerate(["A", "B", "C"]),
+        ((0, "A"), (1, "B"), (2, "C")),
+        _generator(),
+    ],
+)
+def test_from_map_other_iterables(iterable):
+    # Test that iterable arguments to `from_map`
+    # can be enumerate and generator
+    # See: https://github.com/dask/dask/issues/9064
+
+    def func(t):
+        size = t[0] + 1
+        x = t[1]
+        return pd.Series([x] * size)
+
+    ddf = dd.from_map(func, iterable)
+    expect = pd.Series(
+        ["A", "B", "B", "C", "C", "C"],
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    assert_eq(ddf.compute(), expect)
