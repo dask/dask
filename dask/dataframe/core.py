@@ -4689,6 +4689,8 @@ class DataFrame(_Frame):
 
         # Check other can be translated to column name or column object, possibly flattening it
         if not isinstance(other, str):
+
+            # It may refer to several columns
             if isinstance(other, Sequence):
                 # Accept ["a"], but not [["a"]]
                 if len(other) == 1 and (
@@ -4702,7 +4704,7 @@ class DataFrame(_Frame):
                         "Indexes must be single columns only."
                     )
 
-            # Can also be a frame
+            # Or be a frame directly
             elif isinstance(other, DataFrame):
                 raise NotImplementedError(
                     "Dask dataframe does not yet support multi-indexes.\n"
@@ -4715,18 +4717,13 @@ class DataFrame(_Frame):
             # If it's already the index, there's nothing to do
             if other._name == self.index._name:
                 return self
-            # Otherwise, check length matches when other isn't one of the data columns
-            is_column = any(other._name == self[c]._name for c in self)
-            if not is_column and len(other) != len(self):
-                raise ValueError(
-                    f"Length mismatch: series to become index has {len(other)} rows, but data have {len(self)} rows"
-                )
 
         # If the name of a column/index
         else:
-            # If already the index, no additional checks
+            # With the same name as the index, there's nothing to do either
             if other == self.index.name:
                 return self
+
             # If a missing column, KeyError
             if other not in self.columns:
                 raise KeyError(

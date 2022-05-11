@@ -3688,8 +3688,6 @@ def test_index_errors():
     with pytest.raises(KeyError, match="has no column"):
         # column name doesn't need to be a string, but anyhow a KeyError should be raised if not found
         ddf.set_index(0)
-    with pytest.raises(ValueError, match="Length mismatch"):
-        ddf.set_index(ddf.partitions[0]["A"])  # only 1st partition, so too short
 
 
 @pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
