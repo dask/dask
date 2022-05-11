@@ -3690,6 +3690,46 @@ def test_timeseries_sorted():
     assert_eq(ddf.set_index("index", sorted=True, drop=True), df)
 
 
+def test_index_errors():
+    df = _compat.makeTimeDataFrame()
+    ddf = dd.from_pandas(df.reset_index(), npartitions=2)
+    with pytest.raises(NotImplementedError, match="You tried to index with this index"):
+        ddf.set_index([["A"]])  # should index with ["A"] instead of [["A"]]
+    with pytest.raises(NotImplementedError, match="You tried to index with a frame"):
+        ddf.set_index(ddf[["A"]])  # should index with ddf["A"] instead of ddf[["A"]]
+    with pytest.raises(KeyError, match="has no column"):
+        ddf.set_index("foo")  # a column that doesn't exist
+    with pytest.raises(KeyError, match="has no column"):
+        # column name doesn't need to be a string, but anyhow a KeyError should be raised if not found
+        ddf.set_index(0)
+
+
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
+def test_index_nulls(null_value):
+    "Setting the index with some non-numeric null raises error"
+    df = pd.DataFrame(
+        {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
+    )
+    # an object column all set to nulls fails
+    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
+        ddf.set_index("non_numeric")
+    # an object column with only some nulls also fails
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
+        ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
+
+
+def test_set_index_with_index():
+    "Setting the index with the existing index is a no-op"
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.set_index(ddf.index)
+    assert ddf2 is ddf
+    ddf = ddf.set_index("x", drop=False)
+    assert ddf2 is ddf
+
+
 def test_column_assignment():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
