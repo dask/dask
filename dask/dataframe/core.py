@@ -133,18 +133,20 @@ def finalize(results):
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """A Dask object to represent a pandas scalar"""
 
-    def __init__(self, dsk, name, meta, divisions=None):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
 
-        # TODO: Allow initialization with `operation``
-        self._operation = CompatFrameOperation(
-            dsk,
-            name,
-            meta,
-            divisions,
-            parent_meta=pd.Series(dtype="float64"),
-        )
+        # TODO: Check for mixed legacy/operation usage
+        if operation is None:
+            self._operation = CompatFrameOperation(
+                dsk,
+                name,
+                meta,
+                divisions,
+            )
+        else:
+            self._operation = operation
         if (
             is_dataframe_like(self._meta)
             or is_series_like(self._meta)
@@ -350,15 +352,18 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
 
-        # TODO: Allow initialization with `operation``
-        self._operation = CompatFrameOperation(
-            dsk,
-            name,
-            meta,
-            divisions,
-        )
+        # TODO: Check for mixed legacy/operation usage
+        if operation is None:
+            self._operation = CompatFrameOperation(
+                dsk,
+                name,
+                meta,
+                divisions,
+            )
+        else:
+            self._operation = operation
         if not self._is_partition_type(self._meta):
             raise TypeError(
                 f"Expected meta to specify type {type(self).__name__}, got type "
@@ -4316,24 +4321,13 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors: ClassVar[set[str]] = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
-        if self.dask.layers[name].collection_annotations is None:
-            self.dask.layers[name].collection_annotations = {
-                "npartitions": self.npartitions,
-                "columns": [col for col in self.columns],
-                "type": typename(type(self)),
-                "dataframe_type": typename(type(self._meta)),
-                "series_dtypes": {
-                    col: self._meta[col].dtype
-                    if hasattr(self._meta[col], "dtype")
-                    else None
-                    for col in self._meta.columns
-                },
-            }
-        else:
-            self.dask.layers[name].collection_annotations.update(
-                {
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
+        super().__init__(dsk, name, meta, divisions, operation)
+
+        # TODO: Get "collection_annotations" info from operation
+        if isinstance(self.operation, CompatFrameOperation):
+            if self.dask.layers[self._name].collection_annotations is None:
+                self.dask.layers[self._name].collection_annotations = {
                     "npartitions": self.npartitions,
                     "columns": [col for col in self.columns],
                     "type": typename(type(self)),
@@ -4345,7 +4339,21 @@ class DataFrame(_Frame):
                         for col in self._meta.columns
                     },
                 }
-            )
+            else:
+                self.dask.layers[self._name].collection_annotations.update(
+                    {
+                        "npartitions": self.npartitions,
+                        "columns": [col for col in self.columns],
+                        "type": typename(type(self)),
+                        "dataframe_type": typename(type(self._meta)),
+                        "series_dtypes": {
+                            col: self._meta[col].dtype
+                            if hasattr(self._meta[col], "dtype")
+                            else None
+                            for col in self._meta.columns
+                        },
+                    }
+                )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -7518,13 +7526,23 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(
+    dsk=None, name=None, meta=None, divisions=None, parent_meta=None, operation=None
+):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
+    if operation is not None:
+        name = operation.name
+        meta = operation.meta
+        divisions = operation.divisions
+
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        if operation is None:
+            return get_parallel_type(meta)(dsk, name, meta, divisions)
+        else:
+            return get_parallel_type(meta)(operation=operation)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -7541,8 +7559,10 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                 for i in range(len(chunks[0])):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
-    else:
+    elif operation is None:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
+    else:
+        return get_parallel_type(meta)(operation=operation)
 
 
 def partitionwise_graph(func, layer_name, *args, **kwargs):
