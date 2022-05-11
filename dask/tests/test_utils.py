@@ -48,7 +48,7 @@ from dask.utils_test import inc
 
 
 def test_ensure_bytes():
-    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("B", [49])]
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("B", b"1")]
     for d in data:
         result = ensure_bytes(d)
         assert isinstance(result, bytes)
@@ -69,7 +69,7 @@ def test_ensure_bytes_pyarrow_buffer():
 
 
 def test_ensure_unicode():
-    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("B", [49])]
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array.array("B", b"1")]
     for d in data:
         result = ensure_unicode(d)
         assert isinstance(result, str)
