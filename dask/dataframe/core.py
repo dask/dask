@@ -36,6 +36,7 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     meta_nonempty,
 )
+from dask.dataframe.operation import CompatFrameOperation
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
@@ -135,18 +136,51 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        self._parent_meta = pd.Series(dtype="float64")
 
-        meta = make_meta(meta, parent_meta=self._parent_meta)
-        if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
+        # TODO: Allow initialization with `operation``
+        self._operation = CompatFrameOperation(
+            dsk,
+            name,
+            meta,
+            divisions,
+            parent_meta=pd.Series(dtype="float64"),
+        )
+        if (
+            is_dataframe_like(self._meta)
+            or is_series_like(self._meta)
+            or is_index_like(self._meta)
+        ):
             raise TypeError(
-                f"Expected meta to specify scalar, got {typename(type(meta))}"
+                f"Expected meta to specify scalar, got {typename(type(self._meta))}"
             )
-        self._meta = meta
+
+    @property
+    def operation(self):
+        return self._operation
+
+    @property
+    def dask(self):
+        return self.operation.dask
+
+    @property
+    def _name(self):
+        return self.operation.name
+
+    @_name.setter
+    def _name(self, value):
+        self.operation.name = value
+
+    @property
+    def _meta(self):
+        return self.operation.meta
+
+    @_meta.setter
+    def _meta(self, value):
+        self.operation.meta = value
+
+    @property
+    def _parent_meta(self):
+        return self.operation._parent_meta
 
     def __dask_graph__(self):
         return self.dask
@@ -215,10 +249,10 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
-        return self._args
+        return self.operation
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta = state
+        self._operation = state
 
     def __bool__(self):
         raise TypeError(
@@ -317,18 +351,43 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """
 
     def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        meta = make_meta(meta)
-        if not self._is_partition_type(meta):
+
+        # TODO: Allow initialization with `operation``
+        self._operation = CompatFrameOperation(
+            dsk,
+            name,
+            meta,
+            divisions,
+        )
+        if not self._is_partition_type(self._meta):
             raise TypeError(
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(meta))}"
             )
-        self._meta = meta
-        self.divisions = tuple(divisions)
+
+    @property
+    def operation(self):
+        return self._operation
+
+    @property
+    def dask(self):
+        return self.operation.dask
+
+    @property
+    def _name(self):
+        return self.operation.name
+
+    @_name.setter
+    def _name(self, value):
+        self.operation.name = value
+
+    @property
+    def _meta(self):
+        return self.operation.meta
+
+    @_meta.setter
+    def _meta(self, value):
+        self.operation.meta = value
 
     def __dask_graph__(self):
         return self.dask
@@ -385,15 +444,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
-        return self._divisions
+        return self.operation.divisions
 
     @divisions.setter
     def divisions(self, value):
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(self._divisions):
-            n = len(self._divisions)
+        if hasattr(self, "_divisions") and len(value) != len(self.operation.divisions):
+            n = len(self.operation.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
                 f"tuple of length={n}, got {len(value)}"
@@ -414,7 +473,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self._divisions = value
+        self.operation.divisions = value
 
     @property
     def npartitions(self):
@@ -453,10 +512,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
-        return self._args
+        # return self._args
+        return self.operation
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        # self.dask, self._name, self._meta, self._divisions = state
+        self._operation = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -559,9 +620,7 @@ Dask Name: {name}, {task} tasks"""
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
         )
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self._operation = result.operation
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -3381,8 +3440,7 @@ class Series(_Frame):
         self._meta.name = name
         renamed = _rename_dask(self, name)
         # update myself
-        self.dask = renamed.dask
-        self._name = renamed._name
+        self._operation = renamed.operation
 
     @property
     def ndim(self):
@@ -3517,14 +3575,11 @@ Dask Name: {name}, {task} tasks""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res._divisions = tuple(methods.tolist(new))
+                    res.divisions = tuple(methods.tolist(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
-                self.dask = res.dask
-                self._name = res._name
-                self._divisions = res.divisions
-                self._meta = res._meta
+                self._operation = res.operation
                 res = self
         return res
 
@@ -4312,9 +4367,7 @@ class DataFrame(_Frame):
     @columns.setter
     def columns(self, columns):
         renamed = _rename_dask(self, columns)
-        self._meta = renamed._meta
-        self._name = renamed._name
-        self.dask = renamed.dask
+        self._operation = renamed.operation
 
     @property
     def iloc(self):
@@ -4432,25 +4485,29 @@ class DataFrame(_Frame):
         else:
             df = self.assign(**{key: value})
 
-        self.dask = df.dask
-        self._name = df._name
-        self._meta = df._meta
-        self._divisions = df.divisions
+        self._operation = df.operation
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self._operation = result.operation
 
     def __setattr__(self, key, value):
+        if key == "_operation":
+            object.__setattr__(self, key, value)
+
         try:
             columns = object.__getattribute__(self, "_meta").columns
         except AttributeError:
             columns = ()
 
         # exclude protected attributes from setitem
-        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
+        if key in columns and key not in [
+            "_operation",
+            "divisions",
+            "dask",
+            "_name",
+            "_meta",
+        ]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
@@ -5957,12 +6014,10 @@ def handle_out(out, result):
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
-        out._meta = result._meta
-        out._name = result._name
-        out.dask = result.dask
+        out._operation = result.operation
 
         if not isinstance(out, Scalar):
-            out._divisions = result.divisions
+            out.divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
