@@ -680,9 +680,11 @@ def visualize(
     """
     from dask.dot import dot_graph
 
-    args, _ = unpack_collections(*args, traverse=traverse)
-
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    if len(args) == 1 and isinstance(args[0], dict):
+        dsk = args[0]
+    else:
+        args, _ = unpack_collections(*args, traverse=traverse)
+        dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
 
     color = kwargs.get("color")
 
