@@ -64,12 +64,12 @@ def test_map_overlap_multiple_dataframes(npartitions):
     ddf2 = dd.from_pandas(df*2, npartitions)
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = ddf.map_overlap(shifted_sum, before, after, before, after, ddf2).compute()
+        res = ddf.map_overlap(shifted_sum, before, after, before, after, ddf2)
         sol = shifted_sum(df, before, after, df*2)
         assert_eq(res, sol)
 
         # Series
-        res = ddf.b.map_overlap(shifted_sum, before, after, before, after, ddf2.b).compute()
+        res = ddf.b.map_overlap(shifted_sum, before, after, before, after, ddf2.b)
         sol = shifted_sum(df.b, before, after, df.b*2)
         assert_eq(res, sol)
 
