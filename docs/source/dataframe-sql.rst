@@ -25,26 +25,21 @@ description for mapping SQL onto Pandas syntax can be found in the
 
 .. _pandas docs: https://pandas.pydata.org/docs/getting_started/comparison/comparison_with_sql.html
 
-The following packages may be of interest
+The following packages may be of interest:
 
-- `blazingSQL`_, part of the Rapids project, implements SQL queries using ``cuDF``
-  and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
-  externally-stored data.
+- `dask-sql`_ adds a SQL query engine on top of Dask.
+  In addition to working on CPU, it offers experimental support for CUDA-enabled GPUs through RAPIDS libraries such as `cuDF`_.
 
-- `dask-sql`_ adds a SQL query layer on top of Dask.
-  The API matches blazingSQL but it uses CPU instead of GPU. It still under development
-  and not ready for a production use-case.
-
-- `fugue-sql`_ adds an abstract layer that makes code portable between across differing
-  computing frameworks such as Pandas, Spark and Dask.
+- `FugueSQL`_ provides a unified interface to run SQL code on a variety of different computing frameworks.
+  Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
 
 - `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
   ``SQLite``, which may be useful for small toy examples (this package has not been
   maintained for some time).
 
-.. _blazingSQL: https://docs.blazingsql.com/
 .. _dask-sql: https://dask-sql.readthedocs.io/en/latest/
-.. _fugue-sql: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
+.. _cuDF: https://docs.rapids.ai/api/cudf/stable/
+.. _FugueSQL: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
 .. _pandasql: https://github.com/yhat/pandasql/
 
 Database or Dask?
