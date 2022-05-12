@@ -6344,25 +6344,7 @@ def map_partitions(
         if collections:
             simple = False
 
-    if align_dataframes:
-        divisions = dfs[0].divisions
-    else:
-        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
-        # use longest divisions found
-        divisions = max((d.divisions for d in dfs), key=len)
-
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = func(
-                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+    divisions = _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs)
 
     if has_keyword(func, "partition_info"):
         partition_info = {
@@ -6394,6 +6376,28 @@ def map_partitions(
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs):
+    if align_dataframes:
+        divisions = dfs[0].divisions
+    else:
+        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
+        # use longest divisions found
+        divisions = max((d.divisions for d in dfs), key=len)
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = func(
+                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
+            )
+            if isinstance(divisions, pd.Index):
+                divisions = methods.tolist(divisions)
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+    return divisions
 
 
 def _is_only_scalar(args):

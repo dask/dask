@@ -13,10 +13,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, derived_from, funcname, has_keyword
 
 
-def overlap_chunk(
-    func, prev_part, current_part, next_part, before, after, args, kwargs
-):
-
+def _combined_parts(prev_part, current_part, next_part, before, after):
     msg = (
         "Partition size is less than overlapping "
         "window size. Try using ``df.repartition`` "
@@ -33,21 +30,36 @@ def overlap_chunk(
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
     combined = methods.concat(parts)
-    out = func(combined, *args, **kwargs)
-    if prev_part is None:
+
+    combined._prev_part_length = len(prev_part) if prev_part is not None else None
+    combined._next_part_length = len(next_part) if next_part is not None else None
+
+    return combined
+
+
+def overlap_chunk(func, before, after, *args, **kwargs):
+    dfs = [df for df in args if isinstance(df, (pd.DataFrame, pd.Series))]
+    combined = dfs[0]
+
+    out = func(*args, **kwargs)
+
+    prev_part_length = combined._prev_part_length
+    next_part_length = combined._next_part_length
+
+    if prev_part_length is None:
         before = None
     if isinstance(before, datetime.timedelta):
-        before = len(prev_part)
+        before = prev_part_length
 
     expansion = None
     if combined.shape[0] != 0:
         expansion = out.shape[0] // combined.shape[0]
     if before and expansion:
         before *= expansion
-    if next_part is None:
+    if next_part_length is None:
         return out.iloc[before:]
     if isinstance(after, datetime.timedelta):
-        after = len(next_part)
+        after = next_part_length
     if after and expansion:
         after *= expansion
     return out.iloc[before:-after]
@@ -59,7 +71,6 @@ def map_overlap(
     after,
     *args,
     meta=no_default,
-    enforce_metadata=True,
     transform_divisions=True,
     align_dataframes=True,
     **kwargs,
@@ -70,7 +81,12 @@ def map_overlap(
     ----------
     func : function
         Function applied to each partition.
-    df : dd.DataFrame, dd.Series
+    args, kwargs :
+        Arguments and keywords to pass to the function.  At least one of the
+        args should be a Dask.dataframe. Arguments and keywords may contain
+        ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
+        (both dask and pandas) will be repartitioned to align (if necessary)
+        before applying the function (see ``align_dataframes`` to control).
     before : int or timedelta
         The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
@@ -80,7 +96,18 @@ def map_overlap(
     args, kwargs :
         Arguments and keywords to pass to the function. The partition will
         be the first argument, and these will be passed *after*.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
 
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
     See Also
     --------
     dd.DataFrame.map_overlap
@@ -113,8 +140,12 @@ def map_overlap(
         token = tokenize(func, meta, *args, **kwargs)
     name = f"{name}-{token}"
 
-    from dask.dataframe.core import _get_meta, _maybe_from_pandas
+    from dask.dataframe.core import (Scalar, _get_meta, _get_divisions, _maybe_from_pandas,
+                                     _is_only_scalar, new_dd_object)
     from dask.dataframe.multi import _maybe_align_partitions
+    from dask.utils import apply
+    from dask.delayed import unpack_collections
+    from dask.array.core import normalize_arg
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
@@ -122,31 +153,63 @@ def map_overlap(
 
     meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
 
+    if _is_only_scalar(args):
+        layer = {
+            (name, 0): (
+                apply,
+                func,
+                (tuple, [(arg._name, 0) for arg in args]),
+                kwargs,
+            )
+        }
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
+        return Scalar(graph, name, meta)
+
     dsk = {}
+    args2 = []
+    dependencies = []
 
-    prevs = _get_previous_partitions(dfs[0], before, dsk)
-    nexts = _get_nexts_partitions(dfs[0], after, dsk)
+    def _handle_frame_argument(arg):
+        prevs = _get_previous_partitions(arg, before, dsk)
+        nexts = _get_nexts_partitions(arg, after, dsk)
+        name_a = "overlap-concat-" + tokenize(arg)
+        combined_tasks = {}
+        for i , (prev, current, next) in enumerate(zip(prevs, arg.__dask_keys__(), nexts)):
+            key = (name_a, i)
+            combined_tasks[key] = (_combined_parts, prev, current, next, before, after)
+        return combined_tasks
 
-    # Pop the first dataframe for the moment
-    args = args[1:]
+    class BroadcastArg(tuple):
+        pass
 
-    for i, (prev, current, next) in enumerate(
-        zip(prevs, dfs[0].__dask_keys__(), nexts)
-    ):
+    for arg in args:
+        if isinstance(arg, _Frame):
+            combined_tasks = _handle_frame_argument(arg)
+            dsk.update(combined_tasks)
+            args2.append(BroadcastArg(combined_tasks.keys()))
+            dependencies.append(arg)
+            continue
+        arg = normalize_arg(arg)
+        arg2, collections = unpack_collections(arg)
+        if collections:
+            args2.append(arg2)
+            dependencies.extend(collections)
+        else:
+            args2.append(arg)
+
+    divisions = _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs)
+
+    for i in range(len(dfs[0].__dask_keys__())):
         dsk[(name, i)] = (
+            apply,
             overlap_chunk,
-            func,
-            prev,
-            current,
-            next,
-            before,
-            after,
-            args,
+            [func, before, after,
+            *(arg[i] if isinstance(arg, BroadcastArg) else arg for arg in args2)],
             kwargs,
         )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
-    return dfs[0]._constructor(graph, name, meta, dfs[0].divisions)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def _get_nexts_partitions(df, after, dsk):
