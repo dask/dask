@@ -28,10 +28,10 @@ description for mapping SQL onto Pandas syntax can be found in the
 The following packages may be of interest:
 
 - `dask-sql`_ adds a SQL query engine on top of Dask.
-In addition to working on CPU, it offers experimental support for CUDA-enabled GPUs through RAPIDS libraries such as `cuDF`_.
+  In addition to working on CPU, it offers experimental support for CUDA-enabled GPUs through RAPIDS libraries such as `cuDF`_.
 
 - `FugueSQL`_ provides a unified interface to run SQL code on a variety of different computing frameworks.
-Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
+  Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
 
 - `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
   ``SQLite``, which may be useful for small toy examples (this package has not been
