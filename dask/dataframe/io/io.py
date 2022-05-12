@@ -795,7 +795,7 @@ class _PackedArgCallable(DataFrameIOFunction):
                 self.func.project_columns(columns),
                 args=self.args,
                 kwargs=self.kwargs,
-                meta=self.meta,
+                meta=self.meta[columns],
                 packed=self.packed,
                 enforce_metadata=self.enforce_metadata,
             )

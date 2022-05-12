@@ -48,11 +48,12 @@ class CollectionOperation:
         self._find_deps(self, op_tree, all_ops)
         return op_tree, all_ops
 
-    def visualize(self, filename="dask-operation.svg", **kwargs):
-        from dask.base import visualize
+    def visualize(self, filename="dask-operation.svg", format=None, **kwargs):
+        from dask.dot import graphviz_to_file
 
-        dsk = {k: (lambda x: x, *tuple(v)) for k, v in self.operation_tree[0].items()}
-        return visualize(dsk, filename="dask-operation.svg", **kwargs)
+        g = to_graphviz(self, **kwargs)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def generate_graph(self, keys: list[tuple]) -> dict:
         raise NotImplementedError
@@ -143,17 +144,23 @@ class DataFrameOperation(CollectionOperation):
     @classmethod
     def _required_columns(cls, op, columns=None):
 
+        # First check if this is a creation operation
         creation_name = None
         if isinstance(op, DataFrameCreation):
             return columns, op.name
 
-        if op.columns is None:
-            columns = op.colums
-        elif columns is None:
+        if isinstance(op, DataFrameColumnSelection):
+            # This IS a column selection, so we can
+            # reset the current column projection
             columns = op.columns
+        elif columns is None or op.columns is None:
+            # Required columns unknown, cannot project
+            columns = None
         else:
+            # Required clumns known - Use set union
             columns |= op.columns
 
+        # Discover required columns in dependencies
         for dep_name, dep in op.dependencies.items():
             columns, creation_name = cls._required_columns(dep, columns)
 
@@ -179,7 +186,7 @@ class DataFrameOperation(CollectionOperation):
     def optimize(self):
         new_operation = self
         new_operation = new_operation.project_columns()
-        # TODO: Add other optimizations (predicate pushdown)
+        # TODO: Add other optimizations (e.g. predicate pushdown)
         return new_operation
 
 
@@ -404,3 +411,66 @@ class DataFrameElementwise(DataFrameMapOperation):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._columns = set()
+
+
+def to_graphviz(
+    operation,
+    data_attributes=None,
+    function_attributes=None,
+    rankdir="BT",
+    graph_attr=None,
+    node_attr=None,
+    edge_attr=None,
+    **kwargs,
+):
+    from dask.dot import graphviz, label, name
+
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
+    graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
+    graph_attr["rankdir"] = rankdir
+    node_attr["shape"] = "box"
+    node_attr["fontname"] = "helvetica"
+
+    graph_attr.update(kwargs)
+    g = graphviz.Digraph(
+        graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
+    )
+
+    op_tree, all_ops = operation.operation_tree
+
+    n_tasks = {}
+    for op_name in op_tree:
+        n_tasks[op_name] = all_ops[op_name].npartitions
+
+    min_tasks = min(n_tasks.values())
+    max_tasks = max(n_tasks.values())
+
+    cache = {}
+
+    for op in op_tree:
+        op_name = name(op)
+        attrs = data_attributes.get(op, {})
+
+        node_label = label(op, cache=cache)
+        node_size = (
+            20
+            if max_tasks == min_tasks
+            else int(20 + ((n_tasks[op] - min_tasks) / (max_tasks - min_tasks)) * 20)
+        )
+
+        attrs.setdefault("label", str(node_label))
+        attrs.setdefault("fontsize", str(node_size))
+
+        g.node(op_name, **attrs)
+
+    for op, deps in op_tree.items():
+        op_name = name(op)
+        for dep in deps:
+            dep_name = name(dep)
+            g.edge(dep_name, op_name)
+
+    return g

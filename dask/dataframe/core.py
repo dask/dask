@@ -4438,7 +4438,7 @@ class DataFrame(_Frame):
             )
             operation = op_cls(
                 operator.getitem,
-                meta,
+                make_meta(meta),
                 self.operation,
                 key.operation if key_dependency else key,
                 label="getitem",
