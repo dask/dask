@@ -478,7 +478,7 @@ class Layer(Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+    def _repr_html_(self, dependencies, layer_index="", highlevelgraph_key=""):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
@@ -503,6 +503,7 @@ class Layer(Mapping):
             layer_index=layer_index,
             highlevelgraph_key=highlevelgraph_key,
             info=self.layer_info_dict(),
+            dependencies=dependencies,
             svg_repr=svg_repr,
         )
 
@@ -1135,6 +1136,7 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            layer_dependencies=self.dependencies,
             n_outputs=len(self.get_all_external_keys()),
         )
 
