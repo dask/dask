@@ -21,6 +21,7 @@ concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
+grouper_dispatch = Dispatch("grouper")
 
 
 def concat(
@@ -77,6 +78,11 @@ def is_categorical_dtype(obj):
 def categorical_dtype(meta, categories=None, ordered=False):
     func = categorical_dtype_dispatch.dispatch(type(meta))
     return func(categories=categories, ordered=ordered)
+
+
+def get_grouper(obj):
+    grouper = grouper_dispatch.dispatch(type(obj))
+    return grouper
 
 
 def tolist(obj):
