@@ -140,12 +140,18 @@ def map_overlap(
         token = tokenize(func, meta, *args, **kwargs)
     name = f"{name}-{token}"
 
-    from dask.dataframe.core import (Scalar, _get_meta, _get_divisions, _maybe_from_pandas,
-                                     _is_only_scalar, new_dd_object)
-    from dask.dataframe.multi import _maybe_align_partitions
-    from dask.utils import apply
-    from dask.delayed import unpack_collections
     from dask.array.core import normalize_arg
+    from dask.dataframe.core import (
+        Scalar,
+        _get_divisions,
+        _get_meta,
+        _is_only_scalar,
+        _maybe_from_pandas,
+        new_dd_object,
+    )
+    from dask.dataframe.multi import _maybe_align_partitions
+    from dask.delayed import unpack_collections
+    from dask.utils import apply
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
@@ -174,7 +180,9 @@ def map_overlap(
         nexts = _get_nexts_partitions(arg, after, dsk)
         name_a = "overlap-concat-" + tokenize(arg)
         combined_tasks = {}
-        for i , (prev, current, next) in enumerate(zip(prevs, arg.__dask_keys__(), nexts)):
+        for i, (prev, current, next) in enumerate(
+            zip(prevs, arg.__dask_keys__(), nexts)
+        ):
             key = (name_a, i)
             combined_tasks[key] = (_combined_parts, prev, current, next, before, after)
         return combined_tasks
@@ -197,14 +205,20 @@ def map_overlap(
         else:
             args2.append(arg)
 
-    divisions = _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs)
+    divisions = _get_divisions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
 
     for i in range(len(dfs[0].__dask_keys__())):
         dsk[(name, i)] = (
             apply,
             overlap_chunk,
-            [func, before, after,
-            *(arg[i] if isinstance(arg, BroadcastArg) else arg for arg in args2)],
+            [
+                func,
+                before,
+                after,
+                *(arg[i] if isinstance(arg, BroadcastArg) else arg for arg in args2),
+            ],
             kwargs,
         )
 

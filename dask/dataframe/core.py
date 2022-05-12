@@ -6344,7 +6344,9 @@ def map_partitions(
         if collections:
             simple = False
 
-    divisions = _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs)
+    divisions = _get_divisions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
 
     if has_keyword(func, "partition_info"):
         partition_info = {
