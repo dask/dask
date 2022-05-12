@@ -36,7 +36,7 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     meta_nonempty,
 )
-from dask.dataframe.operation import CompatFrameOperation
+from dask.dataframe.operation import CompatFrameOperation, DataFrameMapOperation
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
@@ -541,7 +541,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 "The `deep` value must be False. This is strictly a shallow copy "
                 "of the underlying computational graph."
             )
-        return new_dd_object(self.dask, self._name, self._meta, self.divisions)
+        return new_dd_object(operation=self.operation)
 
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
@@ -4415,8 +4415,28 @@ class DataFrame(_Frame):
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
 
+    def _getitem_operation(self, meta, key, key_dependency):
+        if isinstance(self.operation, CompatFrameOperation):
+            name = f"getitem-{tokenize(self, key)}"
+            deps = [self, key] if key_dependency else [self]
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=deps
+            )
+            return new_dd_object(graph, name, meta, self.divisions)
+        else:
+            operation = DataFrameMapOperation(
+                operator.getitem,
+                meta,
+                self.operation,
+                key.operation if key_dependency else key,
+                label="getitem",
+                token=tokenize(self, key),
+                divisions=self.divisions,
+            )
+            return new_dd_object(operation=operation)
+
     def __getitem__(self, key):
-        name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
@@ -4433,9 +4453,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return self._getitem_operation(meta, key, False)
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -4457,19 +4475,15 @@ class DataFrame(_Frame):
         ):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
+            return self._getitem_operation(meta, key, False)
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:
                 from dask.dataframe.multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            return new_dd_object(graph, name, self, self.divisions)
+            return self._getitem_operation(self, key, True)
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
@@ -5966,11 +5980,6 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         if not isinstance(arg, (_Frame, Scalar, Array))
     ]
 
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
-
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
-
     if meta is no_default:
         if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
             # should not occur in current funcs
@@ -5988,7 +5997,29 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    is_legacy_collection = [
+        isinstance(df.operation, CompatFrameOperation)
+        if hasattr(df, "operation")
+        else True
+        for df in dfs
+    ]
+    if any(is_legacy_collection):
+        # adjust the key length of Scalar
+        dsk = partitionwise_graph(op, _name, *args, **kwargs)
+        graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
+        result = new_dd_object(graph, _name, meta, divisions)
+    else:
+        operation = DataFrameMapOperation(
+            op,
+            meta,
+            *[x.operation if hasattr(x, "operation") else x for x in args],
+            label=funcname(op),
+            token=tokenize(op, *args, **kwargs),
+            divisions=divisions,
+            **kwargs,
+        )
+        result = new_dd_object(operation=operation)
+
     return handle_out(out, result)
 
 

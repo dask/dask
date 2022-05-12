@@ -6,6 +6,7 @@ from typing import Any
 from dask.base import tokenize
 from dask.dataframe.utils import make_meta
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import apply
 
 
 class CollectionOperation:
@@ -23,7 +24,7 @@ class CollectionOperation:
             )
         return self._dask
 
-    def generate_graph(self, keys: list[tuple]):  # -> dict:
+    def generate_graph(self, keys: list[tuple]) -> dict:
         raise NotImplementedError
 
     @property
@@ -96,7 +97,7 @@ class CompatFrameOperation(DataFrameOperation):
     def dask(self) -> HighLevelGraph | None:
         return self._dask
 
-    def generate_graph(self, keys: list[tuple]):  # -> dict:
+    def generate_graph(self, keys: list[tuple]) -> dict:
         return dict(self.dask)
 
     @property
@@ -129,7 +130,7 @@ class DataFrameCreation(DataFrameOperation):
         self._divisions = tuple(divisions)
         self.creation_info = creation_info
 
-    def generate_graph(self, keys: list[tuple]):  # -> dict:
+    def generate_graph(self, keys: list[tuple]) -> dict:
         dsk = {}
         for key in keys:
             name, index = key
@@ -147,29 +148,35 @@ class DataFrameMapOperation(DataFrameOperation):
         self,
         func,
         meta,
-        *inputs,
+        *args,
         divisions=None,
         label=None,
         token=None,
         creation_info=None,
+        **kwargs,
     ):
         label = label or "map-partitions"
-        token = token or tokenize(func, meta, inputs, divisions, creation_info)
+        token = token or tokenize(func, meta, args, divisions, creation_info)
         self._name = f"{label}-{token}"
         self.func = func
         self._meta = meta
-        assert len(inputs)
-        self.inputs = inputs
-        self._dependencies = {inp.name: inp for inp in inputs}
-        divisions = divisions or (None,) * (len(next(iter(inputs))) + 1)
+        assert len(args)
+        self.args = args
+        self._dependencies = {
+            arg.name: arg for arg in self.args if isinstance(arg, CollectionOperation)
+        }
+        divisions = divisions or (None,) * (
+            len(next(iter(self._dependencies.values()))) + 1
+        )
         self._divisions = tuple(divisions)
         self.creation_info = creation_info
+        self.kwargs = kwargs
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
         return self._dependencies
 
-    def generate_graph(self, keys: list[tuple]):  # -> dict:
+    def generate_graph(self, keys: list[tuple]) -> dict:
         dsk = {}
         dependency_graph = {}
         for name, dep in self.dependencies.items():
@@ -186,9 +193,21 @@ class DataFrameMapOperation(DataFrameOperation):
             assert name == self.name
 
             task = [self.func]
-            for name in self.dependencies:
-                dep_key = (name, index)
-                task.append(dependency_graph.pop(dep_key, dep_key))
-            dsk[key] = tuple(task)
+            for arg in self.args:
+                if isinstance(arg, CollectionOperation):
+                    dep_key = (arg.name, index)
+                    task.append(dependency_graph.pop(dep_key, dep_key))
+                else:
+                    task.append(arg)
+
+            if self.kwargs:
+                dsk[key] = (
+                    apply,
+                    task[0],
+                    task[1:],
+                    self.kwargs,
+                )
+            else:
+                dsk[key] = tuple(task)
 
         return dsk
