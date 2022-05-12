@@ -245,7 +245,7 @@ class DataFrameCreation(DataFrameOperation):
         from dask.dataframe.io.utils import DataFrameIOFunction
 
         if columns is not None and isinstance(io_func, DataFrameIOFunction):
-            self.io_func = io_func.project_columns(columns)
+            self.io_func = io_func.project_columns(list(columns))
             self._meta = meta[columns]
         else:
             self.io_func = io_func

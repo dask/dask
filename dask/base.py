@@ -357,6 +357,15 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
     """
     from dask.highlevelgraph import HighLevelGraph
 
+    # Try optimizing the `CollectionOperation`s
+    if optimize_graph:
+        collections = [
+            collection.optimize_operation()
+            if hasattr(collection, "optimize_operation")
+            else collection
+            for collection in collections
+        ]
+
     optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
 
     if optimize_graph:
