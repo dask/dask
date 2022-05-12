@@ -177,6 +177,7 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    use_operation_api=False,
     **kwargs,
 ):
     """
@@ -548,6 +549,7 @@ def read_parquet(
             "args": (path,),
             "kwargs": input_kwargs,
         },
+        use_operation_api=use_operation_api,
     )
 
 
