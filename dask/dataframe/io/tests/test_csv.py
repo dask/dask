@@ -1311,7 +1311,7 @@ def test_to_csv():
             paths = dask.compute(*r, scheduler="sync")
             # this is a tuple rather than a list since it's the output of dask.compute
             assert paths == tuple(
-                os.path.join(dn, f"{n}.part") for n in range(npartitions)
+                os.path.join(dn, f"part-{n}.csv") for n in range(npartitions)
             )
             result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
             assert_eq(result, df)
