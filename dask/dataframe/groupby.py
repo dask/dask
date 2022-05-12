@@ -1284,9 +1284,7 @@ class _GroupBy:
         # Otherwise, pandas will throw an ambiguity warning if the
         # DataFrame's index (self.obj.index) was included in the grouping
         # specification (self.by). See pandas #14432
-        breakpoint()
         grouper = grouper_dispatch(self._meta.obj)
-        breakpoint()
         by_groupers = [grouper(key=ind) for ind in by]
         cumlast = map_partitions(
             _apply_chunk,
