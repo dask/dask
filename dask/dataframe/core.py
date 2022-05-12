@@ -4420,9 +4420,7 @@ class DataFrame(_Frame):
             name = f"getitem-{tokenize(self, key)}"
             deps = [self, key] if key_dependency else [self]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(
-                name, dsk, dependencies=deps
-            )
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
             return new_dd_object(graph, name, meta, self.divisions)
         else:
             operation = DataFrameMapOperation(
