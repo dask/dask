@@ -293,9 +293,6 @@ class Generator:
             )
             return Array(graph, name, chunks, dtype=dtype)
 
-    # @derived_from(np.random.Generator, skipblocks=1)
-    # def dirichlet(self, alpha, size=None, chunks="auto"):
-
     @derived_from(np.random.Generator, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
         return self._wrap("exponential", scale, size=size, chunks=chunks, **kwargs)
@@ -490,6 +487,58 @@ class Generator:
     def zipf(self, a, size=None, chunks="auto", **kwargs):
         return self._wrap("zipf", a, size=size, chunks=chunks, **kwargs)
 
+    # provided by randomgen.ExtendedGenerator
+    def complex_normal(
+        self, loc=0.0, gamma=1.0, relation=0.0, size=None, chunks="auto", **kwargs
+    ):
+        return self._wrap(
+            "complex_normal",
+            loc=loc,
+            gamma=gamma,
+            relation=relation,
+            size=size,
+            chunks=chunks,
+            **kwargs,
+        )
+
+    # provided by randomgen.ExtendedGenerator
+    def multivariate_normal(
+        self,
+        mean,
+        cov,
+        size=None,
+        check_valid="warn",
+        tol=1e-8,
+        method="svd",
+        chunks="auto",
+        **kwargs,
+    ):
+        return self._wrap(
+            "multivariate_normal",
+            mean,
+            cov,
+            size=size,
+            check_valid=check_valid,
+            tol=tol,
+            method=method,
+            chunks=chunks,
+            **kwargs,
+        )
+
+    # provided by randomgen.ExtendedGenerator
+    def standard_wishart(
+        self, df, dim, size=None, rescale=True, chunks="auto", **kwargs
+    ):
+        return self._wrap(
+            "standard_wishart",
+            df,
+            dim,
+            size=size,
+            rescale=rescale,
+            chunks=chunks,
+            **kwargs,
+        )
+
 
 def _choice_rng(state_data, a, size, replace, p, axis, shuffle):
     state = np.random.default_rng(state_data)
@@ -505,18 +554,27 @@ def _shuffle(state_data, x, axis=0):
 
 def _apply_random_func(rng, funcname, state_data, size, args, kwargs):
     """Apply random method with seed"""
+    state = None
     if rng is None:
-        rng = np.random.Generator
-    if rng == Generator:
+        rng = np.random.default_rng()
+    if rng is Generator:
+        # common case
         state = np.random.default_rng(state_data)
     else:
+        # find out and use the random number generator we are given
         import importlib
 
-        if importlib.util.find_spec("cupy") is not None:
+        if state is None and importlib.util.find_spec("cupy") is not None:
             import cupy
 
-            state = cupy.random.default_rng(state_data)
-        else:
+            if rng is cupy.random.Generator:
+                state = cupy.random.default_rng(state_data)
+        if state is None and importlib.util.find_spec("randomgen") is not None:
+            import randomgen
+
+            if rng is randomgen.ExtendedGenerator:
+                state = randomgen.ExtendedGenerator(randomgen.PCG64(state_data))
+        if state is None:
             raise TypeError(f"Unknown Generator type: {rng}")
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
@@ -604,16 +662,23 @@ def default_rng(seed=None):
     np.random.default_rng
     """
     if hasattr(seed, "capsule"):
-        # We were passed a BitGenerator, so just wrap it
+        # We are passed a BitGenerator, so just wrap it
         return Generator(seed)
     elif isinstance(seed, Generator):
         # Pass through a Generator
-        seed._generator = seed
+        seed._generator = type(seed)
         return seed
     elif hasattr(seed, "standard_normal"):
         # a Generator. Just not ours
         res = Generator(np.random.PCG64())
-        res._generator = seed
+        res._generator = type(seed)
+        return res
+    elif hasattr(seed, "complex_normal"):
+        # a randomgen ExtendedGenerator
+        res = Generator(np.random.PCG64())
+        res._generator = type(seed)
+        res._bit_generator = seed.bit_generator
+        res._bit_generator_state = seed.bit_generator.state
         return res
     # Otherwise return default Generator
     return Generator(np.random.PCG64(seed))
@@ -657,6 +722,7 @@ wald = _state.wald
 weibull = _state.weibull
 zipf = _state.zipf
 
+
 """
 Standard distributions
 """
@@ -666,6 +732,14 @@ standard_exponential = _state.standard_exponential
 standard_gamma = _state.standard_gamma
 standard_normal = _state.standard_normal
 standard_t = _state.standard_t
+
+
+"""
+Provided by randomgen.ExtendedGenerator
+"""
+complex_normal = _state.complex_normal
+multivariate_normal = _state.multivariate_normal
+standard_wishart = _state.standard_wishart
 
 
 class RandomState:
