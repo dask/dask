@@ -36,7 +36,12 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     meta_nonempty,
 )
-from dask.dataframe.operation import CompatFrameOperation, DataFrameMapOperation
+from dask.dataframe.operation import (
+    CompatFrameOperation,
+    DataFrameColumnSelection,
+    DataFrameElementwise,
+    DataFrameSeriesSelection,
+)
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
@@ -373,6 +378,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def operation(self):
         return self._operation
+
+    def optimize_operation(self):
+        return type(self)(operation=self.operation.optimize())
 
     @property
     def dask(self):
@@ -4415,7 +4423,7 @@ class DataFrame(_Frame):
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
 
-    def _getitem_operation(self, meta, key, key_dependency):
+    def _getitem_operation(self, meta, key, key_dependency, getitem_type):
         if isinstance(self.operation, CompatFrameOperation):
             name = f"getitem-{tokenize(self, key)}"
             deps = [self, key] if key_dependency else [self]
@@ -4423,7 +4431,12 @@ class DataFrame(_Frame):
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
             return new_dd_object(graph, name, meta, self.divisions)
         else:
-            operation = DataFrameMapOperation(
+            op_cls = (
+                DataFrameColumnSelection
+                if getitem_type == "columns"
+                else DataFrameSeriesSelection
+            )
+            operation = op_cls(
                 operator.getitem,
                 meta,
                 self.operation,
@@ -4451,7 +4464,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            return self._getitem_operation(meta, key, False)
+            return self._getitem_operation(meta, key, False, "columns")
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -4473,7 +4486,7 @@ class DataFrame(_Frame):
         ):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            return self._getitem_operation(meta, key, False)
+            return self._getitem_operation(meta, key, False, "columns")
 
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
@@ -4481,7 +4494,7 @@ class DataFrame(_Frame):
                 from dask.dataframe.multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            return self._getitem_operation(self, key, True)
+            return self._getitem_operation(self, key, True, "series")
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
@@ -6007,7 +6020,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
         result = new_dd_object(graph, _name, meta, divisions)
     else:
-        operation = DataFrameMapOperation(
+        operation = DataFrameElementwise(
             op,
             meta,
             *[x.operation if hasattr(x, "operation") else x for x in args],

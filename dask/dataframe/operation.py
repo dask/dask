@@ -4,6 +4,8 @@ from collections import defaultdict
 from collections.abc import Mapping
 from typing import Any
 
+import numpy as np
+
 from dask.base import tokenize
 from dask.dataframe.utils import make_meta
 from dask.highlevelgraph import HighLevelGraph
@@ -32,10 +34,12 @@ class CollectionOperation:
 
     @classmethod
     def _find_deps(cls, op, op_tree, all_ops):
+        all_ops[op.name] = op
         for dep_name, dep in op.dependencies.items():
             op_tree[op.name].add(dep_name)
-            all_ops[op.name] = op
             cls._find_deps(dep, op_tree, all_ops)
+        if not op.dependencies:
+            op_tree[op.name] |= set()
 
     @property
     def operation_tree(self):
@@ -69,6 +73,28 @@ class CollectionOperation:
     def dependencies(self) -> Mapping[str, CollectionOperation]:
         raise NotImplementedError
 
+    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
+        """Regenerate ``self``"""
+        raise NotImplementedError
+
+    def regenerate_recursive(self, new_kwargs: dict = None, cache: dict = None):
+        """Regenerate this CollectionOperation object (and any
+        CollectionOperation dependencies) recursively.
+        """
+        new_kwargs = new_kwargs or {}
+        cache = cache or {}
+
+        if self.name in cache:
+            return cache[self.name]
+
+        _new_dependencies = {}
+        for dep_name, dep in self.dependencies.items():
+            if dep_name not in cache:
+                cache[dep_name] = dep.regenerate_recursive(new_kwargs, cache)
+            _new_dependencies[dep_name] = cache[dep_name]
+
+        return self.regenerate(_new_dependencies, new_kwargs, cache)
+
 
 class DataFrameOperation(CollectionOperation):
 
@@ -76,6 +102,7 @@ class DataFrameOperation(CollectionOperation):
     _meta: Any
     _divisions: tuple
     _columns: set | None = None
+    projected_columns: set | None = None
 
     @property
     def name(self) -> str:
@@ -113,6 +140,48 @@ class DataFrameOperation(CollectionOperation):
     def columns(self):
         return self._columns
 
+    @classmethod
+    def _required_columns(cls, op, columns=None):
+
+        creation_name = None
+        if isinstance(op, DataFrameCreation):
+            return columns, op.name
+
+        if op.columns is None:
+            columns = op.colums
+        elif columns is None:
+            columns = op.columns
+        else:
+            columns |= op.columns
+
+        for dep_name, dep in op.dependencies.items():
+            columns, creation_name = cls._required_columns(dep, columns)
+
+        return columns, creation_name
+
+    def project_columns(self):
+
+        _, all_ops = self.operation_tree
+        creation_ops = {
+            op_name
+            for op_name, op in all_ops.items()
+            if isinstance(op, DataFrameCreation)
+        }
+        if not creation_ops:
+            return self
+
+        columns, creation = self._required_columns(self)
+        new_kwargs = {creation: {"columns": columns}}
+        new = self.regenerate_recursive(new_kwargs)
+        new.projected_columns = columns
+        return new
+
+    def optimize(self):
+        new_operation = self
+        new_operation = new_operation.project_columns()
+        # TODO: Add other optimizations (predicate pushdown)
+        return new_operation
+
 
 class CompatFrameOperation(DataFrameOperation):
     """Pass-through DataFrameOperation
@@ -129,6 +198,17 @@ class CompatFrameOperation(DataFrameOperation):
         self._parent_meta = parent_meta
         self._meta = make_meta(meta, parent_meta=self._parent_meta)
         self._divisions = tuple(divisions) if divisions is not None else None
+
+    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
+        if self.name not in cache:
+            cache[self.name] = CompatFrameOperation(
+                self._dask,
+                self._name,
+                self._meta,
+                self._divisions,
+                self._parent_meta,
+            )
+        return cache[self.name]
 
     @property
     def dask(self) -> HighLevelGraph | None:
@@ -154,20 +234,22 @@ class DataFrameCreation(DataFrameOperation):
         divisions=None,
         label=None,
         token=None,
-        creation_info=None,
     ):
-        label = label or "create-frame"
-        token = token or tokenize(
-            io_func, meta, inputs, columns, divisions, creation_info
-        )
-        self._name = f"{label}-{token}"
-        self.io_func = io_func
-        self._meta = meta
-        self.inputs = inputs
+        from dask.dataframe.io.utils import DataFrameIOFunction
+
+        if columns is not None and isinstance(io_func, DataFrameIOFunction):
+            self.io_func = io_func.project_columns(columns)
+            self._meta = meta[columns]
+        else:
+            self.io_func = io_func
+            self._meta = meta
         self._columns = columns
+        self.label = label or "create-frame"
+        token = token or tokenize(self.io_func, meta, inputs, columns, divisions)
+        self._name = f"{self.label}-{token}"
+        self.inputs = inputs
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
-        self.creation_info = creation_info
 
     def generate_graph(self, keys: list[tuple]) -> dict:
         dsk = {}
@@ -181,6 +263,22 @@ class DataFrameCreation(DataFrameOperation):
     def dependencies(self) -> Mapping[str, CollectionOperation]:
         return {}
 
+    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
+        if self.name not in cache:
+            kwargs = {
+                "columns": self.columns,
+                "divisions": self.divisions,
+                "label": self.label,
+            }
+            kwargs.update(new_kwargs.get(self.name, {}))
+            cache[self.name] = type(self)(
+                self.io_func,
+                self.meta,
+                self.inputs,
+                **kwargs,
+            )
+        return cache[self.name]
+
 
 class DataFrameMapOperation(DataFrameOperation):
     def __init__(
@@ -191,12 +289,12 @@ class DataFrameMapOperation(DataFrameOperation):
         divisions=None,
         label=None,
         token=None,
-        creation_info=None,
+        columns=None,
         **kwargs,
     ):
-        label = label or "map-partitions"
-        token = token or tokenize(func, meta, args, divisions, creation_info)
-        self._name = f"{label}-{token}"
+        self.label = label or "map-partitions"
+        token = token or tokenize(func, meta, args, divisions)
+        self._name = f"{self.label}-{token}"
         self.func = func
         self._meta = meta
         assert len(args)
@@ -208,8 +306,31 @@ class DataFrameMapOperation(DataFrameOperation):
             len(next(iter(self._dependencies.values()))) + 1
         )
         self._divisions = tuple(divisions)
-        self.creation_info = creation_info
+        self._columns = columns
         self.kwargs = kwargs
+
+    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
+        if self.name not in cache:
+            kwargs = {
+                "divisions": self.divisions,
+                "label": self.label,
+                "columns": self.columns,
+                **self.kwargs,
+            }
+            kwargs.update(new_kwargs.get(self.name, {}))
+            args = [
+                new_dependencies[arg.name]
+                if isinstance(arg, CollectionOperation)
+                else arg
+                for arg in self.args
+            ]
+            cache[self.name] = type(self)(
+                self.func,
+                self.meta,
+                *args,
+                **kwargs,
+            )
+        return cache[self.name]
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
@@ -261,3 +382,25 @@ class DataFrameMapOperation(DataFrameOperation):
 
         dsk.update(fusable_graph)
         return dsk
+
+
+class DataFrameColumnSelection(DataFrameMapOperation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        key = self.args[1]
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
+            self._columns = {key}
+        else:
+            self._columns = set(key)
+
+
+class DataFrameSeriesSelection(DataFrameMapOperation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._columns = set()
+
+
+class DataFrameElementwise(DataFrameMapOperation):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._columns = set()
