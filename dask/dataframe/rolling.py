@@ -187,14 +187,14 @@ def map_overlap(
             combined_tasks[key] = (_combined_parts, prev, current, next, before, after)
         return combined_tasks
 
-    class BroadcastArg(tuple):
+    class PartitionWise(tuple):
         pass
 
     for arg in args:
         if isinstance(arg, _Frame):
             combined_tasks = _handle_frame_argument(arg)
             dsk.update(combined_tasks)
-            args2.append(BroadcastArg(combined_tasks.keys()))
+            args2.append(PartitionWise(combined_tasks.keys()))
             dependencies.append(arg)
             continue
         arg = normalize_arg(arg)
@@ -217,7 +217,7 @@ def map_overlap(
                 func,
                 before,
                 after,
-                *(arg[i] if isinstance(arg, BroadcastArg) else arg for arg in args2),
+                *(arg[i] if isinstance(arg, PartitionWise) else arg for arg in args2),
             ],
             kwargs,
         )
