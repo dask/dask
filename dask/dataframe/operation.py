@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from collections.abc import Mapping
+from functools import singledispatch
 from typing import Any
 
 import numpy as np
@@ -74,27 +75,12 @@ class CollectionOperation:
     def dependencies(self) -> Mapping[str, CollectionOperation]:
         raise NotImplementedError
 
-    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
         """Regenerate ``self``"""
         raise NotImplementedError
 
-    def regenerate_recursive(self, new_kwargs: dict = None, cache: dict = None):
-        """Regenerate this CollectionOperation object (and any
-        CollectionOperation dependencies) recursively.
-        """
-        new_kwargs = new_kwargs or {}
-        cache = cache or {}
-
-        if self.name in cache:
-            return cache[self.name]
-
-        _new_dependencies = {}
-        for dep_name, dep in self.dependencies.items():
-            if dep_name not in cache:
-                cache[dep_name] = dep.regenerate_recursive(new_kwargs, cache)
-            _new_dependencies[dep_name] = cache[dep_name]
-
-        return self.regenerate(_new_dependencies, new_kwargs, cache)
+    def __hash__(self):
+        return hash(self.name)
 
 
 class DataFrameOperation(CollectionOperation):
@@ -141,54 +127,6 @@ class DataFrameOperation(CollectionOperation):
     def columns(self):
         return self._columns
 
-    @classmethod
-    def _required_columns(cls, op, columns=None):
-
-        # First check if this is a creation operation
-        creation_name = None
-        if isinstance(op, DataFrameCreation):
-            return columns, op.name
-
-        if isinstance(op, DataFrameColumnSelection):
-            # This IS a column selection, so we can
-            # reset the current column projection
-            columns = op.columns
-        elif columns is None or op.columns is None:
-            # Required columns unknown, cannot project
-            columns = None
-        else:
-            # Required clumns known - Use set union
-            columns |= op.columns
-
-        # Discover required columns in dependencies
-        for dep_name, dep in op.dependencies.items():
-            columns, creation_name = cls._required_columns(dep, columns)
-
-        return columns, creation_name
-
-    def project_columns(self):
-
-        _, all_ops = self.operation_tree
-        creation_ops = {
-            op_name
-            for op_name, op in all_ops.items()
-            if isinstance(op, DataFrameCreation)
-        }
-        if not creation_ops:
-            return self
-
-        columns, creation = self._required_columns(self)
-        new_kwargs = {creation: {"columns": columns}}
-        new = self.regenerate_recursive(new_kwargs)
-        new.projected_columns = columns
-        return new
-
-    def optimize(self):
-        new_operation = self
-        new_operation = new_operation.project_columns()
-        # TODO: Add other optimizations (e.g. predicate pushdown)
-        return new_operation
-
 
 class CompatFrameOperation(DataFrameOperation):
     """Pass-through DataFrameOperation
@@ -206,16 +144,14 @@ class CompatFrameOperation(DataFrameOperation):
         self._meta = make_meta(meta, parent_meta=self._parent_meta)
         self._divisions = tuple(divisions) if divisions is not None else None
 
-    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
-        if self.name not in cache:
-            cache[self.name] = CompatFrameOperation(
-                self._dask,
-                self._name,
-                self._meta,
-                self._divisions,
-                self._parent_meta,
-            )
-        return cache[self.name]
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        return CompatFrameOperation(
+            self._dask,
+            self._name,
+            self._meta,
+            self._divisions,
+            self._parent_meta,
+        )
 
     @property
     def dask(self) -> HighLevelGraph | None:
@@ -270,21 +206,19 @@ class DataFrameCreation(DataFrameOperation):
     def dependencies(self) -> Mapping[str, CollectionOperation]:
         return {}
 
-    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
-        if self.name not in cache:
-            kwargs = {
-                "columns": self.columns,
-                "divisions": self.divisions,
-                "label": self.label,
-            }
-            kwargs.update(new_kwargs.get(self.name, {}))
-            cache[self.name] = type(self)(
-                self.io_func,
-                self.meta,
-                self.inputs,
-                **kwargs,
-            )
-        return cache[self.name]
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        kwargs = {
+            "columns": self.columns,
+            "divisions": self.divisions,
+            "label": self.label,
+        }
+        kwargs.update(new_kwargs.get(self.name, {}))
+        return type(self)(
+            self.io_func,
+            self.meta,
+            self.inputs,
+            **kwargs,
+        )
 
 
 class DataFrameMapOperation(DataFrameOperation):
@@ -316,28 +250,24 @@ class DataFrameMapOperation(DataFrameOperation):
         self._columns = columns
         self.kwargs = kwargs
 
-    def regenerate(self, new_dependencies: dict, new_kwargs: dict, cache: dict):
-        if self.name not in cache:
-            kwargs = {
-                "divisions": self.divisions,
-                "label": self.label,
-                "columns": self.columns,
-                **self.kwargs,
-            }
-            kwargs.update(new_kwargs.get(self.name, {}))
-            args = [
-                new_dependencies[arg.name]
-                if isinstance(arg, CollectionOperation)
-                else arg
-                for arg in self.args
-            ]
-            cache[self.name] = type(self)(
-                self.func,
-                self.meta,
-                *args,
-                **kwargs,
-            )
-        return cache[self.name]
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        kwargs = {
+            "divisions": self.divisions,
+            "label": self.label,
+            "columns": self.columns,
+            **self.kwargs,
+        }
+        kwargs.update(new_kwargs.get(self.name, {}))
+        args = [
+            new_dependencies[arg.name] if isinstance(arg, CollectionOperation) else arg
+            for arg in self.args
+        ]
+        return type(self)(
+            self.func,
+            self.meta,
+            *args,
+            **kwargs,
+        )
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
@@ -440,7 +370,8 @@ def to_graphviz(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
 
-    op_tree, all_ops = operation.operation_tree
+    all_ops = operations(operation)
+    op_tree = operation_dag(operation)
 
     n_tasks = {}
     for op_name in op_tree:
@@ -474,3 +405,119 @@ def to_graphviz(
             g.edge(dep_name, op_name)
 
     return g
+
+
+class MemoizingVisitor:
+    def __init__(self, func, **kwargs):
+        self.func = func
+        self.kwargs = kwargs
+        self.cache = {}
+
+    def __call__(self, operation):
+        try:
+            return self.cache[operation]
+        except KeyError:
+            return self.cache.setdefault(
+                operation,
+                self.func(
+                    operation,
+                    self,
+                    **self.kwargs.get(operation.name, {}),
+                ),
+            )
+
+
+def _regenerate(operation, visitor, **kwargs):
+    transformed_dependencies = {}
+    for depname, dep in operation.dependencies.items():
+        new_dep = visitor(dep)
+        transformed_dependencies[depname] = new_dep
+    return operation.regenerate(transformed_dependencies, **kwargs)
+
+
+def regenerate(operation, operation_kwargs=None):
+    visitor = MemoizingVisitor(_regenerate, **(operation_kwargs or {}))
+    return visitor(operation)
+
+
+def _operation_dag(operation, visitor):
+    dag = {operation.name: set()}
+    for dep_name, dep in operation.dependencies.items():
+        dag[operation.name].add(dep_name)
+        dag.update(visitor(dep))
+    return dag
+
+
+def operation_dag(operation):
+    return MemoizingVisitor(_operation_dag)(operation)
+
+
+def _operations(operation, visitor):
+    ops = {operation.name: operation}
+    for dep_name, dep in operation.dependencies.items():
+        ops.update(visitor(dep))
+    return ops
+
+
+def operations(operation):
+    return MemoizingVisitor(_operations)(operation)
+
+
+@singledispatch
+def _required_columns(operation, visitor):
+
+    required = {}
+    for dep_name, dep in operation.dependencies.items():
+        required.update(visitor(dep))
+
+    for creation_name in required:
+        columns = required[creation_name]
+        if columns is None or operation.columns is None:
+            # Required columns unknown, cannot project
+            columns = None
+        else:
+            # Required clumns known - Use set union
+            columns |= operation.columns
+        required[creation_name] = columns
+
+    return required
+
+
+@_required_columns.register(DataFrameCreation)
+def _(operation, visitor):
+    return {operation.name: operation.columns}
+
+
+@_required_columns.register(DataFrameColumnSelection)
+def _(operation, visitor):
+    required = {}
+    for dep_name, dep in operation.dependencies.items():
+        required.update(visitor(dep))
+    for creation_name in required:
+        required[creation_name] = operation.columns
+    return required
+
+
+def project_columns(operation):
+
+    all_ops = operations(operation)
+    creation_ops = {
+        op_name for op_name, op in all_ops.items() if isinstance(op, DataFrameCreation)
+    }
+    if not creation_ops:
+        return operation
+
+    new_kwargs = {}
+    for creation, columns in MemoizingVisitor(_required_columns)(operation).items():
+        new_kwargs[creation] = {"columns": columns}
+
+    new = regenerate(operation, operation_kwargs=new_kwargs)
+    new.projected_columns = columns
+    return new
+
+
+def optimize(operation):
+    new_operation = operation
+    new_operation = project_columns(new_operation)
+    # TODO: Add other optimizations (e.g. predicate pushdown)
+    return new_operation
