@@ -736,7 +736,8 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         func : function
-            Function applied to each partition.
+            Map function applied to each partition. If this function accepts the special ``partition_info`` keyword
+            argument, it will recieve information on the partition's relative location within the dataframe.
         args, kwargs :
             Positional and keyword arguments to pass to the function. Positional arguments are computed on a
             per-partition basis, while keyword arguments are shared across all partitions. The partition itself will be
