@@ -54,6 +54,7 @@ from dask.base import (
 )
 from dask.blockwise import blockwise as core_blockwise
 from dask.blockwise import broadcast_dimensions
+from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import quote
 from dask.delayed import Delayed, delayed
@@ -84,14 +85,19 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-try:
-    from dask import threaded
-except (ImportError, ModuleNotFoundError):
+if _EMSCRIPTEN:
     from dask import local
 
     DEFAULT_GET = local.get_sync
 else:
-    DEFAULT_GET = threaded.get
+    try:
+        from dask import threaded
+    except ImportError:
+        from dask import local
+
+        DEFAULT_GET = local.get_sync
+    else:
+        DEFAULT_GET = threaded.get
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 

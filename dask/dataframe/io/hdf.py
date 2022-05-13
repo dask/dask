@@ -18,7 +18,7 @@ from dask.utils import get_scheduler_lock
 
 try:
     from dask import multiprocessing
-except (ImportError, ModuleNotFoundError):
+except ImportError:
     mpget = object()
 else:
     mpget = multiprocessing.get

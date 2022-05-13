@@ -42,6 +42,7 @@ from dask.bag import chunk
 from dask.bag.avro import to_avro
 from dask.base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
 from dask.blockwise import blockwise
+from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
 from dask.delayed import Delayed, unpack_collections
@@ -63,14 +64,19 @@ from dask.utils import (
     takes_multiple_arguments,
 )
 
-try:
-    from dask import multiprocessing
-except (ImportError, ModuleNotFoundError):
+if _EMSCRIPTEN:
     from dask import local
 
     DEFAULT_GET = local.get_sync
 else:
-    DEFAULT_GET = multiprocessing.get
+    try:
+        from dask import multiprocessing
+    except ImportError:
+        from dask import local
+
+        DEFAULT_GET = local.get_sync
+    else:
+        DEFAULT_GET = multiprocessing.get
 
 no_default = "__no__default__"
 no_result = type(

@@ -23,7 +23,7 @@ from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
 from dask import config, local
-from dask.compatibility import _PY_VERSION
+from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
@@ -1291,29 +1291,30 @@ named_schedulers: dict[str, SchedulerGetCallable] = {
     "single-threaded": local.get_sync,
 }
 
-try:
-    from dask import threaded
-except (ImportError, ModuleNotFoundError):
-    pass
-else:
-    named_schedulers.update(
-        {
-            "threads": threaded.get,
-            "threading": threaded.get,
-        }
-    )
+if not _EMSCRIPTEN:
+    try:
+        from dask import threaded
+    except ImportError:
+        pass
+    else:
+        named_schedulers.update(
+            {
+                "threads": threaded.get,
+                "threading": threaded.get,
+            }
+        )
 
-try:
-    from dask import multiprocessing as dask_multiprocessing
-except (ImportError, ModuleNotFoundError):
-    pass
-else:
-    named_schedulers.update(
-        {
-            "processes": dask_multiprocessing.get,
-            "multiprocessing": dask_multiprocessing.get,
-        }
-    )
+    try:
+        from dask import multiprocessing as dask_multiprocessing
+    except ImportError:
+        pass
+    else:
+        named_schedulers.update(
+            {
+                "processes": dask_multiprocessing.get,
+                "multiprocessing": dask_multiprocessing.get,
+            }
+        )
 
 
 get_err_msg = """

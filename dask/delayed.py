@@ -15,6 +15,7 @@ from dask.base import (
     replace_name_in_key,
 )
 from dask.base import tokenize as _tokenize
+from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
@@ -23,14 +24,19 @@ from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
 __all__ = ["Delayed", "delayed"]
 
 
-try:
-    from dask import threaded
-except (ImportError, ModuleNotFoundError):
+if _EMSCRIPTEN:
     from dask import local
 
     DEFAULT_GET = local.get_sync
 else:
-    DEFAULT_GET = threaded.get
+    try:
+        from dask import threaded
+    except ImportError:
+        from dask import local
+
+        DEFAULT_GET = local.get_sync
+    else:
+        DEFAULT_GET = threaded.get
 
 
 def unzip(ls, nout):
