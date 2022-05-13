@@ -97,7 +97,7 @@ def test_random_shapes(shape):
     assert x._meta.shape == (0,) * len(shape)
     assert x.shape == shape
 
-    rs = da.random.default_rng(cupy.random.default_rng())
+    rs = da.random.default_rng(cupy.random.Generator)
 
     x = rs.poisson(1.0, size=shape, chunks=3)
     assert type(x._meta) == cupy.ndarray

@@ -423,30 +423,6 @@ def test_external_randomstate_class():
         assert_eq(a, b)
 
 
-def test_external_generator_class():
-    randomgen = pytest.importorskip("randomgen")
-
-    rs = da.random.default_rng(randomgen.ExtendedGenerator(randomgen.PCG64()))
-    x = rs.random(size=10, chunks=(5,))
-    assert_eq(x, x)
-
-    rs = da.random.default_rng(randomgen.ExtendedGenerator(randomgen.PCG64(seed=123)))
-    a = rs.random(size=10, chunks=(5,))
-    rs = da.random.default_rng(randomgen.ExtendedGenerator(randomgen.PCG64(seed=123)))
-    b = rs.random(size=10, chunks=(5,))
-    assert a.name == b.name
-    assert_eq(a, b)
-
-
-def test_randomgen_distributions():
-    randomgen = pytest.importorskip("randomgen")
-
-    rs = da.random.default_rng(randomgen.ExtendedGenerator(randomgen.PCG64()))
-    rs.complex_normal().compute()
-    rs.multivariate_normal([1], [[1]]).compute()
-    rs.standard_wishart(2, 2).compute()
-
-
 def test_auto_chunks(generator_class):
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = generator_class().random((10000, 10000))
