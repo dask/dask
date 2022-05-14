@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections import defaultdict
 from collections.abc import Mapping
 from functools import singledispatch
 from typing import Any
@@ -20,6 +19,7 @@ class CollectionOperation:
 
     @property
     def dask(self) -> HighLevelGraph | None:
+        """Return a HighLevelGraph representation of this operation"""
         # TODO: We can wrap the operator in a new Layer type
         # to avoid materialization here once the HLG/Layer
         # serialization moves to Pickle (otherwise it will
@@ -28,26 +28,38 @@ class CollectionOperation:
         if self._dask is None:
             self._dask = HighLevelGraph.from_collections(
                 self.name,
-                self.generate_graph(self.collection_keys),
+                generate_graph(self),
                 dependencies=[],
             )
         return self._dask
 
-    @classmethod
-    def _find_deps(cls, op, op_tree, all_ops):
-        all_ops[op.name] = op
-        for dep_name, dep in op.dependencies.items():
-            op_tree[op.name].add(dep_name)
-            cls._find_deps(dep, op_tree, all_ops)
-        if not op.dependencies:
-            op_tree[op.name] |= set()
+    def subgraph(self, keys: list[tuple]) -> tuple:
+        """Return the subgraph and key dependencies for this operation"""
+        raise NotImplementedError
 
     @property
-    def operation_tree(self):
-        op_tree = defaultdict(set)
-        all_ops = {}
-        self._find_deps(self, op_tree, all_ops)
-        return op_tree, all_ops
+    def name(self) -> str:
+        """Operation name getter"""
+        raise NotImplementedError
+
+    @name.setter
+    def name(self, value):
+        """Operation name setter"""
+        raise NotImplementedError
+
+    @property
+    def collection_keys(self) -> list[tuple]:
+        """Get the collection keys for this operation"""
+        raise NotImplementedError
+
+    @property
+    def dependencies(self) -> Mapping[str, CollectionOperation]:
+        """Get CollectionOperation dependencies"""
+        raise NotImplementedError
+
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        """Regenerate this CollectionOperation with ``new_kwargs``"""
+        raise NotImplementedError
 
     def visualize(self, filename="dask-operation.svg", format=None, **kwargs):
         from dask.dot import graphviz_to_file
@@ -55,29 +67,6 @@ class CollectionOperation:
         g = to_graphviz(self, **kwargs)
         graphviz_to_file(g, filename, format)
         return g
-
-    def generate_graph(self, keys: list[tuple]) -> dict:
-        raise NotImplementedError
-
-    @property
-    def name(self) -> str:
-        raise NotImplementedError
-
-    @name.setter
-    def name(self, value):
-        raise NotImplementedError
-
-    @property
-    def collection_keys(self) -> list[tuple]:
-        raise NotImplementedError
-
-    @property
-    def dependencies(self) -> Mapping[str, CollectionOperation]:
-        raise NotImplementedError
-
-    def regenerate(self, new_dependencies: dict, **new_kwargs):
-        """Regenerate ``self``"""
-        raise NotImplementedError
 
     def __hash__(self):
         return hash(self.name)
@@ -144,6 +133,19 @@ class CompatFrameOperation(DataFrameOperation):
         self._meta = make_meta(meta, parent_meta=self._parent_meta)
         self._divisions = tuple(divisions) if divisions is not None else None
 
+    @property
+    def dask(self) -> HighLevelGraph | None:
+        return self._dask
+
+    def subgraph(self, keys: list[tuple]) -> tuple:
+        if self.dask is None:
+            raise ValueError("Graph is undefined")
+        return self.dask.to_dict(), {}
+
+    @property
+    def dependencies(self) -> Mapping[str, CollectionOperation]:
+        return {}
+
     def regenerate(self, new_dependencies: dict, **new_kwargs):
         return CompatFrameOperation(
             self._dask,
@@ -152,19 +154,6 @@ class CompatFrameOperation(DataFrameOperation):
             self._divisions,
             self._parent_meta,
         )
-
-    @property
-    def dask(self) -> HighLevelGraph | None:
-        return self._dask
-
-    def generate_graph(self, keys: list[tuple]) -> dict:
-        if self.dask is None:
-            raise ValueError("Graph is undefined")
-        return self.dask.to_dict()
-
-    @property
-    def dependencies(self) -> Mapping[str, CollectionOperation]:
-        return {}
 
 
 class DataFrameCreation(DataFrameOperation):
@@ -194,13 +183,13 @@ class DataFrameCreation(DataFrameOperation):
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
 
-    def generate_graph(self, keys: list[tuple]) -> dict:
+    def subgraph(self, keys: list[tuple]) -> tuple:
         dsk = {}
         for key in keys:
             name, index = key
             assert name == self.name
             dsk[key] = (self.io_func, self.inputs[index])
-        return dsk
+        return dsk, {}
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
@@ -250,51 +239,27 @@ class DataFrameMapOperation(DataFrameOperation):
         self._columns = columns
         self.kwargs = kwargs
 
-    def regenerate(self, new_dependencies: dict, **new_kwargs):
-        kwargs = {
-            "divisions": self.divisions,
-            "label": self.label,
-            "columns": self.columns,
-            **self.kwargs,
-        }
-        kwargs.update(new_kwargs.get(self.name, {}))
-        args = [
-            new_dependencies[arg.name] if isinstance(arg, CollectionOperation) else arg
-            for arg in self.args
-        ]
-        return type(self)(
-            self.func,
-            self.meta,
-            *args,
-            **kwargs,
-        )
-
-    @property
-    def dependencies(self) -> Mapping[str, CollectionOperation]:
-        return self._dependencies
-
-    def generate_graph(self, keys: list[tuple]) -> dict:
-        dsk = {}
-
-        # Start by populating `dsk` with the graph needed for
-        # dependencies (recursively). If the dependency is
-        # "fusable", we add it to a seperate `fusable_graph`
-        # dictionary.
+    def subgraph(self, keys: list[tuple]) -> tuple:
+        # Start by populating the key dependencies.
+        # If the dependency is "fusable", we add it to a
+        # seperate `fusable_graph` dictionary.
         fusable_graph = {}
+        dep_keys = {}
         for name, dep in self.dependencies.items():
             if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
                 # These dependencies are "fusable"
-                fusable_graph.update(
-                    dep.generate_graph([(name, key[1]) for key in keys])
-                )
+                _graph, _keys = dep.subgraph([(name, key[1]) for key in keys])
+                fusable_graph.update(_graph)
+                dep_keys.update(_keys)
             else:
-                # Not fusing these dependencies, so include them in dsk
-                dsk.update(dep.generate_graph([(name, key[1]) for key in keys]))
+                # Not fusing these dependencies
+                dep_keys[dep] = [(name, key[1]) for key in keys]
 
         # Now we just need to update the graph with the
         # current DataFrameMapOperation tasks. If any dependency
         # keys are in `fusable_graph`, we use the corresponding
         # element from `fusable_graph` (rather than the task key).
+        dsk = {}
         for key in keys:
             name, index = key
             assert name == self.name
@@ -318,7 +283,30 @@ class DataFrameMapOperation(DataFrameOperation):
                 dsk[key] = tuple(task)
 
         dsk.update(fusable_graph)
-        return dsk
+        return dsk, dep_keys
+
+    @property
+    def dependencies(self) -> Mapping[str, CollectionOperation]:
+        return self._dependencies
+
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        kwargs = {
+            "divisions": self.divisions,
+            "label": self.label,
+            "columns": self.columns,
+            **self.kwargs,
+        }
+        kwargs.update(new_kwargs.get(self.name, {}))
+        args = [
+            new_dependencies[arg.name] if isinstance(arg, CollectionOperation) else arg
+            for arg in self.args
+        ]
+        return type(self)(
+            self.func,
+            self.meta,
+            *args,
+            **kwargs,
+        )
 
 
 class DataFrameColumnSelection(DataFrameMapOperation):
@@ -413,7 +401,7 @@ class MemoizingVisitor:
         self.kwargs = kwargs
         self.cache = {}
 
-    def __call__(self, operation):
+    def __call__(self, operation, **kwargs):
         try:
             return self.cache[operation]
         except KeyError:
@@ -422,9 +410,23 @@ class MemoizingVisitor:
                 self.func(
                     operation,
                     self,
+                    **kwargs,
                     **self.kwargs.get(operation.name, {}),
                 ),
             )
+
+
+def _generate_graph(operation, visitor, keys=None):
+    if keys is None:
+        raise ValueError
+    dsk, dependency_keys = operation.subgraph(keys)
+    for dep, dep_keys in dependency_keys.items():
+        dsk.update(visitor(dep, keys=dep_keys))
+    return dsk
+
+
+def generate_graph(operation):
+    return MemoizingVisitor(_generate_graph)(operation, keys=operation.collection_keys)
 
 
 def _regenerate(operation, visitor, **kwargs):
