@@ -181,6 +181,7 @@ def get(
     """
     chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
+    initializer = initializer or config.get("initializer", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
@@ -202,9 +203,9 @@ def get(
     else:
         if initializer is not None:
             raise ValueError(
-                "Incompatible argument values: keyword arguments "
-                "``pool`` and ``initializer`` may not both be set "
-                "at the same time."
+                "Incompatible values: ``pool`` and ``initializer`` may not "
+                "both be set at the same time.  At least one of them must be "
+                "set to ``None``."
             )
         if isinstance(pool, multiprocessing.pool.Pool):
             pool = MultiprocessingPoolExecutor(pool)
