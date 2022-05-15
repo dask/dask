@@ -662,8 +662,12 @@ def visualize(
     verbose : bool, optional
         Whether to label output and input boxes even if the data aren't chunked.
         Beware: these labels can get very long. Default is False.
+    visualizer : {"graphviz", "ipycytoscape", "cytoscape"}, optional.
+        The visualization engine to use. If not provided, this checks the dask config
+        value "visualizer". If that is not set, it tries to import ``graphviz``
+        and ``ipycytoscape``, using the first one to succeed.
     **kwargs
-       Additional keyword arguments to forward to ``to_graphviz``.
+       Additional keyword arguments to forward to the visualizer.
 
     Examples
     --------
@@ -685,8 +689,6 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    from dask.dot import cytoscape_graph, dot_graph
-
     args, _ = unpack_collections(*args, traverse=traverse)
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
@@ -791,8 +793,12 @@ def visualize(
             pass
 
     if visualizer == "graphviz":
+        from dask.dot import dot_graph
+
         return dot_graph(dsk, filename=filename, **kwargs)
     elif visualizer in ("cytoscape", "ipycytoscape"):
+        from dask.dot import cytoscape_graph
+
         return cytoscape_graph(dsk, filename=filename, **kwargs)
     else:
         raise ValueError(f"Visualizer {visualizer} not recognized")

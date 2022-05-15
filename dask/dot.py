@@ -318,6 +318,10 @@ def to_cytoscape_json(
     verbose=False,
     **kwargs,
 ):
+    """
+    Convert a dask graph to Cytoscape JSON:
+    https://js.cytoscape.org/#notation/elements-json
+    """
     nodes = []
     edges = []
     data = {"nodes": nodes, "edges": edges}
@@ -415,13 +419,51 @@ def cytoscape_graph(
     format: str | None = None,
     *,
     rankdir: str = "BT",
-    node_sep: float = 100,
+    node_sep: float = 10,
     edge_sep: float = 10,
     spacing_factor: float = 1,
     node_style: dict[str, str] | None = None,
     edge_style: dict[str, str] | None = None,
     **kwargs,
 ):
+    """
+    Create an ipycytoscape widget for a dask graph.
+
+    If `filename` is not None, write an HTML file to disk with the specified name.
+
+    This uses the Cytoscape dagre layout algorithm. Options for that are documented here:
+    https://github.com/cytoscape/cytoscape.js-dagre#api
+
+    Parameters
+    ----------
+    dsk : dict
+        The graph to display.
+    filename : str or None, optional
+        The name of the HTML file to write to disk.
+    format : str, optional
+        Not used in this visualizer.
+    rankdir: str
+        The direction in which to orient the visualization.
+    node_sep: float
+        The separation (in px) between nodes in the DAG layout.
+    edge_sep: float
+        The separation (in px) between edges in the DAG layout.
+    spacing_factor: float
+        An overall scaling factor to increase (>1) or decrease (<1) the spacing
+        of the layout.
+    node_style: dict[str, str], optional
+        A dictionary of style attributes for nodes (refer to Cytoscape JSON docs
+        for available options: https://js.cytoscape.org/#notation/elements-json)
+    edge_style: dict[str, str], optional
+        A dictionary of style attributes for edges (refer to Cytoscape JSON docs
+        for available options: https://js.cytoscape.org/#notation/elements-json)
+    **kwargs
+        Additional keyword arguments to forward to `to_cytoscape_json`.
+
+    Returns
+    -------
+    result : ipycytoscape.CytoscapeWidget
+    """
     ipycytoscape = import_required(
         "ipycytoscape",
         "Drawing dask graphs with the cytoscape visualizer requires the `ipycytoscape` "
@@ -435,6 +477,9 @@ def cytoscape_graph(
     edge_style = edge_style or {}
 
     data = to_cytoscape_json(dsk, **kwargs)
+    # TODO: it's not easy to programmatically increase the height of the widget.
+    # Ideally we would make it a bit bigger, but that will probably require upstreaming
+    # some fixes.
     g = ipycytoscape.CytoscapeWidget(
         layout={"height": "400px"},
     )
@@ -444,6 +489,7 @@ def cytoscape_graph(
         nodeSep=node_sep,
         edgeSep=edge_sep,
         spacingFactor=spacing_factor,
+        nodeDimensionsIncludeLabels=True,
     )
     g.graph.add_graph_from_json(
         data,

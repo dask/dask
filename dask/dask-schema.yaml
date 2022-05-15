@@ -20,6 +20,14 @@ properties:
           If ``true``, tokenize will error instead of falling back to uuids
           when a deterministic token cannot be generated. Defaults to
           ``false``.
+  visualizer:
+    type:
+      - string
+      - 'null'
+    description: |
+      Visualization engine to use when calling ``.visualize()`` on a Dask collection.
+      Currently supports ``'graphviz'``, ``'ipycytoscape'``, and ``'cytoscape'``
+      (alias for ``'ipycytoscape'``)
 
   dataframe:
     type: object
