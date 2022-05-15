@@ -339,9 +339,9 @@ def to_cytoscape_json(
                     {
                         "data": {
                             "id": func_name,
-                            "nodelabel": key_split(k),
+                            "label": key_split(k),
                             "shape": "ellipse",
-                            "color": "white",
+                            "color": "gray",
                             **attrs,
                         }
                     }
@@ -361,9 +361,9 @@ def to_cytoscape_json(
                         {
                             "data": {
                                 "id": dep_name,
-                                "nodelabel": box_label(dep, verbose),
+                                "label": box_label(dep, verbose),
                                 "shape": "rectangle",
-                                "color": "white",
+                                "color": "gray",
                                 **attrs,
                             }
                         }
@@ -399,9 +399,9 @@ def to_cytoscape_json(
                 {
                     "data": {
                         "id": k_name,
-                        "nodelabel": box_label(k, verbose),
+                        "label": box_label(k, verbose),
                         "shape": "rectangle",
-                        "color": "white",
+                        "color": "gray",
                         **attrs,
                     }
                 }
@@ -458,13 +458,13 @@ def cytoscape_graph(
                     "font-size": "24px",
                     "font-weight": "bold",
                     "color": "black",
-                    "background-color": "data(color)",
-                    "border-color": "black",
-                    "border-width": 2,
+                    "background-color": "#eee",
+                    "border-color": "data(color)",
+                    "border-width": 4,
                     "opacity": "1.0",
                     "text-valign": "center",
                     "text-halign": "center",
-                    "label": "data(nodelabel)",
+                    "label": "data(label)",
                     "shape": "data(shape)",
                     "width": 64,
                     "height": 64,
