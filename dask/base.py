@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
+from typing import Literal
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -601,7 +602,13 @@ def compute(
 
 
 def visualize(
-    *args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs
+    *args,
+    filename="mydask",
+    traverse=True,
+    optimize_graph=False,
+    maxval=None,
+    visualizer: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    **kwargs,
 ):
     """
     Visualize several dask graphs simultaneously.
@@ -765,8 +772,30 @@ def visualize(
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
-    # return dot_graph(dsk, filename=filename, **kwargs)
-    return cytoscape_graph(dsk, **kwargs)
+    # Determine which visualizer to dispatch to, first checking the kwarg, then config,
+    # then whichever of graphviz or ipycytoscape are installed, in that order.
+    visualizer = visualizer or config.get("visualizer", None)
+
+    if not visualizer:
+        try:
+            import graphviz  # noqa: F401
+
+            visualizer = "graphviz"
+        except ImportError:
+            pass
+        try:
+            import ipycytoscape  # noqa: F401
+
+            visualizer = "cytoscape"
+        except ImportError:
+            pass
+
+    if visualizer == "graphviz":
+        return dot_graph(dsk, filename=filename, **kwargs)
+    elif visualizer in ("cytoscape", "ipycytoscape"):
+        return cytoscape_graph(dsk, filename=filename, **kwargs)
+    else:
+        raise ValueError(f"Visualizer {visualizer} not recognized")
 
 
 def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):

@@ -1,18 +1,11 @@
+from __future__ import annotations
+
 import os
 import re
 from functools import partial
 
 from dask.core import get_dependencies, ishashable, istask
 from dask.utils import apply, funcname, import_required, key_split
-
-graphviz = import_required(
-    "graphviz",
-    "Drawing dask graphs requires the `graphviz` python library and the "
-    "`graphviz` system library.\n\n"
-    "Please either conda or pip install as follows:\n\n"
-    "  conda install python-graphviz     # either conda install\n"
-    "  python -m pip install graphviz    # or pip install and follow installation instructions",
-)
 
 
 def task_label(task):
@@ -137,6 +130,15 @@ def to_graphviz(
     verbose=False,
     **kwargs,
 ):
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz visualizer requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
+
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
@@ -407,22 +409,41 @@ def to_cytoscape_json(
     return data
 
 
-def cytoscape_graph(dsk, **kwargs):
-    import ipycytoscape
-
-    data = to_cytoscape_json(
-        dsk,
-        **kwargs,
+def cytoscape_graph(
+    dsk,
+    filename: str | None = "mydask",
+    format: str | None = None,
+    *,
+    rankdir: str = "BT",
+    node_sep: float = 100,
+    edge_sep: float = 10,
+    spacing_factor: float = 1,
+    node_style: dict[str, str] | None = None,
+    edge_style: dict[str, str] | None = None,
+    **kwargs,
+):
+    ipycytoscape = import_required(
+        "ipycytoscape",
+        "Drawing dask graphs with the cytoscape visualizer requires the `ipycytoscape` "
+        "python library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install ipycytoscape            # either conda install\n"
+        "  python -m pip install ipycytoscape    # or pip install",
     )
+
+    node_style = node_style or {}
+    edge_style = edge_style or {}
+
+    data = to_cytoscape_json(dsk, **kwargs)
     g = ipycytoscape.CytoscapeWidget(
         layout={"height": "400px"},
     )
     g.set_layout(
         name="dagre",
-        rankDir="BT",
-        nodeSep=100,
-        edgeSep=10,
-        spacingFactor=1,
+        rankDir=rankdir,
+        nodeSep=node_sep,
+        edgeSep=edge_sep,
+        spacingFactor=spacing_factor,
     )
     g.graph.add_graph_from_json(
         data,
@@ -447,6 +468,7 @@ def cytoscape_graph(dsk, **kwargs):
                     "shape": "data(shape)",
                     "width": 64,
                     "height": 64,
+                    **node_style,
                 },
             },
             {
@@ -457,6 +479,7 @@ def cytoscape_graph(dsk, **kwargs):
                     "target-arrow-shape": "triangle",
                     "target-arrow-color": "gray",
                     "curve-style": "bezier",
+                    **edge_style,
                 },
             },
         ],
@@ -466,4 +489,10 @@ def cytoscape_graph(dsk, **kwargs):
     g.max_zoom = z * 2.0
     g.min_zoom = z / 10.0
     g.wheel_sensitivity = 0.1
+
+    if filename is not None:
+        from ipywidgets.embed import embed_minimal_html
+
+        filename = filename if filename.endswith(".html") else filename + ".html"
+        embed_minimal_html(filename, views=[g], title="Dask task graph")
     return g
