@@ -716,7 +716,7 @@ def visualize(
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
-            cmap = plt.cm.RdBu
+            cmap = plt.cm.plasma
         if isinstance(cmap, str):
             import matplotlib.pyplot as plt
 
