@@ -678,7 +678,7 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    from dask.dot import dot_graph
+    from dask.dot import cytoscape_graph, dot_graph
 
     args, _ = unpack_collections(*args, traverse=traverse)
 
@@ -765,7 +765,8 @@ def visualize(
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
-    return dot_graph(dsk, filename=filename, **kwargs)
+    # return dot_graph(dsk, filename=filename, **kwargs)
+    return cytoscape_graph(dsk, **kwargs)
 
 
 def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):

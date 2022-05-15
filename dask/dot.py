@@ -306,3 +306,164 @@ def graphviz_to_file(g, filename, format):
         f.write(data)
 
     return display_cls(filename=full_filename)
+
+
+def to_cytoscape_json(
+    dsk,
+    data_attributes=None,
+    function_attributes=None,
+    collapse_outputs=False,
+    verbose=False,
+    **kwargs,
+):
+    nodes = []
+    edges = []
+    data = {"nodes": nodes, "edges": edges}
+
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
+
+    seen = set()
+    connected = set()
+
+    for k, v in dsk.items():
+        k_name = name(k)
+        if istask(v):
+            func_name = name((k, "function")) if not collapse_outputs else k_name
+            if collapse_outputs or func_name not in seen:
+                seen.add(func_name)
+                attrs = function_attributes.get(k, {}).copy()
+                nodes.append(
+                    {
+                        "data": {
+                            "id": func_name,
+                            "nodelabel": key_split(k),
+                            "shape": "ellipse",
+                            "color": "white",
+                            **attrs,
+                        }
+                    }
+                )
+            if not collapse_outputs:
+                edges.append({"data": {"source": func_name, "target": k_name}})
+
+                connected.add(func_name)
+                connected.add(k_name)
+
+            for dep in get_dependencies(dsk, k):
+                dep_name = name(dep)
+                if dep_name not in seen:
+                    seen.add(dep_name)
+                    attrs = data_attributes.get(dep, {}).copy()
+                    nodes.append(
+                        {
+                            "data": {
+                                "id": dep_name,
+                                "nodelabel": box_label(dep, verbose),
+                                "shape": "rectangle",
+                                "color": "white",
+                                **attrs,
+                            }
+                        }
+                    )
+                edges.append(
+                    {
+                        "data": {
+                            "source": dep_name,
+                            "target": func_name,
+                        }
+                    }
+                )
+                connected.add(dep_name)
+                connected.add(func_name)
+
+        elif ishashable(v) and v in dsk:
+            v_name = name(v)
+            edges.append(
+                {
+                    "data": {
+                        "source": v_name,
+                        "target": k_name,
+                    }
+                }
+            )
+            connected.add(v_name)
+            connected.add(k_name)
+
+        if (not collapse_outputs or k_name in connected) and k_name not in seen:
+            seen.add(k_name)
+            attrs = data_attributes.get(k, {}).copy()
+            nodes.append(
+                {
+                    "data": {
+                        "id": k_name,
+                        "nodelabel": box_label(k, verbose),
+                        "shape": "rectangle",
+                        "color": "white",
+                        **attrs,
+                    }
+                }
+            )
+    return data
+
+
+def cytoscape_graph(dsk, **kwargs):
+    import ipycytoscape
+
+    data = to_cytoscape_json(
+        dsk,
+        **kwargs,
+    )
+    g = ipycytoscape.CytoscapeWidget(
+        layout={"height": "400px"},
+    )
+    g.set_layout(
+        name="dagre",
+        rankDir="BT",
+        nodeSep=100,
+        edgeSep=10,
+        spacingFactor=1,
+    )
+    g.graph.add_graph_from_json(
+        data,
+        directed=True,
+    )
+    g.set_style(
+        [
+            {
+                "selector": "node",
+                "style": {
+                    "font-family": "helvetica",
+                    "font-size": "24px",
+                    "font-weight": "bold",
+                    "color": "black",
+                    "background-color": "data(color)",
+                    "border-color": "black",
+                    "border-width": 2,
+                    "opacity": "1.0",
+                    "text-valign": "center",
+                    "text-halign": "center",
+                    "label": "data(nodelabel)",
+                    "shape": "data(shape)",
+                    "width": 64,
+                    "height": 64,
+                },
+            },
+            {
+                "selector": "edge",
+                "style": {
+                    "width": 8,
+                    "line-color": "gray",
+                    "target-arrow-shape": "triangle",
+                    "target-arrow-color": "gray",
+                    "curve-style": "bezier",
+                },
+            },
+        ],
+    )
+    # Tweak the zoom sensitivity
+    z = g.zoom
+    g.max_zoom = z * 2.0
+    g.min_zoom = z / 10.0
+    g.wheel_sensitivity = 0.1
+    return g
