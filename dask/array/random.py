@@ -619,55 +619,6 @@ def default_rng(seed=None):
     return Generator(np.random.PCG64(seed))
 
 
-_state = default_rng()
-
-
-beta = _state.beta
-binomial = _state.binomial
-chisquare = _state.chisquare
-if hasattr(_state, "choice"):
-    choice = _state.choice
-exponential = _state.exponential
-f = _state.f
-gamma = _state.gamma
-geometric = _state.geometric
-gumbel = _state.gumbel
-hypergeometric = _state.hypergeometric
-integers = _state.integers
-laplace = _state.laplace
-logistic = _state.logistic
-lognormal = _state.lognormal
-logseries = _state.logseries
-multinomial = _state.multinomial
-multivariate_hypergeometric = _state.multivariate_hypergeometric
-negative_binomial = _state.negative_binomial
-noncentral_chisquare = _state.noncentral_chisquare
-noncentral_f = _state.noncentral_f
-normal = _state.normal
-pareto = _state.pareto
-permutation = _state.permutation
-poisson = _state.poisson
-power = _state.power
-random = _state.random
-rayleigh = _state.rayleigh
-triangular = _state.triangular
-uniform = _state.uniform
-vonmises = _state.vonmises
-wald = _state.wald
-weibull = _state.weibull
-zipf = _state.zipf
-
-"""
-Standard distributions
-"""
-
-standard_cauchy = _state.standard_cauchy
-standard_exponential = _state.standard_exponential
-standard_gamma = _state.standard_gamma
-standard_normal = _state.standard_normal
-standard_t = _state.standard_t
-
-
 class RandomState:
     """
     Mersenne Twister pseudo-random number generator
@@ -1097,17 +1048,37 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     return func(*args, size=size, **kwargs)
 
 
-_state = RandomState()
+"""
+Generator only
+"""
+_state = default_rng()
 
+integers = _state.integers
+multivariate_hypergeometric = _state.multivariate_hypergeometric
+random = _state.random
+
+
+"""
+RandomState only
+"""
+_state = RandomState()
 
 seed = _state.seed
 
+random_sample = _state.random_sample
+random = random_sample
+randint = _state.randint
+random_integers = _state.random_integers
+
+
+"""
+Common distributions
+"""
 
 beta = _state.beta
 binomial = _state.binomial
 chisquare = _state.chisquare
-if hasattr(_state, "choice"):
-    choice = _state.choice
+choice = _state.choice
 exponential = _state.exponential
 f = _state.f
 gamma = _state.gamma
@@ -1128,16 +1099,13 @@ permutation = _state.permutation
 poisson = _state.poisson
 power = _state.power
 rayleigh = _state.rayleigh
-random_sample = _state.random_sample
-random = random_sample
-randint = _state.randint
-random_integers = _state.random_integers
 triangular = _state.triangular
 uniform = _state.uniform
 vonmises = _state.vonmises
 wald = _state.wald
 weibull = _state.weibull
 zipf = _state.zipf
+
 
 """
 Standard distributions
