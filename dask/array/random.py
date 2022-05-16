@@ -295,6 +295,7 @@ class Generator:
 
     # @derived_from(np.random.Generator, skipblocks=1)
     # def dirichlet(self, alpha, size=None, chunks="auto"):
+    #     return self._wrap("dirichlet", alpha, size=size, chunks=chunks, **kwargs)
 
     @derived_from(np.random.Generator, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
