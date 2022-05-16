@@ -68,6 +68,9 @@ class DataFrameOperation(CollectionOperation):
             return type(collection)(operation=optimize(collection.operation))
         return collection
 
+    def copy(self):
+        raise NotImplementedError
+
 
 class CompatFrameOperation(DataFrameOperation):
     """Pass-through DataFrameOperation
@@ -84,6 +87,15 @@ class CompatFrameOperation(DataFrameOperation):
         self._parent_meta = parent_meta
         self._meta = make_meta(meta, parent_meta=self._parent_meta)
         self._divisions = tuple(divisions) if divisions is not None else None
+
+    def copy(self):
+        return type(self)(
+            self.dask,
+            self.name,
+            self.meta,
+            self.divisions,
+            parent_meta=self._parent_meta,
+        )
 
     @property
     def dask(self) -> HighLevelGraph | None:
@@ -136,6 +148,17 @@ class DataFrameCreation(DataFrameOperation):
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
         self.creation_info = creation_info or {}
+
+    def copy(self):
+        return type(self)(
+            self.io_func,
+            self.meta,
+            self.inputs,
+            columns=self.columns,
+            divisions=self.divisions,
+            label=self.label,
+            creation_info=self.creation_info,
+        )
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         dsk = {}
@@ -205,6 +228,17 @@ class DataFrameMapOperation(DataFrameOperation):
         self._divisions = tuple(divisions)
         self._columns = columns
         self.kwargs = kwargs
+
+    def copy(self):
+        return type(self)(
+            self.func,
+            self.meta,
+            self.args,
+            columns=self.columns,
+            divisions=self.divisions,
+            label=self.label,
+            **self.kwargs,
+        )
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         # Start by populating the key dependencies.

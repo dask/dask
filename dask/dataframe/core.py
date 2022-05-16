@@ -546,7 +546,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 "The `deep` value must be False. This is strictly a shallow copy "
                 "of the underlying computational graph."
             )
-        return new_dd_object(operation=self.operation)
+        return new_dd_object(operation=self.operation.copy())
 
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
