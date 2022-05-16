@@ -1069,7 +1069,7 @@ def compute_divisions(df, col=None, **kwargs) -> tuple:
 def compute_and_set_divisions(df, **kwargs):
     mins, maxes, lens = _compute_partition_stats(df.index, allow_overlap=True, **kwargs)
     if len(mins) == len(df.divisions) - 1:
-        df._divisions = tuple(mins) + (maxes[-1],)
+        df.divisions = tuple(mins) + (maxes[-1],)
         if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
             return df
 
