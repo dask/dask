@@ -1046,6 +1046,7 @@ def from_map(
             token=token,
             columns=column_projection,
             divisions=divisions,
+            creation_info=creation_info,
         )
         dd_kwargs = {"operation": operation}
 
