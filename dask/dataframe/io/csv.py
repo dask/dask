@@ -848,8 +848,13 @@ def to_csv(
     encoding : string, optional
         A string representing the encoding to use in the output file,
         defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
-    mode : str
-        Python write mode, default 'w'
+    mode : str, default 'w'
+        Python file mode. The default is 'w' (or 'wt'), for writing
+        a new file or overwriting an existing file in text mode. 'a'
+        (or 'at') will append to an existing file in text mode or
+        create a new file if it does not already exist.
+        Note that not all filesystems support the
+        append mode, especially on cloud storage systems.
     name_function : callable, default None
         Function accepting an integer (partition index) and producing a
         string to replace the asterisk in the given filename globstring.
