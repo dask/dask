@@ -608,12 +608,12 @@ def default_rng(seed=None):
         return Generator(seed)
     elif isinstance(seed, Generator):
         # Pass through a Generator
-        seed._generator = seed
+        seed._generator = type(seed)
         return seed
     elif hasattr(seed, "standard_normal"):
         # a Generator. Just not ours
         res = Generator(np.random.PCG64())
-        res._generator = seed
+        res._generator = type(seed)
         return res
     # Otherwise return default Generator
     return Generator(np.random.PCG64(seed))
