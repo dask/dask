@@ -67,6 +67,10 @@ class CollectionOperation:
         """Perform collection-specific optimizations"""
         raise NotImplementedError
 
+    def copy(self):
+        """Copy this operation"""
+        raise NotImplementedError
+
     def __hash__(self):
         return hash(self.name)
 

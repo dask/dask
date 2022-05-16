@@ -68,9 +68,6 @@ class DataFrameOperation(CollectionOperation):
             return type(collection)(operation=optimize(collection.operation))
         return collection
 
-    def copy(self):
-        raise NotImplementedError
-
 
 class CompatFrameOperation(DataFrameOperation):
     """Pass-through DataFrameOperation
