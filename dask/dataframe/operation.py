@@ -33,7 +33,7 @@ class CollectionOperation:
             )
         return self._dask
 
-    def subgraph(self, keys: list[tuple]) -> tuple:
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         """Return the subgraph and key dependencies for this operation"""
         raise NotImplementedError
 
@@ -137,7 +137,7 @@ class CompatFrameOperation(DataFrameOperation):
     def dask(self) -> HighLevelGraph | None:
         return self._dask
 
-    def subgraph(self, keys: list[tuple]) -> tuple:
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         if self.dask is None:
             raise ValueError("Graph is undefined")
         return self.dask.to_dict(), {}
@@ -183,7 +183,7 @@ class DataFrameCreation(DataFrameOperation):
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
 
-    def subgraph(self, keys: list[tuple]) -> tuple:
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         dsk = {}
         for key in keys:
             name, index = key
@@ -239,7 +239,7 @@ class DataFrameMapOperation(DataFrameOperation):
         self._columns = columns
         self.kwargs = kwargs
 
-    def subgraph(self, keys: list[tuple]) -> tuple:
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         # Start by populating the key dependencies.
         # If the dependency is "fusable", we add it to a
         # seperate `fusable_graph` dictionary.
@@ -259,7 +259,7 @@ class DataFrameMapOperation(DataFrameOperation):
         # current DataFrameMapOperation tasks. If any dependency
         # keys are in `fusable_graph`, we use the corresponding
         # element from `fusable_graph` (rather than the task key).
-        dsk = {}
+        dsk: dict[tuple, tuple] = {}
         for key in keys:
             name, index = key
             assert name == self.name
@@ -401,32 +401,31 @@ class MemoizingVisitor:
         self.kwargs = kwargs
         self.cache = {}
 
-    def __call__(self, operation, **kwargs):
+    def __call__(self, operation, *args):
+        key = tokenize(operation, *args)
         try:
-            return self.cache[operation]
+            return self.cache[key]
         except KeyError:
             return self.cache.setdefault(
-                operation,
+                key,
                 self.func(
                     operation,
                     self,
-                    **kwargs,
+                    *args,
                     **self.kwargs.get(operation.name, {}),
                 ),
             )
 
 
-def _generate_graph(operation, visitor, keys=None):
-    if keys is None:
-        raise ValueError
+def _generate_graph(operation, visitor, keys):
     dsk, dependency_keys = operation.subgraph(keys)
     for dep, dep_keys in dependency_keys.items():
-        dsk.update(visitor(dep, keys=dep_keys))
+        dsk.update(visitor(dep, dep_keys))
     return dsk
 
 
 def generate_graph(operation):
-    return MemoizingVisitor(_generate_graph)(operation, keys=operation.collection_keys)
+    return MemoizingVisitor(_generate_graph)(operation, operation.collection_keys)
 
 
 def _regenerate(operation, visitor, **kwargs):
@@ -519,7 +518,15 @@ def project_columns(operation):
 
 
 def optimize(operation):
+    if isinstance(operation, CompatFrameOperation):
+        return operation
     new_operation = operation
     new_operation = project_columns(new_operation)
     # TODO: Add other optimizations (e.g. predicate pushdown)
     return new_operation
+
+
+def optimize_collection(collection):
+    if hasattr(collection, "operation"):
+        return type(collection)(operation=optimize(collection.operation))
+    return collection

@@ -379,11 +379,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def operation(self):
         return self._operation
 
-    def optimize_operation(self):
-        from dask.dataframe.operation import optimize
-
-        return type(self)(operation=optimize(self.operation))
-
     @property
     def dask(self):
         return self.operation.dask
