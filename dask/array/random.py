@@ -505,19 +505,15 @@ def _shuffle(state_data, x, axis=0):
 
 def _apply_random_func(rng, funcname, state_data, size, args, kwargs):
     """Apply random method with seed"""
-    if rng is None:
-        rng = np.random.Generator
-    if rng == Generator:
+    if rng is None or rng is Generator:
         state = np.random.default_rng(state_data)
     else:
         import importlib
 
-        if importlib.util.find_spec("cupy") is not None:
-            import cupy
+        lib = rng.__module__.split(".")[0]
+        xp = importlib.import_module(lib)
+        state = xp.random.default_rng(state_data)
 
-            state = cupy.random.default_rng(state_data)
-        else:
-            raise TypeError(f"Unknown Generator type: {rng}")
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
 
@@ -604,7 +600,7 @@ def default_rng(seed=None):
     np.random.default_rng
     """
     if hasattr(seed, "capsule"):
-        # We were passed a BitGenerator, so just wrap it
+        # We are passed a BitGenerator, so just wrap it
         return Generator(seed)
     elif isinstance(seed, Generator):
         # Pass through a Generator
