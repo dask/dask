@@ -92,7 +92,7 @@ class DaskCollection(Protocol):
     def __dask_graph__(self) -> Mapping:
         """The Dask task graph.
 
-        The core Dask collections (Array, DatFrame, Bag, and Delayed)
+        The core Dask collections (Array, DataFrame, Bag, and Delayed)
         use a :py:class:`HighLevelGraph` to represent the collection
         task graph. It is also possible to represent the task graph as
         a low level graph using a Python dictionary.
