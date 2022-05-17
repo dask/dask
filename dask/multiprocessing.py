@@ -151,7 +151,7 @@ def get(
     optimize_graph=True,
     pool=None,
     initializer=None,
-    replace_default_initializer=False,
+    use_default_initializer=True,
     chunksize=None,
     **kwargs,
 ):
@@ -174,13 +174,12 @@ def get(
     pool : Executor or Pool
         Some sort of `Executor` or `Pool` to use
     initializer: function
-        Ignored if ``pool`` is not ``None``.
+        Ignored if ``pool`` has been set.
         Function to initialize a worker process before running any tasks in it.
-    replace_default_initializer: bool
-        Ignored if ``initializer`` is ``None``.
-        If False [default], function `initializer` will be called immediately after
-        the default process-initializer is run.
-        If True, function `initializer` will replace the default process-initializer.
+    use_default_initializer: bool
+        If True [default], the default process-initializer will be run.  The user-
+        defined ``initializer`` will also be run afterwards if it is also set.
+        If False, the default process-initializer will not be run.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
         Defaults to 5 as some batching is helpful.
@@ -189,6 +188,9 @@ def get(
     chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
     initializer = initializer or config.get("multiprocessing.initializer", None)
+    use_default_initializer = use_default_initializer or config.get(
+        "multiprocessing.use_default_initializer", True
+    )
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
@@ -204,10 +206,7 @@ def get(
         initializer = partial(
             initialize_worker_process,
             user_initializer=initializer,
-            override=(
-                replace_default_initializer
-                or config.get("multiprocessing.replace_initializer", False)
-            ),
+            use_default_initializer=use_default_initializer,
         )
         pool = ProcessPoolExecutor(
             num_workers, mp_context=context, initializer=initializer
@@ -261,13 +260,13 @@ def get(
     return result
 
 
-def initialize_worker_process(user_initializer=None, override=False):
+def initialize_worker_process(user_initializer=None, use_default_initializer=True):
     """
     Initialize a worker process before running any tasks in it.
     """
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
-    if user_initializer is None or not override:
+    if use_default_initializer:
         np = sys.modules.get("numpy")
         if np is not None:
             np.random.seed()

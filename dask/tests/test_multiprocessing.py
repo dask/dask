@@ -203,15 +203,17 @@ def proc_init():
 
 
 @pytest.mark.parametrize(
-    "scheduler, initializer, override, expected_results",
+    "scheduler, initializer, use_default_initializer, expected_results",
     [
         ("threading", None, None, [1] * 10),
         ("processes", None, None, [0] * 10),
-        ("processes", proc_init, False, [1] * 10),
         ("processes", proc_init, True, [1] * 10),
+        ("processes", proc_init, False, [1] * 10),
     ],
 )
-def test_process_initializer(scheduler, initializer, override, expected_results):
+def test_process_initializer(
+    scheduler, initializer, use_default_initializer, expected_results
+):
     @delayed(pure=False)
     def f():
         return global_.value
@@ -222,7 +224,7 @@ def test_process_initializer(scheduler, initializer, override, expected_results)
         {
             "scheduler": scheduler,
             "multiprocessing.initializer": initializer,
-            "multiprocessing.replace_initializer": override,
+            "multiprocessing.use_default_initializer": use_default_initializer,
         }
     ):
         (results,) = compute([f() for _ in range(10)])
@@ -232,7 +234,7 @@ def test_process_initializer(scheduler, initializer, override, expected_results)
         [f() for _ in range(10)],
         scheduler=scheduler,
         initializer=initializer,
-        replace_default_initializer=override,
+        replace_default_initializer=use_default_initializer,
     )
     assert results2 == expected_results
 
