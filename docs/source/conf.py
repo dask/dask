@@ -335,6 +335,10 @@ intersphinx_mapping = {
         "https://zarr.readthedocs.io/en/latest/objects.inv",
     ),
     "skimage": ("https://scikit-image.org/docs/dev/", None),
+    "fsspec": (
+        "https://filesystem-spec.readthedocs.io/en/latest/",
+        "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
+    ),
 }
 
 # Redirects

@@ -791,6 +791,7 @@ def to_csv(
     """
     Store Dask DataFrame to CSV files
 
+    Internally uses ``fsspec``.
     One filename per partition will be created. You can specify the
     filenames in a variety of ways.
 
@@ -890,6 +891,10 @@ def to_csv(
     ValueError
         If `header_first_partition_only` is set to `False` or
         `name_function` is specified when `single_file` is `True`.
+
+    See Also
+    --------
+    fsspec.open_files
     """
     if single_file and name_function is not None:
         raise ValueError("name_function is not supported under the single file mode")
