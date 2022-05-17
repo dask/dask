@@ -136,7 +136,6 @@ messy situations in everyday problems.
 
    install.rst
    10-minutes-to-dask.rst
-   deploying.rst
    presentations.rst
    best-practices.rst
    faq.rst
@@ -151,6 +150,7 @@ messy situations in everyday problems.
    dataframe.rst
    delayed.rst
    futures.rst
+   deploying.rst
 
 .. toctree::
    :maxdepth: 1
