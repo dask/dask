@@ -3882,6 +3882,27 @@ def test_setitem_1d():
 
     assert_eq(x, dx)
 
+    index = da.arange(3)
+    with pytest.raises(ValueError, match="Boolean index assignment in Dask"):
+        dx[index] = 1
+
+
+def test_setitem_hardmask():
+    x = np.ma.array([1, 2, 3, 4], dtype=int)
+    x.harden_mask()
+
+    y = x.copy()
+    assert y.hardmask
+
+    x[0] = np.ma.masked
+    x[0:2] = np.ma.masked
+
+    dx = da.from_array(y)
+    dx[0] = np.ma.masked
+    dx[0:2] = np.ma.masked
+
+    assert_eq(x, dx)
+
 
 def test_setitem_2d():
     x = np.arange(24).reshape((4, 6))
@@ -5215,3 +5236,61 @@ def test_len_object_with_unknown_size():
     b = a[a < 0.5]
     with pytest.raises(ValueError, match="on object with unknown chunk size"):
         assert len(b)
+
+
+@pytest.mark.parametrize("ndim", [0, 1, 3, 8])
+def test_chunk_shape_broadcast(ndim):
+    from functools import partial
+
+    def f(x, ndim=0):
+        # Ignore `x` and return arbitrary one-element array of dimensionality `ndim`
+        # For example,
+        # f(x, 0) = array(5)
+        # f(x, 1) = array([5])
+        # f(x, 2) = array([[5]])
+        # f(x, 3) = array([[[5]]])
+        return np.array(5)[(np.newaxis,) * ndim]
+
+    array = da.from_array([1] + [2, 2] + [3, 3, 3], chunks=((1, 2, 3),))
+    out_chunks = ((1, 1, 1),)
+
+    # check ``enforce_ndim`` keyword parameter of ``map_blocks()``
+    out = array.map_blocks(partial(f, ndim=ndim), chunks=out_chunks, enforce_ndim=True)
+
+    if ndim != 1:
+        with pytest.raises(ValueError, match="Dimension mismatch:"):
+            out.compute()
+    else:
+        out.compute()  # should not raise an exception
+
+    # check ``check_ndim`` keyword parameter of ``assert_eq()``
+    out = array.map_blocks(partial(f, ndim=ndim), chunks=out_chunks)
+    expected = np.array([5, 5, 5])
+    try:
+        assert_eq(out, expected)
+    except AssertionError:
+        assert_eq(out, expected, check_ndim=False)
+    else:
+        if ndim != 1:
+            raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_chunk_non_array_like():
+    array = da.from_array([1] + [2, 2] + [3, 3, 3], chunks=((1, 2, 3),))
+    out_chunks = ((1, 1, 1),)
+
+    # check ``enforce_ndim`` keyword parameter of ``map_blocks()``
+    out = array.map_blocks(lambda x: 5, chunks=out_chunks, enforce_ndim=True)
+
+    with pytest.raises(ValueError, match="Dimension mismatch:"):
+        out.compute()
+
+    expected = np.array([5, 5, 5])
+    # check ``check_ndim`` keyword parameter of ``assert_eq()``
+    out = array.map_blocks(lambda x: 5, chunks=out_chunks)
+    try:
+        assert_eq(out, expected)
+    except AssertionError:
+        assert_eq(out, expected, check_chunks=False)
+    else:
+        raise AssertionError("Expected a ValueError: Dimension mismatch")

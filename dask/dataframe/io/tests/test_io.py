@@ -356,6 +356,27 @@ def test_from_pandas_with_datetime_index():
     assert_eq(df, ddf)
 
 
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
+def test_from_pandas_with_index_nulls(null_value):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=["C", null_value, "A"])
+    with pytest.raises(NotImplementedError, match="is non-numeric and contains nulls"):
+        dd.from_pandas(df, npartitions=2, sort=False)
+
+
+def test_from_pandas_with_wrong_args():
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 2, 1])
+    with pytest.raises(TypeError, match="must be a pandas DataFrame or Series"):
+        dd.from_pandas("foo")
+    with pytest.raises(
+        ValueError, match="one of npartitions and chunksize must be specified"
+    ):
+        dd.from_pandas(df)
+    with pytest.raises(TypeError, match="provide npartitions as an int"):
+        dd.from_pandas(df, npartitions=5.2, sort=False)
+    with pytest.raises(TypeError, match="provide chunksize as an int"):
+        dd.from_pandas(df, chunksize=18.27)
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
@@ -956,3 +977,34 @@ def test_from_map_custom_name():
     ddf = dd.from_map(func, iterable, label=label, token=token)
     assert ddf._name == label + "-" + token
     assert_eq(ddf, expect)
+
+
+def _generator():
+    # Simple generator for test_from_map_other_iterables
+    yield from enumerate(["A", "B", "C"])
+
+
+@pytest.mark.parametrize(
+    "iterable",
+    [
+        enumerate(["A", "B", "C"]),
+        ((0, "A"), (1, "B"), (2, "C")),
+        _generator(),
+    ],
+)
+def test_from_map_other_iterables(iterable):
+    # Test that iterable arguments to `from_map`
+    # can be enumerate and generator
+    # See: https://github.com/dask/dask/issues/9064
+
+    def func(t):
+        size = t[0] + 1
+        x = t[1]
+        return pd.Series([x] * size)
+
+    ddf = dd.from_map(func, iterable)
+    expect = pd.Series(
+        ["A", "B", "B", "C", "C", "C"],
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    assert_eq(ddf.compute(), expect)

@@ -633,7 +633,7 @@ class ArrowDatasetEngine(Engine):
                             break
 
                 divisions = division_info["divisions"]
-                if divisions[0] < old_end:
+                if divisions[0] <= old_end:
                     raise ValueError(
                         "Appended divisions overlapping with the previous ones"
                         " (set ignore_divisions=True to append anyway).\n"
