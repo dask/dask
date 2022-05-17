@@ -607,7 +607,7 @@ def visualize(
     traverse=True,
     optimize_graph=False,
     maxval=None,
-    visualizer: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
     **kwargs,
 ):
     """
@@ -662,12 +662,12 @@ def visualize(
     verbose : bool, optional
         Whether to label output and input boxes even if the data aren't chunked.
         Beware: these labels can get very long. Default is False.
-    visualizer : {"graphviz", "ipycytoscape", "cytoscape"}, optional.
+    engine : {"graphviz", "ipycytoscape", "cytoscape"}, optional.
         The visualization engine to use. If not provided, this checks the dask config
-        value "visualizer". If that is not set, it tries to import ``graphviz``
+        value "visualization.engine". If that is not set, it tries to import ``graphviz``
         and ``ipycytoscape``, using the first one to succeed.
     **kwargs
-       Additional keyword arguments to forward to the visualizer.
+       Additional keyword arguments to forward to the visualization engine.
 
     Examples
     --------
@@ -774,34 +774,34 @@ def visualize(
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
-    # Determine which visualizer to dispatch to, first checking the kwarg, then config,
+    # Determine which engine to dispatch to, first checking the kwarg, then config,
     # then whichever of graphviz or ipycytoscape are installed, in that order.
-    visualizer = visualizer or config.get("visualizer", None)
+    engine = engine or config.get("visualization.engine", None)
 
-    if not visualizer:
+    if not engine:
         try:
             import graphviz  # noqa: F401
 
-            visualizer = "graphviz"
+            engine = "graphviz"
         except ImportError:
             pass
         try:
             import ipycytoscape  # noqa: F401
 
-            visualizer = "cytoscape"
+            engine = "cytoscape"
         except ImportError:
             pass
 
-    if visualizer == "graphviz":
+    if engine == "graphviz":
         from dask.dot import dot_graph
 
         return dot_graph(dsk, filename=filename, **kwargs)
-    elif visualizer in ("cytoscape", "ipycytoscape"):
+    elif engine in ("cytoscape", "ipycytoscape"):
         from dask.dot import cytoscape_graph
 
         return cytoscape_graph(dsk, filename=filename, **kwargs)
     else:
-        raise ValueError(f"Visualizer {visualizer} not recognized")
+        raise ValueError(f"Visualizer {engine} not recognized")
 
 
 def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):

@@ -8,7 +8,7 @@ from operator import add, neg
 import pytest
 
 ipycytoscape = pytest.importorskip("ipycytoscape")
-from dask.dot import cytoscape_graph, to_cytoscape_json
+from dask.dot import _to_cytoscape_json, cytoscape_graph
 
 if sys.flags.optimize != 2:
     pytest.importorskip("graphviz")
@@ -138,10 +138,10 @@ def test_cytoscape_graph_custom():
 def test_cytoscape_graph_color():
     from dask.delayed import Delayed
 
-    g = Delayed("f", dsk).visualize(visualizer="cytoscape")
+    g = Delayed("f", dsk).visualize(engine="cytoscape")
     init_color = g.graph.nodes[0].data["color"]
     # Check that we changed the semantic color
-    g = Delayed("f", dsk).visualize(visualizer="cytoscape", color="order")
+    g = Delayed("f", dsk).visualize(engine="cytoscape", color="order")
     assert any(n.data["color"] != init_color for n in g.graph.nodes)
 
 
@@ -168,8 +168,8 @@ def test_to_graphviz_verbose():
     assert set(shapes) == {"box", "circle"}
 
 
-def test_to_cytoscape_json_verbose():
-    data = to_cytoscape_json(dsk, verbose=True)
+def test__to_cytoscape_json_verbose():
+    data = _to_cytoscape_json(dsk, verbose=True)
     labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
     assert len(labels) == 10
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
@@ -186,8 +186,8 @@ def test_to_graphviz_collapse_outputs():
     assert set(shapes) == {"box", "circle"}
 
 
-def test_to_cytoscape_json_collapse_outputs():
-    data = to_cytoscape_json(dsk, collapse_outputs=True)
+def test__to_cytoscape_json_collapse_outputs():
+    data = _to_cytoscape_json(dsk, collapse_outputs=True)
     labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"c", "d", "e", "f", ""}
@@ -204,8 +204,8 @@ def test_to_graphviz_collapse_outputs_and_verbose():
     assert set(shapes) == {"box", "circle"}
 
 
-def test_to_cytoscape_json_collapse_outputs_and_verbose():
-    data = to_cytoscape_json(dsk, collapse_outputs=True, verbose=True)
+def test__to_cytoscape_json_collapse_outputs_and_verbose():
+    data = _to_cytoscape_json(dsk, collapse_outputs=True, verbose=True)
     labels = list(map(lambda x: x["data"]["label"], data["nodes"]))
     assert len(labels) == 6  # 6 nodes total
     assert set(labels) == {"a", "b", "c", "d", "e", "f"}
@@ -370,7 +370,7 @@ def test_delayed_kwargs_apply():
     assert "apply" not in label
 
 
-@pytest.mark.parametrize("viz_func", [to_graphviz, to_cytoscape_json])
+@pytest.mark.parametrize("viz_func", [to_graphviz, _to_cytoscape_json])
 def test_immutable_attributes(viz_func):
     def inc(x):
         return x + 1

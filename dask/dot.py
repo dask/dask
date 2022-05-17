@@ -132,7 +132,7 @@ def to_graphviz(
 ):
     graphviz = import_required(
         "graphviz",
-        "Drawing dask graphs with the graphviz visualizer requires the `graphviz` "
+        "Drawing dask graphs with the graphviz engine requires the `graphviz` "
         "python library and the `graphviz` system library.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install python-graphviz     # either conda install\n"
@@ -310,7 +310,7 @@ def graphviz_to_file(g, filename, format):
     return display_cls(filename=full_filename)
 
 
-def to_cytoscape_json(
+def _to_cytoscape_json(
     dsk,
     data_attributes=None,
     function_attributes=None,
@@ -441,7 +441,7 @@ def cytoscape_graph(
     filename : str or None, optional
         The name of the HTML file to write to disk.
     format : str, optional
-        Not used in this visualizer.
+        Not used in this engine.
     rankdir: str
         The direction in which to orient the visualization.
     node_sep: float
@@ -458,7 +458,7 @@ def cytoscape_graph(
         A dictionary of style attributes for edges (refer to Cytoscape JSON docs
         for available options: https://js.cytoscape.org/#notation/elements-json)
     **kwargs
-        Additional keyword arguments to forward to `to_cytoscape_json`.
+        Additional keyword arguments to forward to `_to_cytoscape_json`.
 
     Returns
     -------
@@ -466,7 +466,7 @@ def cytoscape_graph(
     """
     ipycytoscape = import_required(
         "ipycytoscape",
-        "Drawing dask graphs with the cytoscape visualizer requires the `ipycytoscape` "
+        "Drawing dask graphs with the cytoscape engine requires the `ipycytoscape` "
         "python library.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install ipycytoscape            # either conda install\n"
@@ -476,7 +476,7 @@ def cytoscape_graph(
     node_style = node_style or {}
     edge_style = edge_style or {}
 
-    data = to_cytoscape_json(dsk, **kwargs)
+    data = _to_cytoscape_json(dsk, **kwargs)
     # TODO: it's not easy to programmatically increase the height of the widget.
     # Ideally we would make it a bit bigger, but that will probably require upstreaming
     # some fixes.

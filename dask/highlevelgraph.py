@@ -1153,7 +1153,7 @@ def to_graphviz(
 
     graphviz = import_required(
         "graphviz",
-        "Drawing dask graphs with the graphviz visualizer requires the `graphviz` "
+        "Drawing dask graphs with the graphviz visualization engine requires the `graphviz` "
         "python library and the `graphviz` system library.\n\n"
         "Please either conda or pip install as follows:\n\n"
         "  conda install python-graphviz     # either conda install\n"
