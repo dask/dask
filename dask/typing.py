@@ -383,7 +383,7 @@ class DaskCollection(Protocol):
 
 @runtime_checkable
 class HLGDaskCollection(DaskCollection, Protocol):
-    """Protocal defining a Dask collection that uses HighLevelGraphs.
+    """Protocol defining a Dask collection that uses HighLevelGraphs.
 
     This protocol is nearly identical to
     :py:class:`~dask.typing.DaskCollection`, with the addition of the
