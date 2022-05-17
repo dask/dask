@@ -151,6 +151,7 @@ def get(
     optimize_graph=True,
     pool=None,
     initializer=None,
+    replace_default_initializer=False,
     chunksize=None,
     **kwargs,
 ):
@@ -173,7 +174,13 @@ def get(
     pool : Executor or Pool
         Some sort of `Executor` or `Pool` to use
     initializer: function
+        Ignored if ``pool`` is not ``None``.
         Function to initialize a worker process before running any tasks in it.
+    replace_default_initializer: bool
+        Ignored if ``initializer`` is ``None``.
+        If False [default], function `initializer` will be called immediately after
+        the default process-initializer is run.
+        If True, function `initializer` will replace the default process-initializer.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
         Defaults to 5 as some batching is helpful.
@@ -181,7 +188,7 @@ def get(
     """
     chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
-    initializer = initializer or config.get("initializer", None)
+    initializer = initializer or config.get("multiprocessing.initializer", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
@@ -194,17 +201,24 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
+        initializer = partial(
+            initialize_worker_process,
+            user_initializer=initializer,
+            override=(
+                replace_default_initializer
+                or config.get("multiprocessing.replace_initializer", False)
+            ),
+        )
         pool = ProcessPoolExecutor(
-            num_workers,
-            mp_context=context,
-            initializer=initializer or initialize_worker_process,
+            num_workers, mp_context=context, initializer=initializer
         )
         cleanup = True
     else:
         if initializer is not None:
             warn(
-                "The ``initializer`` argument is ignored when ``pool`` is provided."
-                " The user should configure ``pool`` with the needed ``initializer`` on creation."
+                "The ``initializer`` argument is ignored when ``pool`` is provided. "
+                "The user should configure ``pool`` with the needed ``initializer`` "
+                "on creation."
             )
         if isinstance(pool, multiprocessing.pool.Pool):
             pool = MultiprocessingPoolExecutor(pool)
@@ -247,12 +261,16 @@ def get(
     return result
 
 
-def initialize_worker_process():
+def initialize_worker_process(user_initializer=None, override=False):
     """
     Initialize a worker process before running any tasks in it.
     """
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
-    np = sys.modules.get("numpy")
-    if np is not None:
-        np.random.seed()
+    if user_initializer is None or not override:
+        np = sys.modules.get("numpy")
+        if np is not None:
+            np.random.seed()
+
+    if user_initializer is not None:
+        user_initializer()

@@ -202,28 +202,39 @@ def proc_init():
     global_.value = 1
 
 
-def test_process_initializer():
+@pytest.mark.parametrize(
+    "scheduler, initializer, override, expected_results",
+    [
+        ("threading", None, None, [1] * 10),
+        ("processes", None, None, [0] * 10),
+        ("processes", proc_init, False, [1] * 10),
+        ("processes", proc_init, True, [1] * 10),
+    ],
+)
+def test_process_initializer(scheduler, initializer, override, expected_results):
     @delayed(pure=False)
     def f():
         return global_.value
 
     global_.value = 1
-    N = 10
 
-    with dask.config.set(scheduler="threading"):
-        (results,) = compute([f() for _ in range(N)])
-    expected_results = [1] * N
-    assert results == expected_results  # processes saw global_.value = 1
+    with dask.config.set(
+        {
+            "scheduler": scheduler,
+            "multiprocessing.initializer": initializer,
+            "multiprocessing.replace_initializer": override,
+        }
+    ):
+        (results,) = compute([f() for _ in range(10)])
+    assert results == expected_results
 
-    with dask.config.set(scheduler="processes"):
-        (results,) = compute([f() for _ in range(N)])
-    expected_results = [0] * N
-    assert results == expected_results  # processes did not see global_.value = 1
-
-    with dask.config.set(scheduler="processes", initializer=proc_init):
-        (results,) = compute([f() for _ in range(N)])
-    expected_results = [1] * N
-    assert results == expected_results  # processes saw global_.value = 1
+    (results2,) = compute(
+        [f() for _ in range(10)],
+        scheduler=scheduler,
+        initializer=initializer,
+        replace_default_initializer=override,
+    )
+    assert results2 == expected_results
 
 
 def check_for_pytest():
