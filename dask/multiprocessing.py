@@ -260,6 +260,12 @@ def get(
     return result
 
 
+def default_initializer():
+    np = sys.modules.get("numpy")
+    if np is not None:
+        np.random.seed()
+
+
 def initialize_worker_process(user_initializer=None, use_default_initializer=True):
     """
     Initialize a worker process before running any tasks in it.
@@ -267,9 +273,7 @@ def initialize_worker_process(user_initializer=None, use_default_initializer=Tru
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
     if use_default_initializer:
-        np = sys.modules.get("numpy")
-        if np is not None:
-            np.random.seed()
+        default_initializer()
 
     if user_initializer is not None:
         user_initializer()
