@@ -202,10 +202,9 @@ def get(
         cleanup = True
     else:
         if initializer is not None:
-            raise ValueError(
-                "Incompatible values: ``pool`` and ``initializer`` may not "
-                "both be set at the same time.  At least one of them must be "
-                "set to ``None``."
+            warn(
+                "The ``initializer`` argument is ignored when ``pool`` is provided."
+                " The user should configure ``pool`` with the needed ``initializer`` on creation."
             )
         if isinstance(pool, multiprocessing.pool.Pool):
             pool = MultiprocessingPoolExecutor(pool)
