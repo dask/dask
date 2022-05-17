@@ -1008,3 +1008,44 @@ def test_from_map_other_iterables(iterable):
         index=[0, 0, 1, 0, 1, 2],
     )
     assert_eq(ddf.compute(), expect)
+
+
+def test_from_map_column_projection():
+    # Test that column projection works
+    # as expected with from_map when
+    # enforce_metadata=True
+
+    projected = []
+
+    class MyFunc:
+        def __init__(self, columns=None):
+            self.columns = columns
+
+        def project_columns(self, columns):
+            return MyFunc(columns)
+
+        def __call__(self, t):
+            size = t[0] + 1
+            x = t[1]
+            df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
+            if self.columns is None:
+                return df
+            projected.extend(self.columns)
+            return df[self.columns]
+
+    ddf = dd.from_map(
+        MyFunc(),
+        enumerate([0, 1, 2]),
+        label="myfunc",
+        enforce_metadata=True,
+    )
+    expect = pd.DataFrame(
+        {
+            "A": [0, 1, 1, 2, 2, 2],
+            "B": [10] * 6,
+        },
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    assert_eq(ddf["A"], expect["A"])
+    assert set(projected) == {"A"}
+    assert_eq(ddf, expect)
