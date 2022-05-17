@@ -497,7 +497,7 @@ elements of ``dask.delayed``:
 
         @staticmethod
         def __dask_optimize__(dsk, keys, **kwargs):
-            # We cull unncessary tasks here. See
+            # We cull unnecessary tasks here. See
             # https://docs.dask.org/en/stable/optimize.html for more
             # information on optimizations in Dask.
             dsk2, _ = cull(dsk, keys)

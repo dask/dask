@@ -158,8 +158,27 @@ def annotate(**annotations):
         yield
 
 
-def is_dask_collection(x):
-    """Returns ``True`` if ``x`` is a dask collection"""
+def is_dask_collection(x) -> bool:
+    """Returns ``True`` if ``x`` is a dask collection.
+
+    Parameters
+    ----------
+    x : Any
+        Object to test.
+
+    Returns
+    -------
+    result : bool
+        ``True`` if `x` is a Dask collection.
+
+    Notes
+    -----
+    The DaskCollection typing.Protocol implementation defines a Dask
+    collection as a class that returns a Mapping from the
+    ``__dask_graph__`` method. This helper function existed before the
+    implementation of the protocol.
+
+    """
     try:
         return x.__dask_graph__() is not None
     except (AttributeError, TypeError):
@@ -314,8 +333,13 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
+    from dask.highlevelgraph import HighLevelGraph
+
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
     dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
+    # see https://github.com/dask/dask/issues/8991.
+    # This merge should be removed once the underlying issue is fixed.
+    dsk2 = HighLevelGraph.merge(dsk2)
     return schedule(dsk2, keys, **kwargs)
 
 

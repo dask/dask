@@ -199,6 +199,9 @@ class BlockwiseDepDict(BlockwiseDep):
                 return self.mapping[flat_idx]
             raise err
 
+    def __len__(self) -> int:
+        return len(self.mapping)
+
     def __dask_distributed_pack__(
         self, required_indices: tuple | list[tuple[int, ...]] | None = None
     ):
@@ -821,7 +824,7 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if k in names:
+            if idxv is not None and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)
             indices.append((k, idxv))

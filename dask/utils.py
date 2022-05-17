@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import functools
 import inspect
 import os
@@ -884,21 +885,45 @@ def typename(typ: Any, short: bool = False) -> str:
 
 
 def ensure_bytes(s) -> bytes:
-    """Turn string or bytes to bytes
+    """Attempt to turn `s` into bytes.
 
-    >>> ensure_bytes('123')
-    b'123'
+    Parameters
+    ----------
+    s : Any
+        The object to be converted. Will correctly handled
+        * str
+        * bytes
+        * objects implementing the buffer protocol (memoryview, ndarray, etc.)
+
+    Returns
+    -------
+    b : bytes
+
+    Raises
+    ------
+    TypeError
+        When `s` cannot be converted
+
+    Examples
+    --------
     >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
+    >>> ensure_bytes(bytearray(b'123'))
+    b'123'
     """
     if isinstance(s, bytes):
         return s
-    if hasattr(s, "encode"):
+    elif hasattr(s, "encode"):
         return s.encode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    else:
+        try:
+            return bytes(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a bytes object nor can be encoded to bytes"
+            ) from e
 
 
 def ensure_unicode(s) -> str:
@@ -911,9 +936,15 @@ def ensure_unicode(s) -> str:
     """
     if isinstance(s, str):
         return s
-    if hasattr(s, "decode"):
+    elif hasattr(s, "decode"):
         return s.decode()
-    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
+    else:
+        try:
+            return codecs.decode(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a str object nor can be decoded to str"
+            ) from e
 
 
 def digit(n, k, base):
