@@ -151,7 +151,6 @@ messy situations in everyday problems.
    dataframe.rst
    delayed.rst
    futures.rst
-   how-to/connect-to-remote-data.rst
 
 .. toctree::
    :maxdepth: 1
