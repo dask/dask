@@ -17,7 +17,7 @@ class CollectionOperation:
         return self._name
 
     @property
-    def dask(self) -> HighLevelGraph | None:
+    def dask(self) -> HighLevelGraph:
         """Return a HighLevelGraph representation of this operation"""
         # TODO: We can wrap the operator in a new Layer type
         # to avoid materialization here once the HLG/Layer

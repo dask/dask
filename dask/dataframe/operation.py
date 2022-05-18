@@ -16,12 +16,11 @@ from dask.utils import apply, is_arraylike
 
 
 class DataFrameOperation(CollectionOperation):
+    """Abtract Frame-based CollectionOperation"""
 
     _meta: Any
-    _divisions: tuple
+    _divisions: tuple | None = None
     _columns: set | None = None
-    applied_filters: list | None = None
-    projected_columns: set | None = None
 
     @property
     def meta(self):
@@ -29,20 +28,28 @@ class DataFrameOperation(CollectionOperation):
         return self._meta
 
     @property
-    def divisions(self) -> tuple:
+    def divisions(self) -> tuple | None:
         """Return DataFrame divisions"""
         return self._divisions
 
     @property
-    def npartitions(self) -> int:
+    def npartitions(self) -> int | None:
+        if not self.divisions:
+            return None
         return len(self.divisions) - 1
 
     @property
     def collection_keys(self) -> list[tuple]:
+        if self.npartitions is None:
+            raise ValueError
         return [(self.name, i) for i in range(self.npartitions)]
 
     @property
     def columns(self):
+        """Set of column names required for this operation
+
+        None means that the required-column set is unknown.
+        """
         return self._columns
 
 
@@ -76,7 +83,9 @@ class CompatFrameOperation(DataFrameOperation):
         )
 
     @property
-    def dask(self) -> HighLevelGraph | None:
+    def dask(self) -> HighLevelGraph:
+        if self._dask is None:
+            raise ValueError
         return self._dask
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
@@ -385,22 +394,16 @@ def optimize(operation, predicate_pushdown=True, column_projection=True):
     if isinstance(operation, CompatFrameOperation):
         return operation
     new = operation
-    applied_filters = None
-    projected_columns = None
 
     # Apply predicate pushdown
     if predicate_pushdown:
         new = optimize_predicate_pushdown(new)
-        applied_filters = new.applied_filters
 
     # Apply column projection
     if column_projection:
         new = project_columns(new)
-        projected_columns = new.projected_columns
 
     # Return new operation
-    new.applied_filters = applied_filters
-    new.projected_columns = projected_columns
     return new
 
 
