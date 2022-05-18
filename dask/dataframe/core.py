@@ -144,11 +144,13 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
         # TODO: Check for mixed legacy/operation usage
         if operation is None:
+            _parent_meta = pd.Series(dtype="float64")
             self._operation = CompatFrameOperation(
                 dsk,
-                name,
-                meta,
-                divisions,
+                name=name,
+                meta=make_meta(meta, parent_meta=_parent_meta),
+                divisions=divisions,
+                parent_meta=_parent_meta,
             )
         else:
             self._operation = operation
@@ -175,7 +177,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
     @_name.setter
     def _name(self, value):
-        self.operation.name = value
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"name": value}}
+        )
 
     @property
     def _meta(self):
@@ -183,7 +189,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
     @_meta.setter
     def _meta(self, value):
-        self.operation.meta = value
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"meta": value}}
+        )
 
     @property
     def _parent_meta(self):
@@ -363,9 +373,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         if operation is None:
             self._operation = CompatFrameOperation(
                 dsk,
-                name,
-                meta,
-                divisions,
+                name=name,
+                meta=make_meta(meta),
+                divisions=divisions,
             )
         else:
             self._operation = operation
@@ -389,7 +399,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @_name.setter
     def _name(self, value):
-        self.operation.name = value
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"name": value}}
+        )
 
     @property
     def _meta(self):
@@ -397,7 +411,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @_meta.setter
     def _meta(self, value):
-        self.operation.meta = value
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"meta": value}}
+        )
 
     def __dask_graph__(self):
         return self.dask
@@ -458,6 +476,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @divisions.setter
     def divisions(self, value):
+        from dask.operation import regenerate
+
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
@@ -483,7 +503,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self.operation.divisions = value
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"divisions": value}}
+        )
 
     @property
     def npartitions(self):

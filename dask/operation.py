@@ -8,7 +8,13 @@ from dask.highlevelgraph import HighLevelGraph
 
 class CollectionOperation:
 
+    _name: str
     _dask: HighLevelGraph | None = None
+
+    @property
+    def name(self) -> str:
+        """Return the unique name for this CollectionOperation"""
+        return self._name
 
     @property
     def dask(self) -> HighLevelGraph | None:
@@ -28,16 +34,6 @@ class CollectionOperation:
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         """Return the subgraph and key dependencies for this operation"""
-        raise NotImplementedError
-
-    @property
-    def name(self) -> str:
-        """Operation name getter"""
-        raise NotImplementedError
-
-    @name.setter
-    def name(self, value):
-        """Operation name setter"""
         raise NotImplementedError
 
     @property
@@ -67,6 +63,7 @@ class CollectionOperation:
         raise NotImplementedError
 
     def __hash__(self):
+        """Hash a CollectionOperation using its unique name"""
         return hash(self.name)
 
 

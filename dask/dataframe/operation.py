@@ -9,7 +9,6 @@ from typing import Any
 import numpy as np
 
 from dask.base import tokenize
-from dask.dataframe.utils import make_meta
 from dask.highlevelgraph import HighLevelGraph
 from dask.operation import CollectionOperation, MemoizingVisitor, operations, regenerate
 from dask.optimization import SubgraphCallable
@@ -18,7 +17,6 @@ from dask.utils import apply, is_arraylike
 
 class DataFrameOperation(CollectionOperation):
 
-    _name: str
     _meta: Any
     _divisions: tuple
     _columns: set | None = None
@@ -26,28 +24,14 @@ class DataFrameOperation(CollectionOperation):
     projected_columns: set | None = None
 
     @property
-    def name(self) -> str:
-        return self._name
-
-    @name.setter
-    def name(self, value):
-        self._name = value
-
-    @property
     def meta(self):
+        """Return DataFrame metadata"""
         return self._meta
-
-    @meta.setter
-    def meta(self, value):
-        self._meta = value
 
     @property
     def divisions(self) -> tuple:
+        """Return DataFrame divisions"""
         return self._divisions
-
-    @divisions.setter
-    def divisions(self, value):
-        self._divisions = value
 
     @property
     def npartitions(self) -> int:
@@ -69,21 +53,25 @@ class CompatFrameOperation(DataFrameOperation):
     collections name, meta, divisions, and graph (HLG).
     """
 
-    def __init__(self, dsk, name, meta, divisions, parent_meta=None):
+    def __init__(self, dsk, name=None, meta=None, divisions=None, parent_meta=None):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
+        if name is None:
+            raise ValueError
+        if meta is None:
+            raise ValueError
         self._dask = dsk
         self._name = name
+        self._meta = meta
         self._parent_meta = parent_meta
-        self._meta = make_meta(meta, parent_meta=self._parent_meta)
         self._divisions = tuple(divisions) if divisions is not None else None
 
     def copy(self):
         return type(self)(
             self.dask,
-            self.name,
-            self.meta,
-            self.divisions,
+            name=self.name,
+            meta=self.meta.copy(),
+            divisions=self.divisions,
             parent_meta=self._parent_meta,
         )
 
@@ -101,13 +89,14 @@ class CompatFrameOperation(DataFrameOperation):
         return {}
 
     def regenerate(self, new_dependencies: dict, **new_kwargs):
-        return CompatFrameOperation(
-            self._dask,
-            self._name,
-            self._meta,
-            self._divisions,
-            self._parent_meta,
-        )
+        kwargs = {
+            "name": self.name,
+            "meta": self.meta,
+            "divisions": self._divisions,
+            "parent_meta": self._parent_meta,
+        }
+        kwargs.update(new_kwargs)
+        return CompatFrameOperation(self._dask, **kwargs)
 
 
 class DataFrameCreation(DataFrameOperation):
@@ -142,7 +131,7 @@ class DataFrameCreation(DataFrameOperation):
     def copy(self):
         return type(self)(
             self.io_func,
-            self.meta,
+            self.meta.copy(),
             self.inputs,
             columns=self.columns,
             divisions=self.divisions,
@@ -151,7 +140,7 @@ class DataFrameCreation(DataFrameOperation):
         )
 
     @cached_property
-    def func(self):
+    def _subgraph_callable(self):
         inkeys = [f"inputs-{self.name}"]
         subgraph = {self.name: (self.io_func, inkeys[-1])}
         return SubgraphCallable(
@@ -160,8 +149,8 @@ class DataFrameCreation(DataFrameOperation):
             inkeys=inkeys,
         )
 
-    def _fuse_subgraph(self):
-        func = self.func
+    def _fuse_subgraph_callables(self):
+        func = self._subgraph_callable
         return func, {func.inkeys[0]: self.inputs}
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
@@ -169,7 +158,7 @@ class DataFrameCreation(DataFrameOperation):
         for key in keys:
             name, index = key
             assert name == self.name
-            dsk[key] = (self.func, self.inputs[index])
+            dsk[key] = (self._subgraph_callable, self.inputs[index])
         return dsk, {}
 
     @property
@@ -184,7 +173,7 @@ class DataFrameCreation(DataFrameOperation):
                     "filters unless ``creation_info`` is defined."
                 )
             kwargs = self.creation_info.get("kwargs", {})
-            kwargs.update(new_kwargs.get(self.name, {}))
+            kwargs.update(new_kwargs)
             return self.creation_info["func"](
                 *self.creation_info.get("args", []),
                 **kwargs,
@@ -195,7 +184,7 @@ class DataFrameCreation(DataFrameOperation):
                 "divisions": self.divisions,
                 "label": self.label,
             }
-            kwargs.update(new_kwargs.get(self.name, {}))
+            kwargs.update(new_kwargs)
             return type(self)(
                 self.io_func,
                 self.meta,
@@ -233,10 +222,14 @@ class DataFrameMapOperation(DataFrameOperation):
         self._columns = columns
         self.kwargs = kwargs
 
+    @property
+    def func(self):
+        return self._func
+
     def copy(self):
         return type(self)(
-            self._func,
-            self.meta,
+            self.func,
+            self.meta.copy(),
             *self.args,
             columns=self.columns,
             divisions=self.divisions,
@@ -245,8 +238,8 @@ class DataFrameMapOperation(DataFrameOperation):
         )
 
     @cached_property
-    def func(self):
-        task = [self._func]
+    def _subgraph_callable(self):
+        task = [self.func]
         inkeys = []
         for arg in self.args:
             if isinstance(arg, CollectionOperation):
@@ -271,8 +264,8 @@ class DataFrameMapOperation(DataFrameOperation):
             inkeys=inkeys,
         )
 
-    def _fuse_subgraph(self):
-        func = self.func
+    def _fuse_subgraph_callables(self):
+        func = self._subgraph_callable
         inkeys = func.inkeys
         dep_funcs = {}
         all_deps = self.dependencies.copy()
@@ -280,7 +273,7 @@ class DataFrameMapOperation(DataFrameOperation):
             assert key in self.dependencies
             dep = self.dependencies[key]
             if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
-                _func, _deps = dep._fuse_subgraph()
+                _func, _deps = dep._fuse_subgraph_callables()
                 dep_funcs[key] = _func
                 all_deps.update(_deps)
 
@@ -291,8 +284,10 @@ class DataFrameMapOperation(DataFrameOperation):
                 if key in dep_funcs:
                     dep_func = dep_funcs[key]
                     new_dsk.update(dep_func.dsk)
-                    new_inkeys.extend(dep_func.inkeys)
-                else:
+                    new_inkeys.extend(
+                        [k for k in dep_func.inkeys if k not in new_inkeys]
+                    )
+                elif key not in new_inkeys:
                     new_inkeys.append(key)
             func = SubgraphCallable(
                 dsk=new_dsk,
@@ -308,7 +303,7 @@ class DataFrameMapOperation(DataFrameOperation):
         # `deps` corresponds to a dict, where the values are
         # either a `CollectionOperation` or indexable object.
         # Indexable elements correspond to DataFrameCreation inputs.
-        func, deps = self._fuse_subgraph()
+        func, deps = self._fuse_subgraph_callables()
 
         # Populate dep_keys
         dep_keys = {}
