@@ -41,8 +41,8 @@ def imread(filename, imread=None, preprocess=None):
     Returns
     -------
 
-    Dask array of all images stacked along the first dimension.  All images
-    will be treated as individual chunks
+    Dask array of all images stacked along the first dimension.
+    Each separate image file will be treated as an individual chunk.
     """
     imread = imread or sk_imread
     filenames = sorted(glob(filename))
