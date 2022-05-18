@@ -61,14 +61,6 @@ class DataFrameOperation(CollectionOperation):
     def columns(self):
         return self._columns
 
-    @classmethod
-    def optimize_collection(cls, collection):
-        if hasattr(collection, "operation") and isinstance(
-            collection.operation, DataFrameOperation
-        ):
-            return type(collection)(operation=optimize(collection.operation))
-        return collection
-
 
 class CompatFrameOperation(DataFrameOperation):
     """Pass-through DataFrameOperation
@@ -168,7 +160,7 @@ class DataFrameCreation(DataFrameOperation):
             inkeys=inkeys,
         )
 
-    def _subgraph_callable(self):
+    def _fuse_subgraph(self):
         func = self.func
         return func, {func.inkeys[0]: self.inputs}
 
@@ -279,8 +271,7 @@ class DataFrameMapOperation(DataFrameOperation):
             inkeys=inkeys,
         )
 
-    def _subgraph_callable(self):
-
+    def _fuse_subgraph(self):
         func = self.func
         inkeys = func.inkeys
         dep_funcs = {}
@@ -289,7 +280,7 @@ class DataFrameMapOperation(DataFrameOperation):
             assert key in self.dependencies
             dep = self.dependencies[key]
             if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
-                _func, _deps = dep._subgraph_callable()
+                _func, _deps = dep._fuse_subgraph()
                 dep_funcs[key] = _func
                 all_deps.update(_deps)
 
@@ -313,18 +304,20 @@ class DataFrameMapOperation(DataFrameOperation):
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
 
-        dep_keys = {}
-        func, deps = self._subgraph_callable()
+        # Get (fused) SubgraphCallable and deps.
+        # `deps` corresponds to a dict, where the values are
+        # either a `CollectionOperation` or indexable object.
+        # Indexable elements correspond to DataFrameCreation inputs.
+        func, deps = self._fuse_subgraph()
 
+        # Populate dep_keys
+        dep_keys = {}
         for func_key in func.inkeys:
             fused_dep = deps[func_key]
             if isinstance(fused_dep, CollectionOperation):
                 dep_keys[fused_dep] = [(func_key, key[1]) for key in keys]
 
-        # Now we just need to update the graph with the
-        # current DataFrameMapOperation tasks. If any dependency
-        # keys are in `fusable_graph`, we use the corresponding
-        # element from `fusable_graph` (rather than the task key).
+        # Build the graph
         dsk: dict[tuple, tuple] = {}
         for key in keys:
             name, index = key

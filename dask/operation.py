@@ -62,11 +62,6 @@ class CollectionOperation:
         graphviz_to_file(g, filename, format)
         return g
 
-    @classmethod
-    def optimize_collection(cls, collection):
-        """Perform collection-specific optimizations"""
-        raise NotImplementedError
-
     def copy(self):
         """Copy this operation"""
         raise NotImplementedError
