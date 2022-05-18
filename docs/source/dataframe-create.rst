@@ -1,8 +1,11 @@
 Create and Store Dask DataFrames
 ================================
 
-Dask can create DataFrames from various data storage formats like CSV, HDF,
-Apache Parquet, and others.  For most formats, this data can live on various
+.. meta::
+    :description: Learn how to create DataFrames and store them. Create a Dask DataFrame from various data storage formats like CSV, HDF, Apache Parquet, and others.
+
+You can create a Dask DataFrame from various data storage formats
+like CSV, HDF, Apache Parquet, and others. For most formats, this data can live on various
 storage systems including local disk, network file systems (NFS), the Hadoop
 Distributed File System (HDFS), Google Cloud Storage, and Amazon S3
 (excepting HDF, which is only available on POSIX like file systems).
