@@ -1,8 +1,8 @@
-Dask DataFrames: How to Create a Dataframe and Store It
-=======================================================
+Create and Store Dask DataFrames
+================================
 
 .. meta::
-    :description: Learn how to create dataframes and store them. Create a Dask DataFrame from various data storage formats like CSV, HDF, Apache Parquet, and others.
+    :description: Learn how to create DataFrames and store them. Create a Dask DataFrame from various data storage formats like CSV, HDF, Apache Parquet, and others.
 
 You can create a Dask DataFrame from various data storage formats
 like CSV, HDF, Apache Parquet, and others. For most formats, this data can live on various
