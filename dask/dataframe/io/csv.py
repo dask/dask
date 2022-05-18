@@ -791,7 +791,6 @@ def to_csv(
     """
     Store Dask DataFrame to CSV files
 
-    Internally uses ``fsspec``.
     One filename per partition will be created. You can specify the
     filenames in a variety of ways.
 
