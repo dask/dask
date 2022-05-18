@@ -536,7 +536,7 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
-@grouper_dispatch.register((pd.DataFrame,))
+@grouper_dispatch.register((pd.DataFrame, pd.Series))
 def get_grouper_pandas(obj):
     return pd.core.groupby.Grouper
 

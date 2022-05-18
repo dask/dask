@@ -80,11 +80,6 @@ def categorical_dtype(meta, categories=None, ordered=False):
     return func(categories=categories, ordered=ordered)
 
 
-def get_grouper(obj):
-    grouper = grouper_dispatch.dispatch(type(obj))
-    return grouper
-
-
 def tolist(obj):
     func = tolist_dispatch.dispatch(type(obj))
     return func(obj)
