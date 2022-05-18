@@ -3,7 +3,7 @@ from __future__ import annotations
 import itertools
 import operator
 from collections.abc import Mapping
-from functools import singledispatch
+from functools import cached_property, singledispatch
 from typing import Any
 
 import numpy as np
@@ -12,6 +12,7 @@ from dask.base import tokenize
 from dask.dataframe.utils import make_meta
 from dask.highlevelgraph import HighLevelGraph
 from dask.operation import CollectionOperation, MemoizingVisitor, operations, regenerate
+from dask.optimization import SubgraphCallable
 from dask.utils import apply, is_arraylike
 
 
@@ -157,12 +158,26 @@ class DataFrameCreation(DataFrameOperation):
             creation_info=self.creation_info,
         )
 
+    @cached_property
+    def func(self):
+        inkeys = [f"inputs-{self.name}"]
+        subgraph = {self.name: (self.io_func, inkeys[-1])}
+        return SubgraphCallable(
+            dsk=subgraph,
+            outkey=self.name,
+            inkeys=inkeys,
+        )
+
+    def _subgraph_callable(self):
+        func = self.func
+        return func, {func.inkeys[0]: self.inputs}
+
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         dsk = {}
         for key in keys:
             name, index = key
             assert name == self.name
-            dsk[key] = (self.io_func, self.inputs[index])
+            dsk[key] = (self.func, self.inputs[index])
         return dsk, {}
 
     @property
@@ -212,7 +227,7 @@ class DataFrameMapOperation(DataFrameOperation):
         self.label = label or "map-partitions"
         token = token or tokenize(func, meta, args, divisions)
         self._name = f"{self.label}-{token}"
-        self.func = func
+        self._func = func
         self._meta = meta
         assert len(args)
         self.args = args
@@ -228,30 +243,83 @@ class DataFrameMapOperation(DataFrameOperation):
 
     def copy(self):
         return type(self)(
-            self.func,
+            self._func,
             self.meta,
-            self.args,
+            *self.args,
             columns=self.columns,
             divisions=self.divisions,
             label=self.label,
             **self.kwargs,
         )
 
-    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
-        # Start by populating the key dependencies.
-        # If the dependency is "fusable", we add it to a
-        # seperate `fusable_graph` dictionary.
-        fusable_graph = {}
-        dep_keys = {}
-        for name, dep in self.dependencies.items():
-            if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
-                # These dependencies are "fusable"
-                _graph, _keys = dep.subgraph([(name, key[1]) for key in keys])
-                fusable_graph.update(_graph)
-                dep_keys.update(_keys)
+    @cached_property
+    def func(self):
+        task = [self._func]
+        inkeys = []
+        for arg in self.args:
+            if isinstance(arg, CollectionOperation):
+                inkeys.append(arg.name)
+                task.append(inkeys[-1])
             else:
-                # Not fusing these dependencies
-                dep_keys[dep] = [(name, key[1]) for key in keys]
+                task.append(arg)
+
+        subgraph = {
+            self.name: (
+                apply,
+                task[0],
+                task[1:],
+                self.kwargs,
+            )
+            if self.kwargs
+            else tuple(task)
+        }
+        return SubgraphCallable(
+            dsk=subgraph,
+            outkey=self.name,
+            inkeys=inkeys,
+        )
+
+    def _subgraph_callable(self):
+
+        func = self.func
+        inkeys = func.inkeys
+        dep_funcs = {}
+        all_deps = self.dependencies.copy()
+        for key in inkeys:
+            assert key in self.dependencies
+            dep = self.dependencies[key]
+            if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
+                _func, _deps = dep._subgraph_callable()
+                dep_funcs[key] = _func
+                all_deps.update(_deps)
+
+        if dep_funcs:
+            new_dsk = func.dsk.copy()
+            new_inkeys = []
+            for key in func.inkeys:
+                if key in dep_funcs:
+                    dep_func = dep_funcs[key]
+                    new_dsk.update(dep_func.dsk)
+                    new_inkeys.extend(dep_func.inkeys)
+                else:
+                    new_inkeys.append(key)
+            func = SubgraphCallable(
+                dsk=new_dsk,
+                outkey=self.name,
+                inkeys=new_inkeys,
+            )
+
+        return func, all_deps
+
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+
+        dep_keys = {}
+        func, deps = self._subgraph_callable()
+
+        for func_key in func.inkeys:
+            fused_dep = deps[func_key]
+            if isinstance(fused_dep, CollectionOperation):
+                dep_keys[fused_dep] = [(func_key, key[1]) for key in keys]
 
         # Now we just need to update the graph with the
         # current DataFrameMapOperation tasks. If any dependency
@@ -262,25 +330,16 @@ class DataFrameMapOperation(DataFrameOperation):
             name, index = key
             assert name == self.name
 
-            task = [self.func]
-            for arg in self.args:
-                if isinstance(arg, CollectionOperation):
-                    dep_key = (arg.name, index)
-                    task.append(fusable_graph.pop(dep_key, dep_key))
+            task = [func]
+            for arg in func.inkeys:
+                fused_dep = deps[func_key]
+                if isinstance(fused_dep, CollectionOperation):
+                    dep_key = (arg, index)
                 else:
-                    task.append(arg)
+                    dep_key = fused_dep[index]
+                task.append(dep_key)
+            dsk[key] = tuple(task)
 
-            if self.kwargs:
-                dsk[key] = (
-                    apply,
-                    task[0],
-                    task[1:],
-                    self.kwargs,
-                )
-            else:
-                dsk[key] = tuple(task)
-
-        dsk.update(fusable_graph)
         return dsk, dep_keys
 
     @property
@@ -507,6 +566,8 @@ def _filter_expression(operation, visitor):
 @_filter_expression.register(DataFrameMapOperation)
 def _(operation, visitor):
     op = operation.func
+    if isinstance(op, SubgraphCallable):
+        op = op.dsk[op.outkey][0]
     if op in _comparison_symbols:
         # Return DNF expression pattern for a simple comparison
         left = _get_operation_arg(operation.args[0], visitor)
