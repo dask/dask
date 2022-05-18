@@ -1556,3 +1556,79 @@ class DataFrameTreeReduction(Layer):
         # `Serialized` functions nested within them should be deserialzed
         # automatically by the comm.
         return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
+
+
+class CollectionOperationLayer(Layer):
+    """Compatibility Layer for a CollectionOperation DAG"""
+
+    def __init__(
+        self,
+        operation,
+        output_keys: list,
+        annotations: dict[str, Any] | None = None,
+    ):
+        super().__init__(annotations=annotations)
+        self.operation = operation
+        self.output_keys = output_keys
+
+    def _construct_graph(self):
+        """Construct graph for a tree reduction."""
+        from dask.operation import generate_graph
+
+        return generate_graph(self.operation, keys=self.output_keys)
+
+    def __repr__(self):
+        return f"CollectionOperationLayer<operation='{self.operation}'>"
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def get_output_keys(self):
+        return {key for key in self.output_keys}
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self.output_keys)
+
+    def _cull(self, output_partitions):
+        return CollectionOperationLayer(
+            self.operation,
+            self.output_keys,
+            annotations=self.annotations,
+        )
+
+    def cull(self, keys, all_keys):
+        """Cull a DataFrameTreeReduction HighLevelGraph layer"""
+        name = self.operation.name
+        output_keys = [
+            (self.operation.name, *key[1:]) for key in keys if key[0] == name
+        ]
+        if set(output_keys) != set(self.output_keys):
+            culled_layer = self._cull(output_keys)
+
+            # For now, assume a CollectionOperationLayer can
+            # have no dependencies...
+            return culled_layer, {}
+        return self, {}
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        from dask.highlevelgraph import MaterializedLayer
+
+        return MaterializedLayer(
+            self._dict, annotations=self.annotations
+        ).__dask_distributed_pack__(*args, **kwargs)

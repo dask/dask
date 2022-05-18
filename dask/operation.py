@@ -19,15 +19,12 @@ class CollectionOperation:
     @property
     def dask(self) -> HighLevelGraph:
         """Return a HighLevelGraph representation of this operation"""
-        # TODO: We can wrap the operator in a new Layer type
-        # to avoid materialization here once the HLG/Layer
-        # serialization moves to Pickle (otherwise it will
-        # be too much of a headache to wrap a general
-        # CollectionOperation in an HLG Layer)
+        from dask.layers import CollectionOperationLayer
+
         if self._dask is None:
             self._dask = HighLevelGraph.from_collections(
                 self.name,
-                generate_graph(self),
+                CollectionOperationLayer(self, self.collection_keys),
                 dependencies=[],
             )
         return self._dask
@@ -166,8 +163,9 @@ def _generate_graph(operation, visitor, keys):
     return dsk
 
 
-def generate_graph(operation):
-    return MemoizingVisitor(_generate_graph)(operation, operation.collection_keys)
+def generate_graph(operation, keys=None):
+    keys = keys or operation.collection_keys
+    return MemoizingVisitor(_generate_graph)(operation, keys)
 
 
 def _regenerate(operation, visitor, **kwargs):
