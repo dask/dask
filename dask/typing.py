@@ -16,7 +16,7 @@ PostComputeCallable = Callable
 
 
 class SchedulerGetCallable(Protocol):
-    """Protocol defining the signature of a __dask_scheduler__ callable."""
+    """Protocol defining the signature of a ``__dask_scheduler__`` callable."""
 
     def __call__(
         self,
@@ -45,7 +45,7 @@ class SchedulerGetCallable(Protocol):
 
 
 class PostPersistCallable(Protocol[CollType_co]):
-    """Protocol defining the signature of a __dask_postpersist__ callable."""
+    """Protocol defining the signature of a ``__dask_postpersist__`` callable."""
 
     def __call__(
         self,
@@ -92,17 +92,20 @@ class DaskCollection(Protocol):
     def __dask_graph__(self) -> Mapping:
         """The Dask task graph.
 
-        The core Dask collections (Array, DatFrame, Bag, and Delayed)
-        use a :py:class:`HighLevelGraph` to represent the collection
-        task graph. It is also possible to represent the task graph as
-        a low level graph using a Python dictionary.
+        The core Dask collections (Array, DataFrame, Bag, and Delayed)
+        use a :py:class:`~dask.highlevelgraph.HighLevelGraph` to
+        represent the collection task graph. It is also possible to
+        represent the task graph as a low level graph using a Python
+        dictionary.
 
         Returns
         -------
         Mapping
             The Dask task graph. If the instance returns a
             :py:class:`dask.highlevelgraph.HighLevelGraph` then the
-            :py:func:`__dask_layers__` method must be defined.
+            :py:func:`__dask_layers__` method must be implemented, as
+            defined by the :py:class:`~dask.typing.HLGDaskCollection`
+            protocol.
 
         """
         raise NotImplementedError("Inheriting class must implement this method.")
@@ -111,10 +114,30 @@ class DaskCollection(Protocol):
     def __dask_keys__(self) -> list[Hashable]:
         """The output keys of the task graph.
 
+        Note that there are additional constraints on keys for a Dask
+        collection than those described in the :doc:`task graph
+        specification documentation <spec>`. These additional
+        constraints are described below.
+
+        All keys must either be non-empty strings or tuples where the
+        first element is a non-empty string, followed by zero or more
+        arbitrary hashables. The non-empty string is commonly known as
+        the *collection name*. All collections embedded in the dask
+        package have exactly one name, but this is not a requirement.
+
+        These are all valid outputs:
+
+        - ``[]``
+        - ``["x", "y"]``
+        - ``[[("y", "a", 0), ("y", "a", 1)], [("y", "b", 0), ("y", "b", 1)]``
+
         Returns
         -------
         list
-            The output keys of the collection's task graph.
+            A possibly nested list of keys that represent the outputs
+            of the graph. After computation, the results will be
+            returned in the same layout, with the keys replaced with
+            their corresponding outputs.
 
         """
         raise NotImplementedError("Inheriting class must implement this method.")
@@ -148,12 +171,16 @@ class DaskCollection(Protocol):
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
         """Rebuilder function and optional arguments to contruct a persisted collection.
 
+        See also the documentation for :py:class:`dask.typing.PostPersistCallable`.
+
         Returns
         -------
         PostPersistCallable
             Callable that rebuilds the collection. The signature
             should be
-            ``rebuild(dsk: Mapping, *args: Any, rename: Mapping[str, str] | None)``.
+            ``rebuild(dsk: Mapping, *args: Any, rename: Mapping[str, str] | None)``
+            (as defined by the
+            :py:class:`~dask.typing.PostPersistCallable` protocol).
             The callable should return an equivalent Dask collection
             with the same keys as `self`, but with results that are
             computed through a different graph. In the case of
@@ -356,7 +383,14 @@ class DaskCollection(Protocol):
 
 @runtime_checkable
 class HLGDaskCollection(DaskCollection, Protocol):
-    """Protocal defining a Dask collection that uses HighLevelGraphs."""
+    """Protocol defining a Dask collection that uses HighLevelGraphs.
+
+    This protocol is nearly identical to
+    :py:class:`~dask.typing.DaskCollection`, with the addition of the
+    ``__dask_layers__`` method (required for collections backed by
+    high level graphs).
+
+    """
 
     @abc.abstractmethod
     def __dask_layers__(self) -> Sequence[str]:
