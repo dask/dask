@@ -151,7 +151,6 @@ def get(
     optimize_graph=True,
     pool=None,
     initializer=None,
-    use_default_initializer=True,
     chunksize=None,
     **kwargs,
 ):
@@ -176,10 +175,6 @@ def get(
     initializer: function
         Ignored if ``pool`` has been set.
         Function to initialize a worker process before running any tasks in it.
-    use_default_initializer: bool
-        If True [default], the default process-initializer will be run.  The user-
-        defined ``initializer`` will also be run afterwards if it is also set.
-        If False, the default process-initializer will not be run.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
         Defaults to 5 as some batching is helpful.
@@ -188,9 +183,6 @@ def get(
     chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
     initializer = initializer or config.get("multiprocessing.initializer", None)
-    use_default_initializer = use_default_initializer or config.get(
-        "multiprocessing.use_default_initializer", True
-    )
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
@@ -203,11 +195,7 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
-        initializer = partial(
-            initialize_worker_process,
-            user_initializer=initializer,
-            use_default_initializer=use_default_initializer,
-        )
+        initializer = partial(initialize_worker_process, user_initializer=initializer)
         pool = ProcessPoolExecutor(
             num_workers, mp_context=context, initializer=initializer
         )
@@ -268,12 +256,11 @@ def default_initializer():
         np.random.seed()
 
 
-def initialize_worker_process(user_initializer=None, use_default_initializer=True):
+def initialize_worker_process(user_initializer=None):
     """
     Initialize a worker process before running any tasks in it.
     """
-    if use_default_initializer:
-        default_initializer()
+    default_initializer()
 
     if user_initializer is not None:
         user_initializer()

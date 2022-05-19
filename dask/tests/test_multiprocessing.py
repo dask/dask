@@ -203,17 +203,14 @@ def proc_init():
 
 
 @pytest.mark.parametrize(
-    "scheduler, initializer, use_default_initializer, expected_results",
+    "scheduler, initializer, expected_results",
     [
-        ("threading", None, None, [1] * 10),
-        ("processes", None, None, [0] * 10),
-        ("processes", proc_init, True, [1] * 10),
-        ("processes", proc_init, False, [1] * 10),
+        ("threading", None, [1] * 10),
+        ("processes", None, [0] * 10),
+        ("processes", proc_init, [1] * 10),
     ],
 )
-def test_process_initializer(
-    scheduler, initializer, use_default_initializer, expected_results
-):
+def test_process_initializer(scheduler, initializer, expected_results):
     @delayed(pure=False)
     def f():
         return global_.value
@@ -221,11 +218,7 @@ def test_process_initializer(
     global_.value = 1
 
     with dask.config.set(
-        {
-            "scheduler": scheduler,
-            "multiprocessing.initializer": initializer,
-            "multiprocessing.use_default_initializer": use_default_initializer,
-        }
+        {"scheduler": scheduler, "multiprocessing.initializer": initializer}
     ):
         (results,) = compute([f() for _ in range(10)])
     assert results == expected_results
@@ -234,7 +227,6 @@ def test_process_initializer(
         [f() for _ in range(10)],
         scheduler=scheduler,
         initializer=initializer,
-        replace_default_initializer=use_default_initializer,
     )
     assert results2 == expected_results
 
