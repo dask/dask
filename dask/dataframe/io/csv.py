@@ -8,7 +8,6 @@ try:
 except ImportError:
     psutil = None
 
-import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
@@ -791,7 +790,6 @@ def to_csv(
     """
     Store Dask DataFrame to CSV files
 
-    Internally uses ``fsspec``.
     One filename per partition will be created. You can specify the
     filenames in a variety of ways.
 
@@ -833,64 +831,69 @@ def to_csv(
     >>> paths = ['/path/to/data/alice.csv', '/path/to/data/bob.csv', ...]  # doctest: +SKIP
     >>> df.to_csv(paths) # doctest: +SKIP
 
+    You can also provide a directory name:
+
+    >>> df.to_csv('/path/to/data') # doctest: +SKIP
+
+    The files will be numbered 0, 1, 2, (and so on) suffixed with '.part':
+
+    ::
+
+        /path/to/data/0.part
+        /path/to/data/1.part
+
     Parameters
     ----------
     df : dask.DataFrame
         Data to save
-    filename : string
-        Path glob indicating the naming scheme for the output files
+    filename : string or list
+        Absolute or relative filepath(s). Prefix with a protocol like ``s3://``
+        to save to remote filesystems.
     single_file : bool, default False
         Whether to save everything into a single CSV file. Under the
         single file mode, each partition is appended at the end of the
-        specified CSV file. Note that not all filesystems support the
-        append mode and thus the single file mode, especially on cloud
-        storage systems such as S3 or GCS. A warning will be issued when
-        writing to a file that is not backed by a local filesystem.
-    encoding : string, optional
-        A string representing the encoding to use in the output file,
-        defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
+        specified CSV file.
+    encoding : string, default 'utf-8'
+        A string representing the encoding to use in the output file.
     mode : str, default 'w'
         Python file mode. The default is 'w' (or 'wt'), for writing
         a new file or overwriting an existing file in text mode. 'a'
         (or 'at') will append to an existing file in text mode or
-        create a new file if it does not already exist.
-        Note that not all filesystems support the
-        append mode, especially on cloud storage systems.
+        create a new file if it does not already exist. See :py:func:`open`.
     name_function : callable, default None
         Function accepting an integer (partition index) and producing a
         string to replace the asterisk in the given filename globstring.
         Should preserve the lexicographic order of partitions. Not
-        supported when `single_file` is `True`.
+        supported when ``single_file`` is True.
     compression : string, optional
-        a string representing the compression to use in the output file,
+        A string representing the compression to use in the output file,
         allowed values are 'gzip', 'bz2', 'xz',
-        only used when the first argument is a filename
-    compute : bool
-        If true, immediately executes. If False, returns a set of delayed
+        only used when the first argument is a filename.
+    compute : bool, default True
+        If True, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
     storage_options : dict
         Parameters passed on to the backend filesystem class.
-    header_first_partition_only : boolean, default None
-        If set to `True`, only write the header row in the first output
+    header_first_partition_only : bool, default None
+        If set to True, only write the header row in the first output
         file. By default, headers are written to all partitions under
-        the multiple file mode (`single_file` is `False`) and written
-        only once under the single file mode (`single_file` is `True`).
-        It must not be `False` under the single file mode.
+        the multiple file mode (``single_file`` is False) and written
+        only once under the single file mode (``single_file`` is True).
+        It must be True under the single file mode.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
     kwargs : dict, optional
-        Additional parameters to pass to `pd.DataFrame.to_csv()`
+        Additional parameters to pass to :meth:`pandas.DataFrame.to_csv`.
 
     Returns
     -------
-    The names of the file written if they were computed right away
-    If not, the delayed tasks associated to the writing of the files
+    The names of the file written if they were computed right away.
+    If not, the delayed tasks associated with writing the files.
 
     Raises
     ------
     ValueError
-        If `header_first_partition_only` is set to `False` or
-        `name_function` is specified when `single_file` is `True`.
+        If ``header_first_partition_only`` is set to False.
 
     See Also
     --------
@@ -914,8 +917,6 @@ def to_csv(
     dfs = df.to_delayed()
     if single_file:
         first_file = open_file(filename, mode=mode, **file_options)
-        if not isinstance(first_file.fs, fsspec.implementations.local.LocalFileSystem):
-            warn("Appending data to a network storage system may not work.")
         value = to_csv_chunk(dfs[0], first_file, **kwargs)
         append_mode = mode.replace("w", "") + "a"
         append_file = open_file(filename, mode=append_mode, **file_options)
