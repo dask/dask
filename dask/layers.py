@@ -1219,18 +1219,20 @@ class DataFrameIOLayer(Blockwise):
         """
         from dask.dataframe.io.utils import DataFrameIOFunction
 
-        if columns and (self.columns is None or columns < set(self.columns)):
+        columns = list(columns)
+
+        if self.columns is None or set(self.columns).issuperset(columns):
 
             # Apply column projection in IO function.
             # Must satisfy `DataFrameIOFunction` protocol
             if isinstance(self.io_func, DataFrameIOFunction):
-                io_func = self.io_func.project_columns(list(columns))
+                io_func = self.io_func.project_columns(columns)
             else:
                 io_func = self.io_func
 
             layer = DataFrameIOLayer(
                 (self.label or "subset") + "-" + tokenize(self.name, columns),
-                list(columns),
+                columns,
                 self.inputs,
                 io_func,
                 label=self.label,
