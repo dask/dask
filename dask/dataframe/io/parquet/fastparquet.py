@@ -1179,11 +1179,13 @@ class FastParquetEngine(Engine):
                     else None
                 )
                 divisions = division_info["divisions"]
-                if old_end is None or divisions[0] <= old_end:
+                if old_end is not None and divisions[0] <= old_end:
                     raise ValueError(
-                        "Appended divisions overlapping with previous ones."
-                        "\n"
-                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                        "The divisions of the appended dataframe overlap with "
+                        "previously written divisions. If this is desired, set "
+                        "``ignore_divisions=True`` to append anyway.\n"
+                        "- End of last written partition: {old_end}\n"
+                        "- Start of first new partition: {divisions[0]}"
                     )
         else:
             fmd = fastparquet.writer.make_metadata(

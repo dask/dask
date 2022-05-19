@@ -635,9 +635,11 @@ class ArrowDatasetEngine(Engine):
                 divisions = division_info["divisions"]
                 if divisions[0] <= old_end:
                     raise ValueError(
-                        "Appended divisions overlapping with the previous ones"
-                        " (set ignore_divisions=True to append anyway).\n"
-                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                        "The divisions of the appended dataframe overlap with "
+                        "previously written divisions. If this is desired, set "
+                        "``ignore_divisions=True`` to append anyway.\n"
+                        "- End of last written partition: {old_end}\n"
+                        "- Start of first new partition: {divisions[0]}"
                     )
 
         extra_write_kwargs = {"schema": schema, "index_cols": index_cols}

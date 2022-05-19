@@ -873,9 +873,8 @@ def test_append_overlapping_divisions(tmpdir, engine, metadata_file, index, offs
     ddf2 = dd.from_pandas(df.set_index(df.index + offset), chunksize=100)
     ddf1.to_parquet(tmp, engine=engine, write_metadata_file=metadata_file)
 
-    with pytest.raises(ValueError) as excinfo:
+    with pytest.raises(ValueError, match="overlap with previously written divisions"):
         ddf2.to_parquet(tmp, engine=engine, append=True)
-    assert "Appended divisions" in str(excinfo.value)
 
     ddf2.to_parquet(tmp, engine=engine, append=True, ignore_divisions=True)
 
