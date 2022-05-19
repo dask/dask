@@ -194,6 +194,43 @@ def test_random_seeds(random):
     assert len(set(results)) == N
 
 
+class global_:
+    value = 0
+
+
+def proc_init():
+    global_.value = 1
+
+
+@pytest.mark.parametrize(
+    "scheduler, initializer, expected_results",
+    [
+        ("threading", None, [1] * 10),
+        ("processes", None, [0] * 10),
+        ("processes", proc_init, [1] * 10),
+    ],
+)
+def test_process_initializer(scheduler, initializer, expected_results):
+    @delayed(pure=False)
+    def f():
+        return global_.value
+
+    global_.value = 1
+
+    with dask.config.set(
+        {"scheduler": scheduler, "multiprocessing.initializer": initializer}
+    ):
+        (results,) = compute([f() for _ in range(10)])
+    assert results == expected_results
+
+    (results2,) = compute(
+        [f() for _ in range(10)],
+        scheduler=scheduler,
+        initializer=initializer,
+    )
+    assert results2 == expected_results
+
+
 def check_for_pytest():
     """We check for spawn by ensuring subprocess doesn't have modules only
     parent process should have:
