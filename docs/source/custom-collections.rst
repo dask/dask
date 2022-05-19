@@ -448,8 +448,7 @@ Demonstrating this class:
     >>> x2.compute()
     (2, 3, 4, 5)
 
-    # Run-time typechecking from Python 3.8's Protocol and
-    # typing.runtime_checkable decorator.
+    # Run-time typechecking
     >>> from dask.typing import DaskCollection
     >>> isinstance(x, DaskCollection)
     True
