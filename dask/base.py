@@ -784,13 +784,12 @@ def visualize(
 
             engine = "graphviz"
         except ImportError:
-            pass
-        try:
-            import ipycytoscape  # noqa: F401
+            try:
+                import ipycytoscape  # noqa: F401
 
-            engine = "cytoscape"
-        except ImportError:
-            pass
+                engine = "cytoscape"
+            except ImportError:
+                pass
 
     if engine == "graphviz":
         from dask.dot import dot_graph
