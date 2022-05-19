@@ -2462,7 +2462,7 @@ def test_groupby_grouper_dispatch(key):
     cudf = pytest.importorskip("cudf")
 
     # not directly used but must be imported
-    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: f401
+    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: F841
 
     pdf = pd.DataFrame(
         {
