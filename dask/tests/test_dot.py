@@ -136,6 +136,7 @@ def test_cytoscape_graph_custom():
 
 
 def test_cytoscape_graph_color():
+    pytest.importorskip("matplotlib.pyplot")
     from dask.delayed import Delayed
 
     g = Delayed("f", dsk).visualize(engine="cytoscape")
