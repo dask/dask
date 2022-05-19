@@ -893,7 +893,8 @@ def to_csv(
     Raises
     ------
     ValueError
-        If ``header_first_partition_only`` is set to False.
+        If ``header_first_partition_only`` is set to False or
+        ``name_function`` is specified when ``single_file`` is True.
 
     See Also
     --------
