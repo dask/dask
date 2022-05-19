@@ -620,20 +620,22 @@ class ArrowDatasetEngine(Engine):
                     tail_metadata.row_group(i)
                     for i in range(tail_metadata.num_row_groups)
                 )
+                index_col_i = names.index(division_info["name"])
                 for row_group in row_groups:
-                    for i, name in enumerate(names):
-                        if name != division_info["name"]:
-                            continue
-                        column = row_group.column(i)
-                        if column.statistics:
-                            if not old_end:
-                                old_end = column.statistics.max
-                            else:
-                                old_end = max(old_end, column.statistics.max)
+                    column = row_group.column(index_col_i)
+                    if column.statistics:
+                        if old_end is None:
+                            old_end = column.statistics.max
+                        elif column.statistics.max > old_end:
+                            old_end = column.statistics.max
+                        else:
+                            # Existing column on disk isn't sorted, set
+                            # `old_end = None` to skip check below
+                            old_end = None
                             break
 
                 divisions = division_info["divisions"]
-                if divisions[0] <= old_end:
+                if old_end is not None and divisions[0] <= old_end:
                     raise ValueError(
                         "The divisions of the appended dataframe overlap with "
                         "previously written divisions. If this is desired, set "
