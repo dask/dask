@@ -19,7 +19,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # https://github.com/dask/dask/issues/8682 is resolved
     conda uninstall --force numpy pandas fastparquet
 
-    python -m pip install --no-deps --pre \
+    python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
         pandas
