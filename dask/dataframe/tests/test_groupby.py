@@ -2788,3 +2788,63 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_method_all_columns(agg_func):
+    pdf = pd.DataFrame(
+        {
+            "x": list(range(10)),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=5)
+
+    pandas_group = pdf.groupby(["x"])
+    dask_group = ddf.groupby(["x"])
+
+    expect = getattr(pandas_group, agg_func)()
+    actual = getattr(dask_group, agg_func)()
+
+    assert_eq(expect, actual)
+
+    pdf = pd.DataFrame(
+        {
+            "x": list(range(10)),
+            "y": list(range(10, 20)),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=5)
+
+    pandas_group = pdf.groupby(["x", "y"])
+    dask_group = ddf.groupby(["x", "y"])
+
+    expect = getattr(pandas_group, agg_func)()
+    actual = getattr(dask_group, agg_func)()
+
+    assert_eq(expect, actual)
+
+
+def test_groupby_agg_all_columns(agg_func):
+    pdf = pd.DataFrame(
+        {
+            "x": list(range(10)),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=5)
+
+    expect = pdf.groupby(["x"]).agg(agg_func)
+    actual = ddf.groupby(["x"]).agg(agg_func)
+
+    assert_eq(expect, actual)
+
+    pdf = pd.DataFrame(
+        {
+            "x": list(range(10)),
+            "y": list(range(10, 20)),
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=5)
+
+    expect = pdf.groupby(["x", "y"]).agg(agg_func)
+    actual = ddf.groupby(["x", "y"]).agg(agg_func)
+
+    assert_eq(expect, actual)
