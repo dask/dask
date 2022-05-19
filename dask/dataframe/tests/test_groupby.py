@@ -2455,6 +2455,7 @@ def test_groupby_dropna_cudf(dropna, by, group_keys):
     assert_eq(dask_result, cudf_result)
 
 
+@pytest.mark.xfail
 @pytest.mark.gpu
 @pytest.mark.parametrize("key", ["a", "b"])
 def test_groupby_grouper_dispatch(key):
