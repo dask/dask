@@ -799,8 +799,12 @@ def visualize(
         from dask.dot import cytoscape_graph
 
         return cytoscape_graph(dsk, filename=filename, **kwargs)
+    elif engine is None:
+        raise RuntimeError(
+            "No visualization engine detected, please install graphviz or ipycytoscape"
+        )
     else:
-        raise ValueError(f"Visualizer {engine} not recognized")
+        raise ValueError(f"Visualization engine {engine} not recognized")
 
 
 def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):
