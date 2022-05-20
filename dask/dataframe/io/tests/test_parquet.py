@@ -2456,16 +2456,17 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
 
 def test_getitem_optimization_empty(tmpdir, engine):
     df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
-    ddf = dd.from_pandas(df, 2)
+    ddf = dd.from_pandas(df, 2, sort=False)
     fn = os.path.join(str(tmpdir))
     ddf.to_parquet(fn, engine=engine)
 
-    df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
+    ddf2 = dd.read_parquet(fn, engine=engine)[[]]
+    dsk = optimize_dataframe_getitem(ddf2.dask, keys=[ddf2._name])
 
-    subgraph = next(iter(dsk.layers.values()))
-    assert isinstance(subgraph, DataFrameIOLayer)
+    subgraph = next(l for l in dsk.layers.values() if isinstance(l, DataFrameIOLayer))
     assert subgraph.columns == []
+
+    assert_eq(ddf2, ddf[[]])
 
 
 def test_getitem_optimization_multi(tmpdir, engine):
@@ -2700,7 +2701,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
 
     # Read back with both `split_row_groups>1` and
     # `aggregate_files=True`
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=engine,
@@ -2787,7 +2788,7 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
     assert_eq(ddf1, ddf2, check_index=False)
 
@@ -2822,7 +2823,7 @@ def test_chunksize_files(
         write_index=False,
     )
 
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -2871,7 +2872,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
         partition_on=partition_on,
         write_index=False,
     )
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -2923,7 +2924,7 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         assert "_metadata" not in files
         path = os.path.join(dirname, "*.parquet")
 
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(
             path,
             engine=engine,
@@ -2957,7 +2958,7 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
         path, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
     )
 
-    with pytest.warns(match="argument will be deprecated"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf_read = dd.read_parquet(
             path,
             engine=read_engine,
