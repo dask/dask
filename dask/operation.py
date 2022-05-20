@@ -107,26 +107,21 @@ class CollectionOperation:
         return hash(self.name)
 
 
-class MapInputs(CollectionOperation):
-    """MapInputs class
+class LiteralInputs(CollectionOperation):
+    """LiteralInputs class
 
     Defines literal block/partition inputs to a CollectionOperation
     """
 
     def __init__(self, inputs: Mapping, label=None):
         self._inputs = inputs
-        self._label = label or "map-operation-inputs"
+        self._label = label or "literals"
         self._name = self._label + "-" + tokenize(inputs)
 
     @property
     def dependencies(self):
-        # MapInputs may not have dependencies
+        # LiteralInputs can not have dependencies
         return {}
-
-    @property
-    def npartitions(self):
-        # TODO: Shouldn't need npartitions for Array...
-        return len(self.collection_keys)
 
     @property
     def collection_keys(self) -> list[tuple]:
@@ -226,12 +221,12 @@ class FusedOperation(MapOperation):
         dep_keys = {}
         for dep_name, dep in deps.items():
             input_op_keys = [(dep_name,) + tuple(key[1:]) for key in keys]
-            if isinstance(dep, MapInputs):
+            if isinstance(dep, LiteralInputs):
                 dep_subgraphs.update(dep.subgraph(input_op_keys)[0])
             else:
                 dep_keys[dep] = input_op_keys
 
-        # Build subgraph with MapInputs dependencies fused
+        # Build subgraph with LiteralInputs dependencies fused
         dsk = {}
         for key in keys:
             task = [func]
@@ -286,7 +281,7 @@ def to_graphviz(
 
     n_tasks = {}
     for op_name in op_tree:
-        n_tasks[op_name] = all_ops[op_name].npartitions
+        n_tasks[op_name] = len(all_ops[op_name].collection_keys)
 
     min_tasks = min(n_tasks.values())
     max_tasks = max(n_tasks.values())
@@ -354,9 +349,9 @@ def generate_graph(operation, keys=None):
     return MemoizingVisitor(_generate_graph)(operation, keys)
 
 
-def _regenerate(operation, visitor, replace_operation=None, **kwargs):
+def _regenerate(operation, visitor, **kwargs):
     transformed_dependencies = {}
-    operation = replace_operation or operation
+    operation = kwargs.pop("replace_with", operation)
     for depname, dep in operation.dependencies.items():
         new_dep = visitor(dep)
         transformed_dependencies[depname] = new_dep
@@ -467,9 +462,6 @@ def map_fusion(operation, fused_op_cls):
     for op_name, fusable_set in fusable.items():
         # Define new fused operation
         new_op = fused_op_cls.from_operation(all_ops[op_name], fusable_set)
-        replaced[op_name] = new_op
+        replaced[op_name] = {"replace_with": new_op}
 
-    return regenerate(
-        replaced.get(operation.name, operation),
-        operation_kwargs=replaced,
-    )
+    return regenerate(operation, operation_kwargs=replaced)

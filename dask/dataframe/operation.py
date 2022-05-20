@@ -13,7 +13,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.operation import (
     CollectionOperation,
     FusedOperation,
-    MapInputs,
+    LiteralInputs,
     MapOperation,
     MemoizingVisitor,
     fuse_subgraph_callables,
@@ -234,7 +234,7 @@ class DataFrameCreation(DataFrameOperation, MapOperation):
         token = token or tokenize(self.io_func, meta, inputs, columns, divisions)
         self._name = f"{self.label}-{token}"
         self.inputs = inputs
-        _dep = MapInputs({(i,): val for i, val in enumerate(inputs)})
+        _dep = LiteralInputs({(i,): val for i, val in enumerate(inputs)})
         self._dependencies = {_dep.name: _dep}
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
@@ -390,12 +390,12 @@ class DataFrameMapOperation(DataFrameOperation, MapOperation):
         dep_keys = {}
         for dep_name, dep in self.dependencies.items():
             input_op_keys = [(dep_name,) + tuple(key[1:]) for key in keys]
-            if isinstance(dep, MapInputs):
+            if isinstance(dep, LiteralInputs):
                 dep_subgraphs.update(dep.subgraph(input_op_keys)[0])
             else:
                 dep_keys[dep] = input_op_keys
 
-        # Build subgraph with MapInputs dependencies fused
+        # Build subgraph with LiteralInputs dependencies fused
         dsk = {}
         for key in keys:
             task = [self.func]
