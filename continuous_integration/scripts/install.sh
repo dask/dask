@@ -7,7 +7,10 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    mamba install -y -c arrow-nightlies "pyarrow>7.0"
+    # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
+    arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
+    export PYARROW_VERSION=${arr[1]}
+    mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force numpy pandas fastparquet
@@ -16,7 +19,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # https://github.com/dask/dask/issues/8682 is resolved
     conda uninstall --force numpy pandas fastparquet
 
-    python -m pip install --no-deps --pre \
+    python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
         pandas
