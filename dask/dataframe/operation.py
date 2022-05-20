@@ -10,7 +10,13 @@ import numpy as np
 
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.operation import CollectionOperation, MemoizingVisitor, operations, regenerate
+from dask.operation import (
+    CollectionOperation,
+    MapOperation,
+    MemoizingVisitor,
+    operations,
+    regenerate,
+)
 from dask.optimization import SubgraphCallable
 from dask.utils import apply, is_arraylike
 
@@ -108,7 +114,7 @@ class CompatFrameOperation(DataFrameOperation):
         return CompatFrameOperation(self._dask, **kwargs)
 
 
-class DataFrameCreation(DataFrameOperation):
+class DataFrameCreation(DataFrameOperation, MapOperation):
     def __init__(
         self,
         io_func,
@@ -149,25 +155,21 @@ class DataFrameCreation(DataFrameOperation):
         )
 
     @cached_property
-    def _subgraph_callable(self):
+    def subgraph_callable(self):
         inkeys = [f"inputs-{self.name}"]
         subgraph = {self.name: (self.io_func, inkeys[-1])}
         return SubgraphCallable(
             dsk=subgraph,
             outkey=self.name,
             inkeys=inkeys,
-        )
-
-    def _fuse_subgraph_callables(self):
-        func = self._subgraph_callable
-        return func, {func.inkeys[0]: self.inputs}
+        ), {inkeys[0]: self.inputs}
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         dsk = {}
         for key in keys:
             name, index = key
             assert name == self.name
-            dsk[key] = (self._subgraph_callable, self.inputs[index])
+            dsk[key] = (self.io_func, self.inputs[index])
         return dsk, {}
 
     @property
@@ -202,7 +204,7 @@ class DataFrameCreation(DataFrameOperation):
             )
 
 
-class DataFrameMapOperation(DataFrameOperation):
+class DataFrameMapOperation(DataFrameOperation, MapOperation):
     def __init__(
         self,
         func,
@@ -247,7 +249,7 @@ class DataFrameMapOperation(DataFrameOperation):
         )
 
     @cached_property
-    def _subgraph_callable(self):
+    def subgraph_callable(self):
         task = [self.func]
         inkeys = []
         for arg in self.args:
@@ -267,77 +269,37 @@ class DataFrameMapOperation(DataFrameOperation):
             if self.kwargs
             else tuple(task)
         }
-        return SubgraphCallable(
-            dsk=subgraph,
-            outkey=self.name,
-            inkeys=inkeys,
+        return (
+            SubgraphCallable(
+                dsk=subgraph,
+                outkey=self.name,
+                inkeys=inkeys,
+            ),
+            self.dependencies,
         )
 
-    def _fuse_subgraph_callables(self):
-        func = self._subgraph_callable
-        inkeys = func.inkeys
-        dep_funcs = {}
-        all_deps = self.dependencies.copy()
-        for key in inkeys:
-            assert key in self.dependencies
-            dep = self.dependencies[key]
-            if isinstance(dep, (DataFrameMapOperation, DataFrameCreation)):
-                _func, _deps = dep._fuse_subgraph_callables()
-                dep_funcs[key] = _func
-                all_deps.update(_deps)
-
-        if dep_funcs:
-            new_dsk = func.dsk.copy()
-            new_inkeys = []
-            for key in func.inkeys:
-                if key in dep_funcs:
-                    dep_func = dep_funcs[key]
-                    new_dsk.update(dep_func.dsk)
-                    new_inkeys.extend(
-                        [k for k in dep_func.inkeys if k not in new_inkeys]
-                    )
-                elif key not in new_inkeys:
-                    new_inkeys.append(key)
-            func = SubgraphCallable(
-                dsk=new_dsk,
-                outkey=self.name,
-                inkeys=new_inkeys,
-            )
-
-        return func, all_deps
-
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
-
-        # Get (fused) SubgraphCallable and deps.
-        # `deps` corresponds to a dict, where the values are
-        # either a `CollectionOperation` or indexable object.
-        # Indexable elements correspond to DataFrameCreation inputs.
-        func, deps = self._fuse_subgraph_callables()
-
-        # Populate dep_keys
-        dep_keys = {}
-        for func_key in func.inkeys:
-            fused_dep = deps[func_key]
-            if isinstance(fused_dep, CollectionOperation):
-                dep_keys[fused_dep] = [(func_key, key[1]) for key in keys]
-
         # Build the graph
+        func = self.func
+        deps: dict[CollectionOperation, list] = {
+            dep: [] for dep in self.dependencies.values()
+        }
         dsk: dict[tuple, tuple] = {}
         for key in keys:
             name, index = key
             assert name == self.name
 
             task = [func]
-            for arg in func.inkeys:
-                fused_dep = deps[func_key]
-                if isinstance(fused_dep, CollectionOperation):
-                    dep_key = (arg, index)
+            for arg in self.args:
+                if isinstance(arg, CollectionOperation):
+                    dep_key = (arg.name, index)
+                    deps[arg].append(dep_key)
                 else:
-                    dep_key = fused_dep[index]
+                    dep_key = arg
                 task.append(dep_key)
             dsk[key] = tuple(task)
 
-        return dsk, dep_keys
+        return dsk, deps
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
