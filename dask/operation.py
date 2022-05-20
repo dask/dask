@@ -116,12 +116,17 @@ class MapInputs(CollectionOperation):
     def __init__(self, inputs: Mapping, label=None):
         self._inputs = inputs
         self._label = label or "map-operation-inputs"
-        self._name = self._label + tokenize(inputs)
+        self._name = self._label + "-" + tokenize(inputs)
 
     @property
     def dependencies(self):
         # MapInputs may not have dependencies
         return {}
+
+    @property
+    def npartitions(self):
+        # TODO: Shouldn't need npartitions for Array...
+        return len(self.collection_keys)
 
     @property
     def collection_keys(self) -> list[tuple]:
@@ -190,7 +195,7 @@ class FusedOperation(MapOperation):
         self._inkey_mapping = inkey_mapping
         self._dependencies = dependencies
         self._label = label or "fused-operation"
-        self._name = self._label + tokenize(func, dependencies)
+        self._name = self._label + "-" + tokenize(func, dependencies)
 
     @classmethod
     def from_operation(
