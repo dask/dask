@@ -712,6 +712,11 @@ def test_deterministic_hashing_dataframe():
 
     assert tokenize(ddf1) == tokenize(ddf2)
 
+    ddf1 = dask_df.loc[0:1, "c"]
+    ddf2 = dask_df.loc[0:1, "c"]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
     ddf1 = dask_df.iloc[:, [0, 1]]
     ddf2 = dask_df.iloc[:, [0, 1]]
 
