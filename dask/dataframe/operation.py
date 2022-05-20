@@ -12,8 +12,12 @@ from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.operation import (
     CollectionOperation,
+    FusedOperation,
+    MapInputs,
     MapOperation,
     MemoizingVisitor,
+    fuse_subgraph_callables,
+    map_fusion,
     operations,
     regenerate,
 )
@@ -57,6 +61,97 @@ class DataFrameOperation(CollectionOperation):
         None means that the required-column set is unknown.
         """
         return self._columns
+
+
+class FusedDataFrameOperation(FusedOperation, DataFrameOperation):
+    def __init__(
+        self,
+        func: SubgraphCallable,
+        inkey_mapping: dict,
+        dependencies: dict,
+        divisions,
+        meta,
+        label=None,
+    ):
+        super().__init__(func, inkey_mapping, dependencies, label=label)
+        self._meta = meta
+        self._divisions = divisions
+
+    @property
+    def collection_keys(self) -> list[tuple]:
+        if self.npartitions is None:
+            raise ValueError
+        return [(self.name, i) for i in range(self.npartitions)]
+
+    @classmethod
+    def from_operation(
+        cls,
+        operation: CollectionOperation,
+        fusable: set | bool,
+        label: str | None = None,
+    ):
+        # Check inputs
+        if not isinstance(operation, DataFrameMapOperation):
+            raise ValueError(
+                f"FusedDataFrameOperation.from_operation only supports "
+                f"DataFrameMapOperation. Got {type(operation)}"
+            )
+        elif not fusable:
+            return operation
+
+        # Build fused SubgraphCallable and extract dependencies
+        _dependencies = {}
+        _inkey_mapping = {}
+        _subgraph_callable, all_deps = fuse_subgraph_callables(operation, fusable)
+        for key in _subgraph_callable.inkeys:
+            _dependencies[key] = all_deps[key]
+            _inkey_mapping[key] = key
+
+        # Return new FusedOperation object
+        return cls(
+            _subgraph_callable,
+            _inkey_mapping,
+            _dependencies,
+            operation.divisions,
+            operation.meta,
+            label=label,
+        )
+
+    def regenerate(self, new_dependencies: dict, **new_kwargs):
+        # Update dependencies
+        _dependencies = {}
+        _inkey_mapping = {}
+
+        for inkey in self._subgraph_callable.inkeys:
+            dep_name = self._inkey_mapping[inkey]
+            dep = self.dependencies[dep_name]
+            _dep = new_dependencies[dep.name]
+            _dependencies[_dep.name] = _dep
+            _inkey_mapping[inkey] = _dep.name
+
+        # Return new object
+        kwargs = {
+            "meta": self.meta,
+            "divisions": self._divisions,
+            "label": self._label,
+        }
+        kwargs.update(new_kwargs)
+        return type(self)(
+            self._subgraph_callable,
+            _inkey_mapping,
+            _dependencies,
+            **kwargs,
+        )
+
+    def copy(self):
+        return type(self)(
+            self._subgraph_callable,
+            self._inkey_mapping,
+            self.dependencies,
+            self.divisions,
+            self.meta,
+            label=self._label,
+        )
 
 
 class CompatFrameOperation(DataFrameOperation):
@@ -139,6 +234,8 @@ class DataFrameCreation(DataFrameOperation, MapOperation):
         token = token or tokenize(self.io_func, meta, inputs, columns, divisions)
         self._name = f"{self.label}-{token}"
         self.inputs = inputs
+        _dep = MapInputs({(i,): val for i, val in enumerate(inputs)})
+        self._dependencies = {_dep.name: _dep}
         divisions = divisions or (None,) * (len(inputs) + 1)
         self._divisions = tuple(divisions)
         self.creation_info = creation_info or {}
@@ -156,25 +253,34 @@ class DataFrameCreation(DataFrameOperation, MapOperation):
 
     @cached_property
     def subgraph_callable(self):
-        inkeys = [f"inputs-{self.name}"]
+        inkeys = list(self.dependencies)
         subgraph = {self.name: (self.io_func, inkeys[-1])}
-        return SubgraphCallable(
-            dsk=subgraph,
-            outkey=self.name,
-            inkeys=inkeys,
-        ), {inkeys[0]: self.inputs}
+        return (
+            SubgraphCallable(
+                dsk=subgraph,
+                outkey=self.name,
+                inkeys=inkeys,
+            ),
+            self.dependencies,
+        )
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+
+        # Always fuse MapInput operations
+        input_op_name, input_op = next(iter(self.dependencies.items()))
+        input_op_keys = [(input_op_name,) + tuple(key[1:]) for key in keys]
+        dep_subgraph, _ = input_op.subgraph(input_op_keys)
+
+        # Build subgraph with MapInput dependencies fused
         dsk = {}
         for key in keys:
-            name, index = key
-            assert name == self.name
-            dsk[key] = (self.io_func, self.inputs[index])
+            dep_key = (input_op_name,) + tuple(key[1:])
+            dsk[key] = (self.io_func, dep_subgraph.get(dep_key, dep_key))
         return dsk, {}
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
-        return {}
+        return self._dependencies
 
     def regenerate(self, new_dependencies: dict, **new_kwargs):
         if "filters" in new_kwargs:
@@ -279,27 +385,28 @@ class DataFrameMapOperation(DataFrameOperation, MapOperation):
         )
 
     def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
-        # Build the graph
-        func = self.func
-        deps: dict[CollectionOperation, list] = {
-            dep: [] for dep in self.dependencies.values()
-        }
-        dsk: dict[tuple, tuple] = {}
-        for key in keys:
-            name, index = key
-            assert name == self.name
+        # Check if we have MapInput dependencies to fuse
+        dep_subgraphs = {}
+        dep_keys = {}
+        for dep_name, dep in self.dependencies.items():
+            input_op_keys = [(dep_name,) + tuple(key[1:]) for key in keys]
+            if isinstance(dep, MapInputs):
+                dep_subgraphs.update(dep.subgraph(input_op_keys)[0])
+            else:
+                dep_keys[dep] = input_op_keys
 
-            task = [func]
+        # Build subgraph with MapInputs dependencies fused
+        dsk = {}
+        for key in keys:
+            task = [self.func]
             for arg in self.args:
                 if isinstance(arg, CollectionOperation):
-                    dep_key = (arg.name, index)
-                    deps[arg].append(dep_key)
+                    dep_key = (arg.name,) + tuple(key[1:])
+                    task.append(dep_subgraphs.get(dep_key, dep_key))
                 else:
-                    dep_key = arg
-                task.append(dep_key)
+                    task.append(arg)
             dsk[key] = tuple(task)
-
-        return dsk, deps
+        return dsk, dep_keys
 
     @property
     def dependencies(self) -> Mapping[str, CollectionOperation]:
@@ -352,7 +459,12 @@ class DataFrameElementwise(DataFrameMapOperation):
 #
 
 
-def optimize(operation, predicate_pushdown=True, column_projection=True):
+def optimize(
+    operation,
+    predicate_pushdown=True,
+    column_projection=True,
+    fuse_map_operations=True,
+):
     if isinstance(operation, CompatFrameOperation):
         return operation
     new = operation
@@ -364,6 +476,10 @@ def optimize(operation, predicate_pushdown=True, column_projection=True):
     # Apply column projection
     if column_projection:
         new = project_columns(new)
+
+    # Apply map fusion
+    if fuse_map_operations:
+        new = map_fusion(new, FusedDataFrameOperation)
 
     # Return new operation
     return new
