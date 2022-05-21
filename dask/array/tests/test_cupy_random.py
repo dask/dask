@@ -65,26 +65,26 @@ def test_random_all_Generator():
         assert_eq(a, a)  # Check that _meta and computed arrays match types
 
     cupy_generator = cupy.random.default_rng()
-    rs = da.random.default_rng(seed=cupy_generator)
+    rng = da.random.default_rng(seed=cupy_generator)
 
-    rnd_test(rs.beta, 1, 2, size=5, chunks=3)
-    rnd_test(rs.binomial, 10, 0.5, size=5, chunks=3)
-    rnd_test(rs.chisquare, 1, size=5, chunks=3)
-    rnd_test(rs.exponential, 1, size=5, chunks=3)
-    rnd_test(rs.f, 1, 2, size=5, chunks=3)
-    rnd_test(rs.gamma, 5, 1, size=5, chunks=3)
-    rnd_test(rs.geometric, 1, size=5, chunks=3)
-    rnd_test(rs.hypergeometric, 1, 2, 3, size=5, chunks=3)
-    rnd_test(rs.integers, 1, high=10, size=5, chunks=3)
-    rnd_test(rs.logseries, 0.5, size=5, chunks=3)
-    rnd_test(rs.poisson, 1, size=5, chunks=3)
+    rnd_test(rng.beta, 1, 2, size=5, chunks=3)
+    rnd_test(rng.binomial, 10, 0.5, size=5, chunks=3)
+    rnd_test(rng.chisquare, 1, size=5, chunks=3)
+    rnd_test(rng.exponential, 1, size=5, chunks=3)
+    rnd_test(rng.f, 1, 2, size=5, chunks=3)
+    rnd_test(rng.gamma, 5, 1, size=5, chunks=3)
+    rnd_test(rng.geometric, 1, size=5, chunks=3)
+    rnd_test(rng.hypergeometric, 1, 2, 3, size=5, chunks=3)
+    rnd_test(rng.integers, 1, high=10, size=5, chunks=3)
+    rnd_test(rng.logseries, 0.5, size=5, chunks=3)
+    rnd_test(rng.poisson, 1, size=5, chunks=3)
 
-    rnd_test(rs.power, 1, size=5, chunks=3)
-    rnd_test(rs.random, size=5, chunks=3)
+    rnd_test(rng.power, 1, size=5, chunks=3)
+    rnd_test(rng.random, size=5, chunks=3)
 
-    rnd_test(rs.standard_exponential, size=5, chunks=3)
-    rnd_test(rs.standard_gamma, 2, size=5, chunks=3)
-    rnd_test(rs.standard_normal, size=5, chunks=3)
+    rnd_test(rng.standard_exponential, size=5, chunks=3)
+    rnd_test(rng.standard_gamma, 2, size=5, chunks=3)
+    rnd_test(rng.standard_normal, size=5, chunks=3)
 
 
 @pytest.mark.parametrize("shape", [(2, 3), (2, 3, 4), (2, 3, 4, 2)])
@@ -97,9 +97,9 @@ def test_random_shapes(shape):
     assert x._meta.shape == (0,) * len(shape)
     assert x.shape == shape
 
-    rs = da.random.default_rng(cupy.random.default_rng())
+    rng = da.random.default_rng(cupy.random.default_rng())
 
-    x = rs.poisson(1.0, size=shape, chunks=3)
+    x = rng.poisson(1.0, size=shape, chunks=3)
     assert type(x._meta) == cupy.ndarray
     assert_eq(x, x)  # Check that _meta and computed arrays match types
     assert x._meta.shape == (0,) * len(shape)
