@@ -73,7 +73,6 @@ class Generator:
 
     def __init__(self, bit_generator):
         self._bit_generator = bit_generator
-        self._bit_generator_state = bit_generator.state
         self._generator = Generator
 
     def __str__(self):
@@ -151,7 +150,7 @@ class Generator:
                 small_kwargs[key] = ar
 
         sizes = list(product(*chunks))
-        seeds = random_rng_data(len(sizes), self._bit_generator_state)
+        seeds = random_rng_data(len(sizes), self._bit_generator.state)
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = f"{funcname}-{token}"
 
@@ -277,7 +276,7 @@ class Generator:
                 )
                 raise NotImplementedError(err_msg)
             sizes = list(product(*chunks))
-            state_data = random_rng_data(len(sizes), self._bit_generator_state)
+            state_data = random_rng_data(len(sizes), self._bit_generator.state)
 
             name = "da.random.choice-%s" % tokenize(
                 state_data, size, chunks, a, replace, p, axis, shuffle
@@ -424,7 +423,7 @@ class Generator:
             x = arange(x, chunks="auto")
 
         index = np.arange(len(x))
-        _shuffle(self._bit_generator_state, index)
+        _shuffle(self._bit_generator.state, index)
         return shuffle_slice(x, index)
 
     @derived_from(np.random.Generator, skipblocks=1)
