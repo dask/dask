@@ -25,6 +25,7 @@ extras_require: dict[str, list[str]] = {
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
 extras_require["test"] = [
+    "pandas[test]",
     "pytest",
     "pytest-rerunfailures",
     "pytest-xdist",
