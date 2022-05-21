@@ -58,7 +58,8 @@ def test_random_all_RandomState():
     rnd_test(rs.standard_t, 2, size=5, chunks=3)
 
 
-def test_random_all_Generator():
+@pytest.mark.parametrize("shape", [(2), (2, 3), (2, 3, 4), (2, 3, 4, 2)], ids=type)
+def test_random_all_Generator(shape):
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
         assert type(a._meta) == cupy.ndarray
@@ -67,24 +68,22 @@ def test_random_all_Generator():
     cupy_generator = cupy.random.default_rng()
     rng = da.random.default_rng(seed=cupy_generator)
 
-    rnd_test(rng.beta, 1, 2, size=5, chunks=3)
-    rnd_test(rng.binomial, 10, 0.5, size=5, chunks=3)
-    rnd_test(rng.chisquare, 1, size=5, chunks=3)
-    rnd_test(rng.exponential, 1, size=5, chunks=3)
-    rnd_test(rng.f, 1, 2, size=5, chunks=3)
-    rnd_test(rng.gamma, 5, 1, size=5, chunks=3)
-    rnd_test(rng.geometric, 1, size=5, chunks=3)
-    rnd_test(rng.hypergeometric, 1, 2, 3, size=5, chunks=3)
-    rnd_test(rng.integers, 1, high=10, size=5, chunks=3)
-    rnd_test(rng.logseries, 0.5, size=5, chunks=3)
-    rnd_test(rng.poisson, 1, size=5, chunks=3)
-
-    rnd_test(rng.power, 1, size=5, chunks=3)
-    rnd_test(rng.random, size=5, chunks=3)
-
-    rnd_test(rng.standard_exponential, size=5, chunks=3)
-    rnd_test(rng.standard_gamma, 2, size=5, chunks=3)
-    rnd_test(rng.standard_normal, size=5, chunks=3)
+    rnd_test(rng.beta, 1, 2, size=shape, chunks=3)
+    rnd_test(rng.binomial, 10, 0.5, size=shape, chunks=3)
+    rnd_test(rng.chisquare, 1, size=shape, chunks=3)
+    rnd_test(rng.exponential, 1, size=shape, chunks=3)
+    rnd_test(rng.f, 1, 2, size=shape, chunks=3)
+    rnd_test(rng.gamma, 5, 1, size=shape, chunks=3)
+    rnd_test(rng.geometric, 1, size=shape, chunks=3)
+    rnd_test(rng.hypergeometric, 1, 2, 3, size=shape, chunks=3)
+    rnd_test(rng.integers, 1, high=10, size=shape, chunks=3)
+    rnd_test(rng.logseries, 0.5, size=shape, chunks=3)
+    rnd_test(rng.poisson, 1, size=shape, chunks=3)
+    rnd_test(rng.power, 1, size=shape, chunks=3)
+    rnd_test(rng.random, size=shape, chunks=3)
+    rnd_test(rng.standard_exponential, size=shape, chunks=3)
+    rnd_test(rng.standard_gamma, 2, size=shape, chunks=3)
+    rnd_test(rng.standard_normal, size=shape, chunks=3)
 
 
 @pytest.mark.parametrize("shape", [(2, 3), (2, 3, 4), (2, 3, 4, 2)])
