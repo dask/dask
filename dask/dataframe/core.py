@@ -736,14 +736,20 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         func : function
-            Function applied to each partition.
+            The function applied to each partition. If this function accepts
+            the special ``partition_info`` keyword argument, it will recieve
+            information on the partition's relative location within the
+            dataframe.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
-            or regular python objects. DataFrame-like args (both dask and
-            pandas) will be repartitioned to align  (if necessary) before
-            applying the function (see ``align_dataframes`` to control).
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
         enforce_metadata : bool, default True
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
@@ -6393,7 +6399,13 @@ def map_partitions(
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
-        args = _maybe_align_partitions(args)
+        try:
+            args = _maybe_align_partitions(args)
+        except ValueError as e:
+            raise ValueError(
+                f"{e}. If you don't want the partitions to be aligned, and are "
+                "calling `map_partitions` directly, pass `align_dataframes=False`."
+            ) from e
 
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None

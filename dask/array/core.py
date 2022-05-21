@@ -556,11 +556,11 @@ def map_blocks(
     new_axis : number or iterable, optional
         New dimensions created by the function. Note that these are applied
         after ``drop_axis`` (if present).
-    enforce_ndim : bool, default True
+    enforce_ndim : bool, default False
         Whether to enforce at runtime that the dimensionality of the array
         produced by ``func`` actually matches that of the array returned by
         ``map_blocks``.
-        This will raise an error if there is a mismatch.
+        If True, this will raise an error when there is a mismatch.
     token : string, optional
         The key prefix to use for the output array. If not provided, will be
         determined from the function name.

@@ -1,5 +1,5 @@
-Deploying Clusters
-==================
+Deploy Dask Clusters
+====================
 
 .. toctree::
    :maxdepth: 1
