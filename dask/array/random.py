@@ -209,88 +209,84 @@ class Generator:
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with contextlib.suppress(AttributeError):
+    @derived_from(np.random.Generator, skipblocks=1)
+    def choice(
+        self,
+        a,
+        size=None,
+        replace=True,
+        p=None,
+        axis=0,
+        shuffle=True,
+        chunks="auto",
+    ):
+        dependencies = []
+        # Normalize and validate `a`
+        if isinstance(a, Integral):
+            # On windows the output dtype differs if p is provided or
+            # absent, see https://github.com/numpy/numpy/issues/9867
+            dummy_p = np.array([1]) if p is not None else p
+            dtype = np.random.default_rng().choice(1, size=(), p=dummy_p).dtype
+            len_a = a
+            if a < 0:
+                raise ValueError("a must be greater than 0")
+        else:
+            a = asarray(a)
+            a = a.rechunk(a.shape)
+            dtype = a.dtype
+            if a.ndim != 1:
+                raise ValueError("a must be one dimensional")
+            len_a = len(a)
+            dependencies.append(a)
+            a = a.__dask_keys__()[0]
 
-        @derived_from(np.random.Generator, skipblocks=1)
-        def choice(
-            self,
-            a,
-            size=None,
-            replace=True,
-            p=None,
-            axis=0,
-            shuffle=True,
-            chunks="auto",
-        ):
-            dependencies = []
-            # Normalize and validate `a`
-            if isinstance(a, Integral):
-                # On windows the output dtype differs if p is provided or
-                # absent, see https://github.com/numpy/numpy/issues/9867
-                dummy_p = np.array([1]) if p is not None else p
-                dtype = np.random.default_rng().choice(1, size=(), p=dummy_p).dtype
-                len_a = a
-                if a < 0:
-                    raise ValueError("a must be greater than 0")
+        # Normalize and validate `p`
+        if p is not None:
+            if not isinstance(p, Array):
+                # If p is not a dask array, first check the sum is close
+                # to 1 before converting.
+                p = np.asarray(p)
+                if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
+                    raise ValueError("probabilities do not sum to 1")
+                p = asarray(p)
             else:
-                a = asarray(a)
-                a = a.rechunk(a.shape)
-                dtype = a.dtype
-                if a.ndim != 1:
-                    raise ValueError("a must be one dimensional")
-                len_a = len(a)
-                dependencies.append(a)
-                a = a.__dask_keys__()[0]
+                p = p.rechunk(p.shape)
 
-            # Normalize and validate `p`
-            if p is not None:
-                if not isinstance(p, Array):
-                    # If p is not a dask array, first check the sum is close
-                    # to 1 before converting.
-                    p = np.asarray(p)
-                    if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
-                        raise ValueError("probabilities do not sum to 1")
-                    p = asarray(p)
-                else:
-                    p = p.rechunk(p.shape)
+            if p.ndim != 1:
+                raise ValueError("p must be one dimensional")
+            if len(p) != len_a:
+                raise ValueError("a and p must have the same size")
 
-                if p.ndim != 1:
-                    raise ValueError("p must be one dimensional")
-                if len(p) != len_a:
-                    raise ValueError("a and p must have the same size")
+            dependencies.append(p)
+            p = p.__dask_keys__()[0]
 
-                dependencies.append(p)
-                p = p.__dask_keys__()[0]
+        if size is None:
+            size = ()
+        elif not isinstance(size, (tuple, list)):
+            size = (size,)
 
-            if size is None:
-                size = ()
-            elif not isinstance(size, (tuple, list)):
-                size = (size,)
-
-            chunks = normalize_chunks(chunks, size, dtype=np.float64)
-            if not replace and len(chunks[0]) > 1:
-                err_msg = (
-                    "replace=False is not currently supported for "
-                    "dask.array.choice with multi-chunk output "
-                    "arrays"
-                )
-                raise NotImplementedError(err_msg)
-            sizes = list(product(*chunks))
-            state_data = random_rng_data(len(sizes), self._bit_generator.state)
-
-            name = "da.random.choice-%s" % tokenize(
-                state_data, size, chunks, a, replace, p, axis, shuffle
+        chunks = normalize_chunks(chunks, size, dtype=np.float64)
+        if not replace and len(chunks[0]) > 1:
+            err_msg = (
+                "replace=False is not currently supported for "
+                "dask.array.choice with multi-chunk output "
+                "arrays"
             )
-            keys = product([name], *(range(len(bd)) for bd in chunks))
-            dsk = {
-                k: (_choice_rng, state, a, size, replace, p, axis, shuffle)
-                for k, state, size in zip(keys, state_data, sizes)
-            }
+            raise NotImplementedError(err_msg)
+        sizes = list(product(*chunks))
+        state_data = random_rng_data(len(sizes), self._bit_generator.state)
 
-            graph = HighLevelGraph.from_collections(
-                name, dsk, dependencies=dependencies
-            )
-            return Array(graph, name, chunks, dtype=dtype)
+        name = "da.random.choice-%s" % tokenize(
+            state_data, size, chunks, a, replace, p, axis, shuffle
+        )
+        keys = product([name], *(range(len(bd)) for bd in chunks))
+        dsk = {
+            k: (_choice_rng, state, a, size, replace, p, axis, shuffle)
+            for k, state, size in zip(keys, state_data, sizes)
+        }
+
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+        return Array(graph, name, chunks, dtype=dtype)
 
     # @derived_from(np.random.Generator, skipblocks=1)
     # def dirichlet(self, alpha, size=None, chunks="auto"):
