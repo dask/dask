@@ -550,7 +550,7 @@ def default_rng(seed=None):
     Generator(PCG64)
     >>> rfloat = rng.random().compute()
     >>> rfloat
-    array(0.53808239)
+    array(0.58296534)
     >>> type(rfloat)
     <class 'numpy.ndarray'>
 
@@ -561,7 +561,7 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(12345)
     >>> rints = rng.integers(low=0, high=10, size=3).compute()
     >>> rints
-    array([1, 5, 3])
+    array([9, 5, 9])
     >>> type(rints[0])
     <class 'numpy.int64'>
 
@@ -573,9 +573,9 @@ def default_rng(seed=None):
     Generator(PCG64)
     >>> arr1 = rng.random((3, 3)).compute()
     >>> arr1
-    array([[0.28489641, 0.93032418, 0.54341103],
-           [0.5792587 , 0.16936386, 0.6158577 ],
-           [0.88537818, 0.26300315, 0.71861867]])
+    array([[0.99265878, 0.22614087, 0.09490986],
+           [0.17133283, 0.24328892, 0.75882921],
+           [0.70299823, 0.93366648, 0.97560502]])
 
     If we exit and restart our Python interpreter, we'll see that we
     generate the same random numbers again:
@@ -584,9 +584,9 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(seed=42)
     >>> arr2 = rng.random((3, 3)).compute()
     >>> arr2
-    array([[0.28489641, 0.93032418, 0.54341103],
-           [0.5792587 , 0.16936386, 0.6158577 ],
-           [0.88537818, 0.26300315, 0.71861867]])
+    array([[0.99265878, 0.22614087, 0.09490986],
+           [0.17133283, 0.24328892, 0.75882921],
+           [0.70299823, 0.93366648, 0.97560502]])
 
     See Also
     --------
