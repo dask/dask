@@ -13,3 +13,5 @@ include dask/py.typed
 
 include versioneer.py
 include dask/_version.py
+
+include conftest.py
