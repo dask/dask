@@ -1484,7 +1484,19 @@ def format_time(n: float) -> str:
     '123.45 us'
     >>> format_time(123.456)
     '123.46 s'
+    >>> format_time(1234.567)
+    '20m 34s'
+    >>> format_time(12345.67)
+    '3h 25m'
     """
+    if n > 60 * 60 * 2:
+        h = int(n / 3600)
+        m = int((n - h * 3600) / 60)
+        return f"{h}h {m}m"
+    if n > 60 * 10:
+        m = int(n / 60)
+        s = int(n - m * 60)
+        return f"{m}m {s}s"
     if n >= 1:
         return "%.2f s" % n
     if n >= 1e-3:
