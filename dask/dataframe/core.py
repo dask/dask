@@ -36,6 +36,12 @@ from dask.dataframe.dispatch import (
     hash_object_dispatch,
     meta_nonempty,
 )
+from dask.dataframe.operation import (
+    CompatFrameOperation,
+    DataFrameColumnSelection,
+    DataFrameElementwise,
+    DataFrameSeriesSelection,
+)
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
@@ -132,21 +138,66 @@ def finalize(results):
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """A Dask object to represent a pandas scalar"""
 
-    def __init__(self, dsk, name, meta, divisions=None):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
         # divisions is ignored, only present to be compatible with other
         # objects.
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        self._parent_meta = pd.Series(dtype="float64")
 
-        meta = make_meta(meta, parent_meta=self._parent_meta)
-        if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
-            raise TypeError(
-                f"Expected meta to specify scalar, got {typename(type(meta))}"
+        # TODO: Check for mixed legacy/operation usage
+        if operation is None:
+            _parent_meta = pd.Series(dtype="float64")
+            self._operation = CompatFrameOperation(
+                dsk,
+                name=name,
+                meta=make_meta(meta, parent_meta=_parent_meta),
+                divisions=divisions,
+                parent_meta=_parent_meta,
             )
-        self._meta = meta
+        else:
+            self._operation = operation
+        if (
+            is_dataframe_like(self._meta)
+            or is_series_like(self._meta)
+            or is_index_like(self._meta)
+        ):
+            raise TypeError(
+                f"Expected meta to specify scalar, got {typename(type(self._meta))}"
+            )
+
+    @property
+    def operation(self):
+        return self._operation
+
+    @property
+    def dask(self):
+        return self.operation.dask
+
+    @property
+    def _name(self):
+        return self.operation.name
+
+    @_name.setter
+    def _name(self, value):
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"name": value}}
+        )
+
+    @property
+    def _meta(self):
+        return self.operation.meta
+
+    @_meta.setter
+    def _meta(self, value):
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"meta": value}}
+        )
+
+    @property
+    def _parent_meta(self):
+        return self.operation._parent_meta
 
     def __dask_graph__(self):
         return self.dask
@@ -215,10 +266,10 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
-        return self._args
+        return self.operation
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta = state
+        self._operation = state
 
     def __bool__(self):
         raise TypeError(
@@ -316,19 +367,55 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        self.dask = dsk
-        self._name = name
-        meta = make_meta(meta)
-        if not self._is_partition_type(meta):
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
+
+        # TODO: Check for mixed legacy/operation usage
+        if operation is None:
+            self._operation = CompatFrameOperation(
+                dsk,
+                name=name,
+                meta=make_meta(meta),
+                divisions=divisions,
+            )
+        else:
+            self._operation = operation
+        if not self._is_partition_type(self._meta):
             raise TypeError(
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(meta))}"
             )
-        self._meta = meta
-        self.divisions = tuple(divisions)
+
+    @property
+    def operation(self):
+        return self._operation
+
+    @property
+    def dask(self):
+        return self.operation.dask
+
+    @property
+    def _name(self):
+        return self.operation.name
+
+    @_name.setter
+    def _name(self, value):
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"name": value}}
+        )
+
+    @property
+    def _meta(self):
+        return self.operation.meta
+
+    @_meta.setter
+    def _meta(self, value):
+        from dask.operation import regenerate
+
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"meta": value}}
+        )
 
     def __dask_graph__(self):
         return self.dask
@@ -385,15 +472,17 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
-        return self._divisions
+        return self.operation.divisions
 
     @divisions.setter
     def divisions(self, value):
+        from dask.operation import regenerate
+
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(self._divisions):
-            n = len(self._divisions)
+        if hasattr(self, "_divisions") and len(value) != len(self.operation.divisions):
+            n = len(self.operation.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
                 f"tuple of length={n}, got {len(value)}"
@@ -414,7 +503,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self._divisions = value
+        self._operation = regenerate(
+            self.operation, operation_kwargs={self._name: {"divisions": value}}
+        )
 
     @property
     def npartitions(self) -> int:
@@ -453,10 +544,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
-        return self._args
+        # return self._args
+        return self.operation
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        # self.dask, self._name, self._meta, self._divisions = state
+        self._operation = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -475,7 +568,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 "The `deep` value must be False. This is strictly a shallow copy "
                 "of the underlying computational graph."
             )
-        return new_dd_object(self.dask, self._name, self._meta, self.divisions)
+        return new_dd_object(operation=self.operation.copy())
 
     def __array__(self, dtype=None, **kwargs):
         self._computed = self.compute()
@@ -559,9 +652,7 @@ Dask Name: {name}, {task} tasks"""
         result = map_partitions(
             methods.assign_index, self, value, enforce_metadata=False
         )
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self._operation = result.operation
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -3387,8 +3478,7 @@ class Series(_Frame):
         self._meta.name = name
         renamed = _rename_dask(self, name)
         # update myself
-        self.dask = renamed.dask
-        self._name = renamed._name
+        self._operation = renamed.operation
 
     @property
     def ndim(self):
@@ -3523,14 +3613,11 @@ Dask Name: {name}, {task} tasks""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res._divisions = tuple(methods.tolist(new))
+                    res.divisions = tuple(methods.tolist(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
-                self.dask = res.dask
-                self._name = res._name
-                self._divisions = res.divisions
-                self._meta = res._meta
+                self._operation = res.operation
                 res = self
         return res
 
@@ -4269,24 +4356,13 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors: ClassVar[set[str]] = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
-        if self.dask.layers[name].collection_annotations is None:
-            self.dask.layers[name].collection_annotations = {
-                "npartitions": self.npartitions,
-                "columns": [col for col in self.columns],
-                "type": typename(type(self)),
-                "dataframe_type": typename(type(self._meta)),
-                "series_dtypes": {
-                    col: self._meta[col].dtype
-                    if hasattr(self._meta[col], "dtype")
-                    else None
-                    for col in self._meta.columns
-                },
-            }
-        else:
-            self.dask.layers[name].collection_annotations.update(
-                {
+    def __init__(self, dsk=None, name=None, meta=None, divisions=None, operation=None):
+        super().__init__(dsk, name, meta, divisions, operation)
+
+        # TODO: Get "collection_annotations" info from operation
+        if isinstance(self.operation, CompatFrameOperation):
+            if self.dask.layers[self._name].collection_annotations is None:
+                self.dask.layers[self._name].collection_annotations = {
                     "npartitions": self.npartitions,
                     "columns": [col for col in self.columns],
                     "type": typename(type(self)),
@@ -4298,7 +4374,21 @@ class DataFrame(_Frame):
                         for col in self._meta.columns
                     },
                 }
-            )
+            else:
+                self.dask.layers[self._name].collection_annotations.update(
+                    {
+                        "npartitions": self.npartitions,
+                        "columns": [col for col in self.columns],
+                        "type": typename(type(self)),
+                        "dataframe_type": typename(type(self._meta)),
+                        "series_dtypes": {
+                            col: self._meta[col].dtype
+                            if hasattr(self._meta[col], "dtype")
+                            else None
+                            for col in self._meta.columns
+                        },
+                    }
+                )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -4320,9 +4410,7 @@ class DataFrame(_Frame):
     @columns.setter
     def columns(self, columns):
         renamed = _rename_dask(self, columns)
-        self._meta = renamed._meta
-        self._name = renamed._name
-        self.dask = renamed.dask
+        self._operation = renamed.operation
 
     @property
     def iloc(self):
@@ -4362,8 +4450,31 @@ class DataFrame(_Frame):
             "`len(df.index) == 0` or `len(df.columns) == 0`"
         )
 
+    def _getitem_operation(self, meta, key, key_dependency, getitem_type):
+        if isinstance(self.operation, CompatFrameOperation):
+            name = f"getitem-{tokenize(self, key)}"
+            deps = [self, key] if key_dependency else [self]
+            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+            return new_dd_object(graph, name, meta, self.divisions)
+        else:
+            op_cls = (
+                DataFrameColumnSelection
+                if getitem_type == "columns"
+                else DataFrameSeriesSelection
+            )
+            operation = op_cls(
+                operator.getitem,
+                make_meta(meta),
+                self.operation,
+                key.operation if key_dependency else key,
+                label="getitem",
+                token=tokenize(self, key),
+                divisions=self.divisions,
+            )
+            return new_dd_object(operation=operation)
+
     def __getitem__(self, key):
-        name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
@@ -4380,9 +4491,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return self._getitem_operation(meta, key, False, "columns")
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -4404,19 +4513,15 @@ class DataFrame(_Frame):
         ):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
+            return self._getitem_operation(meta, key, False, "columns")
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:
                 from dask.dataframe.multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
-            return new_dd_object(graph, name, self, self.divisions)
+            return self._getitem_operation(self, key, True, "series")
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
@@ -4440,25 +4545,29 @@ class DataFrame(_Frame):
         else:
             df = self.assign(**{key: value})
 
-        self.dask = df.dask
-        self._name = df._name
-        self._meta = df._meta
-        self._divisions = df.divisions
+        self._operation = df.operation
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
-        self.dask = result.dask
-        self._name = result._name
-        self._meta = result._meta
+        self._operation = result.operation
 
     def __setattr__(self, key, value):
+        if key == "_operation":
+            object.__setattr__(self, key, value)
+
         try:
             columns = object.__getattribute__(self, "_meta").columns
         except AttributeError:
             columns = ()
 
         # exclude protected attributes from setitem
-        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
+        if key in columns and key not in [
+            "_operation",
+            "divisions",
+            "dask",
+            "_name",
+            "_meta",
+        ]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
@@ -5996,11 +6105,6 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         if not isinstance(arg, (_Frame, Scalar, Array))
     ]
 
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
-
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
-
     if meta is no_default:
         if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
             # should not occur in current funcs
@@ -6018,7 +6122,29 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    is_legacy_collection = [
+        isinstance(df.operation, CompatFrameOperation)
+        if hasattr(df, "operation")
+        else True
+        for df in dfs
+    ]
+    if any(is_legacy_collection):
+        # adjust the key length of Scalar
+        dsk = partitionwise_graph(op, _name, *args, **kwargs)
+        graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
+        result = new_dd_object(graph, _name, meta, divisions)
+    else:
+        operation = DataFrameElementwise(
+            op,
+            meta,
+            *[x.operation if hasattr(x, "operation") else x for x in args],
+            label=funcname(op),
+            token=tokenize(op, *args, **kwargs),
+            divisions=divisions,
+            **kwargs,
+        )
+        result = new_dd_object(operation=operation)
+
     return handle_out(out, result)
 
 
@@ -6052,12 +6178,10 @@ def handle_out(out, result):
             )
 
     if isinstance(out, (Series, DataFrame, Scalar)):
-        out._meta = result._meta
-        out._name = result._name
-        out.dask = result.dask
+        out._operation = result.operation
 
         if not isinstance(out, Scalar):
-            out._divisions = result.divisions
+            out.divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -7562,13 +7686,23 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(
+    dsk=None, name=None, meta=None, divisions=None, parent_meta=None, operation=None
+):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
+    if operation is not None:
+        name = operation.name
+        meta = operation.meta
+        divisions = operation.divisions
+
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        if operation is None:
+            return get_parallel_type(meta)(dsk, name, meta, divisions)
+        else:
+            return get_parallel_type(meta)(operation=operation)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -7585,8 +7719,10 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                 for i in range(len(chunks[0])):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
-    else:
+    elif operation is None:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
+    else:
+        return get_parallel_type(meta)(operation=operation)
 
 
 def partitionwise_graph(func, layer_name, *args, **kwargs):

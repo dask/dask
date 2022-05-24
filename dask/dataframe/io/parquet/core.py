@@ -177,6 +177,7 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    use_operation_api=False,
     **kwargs,
 ):
     """
@@ -448,7 +449,9 @@ def read_parquet(
         path = stringify_path(path)
 
     # Update input_kwargs
-    input_kwargs.update({"columns": columns, "engine": engine})
+    input_kwargs.update(
+        {"columns": columns, "engine": engine, "use_operation_api": use_operation_api}
+    )
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -548,6 +551,7 @@ def read_parquet(
             "args": (path,),
             "kwargs": input_kwargs,
         },
+        use_operation_api=use_operation_api,
     )
 
 

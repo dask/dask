@@ -4747,7 +4747,6 @@ def test_assign_index():
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf_copy = ddf.copy()
-
     ddf.index = ddf.index * 10
 
     expected = df.copy()
