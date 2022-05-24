@@ -186,7 +186,7 @@ def get(
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
-        # consistent seed for the Python hash algorithm. Unfortunatley, there
+        # consistent seed for the Python hash algorithm. Unfortunately, there
         # is no way to specify environment variables only for the Pool
         # processes, so we have to rely on environment variables being
         # inherited.
