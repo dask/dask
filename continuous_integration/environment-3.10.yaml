@@ -49,6 +49,7 @@ dependencies:
   - cytoolz
   - distributed
   - ipython
+  - ipycytoscape
   - lz4
   - numba
   - partd
