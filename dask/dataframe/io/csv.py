@@ -916,7 +916,7 @@ def to_csv(
         files = [first_file]
     else:
         if os.path.isdir(filename) and "*" not in filename:
-            filename = os.path.join(filename, "part-*.csv")
+            filename = os.path.join(filename, "part.*.csv")
         files = open_files(
             filename,
             mode=mode,
