@@ -11,7 +11,7 @@ import tlz as toolz
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, ensure_set, key_split, stringify
+from dask.utils import ensure_dict, ensure_set, import_required, key_split, stringify
 from dask.widgets import get_template
 
 
@@ -1151,7 +1151,16 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from dask.dot import graphviz, label, name
+    from dask.dot import label, name
+
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz visualization engine requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}

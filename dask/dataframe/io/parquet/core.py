@@ -18,6 +18,7 @@ from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
 from dask.utils import apply, import_required, natural_sort_key, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
@@ -756,19 +757,34 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        if _is_local_fs(fs):
-            working_dir = fs.expand_path(".")[0]
-            if path.rstrip("/") == working_dir.rstrip("/"):
-                raise ValueError(
-                    "Cannot clear the contents of the current working directory!"
-                )
         if append:
             raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
+
         if fs.exists(path) and fs.isdir(path):
-            # Only remove path contents if
-            # (1) The path exists
-            # (2) The path is a directory
-            # (3) The path is not the current working directory
+            # Check for any previous parquet layers reading from a file in the
+            # output directory, since deleting those files now would result in
+            # errors or incorrect results.
+            for layer_name, layer in df.dask.layers.items():
+                if layer_name.startswith("read-parquet-") and isinstance(
+                    layer, DataFrameIOLayer
+                ):
+                    path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
+                    for input in layer.inputs:
+                        if input["piece"][0].startswith(path_with_slash):
+                            raise ValueError(
+                                "Reading and writing to the same parquet file within the "
+                                "same task graph is not supported."
+                            )
+
+            # Don't remove the directory if it's the current working directory
+            if _is_local_fs(fs):
+                working_dir = fs.expand_path(".")[0]
+                if path.rstrip("/") == working_dir.rstrip("/"):
+                    raise ValueError(
+                        "Cannot clear the contents of the current working directory!"
+                    )
+
+            # It's safe to clear the output directory
             fs.rm(path, recursive=True)
 
     # Always skip divisions checks if divisions are unknown

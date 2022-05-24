@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
+from typing import Literal
 
 from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
@@ -601,7 +602,13 @@ def compute(
 
 
 def visualize(
-    *args, filename="mydask", traverse=True, optimize_graph=False, maxval=None, **kwargs
+    *args,
+    filename="mydask",
+    traverse=True,
+    optimize_graph=False,
+    maxval=None,
+    engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+    **kwargs,
 ):
     """
     Visualize several dask graphs simultaneously.
@@ -655,8 +662,12 @@ def visualize(
     verbose : bool, optional
         Whether to label output and input boxes even if the data aren't chunked.
         Beware: these labels can get very long. Default is False.
+    engine : {"graphviz", "ipycytoscape", "cytoscape"}, optional.
+        The visualization engine to use. If not provided, this checks the dask config
+        value "visualization.engine". If that is not set, it tries to import ``graphviz``
+        and ``ipycytoscape``, using the first one to succeed.
     **kwargs
-       Additional keyword arguments to forward to ``to_graphviz``.
+       Additional keyword arguments to forward to the visualization engine.
 
     Examples
     --------
@@ -678,8 +689,6 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    from dask.dot import dot_graph
-
     args, _ = unpack_collections(*args, traverse=traverse)
 
     dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
@@ -707,7 +716,7 @@ def visualize(
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
-            cmap = plt.cm.RdBu
+            cmap = plt.cm.plasma
         if isinstance(cmap, str):
             import matplotlib.pyplot as plt
 
@@ -765,7 +774,37 @@ def visualize(
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
-    return dot_graph(dsk, filename=filename, **kwargs)
+    # Determine which engine to dispatch to, first checking the kwarg, then config,
+    # then whichever of graphviz or ipycytoscape are installed, in that order.
+    engine = engine or config.get("visualization.engine", None)
+
+    if not engine:
+        try:
+            import graphviz  # noqa: F401
+
+            engine = "graphviz"
+        except ImportError:
+            try:
+                import ipycytoscape  # noqa: F401
+
+                engine = "cytoscape"
+            except ImportError:
+                pass
+
+    if engine == "graphviz":
+        from dask.dot import dot_graph
+
+        return dot_graph(dsk, filename=filename, **kwargs)
+    elif engine in ("cytoscape", "ipycytoscape"):
+        from dask.dot import cytoscape_graph
+
+        return cytoscape_graph(dsk, filename=filename, **kwargs)
+    elif engine is None:
+        raise RuntimeError(
+            "No visualization engine detected, please install graphviz or ipycytoscape"
+        )
+    else:
+        raise ValueError(f"Visualization engine {engine} not recognized")
 
 
 def persist(*args, traverse=True, optimize_graph=True, scheduler=None, **kwargs):
