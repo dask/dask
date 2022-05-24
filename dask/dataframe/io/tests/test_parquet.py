@@ -3593,6 +3593,29 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
 
 
+def test_to_parquet_overwrite_files_from_read_parquet_in_same_call_raises(
+    tmpdir, engine
+):
+
+    subdir = tmpdir.mkdir("subdir")
+
+    dd.from_pandas(pd.DataFrame({"x": range(20)}), npartitions=2).to_parquet(
+        subdir, engine=engine
+    )
+
+    ddf = dd.read_parquet(subdir)
+
+    # Test writing to the same files, as well as a parent directory
+    for target in [subdir, tmpdir]:
+        with pytest.raises(ValueError, match="same parquet file"):
+            ddf.to_parquet(target, overwrite=True)
+
+        ddf2 = ddf.assign(y=ddf.x + 1)
+
+        with pytest.raises(ValueError, match="same parquet file"):
+            ddf2.to_parquet(target, overwrite=True)
+
+
 def test_to_parquet_errors_non_string_column_names(tmpdir, engine):
     df = pd.DataFrame({"x": range(10), 1: range(10)})
     ddf = dd.from_pandas(df, npartitions=2)
