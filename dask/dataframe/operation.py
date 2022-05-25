@@ -4,16 +4,12 @@ from dataclasses import dataclass, replace
 from functools import cached_property
 from typing import Any, Hashable, Tuple
 
-from typing_extensions import TypeAlias
-
 from dask.highlevelgraph import HighLevelGraph
 from dask.operation import CollectionOperation
 
-PartitionKey: TypeAlias = Tuple[str, int]
-
 
 @dataclass(frozen=True)
-class FrameOperation(CollectionOperation[PartitionKey]):
+class FrameOperation(CollectionOperation[Tuple[str, int]]):
     """Abtract DataFrame-based CollectionOperation"""
 
     @property
@@ -21,7 +17,7 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         """Return DataFrame metadata"""
         raise NotImplementedError
 
-    def replace_meta(self, value) -> CollectionOperation[PartitionKey]:
+    def replace_meta(self, value) -> CollectionOperation[tuple[str, int]]:
         """Return a new operation with different meta"""
         raise ValueError(f"meta cannot be modified for {type(self)}")
 
@@ -30,7 +26,7 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         """Return DataFrame divisions"""
         raise NotImplementedError
 
-    def replace_divisions(self, value) -> CollectionOperation[PartitionKey]:
+    def replace_divisions(self, value) -> CollectionOperation[tuple[str, int]]:
         """Return a new operation with different divisions"""
         raise ValueError(f"divisions cannot be modified for {type(self)}")
 
@@ -42,7 +38,7 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         return len(self.divisions) - 1
 
     @property
-    def collection_keys(self) -> list[PartitionKey]:
+    def collection_keys(self) -> list[tuple[str, int]]:
         """Return list of all collection keys"""
         if self.npartitions is None:
             raise ValueError
@@ -114,7 +110,8 @@ class CompatFrameOperation(FrameOperation):
     def subgraph(
         self, keys: list[tuple]
     ) -> tuple[
-        dict[PartitionKey, Any], dict[CollectionOperation[Any], list[tuple[Hashable]]]
+        dict[tuple[str, int], Any],
+        dict[CollectionOperation[Any], list[tuple[Hashable]]],
     ]:
         # TODO: Maybe add optional HLG optimization pass?
         return self.dask.cull(keys).to_dict(), {}
