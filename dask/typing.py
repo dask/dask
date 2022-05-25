@@ -155,7 +155,7 @@ class DaskCollection(Protocol):
         Returns
         -------
         PostComputeCallable
-            Callable that recieves the sequence of the results of each
+            Callable that receives the sequence of the results of each
             final key along with optional arguments. An example signature
             would be ``finalize(results: Sequence[Any], *args)``.
         tuple[Any, ...]
@@ -169,7 +169,7 @@ class DaskCollection(Protocol):
 
     @abc.abstractmethod
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
-        """Rebuilder function and optional arguments to contruct a persisted collection.
+        """Rebuilder function and optional arguments to construct a persisted collection.
 
         See also the documentation for :py:class:`dask.typing.PostPersistCallable`.
 
@@ -187,7 +187,7 @@ class DaskCollection(Protocol):
             :py:func:`dask.persist`, the new graph will have just the
             output keys and the values already computed.
         tuple[Any, ...]
-            Optional arugments passed to the rebuild callable. If no
+            Optional arguments passed to the rebuild callable. If no
             additional arguments are to be passed then this must be an
             empty tuple.
 

@@ -402,9 +402,9 @@ class SimpleShuffleLayer(Layer):
         # depth-first delays the freeing of the result of `shuffle_group()`
         # until the end of the shuffling.
         #
-        # We address this by manually setting a high "prioroty" to the
+        # We address this by manually setting a high "priority" to the
         # `getitem()` ("split") tasks, using annotations. This forces a
-        # breadth-first scheduling of the tasks tath directly depend on
+        # breadth-first scheduling of the tasks that directly depend on
         # the `shuffle_group()` output, allowing that data to be freed
         # much earlier.
         #
@@ -497,7 +497,7 @@ class SimpleShuffleLayer(Layer):
         """Cull a SimpleShuffleLayer HighLevelGraph layer.
 
         The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
+        tasks to produce the keys (indices) included in `parts_out`.
         Therefore, "culling" the layer only requires us to reset this
         parameter.
         """
@@ -1006,7 +1006,7 @@ class BroadcastJoinLayer(Layer):
 
         For a broadcast join, output partitions always depend on
         all partitions of the broadcasted collection, but only one
-        partition of the "other" collecction.
+        partition of the "other" collection.
         """
         # Get broadcast info
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
@@ -1037,7 +1037,7 @@ class BroadcastJoinLayer(Layer):
         """Cull a BroadcastJoinLayer HighLevelGraph layer.
 
         The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
+        tasks to produce the keys (indices) included in `parts_out`.
         Therefore, "culling" the layer only requires us to reset this
         parameter.
         """

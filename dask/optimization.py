@@ -877,7 +877,7 @@ def fuse(
 def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
     """Subroutine of fuse.
 
-    Mutates dsk, depenencies, and fused_trees inplace"""
+    Mutates dsk, dependencies, and fused_trees inplace"""
     # locate all members of linear chains
     child2parent = {}
     unfusible = set()

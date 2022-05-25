@@ -290,7 +290,7 @@ def test_indices_dimensions_chunks():
         assert expected == actual
 
 
-def test_empty_indicies():
+def test_empty_indices():
     darr = da.indices(tuple(), chunks=tuple())
     nparr = np.indices(tuple())
     assert darr.shape == nparr.shape
@@ -316,7 +316,7 @@ def test_empty_indicies():
     assert_eq(darr, nparr)
 
 
-def test_indicies():
+def test_indices():
     darr = da.indices((1,), chunks=(1,))
     nparr = np.indices((1,))
     assert_eq(darr, nparr)
