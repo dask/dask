@@ -146,8 +146,8 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             self._operation = CompatFrameOperation(
                 dsk,
                 name,
-                meta=make_meta(meta, parent_meta=_parent_meta),
-                divisions=divisions,
+                make_meta(meta, parent_meta=_parent_meta),
+                divisions,
                 parent_meta=_parent_meta,
             )
         else:
@@ -186,11 +186,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
 
     @_meta.setter
     def _meta(self, value):
-        self._operation = self.operation.replay(meta=value)
+        self._operation = self.operation.replace_meta(value)
 
     @property
     def _parent_meta(self):
-        return self.operation._parent_meta
+        return self.operation.parent_meta
 
     def __dask_graph__(self):
         return self.dask
@@ -373,8 +373,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             self._operation = CompatFrameOperation(
                 dsk,
                 name,
-                meta=make_meta(meta),
-                divisions=divisions,
+                make_meta(meta),
+                divisions,
             )
         else:
             if not isinstance(operation, FrameOperation):
@@ -410,7 +410,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @_meta.setter
     def _meta(self, value):
-        self._operation = self.operation.replay(meta=value)
+        self._operation = self.operation.replace_meta(value)
 
     def __dask_graph__(self):
         return self.dask
@@ -513,7 +513,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self._operation = self.operation.replay(divisions=value)
+        self._operation = self.operation.replace_divisions(value)
 
     @property
     def npartitions(self) -> int:

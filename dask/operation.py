@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from typing import Hashable
+from dataclasses import dataclass
+from typing import Any, Generic, Hashable, TypeVar
 
 from dask.base import tokenize
 
+KeyType = TypeVar("KeyType", bound=Hashable)
 
-class CollectionOperation:
+
+@dataclass(frozen=True)
+class CollectionOperation(Generic[KeyType]):
     """CollectionOperation class
 
     Encapsulates the state and graph-creation logic for
@@ -22,11 +26,15 @@ class CollectionOperation:
         raise NotImplementedError
 
     @property
-    def dependencies(self) -> set[CollectionOperation]:
+    def dependencies(self) -> frozenset[CollectionOperation[Any]]:
         """Return set of CollectionOperation dependencies"""
         raise NotImplementedError
 
-    def subgraph(self, keys: list[tuple]) -> tuple:
+    def subgraph(
+        self, keys: list[tuple]
+    ) -> tuple[
+        dict[KeyType, Any], dict[CollectionOperation[Any], list[tuple[Hashable]]]
+    ]:
         """Return the subgraph and key dependencies for this operation
 
         NOTE: Since this method returns a mapping between dependencies
@@ -50,44 +58,28 @@ class CollectionOperation:
         """
         raise NotImplementedError
 
-    def reinitialize(self, new_dependencies: dict, **new_kwargs) -> CollectionOperation:
+    def reinitialize(
+        self, replace_dependencies: dict, **changes
+    ) -> CollectionOperation[Any]:
         """Reinitialize this CollectionOperation
 
         Parameters
         ----------
-        new_dependencies : dict[CollectionOperation, CollectionOperation]
-            Dependencies for the new operation
-        **new_kwargs : dict
-            New kwargs to use when initializing the new operation
+        replace_dependencies : dict[CollectionOperation, CollectionOperation]
+            Replaced dependencies for the new operation
+        **changes : dict
+            New fields to use when initializing the new operation
         """
         raise NotImplementedError
 
     @property
-    def collection_keys(self) -> list[Hashable]:
+    def collection_keys(self) -> list[KeyType]:
         """Get the collection keys for this operation"""
         raise NotImplementedError
 
-    def copy(self) -> CollectionOperation:
+    def copy(self) -> CollectionOperation[Any]:
         """Return a shallow copy of this operation"""
         raise NotImplementedError
-
-    def __hash__(self) -> int:
-        """Hash a CollectionOperation"""
-        raise NotImplementedError
-
-    def replay(self, **kwargs) -> CollectionOperation:
-        """Replay this CollectionOperation
-
-        This will recursively call ``reinitialize`` for all
-        operations in the expression graph.
-
-        Parameters
-        ----------
-        **kwargs : dict
-            New kwargs to use when reinitializing this operation
-        """
-        _operation_kwargs = {self.name: kwargs} if kwargs else {}
-        return replay(self, operation_kwargs=_operation_kwargs)
 
 
 #
@@ -119,7 +111,7 @@ class MemoizingVisitor:
             )
 
 
-def _replay(operation, visitor, **kwargs):
+def _replay(operation: CollectionOperation[Any], visitor: MemoizingVisitor, **kwargs):
     # Helper function for ``replay``
     transformed_dependencies = {}
     operation = kwargs.pop("replace_with", operation)
@@ -128,7 +120,7 @@ def _replay(operation, visitor, **kwargs):
     return operation.reinitialize(transformed_dependencies, **kwargs)
 
 
-def replay(operation, operation_kwargs=None):
-    """Replay the operation by calling reinitialize recursively"""
+def replay(operation: CollectionOperation[Any], operation_kwargs=None):
+    """Replay the operation recursively"""
     visitor = MemoizingVisitor(_replay, **(operation_kwargs or {}))
     return visitor(operation)

@@ -1,39 +1,38 @@
 from __future__ import annotations
 
-from typing import Any, Hashable
+from dataclasses import dataclass, replace
+from functools import cached_property
+from typing import Any, Hashable, Tuple
 
-from dask.base import tokenize
+from typing_extensions import TypeAlias
+
 from dask.highlevelgraph import HighLevelGraph
 from dask.operation import CollectionOperation
 
+PartitionKey: TypeAlias = Tuple[str, int]
 
-class FrameOperation(CollectionOperation):
+
+@dataclass(frozen=True)
+class FrameOperation(CollectionOperation[PartitionKey]):
     """Abtract DataFrame-based CollectionOperation"""
-
-    def __init__(
-        self,
-        name: str,
-        meta: Any,
-        divisions: tuple | None,
-    ):
-        self._name = name
-        self._meta = meta
-        self._divisions = tuple(divisions) if divisions is not None else None
-
-    @property
-    def name(self) -> str:
-        """Return the unique name for this CollectionOperation"""
-        return self._name
 
     @property
     def meta(self) -> Any:
         """Return DataFrame metadata"""
-        return self._meta
+        raise NotImplementedError
+
+    def replace_meta(self, value) -> CollectionOperation[PartitionKey]:
+        """Return a new operation with different meta"""
+        raise ValueError(f"meta cannot be modified for {type(self)}")
 
     @property
     def divisions(self) -> tuple | None:
         """Return DataFrame divisions"""
-        return self._divisions
+        raise NotImplementedError
+
+    def replace_divisions(self, value) -> CollectionOperation[PartitionKey]:
+        """Return a new operation with different divisions"""
+        raise ValueError(f"divisions cannot be modified for {type(self)}")
 
     @property
     def npartitions(self) -> int | None:
@@ -43,17 +42,23 @@ class FrameOperation(CollectionOperation):
         return len(self.divisions) - 1
 
     @property
-    def collection_keys(self) -> list[Hashable]:
+    def collection_keys(self) -> list[PartitionKey]:
         """Return list of all collection keys"""
         if self.npartitions is None:
             raise ValueError
         return [(self.name, i) for i in range(self.npartitions)]
 
-    def __hash__(self):
-        """Hash a FrameOperation using its name, meta and divisions"""
-        return hash(tokenize(self.name, self.meta, self.divisions))
+    @property
+    def dask(self) -> HighLevelGraph:
+        """Return a HighLevelGraph representation of this operation
+
+        This property provides temporary compatibility, and may
+        be removed in the future.
+        """
+        raise NotImplementedError
 
 
+@dataclass(frozen=True)
 class CompatFrameOperation(FrameOperation):
     """Pass-through FrameOperation
 
@@ -63,48 +68,56 @@ class CompatFrameOperation(FrameOperation):
     dependencies.
     """
 
-    def __init__(
-        self,
-        dsk: dict | HighLevelGraph,
-        name: str,
-        meta: Any = None,
-        divisions: tuple | None = None,
-        parent_meta: Any = None,
-    ):
-        if not isinstance(dsk, HighLevelGraph):
-            dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-        if meta is None:
-            raise ValueError("meta cannot be None")
-        super().__init__(name, meta, divisions)
-        self._dask = dsk
-        self._parent_meta = parent_meta
+    _dsk: dict | HighLevelGraph
+    _name: str
+    _meta: Any
+    _divisions: tuple | None
+    parent_meta: Any | None = None
 
-    def copy(self) -> CompatFrameOperation:
-        return CompatFrameOperation(
-            self.dask,
-            self.name,
-            meta=self.meta.copy(),
-            divisions=self.divisions,
-            parent_meta=self._parent_meta,
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    def replace_meta(self, value) -> CompatFrameOperation:
+        return replace(self, _meta=value)
+
+    @property
+    def divisions(self) -> tuple | None:
+        return tuple(self._divisions) if self._divisions is not None else None
+
+    def replace_divisions(self, value) -> CompatFrameOperation:
+        return replace(self, _divisions=value)
+
+    @property
+    def dependencies(self) -> frozenset[CollectionOperation[Any]]:
+        return frozenset()
+
+    @cached_property
+    def dask(self) -> HighLevelGraph:
+        return (
+            HighLevelGraph.from_collections(self._name, self._dsk, dependencies=[])
+            if not isinstance(self._dsk, HighLevelGraph)
+            else self._dsk
         )
 
-    @property
-    def dask(self) -> HighLevelGraph:
-        if not isinstance(self._dask, HighLevelGraph):
-            raise TypeError
-        return self._dask
+    def reinitialize(self, replace_dependencies, **changes) -> CompatFrameOperation:
+        if replace_dependencies:
+            raise ValueError(
+                "CompatFrameOperation does not support replace_dependencies"
+            )
+        return replace(self, **changes)
 
-    @property
-    def dependencies(self) -> set[CollectionOperation]:
-        return set()
+    def subgraph(
+        self, keys: list[tuple]
+    ) -> tuple[
+        dict[PartitionKey, Any], dict[CollectionOperation[Any], list[tuple[Hashable]]]
+    ]:
+        # TODO: Maybe add optional HLG optimization pass?
+        return self.dask.cull(keys).to_dict(), {}
 
-    def reinitialize(self, new_dependencies: dict, **new_kwargs):
-        if new_dependencies:
-            raise ValueError("CompatFrameOperation cannot have dependencies")
-        kwargs = {
-            "meta": self.meta,
-            "divisions": self._divisions,
-            "parent_meta": self._parent_meta,
-        }
-        kwargs.update(new_kwargs)
-        return CompatFrameOperation(self._dask, self.name, **kwargs)
+    def copy(self) -> CompatFrameOperation:
+        return replace(self, _meta=self.meta.copy())
