@@ -21,6 +21,7 @@ concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
+grouper_dispatch = Dispatch("grouper")
 
 
 def concat(
