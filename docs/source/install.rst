@@ -95,6 +95,10 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |     gcsfs     | >=0.4.0  |        File-system interface to Google Cloud Storage         |
 +---------------+----------+--------------------------------------------------------------+
+|   graphviz    |          |        Graph visualization using the graphviz engine         |
++---------------+----------+--------------------------------------------------------------+
+| ipycytoscape  |          |        Graph visualization using the cytoscape engine        |
++---------------+----------+--------------------------------------------------------------+
 |   murmurhash  |          |                   Faster hashing of arrays                   |
 +---------------+----------+--------------------------------------------------------------+
 |     numpy     | >=1.18   |                   Required for dask.array                    |
