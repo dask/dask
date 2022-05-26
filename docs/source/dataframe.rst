@@ -63,7 +63,7 @@ There are some slight alterations due to the parallel nature of Dask:
 
 .. grid:: 2
 
-    .. grid-item-card:: Dask DataFrame Syntax
+    .. grid-item-card:: Dask DataFrame API
 
         .. code-block:: python
 
