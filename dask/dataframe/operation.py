@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from functools import cached_property
-from typing import Any, Callable, Hashable, Iterable
+from typing import Any, Callable, Hashable
 
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -126,7 +125,7 @@ class FrameCreation(FusableOperation, FrameOperation):
 
     _io_func: Callable
     _meta: Any
-    _inputs: Iterable
+    _inputs: list
     _divisions: tuple
     _label: str
 
@@ -214,9 +213,7 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
 
     @property
     def divisions(self) -> tuple | None:
-        return self._divisions or (None,) * (
-            len(next(iter(self.dependencies.values()))) + 1
-        )
+        return self._divisions
 
     def replace_divisions(self, value) -> PartitionwiseOperation:
         return replace(self, _divisions=value)
@@ -309,7 +306,7 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
     _dependencies: frozenset
     _label: str
     _meta: Any
-    _divisions: tuple
+    _divisions: tuple | None
 
     @classmethod
     def from_operation(

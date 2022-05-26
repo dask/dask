@@ -4,7 +4,7 @@ import copy
 from collections import Mapping, defaultdict
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable, Hashable, Tuple
+from typing import Any, Callable
 
 from dask.base import tokenize
 from dask.core import reverse_dict
@@ -295,17 +295,17 @@ def operations(operation: CollectionOperation):
 
 def _fuse_subgraph_callables(
     operation: CollectionOperation, visitor: MemoizingVisitor, fusable: bool | set
-):
+) -> tuple[SubgraphCallable, set[CollectionOperation]]:
     if not isinstance(operation, FusableOperation):
         raise ValueError
     func, deps = operation.subgraph_callable
-    all_deps = set(deps)
+    all_deps: set = set(deps)
 
     dep_funcs = {}
     for dep in deps:
-        if (fusable is True or dep.name in fusable) and isinstance(
-            dep, FusableOperation
-        ):
+        if (
+            fusable is True or (isinstance(fusable, set) and dep.name in fusable)
+        ) and isinstance(dep, FusableOperation):
             _func, _deps = visitor(dep, fusable)
             dep_funcs[dep.name] = _func
             all_deps |= _deps
@@ -329,8 +329,7 @@ def _fuse_subgraph_callables(
     return func, all_deps
 
 
-def fuse_subgraph_callables(operation: CollectionOperation, fusable: bool | set = None):
-    fusable = fusable or True
+def fuse_subgraph_callables(operation: CollectionOperation, fusable: bool | set = True):
     visitor = MemoizingVisitor(_fuse_subgraph_callables)
     return visitor(operation, fusable)
 
@@ -341,8 +340,8 @@ def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
     op_dag = operation_dag(operation)
     reverse_dag = reverse_dict(op_dag)
 
-    fusable = defaultdict(set)
-    fuse_operation = None
+    fusable: dict[str, set] = defaultdict(set)
+    fuse_operation = ""
 
     work = [operation.name]
     while work:
@@ -365,7 +364,10 @@ def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
                     {
                         map_dep
                         for map_dep in map_dependents
-                        if map_dep not in fusable[fuse_operation]
+                        if (
+                            fuse_operation is None
+                            or map_dep not in fusable[fuse_operation]
+                        )
                     }
                 )
                 <= 1
