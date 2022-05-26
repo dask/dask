@@ -523,6 +523,7 @@ def assert_eq(
     check_dtype=True,
     check_divisions=True,
     check_index=True,
+    ignore_ordering=True,
     scheduler="sync",
     **kwargs,
 ):
@@ -545,7 +546,7 @@ def assert_eq(
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
-    if isinstance(a, (pd.DataFrame, pd.Series)):
+    if isinstance(a, (pd.DataFrame, pd.Series)) and ignore_ordering:
         a = _maybe_sort(a, check_index)
         b = _maybe_sort(b, check_index)
     if not check_index:
