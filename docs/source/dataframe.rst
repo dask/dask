@@ -84,7 +84,7 @@ There are some slight alterations due to the parallel nature of Dask:
             3    5
             Name: x, dtype: int64
         
-    .. grid-item-card:: pandas DataFrame Syntax
+    .. grid-item-card:: pandas DataFrame API
 
         .. code-block:: python
 
