@@ -112,7 +112,7 @@ class CompatFrameOperation(FrameOperation):
             )
         return replace(self, **changes)
 
-    def subgraph(self, keys: list[tuple[str, int]]) -> tuple[dict, dict]:
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
         # TODO: Maybe add optional HLG optimization pass?
         return self.dask.cull(keys).to_dict(), {}
 
