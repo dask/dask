@@ -1,6 +1,30 @@
 Changelog
 =========
 
+.. _v2022.05.2:
+
+2022.05.2
+---------
+
+Released on May 26, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Add a dispatch for  non-pandas ``Grouper`` objects and use it in ``GroupBy`` (:pr:`9074`) `brandon-b-miller`_
+- Error if ``read_parquet`` & ``to_parquet`` files intersect (:pr:`9124`) `Jim Crist-Harif`_
+- Visualize task graphs using ``ipycytoscape`` (:pr:`9091`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fix various typos (:pr:`9126`) `Ryan Russell`_
+
+Maintenance
+^^^^^^^^^^^
+- Fix flaky ``test_filter_nonpartition_columns`` (:pr:`9127`) `Pavithra Eswaramoorthy`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.08`` (:pr:`9120`)
+- Include ``conftest.py``` in sdists (:pr:`9115`) `Ben Beasley`_
+
+
 .. _v2022.05.1:
 
 2022.05.1
@@ -5579,3 +5603,4 @@ Other
 .. _`Cheun Hong`: https://github.com/cheunhong
 .. _`Eray Aslan`: https://github.com/erayaslan
 .. _`Ben Beasley`: https://github.com/musicinmybrain
+.. _`Ryan Russell`: https://github.com/ryanrussell
