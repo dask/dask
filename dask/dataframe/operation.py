@@ -1,15 +1,25 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, replace
 from functools import cached_property
-from typing import Any, Hashable, Tuple
+from typing import Any, Callable, Hashable, Iterable
 
+from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.operation import CollectionOperation
+from dask.operation import (
+    CollectionOperation,
+    FusableOperation,
+    FusedOperations,
+    LiteralInputs,
+    fuse_subgraph_callables,
+)
+from dask.optimization import SubgraphCallable
+from dask.utils import apply
 
 
 @dataclass(frozen=True)
-class FrameOperation(CollectionOperation[Tuple[str, int]]):
+class FrameOperation(CollectionOperation):
     """Abtract DataFrame-based CollectionOperation"""
 
     @property
@@ -17,7 +27,7 @@ class FrameOperation(CollectionOperation[Tuple[str, int]]):
         """Return DataFrame metadata"""
         raise NotImplementedError
 
-    def replace_meta(self, value) -> CollectionOperation[tuple[str, int]]:
+    def replace_meta(self, value) -> CollectionOperation:
         """Return a new operation with different meta"""
         raise ValueError(f"meta cannot be modified for {type(self)}")
 
@@ -26,7 +36,7 @@ class FrameOperation(CollectionOperation[Tuple[str, int]]):
         """Return DataFrame divisions"""
         raise NotImplementedError
 
-    def replace_divisions(self, value) -> CollectionOperation[tuple[str, int]]:
+    def replace_divisions(self, value) -> CollectionOperation:
         """Return a new operation with different divisions"""
         raise ValueError(f"divisions cannot be modified for {type(self)}")
 
@@ -38,20 +48,11 @@ class FrameOperation(CollectionOperation[Tuple[str, int]]):
         return len(self.divisions) - 1
 
     @property
-    def collection_keys(self) -> list[tuple[str, int]]:
+    def collection_keys(self) -> list:
         """Return list of all collection keys"""
         if self.npartitions is None:
             raise ValueError
         return [(self.name, i) for i in range(self.npartitions)]
-
-    @property
-    def dask(self) -> HighLevelGraph:
-        """Return a HighLevelGraph representation of this operation
-
-        This property provides temporary compatibility, and may
-        be removed in the future.
-        """
-        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -89,7 +90,7 @@ class CompatFrameOperation(FrameOperation):
         return replace(self, _divisions=value)
 
     @property
-    def dependencies(self) -> frozenset[CollectionOperation[Any]]:
+    def dependencies(self) -> frozenset[CollectionOperation]:
         return frozenset()
 
     @cached_property
@@ -100,21 +101,305 @@ class CompatFrameOperation(FrameOperation):
             else self._dsk
         )
 
-    def reinitialize(self, replace_dependencies, **changes) -> CompatFrameOperation:
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> CompatFrameOperation:
         if replace_dependencies:
             raise ValueError(
                 "CompatFrameOperation does not support replace_dependencies"
             )
         return replace(self, **changes)
 
-    def subgraph(
-        self, keys: list[tuple]
-    ) -> tuple[
-        dict[tuple[str, int], Any],
-        dict[CollectionOperation[Any], list[tuple[Hashable]]],
-    ]:
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
         # TODO: Maybe add optional HLG optimization pass?
         return self.dask.cull(keys).to_dict(), {}
 
     def copy(self) -> CompatFrameOperation:
         return replace(self, _meta=self.meta.copy())
+
+    def __hash__(self):
+        return hash(tokenize(self.name, self.meta, self.divisions))
+
+
+@dataclass(frozen=True)
+class FrameCreation(FusableOperation, FrameOperation):
+
+    _io_func: Callable
+    _meta: Any
+    _inputs: Iterable
+    _divisions: tuple
+    _label: str
+
+    @cached_property
+    def name(self) -> str:
+        token = tokenize(self._io_func, self._meta, self._inputs, self._divisions)
+        return f"{self._label}-{token}"
+
+    @cached_property
+    def dependencies(self) -> frozenset[CollectionOperation]:
+        _dep = LiteralInputs({(i,): val for i, val in enumerate(self._inputs)})
+        return frozenset({_dep})
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    @cached_property
+    def divisions(self) -> tuple | None:
+        return tuple(self._divisions or (None,) * (len(self._inputs) + 1))
+
+    @cached_property
+    def subgraph_callable(
+        self,
+    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
+        inkeys = [d.name for d in self.dependencies]
+        subgraph = {self.name: (self._io_func, inkeys[-1])}
+        return (
+            SubgraphCallable(
+                dsk=subgraph,
+                outkey=self.name,
+                inkeys=inkeys,
+            ),
+            self.dependencies,
+        )
+
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+
+        # Always fuse MapInput operations
+        input_op = next(iter(self.dependencies))
+        input_op_name = input_op.name
+        input_op_keys = [(input_op_name,) + tuple(key[1:]) for key in keys]
+        dep_subgraph, _ = input_op.subgraph(input_op_keys)
+
+        # Build subgraph with LiteralInputs dependencies fused
+        dsk = {}
+        for key in keys:
+            dep_key = (input_op_name,) + tuple(key[1:])
+            dsk[key] = (self._io_func, dep_subgraph.get(dep_key, dep_key))
+        return dsk, {}
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> FrameCreation:
+        # TODO: Support column projection and predicate pushdown
+        return replace(self, **changes)
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+@dataclass(frozen=True)
+class PartitionwiseOperation(FusableOperation, FrameOperation):
+
+    _func: Callable
+    _meta: Any
+    _args: list[Any]
+    _divisions: tuple
+    _label: str
+    _kwargs: dict
+
+    @cached_property
+    def name(self) -> str:
+        token = tokenize(
+            self._func, self._meta, self._args, self._divisions, self._kwargs
+        )
+        return f"{self._label}-{token}"
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    def replace_meta(self, value) -> PartitionwiseOperation:
+        return replace(self, _meta=value)
+
+    @property
+    def divisions(self) -> tuple | None:
+        return self._divisions or (None,) * (
+            len(next(iter(self.dependencies.values()))) + 1
+        )
+
+    def replace_divisions(self, value) -> PartitionwiseOperation:
+        return replace(self, _divisions=value)
+
+    @cached_property
+    def dependencies(self) -> frozenset[CollectionOperation]:
+        return frozenset(
+            arg for arg in self._args if isinstance(arg, CollectionOperation)
+        )
+
+    @cached_property
+    def subgraph_callable(
+        self,
+    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
+        task = [self._func]
+        inkeys = []
+        for arg in self._args:
+            if isinstance(arg, CollectionOperation):
+                inkeys.append(arg.name)
+                task.append(inkeys[-1])
+            else:
+                task.append(arg)
+
+        subgraph = {
+            self.name: (
+                apply,
+                task[0],
+                task[1:],
+                self._kwargs,
+            )
+            if self._kwargs
+            else tuple(task)
+        }
+        return (
+            SubgraphCallable(
+                dsk=subgraph,
+                outkey=self.name,
+                inkeys=inkeys,
+            ),
+            self.dependencies,
+        )
+
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+
+        # Check if we have MapInput dependencies to fuse
+        dep_subgraphs = {}
+        dep_keys = {}
+        for dep in self.dependencies:
+            dep_name = dep.name
+            input_op_keys = [(dep_name,) + tuple(key[1:]) for key in keys]
+            if isinstance(dep, LiteralInputs):
+                dep_subgraphs.update(dep.subgraph(input_op_keys)[0])
+            else:
+                dep_keys[dep] = input_op_keys
+
+        # Build subgraph with LiteralInputs dependencies fused
+        dsk = {}
+        for key in keys:
+            task = [self._func]
+            for arg in self._args:
+                if isinstance(arg, CollectionOperation):
+                    dep_key = (arg.name,) + tuple(key[1:])
+                    task.append(dep_subgraphs.get(dep_key, dep_key))
+                else:
+                    task.append(arg)
+            dsk[key] = tuple(task)
+        return dsk, dep_keys
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> PartitionwiseOperation:
+        args = [
+            replace_dependencies[arg.name]
+            if isinstance(arg, CollectionOperation)
+            else arg
+            for arg in self._args
+        ]
+        _changes = {"_args": args, **changes}
+        return replace(self, **_changes)
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+@dataclass(frozen=True)
+class FusedFrameOperations(FusedOperations, FrameOperation):
+
+    _func: SubgraphCallable
+    _inkey_mapping: dict[str, str]
+    _dependencies: frozenset
+    _label: str
+    _meta: Any
+    _divisions: tuple
+
+    @classmethod
+    def from_operation(
+        cls,
+        operation: CollectionOperation,
+        fusable: set | bool,
+        label: str,
+    ):
+        # Check inputs
+        if not isinstance(operation, PartitionwiseOperation):
+            raise ValueError(
+                f"FusedDataFrameOperation.from_operation only supports "
+                f"PartitionwiseOperation. Got {type(operation)}"
+            )
+        elif not fusable:
+            return operation
+
+        # Build fused SubgraphCallable and extract dependencies
+        _dependencies = set()
+        _inkey_mapping = {}
+        _subgraph_callable, all_deps = fuse_subgraph_callables(operation, fusable)
+        for dep in all_deps:
+            key = dep.name
+            _dependencies.add(dep)
+            _inkey_mapping[key] = key
+
+        # Return new FusedOperations object
+        return cls(
+            _subgraph_callable,
+            _inkey_mapping,
+            frozenset(_dependencies),
+            label,
+            operation.meta,
+            operation.divisions,
+        )
+
+    @cached_property
+    def name(self) -> str:
+        token = tokenize(
+            self._func,
+            self._inkey_mapping,
+            self._dependencies,
+            self._meta,
+            self._divisions,
+        )
+        return f"{self._label}-{token}"
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    def replace_meta(self, value) -> FusedFrameOperations:
+        return replace(self, _meta=value)
+
+    @property
+    def divisions(self) -> tuple | None:
+        return self._divisions or (None,) * (
+            len(next(iter(self.dependencies.values()))) + 1
+        )
+
+    def replace_divisions(self, value) -> FusedFrameOperations:
+        return replace(self, _divisions=value)
+
+    @property
+    def collection_keys(self) -> list[Hashable]:
+        if self.npartitions is None:
+            raise ValueError
+        return [(self.name, i) for i in range(self.npartitions)]
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> FusedFrameOperations:
+        # Update dependencies
+        _dependencies = set()
+        _inkey_mapping = {}
+        _dependency_dict = {d.name: d for d in self.dependencies}
+
+        for inkey in self._func.inkeys:
+            dep_name = self._inkey_mapping[inkey]
+            dep = _dependency_dict[dep_name]
+            _dep = replace_dependencies[dep.name]
+            _dependencies.add(_dep)
+            _inkey_mapping[inkey] = _dep.name
+
+        _changes = {
+            "_inkey_mapping": _inkey_mapping,
+            "_dependencies": _dependencies,
+            **changes,
+        }
+        return replace(self, **_changes)
+
+    def __hash__(self):
+        return hash(self.name)
