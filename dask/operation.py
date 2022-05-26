@@ -341,7 +341,7 @@ def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
     reverse_dag = reverse_dict(op_dag)
 
     fusable: dict[str, set] = defaultdict(set)
-    fuse_operation = ""
+    fuse_operation: str | None = None
 
     work = [operation.name]
     while work:
@@ -359,7 +359,7 @@ def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
             }
             if not map_dependents:
                 fuse_operation = op_name
-            elif (
+            elif fuse_operation and (
                 len(
                     {
                         map_dep
