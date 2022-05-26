@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from functools import cached_property
-from typing import Any, Callable, Hashable
+from typing import Any, Callable
+
+from typing_extensions import TypeAlias
 
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -16,9 +18,10 @@ from dask.operation import (
 from dask.optimization import SubgraphCallable
 from dask.utils import apply
 
+PartitionKey: TypeAlias = "tuple[str, int]"
 
-@dataclass(frozen=True)
-class FrameOperation(CollectionOperation):
+
+class FrameOperation(CollectionOperation[PartitionKey]):
     """Abtract DataFrame-based CollectionOperation"""
 
     @property
@@ -26,7 +29,7 @@ class FrameOperation(CollectionOperation):
         """Return DataFrame metadata"""
         raise NotImplementedError
 
-    def replace_meta(self, value) -> CollectionOperation:
+    def replace_meta(self, value) -> CollectionOperation[PartitionKey]:
         """Return a new operation with different meta"""
         raise ValueError(f"meta cannot be modified for {type(self)}")
 
@@ -35,7 +38,7 @@ class FrameOperation(CollectionOperation):
         """Return DataFrame divisions"""
         raise NotImplementedError
 
-    def replace_divisions(self, value) -> CollectionOperation:
+    def replace_divisions(self, value) -> CollectionOperation[PartitionKey]:
         """Return a new operation with different divisions"""
         raise ValueError(f"divisions cannot be modified for {type(self)}")
 
@@ -47,7 +50,7 @@ class FrameOperation(CollectionOperation):
         return len(self.divisions) - 1
 
     @property
-    def collection_keys(self) -> list:
+    def collection_keys(self) -> list[PartitionKey]:
         """Return list of all collection keys"""
         if self.npartitions is None:
             raise ValueError
@@ -109,7 +112,7 @@ class CompatFrameOperation(FrameOperation):
             )
         return replace(self, **changes)
 
-    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+    def subgraph(self, keys: list[tuple[str, int]]) -> tuple[dict, dict]:
         # TODO: Maybe add optional HLG optimization pass?
         return self.dask.cull(keys).to_dict(), {}
 
@@ -371,7 +374,7 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
         return replace(self, _divisions=value)
 
     @property
-    def collection_keys(self) -> list[Hashable]:
+    def collection_keys(self) -> list[PartitionKey]:
         if self.npartitions is None:
             raise ValueError
         return [(self.name, i) for i in range(self.npartitions)]
