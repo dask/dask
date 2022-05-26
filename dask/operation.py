@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import copy
-from collections import Mapping, defaultdict
+from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
 from typing import Any, Callable
