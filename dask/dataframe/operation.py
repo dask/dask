@@ -20,6 +20,77 @@ from dask.utils import apply
 PartitionKey = Tuple[str, int]
 
 
+class ScalarOperation(CollectionOperation[PartitionKey]):
+    """Scalar-based CollectionOperation"""
+
+    @property
+    def meta(self) -> Any:
+        """Return DataFrame metadata"""
+        raise NotImplementedError
+
+    @property
+    def collection_keys(self) -> list[PartitionKey]:
+        """Return list of all collection keys"""
+        return [(self.name, 0)]
+
+
+@dataclass(frozen=True)
+class CompatScalarOperation(ScalarOperation):
+    """Pass-through ScalarOperation
+
+    This class acts as a container for the name, meta,
+    divisions, and graph (HLG) of a "legacy" collection.
+    """
+
+    _name: str
+    _dsk: dict | HighLevelGraph
+    _meta: Any
+    divisions: tuple | None = None
+    parent_meta: Any | None = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    def replace_meta(self, value) -> CompatScalarOperation:
+        return replace(self, _meta=value)
+
+    @property
+    def dependencies(self) -> frozenset[CollectionOperation]:
+        return frozenset()
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> CompatScalarOperation:
+        if replace_dependencies:
+            raise ValueError(
+                "CompatScalarOperation does not support replace_dependencies"
+            )
+        return replace(self, **changes)
+
+    @cached_property
+    def dask(self) -> HighLevelGraph:
+        return (
+            HighLevelGraph.from_collections(self.name, self._dsk, dependencies=[])
+            if not isinstance(self._dsk, HighLevelGraph)
+            else self._dsk
+        )
+
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
+        # TODO: Maybe add optional HLG optimization pass?
+        return self.dask.cull(keys).to_dict(), {}
+
+    def copy(self) -> CompatScalarOperation:
+        return replace(self, _meta=self.meta.copy())
+
+    def __hash__(self):
+        return hash(tokenize(self.name, self.dask, self.meta, self.parent_meta))
+
+
 class FrameOperation(CollectionOperation[PartitionKey]):
     """Abtract DataFrame-based CollectionOperation"""
 
@@ -33,7 +104,7 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         raise ValueError(f"meta cannot be modified for {type(self)}")
 
     @property
-    def divisions(self) -> tuple | None:
+    def divisions(self) -> tuple:
         """Return DataFrame divisions"""
         raise NotImplementedError
 
@@ -42,17 +113,13 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         raise ValueError(f"divisions cannot be modified for {type(self)}")
 
     @property
-    def npartitions(self) -> int | None:
+    def npartitions(self) -> int:
         """Return partition count"""
-        if not self.divisions:
-            return None
         return len(self.divisions) - 1
 
     @property
     def collection_keys(self) -> list[PartitionKey]:
         """Return list of all collection keys"""
-        if self.npartitions is None:
-            raise ValueError
         return [(self.name, i) for i in range(self.npartitions)]
 
 
@@ -62,15 +129,12 @@ class CompatFrameOperation(FrameOperation):
 
     This class acts as a container for the name, meta,
     divisions, and graph (HLG) of a "legacy" collection.
-    Note that a ``CompatFrameOperation`` may not have any
-    dependencies.
     """
 
-    _dsk: dict | HighLevelGraph
     _name: str
+    _dsk: dict | HighLevelGraph
     _meta: Any
-    _divisions: tuple | None
-    parent_meta: Any | None = None
+    _divisions: tuple
 
     @property
     def name(self) -> str:
@@ -84,8 +148,8 @@ class CompatFrameOperation(FrameOperation):
         return replace(self, _meta=value)
 
     @property
-    def divisions(self) -> tuple | None:
-        return tuple(self._divisions) if self._divisions is not None else None
+    def divisions(self) -> tuple:
+        return self._divisions
 
     def replace_divisions(self, value) -> CompatFrameOperation:
         return replace(self, _divisions=value)
@@ -93,14 +157,6 @@ class CompatFrameOperation(FrameOperation):
     @property
     def dependencies(self) -> frozenset[CollectionOperation]:
         return frozenset()
-
-    @cached_property
-    def dask(self) -> HighLevelGraph:
-        return (
-            HighLevelGraph.from_collections(self._name, self._dsk, dependencies=[])
-            if not isinstance(self._dsk, HighLevelGraph)
-            else self._dsk
-        )
 
     def reinitialize(
         self, replace_dependencies: dict[str, CollectionOperation], **changes
@@ -111,6 +167,14 @@ class CompatFrameOperation(FrameOperation):
             )
         return replace(self, **changes)
 
+    @cached_property
+    def dask(self) -> HighLevelGraph:
+        return (
+            HighLevelGraph.from_collections(self.name, self._dsk, dependencies=[])
+            if not isinstance(self._dsk, HighLevelGraph)
+            else self._dsk
+        )
+
     def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
         # TODO: Maybe add optional HLG optimization pass?
         return self.dask.cull(keys).to_dict(), {}
@@ -119,26 +183,26 @@ class CompatFrameOperation(FrameOperation):
         return replace(self, _meta=self.meta.copy())
 
     def __hash__(self):
-        return hash(tokenize(self.name, self.meta, self.divisions))
+        return hash(tokenize(self.name, self.dask, self.meta, self.divisions))
 
 
 @dataclass(frozen=True)
 class FrameCreation(FusableOperation, FrameOperation):
 
-    _io_func: Callable
+    io_func: Callable
+    inputs: list
+    label: str
     _meta: Any
-    _inputs: list
     _divisions: tuple
-    _label: str
 
     @cached_property
     def name(self) -> str:
-        token = tokenize(self._io_func, self._meta, self._inputs, self._divisions)
-        return f"{self._label}-{token}"
+        token = tokenize(self.io_func, self._meta, self.inputs, self._divisions)
+        return f"{self.label}-{token}"
 
     @cached_property
     def dependencies(self) -> frozenset[CollectionOperation]:
-        _dep = LiteralInputs({(i,): val for i, val in enumerate(self._inputs)})
+        _dep = LiteralInputs({(i,): val for i, val in enumerate(self.inputs)})
         return frozenset({_dep})
 
     @property
@@ -146,15 +210,15 @@ class FrameCreation(FusableOperation, FrameOperation):
         return self._meta
 
     @cached_property
-    def divisions(self) -> tuple | None:
-        return tuple(self._divisions or (None,) * (len(self._inputs) + 1))
+    def divisions(self) -> tuple:
+        return self._divisions
 
     @cached_property
     def subgraph_callable(
         self,
     ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
         inkeys = [d.name for d in self.dependencies]
-        subgraph = {self.name: (self._io_func, inkeys[-1])}
+        subgraph = {self.name: (self.io_func, inkeys[-1])}
         return (
             SubgraphCallable(
                 dsk=subgraph,
@@ -176,7 +240,7 @@ class FrameCreation(FusableOperation, FrameOperation):
         dsk = {}
         for key in keys:
             dep_key = (input_op_name,) + tuple(key[1:])
-            dsk[key] = (self._io_func, dep_subgraph.get(dep_key, dep_key))
+            dsk[key] = (self.io_func, dep_subgraph.get(dep_key, dep_key))
         return dsk, {}
 
     def reinitialize(
@@ -192,19 +256,17 @@ class FrameCreation(FusableOperation, FrameOperation):
 @dataclass(frozen=True)
 class PartitionwiseOperation(FusableOperation, FrameOperation):
 
-    _func: Callable
+    func: Callable
+    args: list[Any]
+    label: str
+    kwargs: dict
     _meta: Any
-    _args: list[Any]
     _divisions: tuple
-    _label: str
-    _kwargs: dict
 
     @cached_property
     def name(self) -> str:
-        token = tokenize(
-            self._func, self._meta, self._args, self._divisions, self._kwargs
-        )
-        return f"{self._label}-{token}"
+        token = tokenize(self.func, self._meta, self.args, self._divisions, self.kwargs)
+        return f"{self.label}-{token}"
 
     @property
     def meta(self) -> Any:
@@ -214,7 +276,7 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
         return replace(self, _meta=value)
 
     @property
-    def divisions(self) -> tuple | None:
+    def divisions(self) -> tuple:
         return self._divisions
 
     def replace_divisions(self, value) -> PartitionwiseOperation:
@@ -223,16 +285,16 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
     @cached_property
     def dependencies(self) -> frozenset[CollectionOperation]:
         return frozenset(
-            arg for arg in self._args if isinstance(arg, CollectionOperation)
+            arg for arg in self.args if isinstance(arg, CollectionOperation)
         )
 
     @cached_property
     def subgraph_callable(
         self,
     ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
-        task = [self._func]
+        task = [self.func]
         inkeys = []
-        for arg in self._args:
+        for arg in self.args:
             if isinstance(arg, CollectionOperation):
                 inkeys.append(arg.name)
                 task.append(inkeys[-1])
@@ -244,9 +306,9 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
                 apply,
                 task[0],
                 task[1:],
-                self._kwargs,
+                self.kwargs,
             )
-            if self._kwargs
+            if self.kwargs
             else tuple(task)
         }
         return (
@@ -274,8 +336,8 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
         # Build subgraph with LiteralInputs dependencies fused
         dsk = {}
         for key in keys:
-            task = [self._func]
-            for arg in self._args:
+            task = [self.func]
+            for arg in self.args:
                 if isinstance(arg, CollectionOperation):
                     dep_key = (arg.name,) + tuple(key[1:])
                     task.append(dep_subgraphs.get(dep_key, dep_key))
@@ -291,9 +353,9 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
             replace_dependencies[arg.name]
             if isinstance(arg, CollectionOperation)
             else arg
-            for arg in self._args
+            for arg in self.args
         ]
-        _changes = {"_args": args, **changes}
+        _changes = {"args": args, **changes}
         return replace(self, **_changes)
 
     def __hash__(self):
@@ -303,12 +365,12 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
 @dataclass(frozen=True)
 class FusedFrameOperations(FusedOperations, FrameOperation):
 
-    _func: SubgraphCallable
-    _inkey_mapping: dict[str, str]
+    func: SubgraphCallable
+    inkey_mapping: dict[str, str]
+    label: str
     _dependencies: frozenset
-    _label: str
     _meta: Any
-    _divisions: tuple | None
+    _divisions: tuple
 
     @classmethod
     def from_operation(
@@ -328,19 +390,19 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
 
         # Build fused SubgraphCallable and extract dependencies
         _dependencies = set()
-        _inkey_mapping = {}
+        inkey_mapping = {}
         _subgraph_callable, all_deps = fuse_subgraph_callables(operation, fusable)
         for dep in all_deps:
             key = dep.name
             _dependencies.add(dep)
-            _inkey_mapping[key] = key
+            inkey_mapping[key] = key
 
         # Return new FusedOperations object
         return cls(
             _subgraph_callable,
-            _inkey_mapping,
-            frozenset(_dependencies),
+            inkey_mapping,
             label,
+            frozenset(_dependencies),
             operation.meta,
             operation.divisions,
         )
@@ -348,13 +410,13 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
     @cached_property
     def name(self) -> str:
         token = tokenize(
-            self._func,
-            self._inkey_mapping,
+            self.func,
+            self.inkey_mapping,
             self._dependencies,
             self._meta,
             self._divisions,
         )
-        return f"{self._label}-{token}"
+        return f"{self.label}-{token}"
 
     @property
     def meta(self) -> Any:
@@ -364,8 +426,8 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
         return replace(self, _meta=value)
 
     @property
-    def divisions(self) -> tuple | None:
-        return self._divisions or (None,) * (len(next(iter(self.dependencies))) + 1)
+    def divisions(self) -> tuple:
+        return self._divisions
 
     def replace_divisions(self, value) -> FusedFrameOperations:
         return replace(self, _divisions=value)
@@ -381,18 +443,18 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
     ) -> FusedFrameOperations:
         # Update dependencies
         _dependencies = set()
-        _inkey_mapping = {}
+        inkey_mapping = {}
         _dependency_dict = {d.name: d for d in self.dependencies}
 
-        for inkey in self._func.inkeys:
-            dep_name = self._inkey_mapping[inkey]
+        for inkey in self.func.inkeys:
+            dep_name = self.inkey_mapping[inkey]
             dep = _dependency_dict[dep_name]
             _dep = replace_dependencies[dep.name]
             _dependencies.add(_dep)
-            _inkey_mapping[inkey] = _dep.name
+            inkey_mapping[inkey] = _dep.name
 
         _changes = {
-            "_inkey_mapping": _inkey_mapping,
+            "inkey_mapping": inkey_mapping,
             "_dependencies": _dependencies,
             **changes,
         }

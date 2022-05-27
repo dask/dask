@@ -38,8 +38,10 @@ from dask.dataframe.dispatch import (
 )
 from dask.dataframe.operation import (
     CompatFrameOperation,
+    CompatScalarOperation,
     FrameOperation,
     PartitionwiseOperation,
+    ScalarOperation,
 )
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
@@ -147,16 +149,16 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
                 )
 
             _parent_meta = pd.Series(dtype="float64")
-            self._operation = CompatFrameOperation(
-                dsk,
+            self._operation = CompatScalarOperation(
                 name,
+                dsk,
                 make_meta(meta, parent_meta=_parent_meta),
-                divisions,
+                divisions=divisions,
                 parent_meta=_parent_meta,
             )
         else:
-            if not isinstance(operation, FrameOperation):
-                raise ValueError(f"Expected FrameOperation, got {type(operation)}")
+            if not isinstance(operation, ScalarOperation):
+                raise ValueError(f"Expected ScalarOperation, got {type(operation)}")
             elif any([dsk, name, meta, divisions]):
                 raise ValueError(
                     "dsk, name, meta, and divisions can not be passed "
@@ -375,10 +377,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                     "Must specify dsk, name, and meta if " "operation is not specified."
                 )
             self._operation = CompatFrameOperation(
-                dsk,
                 name,
+                dsk,
                 make_meta(meta),
-                divisions,
+                tuple(divisions),
             )
         else:
             if not isinstance(operation, FrameOperation):
@@ -4472,11 +4474,11 @@ class DataFrame(_Frame):
         else:
             operation = PartitionwiseOperation(
                 operator.getitem,
-                make_meta(meta),
                 [self.operation, key.operation if key_dependency else key],
-                self.divisions,
                 "getitem",
                 {},
+                make_meta(meta),
+                tuple(self.divisions),
             )
             return new_dd_object(operation=operation)
 
@@ -6141,11 +6143,11 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     else:
         operation = PartitionwiseOperation(
             op,
-            meta,
             [x.operation if hasattr(x, "operation") else x for x in args],
-            divisions,
             funcname(op),
             kwargs,
+            meta,
+            tuple(divisions),
         )
         result = new_dd_object(operation=operation)
 

@@ -1062,10 +1062,10 @@ def from_map(
     if use_operation_api:
         operation = FrameCreation(
             io_func,
-            meta,
             inputs,
-            divisions,
             label,
+            meta,
+            tuple(divisions),
             # token=token,
             # columns=column_projection,
             # creation_info=creation_info,

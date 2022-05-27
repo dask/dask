@@ -106,23 +106,23 @@ class LiteralInputs(CollectionOperation):
     Defines literal block/partition inputs to a CollectionOperation
     """
 
-    _inputs: Mapping[tuple, Any]
-    _label: str = "literals"
+    inputs: Mapping[tuple, Any]
+    label: str = "literals"
 
     @cached_property
     def name(self) -> str:
-        return f"{self._label}-{tokenize(self._inputs)}"
+        return f"{self.label}-{tokenize(self.inputs)}"
 
     @property
     def collection_keys(self) -> list:
-        keys = self._inputs.keys()  # This may not always work
+        keys = self.inputs.keys()  # This may not always work
         return [(self.name,) + key for key in keys]
 
     def subgraph(self, keys) -> tuple[dict, dict]:
         dsk: dict[tuple, Any] = {}
         for key in keys:
             index = key[1:]
-            dsk[key] = self._inputs[index]
+            dsk[key] = self.inputs[index]
         return dsk, {}
 
     @property
@@ -177,10 +177,10 @@ class FusedOperations(FusableOperation[KeyType]):
     to multiple 'fused' ``FusableOperation`` objects.
     """
 
-    _func: SubgraphCallable
-    _inkey_mapping: dict[str, str]
+    func: SubgraphCallable
+    inkey_mapping: dict[str, str]
+    label: str
     _dependencies: frozenset
-    _label: str
 
     @classmethod
     def from_operation(
@@ -195,7 +195,7 @@ class FusedOperations(FusableOperation[KeyType]):
     def subgraph_callable(
         self,
     ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
-        return self._func, self.dependencies
+        return self.func, self.dependencies
 
     @property
     def dependencies(self):
@@ -222,7 +222,7 @@ class FusedOperations(FusableOperation[KeyType]):
         for key in keys:
             task = [func]
             for inkey in func.inkeys:
-                dep_name = self._inkey_mapping[inkey]
+                dep_name = self.inkey_mapping[inkey]
                 real_dep = _dependencies_dict[dep_name]
                 dep_key = (real_dep.name,) + tuple(key[1:])
                 task.append(dep_subgraphs.get(dep_key, dep_key))
