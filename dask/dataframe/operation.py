@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from functools import cached_property
-from typing import Any, Callable
-
-from typing_extensions import TypeAlias
+from typing import TYPE_CHECKING, Any, Callable
 
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
@@ -18,7 +16,11 @@ from dask.operation import (
 from dask.optimization import SubgraphCallable
 from dask.utils import apply
 
-PartitionKey: TypeAlias = "tuple[str, int]"
+if TYPE_CHECKING:
+    # TODO: import from typing (requires Python >=3.10)
+    from typing_extensions import TypeAlias
+
+    PartitionKey: TypeAlias = "tuple[str, int]"
 
 
 class FrameOperation(CollectionOperation[PartitionKey]):
