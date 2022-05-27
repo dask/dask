@@ -8,10 +8,10 @@ import sys
 from functools import partial
 from operator import add
 
-from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
-from distributed.utils_test import loop  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, varying
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
 
 import dask
 import dask.bag as db
