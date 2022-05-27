@@ -5,16 +5,21 @@ from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Callable
+from typing import Any, Callable, Hashable, Protocol, TypeVar, runtime_checkable
 
 from dask.base import tokenize
 from dask.core import reverse_dict
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
 
+KeyType = TypeVar("KeyType", bound=Hashable)
+CollectionOperationType = TypeVar(
+    "CollectionOperationType", bound="CollectionOperation"
+)
 
-@dataclass(frozen=True)
-class CollectionOperation:
+
+@runtime_checkable
+class CollectionOperation(Hashable, Protocol[KeyType]):
     """CollectionOperation class
 
     Encapsulates the state and graph-creation logic for
@@ -35,7 +40,9 @@ class CollectionOperation:
         """Return set of CollectionOperation dependencies"""
         raise NotImplementedError
 
-    def subgraph(self, keys: list) -> tuple[dict, dict]:
+    def subgraph(
+        self, keys: list[KeyType]
+    ) -> tuple[dict[KeyType, Any], dict[CollectionOperation, list[Hashable]]]:
         """Return the subgraph and key dependencies for this operation
 
         NOTE: Since this method returns a mapping between dependencies
@@ -48,7 +55,7 @@ class CollectionOperation:
 
         Returns
         -------
-        graph : dict[tuple[Hashable], Any]
+        graph : dict[tuple[KeyType], Any]
             The subgraph for the current operation
         dependencies : dict[CollectionOperation, list[Hashable]]
             A dictionary mapping ``CollectionOperation`` objects
@@ -74,11 +81,11 @@ class CollectionOperation:
         raise NotImplementedError
 
     @property
-    def collection_keys(self) -> list:
+    def collection_keys(self) -> list[KeyType]:
         """Get the collection keys for this operation"""
         raise NotImplementedError
 
-    def copy(self) -> CollectionOperation:
+    def copy(self: CollectionOperationType) -> CollectionOperationType:
         """Return a shallow copy of this operation"""
         return copy.copy(self)
 
@@ -133,8 +140,8 @@ class LiteralInputs(CollectionOperation):
         return hash(self.name)
 
 
-@dataclass(frozen=True)
-class FusableOperation(CollectionOperation):
+@runtime_checkable
+class FusableOperation(CollectionOperation[KeyType], Protocol):
     """FusableOperation class
 
     A block/partition-wise collection operation which can
@@ -163,7 +170,7 @@ class FusableOperation(CollectionOperation):
 
 
 @dataclass(frozen=True)
-class FusedOperations(FusableOperation):
+class FusedOperations(FusableOperation[KeyType]):
     """FusedOperations class
 
     A specialized ``FusableOperation`` class corresponding
