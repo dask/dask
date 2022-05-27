@@ -119,13 +119,6 @@ def write_read_engines(**kwargs):
     )
 
 
-pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
-write_read_engines_xfail = write_read_engines(
-    **{
-        "xfail_pyarrow_fastparquet": pyarrow_fastparquet_msg,
-    }
-)
-
 if (
     fastparquet
     and fastparquet_version < parse_version("0.5")
@@ -136,6 +129,7 @@ if (
     # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
     # fixed in fastparquet 0.5.0
     fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
+    pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
     fp_pandas_xfail = write_read_engines(
         **{
             "xfail_pyarrow_fastparquet": pyarrow_fastparquet_msg,
@@ -144,7 +138,6 @@ if (
         }
     )
 else:
-    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
     fp_pandas_xfail = write_read_engines()
 
 
@@ -208,7 +201,7 @@ def test_local(tmpdir, write_engine, read_engine, has_metadata):
 
 
 @pytest.mark.parametrize("index", [False, True])
-@write_read_engines_xfail
+@write_read_engines()
 def test_empty(tmpdir, write_engine, read_engine, index):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})[:0]
@@ -224,10 +217,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 @write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
-    if write_engine != "fastparquet":
-        df = pd.DataFrame({"a": [b"a", b"b", b"b"], "b": [4, 5, 6]})
-    else:
-        df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
+    df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
@@ -942,9 +932,13 @@ def test_append_dict_column(tmpdir, engine):
     )
     ddf1 = dd.from_pandas(df, npartitions=1)
 
+    schema = {"value": pa.struct([("x", pa.int32())])}
+
     # Write ddf1 to tmp, and then append it again
-    ddf1.to_parquet(tmp, append=True, engine=engine)
-    ddf1.to_parquet(tmp, append=True, engine=engine, ignore_divisions=True)
+    ddf1.to_parquet(tmp, append=True, engine=engine, schema=schema)
+    ddf1.to_parquet(
+        tmp, append=True, engine=engine, schema=schema, ignore_divisions=True
+    )
 
     # Read back all data (ddf1 + ddf1)
     ddf2 = dd.read_parquet(tmp, engine=engine)
@@ -955,7 +949,7 @@ def test_append_dict_column(tmpdir, engine):
     assert_eq(expect, result)
 
 
-@write_read_engines_xfail
+@write_read_engines()
 def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -965,10 +959,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
     )
     ddf = dd.from_pandas(df, npartitions=2)
     dd.to_parquet(ddf, tmp, engine=write_engine)
-
-    if read_engine == "fastparquet":
-        pf = fastparquet.ParquetFile(tmp)
-        assert pf.columns == ["myindex", "c", "a", "b"]
 
     ddf2 = dd.read_parquet(tmp, index="myindex", engine=read_engine)
     assert_eq(ddf, ddf2, check_divisions=False)
@@ -1004,7 +994,11 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": [3, 2, 1]}), {}, {}),
         (pd.DataFrame({"x": ["c", "a", "b"]}), {}, {}),
         (pd.DataFrame({"x": ["cc", "a", "bbb"]}), {}, {}),
-        (pd.DataFrame({"x": [b"a", b"b", b"c"]}), {"object_encoding": "bytes"}, {}),
+        (
+            pd.DataFrame({"x": [b"a", b"b", b"c"]}),
+            {"object_encoding": "bytes", "schema": {"x": pa.binary()} if pa else None},
+            {},
+        ),
         (
             pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])}),
             {},
@@ -1255,7 +1249,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 @PYARROW_MARK
 @pytest.mark.parametrize("index", [False, True])
 @pytest.mark.parametrize("schema", ["infer", "complex"])
-def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
+def test_pyarrow_schema_inference(tmpdir, index, schema):
     if schema == "complex":
         schema = {"index": pa.string(), "amount": pa.int64()}
 
@@ -1284,8 +1278,41 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
         df = dd.from_pandas(df, npartitions=2)
 
     df.to_parquet(tmpdir, engine="pyarrow", schema=schema)
-    df_out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
+    df_out = dd.read_parquet(tmpdir, engine="pyarrow", calculate_divisions=True)
     assert_eq(df, df_out)
+
+
+@PYARROW_MARK
+def test_pyarrow_schema_mismatch_error(tmpdir):
+    df1 = pd.DataFrame({"x": [1, 2, 3], "y": [4.5, 6, 7]})
+    df2 = pd.DataFrame({"x": [4, 5, 6], "y": ["a", "b", "c"]})
+
+    ddf = dd.from_delayed(
+        [dask.delayed(df1), dask.delayed(df2)], meta=df1, verify_meta=False
+    )
+
+    with pytest.raises(ValueError) as rec:
+        ddf.to_parquet(str(tmpdir), engine="pyarrow")
+
+    msg = str(rec.value)
+    assert "Failed to convert partition to expected pyarrow schema" in msg
+    assert "y: double" in str(rec.value)
+    assert "y: string" in str(rec.value)
+
+
+@PYARROW_MARK
+def test_pyarrow_schema_mismatch_explicit_schema_none(tmpdir):
+    df1 = pd.DataFrame({"x": [1, 2, 3], "y": [4.5, 6, 7]})
+    df2 = pd.DataFrame({"x": [4, 5, 6], "y": ["a", "b", "c"]})
+    ddf = dd.from_delayed(
+        [dask.delayed(df1), dask.delayed(df2)], meta=df1, verify_meta=False
+    )
+    ddf.to_parquet(str(tmpdir), engine="pyarrow", schema=None)
+    res = dd.read_parquet(tmpdir, engine="pyarrow")
+    sol = pd.concat([df1, df2])
+    # Only checking that the data was written correctly, we don't care about
+    # the incorrect _meta from read_parquet
+    assert_eq(res, sol, check_dtype=False)
 
 
 def test_partition_on(tmpdir, engine):
@@ -2259,7 +2286,6 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]}),
         pd.DataFrame({"x": ["c", "a", "b"]}),
         pd.DataFrame({"x": ["cc", "a", "bbb"]}),
-        pd.DataFrame({"x": [b"a", b"b", b"c"]}),
         pytest.param(pd.DataFrame({"x": pd.Categorical(["a", "b", "a"])})),
         pytest.param(pd.DataFrame({"x": pd.Categorical([1, 2, 1])})),
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000000, 2000000, 1000000]))}),  # ms
@@ -3668,7 +3694,7 @@ def test_roundtrip_decimal_dtype(tmpdir):
     ]
     ddf1 = dd.from_pandas(pd.DataFrame(data), npartitions=1)
 
-    ddf1.to_parquet(path=tmpdir, engine="pyarrow")
+    ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema={"col1": pa.decimal128(5, 2)})
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
     assert ddf1["col1"].dtype == ddf2["col1"].dtype

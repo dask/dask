@@ -1114,7 +1114,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        schema=None,
+        schema="infer",
         object_encoding="utf8",
         index_cols=None,
         custom_metadata=None,
