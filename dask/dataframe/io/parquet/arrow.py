@@ -1,4 +1,5 @@
 import json
+import textwrap
 from collections import defaultdict
 from datetime import datetime
 
@@ -29,7 +30,7 @@ from dask.dataframe.io.utils import (
     _open_input_files,
 )
 from dask.dataframe.utils import clear_known_categories
-from dask.delayed import Delayed, delayed
+from dask.delayed import Delayed
 from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
@@ -504,50 +505,26 @@ class ArrowDatasetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        schema=None,
+        schema="infer",
         index_cols=None,
         **kwargs,
     ):
-        # Infer schema if "infer"
-        # (also start with inferred schema if user passes a dict)
         if schema == "infer" or isinstance(schema, dict):
-
             # Start with schema from _meta_nonempty
-            _schema = pa.Schema.from_pandas(
+            inferred_schema = pa.Schema.from_pandas(
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
-            )
+            ).remove_metadata()
 
             # Use dict to update our inferred schema
             if isinstance(schema, dict):
                 schema = pa.schema(schema)
                 for name in schema.names:
-                    i = _schema.get_field_index(name)
+                    i = inferred_schema.get_field_index(name)
                     j = schema.get_field_index(name)
-                    _schema = _schema.set(i, schema.field(j))
-
-            # If we have object columns, we need to sample partitions
-            # until we find non-null data for each column in `sample`
-            sample = [col for col in df.columns if df[col].dtype == "object"]
-            if sample and schema == "infer":
-                delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
-                for i in range(df.npartitions):
-                    # Keep data on worker
-                    _s = delayed_schema_from_pandas(
-                        df[sample].to_delayed()[i]
-                    ).compute()
-                    for name, typ in zip(_s.names, _s.types):
-                        if typ != "null":
-                            i = _schema.get_field_index(name)
-                            j = _s.get_field_index(name)
-                            _schema = _schema.set(i, _s.field(j))
-                            sample.remove(name)
-                    if not sample:
-                        break
-
-            # Final (inferred) schema
-            schema = _schema
+                    inferred_schema = inferred_schema.set(i, schema.field(j))
+            schema = inferred_schema
 
         # Check that target directory exists
         fs.mkdirs(path, exist_ok=True)
@@ -651,10 +628,33 @@ class ArrowDatasetEngine(Engine):
     def _pandas_to_arrow_table(
         cls, df: pd.DataFrame, preserve_index=False, schema=None
     ) -> pa.Table:
-        table = pa.Table.from_pandas(
-            df, nthreads=1, preserve_index=preserve_index, schema=schema
-        )
-        return table
+        try:
+            return pa.Table.from_pandas(
+                df, nthreads=1, preserve_index=preserve_index, schema=schema
+            )
+        except pa.ArrowException as exc:
+            if schema is None:
+                raise
+            df_schema = pa.Schema.from_pandas(df)
+            expected = textwrap.indent(
+                schema.to_string(show_schema_metadata=False), "    "
+            )
+            actual = textwrap.indent(
+                df_schema.to_string(show_schema_metadata=False), "    "
+            )
+            raise ValueError(
+                f"Failed to convert partition to expected pyarrow schema:\n"
+                f"    `{exc!r}`\n"
+                f"\n"
+                f"Expected partition schema:\n"
+                f"{expected}\n"
+                f"\n"
+                f"Received partition schema:\n"
+                f"{actual}\n"
+                f"\n"
+                f"This error *may* be resolved by passing in schema information for\n"
+                f"the mismatched column(s) using the `schema` keyword in `to_parquet`."
+            ) from None
 
     @classmethod
     def write_partition(
