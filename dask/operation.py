@@ -91,7 +91,7 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
 
     @cached_property
     def dask(self) -> HighLevelGraph:
-        dsk, _ = self.subgraph(self.collection_keys)
+        dsk = generate_graph(self)
         return HighLevelGraph.from_collections(
             self.name,
             dsk,
@@ -106,7 +106,7 @@ class LiteralInputs(CollectionOperation):
     Defines literal block/partition inputs to a CollectionOperation
     """
 
-    _inputs: Mapping
+    _inputs: Mapping[tuple, Any]
     _label: str = "literals"
 
     @cached_property
@@ -116,7 +116,7 @@ class LiteralInputs(CollectionOperation):
     @property
     def collection_keys(self) -> list:
         keys = self._inputs.keys()  # This may not always work
-        return [(self.name,) + tuple(key[1:]) for key in keys]
+        return [(self.name,) + key for key in keys]
 
     def subgraph(self, keys) -> tuple[dict, dict]:
         dsk: dict[tuple, Any] = {}
@@ -260,6 +260,18 @@ class MemoizingVisitor:
                     **self.kwargs.get(operation.name, {}),
                 ),
             )
+
+
+def _generate_graph(operation, visitor, keys):
+    dsk, dependency_keys = operation.subgraph(keys)
+    for dep, dep_keys in dependency_keys.items():
+        dsk.update(visitor(dep, dep_keys))
+    return dsk
+
+
+def generate_graph(operation, keys=None):
+    keys = keys or operation.collection_keys
+    return MemoizingVisitor(_generate_graph)(operation, keys)
 
 
 def _replay(operation: CollectionOperation, visitor: MemoizingVisitor, **kwargs):

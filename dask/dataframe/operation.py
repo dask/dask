@@ -12,6 +12,7 @@ from dask.operation import (
     FusedOperations,
     LiteralInputs,
     fuse_subgraph_callables,
+    map_fusion,
 )
 from dask.optimization import SubgraphCallable
 from dask.utils import apply
@@ -364,9 +365,7 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
 
     @property
     def divisions(self) -> tuple | None:
-        return self._divisions or (None,) * (
-            len(next(iter(self.dependencies.values()))) + 1
-        )
+        return self._divisions or (None,) * (len(next(iter(self.dependencies))) + 1)
 
     def replace_divisions(self, value) -> FusedFrameOperations:
         return replace(self, _divisions=value)
@@ -401,3 +400,24 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
 
     def __hash__(self):
         return hash(self.name)
+
+
+#
+# Optimization
+#
+
+
+def optimize(
+    operation,
+    fuse_operations=True,
+):
+    if isinstance(operation, CompatFrameOperation):
+        return operation
+    new = operation
+
+    # Apply map fusion
+    if fuse_operations:
+        new = map_fusion(new, FusedFrameOperations)
+
+    # Return new operation
+    return new
