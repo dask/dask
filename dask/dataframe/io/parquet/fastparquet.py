@@ -1114,7 +1114,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        schema=None,
+        schema="infer",
         object_encoding="utf8",
         index_cols=None,
         custom_metadata=None,
@@ -1226,9 +1226,11 @@ class FastParquetEngine(Engine):
         # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
         for s in fmd.schema:
-            if isinstance(s.name, bytes):
+            try:
                 # can be coerced to bytes on copy
                 s.name = s.name.decode()
+            except AttributeError:
+                pass
         if custom_metadata and fmd is not None:
             fmd.key_value_metadata = fmd.key_value_metadata + (
                 [

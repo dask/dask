@@ -614,7 +614,7 @@ def to_parquet(
     write_metadata_file=None,
     compute=True,
     compute_kwargs=None,
-    schema=None,
+    schema="infer",
     name_function=None,
     **kwargs,
 ):
@@ -671,20 +671,26 @@ def to_parquet(
         default), a ``_metadata`` file will only be written if ``append=True``
         and the dataset already has a ``_metadata`` file.
     compute : bool, default True
-        If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
-        then a ``dask.dataframe.Scalar`` object is returned for future computation.
+        If ``True`` (default) then the result is computed immediately. If
+        ``False`` then a ``dask.dataframe.Scalar`` object is returned for
+        future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
-    schema : Schema object, dict, or {"infer", None}, default None
-        Global schema to use for the output dataset. Alternatively, a `dict`
-        of pyarrow types can be specified (e.g. `schema={"id": pa.string()}`).
-        For this case, fields excluded from the dictionary will be inferred
-        from `_meta_nonempty`.  If "infer", the first non-empty and non-null
-        partition will be used to infer the type for "object" columns. If
-        None (default), we let the backend infer the schema for each distinct
-        output partition. If the partitions produce inconsistent schemas,
-        pyarrow will throw an error when writing the shared _metadata file.
-        Note that this argument is ignored by the "fastparquet" engine.
+    schema : pyarrow.Schema, dict, "infer", or None, default "infer"
+        Global schema to use for the output dataset. Defaults to "infer", which
+        will infer the schema from the dask dataframe metadata. This is usually
+        sufficient for common schemas, but notably will fail for ``object``
+        dtype columns that contain things other than strings. These columns
+        will require an explicit schema be specified. The schema for a subset
+        of columns can be overridden by passing in a dict of column names to
+        pyarrow types (for example ``schema={"field": pa.string()}``); columns
+        not present in this dict will still be automatically inferred.
+        Alternatively, a full ``pyarrow.Schema`` may be passed, in which case
+        no schema inference will be done. Passing in ``schema=None`` will
+        disable the use of a global file schema - each written file may use a
+        different schema dependent on the dtypes of the corresponding
+        partition. Note that this argument is ignored by the "fastparquet"
+        engine.
     name_function : callable, default None
         Function to generate the filename for each output partition.
         The function should accept an integer (partition index) as input and
