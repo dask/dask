@@ -156,16 +156,6 @@ def test_get_engine_fastparquet():
     assert get_engine("fastparquet") == FastParquetEngine
 
 
-@PYARROW_MARK
-@FASTPARQUET_MARK
-def test_get_engine_auto_warning_if_both_installed():
-    from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
-
-    with pytest.warns(FutureWarning, match="engine='auto' will switch"):
-        engine = get_engine("auto", True)
-        assert engine == FastParquetEngine
-
-
 @write_read_engines()
 @pytest.mark.parametrize("has_metadata", [False, True])
 def test_local(tmpdir, write_engine, read_engine, has_metadata):
@@ -1822,23 +1812,6 @@ def check_compression(engine, filename, compression):
                     assert (
                         column.total_compressed_size != column.total_uncompressed_size
                     )
-
-
-def test_explicit_compression_default_deprecated(tmpdir, engine):
-    """TODO: remove this test when `compression="default"` is fully removed"""
-    fn = str(tmpdir)
-
-    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
-    df.index.name = "index"
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    with pytest.warns(FutureWarning, match="compression='default'"):
-        ddf.to_parquet(
-            fn, compression="default", engine=engine, write_metadata_file=True
-        )
-    out = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
-    assert_eq(out, ddf)
-    check_compression(engine, fn, "default")
 
 
 @pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
