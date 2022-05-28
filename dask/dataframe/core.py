@@ -1329,28 +1329,45 @@ Dask Name: {name}, {task} tasks"""
                 f"only {self.npartitions} partitions, head received {npartitions}"
             )
 
-        name = f"head-{npartitions}-{n}-{self._name}"
-        if safe:
-            head = safe_head
+        if isinstance(self.operation, CompatFrameOperation):
+            name = f"head-{npartitions}-{n}-{self._name}"
+            if safe:
+                head = safe_head
+            else:
+                head = M.head
+
+            if npartitions > 1:
+                name_p = f"head-partial-{n}-{self._name}"
+
+                dsk = {}
+                for i in range(npartitions):
+                    dsk[(name_p, i)] = (M.head, (self._name, i), n)
+
+                concat = (_concat, [(name_p, i) for i in range(npartitions)])
+                dsk[(name, 0)] = (head, concat, n)
+            else:
+                dsk = {(name, 0): (head, (self._name, 0), n)}
+
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+            result = new_dd_object(
+                graph,
+                name,
+                self._meta,
+                [self.divisions[0], self.divisions[npartitions]],
+            )
         else:
-            head = M.head
+            from dask.dataframe.operation import Head
 
-        if npartitions > 1:
-            name_p = f"head-partial-{n}-{self._name}"
-
-            dsk = {}
-            for i in range(npartitions):
-                dsk[(name_p, i)] = (M.head, (self._name, i), n)
-
-            concat = (_concat, [(name_p, i) for i in range(npartitions)])
-            dsk[(name, 0)] = (head, concat, n)
-        else:
-            dsk = {(name, 0): (head, (self._name, 0), n)}
-
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        result = new_dd_object(
-            graph, name, self._meta, [self.divisions[0], self.divisions[npartitions]]
-        )
+            head_operation = Head(
+                f"head-{npartitions}-{n}",
+                self._meta,
+                tuple([self.divisions[0], self.divisions[npartitions]]),
+                frozenset({self.operation}),
+                n,
+                npartitions,
+                safe,
+            )
+            result = new_dd_object(operation=head_operation)
 
         if compute:
             result = result.compute()

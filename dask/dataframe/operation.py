@@ -464,6 +464,93 @@ class FusedFrameOperations(FusedOperations, FrameOperation):
         return hash(self.name)
 
 
+@dataclass(frozen=True)
+class SimpleFrameOperation(FrameOperation):
+
+    label: str
+    _meta: Any
+    _divisions: tuple
+    _dependencies: frozenset
+
+    @cached_property
+    def name(self) -> str:
+        return f"{self.label}-{tokenize(self.meta, self.divisions, self.dependencies)}"
+
+    @property
+    def meta(self) -> Any:
+        return self._meta
+
+    def replace_meta(self, value) -> SimpleFrameOperation:
+        return replace(self, _meta=value)
+
+    @property
+    def divisions(self) -> tuple:
+        return self._divisions
+
+    def replace_divisions(self, value) -> SimpleFrameOperation:
+        return replace(self, _divisions=value)
+
+    @property
+    def dependencies(self) -> frozenset[CollectionOperation]:
+        return self._dependencies
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, CollectionOperation], **changes
+    ) -> SimpleFrameOperation:
+        _dependencies = {replace_dependencies[dep.name] for dep in self.dependencies}
+        _changes = {"_dependencies": _dependencies, **changes}
+        return replace(self, **_changes)
+
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
+        raise NotImplementedError
+
+    def copy(self) -> SimpleFrameOperation:
+        return replace(self, _meta=self.meta.copy())
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+@dataclass(frozen=True)
+class Head(SimpleFrameOperation):
+
+    # Required Fields
+    label: str
+    _meta: Any
+    _divisions: tuple
+    _dependencies: frozenset
+
+    # Custom fields
+    _n: int
+    _npartitions: int
+    safe: bool
+
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
+        from dask.dataframe.core import _concat, safe_head
+        from dask.utils import M
+
+        assert len(self.dependencies) == 1
+        dep = next(iter(self.dependencies))
+
+        head = safe_head if self.safe else M.head
+        if self._npartitions > 1:
+            name_p = f"head-partial-{self._n}-{dep.name}"
+
+            dsk: dict[tuple, Any] = {}
+            dep_keys = []
+            for i in range(self._npartitions):
+                dep_keys.append((dep.name, i))
+                dsk[(name_p, i)] = (M.head, dep_keys[-1], self._n)
+
+            concat = (_concat, [(name_p, i) for i in range(self._npartitions)])
+            dsk[(self.name, 0)] = (head, concat, self._n)
+        else:
+            dep_keys = [(dep.name, 0)]
+            dsk = {(self.name, 0): (head, dep_keys[-1], self._n)}
+
+        return dsk, {dep: dep_keys}
+
+
 #
 # Optimization
 #
