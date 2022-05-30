@@ -8,16 +8,14 @@ from pandas.core.window import Rolling as pd_Rolling
 
 from dask.base import tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import _emulate
-from dask.dataframe.utils import make_meta
+from dask.dataframe.core import _Frame, no_default
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, derived_from, funcname, has_keyword
 
+CombinedOutput = type("CombinedOutput", (tuple,), {})
 
-def overlap_chunk(
-    func, prev_part, current_part, next_part, before, after, args, kwargs
-):
 
+def _combined_parts(prev_part, current_part, next_part, before, after):
     msg = (
         "Partition size is less than overlapping "
         "window size. Try using ``df.repartition`` "
@@ -34,34 +32,65 @@ def overlap_chunk(
 
     parts = [p for p in (prev_part, current_part, next_part) if p is not None]
     combined = methods.concat(parts)
-    out = func(combined, *args, **kwargs)
-    if prev_part is None:
+
+    return CombinedOutput(
+        (
+            combined,
+            len(prev_part) if prev_part is not None else None,
+            len(next_part) if next_part is not None else None,
+        )
+    )
+
+
+def overlap_chunk(func, before, after, *args, **kwargs):
+    dfs = [df for df in args if isinstance(df, CombinedOutput)]
+    combined, prev_part_length, next_part_length = dfs[0]
+
+    args = [arg[0] if isinstance(arg, CombinedOutput) else arg for arg in args]
+
+    out = func(*args, **kwargs)
+
+    if prev_part_length is None:
         before = None
     if isinstance(before, datetime.timedelta):
-        before = len(prev_part)
+        before = prev_part_length
 
     expansion = None
     if combined.shape[0] != 0:
         expansion = out.shape[0] // combined.shape[0]
     if before and expansion:
         before *= expansion
-    if next_part is None:
+    if next_part_length is None:
         return out.iloc[before:]
     if isinstance(after, datetime.timedelta):
-        after = len(next_part)
+        after = next_part_length
     if after and expansion:
         after *= expansion
     return out.iloc[before:-after]
 
 
-def map_overlap(func, df, before, after, *args, **kwargs):
+def map_overlap(
+    func,
+    before,
+    after,
+    *args,
+    meta=no_default,
+    transform_divisions=True,
+    align_dataframes=True,
+    **kwargs,
+):
     """Apply a function to each partition, sharing rows with adjacent partitions.
 
     Parameters
     ----------
     func : function
         Function applied to each partition.
-    df : dd.DataFrame, dd.Series
+    args, kwargs :
+        Arguments and keywords to pass to the function.  At least one of the
+        args should be a Dask.dataframe. Arguments and keywords may contain
+        ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
+        (both dask and pandas) will be repartitioned to align (if necessary)
+        before applying the function (see ``align_dataframes`` to control).
     before : int or timedelta
         The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
@@ -71,13 +100,26 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     args, kwargs :
         Arguments and keywords to pass to the function. The partition will
         be the first argument, and these will be passed *after*.
+    transform_divisions : bool, default True
+        Whether to apply the function onto the divisions and apply those
+        transformed divisions to the output.
+    align_dataframes : bool, default True
+        Whether to repartition DataFrame- or Series-like args
+        (both dask and pandas) so their divisions align before applying
+        the function. This requires all inputs to have known divisions.
+        Single-partition inputs will be split into multiple partitions.
 
+        If False, all inputs must have either the same number of partitions
+        or a single partition. Single-partition inputs will be broadcast to
+        every partition of multi-partition inputs.
     See Also
     --------
     dd.DataFrame.map_overlap
     """
+    dfs = [df for df in args if isinstance(df, _Frame)]
+
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
-        if not is_datetime64_any_dtype(df.index._meta_nonempty.inferred_type):
+        if not is_datetime64_any_dtype(dfs[0].index._meta_nonempty.inferred_type):
             raise TypeError(
                 "Must have a `DatetimeIndex` when using string offset "
                 "for `before` and `after`"
@@ -91,31 +133,139 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         ):
             raise ValueError("before and after must be positive integers")
 
-    if "token" in kwargs:
-        func_name = kwargs.pop("token")
-        token = tokenize(df, before, after, *args, **kwargs)
-    else:
-        func_name = "overlap-" + funcname(func)
-        token = tokenize(func, df, before, after, *args, **kwargs)
+    name = kwargs.pop("token", None)
+    parent_meta = kwargs.pop("parent_meta", None)
 
-    if "meta" in kwargs:
-        meta = kwargs.pop("meta")
+    assert callable(func)
+    if name is not None:
+        token = tokenize(meta, *args, **kwargs)
     else:
-        meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta, index=df._meta.index, parent_meta=df._meta)
+        name = funcname(func)
+        token = tokenize(func, meta, *args, **kwargs)
+    name = f"{name}-{token}"
 
-    name = f"{func_name}-{token}"
-    name_a = "overlap-prepend-" + tokenize(df, before)
-    name_b = "overlap-append-" + tokenize(df, after)
-    df_name = df._name
+    from dask.array.core import normalize_arg
+    from dask.dataframe.core import (
+        Scalar,
+        _get_divisions,
+        _get_meta,
+        _is_only_scalar,
+        _maybe_from_pandas,
+        new_dd_object,
+    )
+    from dask.dataframe.multi import _maybe_align_partitions
+    from dask.delayed import unpack_collections
+    from dask.utils import apply
+
+    if align_dataframes:
+        args = _maybe_from_pandas(args)
+        args = _maybe_align_partitions(args)
+
+    meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
+
+    if _is_only_scalar(args):
+        layer = {
+            (name, 0): (
+                apply,
+                func,
+                (tuple, [(arg._name, 0) for arg in args]),
+                kwargs,
+            )
+        }
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
+        return Scalar(graph, name, meta)
 
     dsk = {}
+    args2 = []
+    dependencies = []
+
+    def _handle_frame_argument(arg):
+        prevs = _get_previous_partitions(arg, before, dsk)
+        nexts = _get_nexts_partitions(arg, after, dsk)
+        name_a = "overlap-concat-" + tokenize(arg)
+        combined_tasks = {}
+        for i, (prev, current, next) in enumerate(
+            zip(prevs, arg.__dask_keys__(), nexts)
+        ):
+            key = (name_a, i)
+            combined_tasks[key] = (_combined_parts, prev, current, next, before, after)
+        return combined_tasks
+
+    PartitionWise = type("PartitionWise", (tuple,), {})
+
+    for arg in args:
+        if isinstance(arg, _Frame):
+            combined_tasks = _handle_frame_argument(arg)
+            dsk.update(combined_tasks)
+            args2.append(PartitionWise(combined_tasks.keys()))
+            dependencies.append(arg)
+            continue
+        arg = normalize_arg(arg)
+        arg2, collections = unpack_collections(arg)
+        if collections:
+            args2.append(arg2)
+            dependencies.extend(collections)
+        else:
+            args2.append(arg)
+
+    divisions = _get_divisions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
+
+    for i in range(len(dfs[0].__dask_keys__())):
+        dsk[(name, i)] = (
+            apply,
+            overlap_chunk,
+            [
+                func,
+                before,
+                after,
+                *(arg[i] if isinstance(arg, PartitionWise) else arg for arg in args2),
+            ],
+            kwargs,
+        )
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
+    return new_dd_object(graph, name, meta, divisions)
+
+
+def _get_nexts_partitions(df, after, dsk):
+    df_name = df._name
 
     timedelta_partition_message = (
         "Partition size is less than specified window. "
         "Try using ``df.repartition`` to increase the partition size"
     )
 
+    name_b = "overlap-append-" + tokenize(df, after)
+    if after and isinstance(after, Integral):
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (M.head, (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
+    elif isinstance(after, datetime.timedelta):
+        # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
+        deltas = pd.Series(df.divisions).diff().iloc[1:-1]
+        if (after > deltas).any():
+            raise ValueError(timedelta_partition_message)
+
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
+    else:
+        nexts = [None] * df.npartitions
+    return nexts
+
+
+def _get_previous_partitions(df, before, dsk):
+    df_name = df._name
+
+    name_a = "overlap-prepend-" + tokenize(df, before)
     if before and isinstance(before, Integral):
 
         prevs = [None]
@@ -171,44 +321,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                 prevs.append(key)
     else:
         prevs = [None] * df.npartitions
-
-    if after and isinstance(after, Integral):
-        nexts = []
-        for i in range(1, df.npartitions):
-            key = (name_b, i)
-            dsk[key] = (M.head, (df_name, i), after)
-            nexts.append(key)
-        nexts.append(None)
-    elif isinstance(after, datetime.timedelta):
-        # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
-        deltas = pd.Series(df.divisions).diff().iloc[1:-1]
-        if (after > deltas).any():
-            raise ValueError(timedelta_partition_message)
-
-        nexts = []
-        for i in range(1, df.npartitions):
-            key = (name_b, i)
-            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
-            nexts.append(key)
-        nexts.append(None)
-    else:
-        nexts = [None] * df.npartitions
-
-    for i, (prev, current, next) in enumerate(zip(prevs, df.__dask_keys__(), nexts)):
-        dsk[(name, i)] = (
-            overlap_chunk,
-            func,
-            prev,
-            current,
-            next,
-            before,
-            after,
-            args,
-            kwargs,
-        )
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    return df._constructor(graph, name, meta, df.divisions)
+    return prevs
 
 
 def _head_timedelta(current, next_, after):
@@ -324,9 +437,9 @@ class Rolling:
             after = 0
         return map_overlap(
             self.pandas_rolling_method,
-            self.obj,
             before,
             after,
+            self.obj,
             rolling_kwargs,
             method_name,
             *args,
