@@ -58,7 +58,7 @@ def test_map_overlap(npartitions):
         assert_eq(res, sol)
 
 
-@pytest.mark.parametrize("npartitions", [1, 4])
+@pytest.mark.parametrize("npartitions", [4, 4])
 @pytest.mark.parametrize("enforce_metadata", [True, False])
 def test_map_overlap_multiple_dataframes(npartitions, enforce_metadata):
     ddf = dd.from_pandas(df, npartitions)
