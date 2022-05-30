@@ -75,6 +75,7 @@ def map_overlap(
     after,
     *args,
     meta=no_default,
+    enforce_metadata=True,
     transform_divisions=True,
     align_dataframes=True,
     **kwargs,
@@ -91,6 +92,11 @@ def map_overlap(
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
         before applying the function (see ``align_dataframes`` to control).
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work or types don't match.
     before : int or timedelta
         The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
@@ -151,7 +157,9 @@ def map_overlap(
         _get_meta,
         _is_only_scalar,
         _maybe_from_pandas,
+        apply_and_enforce,
         new_dd_object,
+        partitionwise_graph,
     )
     from dask.dataframe.multi import _maybe_align_partitions
     from dask.delayed import unpack_collections
@@ -175,29 +183,31 @@ def map_overlap(
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
 
-    dsk = {}
     args2 = []
     dependencies = []
 
+    divisions = _get_divisions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
+
     def _handle_frame_argument(arg):
+        dsk = {}
         prevs = _get_previous_partitions(arg, before, dsk)
         nexts = _get_nexts_partitions(arg, after, dsk)
         name_a = "overlap-concat-" + tokenize(arg)
-        combined_tasks = {}
         for i, (prev, current, next) in enumerate(
             zip(prevs, arg.__dask_keys__(), nexts)
         ):
             key = (name_a, i)
-            combined_tasks[key] = (_combined_parts, prev, current, next, before, after)
-        return combined_tasks
+            dsk[key] = (_combined_parts, prev, current, next, before, after)
 
-    PartitionWise = type("PartitionWise", (tuple,), {})
+        graph = HighLevelGraph.from_collections(name_a, dsk, dependencies=[arg])
+        return new_dd_object(graph, name_a, meta, divisions)
 
     for arg in args:
         if isinstance(arg, _Frame):
-            combined_tasks = _handle_frame_argument(arg)
-            dsk.update(combined_tasks)
-            args2.append(PartitionWise(combined_tasks.keys()))
+            arg = _handle_frame_argument(arg)
+            args2.append(arg)
             dependencies.append(arg)
             continue
         arg = normalize_arg(arg)
@@ -208,24 +218,43 @@ def map_overlap(
         else:
             args2.append(arg)
 
-    divisions = _get_divisions(
-        align_dataframes, transform_divisions, dfs, func, args, kwargs
-    )
+    kwargs3 = {}
+    simple = True
+    for k, v in kwargs.items():
+        v = normalize_arg(v)
+        v, collections = unpack_collections(v)
+        dependencies.extend(collections)
+        kwargs3[k] = v
+        if collections:
+            simple = False
 
-    for i in range(len(dfs[0].__dask_keys__())):
-        dsk[(name, i)] = (
-            apply,
+    if enforce_metadata:
+        dsk = partitionwise_graph(
+            apply_and_enforce,
+            name,
+            func,
+            before,
+            after,
+            *args2,
+            dependencies=dependencies,
+            _func=overlap_chunk,
+            _meta=meta,
+            **kwargs3,
+        )
+    else:
+        kwargs4 = kwargs if simple else kwargs3
+        dsk = partitionwise_graph(
             overlap_chunk,
-            [
-                func,
-                before,
-                after,
-                *(arg[i] if isinstance(arg, PartitionWise) else arg for arg in args2),
-            ],
-            kwargs,
+            name,
+            func,
+            before,
+            after,
+            *args2,
+            **kwargs4,
+            dependencies=dependencies,
         )
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
 
 
