@@ -22,6 +22,7 @@ from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
+    get_abstract_type,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -34,6 +35,10 @@ from dask.dataframe.dispatch import (
     union_categoricals_dispatch,
 )
 from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.operation.core import DataFrame as AbstractDataFrame
+from dask.dataframe.operation.core import Index as AbstractIndex
+from dask.dataframe.operation.core import Scalar as AbstractScalar
+from dask.dataframe.operation.core import Series as AbstractSeries
 from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
@@ -304,6 +309,31 @@ def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=Fals
     return pd.api.types.union_categoricals(
         to_union, sort_categories=sort_categories, ignore_order=ignore_order
     )
+
+
+@get_abstract_type.register(pd.Series)
+def get_abstract_type_series(_):
+    return AbstractSeries
+
+
+@get_abstract_type.register(pd.DataFrame)
+def get_abstract_type_dataframe(_):
+    return AbstractDataFrame
+
+
+@get_abstract_type.register(pd.Index)
+def get_abstract_type_index(_):
+    return AbstractIndex
+
+
+@get_abstract_type.register(_Frame)
+def get_abstract_type_frame(o):
+    return get_abstract_type(o._meta)
+
+
+@get_abstract_type.register(object)
+def get_abstract_type_object(_):
+    return AbstractScalar
 
 
 @get_parallel_type.register(pd.Series)

@@ -43,7 +43,7 @@ def test_creation_operation():
 
 
 def test_creation_fusion():
-    from dask.dataframe.operation import optimize
+    from dask.dataframe.operation.core import optimize
 
     # Creation followed by partitionwise operations
     ddf = dd.from_map(

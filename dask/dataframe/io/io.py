@@ -23,7 +23,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.dataframe.operation import FrameCreation
+from dask.dataframe.operation.core import FrameCreation, new_dd_collection
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
@@ -1070,7 +1070,8 @@ def from_map(
             # columns=column_projection,
             # creation_info=creation_info,
         )
-        dd_kwargs = {"operation": operation}
+        # Return new DataFrame-collection object
+        return new_dd_collection(operation)
 
     else:
         # Construct DataFrameIOLayer
@@ -1083,15 +1084,8 @@ def from_map(
             produces_tasks=produces_tasks,
             creation_info=creation_info,
         )
-        dd_kwargs = {
-            "dsk": HighLevelGraph.from_collections(name, layer, dependencies=[]),
-            "name": name,
-            "meta": meta,
-            "divisions": divisions,
-        }
-
-    # Return new DataFrame-collection object
-    return new_dd_object(**dd_kwargs)
+        # Return new DataFrame-collection object
+        return new_dd_object(layer, name, meta, divisions)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__
