@@ -912,7 +912,7 @@ class ArrowDatasetEngine(Engine):
         if (
             partitioning_supported
             and ds.partitioning.dictionaries
-            and all(ds.partitioning.dictionaries)
+            and all(arr is not None for arr in ds.partitioning.dictionaries)
         ):
             # Use ds.partitioning for pyarrow>=5.0.0
             partition_names = list(ds.partitioning.schema.names)
