@@ -551,15 +551,16 @@ def test_assert_eq_sorts():
         assert_eq(df1, df2_r)
 
 
-def test_assert_eq_ordering():
-    df = pd.DataFrame({"a": [5, 4, 3, 2, 1] * 20, "b": range(100, 200)})
-    ddf = dd.from_pandas(df, npartitions=10)
-    sorted_ddf = ddf.sort_values(["a"])
-
-    assert_eq(df, sorted_ddf)
-
+def test_assert_eq_order():
+    df = pd.DataFrame({"a": [5, 4, 3, 2, 1] * 2, "b": range(10, 20)})
+    df_s = df.sort_values(["a"])
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf_s = ddf.sort_values(["a"])
+    assert_eq(df, df_s)
+    assert_eq(df, ddf_s)
     with pytest.raises(AssertionError):
-        assert_eq(df, sorted_ddf, ignore_ordering=False)
+        assert_eq(df, df_s, check_order=True)
+        assert_eq(df, ddf_s, check_order=True)
 
 
 def test_assert_eq_scheduler():
