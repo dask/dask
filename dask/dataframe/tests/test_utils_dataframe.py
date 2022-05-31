@@ -562,6 +562,11 @@ def test_assert_eq_order():
         assert_eq(df, df_s, check_order=True)
         assert_eq(df, ddf_s, check_order=True)
 
+    ddf_r = ddf_s.reset_index(drop=True)
+    assert_eq(df, ddf_r, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_r, check_index=False, check_order=True)
+
 
 def test_assert_eq_scheduler():
     using_custom_scheduler = False
