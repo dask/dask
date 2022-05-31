@@ -248,7 +248,7 @@ def test_normalize_base():
 def test_tokenize_object():
     o = object()
     # Defaults to non-deterministic tokenization
-    # assert normalize_token(o) != normalize_token(o)
+    assert normalize_token(o) != normalize_token(o)
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
