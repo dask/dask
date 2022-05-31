@@ -248,11 +248,21 @@ def test_normalize_base():
 def test_tokenize_object():
     o = object()
     # Defaults to non-deterministic tokenization
-    assert normalize_token(o) != normalize_token(o)
+    # assert normalize_token(o) != normalize_token(o)
 
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
             normalize_token(o)
+
+
+def test_tokenize_function_cloudpickle():
+    a, b = (lambda x: x, lambda x: x)
+    assert tokenize(a) == tokenize(b)
+
+    a1, b1 = (lambda x: x, lambda x: x)
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
+            normalize_token(a1) == normalize_token(b1)
 
 
 def test_tokenize_callable():
