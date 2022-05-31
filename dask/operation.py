@@ -169,70 +169,6 @@ class FusableOperation(CollectionOperation[KeyType], Protocol):
         raise NotImplementedError
 
 
-@dataclass(frozen=True)
-class FusedOperations(FusableOperation[KeyType]):
-    """FusedOperations class
-
-    A specialized ``FusableOperation`` class corresponding
-    to multiple 'fused' ``FusableOperation`` objects.
-    """
-
-    func: SubgraphCallable
-    inkey_mapping: dict[str, str]
-    label: str
-    _dependencies: frozenset
-
-    @classmethod
-    def from_operation(
-        cls,
-        operation: CollectionOperation,
-        fusable: set | bool,
-        label: str,
-    ):
-        raise NotImplementedError
-
-    @property
-    def subgraph_callable(
-        self,
-    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
-        return self.func, self.dependencies
-
-    @property
-    def dependencies(self):
-        return self._dependencies
-
-    def subgraph(self, keys) -> tuple[dict, dict]:
-        func, deps = self.subgraph_callable
-
-        # Check if we have MapInput dependencies to fuse
-        dep_subgraphs = {}
-        dep_keys = {}
-        for dep in deps:
-            dep_name = dep.name
-            input_op_keys = [(dep_name,) + tuple(key[1:]) for key in keys]
-            if isinstance(dep, LiteralInputs):
-                dep_subgraphs.update(dep.subgraph(input_op_keys)[0])
-            else:
-                dep_keys[dep] = input_op_keys
-
-        _dependencies_dict = {d.name: d for d in self.dependencies}
-
-        # Build subgraph with LiteralInputs dependencies fused
-        dsk = {}
-        for key in keys:
-            task = [func]
-            for inkey in func.inkeys:
-                dep_name = self.inkey_mapping[inkey]
-                real_dep = _dependencies_dict[dep_name]
-                dep_key = (real_dep.name,) + tuple(key[1:])
-                task.append(dep_subgraphs.get(dep_key, dep_key))
-            dsk[key] = tuple(task)
-        return dsk, dep_keys
-
-    def __hash__(self):
-        return hash(self.name)
-
-
 #
 # Expression-Graph Traversal Logic
 #
@@ -354,7 +290,7 @@ def fuse_subgraph_callables(operation: CollectionOperation, fusable: bool | set 
     return visitor(operation, fusable)
 
 
-def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
+def map_fusion(operation: CollectionOperation, make_fused_op: Callable):
 
     all_ops = operations(operation)
     op_dag = operation_dag(operation)
@@ -397,7 +333,7 @@ def map_fusion(operation: CollectionOperation, fused_op_cls: FusedOperations):
     replaced = {}
     for op_name, fusable_set in fusable.items():
         # Define new fused operation
-        new_op = fused_op_cls.from_operation(all_ops[op_name], fusable_set, "fused")
+        new_op = make_fused_op(all_ops[op_name], fusable_set, "fused")
         replaced[op_name] = {"replace_with": new_op}
 
     return replay(operation, operation_kwargs=replaced)

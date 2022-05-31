@@ -1061,11 +1061,11 @@ def from_map(
     divisions = divisions or [None] * (len(inputs) + 1)
     if use_operation_api:
         operation = FrameCreation(
+            meta,
+            tuple(divisions),
             io_func,
             inputs,
             label,
-            meta,
-            tuple(divisions),
             # token=token,
             # columns=column_projection,
             # creation_info=creation_info,
