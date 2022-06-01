@@ -522,7 +522,7 @@ def assert_eq(
     check_names=True,
     check_dtype=True,
     check_divisions=True,
-    check_index=False,
+    check_index=True,
     sort_results=True,
     scheduler="sync",
     **kwargs,
