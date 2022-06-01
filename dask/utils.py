@@ -1950,10 +1950,10 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from platform import uname
-    from json import dumps
-    from sys import stdout, version_info
     from importlib.metadata import version
+    from json import dumps
+    from platform import uname
+    from sys import stdout, version_info
 
     deps = [
         "dask",
