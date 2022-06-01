@@ -154,6 +154,7 @@ def from_pandas(
     chunksize: Optional[int] = None,
     sort: bool = True,
     name: Optional[str] = None,
+    use_operation_api: bool = False,
 ) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
@@ -246,7 +247,18 @@ def from_pandas(
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
     if not nrows:
-        return new_dd_object({(name, 0): data}, name, data, [None, None])
+        if use_operation_api:
+            return new_dd_collection(
+                FrameCreation(
+                    lambda x: x,
+                    [data],
+                    "from_pandas",
+                    data,
+                    (None, None),
+                )
+            )
+        else:
+            return new_dd_object({(name, 0): data}, name, data, [None, None])
 
     if data.index.isna().any() and not data.index.is_numeric():
         raise NotImplementedError(
@@ -263,6 +275,20 @@ def from_pandas(
     else:
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
+
+    if use_operation_api:
+        return new_dd_collection(
+            FrameCreation(
+                lambda x: x,
+                [
+                    data.iloc[start:stop]
+                    for (start, stop) in zip(locations[:-1], locations[1:])
+                ],
+                "from_pandas",
+                data,
+                divisions,
+            )
+        )
 
     dsk = {
         (name, i): data.iloc[start:stop]

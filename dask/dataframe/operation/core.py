@@ -877,6 +877,52 @@ class _Frame(LegacyFrame):
             result = result.compute()
         return result
 
+    def repartition(
+        self,
+        divisions=None,
+        npartitions=None,
+        partition_size=None,
+        freq=None,
+        force=False,
+    ):
+        from dask.dataframe.operation.repartition import repartition, repartition_freq
+
+        if isinstance(divisions, int):
+            npartitions = divisions
+            divisions = None
+        if isinstance(divisions, str):
+            partition_size = divisions
+            divisions = None
+        if (
+            sum(
+                [
+                    partition_size is not None,
+                    divisions is not None,
+                    npartitions is not None,
+                    freq is not None,
+                ]
+            )
+            != 1
+        ):
+            raise ValueError(
+                "Please provide exactly one of ``npartitions=``, ``freq=``, "
+                "``divisions=``, ``partition_size=`` keyword arguments"
+            )
+
+        if partition_size is not None:
+            raise ValueError("Not supported yet")
+            # return repartition_size(self, partition_size)
+        elif npartitions is not None:
+            raise ValueError("Not supported yet")
+            # return repartition_npartitions(self, npartitions)
+        elif divisions is not None:
+            return repartition(self, divisions, force=force)
+        elif freq is not None:
+            return repartition_freq(self, freq=freq)
+
+    def map_partitions(self, func, *args, **kwargs):
+        return map_partitions(func, self, *args, **kwargs)
+
 
 class Series(_Frame, LegacySeries):
     @property
@@ -1079,3 +1125,185 @@ def new_dd_collection(operation):
 def has_abstract_type(x):
     """Does this object have a _Frame equivalent?"""
     return get_abstract_type(x) is not Scalar
+
+
+def _maybe_from_pandas(dfs):
+    from dask.dataframe.io import from_pandas
+
+    dfs = [
+        from_pandas(df, 1, use_operation_api=True)
+        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
+        else df
+        for df in dfs
+    ]
+    return dfs
+
+
+def map_partitions(
+    func,
+    *args,
+    meta=no_default,
+    enforce_metadata=True,
+    transform_divisions=True,
+    align_dataframes=True,
+    **kwargs,
+):
+    # from dask.array.core import Array
+    # from dask.blockwise import BlockwiseDep
+
+    # Use legacy map_partitions if any collection inputs
+    # are not supported
+    # dasks = [arg for arg in args if isinstance(arg, (LegacyFrame, Array, BlockwiseDep))]
+    if (
+        True
+    ):  # any([not hasattr(d, "operation") or isinstance(d, BlockwiseDep) for d in dasks]):
+        from dask.dataframe.core import map_partitions as mp_legacy
+
+        return mp_legacy(
+            func,
+            *args,
+            meta=meta,
+            enforce_metadata=enforce_metadata,
+            transform_divisions=transform_divisions,
+            align_dataframes=align_dataframes,
+            **kwargs,
+        )
+
+    # name = kwargs.pop("token", None)
+    # parent_meta = kwargs.pop("parent_meta", None)
+
+    # assert callable(func)
+    # if name is not None:
+    #     token = tokenize(meta, *args, **kwargs)
+    # else:
+    #     name = funcname(func)
+    #     token = tokenize(func, meta, *args, **kwargs)
+    # name = f"{name}-{token}"
+
+    # from dask.dataframe.multi import _maybe_align_partitions
+
+    # if align_dataframes:
+    #     args = _maybe_from_pandas(args)
+    #     try:
+    #         args = _maybe_align_partitions(args)
+    #     except ValueError as e:
+    #         raise ValueError(
+    #             f"{e}. If you don't want the partitions to be aligned, and are "
+    #             "calling `map_partitions` directly, pass `align_dataframes=False`."
+    #         ) from e
+
+    # dfs = [df for df in args if isinstance(df, _Frame)]
+    # meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    # if parent_meta is None and dfs:
+    #     parent_meta = dfs[0]._meta
+
+    # if meta is no_default:
+    #     # Use non-normalized kwargs here, as we want the real values (not
+    #     # delayed values)
+    #     meta = _emulate(func, *args, udf=True, **kwargs)
+    #     meta_is_emulated = True
+    # else:
+    #     meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+    #     meta_is_emulated = False
+
+    # if all(isinstance(arg, Scalar) for arg in args):
+    #     layer = {
+    #         (name, 0): (
+    #             apply,
+    #             func,
+    #             (tuple, [(arg._name, 0) for arg in args]),
+    #             kwargs,
+    #         )
+    #     }
+    #     graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
+    #     return Scalar(graph, name, meta)
+    # elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
+    #     if not meta_is_emulated:
+    #         warnings.warn(
+    #             "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+    #             "Try passing a pandas object as meta or a dict or tuple representing the "
+    #             "(name, dtype) of the columns. In the future the meta you passed will not work.",
+    #             FutureWarning,
+    #         )
+    #     # If `meta` is not a pandas object, the concatenated results will be a
+    #     # different type
+    #     meta = make_meta(_concat([meta]), index=meta_index)
+
+    # # Ensure meta is empty series
+    # meta = make_meta(meta, parent_meta=parent_meta)
+
+    # args2 = []
+    # dependencies = []
+    # for arg in args:
+    #     if isinstance(arg, _Frame):
+    #         args2.append(arg)
+    #         dependencies.append(arg)
+    #         continue
+    #     arg = normalize_arg(arg)
+    #     arg2, collections = unpack_collections(arg)
+    #     if collections:
+    #         args2.append(arg2)
+    #         dependencies.extend(collections)
+    #     else:
+    #         args2.append(arg)
+
+    # kwargs3 = {}
+    # simple = True
+    # for k, v in kwargs.items():
+    #     v = normalize_arg(v)
+    #     v, collections = unpack_collections(v)
+    #     dependencies.extend(collections)
+    #     kwargs3[k] = v
+    #     if collections:
+    #         simple = False
+
+    # if align_dataframes:
+    #     divisions = dfs[0].divisions
+    # else:
+    #     # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
+    #     # use longest divisions found
+    #     divisions = max((d.divisions for d in dfs), key=len)
+
+    # if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+    #     try:
+    #         divisions = func(
+    #             *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
+    #         )
+    #         if isinstance(divisions, pd.Index):
+    #             divisions = methods.tolist(divisions)
+    #     except Exception:
+    #         pass
+    #     else:
+    #         if not valid_divisions(divisions):
+    #             divisions = [None] * (dfs[0].npartitions + 1)
+
+    # if has_keyword(func, "partition_info"):
+    #     partition_info = {
+    #         (i,): {"number": i, "division": division}
+    #         for i, division in enumerate(divisions[:-1])
+    #     }
+
+    #     args2.insert(0, BlockwiseDepDict(partition_info))
+    #     orig_func = func
+
+    #     def func(partition_info, *args, **kwargs):
+    #         return orig_func(*args, **kwargs, partition_info=partition_info)
+
+    # if enforce_metadata:
+    #     dsk = partitionwise_graph(
+    #         apply_and_enforce,
+    #         name,
+    #         *args2,
+    #         dependencies=dependencies,
+    #         _func=func,
+    #         _meta=meta,
+    #         **kwargs3,
+    #     )
+    # else:
+    #     kwargs4 = kwargs if simple else kwargs3
+    #     dsk = partitionwise_graph(
+    #         func, name, *args2, **kwargs4, dependencies=dependencies
+    #     )
+
+    # graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    # return new_dd_object(graph, name, meta, divisions)
