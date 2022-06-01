@@ -65,16 +65,15 @@ Engine
 ~~~~~~
 
 :func:`read_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
-is installed, and falls back to ``pyarrow`` otherwise. We recommend using
-``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``.
+``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
+``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
+specify the engine using the ``engine`` keyword argument:
 
 .. code-block:: python
 
    >>> df = dd.read_parquet(
    ...      "s3://bucket-name/my/parquet/",
-   ...      engine="pyarrow"  # explicitly specify the pyarrow engine
+   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
    ... )
 
 Metadata
@@ -165,7 +164,7 @@ calculating divisions should be avoided for large datasets without a
 global ``_metadata`` file. This is especially true for remote storage.
 
 For more information about divisions, see :ref:`dataframe.design`.
- 
+
 Writing
 -------
 
@@ -219,16 +218,15 @@ Engine
 ~~~~~~
 
 :func:`to_parquet` supports two backend engines - ``pyarrow`` and
-``fastparquet``.  For historical reasons this defaults to ``fastparquet`` if it
-is installed, and falls back to ``pyarrow`` otherwise. We recommend using
-``pyarrow`` when possible. This can be explicitly set by passing
-``engine="pyarrow"``.
+``fastparquet``. The ``pyarrow`` engine is used by default, falling back to
+``fastparquet`` if ``pyarrow`` isn't installed. If desired, you may explicitly
+specify the engine using the ``engine`` keyword argument:
 
 .. code-block:: python
 
    >>> df.to_parquet(
-   ...     "s3://bucket-name/my/parquet/",
-   ...     engine="pyarrow"  # explicitly specify the pyarrow engine
+   ...      "s3://bucket-name/my/parquet/",
+   ...      engine="fastparquet"  # explicitly specify the fastparquet engine
    ... )
 
 Metadata
