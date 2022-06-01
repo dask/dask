@@ -1,3 +1,5 @@
+.. _dataframe.parquet:
+
 Dask Dataframe and Parquet
 ==========================
 
