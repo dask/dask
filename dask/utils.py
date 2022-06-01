@@ -1950,7 +1950,7 @@ def cached_cumsum(seq, initial_zero=False):
 def show_versions() -> None:
     """Provide version information for bug reports."""
 
-    from importlib.metadata import version
+    from importlib.metadata import PackageNotFoundError, version
     from json import dumps
     from platform import uname
     from sys import stdout, version_info
@@ -1968,7 +1968,7 @@ def show_versions() -> None:
         "zarr",
     ]
 
-    result = {
+    result: dict[str, str | None] = {
         # note: only major, minor, micro are extracted
         "Python": ".".join([str(i) for i in version_info[:3]]),
         "Platform": uname().system,
@@ -1980,7 +1980,6 @@ def show_versions() -> None:
         except PackageNotFoundError:
             result[modname] = None
 
-    formatted_result = f"Platform: {result.pop('Platform')}"
     stdout.writelines(dumps(result, indent=2))
 
     return
