@@ -26,9 +26,9 @@ from dask.dataframe.utils import (
     valid_divisions,
 )
 from dask.operation import (
-    CollectionOperation,
-    FusableOperation,
     LiteralInputs,
+    _CollectionOperation,
+    _FusableOperation,
     fuse_subgraph_callables,
     map_fusion,
 )
@@ -49,10 +49,17 @@ no_default = "__no_default__"
 
 PartitionKey = Tuple[str, int]
 
+#
+# Abstract DataFrame-Related Collection Classes
+#
 
-class ScalarOperation(CollectionOperation[PartitionKey]):
-    """Scalar-based CollectionOperation"""
 
+class _ScalarOperation(_CollectionOperation[PartitionKey]):
+    """Abstract Scalar-based _CollectionOperation"""
+
+    # NOTE: This class is not used anywhere yet!
+
+    # Required Attributes
     _meta: Any
 
     @property
@@ -73,9 +80,10 @@ class ScalarOperation(CollectionOperation[PartitionKey]):
         return [(self.name, 0)]
 
 
-class FrameOperation(CollectionOperation[PartitionKey]):
-    """Abtract DataFrame-based CollectionOperation"""
+class _FrameOperation(_CollectionOperation[PartitionKey]):
+    """Abtract DataFrame-based _CollectionOperation"""
 
+    # Required Attributes
     _meta: Any
     _divisions: tuple | None
 
@@ -114,66 +122,9 @@ class FrameOperation(CollectionOperation[PartitionKey]):
         return [(self.name, i) for i in range(self.npartitions)]
 
 
-@dataclass(frozen=True)
-class FrameCreation(FusableOperation, FrameOperation):
+class _PartitionwiseOperation(_FusableOperation, _FrameOperation):
+    """Abstract _PartitionwiseOperation class"""
 
-    _meta: Any
-    _divisions: tuple | None
-    io_func: Callable
-    inputs: list
-    label: str
-
-    @cached_property
-    def name(self) -> str:
-        token = tokenize(self.io_func, self._meta, self.inputs, self._divisions)
-        return f"{self.label}-{token}"
-
-    @cached_property
-    def dependencies(self) -> frozenset[CollectionOperation]:
-        _dep = LiteralInputs({(i,): val for i, val in enumerate(self.inputs)})
-        return frozenset({_dep})
-
-    @cached_property
-    def subgraph_callable(
-        self,
-    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
-        inkeys = [d.name for d in self.dependencies]
-        subgraph = {self.name: (self.io_func, inkeys[-1])}
-        return (
-            SubgraphCallable(
-                dsk=subgraph,
-                outkey=self.name,
-                inkeys=inkeys,
-            ),
-            self.dependencies,
-        )
-
-    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
-
-        # Always fuse MapInput operations
-        input_op = next(iter(self.dependencies))
-        input_op_name = input_op.name
-        input_op_keys = [(input_op_name,) + tuple(key[1:]) for key in keys]
-        dep_subgraph, _ = input_op.subgraph(input_op_keys)
-
-        # Build subgraph with LiteralInputs dependencies fused
-        dsk = {}
-        for key in keys:
-            dep_key = (input_op_name,) + tuple(key[1:])
-            dsk[key] = (self.io_func, dep_subgraph.get(dep_key, dep_key))
-        return dsk, {}
-
-    def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
-    ) -> FrameCreation:
-        # TODO: Support column projection and predicate pushdown
-        return replace(self, **changes)
-
-    def __hash__(self):
-        return hash(self.name)
-
-
-class PartitionwiseOperation(FusableOperation, FrameOperation):
     @property
     def func(self):
         raise NotImplementedError
@@ -187,19 +138,19 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
         raise NotImplementedError
 
     @cached_property
-    def dependencies(self) -> frozenset[CollectionOperation]:
+    def dependencies(self) -> frozenset[_CollectionOperation]:
         return frozenset(
-            arg for arg in self.args if isinstance(arg, CollectionOperation)
+            arg for arg in self.args if isinstance(arg, _CollectionOperation)
         )
 
     @cached_property
     def subgraph_callable(
         self,
-    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
+    ) -> tuple[SubgraphCallable, frozenset[_CollectionOperation]]:
         task = [self.func]
         inkeys = []
         for arg in self.args:
-            if isinstance(arg, CollectionOperation):
+            if isinstance(arg, _CollectionOperation):
                 inkeys.append(arg.name)
                 task.append(inkeys[-1])
             else:
@@ -242,7 +193,7 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
         for key in keys:
             task = [self.func]
             for arg in self.args:
-                if isinstance(arg, CollectionOperation):
+                if isinstance(arg, _CollectionOperation):
                     dep_key = (arg.name,) + tuple(key[1:])
                     task.append(dep_subgraphs.get(dep_key, dep_key))
                 else:
@@ -251,30 +202,187 @@ class PartitionwiseOperation(FusableOperation, FrameOperation):
         return dsk, dep_keys
 
     def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
-    ) -> PartitionwiseOperation:
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> _PartitionwiseOperation:
         args = [
             replace_dependencies[arg.name]
-            if isinstance(arg, CollectionOperation)
+            if isinstance(arg, _CollectionOperation)
             else arg
             for arg in self.args
         ]
         _changes = {"args": args, **changes}
         return replace(self, **_changes)
 
+
+class _SimpleFrameOperation(_FrameOperation):
+    """Abstract _SimpleFrameOperation class
+
+    Template for operations with a single dependency
+    """
+
+    # Required Attributes
+    source: _FrameOperation
+    _meta: Any
+    _divisions: tuple | None
+
+    @property
+    def name(self) -> str:
+        raise NotImplementedError
+
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
+        raise NotImplementedError
+
+    @property
+    def dependencies(self) -> frozenset[_CollectionOperation]:
+        return frozenset({self.source})
+
+    @cached_property
+    def default_meta(self) -> Any:
+        # By default, assume operation does not
+        # change the metadata
+        return self.source.meta
+
+    @cached_property
+    def default_divisions(self) -> tuple:
+        # By default, assume operation does not
+        # change the divisions
+        return self.source.divisions
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> _SimpleFrameOperation:
+        _dependencies = {replace_dependencies[dep.name] for dep in self.dependencies}
+        _changes = {"_dependencies": _dependencies, **changes}
+        return replace(self, **_changes)
+
+    def copy(self) -> _SimpleFrameOperation:
+        return replace(self, _meta=self.meta.copy())
+
+
+#
+# Concrete DataFrame-Related Collection Classes
+#
+
+
+@dataclass(frozen=True)
+class Head(_SimpleFrameOperation):
+
+    source: _FrameOperation
+    _n: int
+    _npartitions: int
+    safe: bool
+    _meta: Any = no_default
+    _divisions: tuple | None = None
+
+    @cached_property
+    def name(self) -> str:
+        label = f"head-{self._npartitions}-{self._n}"
+        token = tokenize(
+            self.meta, self.divisions, self.dependencies, self._npartitions, self._n
+        )
+        return f"{label}-{token}"
+
+    @cached_property
+    def default_divisions(self) -> tuple:
+        dep = self.source
+        return (dep.divisions[0], dep.divisions[self._npartitions])
+
+    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
+        from dask.dataframe.core import _concat, safe_head
+        from dask.utils import M
+
+        dep = self.source
+
+        head = safe_head if self.safe else M.head
+        if self._npartitions > 1:
+            name_p = f"head-partial-{self._n}-{dep.name}"
+
+            dsk: dict[tuple, Any] = {}
+            dep_keys = []
+            for i in range(self._npartitions):
+                dep_keys.append((dep.name, i))
+                dsk[(name_p, i)] = (M.head, dep_keys[-1], self._n)
+
+            concat = (_concat, [(name_p, i) for i in range(self._npartitions)])
+            dsk[(self.name, 0)] = (head, concat, self._n)
+        else:
+            dep_keys = [(dep.name, 0)]
+            dsk = {(self.name, 0): (head, dep_keys[-1], self._n)}
+
+        return dsk, {dep: dep_keys}
+
     def __hash__(self):
         return hash(self.name)
 
 
 @dataclass(frozen=True)
-class Elemwise(PartitionwiseOperation):
+class FrameCreation(_FusableOperation, _FrameOperation):
 
+    io_func: Callable
+    inputs: list
+    label: str
     _meta: Any
-    _divisions: tuple | None
+    _divisions: tuple
+
+    @cached_property
+    def name(self) -> str:
+        token = tokenize(self.io_func, self._meta, self.inputs, self._divisions)
+        return f"{self.label}-{token}"
+
+    @cached_property
+    def dependencies(self) -> frozenset[_CollectionOperation]:
+        _dep = LiteralInputs({(i,): val for i, val in enumerate(self.inputs)})
+        return frozenset({_dep})
+
+    @cached_property
+    def subgraph_callable(
+        self,
+    ) -> tuple[SubgraphCallable, frozenset[_CollectionOperation]]:
+        inkeys = [d.name for d in self.dependencies]
+        subgraph = {self.name: (self.io_func, inkeys[-1])}
+        return (
+            SubgraphCallable(
+                dsk=subgraph,
+                outkey=self.name,
+                inkeys=inkeys,
+            ),
+            self.dependencies,
+        )
+
+    def subgraph(self, keys: list[tuple]) -> tuple[dict, dict]:
+
+        # Always fuse MapInput operations
+        input_op = next(iter(self.dependencies))
+        input_op_name = input_op.name
+        input_op_keys = [(input_op_name,) + tuple(key[1:]) for key in keys]
+        dep_subgraph, _ = input_op.subgraph(input_op_keys)
+
+        # Build subgraph with LiteralInputs dependencies fused
+        dsk = {}
+        for key in keys:
+            dep_key = (input_op_name,) + tuple(key[1:])
+            dsk[key] = (self.io_func, dep_subgraph.get(dep_key, dep_key))
+        return dsk, {}
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> FrameCreation:
+        # TODO: Support column projection and predicate pushdown
+        return replace(self, **changes)
+
+    def __hash__(self):
+        return hash(self.name)
+
+
+@dataclass(frozen=True)
+class Elemwise(_PartitionwiseOperation):
+
     _func: Callable
     _args: list[Any]
     _kwargs: dict
     _transform_divisions: bool
+    _meta: Any = no_default
+    _divisions: tuple | None = None
 
     @cached_property
     def name(self) -> str:
@@ -300,7 +408,7 @@ class Elemwise(PartitionwiseOperation):
         dasks = [
             new_dd_collection(arg)
             for arg in self.args
-            if isinstance(arg, (FrameOperation, ScalarOperation))
+            if isinstance(arg, (_FrameOperation, _ScalarOperation))
         ]
         dfs = [df for df in dasks if isinstance(df, _Frame)]
         _is_broadcastable = partial(is_broadcastable, dfs)
@@ -309,7 +417,7 @@ class Elemwise(PartitionwiseOperation):
         other = [
             (i, arg)
             for i, arg in enumerate(self.args)
-            if not isinstance(arg, (FrameOperation, ScalarOperation))
+            if not isinstance(arg, (_FrameOperation, _ScalarOperation))
         ]
         if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
             # should not occur in current funcs
@@ -328,7 +436,7 @@ class Elemwise(PartitionwiseOperation):
         dasks = [
             new_dd_collection(arg)
             for arg in self.args
-            if isinstance(arg, (FrameOperation, ScalarOperation))
+            if isinstance(arg, (_FrameOperation, _ScalarOperation))
         ]
         dfs = [df for df in dasks if isinstance(df, _Frame)]
 
@@ -360,12 +468,12 @@ class Elemwise(PartitionwiseOperation):
 
 
 @dataclass(frozen=True)
-class ColumnSelection(PartitionwiseOperation):
+class ColumnSelection(_PartitionwiseOperation):
 
-    _meta: Any
-    _divisions: tuple | None
     source: Any
     key: str
+    _meta: Any = no_default
+    _divisions: tuple | None = None
 
     @cached_property
     def name(self) -> str:
@@ -397,12 +505,12 @@ class ColumnSelection(PartitionwiseOperation):
 
 
 @dataclass(frozen=True)
-class SeriesSelection(PartitionwiseOperation):
+class SeriesSelection(_PartitionwiseOperation):
 
-    _meta: Any
-    _divisions: tuple | None
     source: Any
     key: str
+    _meta: Any = no_default
+    _divisions: tuple | None = None
 
     @cached_property
     def name(self) -> str:
@@ -434,32 +542,32 @@ class SeriesSelection(PartitionwiseOperation):
 
 
 @dataclass(frozen=True)
-class FusedFrameOperations(FusableOperation, FrameOperation):
+class FusedFrameOperations(_FusableOperation, _FrameOperation):
     """FusedFrameOperations class
 
-    A specialized ``FusableOperation`` class corresponding
-    to multiple 'fused' ``FusableOperation`` objects.
+    A specialized ``_FusableOperation`` class corresponding
+    to multiple 'fused' ``_FusableOperation`` objects.
     """
 
-    _meta: Any
-    _divisions: tuple | None
     func: SubgraphCallable
     inkey_mapping: dict[str, str]
     label: str
     _dependencies: frozenset
+    _meta: Any
+    _divisions: tuple | None
 
     @classmethod
     def from_operation(
         cls,
-        operation: CollectionOperation,
+        operation: _CollectionOperation,
         fusable: set | bool,
         label: str,
     ):
         # Check inputs
-        if not isinstance(operation, PartitionwiseOperation):
+        if not isinstance(operation, _PartitionwiseOperation):
             raise ValueError(
-                f"FusedDataFrameOperation.from_operation only supports "
-                f"PartitionwiseOperation. Got {type(operation)}"
+                f"FusedData_FrameOperation.from_operation only supports "
+                f"_PartitionwiseOperation. Got {type(operation)}"
             )
         elif not fusable:
             return operation
@@ -475,12 +583,12 @@ class FusedFrameOperations(FusableOperation, FrameOperation):
 
         # Return new FusedOperations object
         return cls(
-            operation.meta,
-            operation.divisions,
             _subgraph_callable,
             inkey_mapping,
             label,
             frozenset(_dependencies),
+            operation.meta,
+            operation.divisions,
         )
 
     @cached_property
@@ -503,7 +611,7 @@ class FusedFrameOperations(FusableOperation, FrameOperation):
     @property
     def subgraph_callable(
         self,
-    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
+    ) -> tuple[SubgraphCallable, frozenset[_CollectionOperation]]:
         return self.func, self.dependencies
 
     @property
@@ -539,7 +647,7 @@ class FusedFrameOperations(FusableOperation, FrameOperation):
         return dsk, dep_keys
 
     def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
     ) -> FusedFrameOperations:
         # Update dependencies
         _dependencies = set()
@@ -562,101 +670,6 @@ class FusedFrameOperations(FusableOperation, FrameOperation):
 
     def __hash__(self):
         return hash(self.name)
-
-
-@dataclass(frozen=True)
-class SimpleFrameOperation(FrameOperation):
-
-    _meta: Any
-    _divisions: tuple | None
-    _dependencies: frozenset
-    label: str
-
-    @cached_property
-    def name(self) -> str:
-        return f"{self.label}-{tokenize(self.meta, self.divisions, self.dependencies)}"
-
-    @cached_property
-    def default_meta(self) -> Any:
-        # By default, assume operation does not
-        # change the metadata
-        dep = next(iter(self.dependencies))
-        assert isinstance(dep, FrameOperation)
-        return dep.meta
-
-    @cached_property
-    def default_divisions(self) -> tuple:
-        # By default, assume operation does not
-        # change the divisions
-        dep = next(iter(self.dependencies))
-        assert isinstance(dep, FrameOperation)
-        return dep.divisions
-
-    @property
-    def dependencies(self) -> frozenset[CollectionOperation]:
-        return self._dependencies
-
-    def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
-    ) -> SimpleFrameOperation:
-        _dependencies = {replace_dependencies[dep.name] for dep in self.dependencies}
-        _changes = {"_dependencies": _dependencies, **changes}
-        return replace(self, **_changes)
-
-    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
-        raise NotImplementedError
-
-    def copy(self) -> SimpleFrameOperation:
-        return replace(self, _meta=self.meta.copy())
-
-    def __hash__(self):
-        return hash(self.name)
-
-
-@dataclass(frozen=True)
-class Head(SimpleFrameOperation):
-
-    # Required Fields
-    _meta: Any
-    _divisions: tuple | None
-    _dependencies: frozenset
-    label: str
-    # Custom fields
-    _n: int
-    _npartitions: int
-    safe: bool
-
-    @cached_property
-    def default_divisions(self) -> tuple:
-        assert len(self.dependencies) == 1
-        dep = next(iter(self.dependencies))
-        assert isinstance(dep, FrameOperation)
-        return (dep.divisions[0], dep.divisions[self._npartitions])
-
-    def subgraph(self, keys: list[PartitionKey]) -> tuple[dict, dict]:
-        from dask.dataframe.core import _concat, safe_head
-        from dask.utils import M
-
-        assert len(self.dependencies) == 1
-        dep = next(iter(self.dependencies))
-
-        head = safe_head if self.safe else M.head
-        if self._npartitions > 1:
-            name_p = f"head-partial-{self._n}-{dep.name}"
-
-            dsk: dict[tuple, Any] = {}
-            dep_keys = []
-            for i in range(self._npartitions):
-                dep_keys.append((dep.name, i))
-                dsk[(name_p, i)] = (M.head, dep_keys[-1], self._n)
-
-            concat = (_concat, [(name_p, i) for i in range(self._npartitions)])
-            dsk[(self.name, 0)] = (head, concat, self._n)
-        else:
-            dep_keys = [(dep.name, 0)]
-            dsk = {(self.name, 0): (head, dep_keys[-1], self._n)}
-
-        return dsk, {dep: dep_keys}
 
 
 #
@@ -688,8 +701,8 @@ class Scalar(LegacyScalar, OperatorMethodMixin):
         # divisions is ignored, only present to be compatible with other
         # objects.
 
-        if not isinstance(operation, ScalarOperation):
-            raise ValueError(f"Expected ScalarOperation, got {type(operation)}")
+        if not isinstance(operation, _ScalarOperation):
+            raise ValueError(f"Expected _ScalarOperation, got {type(operation)}")
 
         self._operation = operation
         if (
@@ -735,8 +748,8 @@ class Scalar(LegacyScalar, OperatorMethodMixin):
 class _Frame(LegacyFrame):
     def __init__(self, operation):
 
-        if not isinstance(operation, FrameOperation):
-            raise ValueError(f"Expected FrameOperation, got {type(operation)}")
+        if not isinstance(operation, _FrameOperation):
+            raise ValueError(f"Expected _FrameOperation, got {type(operation)}")
 
         self._operation = operation
 
@@ -853,10 +866,7 @@ class _Frame(LegacyFrame):
 
         result = new_dd_collection(
             Head(
-                no_default,  # meta
-                None,  # divisions
-                frozenset({self.operation}),
-                f"head-{npartitions}-{n}",
+                self.operation,
                 n,
                 npartitions,
                 safe,
@@ -951,9 +961,7 @@ class DataFrame(_Frame, LegacyDataFrame):
                         )
                     return self.loc[key]
 
-            return new_dd_collection(
-                ColumnSelection(no_default, None, self.operation, key)
-            )
+            return new_dd_collection(ColumnSelection(self.operation, key))
 
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
@@ -973,9 +981,7 @@ class DataFrame(_Frame, LegacyDataFrame):
         if isinstance(key, (np.ndarray, list)) or (
             not is_dask_collection(key) and (is_series_like(key) or is_index_like(key))
         ):
-            return new_dd_collection(
-                ColumnSelection(no_default, None, self.operation, key)
-            )
+            return new_dd_collection(ColumnSelection(self.operation, key))
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:
@@ -984,9 +990,7 @@ class DataFrame(_Frame, LegacyDataFrame):
                 self, key = _maybe_align_partitions([self, key])
                 if not hasattr(self, "operation"):
                     return self[key]
-            return new_dd_collection(
-                SeriesSelection(no_default, None, self.operation, key.operation)
-            )
+            return new_dd_collection(SeriesSelection(self.operation, key.operation))
         if isinstance(key, DataFrame):
             return self.where(key, np.nan)
 
@@ -1043,12 +1047,11 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     # TODO: Handle division alignment and Array cleanup
 
     operation = Elemwise(
-        meta,
-        None,  # default divisions
         op,
         [x.operation if hasattr(x, "operation") else x for x in args],
         kwargs,
         transform_divisions,
+        _meta=meta,
     )
     result = new_dd_collection(operation)
     return handle_out(out, result)

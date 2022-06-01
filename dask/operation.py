@@ -13,14 +13,14 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
 
 KeyType = TypeVar("KeyType", bound=Hashable)
-CollectionOperationType = TypeVar(
-    "CollectionOperationType", bound="CollectionOperation"
+_CollectionOperationType = TypeVar(
+    "_CollectionOperationType", bound="_CollectionOperation"
 )
 
 
 @runtime_checkable
-class CollectionOperation(Hashable, Protocol[KeyType]):
-    """CollectionOperation class
+class _CollectionOperation(Hashable, Protocol[KeyType]):
+    """_CollectionOperation class
 
     Encapsulates the state and graph-creation logic for
     a generic Dask collection.
@@ -28,7 +28,7 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
 
     @property
     def name(self) -> str:
-        """Return the name for this CollectionOperation
+        """Return the name for this _CollectionOperation
 
         This name should match the string label used in the
         output keys of a task grah terminating with this operation.
@@ -36,13 +36,13 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
         raise NotImplementedError
 
     @property
-    def dependencies(self) -> frozenset[CollectionOperation]:
-        """Return set of CollectionOperation dependencies"""
+    def dependencies(self) -> frozenset[_CollectionOperation]:
+        """Return set of _CollectionOperation dependencies"""
         raise NotImplementedError
 
     def subgraph(
         self, keys: list[KeyType]
-    ) -> tuple[dict[KeyType, Any], dict[CollectionOperation, list[Hashable]]]:
+    ) -> tuple[dict[KeyType, Any], dict[_CollectionOperation, list[Hashable]]]:
         """Return the subgraph and key dependencies for this operation
 
         NOTE: Since this method returns a mapping between dependencies
@@ -57,8 +57,8 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
         -------
         graph : dict[tuple[KeyType], Any]
             The subgraph for the current operation
-        dependencies : dict[CollectionOperation, list[Hashable]]
-            A dictionary mapping ``CollectionOperation`` objects
+        dependencies : dict[_CollectionOperation, list[Hashable]]
+            A dictionary mapping ``_CollectionOperation`` objects
             to required keys. This dictionary will be used by the
             global graph-generation algorithm to determine which
             operation-key combinations need to be materialized after
@@ -67,13 +67,13 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
         raise NotImplementedError
 
     def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
-    ) -> CollectionOperation:
-        """Reinitialize this CollectionOperation
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> _CollectionOperation:
+        """Reinitialize this _CollectionOperation
 
         Parameters
         ----------
-        replace_dependencies : dict[str, CollectionOperation]
+        replace_dependencies : dict[str, _CollectionOperation]
             Replaced dependencies for the new operation
         **changes : dict
             New fields to use when initializing the new operation
@@ -85,7 +85,7 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
         """Get the collection keys for this operation"""
         raise NotImplementedError
 
-    def copy(self: CollectionOperationType) -> CollectionOperationType:
+    def copy(self: _CollectionOperationType) -> _CollectionOperationType:
         """Return a shallow copy of this operation"""
         return copy.copy(self)
 
@@ -100,10 +100,10 @@ class CollectionOperation(Hashable, Protocol[KeyType]):
 
 
 @dataclass(frozen=True)
-class LiteralInputs(CollectionOperation):
+class LiteralInputs(_CollectionOperation):
     """LiteralInputs class
 
-    Defines literal block/partition inputs to a CollectionOperation
+    Defines literal block/partition inputs to a _CollectionOperation
     """
 
     inputs: Mapping[tuple, Any]
@@ -126,12 +126,12 @@ class LiteralInputs(CollectionOperation):
         return dsk, {}
 
     @property
-    def dependencies(self) -> frozenset[CollectionOperation]:
+    def dependencies(self) -> frozenset[_CollectionOperation]:
         # LiteralInputs can not have dependencies
         return frozenset()
 
     def reinitialize(
-        self, replace_dependencies: dict[str, CollectionOperation], **changes
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
     ) -> LiteralInputs:
         # Nothing to "reinitialize"
         return self
@@ -141,11 +141,11 @@ class LiteralInputs(CollectionOperation):
 
 
 @runtime_checkable
-class FusableOperation(CollectionOperation[KeyType], Protocol):
-    """FusableOperation class
+class _FusableOperation(_CollectionOperation[KeyType], Protocol):
+    """_FusableOperation class
 
     A block/partition-wise collection operation which can
-    be fused with other ``FusableOperation`` dependencies. In
+    be fused with other ``_FusableOperation`` dependencies. In
     order to enable operation fusion, the subclass must
     define a ``subgraph_callable`` method.
     """
@@ -153,7 +153,7 @@ class FusableOperation(CollectionOperation[KeyType], Protocol):
     @property
     def subgraph_callable(
         self,
-    ) -> tuple[SubgraphCallable, frozenset[CollectionOperation]]:
+    ) -> tuple[SubgraphCallable, frozenset[_CollectionOperation]]:
         """Return a SubgraphCallable representation of the
         function being mapped by this operation and its
         dependencies
@@ -162,8 +162,8 @@ class FusableOperation(CollectionOperation[KeyType], Protocol):
         -------
         func : SubgraphCallable
             The subgraph for the current operation
-        dependencies : frozenset[CollectionOperation]
-            The set of ``CollectionOperation`` objects
+        dependencies : frozenset[_CollectionOperation]
+            The set of ``_CollectionOperation`` objects
             required as inputs to ``func``.
         """
         raise NotImplementedError
@@ -210,7 +210,7 @@ def generate_graph(operation, keys=None):
     return MemoizingVisitor(_generate_graph)(operation, keys)
 
 
-def _replay(operation: CollectionOperation, visitor: MemoizingVisitor, **kwargs):
+def _replay(operation: _CollectionOperation, visitor: MemoizingVisitor, **kwargs):
     # Helper function for ``replay``
     transformed_dependencies = {}
     operation = kwargs.pop("replace_with", operation)
@@ -219,13 +219,13 @@ def _replay(operation: CollectionOperation, visitor: MemoizingVisitor, **kwargs)
     return operation.reinitialize(transformed_dependencies, **kwargs)
 
 
-def replay(operation: CollectionOperation, operation_kwargs=None):
+def replay(operation: _CollectionOperation, operation_kwargs=None):
     """Replay the operation recursively"""
     visitor = MemoizingVisitor(_replay, **(operation_kwargs or {}))
     return visitor(operation)
 
 
-def _operation_dag(operation: CollectionOperation, visitor: MemoizingVisitor):
+def _operation_dag(operation: _CollectionOperation, visitor: MemoizingVisitor):
     dag: dict = {operation.name: set()}
     for dep in operation.dependencies:
         dep_name = dep.name
@@ -234,25 +234,25 @@ def _operation_dag(operation: CollectionOperation, visitor: MemoizingVisitor):
     return dag
 
 
-def operation_dag(operation: CollectionOperation):
+def operation_dag(operation: _CollectionOperation):
     return MemoizingVisitor(_operation_dag)(operation)
 
 
-def _operations(operation: CollectionOperation, visitor: MemoizingVisitor):
+def _operations(operation: _CollectionOperation, visitor: MemoizingVisitor):
     ops = {operation.name: operation}
     for dep in operation.dependencies:
         ops.update(visitor(dep))
     return ops
 
 
-def operations(operation: CollectionOperation):
+def operations(operation: _CollectionOperation):
     return MemoizingVisitor(_operations)(operation)
 
 
 def _fuse_subgraph_callables(
-    operation: CollectionOperation, visitor: MemoizingVisitor, fusable: bool | set
-) -> tuple[SubgraphCallable, set[CollectionOperation]]:
-    if not isinstance(operation, FusableOperation):
+    operation: _CollectionOperation, visitor: MemoizingVisitor, fusable: bool | set
+) -> tuple[SubgraphCallable, set[_CollectionOperation]]:
+    if not isinstance(operation, _FusableOperation):
         raise ValueError
     func, deps = operation.subgraph_callable
     all_deps: set = set(deps)
@@ -261,7 +261,7 @@ def _fuse_subgraph_callables(
     for dep in deps:
         if (
             fusable is True or (isinstance(fusable, set) and dep.name in fusable)
-        ) and isinstance(dep, FusableOperation):
+        ) and isinstance(dep, _FusableOperation):
             _func, _deps = visitor(dep, fusable)
             dep_funcs[dep.name] = _func
             all_deps |= _deps
@@ -285,12 +285,14 @@ def _fuse_subgraph_callables(
     return func, all_deps
 
 
-def fuse_subgraph_callables(operation: CollectionOperation, fusable: bool | set = True):
+def fuse_subgraph_callables(
+    operation: _CollectionOperation, fusable: bool | set = True
+):
     visitor = MemoizingVisitor(_fuse_subgraph_callables)
     return visitor(operation, fusable)
 
 
-def map_fusion(operation: CollectionOperation, make_fused_op: Callable):
+def map_fusion(operation: _CollectionOperation, make_fused_op: Callable):
 
     all_ops = operations(operation)
     op_dag = operation_dag(operation)
@@ -307,11 +309,11 @@ def map_fusion(operation: CollectionOperation, make_fused_op: Callable):
         work.extend(op_dag[op_name])
         dependents = reverse_dag[op_name]
 
-        if isinstance(op, FusableOperation):
+        if isinstance(op, _FusableOperation):
             map_dependents = {
                 dep_name
                 for dep_name in dependents
-                if isinstance(all_ops[dep_name], FusableOperation)
+                if isinstance(all_ops[dep_name], _FusableOperation)
             }
             if not map_dependents:
                 fuse_operation = op_name
