@@ -213,12 +213,9 @@ For more information see :doc:`Joins <dataframe-joins>`.
 Store Data in Apache Parquet Format
 -----------------------------------
 
-HDF5 is a popular choice for Pandas users with high performance needs.  We
-encourage Dask DataFrame users to :doc:`store and load data <dataframe-create>`
-using Parquet instead.  `Apache Parquet <https://parquet.apache.org/>`_ is a
+`Apache Parquet <https://parquet.apache.org/>`_ is a
 columnar binary format that is easy to split into multiple files (easier for
-parallel loading) and is generally much simpler to deal with than HDF5 (from
-the library's perspective).  It is also a common format used by other big data
+parallel loading). It is also a common format used by other big data
 systems like `Apache Spark <https://spark.apache.org/>`_ and `Apache Impala
 <https://impala.apache.org/>`_, and so it is useful to interchange with other
 systems:
@@ -236,14 +233,5 @@ the Apache Parquet format for Python:
    df1 = dd.read_parquet('path/to/my-results/', engine='fastparquet')
    df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
 
-These libraries can be installed using:
 
-.. code-block:: shell
-
-   conda install fastparquet pyarrow -c conda-forge
-
-`fastparquet <https://github.com/dask/fastparquet/>`_ is a Python-based
-implementation that uses the `Numba <https://numba.pydata.org/>`_
-Python-to-LLVM compiler. PyArrow is part of the
-`Apache Arrow <https://arrow.apache.org/>`_ project and uses the `C++
-implementation of Apache Parquet <https://github.com/apache/parquet-cpp>`_.
+See :ref:`dataframe.parquet` for more on Dask Dataframe and Parquet.
