@@ -30,12 +30,9 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     # is tricky, so drop timeseries for now.
     pdf = timeseries(freq="1H").compute().reset_index(drop=True)
     sdf = spark_session.createDataFrame(pdf)
-    (
-        sdf.repartition(npartitions).write
-        # not overwriting any data, but spark complains if the directory
-        # already exists and we don't set overwrite
-        .parquet(tmpdir, mode="overwrite")
-    )
+    # not overwriting any data, but spark complains if the directory
+    # already exists and we don't set overwrite
+    sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
     # TODO: fastparquet requires the glob, pyarrow does not.
     ddf = dd.read_parquet(tmpdir + "/**.parquet", engine=engine)

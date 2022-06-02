@@ -1,0 +1,17 @@
+name: test-environment
+channels:
+  - conda-forge
+  - nodefaults 
+dependencies:
+  - pyspark
+  - python=3.9
+  - fastparquet
+  - numpy=1.21
+  - pandas=1.3
+  - pyarrow
+  - pytest
+  - pytest-rerunfailures
+  - pytest-timeout
+  - pip
+  - pip:
+    - git+https://github.com/dask/distributed
