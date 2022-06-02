@@ -6093,10 +6093,7 @@ def hash_shard(
         h = df
 
     h = hash_object_dispatch(h, index=False)
-    if is_series_like(h):
-        h = h.values
-    np.mod(h, nparts, out=h)
-    return group_split_dispatch(df, h, nparts, ignore_index=ignore_index)
+    return group_split_dispatch(df, h % nparts, nparts, ignore_index=ignore_index)
 
 
 def split_evenly(df, k):
