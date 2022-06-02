@@ -1,4 +1,5 @@
 import signal
+import sys
 
 import pytest
 
@@ -10,6 +11,11 @@ pyspark = pytest.importorskip("pyspark")
 from dask.dataframe.utils import assert_eq
 
 pytestmark = pytest.mark.spark
+
+pytest.mark.skipif(
+    not sys.platform.startswith("linux"),
+    reason="Unnecessary, and hard to get spark working on other non-linux platforms",
+)
 
 
 @pytest.fixture(scope="module")
