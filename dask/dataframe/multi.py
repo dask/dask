@@ -1363,7 +1363,7 @@ def _split_partition(df, on, nsplits):
         if nset.intersection(set(df.columns)) == nset:
             ind = hash_object_dispatch(df[on], index=False)
             ind = ind % nsplits
-            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+            return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
     # We are not joining (purely) on columns.  Need to
     # add a "_partitions" column to perform the split.

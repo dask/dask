@@ -42,7 +42,7 @@ from dask.dataframe.utils import (
     is_integer_na_dtype,
 )
 from dask.sizeof import SimpleSizeof, sizeof
-from dask.utils import is_arraylike, typename
+from dask.utils import is_arraylike, is_series_like, typename
 
 ##########
 # Pandas #
@@ -359,6 +359,8 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    if is_series_like(c):
+        c = c.values
     indexer, locations = pd._libs.algos.groupsort_indexer(
         c.astype(np.intp, copy=False), k
     )
