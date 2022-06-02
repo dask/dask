@@ -1,3 +1,5 @@
+import signal
+
 import pytest
 
 from dask.datasets import timeseries
@@ -12,6 +14,10 @@ pytestmark = pytest.mark.spark
 
 @pytest.fixture(scope="module")
 def spark_session():
+    # Spark registers a global signal handler that can cause problems elsewhere
+    # in the test suite. In particular, the handler fails if the spark session
+    # is stopped (a bug in pyspark).
+    prev = signal.getsignal(signal.SIGINT)
     spark = (
         pyspark.sql.SparkSession.builder.master("local")
         .appName("Dask Testing")
@@ -20,6 +26,8 @@ def spark_session():
     yield spark
 
     spark.stop()
+    # Make sure we get rid of the signal once we leave stop the session.
+    signal.signal(signal.SIGINT, prev)
 
 
 @pytest.mark.parametrize("npartitions", (1, 5, 10))
