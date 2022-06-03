@@ -3850,7 +3850,8 @@ def test_extra_file(tmpdir, engine, partition_on):
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
-    assert_eq(out, df)
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # For "fastparquet" and "pyarrow", we can pass the
     # expected file extension, or avoid checking file extensions
