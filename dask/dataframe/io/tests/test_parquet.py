@@ -3850,6 +3850,7 @@ def test_extra_file(tmpdir, engine, partition_on):
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
+    # Weird two-step since that we don't care if category ordering changes
     assert_eq(out, df, check_categorical=False)
     assert_eq(out.b, df.b, check_category_order=False)
 
@@ -3873,7 +3874,9 @@ def test_extra_file(tmpdir, engine, partition_on):
         **_parquet_file_extension(".parquet"),
         calculate_divisions=True,
     )
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # Should Work (with FutureWarning)
     with pytest.warns(FutureWarning, match="require_extension is deprecated"):
@@ -3883,7 +3886,6 @@ def test_extra_file(tmpdir, engine, partition_on):
             **_parquet_file_extension(".parquet", legacy=True),
             calculate_divisions=True,
         )
-        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
