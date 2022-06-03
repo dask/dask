@@ -207,8 +207,13 @@ def map_overlap(
 
     def _handle_frame_argument(arg):
         dsk = {}
-        prevs = _get_previous_partitions(arg, before, dsk)
-        nexts = _get_nexts_partitions(arg, after, dsk)
+
+        prevs_parts_dsk, prevs = _get_previous_partitions(arg, before)
+        dsk.update(prevs_parts_dsk)
+
+        nexts_parts_dsk, nexts = _get_nexts_partitions(arg, after)
+        dsk.update(nexts_parts_dsk)
+
         name_a = "overlap-concat-" + tokenize(arg)
         for i, (prev, current, next) in enumerate(
             zip(prevs, arg.__dask_keys__(), nexts)
@@ -285,7 +290,11 @@ def map_overlap(
     return new_dd_object(graph, name, meta, divisions)
 
 
-def _get_nexts_partitions(df, after, dsk):
+def _get_nexts_partitions(df, after):
+    """
+    Helper to get the nexts partitions required for the overlap
+    """
+    dsk = {}
     df_name = df._name
 
     timedelta_partition_message = (
@@ -315,10 +324,14 @@ def _get_nexts_partitions(df, after, dsk):
         nexts.append(None)
     else:
         nexts = [None] * df.npartitions
-    return nexts
+    return dsk, nexts
 
 
-def _get_previous_partitions(df, before, dsk):
+def _get_previous_partitions(df, before):
+    """
+    Helper to get the previous partitions required for the overlap
+    """
+    dsk = {}
     df_name = df._name
 
     name_a = "overlap-prepend-" + tokenize(df, before)
@@ -377,7 +390,7 @@ def _get_previous_partitions(df, before, dsk):
                 prevs.append(key)
     else:
         prevs = [None] * df.npartitions
-    return prevs
+    return dsk, prevs
 
 
 def _head_timedelta(current, next_, after):
