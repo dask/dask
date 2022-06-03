@@ -58,37 +58,38 @@ def test_map_overlap(npartitions):
         assert_eq(res, sol)
 
 
-@pytest.mark.parametrize("npartitions", [4, 4])
+@pytest.mark.parametrize("npartitions", [1, 4])
 @pytest.mark.parametrize("enforce_metadata", [True, False])
-def test_map_overlap_multiple_dataframes(npartitions, enforce_metadata):
+@pytest.mark.parametrize("overlap", [(0, 3), (3, 0), (3, 3), (0, 0)])
+def test_map_overlap_multiple_dataframes(npartitions, enforce_metadata, overlap):
     ddf = dd.from_pandas(df, npartitions)
     ddf2 = dd.from_pandas(df * 2, npartitions)
-    for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
-        # DataFrame
-        res = ddf.map_overlap(
-            shifted_sum,
-            before,
-            after,
-            before,
-            after,
-            ddf2,
-            enforce_metadata=enforce_metadata,
-        )
-        sol = shifted_sum(df, before, after, df * 2)
-        assert_eq(res, sol)
+    before, after = overlap
+    # DataFrame
+    res = ddf.map_overlap(
+        shifted_sum,
+        before,
+        after,
+        before,
+        after,
+        ddf2,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(df, before, after, df * 2)
+    assert_eq(res, sol)
 
-        # Series
-        res = ddf.b.map_overlap(
-            shifted_sum,
-            before,
-            after,
-            before,
-            after,
-            ddf2.b,
-            enforce_metadata=enforce_metadata,
-        )
-        sol = shifted_sum(df.b, before, after, df.b * 2)
-        assert_eq(res, sol)
+    # Series
+    res = ddf.b.map_overlap(
+        shifted_sum,
+        before,
+        after,
+        before,
+        after,
+        ddf2.b,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(df.b, before, after, df.b * 2)
+    assert_eq(res, sol)
 
 
 def test_map_overlap_names():
