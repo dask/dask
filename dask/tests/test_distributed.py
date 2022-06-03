@@ -375,11 +375,6 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    # TODO: this configuration is flaky on osx in CI
-    # See https://github.com/dask/dask/issues/8816
-    if from_futures and sys.platform == "darwin":
-        pytest.xfail("This test sometimes fails on osx in CI")
-
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
     if from_futures:

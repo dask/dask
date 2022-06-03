@@ -29,6 +29,7 @@ jobs:
       PYTHON_VERSION: ${{ matrix.python-version }}
       PARALLEL: "true"
       COVERAGE: "true"
+      HDF5_USE_FILE_LOCKING: "FALSE"
 
     steps:
       - name: Checkout source
