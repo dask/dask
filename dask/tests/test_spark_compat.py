@@ -56,8 +56,7 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    # TODO: fastparquet requires the glob, pyarrow does not.
-    ddf = dd.read_parquet(tmpdir + "/**.parquet", engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
     assert ddf.npartitions == npartitions
@@ -74,8 +73,7 @@ def test_roundtrip_hive_parquet_spark_to_dask(spark_session, tmpdir, engine):
     # already exists and we don't set overwrite
     sdf.write.parquet(tmpdir, mode="overwrite", partitionBy="name")
 
-    # TODO: fastparquet requires the glob, pyarrow does not.
-    ddf = dd.read_parquet(tmpdir + "/**.parquet", engine=engine)
+    ddf = dd.read_parquet(tmpdir, engine=engine)
     # Papercut: pandas TZ localization doesn't survive roundtrip
     ddf = ddf.assign(timestamp=ddf.timestamp.dt.tz_localize("UTC"))
 

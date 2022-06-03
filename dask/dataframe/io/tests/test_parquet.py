@@ -3832,13 +3832,20 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-def test_extra_file(tmpdir, engine):
+@pytest.mark.parametrize("partition_on", ("b", None))
+def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    df = df.assign(b=df.b.astype("category"))
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmpdir, engine=engine, write_metadata_file=True)
+    ddf.to_parquet(
+        tmpdir,
+        engine=engine,
+        write_metadata_file=True,
+        partition_on=partition_on,
+    )
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
