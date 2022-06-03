@@ -6409,7 +6409,7 @@ def map_partitions(
 
     dfs = [df for df in args if isinstance(df, _Frame)]
 
-    meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
+    meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
     if _is_only_scalar(args):
         layer = {
@@ -6510,7 +6510,10 @@ def _is_only_scalar(args):
     return all(isinstance(arg, Scalar) for arg in args)
 
 
-def _get_meta(args, dfs, func, kwargs, meta, parent_meta):
+def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
+    """
+    Helper to generate metadata for map_partitions and map_overlap output.
+    """
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
     if parent_meta is None and dfs:
         parent_meta = dfs[0]._meta
@@ -6528,7 +6531,7 @@ def _get_meta(args, dfs, func, kwargs, meta, parent_meta):
     ) and not _is_only_scalar(args):
         if not meta_is_emulated:
             warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
+                "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "
                 "Try passing a pandas object as meta or a dict or tuple representing the "
                 "(name, dtype) of the columns. In the future the meta you passed will not work.",
                 FutureWarning,

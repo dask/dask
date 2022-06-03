@@ -163,7 +163,7 @@ def map_overlap(
     from dask.dataframe.core import (
         Scalar,
         _get_divisions,
-        _get_meta,
+        _get_meta_map_partitions,
         _is_only_scalar,
         _maybe_from_pandas,
         apply_and_enforce,
@@ -184,7 +184,7 @@ def map_overlap(
                 "calling `map_overlap` directly, pass `align_dataframes=False`."
             ) from e
 
-    meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
+    meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
     if _is_only_scalar(args):
         layer = {
