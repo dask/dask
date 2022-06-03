@@ -6448,7 +6448,7 @@ def map_partitions(
         if collections:
             simple = False
 
-    divisions = _get_divisions(
+    divisions = _get_divisions_map_partitions(
         align_dataframes, transform_divisions, dfs, func, args, kwargs
     )
 
@@ -6484,7 +6484,10 @@ def map_partitions(
     return new_dd_object(graph, name, meta, divisions)
 
 
-def _get_divisions(align_dataframes, transform_divisions, dfs, func, args, kwargs):
+def _get_divisions_map_partitions(align_dataframes, transform_divisions, dfs, func, args, kwargs):
+    """
+    Helper to get divisions for map_partitions and map_overlap output.
+    """
     if align_dataframes:
         divisions = dfs[0].divisions
     else:

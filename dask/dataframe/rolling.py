@@ -162,7 +162,7 @@ def map_overlap(
     from dask.array.core import normalize_arg
     from dask.dataframe.core import (
         Scalar,
-        _get_divisions,
+        _get_divisions_map_partitions,
         _get_meta_map_partitions,
         _is_only_scalar,
         _maybe_from_pandas,
@@ -201,7 +201,7 @@ def map_overlap(
     args2 = []
     dependencies = []
 
-    divisions = _get_divisions(
+    divisions = _get_divisions_map_partitions(
         align_dataframes, transform_divisions, dfs, func, args, kwargs
     )
 
