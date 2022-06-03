@@ -125,6 +125,8 @@ def map_overlap(
         If False, all inputs must have either the same number of partitions
         or a single partition. Single-partition inputs will be broadcast to
         every partition of multi-partition inputs.
+    $META
+
     See Also
     --------
     dd.DataFrame.map_overlap
