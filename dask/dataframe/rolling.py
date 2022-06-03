@@ -176,7 +176,13 @@ def map_overlap(
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
-        args = _maybe_align_partitions(args)
+        try:
+            args = _maybe_align_partitions(args)
+        except ValueError as e:
+            raise ValueError(
+                f"{e}. If you don't want the partitions to be aligned, and are "
+                "calling `map_overlap` directly, pass `align_dataframes=False`."
+            ) from e
 
     meta = _get_meta(args, dfs, func, kwargs, meta, parent_meta)
 
