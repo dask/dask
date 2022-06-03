@@ -794,10 +794,7 @@ Dask Name: {name}, {task} tasks"""
 
         Here we apply a function to a Series resulting in a Series:
 
-        >>> d = [1, 2, 3, 4, 5]
-        >>> s = pd.Series(data=d)
-        >>> ds = dd.from_pandas(s, npartitions=2)
-        >>> res = ds.map_partitions(lambda x: len(x))
+        >>> res = ddf.x.map_partitions(lambda x: len(x)) # ddf.x is a Dask Series Structure
         >>> res.dtype
         dtype('int64')
 
