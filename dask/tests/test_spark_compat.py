@@ -12,12 +12,6 @@ from dask.dataframe.utils import assert_eq
 
 pytestmark = pytest.mark.spark
 
-pytest.mark.skipif(
-    not sys.platform.startswith("linux"),
-    reason="Unnecessary, and hard to get spark working on other non-linux platforms",
-)
-
-
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.
 pdf = timeseries(freq="1H").compute()
@@ -27,6 +21,11 @@ pdf = pdf.reset_index()
 
 @pytest.fixture(scope="module")
 def spark_session():
+    if not sys.platform.startswith("linux"):
+        pytest.skip(
+            "Unnecessary, and hard to get spark working on non-linux platforms",
+        )
+
     # Spark registers a global signal handler that can cause problems elsewhere
     # in the test suite. In particular, the handler fails if the spark session
     # is stopped (a bug in pyspark).
