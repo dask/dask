@@ -1,5 +1,6 @@
 import signal
 import sys
+import threading
 
 import pytest
 
@@ -42,7 +43,8 @@ def spark_session():
 
     spark.stop()
     # Make sure we get rid of the signal once we leave stop the session.
-    signal.signal(signal.SIGINT, prev)
+    if threading.current_thread() is threading.main_thread():
+        signal.signal(signal.SIGINT, prev)
 
 
 @pytest.mark.parametrize("npartitions", (1, 5, 10))
