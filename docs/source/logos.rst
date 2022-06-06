@@ -4,7 +4,7 @@ Images and Logos
 ================
 
 Here are some commonly used Dask icons and logos
-(see the `style guide <dask.org/style-guide>`).
+(see the `Dask style guide <dask.org/style-guide>`_ for more details).
 
 .. image:: images/dask_icon.svg
    :alt: Primary Dask icon.
