@@ -761,6 +761,25 @@ def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
     assert set(df.b.cat.categories) == {"x", "y", "z"}
 
 
+def test_partition_parallel_metadata(tmpdir, engine):
+    # Check that parallel metadata collection works
+    # for hive-partitioned data
+    tmp = str(tmpdir)
+    d = pd.DataFrame(
+        {
+            "a": np.random.rand(50),
+            "b": np.random.choice(["x", "y", "z"], size=50),
+            "c": np.random.choice(["x", "y", "z"], size=50),
+        }
+    )
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=["b"], engine=engine, write_metadata_file=False)
+    df = dd.read_parquet(
+        tmp, engine=engine, calculate_divisions=True, metadata_task_size=1
+    )
+    assert set(df.b.cat.categories) == {"x", "y", "z"}
+
+
 def test_partition_on_cats_2(tmpdir, engine):
     tmp = str(tmpdir)
     d = pd.DataFrame(
