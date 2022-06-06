@@ -255,6 +255,16 @@ def test_tokenize_object():
             normalize_token(o)
 
 
+def test_tokenize_function_cloudpickle():
+    a, b = (lambda x: x, lambda x: x)
+    # No error by default
+    tokenize(a)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
+            tokenize(b)
+
+
 def test_tokenize_callable():
     def my_func(a, b, c=1):
         return a + b + c
