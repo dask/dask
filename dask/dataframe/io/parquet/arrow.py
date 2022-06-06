@@ -1186,6 +1186,7 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "chunksize": chunksize,
             "partitions": partitions,
+            "dataset_options": kwargs["dataset"],
         }
 
         # Main parts/stats-construction
@@ -1261,6 +1262,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups = dataset_info_kwargs["split_row_groups"]
         gather_statistics = dataset_info_kwargs["gather_statistics"]
         partitions = dataset_info_kwargs["partitions"]
+        dataset_options = dataset_info_kwargs["dataset_options"]
 
         # Make sure we are processing a non-empty list
         if not isinstance(files_or_frags, list):
@@ -1285,6 +1287,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=fs,
+                    **dataset_options,
                 ).get_fragments()
             )
         else:
