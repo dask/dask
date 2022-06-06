@@ -76,7 +76,7 @@ def to_hdf(
     compute : bool
         Whether or not to execute immediately.  If False then this returns a
         ``dask.Delayed`` value.
-    lock : Lock, optional
+    lock : bool, Lock, optional
         Lock to use to prevent concurrency issues.  By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
