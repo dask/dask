@@ -167,7 +167,7 @@ def _get_sizeof_on_path(path, size):
 
 
 def test_register_backend_entrypoint(tmp_path):
-    # Create special sizeof implemetnation for a dummy class
+    # Create special sizeof implementation for a dummy class
     (tmp_path / "impl_sizeof.py").write_bytes(
         b"def sizeof_plugin(sizeof):\n"
         b'    print("REG")\n'
@@ -178,8 +178,9 @@ def test_register_backend_entrypoint(tmp_path):
         b"        def sizeof_impl(obj):\n"
         b"            return obj.size \n"
     )
+    # Define dummy class that possesses a size attribute
     (tmp_path / "class_impl.py").write_bytes(
-        b"class Impl:\n" b"    def __init__(self, size):\n" b"        self.size = size"
+        b"class Impl:\n    def __init__(self, size):\n        self.size = size"
     )
     dist_info = tmp_path / "impl_sizeof-0.0.0.dist-info"
     dist_info.mkdir()
