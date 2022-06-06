@@ -8,10 +8,15 @@ from dask.datasets import timeseries
 
 dd = pytest.importorskip("dask.dataframe")
 pyspark = pytest.importorskip("pyspark")
+pytest.importorskip("pyarrow")
+pytest.importorskip("fastparquet")
 
 from dask.dataframe.utils import assert_eq
 
-pytestmark = pytest.mark.spark
+if not sys.platform.startswith("linux"):
+    pytest.skip(
+        "Unnecessary, and hard to get spark working on non-linux platforms",
+    )
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.
@@ -22,11 +27,6 @@ pdf = pdf.reset_index()
 
 @pytest.fixture(scope="module")
 def spark_session():
-    if not sys.platform.startswith("linux"):
-        pytest.skip(
-            "Unnecessary, and hard to get spark working on non-linux platforms",
-        )
-
     # Spark registers a global signal handler that can cause problems elsewhere
     # in the test suite. In particular, the handler fails if the spark session
     # is stopped (a bug in pyspark).
