@@ -214,15 +214,12 @@ def register_pyarrow():
         return int(_get_col_size(data)) + 1000
 
 
-def _register_entry_point_plugins(entry_points=None):
+def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    if entry_points is None:
-        entry_points = importlib.metadata.entry_points()
-
     if sys.version_info >= (3, 10):
-        sizeof_entry_points = entry_points.select(group="dask.sizeof")
+        sizeof_entry_points = importlib.metadata.entry_points(group="dask.sizeof")
     else:
-        sizeof_entry_points = entry_points.get("dask.sizeof", [])
+        sizeof_entry_points = importlib.metadata.entry_points().get("dask.sizeof", [])
 
     for entry_point in sizeof_entry_points:
         registrar = entry_point.load()
