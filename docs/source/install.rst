@@ -1,18 +1,32 @@
-Install Dask
-============
+Dask Installation
+=================
 
-You can install dask with ``conda``, with ``pip``, or by installing from source.
+.. meta::
+    :description: Dask Installation | You can install Dask with conda, pip install Dask, or install from source.
+
+.. _Anaconda distribution: https://www.anaconda.com/download/
+
+How to Install Dask
+-------------------
+
+Dask installation can happen in a couple of different ways. You can install Dask with ``conda``, with ``pip``, or install from source.
 
 Conda
 -----
 
-Dask is installed by default in `Anaconda <https://www.anaconda.com/download/>`_.
-You can update Dask using the `conda <https://www.anaconda.com/download/>`_ command::
+If you use the `Anaconda distribution`_,
+Dask installation will occur by default.
+You can also install or upgrade Dask using the
+`conda install <https://docs.conda.io/projects/conda/en/latest/commands/install.html>`_ command::
 
    conda install dask
 
-This installs Dask and **all** common dependencies, including Pandas and NumPy.
+This installs Dask and **all** common dependencies, including pandas and NumPy.
 Dask packages are maintained both on the default channel and on `conda-forge <https://conda-forge.github.io/>`_.
+You can select the channel with the ``-c`` flag::
+
+    conda install dask -c conda-forge
+
 Optionally, you can obtain a minimal Dask installation using the following command::
 
    conda install dask-core
@@ -22,16 +36,17 @@ This will install a minimal set of dependencies required to run Dask similar to 
 Pip
 ---
 
-You can install everything required for most common uses of Dask (arrays,
-dataframes, ...)  This installs both Dask and dependencies like NumPy, Pandas,
-and so on that are necessary for different workloads.  This is often the right
+You can use pip to install everything required for most common uses of Dask
+(e.g. Dask Array, Dask DataFrame, etc.).
+This installs both Dask and dependencies, like NumPy and pandas,
+that are necessary for different workloads. This is often the right
 choice for Dask users::
 
    python -m pip install "dask[complete]"    # Install everything
 
 You can also install only the Dask library.  Modules like ``dask.array``,
 ``dask.dataframe``, or ``dask.distributed`` won't work until you also install NumPy,
-Pandas, or Tornado, respectively.  This is common for downstream library
+pandas, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
    python -m pip install dask                # Install only core parts of dask
@@ -45,8 +60,19 @@ We also maintain other dependency sets for different subsets of functionality::
 
 We have these options so that users of the lightweight core Dask scheduler
 aren't required to download the more exotic dependencies of the collections
-(Numpy, Pandas, Tornado, etc.).
+(Numpy, pandas, Tornado, etc.).
 
+Conda install versus pip install
+--------------------------------
+
+Briefly, `Pip <https://pip.pypa.io/en/stable/>`_ is a package installer for
+Python while `conda <https://conda.io/docs/>`_ is a cross platform package
+and environment management system. Though there is much overlap between the
+functionality of these two tools, they have a number of key differences.
+For many Python users, the choice is less about whether one tool is better,
+and more about when to use ``pip`` versus ``conda``.
+For a more comprehensive overview on this topic, see the blog post from Anaconda
+`Understanding Conda and Pip <https://www.anaconda.com/blog/understanding-conda-and-pip>`_.
 
 Install from Source
 -------------------
@@ -65,21 +91,21 @@ You can also install all dependencies as well::
 You can view the list of all dependencies within the ``extras_require`` field
 of ``setup.py``.
 
-
-Or do a developer install by using the ``-e`` flag::
+Or do a developer install by using the ``-e`` flag
+(see the :ref:`Install section <develop-install>` in the Development Guidelines)::
 
     python -m pip install -e .
 
 Anaconda
 --------
 
-Dask is included by default in the `Anaconda distribution <https://www.anaconda.com/download>`_.
+Dask is included by default in the `Anaconda distribution`_.
 
 Optional dependencies
 ---------------------
 
 Specific functionality in Dask may require additional optional dependencies.
-For example, reading from Amazon S3 requires ``s3fs``.
+For example, reading from Amazon S3 requires `s3fs <https://s3fs.readthedocs.io/en/latest/>`_.
 These optional dependencies and their minimum supported versions are listed below.
 
 +---------------+----------+--------------------------------------------------------------+
@@ -132,12 +158,19 @@ Test Dask with ``py.test``::
     cd dask
     py.test dask
 
-Please be aware that installing Dask naively may not install all
-requirements by default. Please read the ``pip`` section above which discusses
-requirements.  You may choose to install the ``dask[complete]`` version which includes
-all dependencies for all collections.  Alternatively, you may choose to test
+Installing Dask naively may not install all requirements by default (see the `Pip`_ section above).
+You may choose to install the ``dask[complete]`` version which includes
+all dependencies for all collections::
+
+    pip install "dask[complete]"
+
+Alternatively, you may choose to test
 only certain submodules depending on the libraries within your environment.
 For example, to test only Dask core and Dask array we would run tests as
 follows::
 
     py.test dask/tests dask/array/tests
+
+See the :ref:`section on testing <develop-test>` in the Development Guidelines for more details.
+
+.. _Anaconda distribution: https://www.anaconda.com/download/
