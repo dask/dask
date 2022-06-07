@@ -4,27 +4,33 @@ import operator
 import warnings
 from dataclasses import replace
 from functools import partial
-from numbers import Integral, Number
+from numbers import Integral
+from typing import ClassVar
 
 import numpy as np
 import pandas as pd
+from tlz import first
 
+from dask import threaded
 from dask.array.core import Array
-from dask.base import is_dask_collection
+from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection
+from dask.context import globalmethod
 from dask.dataframe import methods
-from dask.dataframe.core import DataFrame as LegacyDataFrame
-from dask.dataframe.core import Index as LegacyIndex
-from dask.dataframe.core import Scalar as LegacyScalar
-from dask.dataframe.core import Series as LegacySeries
 from dask.dataframe.core import _extract_meta
-from dask.dataframe.core import _Frame as LegacyFrame
-from dask.dataframe.utils import PANDAS_GT_120, is_categorical_dtype
+from dask.dataframe.dispatch import meta_nonempty
+from dask.dataframe.optimize import optimize
+from dask.dataframe.utils import (
+    PANDAS_GT_120,
+    is_categorical_dtype,
+    raise_on_meta_error,
+)
 from dask.operation.dataframe.core import _FrameOperation, _ScalarOperation
 from dask.operation.dataframe.dispatch import get_operation_type
 from dask.utils import (
     M,
     OperatorMethodMixin,
     derived_from,
+    funcname,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -38,7 +44,7 @@ no_default = "__no_default__"
 #
 
 
-class Scalar(LegacyScalar, OperatorMethodMixin):
+class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, operation):
         # divisions is ignored, only present to be compatible with other
         # objects.
@@ -86,8 +92,76 @@ class Scalar(LegacyScalar, OperatorMethodMixin):
     def __setstate__(self, state):
         self._operation = state
 
+    def __dask_graph__(self):
+        return self.dask
 
-class _Frame(LegacyFrame):
+    def __dask_keys__(self):
+        return self.operation.collection_keys
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    def __dask_layers__(self):
+        return (self._name,)
+
+    __dask_optimize__ = globalmethod(
+        optimize, key="dataframe_optimize", falsey=dont_optimize
+    )
+    __dask_scheduler__ = staticmethod(threaded.get)
+
+    def __dask_postcompute__(self):
+        return first, ()
+
+    @property
+    def _meta_nonempty(self):
+        return self._meta
+
+    @property
+    def dtype(self):
+        return self._meta.dtype
+
+    def __dir__(self):
+        o = set(dir(type(self)))
+        o.update(self.__dict__)
+        if not hasattr(self._meta, "dtype"):
+            o.remove("dtype")  # dtype only in `dir` if available
+        return list(o)
+
+    def __repr__(self):
+        name = self._name if len(self._name) < 10 else self._name[:7] + "..."
+        if hasattr(self._meta, "dtype"):
+            extra = ", dtype=%s" % self._meta.dtype
+        else:
+            extra = ", type=%s" % type(self._meta).__name__
+        return f"ddop.Scalar<{name}{extra}>"
+
+    def __array__(self):
+        # array interface is required to support pandas instance + Scalar
+        # Otherwise, above op results in pd.Series of Scalar (object dtype)
+        return np.asarray(self.compute())
+
+    def __bool__(self):
+        raise TypeError(
+            f"Trying to convert {self} to a boolean value. Because Dask objects are "
+            "lazily evaluated, they cannot be converted to a boolean value or used "
+            "in boolean conditions like if statements. Try calling .compute() to "
+            "force computation prior to converting to a boolean value or using in "
+            "a conditional statement."
+        )
+
+    @classmethod
+    def _get_unary_operator(cls, op):
+        return lambda self: elemwise(op, self)
+
+    @classmethod
+    def _get_binary_operator(cls, op, inv=False):
+        if inv:
+            return lambda self, other: elemwise(op, other, self)
+        else:
+            return lambda self, other: elemwise(op, self, other)
+
+
+class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __init__(self, operation):
 
         if not isinstance(operation, _FrameOperation):
@@ -169,6 +243,50 @@ class _Frame(LegacyFrame):
 
         self._operation = replace(self.operation, _divisions=value)
 
+    @property
+    def known_divisions(self):
+        """Whether divisions are already known"""
+        return len(self.divisions) > 0 and self.divisions[0] is not None
+
+    @property
+    def npartitions(self) -> int:
+        """Return number of partitions"""
+        return len(self.divisions) - 1
+
+    @property
+    def _meta_nonempty(self):
+        """A non-empty version of `_meta` with fake data."""
+        return meta_nonempty(self._meta)
+
+    @property  # type: ignore
+    @derived_from(pd.DataFrame)
+    def attrs(self):
+        return self._meta.attrs
+
+    @attrs.setter
+    def attrs(self, value):
+        self._meta.attrs = dict(value)
+
+    def __dask_graph__(self):
+        return self.dask
+
+    def __dask_keys__(self):
+        return self.operation.collection_keys
+
+    def __dask_layers__(self):
+        return (self._name,)
+
+    def __dask_tokenize__(self):
+        return self._name
+
+    __dask_optimize__ = globalmethod(
+        optimize, key="dataframe_optimize", falsey=dont_optimize
+    )
+    __dask_scheduler__ = staticmethod(threaded.get)
+
+    def __dask_postcompute__(self):
+        return finalize, ()
+
     def __getstate__(self):
         return self.operation
 
@@ -177,6 +295,11 @@ class _Frame(LegacyFrame):
 
     def copy(self, deep=False):
         return new_dd_collection(self.operation.copy())
+
+    def __array__(self, dtype=None, **kwargs):
+        self._computed = self.compute()
+        x = np.array(self._computed)
+        return x
 
     @property
     def index(self):
@@ -205,6 +328,26 @@ class _Frame(LegacyFrame):
             _divisions=value.divisions,
         )
 
+    def head(self, n=5, npartitions=1, compute=True):
+        """First n rows of the dataset
+        Parameters
+        ----------
+        n : int, optional
+            The number of rows to return. Default is 5.
+        npartitions : int, optional
+            Elements are only taken from the first ``npartitions``, with a
+            default of 1. If there are fewer than ``n`` rows in the first
+            ``npartitions`` a warning will be raised and any found rows
+            returned. Pass -1 to use all partitions.
+        compute : bool, optional
+            Whether to compute the result, default is True.
+        """
+        if npartitions <= -1:
+            npartitions = self.npartitions
+        # No need to warn if we're already looking at all partitions
+        safe = npartitions != self.npartitions
+        return self._head(n=n, npartitions=npartitions, compute=compute, safe=safe)
+
     def _head(self, n, npartitions, compute, safe):
         from dask.operation.dataframe.core import Head
 
@@ -228,80 +371,34 @@ class _Frame(LegacyFrame):
             result = result.compute()
         return result
 
-    def repartition(
-        self,
-        divisions=None,
-        npartitions=None,
-        partition_size=None,
-        freq=None,
-        force=False,
-    ):
-        from dask.dataframe.operation.repartition import repartition, repartition_freq
+    # def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
+    #     out = kwargs.get("out", ())
+    #     for x in inputs + out:
+    #         # ufuncs work with 0-dimensional NumPy ndarrays
+    #         # so we don't want to raise NotImplemented
+    #         if isinstance(x, np.ndarray) and x.shape == ():
+    #             continue
+    #         elif not isinstance(
+    #             x, (Number, Scalar, _Frame, Array, pd.DataFrame, pd.Series, pd.Index)
+    #         ):
+    #             return NotImplemented
 
-        if isinstance(divisions, int):
-            npartitions = divisions
-            divisions = None
-        if isinstance(divisions, str):
-            partition_size = divisions
-            divisions = None
-        if (
-            sum(
-                [
-                    partition_size is not None,
-                    divisions is not None,
-                    npartitions is not None,
-                    freq is not None,
-                ]
-            )
-            != 1
-        ):
-            raise ValueError(
-                "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisions=``, ``partition_size=`` keyword arguments"
-            )
+    #     if method == "__call__":
+    #         if numpy_ufunc.signature is not None:
+    #             return NotImplemented
+    #         if numpy_ufunc.nout > 1:
+    #             # ufuncs with multiple output values
+    #             # are not yet supported for frames
+    #             return NotImplemented
+    #         else:
+    #             return elemwise(numpy_ufunc, *inputs, **kwargs)
+    #     else:
+    #         # ufunc methods are not yet supported for frames
+    #         return NotImplemented
 
-        if partition_size is not None:
-            raise ValueError("Not supported yet")
-            # return repartition_size(self, partition_size)
-        elif npartitions is not None:
-            raise ValueError("Not supported yet")
-            # return repartition_npartitions(self, npartitions)
-        elif divisions is not None:
-            return repartition(self, divisions, force=force)
-        elif freq is not None:
-            return repartition_freq(self, freq=freq)
-
-    def map_partitions(self, func, *args, **kwargs):
-        NotImplementedError
-
-    def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
-        out = kwargs.get("out", ())
-        for x in inputs + out:
-            # ufuncs work with 0-dimensional NumPy ndarrays
-            # so we don't want to raise NotImplemented
-            if isinstance(x, np.ndarray) and x.shape == ():
-                continue
-            elif not isinstance(
-                x, (Number, Scalar, _Frame, Array, pd.DataFrame, pd.Series, pd.Index)
-            ):
-                return NotImplemented
-
-        if method == "__call__":
-            if numpy_ufunc.signature is not None:
-                return NotImplemented
-            if numpy_ufunc.nout > 1:
-                # ufuncs with multiple output values
-                # are not yet supported for frames
-                return NotImplemented
-            else:
-                return elemwise(numpy_ufunc, *inputs, **kwargs)
-        else:
-            # ufunc methods are not yet supported for frames
-            return NotImplemented
-
-    @property
-    def _elemwise(self):
-        return elemwise
+    # @property
+    # def _elemwise(self):
+    #     return elemwise
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -315,7 +412,13 @@ class _Frame(LegacyFrame):
             return lambda self, other: elemwise(op, self, other)
 
 
-class Series(_Frame, LegacySeries):
+class Series(_Frame):
+
+    _partition_type = pd.Series
+    _is_partition_type = staticmethod(is_series_like)
+    _token_prefix = "series-"
+    _accessors: ClassVar[set[str]] = set()
+
     @property
     def name(self):
         return self._meta.name
@@ -332,6 +435,10 @@ class Series(_Frame, LegacySeries):
             _transform_divisions=False,
         )
 
+    @property
+    def dtype(self):
+        return self._meta.dtype
+
     @derived_from(pd.Series)
     def round(self, decimals=0):
         return elemwise(M.round, self, decimals)
@@ -341,6 +448,42 @@ class Series(_Frame, LegacySeries):
         df = elemwise(M.to_timestamp, self, freq, how, axis)
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
+
+    @derived_from(pd.Series)
+    def groupby(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @derived_from(pd.Series)
+    def mean(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def _bind_operator_method(cls, name, op, original=pd.Series):
+        """bind operator method like Series.add to this class"""
+        from dask.operation.dataframe.core import Elemwise
+
+        def meth(self, other, level=None, fill_value=None, axis=0):
+            if level is not None:
+                raise NotImplementedError("level must be None")
+            axis = self._validate_axis(axis)
+            meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+            operation = Elemwise(
+                op,
+                [self.operation],
+                {
+                    "other": other,
+                    "axis": axis,
+                    "fill_value": fill_value,
+                },
+                _meta=meta,  # TODO Avoid this
+            )
+            return new_dd_collection(operation)
+            # return map_partitions(
+            #     op, self, other, meta=meta, axis=axis, fill_value=fill_value
+            # )
+
+        meth.__name__ = name
+        setattr(cls, name, derived_from(original)(meth))
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison, original=pd.Series):
@@ -360,11 +503,20 @@ class Series(_Frame, LegacySeries):
         setattr(cls, name, derived_from(original)(meth))
 
 
-class Index(Series, LegacyIndex):
-    pass
+class Index(Series):
+    _partition_type = pd.Index
+    _is_partition_type = staticmethod(is_index_like)
+    _token_prefix = "index-"
+    _accessors: ClassVar[set[str]] = set()
 
 
-class DataFrame(_Frame, LegacyDataFrame):
+class DataFrame(_Frame):
+
+    _partition_type = pd.DataFrame
+    _is_partition_type = staticmethod(is_dataframe_like)
+    _token_prefix = "dataframe-"
+    _accessors: ClassVar[set[str]] = set()
+
     @property
     def columns(self):
         return self._meta.columns
@@ -510,6 +662,99 @@ class DataFrame(_Frame, LegacyDataFrame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
+    @derived_from(pd.DataFrame)
+    def groupby(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @derived_from(pd.DataFrame)
+    def mean(self, *args, **kwargs):
+        raise NotImplementedError
+
+    @classmethod
+    def _validate_axis(cls, axis=0):
+        if axis not in (0, 1, "index", "columns", None):
+            raise ValueError(f"No axis named {axis}")
+        # convert to numeric axis
+        return {None: 0, "index": 0, "columns": 1}.get(axis, axis)
+
+    @classmethod
+    def _bind_operator_method(cls, name, op, original=pd.DataFrame):
+        """bind operator method like DataFrame.add to this class"""
+        from dask.operation.dataframe.core import Elemwise
+
+        # name must be explicitly passed for div method whose name is truediv
+
+        def meth(self, other, axis="columns", level=None, fill_value=None):
+            if level is not None:
+                raise NotImplementedError("level must be None")
+
+            axis = self._validate_axis(axis)
+
+            if axis in (1, "columns"):
+                # When axis=1 and other is a series, `other` is transposed
+                # and the operator is applied broadcast across rows. This
+                # isn't supported with dd.Series.
+                if isinstance(other, Series):
+                    msg = f"Unable to {name} dd.Series with axis=1"
+                    raise ValueError(msg)
+                elif is_series_like(other):
+                    # Special case for pd.Series to avoid unwanted partitioning
+                    # of other. We pass it in as a kwarg to prevent this.
+                    meta = _emulate(
+                        op, self, other=other, axis=axis, fill_value=fill_value
+                    )
+                    operation = Elemwise(
+                        op,
+                        [
+                            self.operation,
+                            other.operation
+                            if isinstance(other, _FrameOperation)
+                            else other,
+                        ],
+                        {
+                            "axis": axis,
+                            "fill_value": fill_value,
+                        },
+                        _meta=meta,  # TODO Avoid this
+                    )
+                    return new_dd_collection(operation)
+                    # return map_partitions(
+                    #     op,
+                    #     self,
+                    #     other=other,
+                    #     meta=meta,
+                    #     axis=axis,
+                    #     fill_value=fill_value,
+                    #     enforce_metadata=False,
+                    # )
+
+            meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
+            operation = Elemwise(
+                op,
+                [
+                    self.operation,
+                    other.operation if isinstance(other, _FrameOperation) else other,
+                ],
+                {
+                    "axis": axis,
+                    "fill_value": fill_value,
+                },
+                _meta=meta,  # TODO Avoid this
+            )
+            return new_dd_collection(operation)
+            # return map_partitions(
+            #     op,
+            #     self,
+            #     other,
+            #     meta=meta,
+            #     axis=axis,
+            #     fill_value=fill_value,
+            #     enforce_metadata=False,
+            # )
+
+        meth.__name__ = name
+        setattr(cls, name, derived_from(original)(meth))
+
     @classmethod
     def _bind_comparison_method(cls, name, comparison, original=pd.DataFrame):
         """bind comparison method like DataFrame.eq to this class"""
@@ -651,3 +896,31 @@ def _maybe_from_pandas(dfs):
         for df in dfs
     ]
     return dfs
+
+
+def _emulate(func, *args, udf=False, **kwargs):
+    """
+    Apply a function using args / kwargs. If arguments contain dd.DataFrame /
+    dd.Series, using internal cache (``_meta``) for calculation
+    """
+    with raise_on_meta_error(funcname(func), udf=udf):
+        return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
+
+
+def _concat(args, ignore_index=False):
+    if not args:
+        return args
+    # We filter out empty partitions here because pandas frequently has
+    # inconsistent dtypes in results between empty and non-empty frames.
+    # Ideally this would be handled locally for each operation, but in practice
+    # this seems easier. TODO: don't do this.
+    args2 = [i for i in args if len(i)]
+    return (
+        args[0]
+        if not args2
+        else methods.concat(args2, uniform=True, ignore_index=ignore_index)
+    )
+
+
+def finalize(results):
+    return _concat(results)

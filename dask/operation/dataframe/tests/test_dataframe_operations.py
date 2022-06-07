@@ -37,8 +37,8 @@ def test_creation_operation():
         index=[0, 0, 1, 0, 1, 2],
     )
 
-    assert_eq(ddf["A"], expect["A"])
-    assert_eq(ddf, expect)
+    assert_eq(ddf["A"].compute(), expect["A"])
+    assert_eq(ddf.compute(), expect)
 
 
 def test_creation_fusion():
