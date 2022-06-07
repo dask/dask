@@ -1361,7 +1361,7 @@ def test_sort_values(nelem, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
