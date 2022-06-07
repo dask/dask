@@ -14,7 +14,8 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import insert_meta_param_description, make_meta
-from dask.operation.dataframe.core import FrameCreation, new_dd_collection
+from dask.operation.dataframe.collection import new_dd_collection
+from dask.operation.dataframe.core import FrameCreation
 from dask.utils import funcname, is_arraylike
 
 lock = Lock()

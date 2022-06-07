@@ -1,6 +1,6 @@
 import pandas as pd
 
-from dask.operation.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.operation.dataframe.collection import DataFrame, Index, Scalar, Series, _Frame
 from dask.operation.dataframe.dispatch import get_operation_type
 
 ##########
