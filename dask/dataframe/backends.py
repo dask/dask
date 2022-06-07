@@ -30,6 +30,7 @@ from dask.dataframe.dispatch import (
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -79,6 +80,13 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    import pyarrow as pa
+
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
