@@ -542,13 +542,29 @@ def test_nonempty_series_nullable_float():
 
 
 def test_assert_eq_sorts():
-    df1 = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
-    df2 = df1.sort_values("B")
-    df2_r = df2.reset_index(drop=True)
-    assert_eq(df1, df2)
-    assert_eq(df1, df2_r, check_index=False)
+    df = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
+    df_s = df.sort_values("B")
+    assert_eq(df, df_s)
     with pytest.raises(AssertionError):
-        assert_eq(df1, df2_r)
+        assert_eq(df, df_s, sort_results=False)
+
+    df_sr = df_s.reset_index(drop=True)
+    assert_eq(df, df_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr, check_index=False, sort_results=False)
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf_s = ddf.sort_values(["B"])
+    assert_eq(df, ddf_s)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_s, sort_results=False)
+
+    ddf_sr = ddf_s.reset_index(drop=True)
+    assert_eq(df, ddf_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_sr, check_index=False, sort_results=False)
 
 
 def test_assert_eq_scheduler():
