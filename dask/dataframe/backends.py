@@ -81,15 +81,12 @@ try:
 except ImportError:
     pass
 
-try:
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
     import pyarrow as pa
 
-    @pyarrow_schema_dispatch.register((pd.DataFrame,))
-    def get_pyarrow_schema_pandas(obj):
-        return pa.Schema.from_pandas(obj)
-
-except ImportError:
-    pass
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
