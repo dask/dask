@@ -4177,3 +4177,20 @@ def test_deprecate_gather_statistics(tmp_path, engine):
             gather_statistics=True,
         )
     assert_eq(out, df)
+
+
+@pytest.mark.gpu
+def test_gpu_write_parquet_simple(tmpdir):
+    fn = str(tmpdir)
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+    df = cudf.DataFrame(
+        {
+            "a": ["abc", "def"],
+            "b": ["a", "z"],
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 3)
+    ddf.to_parquet(fn)
+    got = dask_cudf.read_parquet(fn).compute()
+    assert_eq(df, got)
