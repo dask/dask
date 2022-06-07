@@ -4179,6 +4179,7 @@ def test_deprecate_gather_statistics(tmp_path, engine):
     assert_eq(out, df)
 
 
+@pytest.mark.xfail
 @pytest.mark.gpu
 def test_gpu_write_parquet_simple(tmpdir):
     fn = str(tmpdir)
