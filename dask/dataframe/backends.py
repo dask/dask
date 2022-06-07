@@ -5,7 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-import pyarrow as pa
+
 from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
@@ -79,6 +79,16 @@ try:
     import scipy.sparse as sp
 
     meta_object_types += (sp.spmatrix,)
+except ImportError:
+    pass
+
+try:
+    import pyarrow as pa
+
+    @pyarrow_schema_dispatch.register((pd.DataFrame,))
+    def get_pyarrow_schema_pandas(obj):
+        return pa.Schema.from_pandas(obj)
+
 except ImportError:
     pass
 
@@ -541,11 +551,6 @@ def is_categorical_dtype_pandas(obj):
 @grouper_dispatch.register((pd.DataFrame, pd.Series))
 def get_grouper_pandas(obj):
     return pd.core.groupby.Grouper
-
-
-@pyarrow_schema_dispatch.register((pd.DataFrame,))
-def get_pyarrow_schema_pandas(obj):
-    return pa.Schema.from_pandas(obj)
 
 
 @percentile_lookup.register((pd.Series, pd.Index))
