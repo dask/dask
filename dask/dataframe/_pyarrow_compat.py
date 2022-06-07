@@ -86,7 +86,7 @@ def pyarrow_stringarray_to_parts(array):
         # elements so the mask array can always be serialized zero copy.
         npad = array.offset % 8
         mask_start = array.offset // 8
-        mask_stop = mask_start + math.ceil(nitems / 8)
+        mask_stop = math.ceil((array.offset + nitems) / 8)
         mask = mask[mask_start:mask_stop]
 
     # Subtract the offset of the starting element from every used offset in the
