@@ -23,7 +23,6 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.dataframe.operation.core import FrameCreation, new_dd_collection
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
@@ -154,7 +153,6 @@ def from_pandas(
     chunksize: Optional[int] = None,
     sort: bool = True,
     name: Optional[str] = None,
-    use_operation_api: bool = False,
 ) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
@@ -247,18 +245,7 @@ def from_pandas(
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
     if not nrows:
-        if use_operation_api:
-            return new_dd_collection(
-                FrameCreation(
-                    lambda x: x,
-                    [data],
-                    "from_pandas",
-                    data,
-                    (None, None),
-                )
-            )
-        else:
-            return new_dd_object({(name, 0): data}, name, data, [None, None])
+        return new_dd_object({(name, 0): data}, name, data, [None, None])
 
     if data.index.isna().any() and not data.index.is_numeric():
         raise NotImplementedError(
@@ -275,20 +262,6 @@ def from_pandas(
     else:
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
-
-    if use_operation_api:
-        return new_dd_collection(
-            FrameCreation(
-                lambda x: x,
-                [
-                    data.iloc[start:stop]
-                    for (start, stop) in zip(locations[:-1], locations[1:])
-                ],
-                "from_pandas",
-                data,
-                divisions,
-            )
-        )
 
     dsk = {
         (name, i): data.iloc[start:stop]
@@ -876,7 +849,6 @@ def from_map(
     label=None,
     token=None,
     enforce_metadata=True,
-    use_operation_api=False,
     **kwargs,
 ):
     """Create a DataFrame collection from a custom function map
@@ -1084,34 +1056,21 @@ def from_map(
     else:
         io_func = func
 
-    divisions = divisions or [None] * (len(inputs) + 1)
-    if use_operation_api:
-        operation = FrameCreation(
-            io_func,
-            inputs,
-            label,
-            meta,
-            tuple(divisions),
-            # token=token,
-            # columns=column_projection,
-            # creation_info=creation_info,
-        )
-        # Return new DataFrame-collection object
-        return new_dd_collection(operation)
+    # Construct DataFrameIOLayer
+    layer = DataFrameIOLayer(
+        name,
+        column_projection,
+        inputs,
+        io_func,
+        label=label,
+        produces_tasks=produces_tasks,
+        creation_info=creation_info,
+    )
 
-    else:
-        # Construct DataFrameIOLayer
-        layer = DataFrameIOLayer(
-            name,
-            column_projection,
-            inputs,
-            io_func,
-            label=label,
-            produces_tasks=produces_tasks,
-            creation_info=creation_info,
-        )
-        # Return new DataFrame-collection object
-        return new_dd_object(layer, name, meta, divisions)
+    # Return new DataFrame-collection object
+    divisions = divisions or [None] * (len(inputs) + 1)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

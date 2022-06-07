@@ -18,20 +18,20 @@ from dask.dataframe.core import Scalar as LegacyScalar
 from dask.dataframe.core import Series as LegacySeries
 from dask.dataframe.core import _extract_meta
 from dask.dataframe.core import _Frame as LegacyFrame
-from dask.dataframe.dispatch import get_abstract_type
 from dask.dataframe.utils import (
     PANDAS_GT_120,
     is_categorical_dtype,
     raise_on_meta_error,
     valid_divisions,
 )
-from dask.operation import (
+from dask.operation.core import (
     LiteralInputs,
     _CollectionOperation,
     _FusableOperation,
     fuse_subgraph_callables,
     map_fusion,
 )
+from dask.operation.dataframe.dispatch import get_operation_type
 from dask.optimization import SubgraphCallable
 from dask.utils import (
     M,
@@ -923,6 +923,10 @@ class _Frame(LegacyFrame):
     def map_partitions(self, func, *args, **kwargs):
         return map_partitions(func, self, *args, **kwargs)
 
+    @property
+    def _elemwise(self):
+        return elemwise
+
 
 class Series(_Frame, LegacySeries):
     @property
@@ -1089,8 +1093,17 @@ class DataFrame(_Frame, LegacyDataFrame):
 
 def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     from dask.dataframe.core import handle_out
+    from dask.dataframe.multi import _maybe_align_partitions
 
-    # TODO: Handle division alignment and Array cleanup
+    args = _maybe_from_pandas(args)
+
+    args = _maybe_align_partitions(args)
+    dasks = [arg for arg in args if is_dask_collection(arg)]
+
+    if any([not hasattr(x, "operation") for x in dasks]):
+        raise ValueError
+
+    # TODO: Test division alignment and handle Array cleanup
 
     operation = Elemwise(
         op,
@@ -1110,7 +1123,7 @@ def new_dd_collection(operation):
     """
 
     if has_abstract_type(operation.meta):
-        return get_abstract_type(operation.meta)(operation)
+        return get_operation_type(operation.meta)(operation)
     else:
         from dask.dataframe.core import new_dd_object
 
@@ -1124,7 +1137,7 @@ def new_dd_collection(operation):
 
 def has_abstract_type(x):
     """Does this object have a _Frame equivalent?"""
-    return get_abstract_type(x) is not Scalar
+    return get_operation_type(x) is not Scalar
 
 
 def _maybe_from_pandas(dfs):
@@ -1153,6 +1166,7 @@ def map_partitions(
 
     # Use legacy map_partitions if any collection inputs
     # are not supported
+    # dasks = [arg for arg in args if is_dask_collection(arg)]
     # dasks = [arg for arg in args if isinstance(arg, (LegacyFrame, Array, BlockwiseDep))]
     if (
         True

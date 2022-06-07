@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import importlib
 import math
 import warnings
 
@@ -178,7 +177,6 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
-    use_operation_api=False,
     **kwargs,
 ):
     """
@@ -240,12 +238,9 @@ def read_parquet(
         ``"precache_options"`` key. Also, a custom file-open function can be
         used (instead of ``AbstractFileSystem.open``), by specifying the
         desired function under the ``"open_file_func"`` key.
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet library to use. Options include: 'auto', 'fastparquet', and
-        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
-        installed, and falls back to ``pyarrow`` otherwise. Note that in the
-        future this default ordering for 'auto' will switch, with ``pyarrow``
-        being used if it is installed, and falling back to ``fastparquet``.
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -444,15 +439,13 @@ def read_parquet(
         columns = list(columns)
 
     if isinstance(engine, str):
-        engine = get_engine(engine, bool(kwargs))
+        engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
 
     # Update input_kwargs
-    input_kwargs.update(
-        {"columns": columns, "engine": engine, "use_operation_api": use_operation_api}
-    )
+    input_kwargs.update({"columns": columns, "engine": engine})
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -552,7 +545,6 @@ def read_parquet(
             "args": (path,),
             "kwargs": input_kwargs,
         },
-        use_operation_api=use_operation_api,
     )
 
 
@@ -630,12 +622,9 @@ def to_parquet(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet library to use. Options include: 'auto', 'fastparquet', and
-        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
-        installed, and falls back to ``pyarrow`` otherwise. Note that in the
-        future this default ordering for 'auto' will switch, with ``pyarrow``
-        being used if it is installed, and falling back to ``fastparquet``.
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
     compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
@@ -735,14 +724,6 @@ def to_parquet(
     """
     compute_kwargs = compute_kwargs or {}
 
-    if compression == "default":
-        warnings.warn(
-            "compression='default' is deprecated and will be removed in a "
-            "future version, the default for all engines is 'snappy' now.",
-            FutureWarning,
-        )
-        compression = "snappy"
-
     partition_on = partition_on or []
     if isinstance(partition_on, str):
         partition_on = [partition_on]
@@ -758,7 +739,7 @@ def to_parquet(
         raise ValueError("parquet doesn't support non-string column names")
 
     if isinstance(engine, str):
-        engine = get_engine(engine, bool(kwargs))
+        engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -1101,19 +1082,14 @@ def create_metadata_file(
 _ENGINES: dict[str, Engine] = {}
 
 
-# TODO: remove _warn_engine_default_changing once the default has changed to
-# pyarrow.
-def get_engine(engine, _warn_engine_default_changing=False):
+def get_engine(engine):
     """Get the parquet engine backend implementation.
 
     Parameters
     ----------
-    engine : str, default 'auto'
-        Parquet library to use. Options include: 'auto', 'fastparquet', and
-        'pyarrow'. Defaults to 'auto', which uses ``fastparquet`` if it is
-        installed, and falls back to ``pyarrow`` otherwise. Note that in the
-        future this default ordering for 'auto' will switch, with ``pyarrow``
-        being used if it is installed, and falling back to ``fastparquet``.
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
 
     Returns
     -------
@@ -1124,23 +1100,14 @@ def get_engine(engine, _warn_engine_default_changing=False):
 
     if engine == "auto":
         try:
-            engine = get_engine("fastparquet")
-            if _warn_engine_default_changing and importlib.util.find_spec("pyarrow"):
-                warnings.warn(
-                    "engine='auto' will switch to using pyarrow by default in "
-                    "a future version. To continue using fastparquet even if "
-                    "pyarrow is installed in the future please explicitly "
-                    "specify engine='fastparquet'.",
-                    FutureWarning,
-                )
-            return engine
+            return get_engine("pyarrow")
         except RuntimeError:
             pass
 
         try:
-            return get_engine("pyarrow")
+            return get_engine("fastparquet")
         except RuntimeError:
-            raise RuntimeError("Please install either fastparquet or pyarrow") from None
+            raise RuntimeError("Please install either pyarrow or fastparquet") from None
 
     elif engine == "fastparquet":
         import_required("fastparquet", "`fastparquet` not installed")

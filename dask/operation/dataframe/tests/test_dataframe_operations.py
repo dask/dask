@@ -1,6 +1,6 @@
 import pandas as pd
 
-import dask.dataframe as dd
+import dask.operation.dataframe as opdd
 from dask.dataframe.utils import assert_eq
 
 
@@ -22,12 +22,11 @@ class MyIOFunc:
 
 def test_creation_operation():
 
-    ddf = dd.from_map(
+    ddf = opdd.from_map(
         MyIOFunc(),
         enumerate([0, 1, 2]),
         label="myfunc",
         enforce_metadata=True,
-        use_operation_api=True,
     )
 
     expect = pd.DataFrame(
@@ -43,15 +42,14 @@ def test_creation_operation():
 
 
 def test_creation_fusion():
-    from dask.dataframe.operation.core import optimize
+    from dask.operation.dataframe.core import optimize
 
     # Creation followed by partitionwise operations
-    ddf = dd.from_map(
+    ddf = opdd.from_map(
         MyIOFunc(),
         enumerate([0]),
         label="myfunc",
         enforce_metadata=True,
-        use_operation_api=True,
     )
     ddf += 1
     ddf.assign(new=ddf["B"])

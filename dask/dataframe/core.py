@@ -737,7 +737,7 @@ Dask Name: {name}, {task} tasks"""
         ----------
         func : function
             The function applied to each partition. If this function accepts
-            the special ``partition_info`` keyword argument, it will recieve
+            the special ``partition_info`` keyword argument, it will receive
             information on the partition's relative location within the
             dataframe.
         args, kwargs :
@@ -5954,19 +5954,6 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
     args = _maybe_align_partitions(args)
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
-
-    # check if we should redirect to operation API
-    if all([hasattr(x, "operation") for x in dasks]):
-        from dask.dataframe.operation.core import elemwise as abstract_elemwise
-
-        return abstract_elemwise(
-            op,
-            *args,
-            meta=meta,
-            out=out,
-            transform_divisions=transform_divisions,
-            **kwargs,
-        )
 
     # Clean up dask arrays if present
     deps = dasks.copy()
