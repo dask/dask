@@ -180,23 +180,30 @@ class _Frame(LegacyFrame):
 
     @property
     def index(self):
-        return self.map_partitions(
+        from dask.operation.dataframe.core import Elemwise
+
+        operation = Elemwise(
             getattr,
-            "index",
-            token=self._name + "-index",
-            meta=self._meta.index,
-            enforce_metadata=False,
+            [self.operation, "index"],
+            {},
+            _transform_divisions=False,
+            _meta=self._meta.index,
         )
+        return new_dd_collection(operation)
 
     @index.setter
     def index(self, value):
         from dask.dataframe import methods
+        from dask.operation.dataframe.core import Elemwise
 
-        self.divisions = value.divisions
-        result = self.map_partitions(
-            methods.assign_index, value, enforce_metadata=False
+        self._operation = Elemwise(
+            methods.assign_index,
+            [self.operation, value],
+            {},
+            _transform_divisions=False,
+            _meta=self._meta.index,
+            _divisions=value.divisions,
         )
-        self._operation = result.operation
 
     def _head(self, n, npartitions, compute, safe):
         from dask.operation.dataframe.core import Head
@@ -265,7 +272,7 @@ class _Frame(LegacyFrame):
             return repartition_freq(self, freq=freq)
 
     def map_partitions(self, func, *args, **kwargs):
-        return map_partitions(func, self, *args, **kwargs)
+        NotImplementedError
 
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
@@ -315,49 +322,15 @@ class Series(_Frame, LegacySeries):
 
     @name.setter
     def name(self, name):
-        from dask.dataframe.core import _rename_dask
+        from dask.dataframe.core import _rename
+        from dask.operation.dataframe.core import Elemwise
 
-        self._meta.name = name
-        renamed = _rename_dask(self, name)
-        # update myself
-        self._operation = renamed.operation
-
-    def rename(self, index=None, inplace=False, sorted_index=False):
-        from pandas.api.types import is_dict_like, is_list_like, is_scalar
-
-        import dask.dataframe as dd
-
-        if is_scalar(index) or (
-            is_list_like(index)
-            and not is_dict_like(index)
-            and not isinstance(index, dd.Series)
-        ):
-            if inplace:
-                warnings.warn(
-                    "'inplace' argument for dask series will be removed in future versions",
-                    PendingDeprecationWarning,
-                )
-            res = self if inplace else self.copy()
-            res.name = index
-        else:
-            res = self.map_partitions(M.rename, index, enforce_metadata=False)
-            if self.known_divisions:
-                if sorted_index and (callable(index) or is_dict_like(index)):
-                    old = pd.Series(range(self.npartitions + 1), index=self.divisions)
-                    new = old.rename(index).index
-                    if not new.is_monotonic_increasing:
-                        msg = (
-                            "sorted_index=True, but the transformed index "
-                            "isn't monotonic_increasing"
-                        )
-                        raise ValueError(msg)
-                    res.divisions = tuple(dd.methods.tolist(new))
-                else:
-                    res = res.clear_divisions()
-            if inplace:
-                self._operation = res.operation
-                res = self
-        return res
+        self._operation = Elemwise(
+            _rename,
+            [self.operation, name],
+            {},
+            _transform_divisions=False,
+        )
 
     @derived_from(pd.Series)
     def round(self, decimals=0):
@@ -398,10 +371,15 @@ class DataFrame(_Frame, LegacyDataFrame):
 
     @columns.setter
     def columns(self, columns):
-        from dask.dataframe.core import _rename_dask
+        from dask.dataframe.core import _rename
+        from dask.operation.dataframe.core import Elemwise
 
-        renamed = _rename_dask(self, columns)
-        self._operation = renamed.operation
+        self._operation = Elemwise(
+            _rename,
+            [self.operation, columns],
+            {},
+            _transform_divisions=False,
+        )
 
     def __getitem__(self, key):
         from dask.operation.dataframe.core import ColumnSelection, SeriesSelection
@@ -473,10 +451,6 @@ class DataFrame(_Frame, LegacyDataFrame):
             df = self.assign(**{key: value})
 
         self._operation = df.operation
-
-    def __delitem__(self, key):
-        result = self.drop([key], axis=1)
-        self._operation = result.operation
 
     def __setattr__(self, key, value):
         if key == "_operation":
@@ -550,7 +524,7 @@ class DataFrame(_Frame, LegacyDataFrame):
         setattr(cls, name, derived_from(original)(meth))
 
     @derived_from(pd.DataFrame)
-    def applymap(self, func, meta="__no_default__"):
+    def applymap(self, func, meta=no_default):
         return elemwise(M.applymap, self, func, meta=meta)
 
     @derived_from(pd.DataFrame)
@@ -636,7 +610,7 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         op,
         [x.operation if hasattr(x, "operation") else x for x in args],
         kwargs,
-        transform_divisions,
+        _transform_divisions=transform_divisions,
         _meta=meta,
     )
     result = new_dd_collection(operation)
@@ -677,174 +651,3 @@ def _maybe_from_pandas(dfs):
         for df in dfs
     ]
     return dfs
-
-
-def map_partitions(
-    func,
-    *args,
-    meta=no_default,
-    enforce_metadata=True,
-    transform_divisions=True,
-    align_dataframes=True,
-    **kwargs,
-):
-    # from dask.array.core import Array
-    # from dask.blockwise import BlockwiseDep
-
-    # Use legacy map_partitions if any collection inputs
-    # are not supported
-    # dasks = [arg for arg in args if is_dask_collection(arg)]
-    # dasks = [arg for arg in args if isinstance(arg, (LegacyFrame, Array, BlockwiseDep))]
-    if (
-        True
-    ):  # any([not hasattr(d, "operation") or isinstance(d, BlockwiseDep) for d in dasks]):
-        from dask.dataframe.core import map_partitions as mp_legacy
-
-        return mp_legacy(
-            func,
-            *args,
-            meta=meta,
-            enforce_metadata=enforce_metadata,
-            transform_divisions=transform_divisions,
-            align_dataframes=align_dataframes,
-            **kwargs,
-        )
-
-    # name = kwargs.pop("token", None)
-    # parent_meta = kwargs.pop("parent_meta", None)
-
-    # assert callable(func)
-    # if name is not None:
-    #     token = tokenize(meta, *args, **kwargs)
-    # else:
-    #     name = funcname(func)
-    #     token = tokenize(func, meta, *args, **kwargs)
-    # name = f"{name}-{token}"
-
-    # from dask.dataframe.multi import _maybe_align_partitions
-
-    # if align_dataframes:
-    #     args = _maybe_from_pandas(args)
-    #     try:
-    #         args = _maybe_align_partitions(args)
-    #     except ValueError as e:
-    #         raise ValueError(
-    #             f"{e}. If you don't want the partitions to be aligned, and are "
-    #             "calling `map_partitions` directly, pass `align_dataframes=False`."
-    #         ) from e
-
-    # dfs = [df for df in args if isinstance(df, _Frame)]
-    # meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
-    # if parent_meta is None and dfs:
-    #     parent_meta = dfs[0]._meta
-
-    # if meta is no_default:
-    #     # Use non-normalized kwargs here, as we want the real values (not
-    #     # delayed values)
-    #     meta = _emulate(func, *args, udf=True, **kwargs)
-    #     meta_is_emulated = True
-    # else:
-    #     meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-    #     meta_is_emulated = False
-
-    # if all(isinstance(arg, Scalar) for arg in args):
-    #     layer = {
-    #         (name, 0): (
-    #             apply,
-    #             func,
-    #             (tuple, [(arg._name, 0) for arg in args]),
-    #             kwargs,
-    #         )
-    #     }
-    #     graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
-    #     return Scalar(graph, name, meta)
-    # elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-    #     if not meta_is_emulated:
-    #         warnings.warn(
-    #             "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-    #             "Try passing a pandas object as meta or a dict or tuple representing the "
-    #             "(name, dtype) of the columns. In the future the meta you passed will not work.",
-    #             FutureWarning,
-    #         )
-    #     # If `meta` is not a pandas object, the concatenated results will be a
-    #     # different type
-    #     meta = make_meta(_concat([meta]), index=meta_index)
-
-    # # Ensure meta is empty series
-    # meta = make_meta(meta, parent_meta=parent_meta)
-
-    # args2 = []
-    # dependencies = []
-    # for arg in args:
-    #     if isinstance(arg, _Frame):
-    #         args2.append(arg)
-    #         dependencies.append(arg)
-    #         continue
-    #     arg = normalize_arg(arg)
-    #     arg2, collections = unpack_collections(arg)
-    #     if collections:
-    #         args2.append(arg2)
-    #         dependencies.extend(collections)
-    #     else:
-    #         args2.append(arg)
-
-    # kwargs3 = {}
-    # simple = True
-    # for k, v in kwargs.items():
-    #     v = normalize_arg(v)
-    #     v, collections = unpack_collections(v)
-    #     dependencies.extend(collections)
-    #     kwargs3[k] = v
-    #     if collections:
-    #         simple = False
-
-    # if align_dataframes:
-    #     divisions = dfs[0].divisions
-    # else:
-    #     # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
-    #     # use longest divisions found
-    #     divisions = max((d.divisions for d in dfs), key=len)
-
-    # if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-    #     try:
-    #         divisions = func(
-    #             *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
-    #         )
-    #         if isinstance(divisions, pd.Index):
-    #             divisions = methods.tolist(divisions)
-    #     except Exception:
-    #         pass
-    #     else:
-    #         if not valid_divisions(divisions):
-    #             divisions = [None] * (dfs[0].npartitions + 1)
-
-    # if has_keyword(func, "partition_info"):
-    #     partition_info = {
-    #         (i,): {"number": i, "division": division}
-    #         for i, division in enumerate(divisions[:-1])
-    #     }
-
-    #     args2.insert(0, BlockwiseDepDict(partition_info))
-    #     orig_func = func
-
-    #     def func(partition_info, *args, **kwargs):
-    #         return orig_func(*args, **kwargs, partition_info=partition_info)
-
-    # if enforce_metadata:
-    #     dsk = partitionwise_graph(
-    #         apply_and_enforce,
-    #         name,
-    #         *args2,
-    #         dependencies=dependencies,
-    #         _func=func,
-    #         _meta=meta,
-    #         **kwargs3,
-    #     )
-    # else:
-    #     kwargs4 = kwargs if simple else kwargs3
-    #     dsk = partitionwise_graph(
-    #         func, name, *args2, **kwargs4, dependencies=dependencies
-    #     )
-
-    # graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    # return new_dd_object(graph, name, meta, divisions)

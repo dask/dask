@@ -356,7 +356,7 @@ class Elemwise(_PartitionwiseOperation):
     _func: Callable
     _args: list[Any]
     _kwargs: dict
-    _transform_divisions: bool
+    _transform_divisions: bool = True
     _meta: Any = no_default
     _divisions: tuple | None = None
 
