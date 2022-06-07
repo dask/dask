@@ -246,7 +246,6 @@ class Head(_SimpleFrameOperation):
     source: _FrameOperation
     _n: int
     _npartitions: int
-    safe: bool
     _meta: Any = no_default
     _divisions: tuple | None = None
 
@@ -268,18 +267,20 @@ class Head(_SimpleFrameOperation):
         from dask.utils import M
 
         dep = self.source
-
-        head = safe_head if self.safe else M.head
-        if self._npartitions > 1:
+        npartitions = self._npartitions
+        if npartitions <= -1:
+            npartitions = dep.npartitions
+        head = safe_head if npartitions != dep.npartitions else M.head
+        if npartitions > 1:
             name_p = f"head-partial-{self._n}-{dep.name}"
 
             dsk: dict[tuple, Any] = {}
             dep_keys = []
-            for i in range(self._npartitions):
+            for i in range(npartitions):
                 dep_keys.append((dep.name, i))
                 dsk[(name_p, i)] = (M.head, dep_keys[-1], self._n)
 
-            concat = (_concat, [(name_p, i) for i in range(self._npartitions)])
+            concat = (_concat, [(name_p, i) for i in range(npartitions)])
             dsk[(self.name, 0)] = (head, concat, self._n)
         else:
             dep_keys = [(dep.name, 0)]

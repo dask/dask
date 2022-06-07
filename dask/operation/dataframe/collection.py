@@ -12,7 +12,6 @@ import pandas as pd
 from tlz import first
 
 from dask import threaded
-from dask.array.core import Array
 from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection
 from dask.context import globalmethod
 from dask.dataframe import methods
@@ -119,21 +118,6 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def dtype(self):
         return self._meta.dtype
-
-    def __dir__(self):
-        o = set(dir(type(self)))
-        o.update(self.__dict__)
-        if not hasattr(self._meta, "dtype"):
-            o.remove("dtype")  # dtype only in `dir` if available
-        return list(o)
-
-    def __repr__(self):
-        name = self._name if len(self._name) < 10 else self._name[:7] + "..."
-        if hasattr(self._meta, "dtype"):
-            extra = ", dtype=%s" % self._meta.dtype
-        else:
-            extra = ", type=%s" % type(self._meta).__name__
-        return f"ddop.Scalar<{name}{extra}>"
 
     def __array__(self):
         # array interface is required to support pandas instance + Scalar
@@ -258,15 +242,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         """A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)
 
-    @property  # type: ignore
-    @derived_from(pd.DataFrame)
-    def attrs(self):
-        return self._meta.attrs
-
-    @attrs.setter
-    def attrs(self, value):
-        self._meta.attrs = dict(value)
-
     def __dask_graph__(self):
         return self.dask
 
@@ -342,17 +317,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         compute : bool, optional
             Whether to compute the result, default is True.
         """
-        if npartitions <= -1:
-            npartitions = self.npartitions
-        # No need to warn if we're already looking at all partitions
-        safe = npartitions != self.npartitions
-        return self._head(n=n, npartitions=npartitions, compute=compute, safe=safe)
-
-    def _head(self, n, npartitions, compute, safe):
         from dask.operation.dataframe.core import Head
 
-        if npartitions <= -1:
-            npartitions = self.npartitions
         if npartitions > self.npartitions:
             raise ValueError(
                 f"only {self.npartitions} partitions, head received {npartitions}"
@@ -363,42 +329,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 self.operation,
                 n,
                 npartitions,
-                safe,
             )
         )
 
         if compute:
             result = result.compute()
         return result
-
-    # def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
-    #     out = kwargs.get("out", ())
-    #     for x in inputs + out:
-    #         # ufuncs work with 0-dimensional NumPy ndarrays
-    #         # so we don't want to raise NotImplemented
-    #         if isinstance(x, np.ndarray) and x.shape == ():
-    #             continue
-    #         elif not isinstance(
-    #             x, (Number, Scalar, _Frame, Array, pd.DataFrame, pd.Series, pd.Index)
-    #         ):
-    #             return NotImplemented
-
-    #     if method == "__call__":
-    #         if numpy_ufunc.signature is not None:
-    #             return NotImplemented
-    #         if numpy_ufunc.nout > 1:
-    #             # ufuncs with multiple output values
-    #             # are not yet supported for frames
-    #             return NotImplemented
-    #         else:
-    #             return elemwise(numpy_ufunc, *inputs, **kwargs)
-    #     else:
-    #         # ufunc methods are not yet supported for frames
-    #         return NotImplemented
-
-    # @property
-    # def _elemwise(self):
-    #     return elemwise
 
     @classmethod
     def _get_unary_operator(cls, op):
@@ -636,15 +572,12 @@ class DataFrame(_Frame):
                 or callable(v)
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
-                or isinstance(v, Array)
             ):
                 raise TypeError(
                     f"Column assignment doesn't support type {typename(type(v))}"
                 )
             if callable(v):
                 kwargs[k] = v(data)
-            if isinstance(v, Array):
-                raise ValueError
 
             pairs = [k, kwargs[k]]
 

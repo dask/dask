@@ -20,7 +20,7 @@ class MyIOFunc:
         return df[self.columns]
 
 
-def test_creation_operation():
+def test_creation_operation_from_map():
 
     ddf = opdd.from_map(
         MyIOFunc(),
@@ -36,6 +36,22 @@ def test_creation_operation():
         },
         index=[0, 0, 1, 0, 1, 2],
     )
+
+    assert_eq(ddf["A"].compute(), expect["A"])
+    assert_eq(ddf.compute(), expect)
+
+
+def test_creation_operation_from_pandas():
+
+    expect = pd.DataFrame(
+        {
+            "A": [0, 1, 1, 2, 2, 2],
+            "B": [10] * 6,
+        },
+        index=[0, 0, 1, 0, 1, 2],
+    )
+
+    ddf = opdd.from_pandas(expect, 2)
 
     assert_eq(ddf["A"].compute(), expect["A"])
     assert_eq(ddf.compute(), expect)
@@ -57,3 +73,19 @@ def test_creation_fusion():
     # Materialized dict should only have a single (fused) task
     dsk = optimize(ddf.operation).dask.to_dict()
     assert len(dsk) == 1
+
+
+def test_basic():
+    expect = pd.DataFrame(
+        {
+            "A": [0, 1, 1, 2, 2, 2],
+            "B": [10] * 6,
+        },
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    ddf = opdd.from_pandas(expect, 2)
+
+    expect = (expect[expect["A"] > 0][["B"]] - 5).assign(new=1)
+    ddf = (ddf[ddf["A"] > 0][["B"]] - 5).assign(new=1)
+
+    assert_eq(ddf.head(npartitions=-1), expect.head())
