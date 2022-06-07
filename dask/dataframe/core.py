@@ -792,6 +792,12 @@ Dask Name: {name}, {task} tasks"""
         >>> res.dtype
         dtype('float64')
 
+        Here we apply a function to a Series resulting in a Series:
+
+        >>> res = ddf.x.map_partitions(lambda x: len(x)) # ddf.x is a Dask Series Structure
+        >>> res.dtype
+        dtype('int64')
+
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
         can sometimes be expensive, or even fail. To avoid this, you can
