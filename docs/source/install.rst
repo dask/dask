@@ -6,6 +6,9 @@ Dask Installation
 
 .. _Anaconda distribution: https://www.anaconda.com/download/
 
+Dask currently supports Linux, macOS, and Windows. See the :doc:`changelog`
+for comprehensive release notes for each Dask release.
+
 How to Install Dask
 -------------------
 
@@ -14,8 +17,7 @@ Dask installation can happen in a couple of different ways. You can install Dask
 Conda
 -----
 
-If you use the `Anaconda distribution`_,
-Dask installation will occur by default.
+If you use the `Anaconda distribution`_, Dask installation will occur by default.
 You can also install or upgrade Dask using the
 `conda install <https://docs.conda.io/projects/conda/en/latest/commands/install.html>`_ command::
 
