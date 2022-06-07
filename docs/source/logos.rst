@@ -32,6 +32,3 @@ Here are some commonly used Dask icons and logos
 
 .. image:: images/dask_horizontal_on_blue.svg
    :alt: Dask logo to use on a blue background.
-
-.. image:: images/HHMI_Janelia_Color.png
-   :alt: HHMI Janelia logo.
