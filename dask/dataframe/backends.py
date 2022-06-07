@@ -5,6 +5,7 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
@@ -30,6 +31,7 @@ from dask.dataframe.dispatch import (
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -539,6 +541,11 @@ def is_categorical_dtype_pandas(obj):
 @grouper_dispatch.register((pd.DataFrame, pd.Series))
 def get_grouper_pandas(obj):
     return pd.core.groupby.Grouper
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    return pa.Schema.from_pandas(obj)
 
 
 @percentile_lookup.register((pd.Series, pd.Index))
