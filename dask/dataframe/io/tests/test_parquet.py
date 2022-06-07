@@ -4193,5 +4193,5 @@ def test_gpu_write_parquet_simple(tmpdir):
     )
     ddf = dask_cudf.from_cudf(df, 3)
     ddf.to_parquet(fn)
-    got = dask_cudf.read_parquet(fn).compute()
+    got = dask_cudf.read_parquet(fn)
     assert_eq(df, got)
