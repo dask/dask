@@ -136,9 +136,7 @@ def test_repr_html_hlg_layers():
     )
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
     for layer in hg.layers.values():
-        assert (
-            xml.etree.ElementTree.fromstring(layer._repr_html_(hg.layers)) is not None
-        )
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 def annot_map_fn(key):

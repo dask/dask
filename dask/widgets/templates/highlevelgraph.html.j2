@@ -18,7 +18,7 @@
                 {{ type }} with {{ layers | length }} layers and {{ n_outputs }} keys from all layers.
             </p>
             {% for layer in toposort %}
-            {{ layers[layer]._repr_html_(layer_dependencies[layer], layer_index=loop.index, highlevelgraph_key=layer)}}
+            {{ layers[layer]._repr_html_(layer_index=loop.index, highlevelgraph_key=layer, dependencies=layer_dependencies[layer])}}
             {% endfor %}
         </div>
     </div>

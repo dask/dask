@@ -478,7 +478,7 @@ class Layer(Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, dependencies, layer_index="", highlevelgraph_key=""):
+    def _repr_html_(self, layer_index="", highlevelgraph_key="", dependencies=()):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
