@@ -12,12 +12,10 @@ import pandas as pd
 from tlz import first
 
 from dask import threaded
-from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection
-from dask.context import globalmethod
+from dask.base import DaskMethodsMixin, is_dask_collection
 from dask.dataframe import methods
 from dask.dataframe.core import _extract_meta
 from dask.dataframe.dispatch import meta_nonempty
-from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_120,
     is_categorical_dtype,
@@ -103,9 +101,6 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_layers__(self):
         return (self._name,)
 
-    __dask_optimize__ = globalmethod(
-        optimize, key="dataframe_optimize", falsey=dont_optimize
-    )
     __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):
@@ -158,6 +153,18 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(self._meta))}"
             )
+
+    def persist(self, **kwargs):
+        raise NotImplementedError
+
+    def compute(self, **kwargs):
+        from dask.base import compute
+        from dask.operation.dataframe.core import optimize as opt
+
+        new_opt = opt(self.operation)
+        new_df = new_dd_collection(new_opt)
+        (result,) = compute(new_df, traverse=False, **kwargs)
+        return result
 
     @property
     def operation(self):
@@ -254,9 +261,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self._name
 
-    __dask_optimize__ = globalmethod(
-        optimize, key="dataframe_optimize", falsey=dont_optimize
-    )
     __dask_scheduler__ = staticmethod(threaded.get)
 
     def __dask_postcompute__(self):

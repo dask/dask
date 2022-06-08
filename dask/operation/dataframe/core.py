@@ -177,18 +177,6 @@ class _PartitionwiseOperation(_FusableOperation, _FrameOperation):
             dsk[key] = tuple(task)
         return dsk, dep_keys
 
-    def reinitialize(
-        self, replace_dependencies: dict[str, _CollectionOperation], **changes
-    ) -> _PartitionwiseOperation:
-        args = [
-            replace_dependencies[arg.name]
-            if isinstance(arg, _CollectionOperation)
-            else arg
-            for arg in self.args
-        ]
-        _changes = {"args": args, **changes}
-        return replace(self, **_changes)
-
 
 class _SimpleFrameOperation(_FrameOperation):
     """Abstract _SimpleFrameOperation class
@@ -227,8 +215,7 @@ class _SimpleFrameOperation(_FrameOperation):
     def reinitialize(
         self, replace_dependencies: dict[str, _CollectionOperation], **changes
     ) -> _SimpleFrameOperation:
-        _dependencies = {replace_dependencies[dep.name] for dep in self.dependencies}
-        _changes = {"_dependencies": _dependencies, **changes}
+        _changes = {"source": replace_dependencies[self.source.name], **changes}
         return replace(self, **_changes)
 
     def copy(self) -> _SimpleFrameOperation:
@@ -442,6 +429,18 @@ class Elemwise(_PartitionwiseOperation):
 
         return tuple(divisions)
 
+    def reinitialize(
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> _PartitionwiseOperation:
+        args = [
+            replace_dependencies[arg.name]
+            if isinstance(arg, _CollectionOperation)
+            else arg
+            for arg in self.args
+        ]
+        _changes = {"_args": args, **changes}
+        return replace(self, **_changes)
+
     def __hash__(self):
         return hash(self.name)
 
@@ -479,6 +478,18 @@ class ColumnSelection(_PartitionwiseOperation):
     def default_divisions(self) -> tuple:
         return self.source.divisions
 
+    def reinitialize(
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> ColumnSelection:
+        args = [
+            replace_dependencies[arg.name]
+            if isinstance(arg, _CollectionOperation)
+            else arg
+            for arg in self.args
+        ]
+        _changes = {"source": args[0], **changes}
+        return replace(self, **_changes)
+
     def __hash__(self):
         return hash(self.name)
 
@@ -515,6 +526,18 @@ class SeriesSelection(_PartitionwiseOperation):
     @property
     def default_divisions(self) -> tuple:
         return self.source.divisions
+
+    def reinitialize(
+        self, replace_dependencies: dict[str, _CollectionOperation], **changes
+    ) -> SeriesSelection:
+        args = [
+            replace_dependencies[arg.name]
+            if isinstance(arg, _CollectionOperation)
+            else arg
+            for arg in self.args
+        ]
+        _changes = {"source": args[0], "key": args[1], **changes}
+        return replace(self, **_changes)
 
     def __hash__(self):
         return hash(self.name)
