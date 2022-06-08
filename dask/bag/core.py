@@ -69,14 +69,9 @@ if _EMSCRIPTEN:
 
     DEFAULT_GET = local.get_sync
 else:
-    try:
-        from dask import multiprocessing
-    except ImportError:
-        from dask import local
+    from dask import multiprocessing
 
-        DEFAULT_GET = local.get_sync
-    else:
-        DEFAULT_GET = multiprocessing.get
+    DEFAULT_GET = multiprocessing.get
 
 no_default = "__no__default__"
 no_result = type(

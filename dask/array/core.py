@@ -90,14 +90,9 @@ if _EMSCRIPTEN:
 
     DEFAULT_GET = local.get_sync
 else:
-    try:
-        from dask import threaded
-    except ImportError:
-        from dask import local
+    from dask import threaded
 
-        DEFAULT_GET = local.get_sync
-    else:
-        DEFAULT_GET = threaded.get
+    DEFAULT_GET = threaded.get
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 

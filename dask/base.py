@@ -1292,29 +1292,23 @@ named_schedulers: dict[str, SchedulerGetCallable] = {
 }
 
 if not _EMSCRIPTEN:
-    try:
-        from dask import threaded
-    except ImportError:
-        pass
-    else:
-        named_schedulers.update(
-            {
-                "threads": threaded.get,
-                "threading": threaded.get,
-            }
-        )
+    from dask import threaded
 
-    try:
-        from dask import multiprocessing as dask_multiprocessing
-    except ImportError:
-        pass
-    else:
-        named_schedulers.update(
-            {
-                "processes": dask_multiprocessing.get,
-                "multiprocessing": dask_multiprocessing.get,
-            }
-        )
+    named_schedulers.update(
+        {
+            "threads": threaded.get,
+            "threading": threaded.get,
+        }
+    )
+
+    from dask import multiprocessing as dask_multiprocessing
+
+    named_schedulers.update(
+        {
+            "processes": dask_multiprocessing.get,
+            "multiprocessing": dask_multiprocessing.get,
+        }
+    )
 
 
 get_err_msg = """
