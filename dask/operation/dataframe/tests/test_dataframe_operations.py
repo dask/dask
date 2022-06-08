@@ -100,3 +100,11 @@ def test_repartition_divisions():
     ddf = ddf.repartition(divisions=(0, 50, 99))
     assert ddf.divisions == (0, 50, 99)
     assert_eq(ddf.compute(), expect)
+
+
+def test_simple_shuffle():
+    expect = pd.DataFrame({"A": range(100), "B": [0, 1, 2, 3] * 25})
+    ddf = opdd.from_pandas(expect.copy(), 5)
+
+    ddf = ddf.shuffle("B", npartitions=2)
+    assert_eq(ddf.compute().sort_index(), expect)

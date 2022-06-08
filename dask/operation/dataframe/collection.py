@@ -195,6 +195,39 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         elif freq is not None:
             raise NotImplementedError
 
+    def shuffle(
+        self,
+        on,
+        npartitions=None,
+        max_branch=32,
+        shuffle="tasks",
+        ignore_index=False,
+    ):
+        from dask.operation.dataframe.shuffle import ShuffleOnColumns
+
+        # Only support in-memory shuffle for now
+        if shuffle != "tasks":
+            raise NotImplementedError
+
+        # Only support shuffle on list of column names
+        list_like = pd.api.types.is_list_like(on) and not is_dask_collection(on)
+        if not (isinstance(on, str) or list_like):
+            raise NotImplementedError
+        on = [on] if isinstance(on, str) else list(on)
+        nset = set(on)
+        if not (nset & set(self.columns) == nset):
+            raise NotImplementedError
+
+        return new_dd_collection(
+            ShuffleOnColumns(
+                self.operation,
+                on,
+                _npartitions=npartitions,
+                max_branch=max_branch,
+                ignore_index=ignore_index,
+            )
+        )
+
     def persist(self, **kwargs):
         raise NotImplementedError
 
