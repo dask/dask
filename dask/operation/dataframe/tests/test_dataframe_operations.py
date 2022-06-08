@@ -89,3 +89,14 @@ def test_basic():
     ddf = (ddf[ddf["A"] > 0][["B"]] - 5).assign(new=1)
 
     assert_eq(ddf.head(npartitions=-1), expect.head())
+
+
+def test_repartition_divisions():
+    expect = pd.DataFrame({"A": range(100), "B": [0, 1] * 50})
+    ddf = opdd.from_pandas(expect.copy(), 5)
+    expect += 1
+    ddf += 1
+
+    ddf = ddf.repartition(divisions=(0, 50, 99))
+    assert ddf.divisions == (0, 50, 99)
+    assert_eq(ddf.compute(), expect)

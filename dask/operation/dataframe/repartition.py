@@ -1,20 +1,20 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from functools import cached_property
 from pprint import pformat
 from typing import Any
 
-import pandas as pd
 from tlz import unique
 
 from dask.base import tokenize
 from dask.core import keys_in_tasks
-from dask.dataframe.operation.core import (
+from dask.operation.dataframe.collection import _Frame, new_dd_collection
+from dask.operation.dataframe.core import (
     FrameCreation,
     PartitionKey,
-    _Frame,
     _FrameOperation,
     _SimpleFrameOperation,
-    new_dd_collection,
 )
 from dask.utils import is_dataframe_like, is_series_like
 
@@ -54,8 +54,6 @@ class RepartitionDivisions(_SimpleFrameOperation):
         dep_keys = set()
         for v in dsk.values():
             dep_keys |= keys_in_tasks(keys, [v])
-        dep_keys = {keys_in_tasks(keys, [v]) for k, v in dsk.items()}
-
         return dsk, {self.source: list(dep_keys)}
 
     def __hash__(self):
@@ -239,68 +237,3 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
             d[(out2, j - 1)] = (methods.concat, tmp)
         j += 1
     return d
-
-
-def repartition_freq(df, freq=None):
-    """Repartition a timeseries dataframe by a new frequency"""
-    from dask.dataframe import methods
-
-    if not isinstance(df.divisions[0], pd.Timestamp):
-        raise TypeError("Can only repartition on frequency for timeseries")
-
-    freq = _map_freq_to_period_start(freq)
-
-    try:
-        start = df.divisions[0].ceil(freq)
-    except ValueError:
-        start = df.divisions[0]
-    divisions = methods.tolist(
-        pd.date_range(start=start, end=df.divisions[-1], freq=freq)
-    )
-    if not len(divisions):
-        divisions = [df.divisions[0], df.divisions[-1]]
-    else:
-        divisions.append(df.divisions[-1])
-        if divisions[0] != df.divisions[0]:
-            divisions = [df.divisions[0]] + divisions
-
-    return df.repartition(divisions=divisions)
-
-
-def _map_freq_to_period_start(freq):
-    """Ensure that the frequency pertains to the **start** of a period.
-
-    If e.g. `freq='M'`, then the divisions are:
-        - 2021-31-1 00:00:00 (start of February partition)
-        - 2021-2-28 00:00:00 (start of March partition)
-        - ...
-
-    but this **should** be:
-        - 2021-2-1 00:00:00 (start of February partition)
-        - 2021-3-1 00:00:00 (start of March partition)
-        - ...
-
-    Therefore, we map `freq='M'` to `freq='MS'` (same for quarter and year).
-    """
-
-    if not isinstance(freq, str):
-        return freq
-
-    offset = pd.tseries.frequencies.to_offset(freq)
-    offset_type_name = type(offset).__name__
-
-    if not offset_type_name.endswith("End"):
-        return freq
-
-    new_offset = offset_type_name[: -len("End")] + "Begin"
-    try:
-        new_offset_type = getattr(pd.tseries.offsets, new_offset)
-        if "-" in freq:
-            _, anchor = freq.split("-")
-            anchor = "-" + anchor
-        else:
-            anchor = ""
-        n = str(offset.n) if offset.n != 1 else ""
-        return f"{n}{new_offset_type._prefix}{anchor}"
-    except AttributeError:
-        return freq

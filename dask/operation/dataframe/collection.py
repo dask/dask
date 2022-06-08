@@ -154,6 +154,47 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"{typename(type(self._meta))}"
             )
 
+    def repartition(
+        self,
+        divisions=None,
+        npartitions=None,
+        partition_size=None,
+        freq=None,
+        force=False,
+    ):
+        from dask.operation.dataframe.repartition import repartition
+
+        if isinstance(divisions, int):
+            npartitions = divisions
+            divisions = None
+        if isinstance(divisions, str):
+            partition_size = divisions
+            divisions = None
+        if (
+            sum(
+                [
+                    partition_size is not None,
+                    divisions is not None,
+                    npartitions is not None,
+                    freq is not None,
+                ]
+            )
+            != 1
+        ):
+            raise ValueError(
+                "Please provide exactly one of ``npartitions=``, ``freq=``, "
+                "``divisions=``, ``partition_size=`` keyword arguments"
+            )
+
+        if partition_size is not None:
+            raise NotImplementedError
+        elif npartitions is not None:
+            raise NotImplementedError
+        elif divisions is not None:
+            return repartition(self, divisions, force=force)
+        elif freq is not None:
+            raise NotImplementedError
+
     def persist(self, **kwargs):
         raise NotImplementedError
 
@@ -775,18 +816,26 @@ for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
 
 def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
     from dask.dataframe.core import handle_out
-    from dask.dataframe.multi import _maybe_align_partitions
     from dask.operation.dataframe.core import Elemwise
 
-    args = _maybe_from_pandas(args)
-
-    args = _maybe_align_partitions(args)
+    # TODO: Handle division alignment and broadcasting!
+    convert = [
+        True
+        for arg in args
+        if (is_series_like(arg) or is_dataframe_like(arg))
+        and not is_dask_collection(arg)
+    ]
+    if convert:
+        raise NotImplementedError("Cannot coerce from Pandas yet")
     dasks = [arg for arg in args if is_dask_collection(arg)]
-
     if any([not hasattr(x, "operation") for x in dasks]):
-        raise ValueError
+        raise NotImplementedError("Cannot intermingle operation and legacy collections")
+    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    divisions = dfs[0].divisions
+    if not all(df.divisions == divisions for df in dfs):
+        raise NotImplementedError("Cannot broadcast or align partitions yet")
 
-    # TODO: Test division alignment and handle Array cleanup
+    # TODO: Handle "Array" input/cleanup
 
     operation = Elemwise(
         op,
@@ -821,18 +870,6 @@ def new_dd_collection(operation):
 def has_abstract_type(x):
     """Does this object have a _Frame equivalent?"""
     return get_operation_type(x) is not Scalar
-
-
-def _maybe_from_pandas(dfs):
-    from dask.dataframe.io import from_pandas
-
-    dfs = [
-        from_pandas(df, 1, use_operation_api=True)
-        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
-        else df
-        for df in dfs
-    ]
-    return dfs
 
 
 def _emulate(func, *args, udf=False, **kwargs):
