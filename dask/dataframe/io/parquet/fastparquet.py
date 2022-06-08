@@ -429,6 +429,7 @@ class FastParquetEngine(Engine):
                     paths = [
                         path for path in paths if path.endswith(parquet_file_extension)
                     ]
+                    fns = [fn for fn in fns if fn.endswith(parquet_file_extension)]
                     if len0 and paths == []:
                         raise ValueError(
                             "No files satisfy the `parquet_file_extension` criteria "
@@ -535,13 +536,11 @@ class FastParquetEngine(Engine):
             ) = _parse_pandas_metadata(pandas_md)
             #  auto-ranges should not be created by fastparquet
             column_names.extend(pf.cats)
-
         else:
             index_names = []
             column_names = pf.columns + list(pf.cats)
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
-
         if index is None and len(index_names) > 0:
             if len(index_names) == 1 and index_names[0] is not None:
                 index = index_names[0]
