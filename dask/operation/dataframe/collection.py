@@ -515,7 +515,7 @@ class DataFrame(_Frame):
         )
 
     def __getitem__(self, key):
-        from dask.operation.dataframe.core import ColumnSelection, SeriesSelection
+        from dask.operation.dataframe.selection import ColumnSelection, SeriesSelection
 
         if np.isscalar(key) or isinstance(key, (tuple, str)):
 
