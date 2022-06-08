@@ -147,7 +147,7 @@ messy situations in everyday problems.
 
    array.rst
    bag.rst
-   dataframe.rst
+   DataFrame <dataframe.rst>
    delayed.rst
    futures.rst
    deploying.rst

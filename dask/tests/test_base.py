@@ -255,6 +255,16 @@ def test_tokenize_object():
             normalize_token(o)
 
 
+def test_tokenize_function_cloudpickle():
+    a, b = (lambda x: x, lambda x: x)
+    # No error by default
+    tokenize(a)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
+            tokenize(b)
+
+
 def test_tokenize_callable():
     def my_func(a, b, c=1):
         return a + b + c
@@ -1009,6 +1019,7 @@ def test_compute_nested():
 )
 def test_visualize():
     pytest.importorskip("graphviz")
+    pytest.importorskip("ipycytoscape")
     with tmpdir() as d:
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, "mydask"))
@@ -1027,6 +1038,20 @@ def test_visualize():
         x = Tuple(dsk, ["a", "b", "c"])
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
+
+        x = Tuple(dsk, ["a", "b", "c"])
+        visualize(x, filename=os.path.join(d, "cyt"), engine="cytoscape")
+        assert os.path.exists(os.path.join(d, "cyt.html"))
+
+        visualize(x, filename=os.path.join(d, "cyt2.html"), engine="ipycytoscape")
+        assert os.path.exists(os.path.join(d, "cyt2.html"))
+
+        with dask.config.set(visualization__engine="cytoscape"):
+            visualize(x, filename=os.path.join(d, "cyt3.html"))
+            assert os.path.exists(os.path.join(d, "cyt3.html"))
+
+        with pytest.raises(ValueError, match="not-real"):
+            visualize(x, engine="not-real")
 
         # To see if visualize() works when the filename parameter is set to None
         # If the function raises an error, the test will fail

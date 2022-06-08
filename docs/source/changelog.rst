@@ -1,6 +1,102 @@
 Changelog
 =========
 
+.. _v2022.05.2:
+
+2022.05.2
+---------
+
+Released on May 26, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Add a dispatch for  non-pandas ``Grouper`` objects and use it in ``GroupBy`` (:pr:`9074`) `brandon-b-miller`_
+- Error if ``read_parquet`` & ``to_parquet`` files intersect (:pr:`9124`) `Jim Crist-Harif`_
+- Visualize task graphs using ``ipycytoscape`` (:pr:`9091`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fix various typos (:pr:`9126`) `Ryan Russell`_
+
+Maintenance
+^^^^^^^^^^^
+- Fix flaky ``test_filter_nonpartition_columns`` (:pr:`9127`) `Pavithra Eswaramoorthy`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.08`` (:pr:`9120`)
+- Include ``conftest.py``` in sdists (:pr:`9115`) `Ben Beasley`_
+
+
+.. _v2022.05.1:
+
+2022.05.1
+---------
+
+Released on May 24, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``DataFrame.from_dict`` classmethod (:pr:`9017`) `Matthew Powers`_
+- Add ``from_map`` function to Dask DataFrame (:pr:`8911`) `Richard (Rick) Zamora`_
+
+Enhancements
+^^^^^^^^^^^^
+- Improve ``to_parquet`` error for appended divisions overlap (:pr:`9102`) `Jim Crist-Harif`_
+- Enabled user-defined process-initializer functions (:pr:`9087`) `ParticularMiner`_
+- Mention ``align_dataframes=False`` option in ``map_partitions`` error (:pr:`9075`) `Gabe Joseph`_
+- Add kwarg ``enforce_ndim`` to ``dask.array.map_blocks()`` (:pr:`8865`) `ParticularMiner`_
+- Implement ``Series.GroupBy.fillna`` / ``DataFrame.GroupBy.fillna`` methods (:pr:`8869`) `Pavithra Eswaramoorthy`_
+- Allow ``fillna`` with Dask DataFrame (:pr:`8950`) `Pavithra Eswaramoorthy`_
+- Update error message for assignment with 1-d dask array (:pr:`9036`) `Pavithra Eswaramoorthy`_
+- Collection Protocol (:pr:`8674`) `Doug Davis`_
+- Patch around ``pandas`` ``ArrowStringArray`` pickling (:pr:`9024`) `Jim Crist-Harif`_
+- Band-aid for ``compute_as_if_collection`` (:pr:`8998`) `Ian Rose`_
+- Add ``p2p`` shuffle option (:pr:`8836`) `Matthew Rocklin`_
+
+Bug Fixes
+^^^^^^^^^
+- Fixup column projection with no columns (:pr:`9106`) `Jim Crist-Harif`_
+- Blockwise cull NumPy ``dtype`` (:pr:`9100`) `Ian Rose`_
+- Fix column-projection bug in ``from_map`` (:pr:`9078`) `Richard (Rick) Zamora`_
+- Prevent nulls in index for non-numeric dtypes (:pr:`8963`) `Jorge López`_
+- Fix ``is_monotonic`` methods for more than 8 partitions (:pr:`9019`) `Julia Signell`_
+- Handle enumerate and generator inputs to ``from_map`` (:pr:`9066`) `Richard (Rick) Zamora`_
+- Revert ``is_dask_collection``; back to previous implementation (:pr:`9062`) `Doug Davis`_
+- Fix ``Blockwise.clone`` does not handle iterable literal arguments correctly (:pr:`8979`) `JSKenyon`_
+- Array ``setitem`` hardmask (:pr:`9027`) `David Hassell`_
+- Fix overlapping divisions error on append (:pr:`8997`) `Ian Rose`_
+
+Deprecations
+^^^^^^^^^^^^
+- Add pre-deprecation warnings for  ``read_parquet`` kwargs ``chunksize`` and ``aggregate_files`` (:pr:`9052`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Document ``map_partitions`` handling of ``args`` vs ``kwargs``, usage of ``partition_info`` (:pr:`9084`) `Charles Blackmon-Luca`_
+- Update custom collection documentation (leverage new collection protocol) (:pr:`9097`) `Doug Davis`_
+- Better SEO for docs on creating and storing Dask DataFrames (:pr:`9098`) `Sarah Charlotte Johnson`_
+- Clarify chunking in ``imread`` docstring (:pr:`9082`) `Genevieve Buckley`_
+- Rearrange docs TOC (:pr:`9001`) `Matthew Rocklin`_
+- Corrected ``map_blocks()`` docstring for kwarg ``enforce_ndim`` (:pr:`9071`) `ParticularMiner`_
+- Update DataFrame SQL docs references to other libraries (:pr:`9077`) `Charles Blackmon-Luca`_
+- Update page on creating and storing Dask DataFrames (:pr:`9025`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Include ``NUMPY_LICENSE.txt`` in license files (:pr:`9113`) `Ben Beasley`_
+- Increase retries when installing nightly ``pandas`` (:pr:`9103`) `James Bourbeau`_
+- Force nightly ``pyarrow`` in the upstream build (:pr:`9095`) `Joris Van den Bossche`_
+- Improve object handling & testing of ``ensure_unicode`` (:pr:`9059`) `John A Kirkham`_
+- Force nightly ``pyarrow`` in the upstream build (:pr:`8993`) `Joris Van den Bossche`_
+- Additional check on ``is_dask_collection`` (:pr:`9054`) `Doug Davis`_
+- Update ``ensure_bytes`` (:pr:`9050`) `John A Kirkham`_
+- Add end of file pre-commit hook (:pr:`9045`) `James Bourbeau`_
+- Add ``codespell`` pre-commit hook (:pr:`9040`) `James Bourbeau`_
+- Remove the HDFS tests (:pr:`9039`) `Jim Crist-Harif`_
+- Fix flaky ``test_reductions_2D`` (:pr:`9037`) `Jim Crist-Harif`_
+- Prevent codecov from notifying of failure too soon (:pr:`9031`) `Jim Crist-Harif`_
+- Only test on Python 3.9 on macos (:pr:`9029`) `Jim Crist-Harif`_
+- Update ``to_timedelta`` default unit (:pr:`9010`) `Pavithra Eswaramoorthy`_
+
+
 .. _v2022.05.0:
 
 2022.05.0
@@ -5506,3 +5602,5 @@ Other
 .. _`Jorge López`: https://github.com/jorloplaz
 .. _`Cheun Hong`: https://github.com/cheunhong
 .. _`Eray Aslan`: https://github.com/erayaslan
+.. _`Ben Beasley`: https://github.com/musicinmybrain
+.. _`Ryan Russell`: https://github.com/ryanrussell
