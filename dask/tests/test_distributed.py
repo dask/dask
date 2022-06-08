@@ -8,10 +8,10 @@ import sys
 from functools import partial
 from operator import add
 
-from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
-from distributed.utils_test import loop  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, varying
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
 
 import dask
 import dask.bag as db
@@ -374,11 +374,6 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-
-    # TODO: this configuration is flaky on osx in CI
-    # See https://github.com/dask/dask/issues/8816
-    if from_futures and sys.platform == "darwin":
-        pytest.xfail("This test sometimes fails on osx in CI")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 

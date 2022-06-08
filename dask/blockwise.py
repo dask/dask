@@ -303,7 +303,7 @@ def blockwise(
     ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
     allowing for collections it can accept BlockwiseDep instances, which allows for lazy
     evaluation of arguments to ``func`` which might be different for different
-    chunks/paritions.
+    chunks/partitions.
 
     See Also
     --------
@@ -1171,7 +1171,7 @@ def make_blockwise_graph(
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
+            # of to_serialize if we know that are no embedded
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {

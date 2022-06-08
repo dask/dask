@@ -35,6 +35,7 @@ For different computations you may find better performance with particular sched
 This document helps you understand how to choose between and configure different schedulers,
 and provides guidelines on when one might be more appropriate.
 
+.. _threaded-scheduler:
 
 Local Threads
 -------------
