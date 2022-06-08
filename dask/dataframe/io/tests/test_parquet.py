@@ -3851,18 +3851,27 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-def test_extra_file(tmpdir, engine):
+@pytest.mark.parametrize("partition_on", ("b", None))
+def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    df = df.assign(b=df.b.astype("category"))
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmpdir, engine=engine, write_metadata_file=True)
+    ddf.to_parquet(
+        tmpdir,
+        engine=engine,
+        write_metadata_file=True,
+        partition_on=partition_on,
+    )
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # For "fastparquet" and "pyarrow", we can pass the
     # expected file extension, or avoid checking file extensions
@@ -3884,7 +3893,9 @@ def test_extra_file(tmpdir, engine):
         **_parquet_file_extension(".parquet"),
         calculate_divisions=True,
     )
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # Should Work (with FutureWarning)
     with pytest.warns(FutureWarning, match="require_extension is deprecated"):
@@ -3894,7 +3905,6 @@ def test_extra_file(tmpdir, engine):
             **_parquet_file_extension(".parquet", legacy=True),
             calculate_divisions=True,
         )
-        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):

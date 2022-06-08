@@ -23,6 +23,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - pyspark
   # resolver was pulling in old versions, so hard-coding floor
   # https://github.com/dask/dask/pull/8505
   - tiledb>=2.5.0
