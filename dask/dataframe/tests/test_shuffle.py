@@ -1364,6 +1364,29 @@ def test_sort_values(nelem, by, ascending):
     dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
+def test_sort_values_datetime():
+    df = pd.DataFrame({"ts": pd.date_range("2020-01-01", "2020-05-01", tz="UTC")})
+    ddf = dd.from_pandas(df, npartitions=10)
+    df_s = df.sort_values("ts")
+    ddf_s = ddf.sort_values("ts")
+    assert_eq(df_s, ddf_s)
+
+    dts1 = pd.to_datetime(
+        [
+            "2022-04-28",
+            "2022-04-24",
+            "2022-04-25",
+            "2022-04-26",
+            "2022-04-27",
+        ],
+    )
+    df1 = pd.DataFrame(dict(ts=dts1))
+    df1_s = df1.sort_values("ts")
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf1_s = ddf1.sort_values(by="ts")
+    assert_eq(df1_s, ddf1_s)
+
+
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])
 @pytest.mark.parametrize("by", [["a", "b"], ["b", "a"]])
 @pytest.mark.parametrize("nelem", [10, 500])
