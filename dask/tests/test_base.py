@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import inspect
 import os
 import subprocess
 import sys
@@ -1539,3 +1540,49 @@ def test_compute_as_if_collection_low_level_task_graph():
     )[0]
     assert optimized
     da.utils.assert_eq(x, result)
+
+
+# A function designed to be run in a subprocess with sys.platform patched.
+# This allows for checking for different default schedulers depending on the
+# platform, particularly emscripten
+def check_default_scheduler(module, collection, expected, platform):
+    from unittest import mock
+
+    with mock.patch("sys.platform", platform):
+        import importlib
+
+        if expected == "sync":
+            from dask.local import get_sync as get
+        elif expected == "threads":
+            from dask.threaded import get
+        elif expected == "processes":
+            from dask.multiprocessing import get
+
+        mod = importlib.import_module(module)
+
+        assert getattr(mod, collection).__dask_scheduler__ == get
+
+
+@pytest.mark.parametrize(
+    "params",
+    (
+        "'dask.dataframe', '_Frame', 'sync', 'emscripten'",
+        f"'dask.dataframe', '_Frame', 'threads', '{sys.platform}'",
+        "'dask.array', 'Array', 'sync', 'emscripten'",
+        f"'dask.array', 'Array', 'threads', '{sys.platform}'",
+        "'dask.bag', 'Bag', 'sync', 'emscripten'",
+        f"'dask.bag', 'Bag', 'processes', '{sys.platform}'",
+    ),
+)
+def test_emscripten_default_scheduler(params):
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                inspect.getsource(check_default_scheduler)
+                + f"check_default_scheduler({params})\n"
+            ),
+        ]
+    )
+    proc.check_returncode()

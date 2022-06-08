@@ -5,7 +5,7 @@ from warnings import catch_warnings, simplefilter, warn
 
 try:
     import psutil
-except ImportError:
+except (ImportError, NotImplementedError):
     psutil = None
 
 import fsspec.implementations.local
