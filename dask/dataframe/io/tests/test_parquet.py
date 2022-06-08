@@ -761,6 +761,25 @@ def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
     assert set(df.b.cat.categories) == {"x", "y", "z"}
 
 
+def test_partition_parallel_metadata(tmpdir, engine):
+    # Check that parallel metadata collection works
+    # for hive-partitioned data
+    tmp = str(tmpdir)
+    d = pd.DataFrame(
+        {
+            "a": np.random.rand(50),
+            "b": np.random.choice(["x", "y", "z"], size=50),
+            "c": np.random.choice(["x", "y", "z"], size=50),
+        }
+    )
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=["b"], engine=engine, write_metadata_file=False)
+    df = dd.read_parquet(
+        tmp, engine=engine, calculate_divisions=True, metadata_task_size=1
+    )
+    assert set(df.b.cat.categories) == {"x", "y", "z"}
+
+
 def test_partition_on_cats_2(tmpdir, engine):
     tmp = str(tmpdir)
     d = pd.DataFrame(
@@ -4158,3 +4177,26 @@ def test_deprecate_gather_statistics(tmp_path, engine):
             gather_statistics=True,
         )
     assert_eq(out, df)
+
+
+@pytest.mark.gpu
+def test_gpu_write_parquet_simple(tmpdir):
+    fn = str(tmpdir)
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+    from dask.dataframe.dispatch import pyarrow_schema_dispatch
+
+    @pyarrow_schema_dispatch.register((cudf.DataFrame,))
+    def get_pyarrow_schema_cudf(obj):
+        return obj.to_arrow().schema
+
+    df = cudf.DataFrame(
+        {
+            "a": ["abc", "def"],
+            "b": ["a", "z"],
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 3)
+    ddf.to_parquet(fn)
+    got = dask_cudf.read_parquet(fn)
+    assert_eq(df, got)

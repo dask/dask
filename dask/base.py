@@ -1061,12 +1061,19 @@ def _normalize_function(func: Callable) -> tuple | str | bytes:
                 return result
         except Exception:
             pass
-        try:
-            import cloudpickle
+        if not config.get("tokenize.ensure-deterministic"):
+            try:
+                import cloudpickle
 
-            return cloudpickle.dumps(func, protocol=4)
-        except Exception:
-            return str(func)
+                return cloudpickle.dumps(func, protocol=4)
+            except Exception:
+                return str(func)
+        else:
+            raise RuntimeError(
+                f"Function {str(func)} may not be deterministically hashed by "
+                "cloudpickle. See: https://github.com/cloudpipe/cloudpickle/issues/385 "
+                "for more information."
+            )
 
 
 def normalize_dataclass(obj):

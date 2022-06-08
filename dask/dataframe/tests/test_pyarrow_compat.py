@@ -25,10 +25,20 @@ def randstr(i):
     )
 
 
-@pytest.mark.parametrize("length", [6, 8, 12, 17])
+@pytest.mark.parametrize("length", [6, 8, 12, 20])
 @pytest.mark.parametrize(
     "slc",
-    [slice(None), slice(0, 5), slice(2), slice(2, 5), slice(2, None, 2), slice(0, 0)],
+    [
+        slice(None),
+        slice(0, 5),
+        slice(2),
+        slice(2, 5),
+        slice(2, None, 2),
+        slice(0, 0),
+        slice(7, 10),
+        slice(7, 19),
+        slice(15, 19),
+    ],
 )
 @pytest.mark.parametrize("has_mask", [True, False])
 def test_roundtrip_stringarray(length, slc, has_mask):
@@ -51,7 +61,7 @@ def test_roundtrip_stringarray(length, slc, has_mask):
     assert bytes(data) == expected_data
 
     if mask is not None:
-        assert len(mask) == math.ceil(nitems / 8)
+        assert len(mask) == math.ceil((nitems + offset) / 8)
         assert x.offset % 8 == offset
 
     # Test rebuilding from components works

@@ -11,6 +11,7 @@ from packaging.version import parse as parse_version
 
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
@@ -512,7 +513,7 @@ class ArrowDatasetEngine(Engine):
     ):
         if schema == "infer" or isinstance(schema, dict):
             # Start with schema from _meta_nonempty
-            inferred_schema = pa.Schema.from_pandas(
+            inferred_schema = pyarrow_schema_dispatch(
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
@@ -1186,6 +1187,7 @@ class ArrowDatasetEngine(Engine):
             "aggregation_depth": aggregation_depth,
             "chunksize": chunksize,
             "partitions": partitions,
+            "dataset_options": kwargs["dataset"],
         }
 
         # Main parts/stats-construction
@@ -1261,6 +1263,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups = dataset_info_kwargs["split_row_groups"]
         gather_statistics = dataset_info_kwargs["gather_statistics"]
         partitions = dataset_info_kwargs["partitions"]
+        dataset_options = dataset_info_kwargs["dataset_options"]
 
         # Make sure we are processing a non-empty list
         if not isinstance(files_or_frags, list):
@@ -1285,6 +1288,7 @@ class ArrowDatasetEngine(Engine):
                 pa_ds.dataset(
                     files_or_frags,
                     filesystem=fs,
+                    **dataset_options,
                 ).get_fragments()
             )
         else:
