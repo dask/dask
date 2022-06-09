@@ -6,12 +6,25 @@ import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
 from pandas.core.window import Rolling as pd_Rolling
 
+from dask.array.core import normalize_arg
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict
 from dask.dataframe import methods
-from dask.dataframe.core import _Frame, no_default
+from dask.dataframe.core import (
+    Scalar,
+    _Frame,
+    _get_divisions_map_partitions,
+    _get_meta_map_partitions,
+    _maybe_from_pandas,
+    apply_and_enforce,
+    new_dd_object,
+    no_default,
+    partitionwise_graph,
+)
+from dask.dataframe.multi import _maybe_align_partitions
+from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, derived_from, funcname, has_keyword
+from dask.utils import M, apply, derived_from, funcname, has_keyword
 
 CombinedOutput = type("CombinedOutput", (tuple,), {})
 
@@ -156,20 +169,6 @@ def map_overlap(
         name = funcname(func)
         token = tokenize(func, meta, *args, **kwargs)
     name = f"{name}-{token}"
-
-    from dask.array.core import normalize_arg
-    from dask.dataframe.core import (
-        Scalar,
-        _get_divisions_map_partitions,
-        _get_meta_map_partitions,
-        _maybe_from_pandas,
-        apply_and_enforce,
-        new_dd_object,
-        partitionwise_graph,
-    )
-    from dask.dataframe.multi import _maybe_align_partitions
-    from dask.delayed import unpack_collections
-    from dask.utils import apply
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
