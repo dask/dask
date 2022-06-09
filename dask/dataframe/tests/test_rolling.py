@@ -106,7 +106,7 @@ def test_map_overlap_names():
     diff = res3.dask.keys() - res.dask.keys()
     assert len(diff) == npartitions
 
-    res4 = ddf.map_overlap(shifted_sum, 0, 3, 3, 0, c=2)
+    res4 = ddf.map_overlap(shifted_sum, 3, 0, 0, 3, c=2)
     assert res4._name != res._name
 
 

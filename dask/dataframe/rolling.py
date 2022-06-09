@@ -167,10 +167,10 @@ def map_overlap(
 
     assert callable(func)
     if name is not None:
-        token = tokenize(meta, *args, **kwargs)
+        token = tokenize(meta, before, after, *args, **kwargs)
     else:
         name = funcname(func)
-        token = tokenize(func, meta, *args, **kwargs)
+        token = tokenize(func, meta, before, after, *args, **kwargs)
     name = f"{name}-{token}"
 
     if align_dataframes:
