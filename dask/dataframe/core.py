@@ -891,8 +891,6 @@ Dask Name: {name}, {task} tasks"""
 
         5. Trim ``after`` rows from the end of all but the last partition.
 
-        Note that the index and divisions are assumed to remain unchanged.
-
         Examples
         --------
         Given a DataFrame, Series, or Index, such as:
