@@ -1542,13 +1542,14 @@ def test_compute_as_if_collection_low_level_task_graph():
     da.utils.assert_eq(x, result)
 
 
-# A function designed to be run in a subprocess with sys.platform patched.
-# This allows for checking for different default schedulers depending on the
-# platform, particularly emscripten
-def check_default_scheduler(module, collection, expected, platform):
+# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# patched. This allows for checking for different default schedulers depending on the
+# platform. One might prefer patching `sys.platform` for a more direct test, but that
+# causes problems in other libraries.
+def check_default_scheduler(module, collection, expected, emscripten):
     from unittest import mock
 
-    with mock.patch("sys.platform", platform):
+    with mock.patch("dask.compatibility._EMSCRIPTEN", emscripten):
         import importlib
 
         if expected == "sync":
@@ -1566,12 +1567,12 @@ def check_default_scheduler(module, collection, expected, platform):
 @pytest.mark.parametrize(
     "params",
     (
-        "'dask.dataframe', '_Frame', 'sync', 'emscripten'",
-        f"'dask.dataframe', '_Frame', 'threads', '{sys.platform}'",
-        "'dask.array', 'Array', 'sync', 'emscripten'",
-        f"'dask.array', 'Array', 'threads', '{sys.platform}'",
-        "'dask.bag', 'Bag', 'sync', 'emscripten'",
-        f"'dask.bag', 'Bag', 'processes', '{sys.platform}'",
+        "'dask.dataframe', '_Frame', 'sync', True",
+        "'dask.dataframe', '_Frame', 'threads', False",
+        "'dask.array', 'Array', 'sync', True",
+        "'dask.array', 'Array', 'threads', False",
+        "'dask.bag', 'Bag', 'sync', True",
+        "'dask.bag', 'Bag', 'processes', False",
     ),
 )
 def test_emscripten_default_scheduler(params):
