@@ -6525,9 +6525,9 @@ def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
         meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
         meta_is_emulated = False
 
-    if not (
-        has_parallel_type(meta) or is_arraylike(meta) and meta.shape
-    ) and not all(isinstance(arg, Scalar) for arg in args):
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not all(
+        isinstance(arg, Scalar) for arg in args
+    ):
         if not meta_is_emulated:
             warnings.warn(
                 "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "
