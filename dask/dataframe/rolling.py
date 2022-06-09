@@ -85,6 +85,7 @@ def overlap_chunk(func, before, after, *args, **kwargs):
 
 def map_overlap(
     func,
+    df,
     before,
     after,
     *args,
@@ -103,6 +104,7 @@ def map_overlap(
         the special ``partition_info`` keyword argument, it will recieve
         information on the partition's relative location within the
         dataframe.
+    df: dd.DataFrame, dd.Series
     args, kwargs :
         Positional and keyword arguments to pass to the function.
         Positional arguments are computed on a per-partition basis, while
@@ -142,6 +144,7 @@ def map_overlap(
     --------
     dd.DataFrame.map_overlap
     """
+    args = tuple((df,)) + args
     dfs = [df for df in args if isinstance(df, _Frame)]
 
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
@@ -502,9 +505,9 @@ class Rolling:
             after = 0
         return map_overlap(
             self.pandas_rolling_method,
+            self.obj,
             before,
             after,
-            self.obj,
             rolling_kwargs,
             method_name,
             *args,

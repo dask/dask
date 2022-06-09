@@ -958,7 +958,7 @@ Dask Name: {name}, {task} tasks"""
         """
         from dask.dataframe.rolling import map_overlap
 
-        return map_overlap(func, before, after, self, *args, **kwargs)
+        return map_overlap(func, self, before, after, *args, **kwargs)
 
     def memory_usage_per_partition(self, index=True, deep=False):
         """Return the memory usage of each partition
