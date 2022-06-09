@@ -240,4 +240,4 @@ the Apache Parquet format for Python:
    df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
 
 
-See :ref:`dataframe.parquet` for more on Dask Dataframe and Parquet.
+See :ref:`dataframe.parquet` for more details.

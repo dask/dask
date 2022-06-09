@@ -7,12 +7,12 @@ Dask Installation
 .. _Anaconda distribution: https://www.anaconda.com/download/
 
 Dask currently supports Linux, macOS, and Windows. See the :doc:`changelog`
-for comprehensive release notes for each Dask release.
+for comprehensive release notes for each Dask version.
 
 How to Install Dask
 -------------------
 
-Dask installation can happen in a couple of different ways. You can install Dask with ``conda``, with ``pip``, or install from source.
+Dask installation can happen in a few different ways. You can install Dask with ``conda``, with ``pip``, or install from source.
 
 Conda
 -----
@@ -63,18 +63,6 @@ We also maintain other dependency sets for different subsets of functionality::
 We have these options so that users of the lightweight core Dask scheduler
 aren't required to download the more exotic dependencies of the collections
 (Numpy, pandas, Tornado, etc.).
-
-Conda install versus pip install
---------------------------------
-
-Briefly, `Pip <https://pip.pypa.io/en/stable/>`_ is a package installer for
-Python while `conda <https://conda.io/docs/>`_ is a cross platform package
-and environment management system. Though there is much overlap between the
-functionality of these two tools, they have a number of key differences.
-For many Python users, the choice is less about whether one tool is better,
-and more about when to use ``pip`` versus ``conda``.
-For a more comprehensive overview on this topic, see the blog post from Anaconda
-`Understanding Conda and Pip <https://www.anaconda.com/blog/understanding-conda-and-pip>`_.
 
 Install from Source
 -------------------
