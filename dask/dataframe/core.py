@@ -6411,7 +6411,7 @@ def map_partitions(
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
-    if _is_only_scalar(args):
+    if all(isinstance(arg, Scalar) for arg in args):
         layer = {
             (name, 0): (
                 apply,
@@ -6511,10 +6511,6 @@ def _get_divisions_map_partitions(
     return divisions
 
 
-def _is_only_scalar(args):
-    return all(isinstance(arg, Scalar) for arg in args)
-
-
 def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
     """
     Helper to generate metadata for map_partitions and map_overlap output.
@@ -6533,7 +6529,7 @@ def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
 
     if not (
         has_parallel_type(meta) or is_arraylike(meta) and meta.shape
-    ) and not _is_only_scalar(args):
+    ) and not all(isinstance(arg, Scalar) for arg in args):
         if not meta_is_emulated:
             warnings.warn(
                 "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "

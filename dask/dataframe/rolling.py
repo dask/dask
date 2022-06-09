@@ -83,8 +83,6 @@ def map_overlap(
 ):
     """Apply a function to each partition, sharing rows with adjacent partitions.
 
-    Note that the index and divisions are assumed to remain unchanged.
-
     Parameters
     ----------
     func : function
@@ -164,7 +162,6 @@ def map_overlap(
         Scalar,
         _get_divisions_map_partitions,
         _get_meta_map_partitions,
-        _is_only_scalar,
         _maybe_from_pandas,
         apply_and_enforce,
         new_dd_object,
@@ -186,7 +183,7 @@ def map_overlap(
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
-    if _is_only_scalar(args):
+    if all(isinstance(arg, Scalar) for arg in args):
         layer = {
             (name, 0): (
                 apply,
