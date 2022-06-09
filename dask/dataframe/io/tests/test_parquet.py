@@ -4202,6 +4202,7 @@ def test_gpu_write_parquet_simple(tmpdir):
     assert_eq(df, got)
 
 
+@PYARROW_MARK
 def test_retries_on_remote_filesystem(tmpdir):
     # Fake a remote filesystem with a cached one
     fn = str(tmpdir)
