@@ -548,7 +548,7 @@ class SynchronousExecutor(Executor):
 synchronous_executor = SynchronousExecutor()
 
 
-def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, /, **kwargs):
+def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs):
     """A naive synchronous version of get_async
 
     Can be useful for debugging.

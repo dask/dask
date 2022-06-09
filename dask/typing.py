@@ -22,7 +22,6 @@ class SchedulerGetCallable(Protocol):
         self,
         dsk: Mapping,
         keys: Sequence[Hashable] | Hashable,
-        /,
         **kwargs: Any,
     ) -> Any:
         """Method called as the default scheduler for a collection.

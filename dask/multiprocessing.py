@@ -146,7 +146,6 @@ def get_context():
 def get(
     dsk: Mapping,
     keys: Sequence[Hashable] | Hashable,
-    /,
     num_workers=None,
     func_loads=None,
     func_dumps=None,

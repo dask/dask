@@ -35,8 +35,7 @@ def pack_exception(e, dumps):
 
 def get(
     dsk: Mapping,
-    result: Sequence[Hashable] | Hashable,
-    /,
+    keys: Sequence[Hashable] | Hashable,
     cache=None,
     num_workers=None,
     pool=None,
@@ -49,7 +48,7 @@ def get(
 
     dsk: dict
         A dask dictionary specifying a workflow
-    result: key or list of keys
+    keys: key or list of keys
         Keys corresponding to desired data
     num_workers: integer of thread count
         The number of threads to use in the ThreadPool that will actually execute tasks
@@ -91,7 +90,7 @@ def get(
         pool.submit,
         pool._max_workers,
         dsk,
-        result,
+        keys,
         cache=cache,
         get_id=_thread_get_id,
         pack_exception=pack_exception,
