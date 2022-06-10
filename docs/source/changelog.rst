@@ -1,6 +1,51 @@
 Changelog
 =========
 
+.. _v2022.6.0:
+
+2022.6.0
+--------
+
+Released on June 10, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Add feature to show names of layer dependencies in HLG JupyterLab repr (:pr:`9081`) `Angelos Omirolis`_
+- Add arrow schema extraction dispatch (:pr:`9169`) `GALI PREM SAGAR`_
+- Add ``sort_results`` argument to ``assert_eq`` (:pr:`9130`) `Pavithra Eswaramoorthy`_
+- Add weeks to ``parse_timedelta`` (:pr:`9168`) `Matthew Rocklin`_
+- Warn that cloudpickle is not always deterministic (:pr:`9148`) `Pavithra Eswaramoorthy`_
+- Switch parquet default engine (:pr:`9140`) `Jim Crist-Harif`_
+- Use deterministic hashing with ``_iLocIndexer`` /  ``_LocIndexer`` (:pr:`9108`) `Fabien Aulaire`_
+- Enfore consistent schema in ``to_parquet`` pyarrow (:pr:`9131`) `Jim Crist-Harif`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``pyarrow.StringArray`` pickle (:pr:`9170`) `Jim Crist-Harif`_
+- Fix parallel metadata collection in pyarrow engine (:pr:`9165`) `Richard (Rick) Zamora`_
+- Improve ``pyarrow`` partitioning logic (:pr:`9147`) `James Bourbeau`_
+- ``pyarrow`` 8.0 partitioning fix (:pr:`9143`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Better SEO for Installing Dask and Dask DataFrame Best Practices (:pr:`9178`) `Sarah Charlotte Johnson`_
+- Update logos page in docs (:pr:`9167`) `Sarah Charlotte Johnson`_
+- Add example using pandas Series to ``map_partition`` doctring (:pr:`9161`) `Alex-JG3`_
+- Update docs theme for rebranding (:pr:`9160`) `Sarah Charlotte Johnson`_
+- Better SEO for docs on Dask DataFrames (:pr:`9128`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Remove ensure_file from recommended practice for downstream libraries (:pr:`9171`) `Matthew Rocklin`_
+- Test round-tripping DataFrame parquet I/O including pyspark (:pr:`9156`) `Ian Rose`_
+- Try disabling HDF5 locking (:pr:`9154`) `Ian Rose`_
+- Link best practices to DataFrame-parquet (:pr:`9150`) `Tom Augspurger`_
+- Fix typo in ``map_partitions`` ``func`` parameter description (:pr:`9149`) `Christopher Akiki`_
+- Un-``xfail`` ``test_groupby_grouper_dispatch`` (:pr:`9139`) `GALI PREM SAGAR`_
+- Temporarily import cleanup fixture from distributed (:pr:`9138`) `James Bourbeau`_
+- Simplify partitioning logic in pyarrow parquet engine (:pr:`9041`) `Richard (Rick) Zamora`_
+
+
 .. _v2022.05.2:
 
 2022.05.2
@@ -5604,3 +5649,7 @@ Other
 .. _`Eray Aslan`: https://github.com/erayaslan
 .. _`Ben Beasley`: https://github.com/musicinmybrain
 .. _`Ryan Russell`: https://github.com/ryanrussell
+.. _`Angelos Omirolis`: https://github.com/aomirolis
+.. _`Fabien Aulaire`: https://github.com/faulaire
+.. _`Alex-JG3`: https://github.com/Alex-JG3
+.. _`Christopher Akiki`: https://github.com/cakiki
