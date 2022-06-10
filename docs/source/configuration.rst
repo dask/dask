@@ -68,11 +68,11 @@ You can specify configuration values in YAML files. For example:
          spill: 0.85  # default: 0.7
          target: 0.75  # default: 0.6
          terminate: 0.98  # default: 0.95
-            
+
      dashboard:
        # Locate the dashboard if working on a Jupyter Hub server
        link: /user/<user>/proxy/8787/status
-        
+
 
 These files can live in any of the following locations:
 
@@ -379,22 +379,7 @@ Downstream projects typically follow the following convention:
 
        dask.config.update_defaults(defaults)
 
-4.  Within that same config.py file, copy the ``'foo.yaml'`` file to the user's
-    configuration directory if it doesn't already exist.
-
-    We also comment the file to make it easier for us to change defaults in the
-    future.
-
-    .. code-block:: python
-
-       # ... continued from above
-
-       dask.config.ensure_file(source=fn, comment=True)
-
-    The user can investigate ``~/.config/dask/*.yaml`` to see all of the
-    commented out configuration files to which they have access.
-
-5.  Ensure that this file is run on import by including it in ``__init__.py``:
+4.  Ensure that this file is run on import by including it in ``__init__.py``:
 
     .. code-block:: python
 
@@ -402,7 +387,7 @@ Downstream projects typically follow the following convention:
 
        from . import config
 
-6.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
+5.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
     configuration values:
 
     .. code-block:: python
@@ -412,7 +397,7 @@ Downstream projects typically follow the following convention:
        def process(fn, color=dask.config.get('foo.color')):
            ...
 
-7.  You may also want to ensure that your yaml configuration files are included
+6.  You may also want to ensure that your yaml configuration files are included
     in your package.  This can be accomplished by including the following line
     in your MANIFEST.in::
 
