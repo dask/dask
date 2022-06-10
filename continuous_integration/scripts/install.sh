@@ -22,7 +22,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
-        pandas
+        git+https://github.com/pandas-dev/pandas.git@main
 
     python -m pip install \
         --upgrade \
