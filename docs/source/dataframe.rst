@@ -9,7 +9,7 @@ Dask DataFrame
    :hidden:
 
    dataframe-create.rst
-   dataframe-best-practices.rst
+   Best Practices <dataframe-best-practices.rst>
    dataframe-design.rst
    dataframe-groupby.rst
    dataframe-joins.rst

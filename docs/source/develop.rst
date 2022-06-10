@@ -91,6 +91,7 @@ can successfully install Dask)::
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
+.. _develop-install:
 
 Install
 ~~~~~~~
@@ -134,6 +135,8 @@ Python Versions
 
 Dask supports Python versions 3.8, 3.9 and 3.10.
 Name changes are handled by the :file:`dask/compatibility.py` file.
+
+.. _develop-test:
 
 Test
 ~~~~

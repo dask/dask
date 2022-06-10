@@ -1,40 +1,42 @@
 .. _dataframe.performance:
 
-Best Practices
-==============
+Dask DataFrames Best Practices
+==============================
+
+.. meta::
+    :description: Suggestions for Dask DataFrames best practices and solutions to common problems.
 
 It is easy to get started with Dask DataFrame, but using it *well* does require
-some experience.  This page contains suggestions for best practices, and
-includes solutions to common problems.
-
+some experience.  This page contains suggestions for Dask DataFrames best practices,
+and includes solutions to common problems.
 
 Use Pandas
 ----------
 
-For data that fits into RAM, Pandas can often be faster and easier to use than
+For data that fits into RAM, pandas can often be faster and easier to use than
 Dask DataFrame.  While "Big Data" tools can be exciting, they are almost always
 worse than normal data tools while those remain appropriate.
 
 
-Reduce, and then use Pandas
+Reduce, and then use pandas
 ---------------------------
 
 Similar to above, even if you have a large dataset there may be a point in your
 computation where you've reduced things to a more manageable level.  You may
-want to switch to Pandas at this point.
+want to switch to pandas at this point.
 
 .. code-block:: python
 
    df = dd.read_parquet('my-giant-file.parquet')
    df = df[df.name == 'Alice']              # Select a subsection
    result = df.groupby('id').value.mean()   # Reduce to a smaller size
-   result = result.compute()                # Convert to Pandas dataframe
-   result...                                # Continue working with Pandas
+   result = result.compute()                # Convert to pandas dataframe
+   result...                                # Continue working with pandas
 
 Pandas Performance Tips Apply to Dask DataFrame
 -----------------------------------------------
 
-Usual Pandas performance tips like avoiding apply, using vectorized
+Usual pandas performance tips like avoiding apply, using vectorized
 operations, using categoricals, etc., all apply equally to Dask DataFrame.  See
 `Modern Pandas <https://tomaugspurger.github.io/modern-1-intro>`_ by `Tom
 Augspurger <https://github.com/TomAugspurger>`_ for a good read on this topic.
@@ -59,7 +61,6 @@ it sparingly (see below):
 
 For more information, see documentation on :ref:`dataframe partitions <dataframe-design-partitions>`.
 
-
 Avoid Full-Data Shuffling
 -------------------------
 
@@ -75,7 +76,8 @@ to each other to exchange shards of data.  This can be an intensive process,
 particularly on a cluster.
 
 So, definitely set the index but try do so infrequently.  After you set the
-index, you may want to ``persist`` your data if you are on a cluster:
+index, you may want to ``persist`` your data if you are on a cluster
+(see `Persist Intelligently`_):
 
 .. code-block:: python
 
@@ -145,12 +147,17 @@ points to lazy computations:
 Repartition to Reduce Overhead
 ------------------------------
 
-Your Dask DataFrame is split up into many Pandas DataFrames.  We sometimes call
+Your Dask DataFrame is split up into many pandas DataFrames.  We sometimes call
 these "partitions", and often the number of partitions is decided for you. For
 example, it might be the number of CSV files from which you are reading. However,
 over time, as you reduce or increase the size of your pandas DataFrames by
 filtering or joining, it may be wise to reconsider how many partitions you need.
 There is a cost to having too many or having too few.
+
+.. image:: images/dask-dataframe.svg
+   :alt: Individual partitions of a Dask DataFrame are pandas DataFrames. One tip from Dask DataFrames Best Practices is to repartition these partitions.
+   :width: 45%
+   :align: right
 
 Partitions should fit comfortably in memory (smaller than a gigabyte) but also
 not be too many.  Every operation on every partition takes the central
@@ -188,11 +195,11 @@ Joins
 Joining two DataFrames can be either very expensive or very cheap depending on
 the situation.  It is cheap in the following cases:
 
-1.  Joining a Dask DataFrame with a Pandas DataFrame
+1.  Joining a Dask DataFrame with a pandas DataFrame
 2.  Joining a Dask DataFrame with another Dask DataFrame of a single partition
 3.  Joining Dask DataFrames along their indexes
 
-Also, it is expensive in the following case:
+And expensive in the following case:
 
 1.  Joining Dask DataFrames along columns that are not their index
 
@@ -208,7 +215,6 @@ operation:
    dd.merge(a, b, left_on='id', right_on='id')  # slow
 
 For more information see :doc:`Joins <dataframe-joins>`.
-
 
 Store Data in Apache Parquet Format
 -----------------------------------
@@ -234,4 +240,4 @@ the Apache Parquet format for Python:
    df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
 
 
-See :ref:`dataframe.parquet` for more on Dask Dataframe and Parquet.
+See :ref:`dataframe.parquet` for more details.
