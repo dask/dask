@@ -144,7 +144,8 @@ def map_overlap(
     --------
     dd.DataFrame.map_overlap
     """
-    args = tuple((df,)) + args
+    args = (df,) + args
+
     dfs = [df for df in args if isinstance(df, _Frame)]
 
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
