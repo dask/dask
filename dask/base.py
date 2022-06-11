@@ -1239,6 +1239,10 @@ def register_numpy():
         except AttributeError:
             return normalize_function(x)
 
+    @normalize_token.register(np.random.BitGenerator)
+    def normalize_bit_generator(bg):
+        return normalize_token(bg.state)
+
 
 @normalize_token.register_lazy("scipy")
 def register_scipy():

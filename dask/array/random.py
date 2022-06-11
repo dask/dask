@@ -17,7 +17,7 @@ from dask.array.core import (
 from dask.array.creation import arange
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import derived_from, random_rng_data, random_state_data
+from dask.utils import derived_from, random_state_data
 
 
 class Generator:
@@ -150,8 +150,8 @@ class Generator:
                 small_kwargs[key] = ar
 
         sizes = list(product(*chunks))
-        seeds = random_rng_data(len(sizes), self._bit_generator.state)
-        token = tokenize(seeds, size, chunks, args, kwargs)
+        bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
+        token = tokenize(bitgens, size, chunks, args, kwargs)
         name = f"{funcname}-{token}"
 
         keys = product(
@@ -160,7 +160,7 @@ class Generator:
         blocks = product(*[range(len(bd)) for bd in chunks])
 
         vals = []
-        for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
+        for bitgen, size, slc, block in zip(bitgens, sizes, slices, blocks):
             arg = []
             for i, ar in enumerate(args):
                 if i not in lookup:
@@ -180,13 +180,13 @@ class Generator:
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
             vals.append(
-                (_apply_random_func, self._generator, funcname, seed, size, arg, kwrg)
+                (_apply_random_func, self._generator, funcname, bitgen, size, arg, kwrg)
             )
 
         meta = _apply_random_func(
             self._generator,
             funcname,
-            seed,
+            bitgen,
             (0,) * len(size),
             small_args,
             small_kwargs,
@@ -271,15 +271,15 @@ class Generator:
             )
             raise NotImplementedError(err_msg)
         sizes = list(product(*chunks))
-        state_data = random_rng_data(len(sizes), self._bit_generator.state)
+        bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
 
         name = "da.random.choice-%s" % tokenize(
-            state_data, size, chunks, a, replace, p, axis, shuffle
+            bitgens, size, chunks, a, replace, p, axis, shuffle
         )
         keys = product([name], *(range(len(bd)) for bd in chunks))
         dsk = {
-            k: (_choice_rng, state, a, size, replace, p, axis, shuffle)
-            for k, state, size in zip(keys, state_data, sizes)
+            k: (_choice_rng, bitgen, a, size, replace, p, axis, shuffle)
+            for k, bitgen, size in zip(keys, bitgens, sizes)
         }
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
@@ -496,16 +496,23 @@ def _shuffle(state_data, x, axis=0):
     return state.shuffle(x, axis=axis)
 
 
-def _apply_random_func(rng, funcname, state_data, size, args, kwargs):
+def _spawn_bitgens(bitgen, n_bitgens):
+    seeds = bitgen._seed_seq.spawn(n_bitgens)
+    bitgens = [type(bitgen)(seed) for seed in seeds]
+    return bitgens
+
+
+def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random method with seed"""
     if rng is None or rng is Generator:
-        state = np.random.default_rng(state_data)
+        state = np.random.default_rng(bitgen)
     else:
+        # cupy or cupy-like library that provides `random.default_rng()`
         import importlib
 
         lib = rng.__module__.split(".")[0]
         xp = importlib.import_module(lib)
-        state = xp.random.default_rng(state_data)
+        state = xp.random.default_rng(bitgen._seed_seq)
 
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
@@ -550,7 +557,7 @@ def default_rng(seed=None):
     Generator(PCG64)
     >>> rfloat = rng.random().compute()
     >>> rfloat
-    array(0.58296534)
+    array(0.56088184)
     >>> type(rfloat)
     <class 'numpy.ndarray'>
 
@@ -561,7 +568,7 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(12345)
     >>> rints = rng.integers(low=0, high=10, size=3).compute()
     >>> rints
-    array([9, 5, 9])
+    array([2, 8, 7])
     >>> type(rints[0])
     <class 'numpy.int64'>
 
@@ -573,9 +580,9 @@ def default_rng(seed=None):
     Generator(PCG64)
     >>> arr1 = rng.random((3, 3)).compute()
     >>> arr1
-    array([[0.99265878, 0.22614087, 0.09490986],
-           [0.17133283, 0.24328892, 0.75882921],
-           [0.70299823, 0.93366648, 0.97560502]])
+    array([[0.91674416, 0.91098667, 0.8765925 ],
+           [0.30931841, 0.95465607, 0.17509458],
+           [0.99662814, 0.75203348, 0.15038118]])
 
     If we exit and restart our Python interpreter, we'll see that we
     generate the same random numbers again:
@@ -584,9 +591,9 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(seed=42)
     >>> arr2 = rng.random((3, 3)).compute()
     >>> arr2
-    array([[0.99265878, 0.22614087, 0.09490986],
-           [0.17133283, 0.24328892, 0.75882921],
-           [0.70299823, 0.93366648, 0.97560502]])
+    array([[0.91674416, 0.91098667, 0.8765925 ],
+           [0.30931841, 0.95465607, 0.17509458],
+           [0.99662814, 0.75203348, 0.15038118]])
 
     See Also
     --------

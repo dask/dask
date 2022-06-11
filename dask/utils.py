@@ -397,42 +397,6 @@ def random_state_data(n: int, random_state=None) -> list:
     return l
 
 
-def random_rng_data(length: int, random_state=None):
-    """Return a numpy.ndarray of 64bit integers that can be used to
-    initialize ``BitGenerators``.
-
-    Parameters
-    ----------
-    length : int
-        Length of the array to return.
-    random_state : int or BitGenerator state or Generator, optional
-        If an int, is used to seed a new ``Generator``.
-    """
-    import numpy as np
-
-    if all(
-        hasattr(random_state, attr) for attr in ["normal", "beta", "bytes", "uniform"]
-    ):
-        # Generator
-        rng = random_state
-    elif isinstance(random_state, dict):
-        # BitGenerator state
-        bit_generator = np.random.PCG64()
-        bit_generator.state = random_state  # type: ignore
-        rng = np.random.Generator(bit_generator)
-    elif isinstance(random_state, (int, type(None))):
-        # int or None to be used as seed
-        rng = np.random.default_rng(seed=random_state)
-    else:
-        raise ValueError(
-            "random_state is not an int or a BitGenerator state or a Generator"
-        )
-
-    random_data = rng.bytes(length * 8)  # `length` 64-bit integers
-    arr = np.frombuffer(random_data, dtype=np.uint64).reshape((length, -1))
-    return arr
-
-
 def is_integer(i) -> bool:
     """
     >>> is_integer(6)
