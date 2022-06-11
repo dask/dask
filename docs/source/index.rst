@@ -135,7 +135,7 @@ messy situations in everyday problems.
    :caption: Getting Started
 
    Install Dask <install.rst>
-   10-minutes-to-dask.rst
+   dask-basics.rst
    presentations.rst
    best-practices.rst
    faq.rst

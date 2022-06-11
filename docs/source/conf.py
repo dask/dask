@@ -398,6 +398,7 @@ redirect_files = [
     ("setup/custom-startup.html", "how-to/customize-initialization.html"),
     ("setup/environment.html", "how-to/manage-environments.html"),
     ("setup/prometheus.html", "how-to/setup-prometheus.html"),
+    ("10-minutes-to-dask.html", "dask-basics.html"),
 ]
 
 

@@ -1,8 +1,17 @@
-10 Minutes to Dask
-==================
+Dask Basics
+===========
 
-This is a short overview of what you can do with Dask. It is geared towards new users.
+.. meta::
+    :description: This is a short overview of Dask basics geared towards new users. Additional Dask information can be found in the rest of the Dask documentation.
+
+This is a short overview of Dask basics geared towards new users.
 There is much more information contained in the rest of the documentation.
+
+.. figure:: images/dask-overview.svg
+   :alt: Dask basics overview. Dask is composed of three parts: collections, task graphs, and schedulers.
+   :align: center
+
+   High level collections are used to generate task graphs which can be executed by schedulers on a single machine or a cluster.
 
 We normally import dask as follows:
 
@@ -362,13 +371,13 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> result.dask
          HighLevelGraph with 7 layers.
          <dask.highlevelgraph.HighLevelGraph object at 0x7f129df7a9d0>
-         0. from_pandas-0b850a81e4dfe2d272df4dc718065116
-         1. loc-fb7ada1e5ba8f343678fdc54a36e9b3e
-         2. getitem-55d10498f88fc709e600e2c6054a0625
-         3. series-cumsum-map-131dc242aeba09a82fea94e5442f3da9
-         4. series-cumsum-take-last-9ebf1cce482a441d819d8199eac0f721
-         5. series-cumsum-d51d7003e20bd5d2f767cd554bdd5299
-         6. sub-fed3e4af52ad0bd9c3cc3bf800544f57
+         1. from_pandas-0b850a81e4dfe2d272df4dc718065116
+         2. loc-fb7ada1e5ba8f343678fdc54a36e9b3e
+         3. getitem-55d10498f88fc709e600e2c6054a0625
+         4. series-cumsum-map-131dc242aeba09a82fea94e5442f3da9
+         5. series-cumsum-take-last-9ebf1cce482a441d819d8199eac0f721
+         6. series-cumsum-d51d7003e20bd5d2f767cd554bdd5299
+         7. sub-fed3e4af52ad0bd9c3cc3bf800544f57
 
          >>> result.visualize()
 
@@ -382,12 +391,12 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> b.dask
          HighLevelGraph with 6 layers.
          <dask.highlevelgraph.HighLevelGraph object at 0x7fd33a4aa400>
-         0. array-ef3148ecc2e8957c6abe629e08306680
-         1. amax-b9b637c165d9bf139f7b93458cd68ec3
-         2. amax-partial-aaf8028d4a4785f579b8d03ffc1ec615
-         3. amax-aggregate-07b2f92aee59691afaf1680569ee4a63
-         4. getitem-f9e225a2fd32b3d2f5681070d2c3d767
-         5. add-f54f3a929c7efca76a23d6c42cdbbe84
+         1. array-ef3148ecc2e8957c6abe629e08306680
+         2. amax-b9b637c165d9bf139f7b93458cd68ec3
+         3. amax-partial-aaf8028d4a4785f579b8d03ffc1ec615
+         4. amax-aggregate-07b2f92aee59691afaf1680569ee4a63
+         5. getitem-f9e225a2fd32b3d2f5681070d2c3d767
+         6. add-f54f3a929c7efca76a23d6c42cdbbe84
 
          >>> b.visualize()
 
@@ -401,9 +410,9 @@ triggering computation, we can inspect the task graph to figure out what's going
          >>> c.dask
          HighLevelGraph with 3 layers.
          <dask.highlevelgraph.HighLevelGraph object at 0x7f96d0814fd0>
-         0. from_sequence-cca2a33ba6e12645a0c9bc0fd3fe6c88
-         1. lambda-93a7a982c4231fea874e07f71b4bcd7d
-         2. zip-474300792cc4f502f1c1f632d50e0272
+         1. from_sequence-cca2a33ba6e12645a0c9bc0fd3fe6c88
+         2. lambda-93a7a982c4231fea874e07f71b4bcd7d
+         3. zip-474300792cc4f502f1c1f632d50e0272
 
          >>> c.visualize()
 
