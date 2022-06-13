@@ -12,9 +12,9 @@ from dask.utils import _deprecated
 def format_time(t):
     """Format seconds into a human readable form.
 
-    >>> format_time(10.4)
+    >>> format_time(10.4)  # doctest: +SKIP
     '10.4s'
-    >>> format_time(1000.4)
+    >>> format_time(1000.4)  # doctest: +SKIP
     '16min 40.4s'
     """
     m, s = divmod(t, 60)
