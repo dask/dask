@@ -1613,6 +1613,7 @@ timedelta_sizes = {
     "m": 60,
     "h": 3600,
     "d": 3600 * 24,
+    "w": 7 * 3600 * 24,
 }
 
 tds2 = {
@@ -1620,6 +1621,7 @@ tds2 = {
     "minute": 60,
     "hour": 60 * 60,
     "day": 60 * 60 * 24,
+    "week": 7 * 60 * 60 * 24,
     "millisecond": 1e-3,
     "microsecond": 1e-6,
     "nanosecond": 1e-9,

@@ -737,7 +737,7 @@ Dask Name: {name}, {task} tasks"""
         ----------
         func : function
             The function applied to each partition. If this function accepts
-            the special ``partition_info`` keyword argument, it will recieve
+            the special ``partition_info`` keyword argument, it will receive
             information on the partition's relative location within the
             dataframe.
         args, kwargs :
@@ -791,6 +791,12 @@ Dask Name: {name}, {task} tasks"""
         >>> res = ddf.map_partitions(myadd, 1, b=2)
         >>> res.dtype
         dtype('float64')
+
+        Here we apply a function to a Series resulting in a Series:
+
+        >>> res = ddf.x.map_partitions(lambda x: len(x)) # ddf.x is a Dask Series Structure
+        >>> res.dtype
+        dtype('int64')
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
