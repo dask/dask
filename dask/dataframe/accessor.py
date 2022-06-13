@@ -274,6 +274,7 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def split(self, pat=None, n=-1, expand=False):
+        """Known inconsistencies: ``expand=True`` with unknown ``n`` will raise a ``NotImplementedError``."""
         return self._split("split", pat=pat, n=n, expand=expand)
 
     @derived_from(pd.core.strings.StringMethods)
