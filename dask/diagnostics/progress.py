@@ -137,6 +137,8 @@ class ProgressBar(Callback):
             self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
 
     def _draw_bar(self, frac, elapsed):
+        from dask.utils import format_time
+
         bar = "#" * int(self._width * frac)
         percent = int(100 * frac)
         elapsed = format_time(elapsed)
