@@ -5,8 +5,10 @@ import time
 from timeit import default_timer
 
 from dask.callbacks import Callback
+from dask.utils import _deprecated
 
 
+@_deprecated(after_version="2022.6.0", use_instead="dask.utils.format_time")
 def format_time(t):
     """Format seconds into a human readable form.
 
