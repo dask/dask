@@ -25,6 +25,7 @@ from dask.utils import (
     extra_titles,
     factors,
     format_bytes,
+    format_time,
     funcname,
     getargspec,
     has_keyword,
@@ -776,6 +777,18 @@ def test_stringify_collection_keys():
 )
 def test_format_bytes(n, expect):
     assert format_bytes(int(n)) == expect
+
+
+def test_format_time():
+    assert format_time(1.4) == "1.40 s"
+    assert format_time(10.4) == "10.40 s"
+    assert format_time(100.4) == "100.40 s"
+    assert format_time(1000.4) == "16m 40s"
+    assert format_time(10000.4) == "2hr 46m"
+    assert format_time(1234.567) == "20m 34s"
+    assert format_time(12345.67) == "3hr 25m"
+    assert format_time(123456.78) == "34hr 17m"
+    assert format_time(1234567.8) == "14d 6hr"
 
 
 def test_deprecated():
