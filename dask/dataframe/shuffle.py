@@ -935,6 +935,8 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
             ind = ind % int(nfinal)
 
     typ = np.min_scalar_type(npartitions * 2)
+    # Here we convert the final output index `ind` into the output index
+    # for the current stage.
     ind = (ind % npartitions).astype(typ, copy=False) // k**stage % k
     return group_split_dispatch(df, ind, k, ignore_index=ignore_index)
 
