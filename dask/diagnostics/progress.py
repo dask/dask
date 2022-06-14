@@ -5,14 +5,16 @@ import time
 from timeit import default_timer
 
 from dask.callbacks import Callback
+from dask.utils import _deprecated
 
 
+@_deprecated(after_version="2022.6.0", use_instead="dask.utils.format_time")
 def format_time(t):
     """Format seconds into a human readable form.
 
-    >>> format_time(10.4)
+    >>> format_time(10.4)  # doctest: +SKIP
     '10.4s'
-    >>> format_time(1000.4)
+    >>> format_time(1000.4)  # doctest: +SKIP
     '16min 40.4s'
     """
     m, s = divmod(t, 60)
@@ -135,6 +137,8 @@ class ProgressBar(Callback):
             self._draw_bar(ndone / ntasks if ntasks else 0, elapsed)
 
     def _draw_bar(self, frac, elapsed):
+        from dask.utils import format_time
+
         bar = "#" * int(self._width * frac)
         percent = int(100 * frac)
         elapsed = format_time(elapsed)
