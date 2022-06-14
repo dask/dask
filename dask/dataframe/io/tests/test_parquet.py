@@ -3851,18 +3851,27 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-def test_extra_file(tmpdir, engine):
+@pytest.mark.parametrize("partition_on", ("b", None))
+def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    df = df.assign(b=df.b.astype("category"))
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmpdir, engine=engine, write_metadata_file=True)
+    ddf.to_parquet(
+        tmpdir,
+        engine=engine,
+        write_metadata_file=True,
+        partition_on=partition_on,
+    )
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # For "fastparquet" and "pyarrow", we can pass the
     # expected file extension, or avoid checking file extensions
@@ -3884,7 +3893,9 @@ def test_extra_file(tmpdir, engine):
         **_parquet_file_extension(".parquet"),
         calculate_divisions=True,
     )
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # Should Work (with FutureWarning)
     with pytest.warns(FutureWarning, match="require_extension is deprecated"):
@@ -3894,7 +3905,6 @@ def test_extra_file(tmpdir, engine):
             **_parquet_file_extension(".parquet", legacy=True),
             calculate_divisions=True,
         )
-        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
@@ -4200,3 +4210,49 @@ def test_gpu_write_parquet_simple(tmpdir):
     ddf.to_parquet(fn)
     got = dask_cudf.read_parquet(fn)
     assert_eq(df, got)
+
+
+@PYARROW_MARK
+def test_retries_on_remote_filesystem(tmpdir):
+    # Fake a remote filesystem with a cached one
+    fn = str(tmpdir)
+    remote_fn = f"simplecache://{tmpdir}"
+    storage_options = {"target_protocol": "file"}
+
+    df = pd.DataFrame({"a": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn)
+
+    # Check that we set retries for reading and writing to parquet when not otherwise set
+    scalar = ddf.to_parquet(remote_fn, compute=False, storage_options=storage_options)
+    layer = hlg_layer(scalar.dask, "to-parquet")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
+
+    ddf2 = dd.read_parquet(remote_fn, storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-parquet")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
+
+    # But not for a local filesystem
+    scalar = ddf.to_parquet(fn, compute=False, storage_options=storage_options)
+    layer = hlg_layer(scalar.dask, "to-parquet")
+    assert not layer.annotations
+
+    ddf2 = dd.read_parquet(fn, storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-parquet")
+    assert not layer.annotations
+
+    # And we don't overwrite existing retries
+    with dask.annotate(retries=2):
+        scalar = ddf.to_parquet(
+            remote_fn, compute=False, storage_options=storage_options
+        )
+        layer = hlg_layer(scalar.dask, "to-parquet")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2
+
+        ddf2 = dd.read_parquet(remote_fn, storage_options=storage_options)
+        layer = hlg_layer(ddf2.dask, "read-parquet")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2
