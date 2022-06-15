@@ -9,19 +9,19 @@ from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
 from dask import config
-from dask.base import compute_as_if_collection, get_scheduler, tokenize
+from dask.base import (
+    compute_as_if_collection,
+    get_scheduler,
+    named_schedulers,
+    tokenize,
+)
 from dask.dataframe.core import DataFrame
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.delayed import Delayed, delayed
 from dask.utils import get_scheduler_lock
 
-try:
-    from dask import multiprocessing
-except ImportError:
-    mpget = object()
-else:
-    mpget = multiprocessing.get
+MP_GET = named_schedulers.get("processes", object())
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -200,7 +200,7 @@ def to_hdf(
     if lock is None:
         if not single_node:
             lock = True
-        elif not single_file and _actual_get is not mpget:
+        elif not single_file and _actual_get is not MP_GET:
             # if we're writing to multiple files with the multiprocessing
             # scheduler we don't need to lock
             lock = True
