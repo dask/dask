@@ -40,9 +40,14 @@ from tlz import (
 from dask import config
 from dask.bag import chunk
 from dask.bag.avro import to_avro
-from dask.base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    named_schedulers,
+    replace_name_in_key,
+    tokenize,
+)
 from dask.blockwise import blockwise
-from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import flatten, get_dependencies, istask, quote, reverse_dict
 from dask.delayed import Delayed, unpack_collections
@@ -64,14 +69,7 @@ from dask.utils import (
     takes_multiple_arguments,
 )
 
-if _EMSCRIPTEN:
-    from dask import local
-
-    DEFAULT_GET = local.get_sync
-else:
-    from dask import multiprocessing
-
-    DEFAULT_GET = multiprocessing.get
+DEFAULT_GET = named_schedulers.get("processes", named_schedulers["sync"])
 
 no_default = "__no__default__"
 no_result = type(

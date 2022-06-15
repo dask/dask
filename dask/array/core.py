@@ -49,12 +49,12 @@ from dask.base import (
     compute_as_if_collection,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     persist,
     tokenize,
 )
 from dask.blockwise import blockwise as core_blockwise
 from dask.blockwise import broadcast_dimensions
-from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import quote
 from dask.delayed import Delayed, delayed
@@ -85,14 +85,7 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-if _EMSCRIPTEN:
-    from dask import local
-
-    DEFAULT_GET = local.get_sync
-else:
-    from dask import threaded
-
-    DEFAULT_GET = threaded.get
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 

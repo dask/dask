@@ -12,10 +12,10 @@ from dask.base import (
     DaskMethodsMixin,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     replace_name_in_key,
 )
 from dask.base import tokenize as _tokenize
-from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
@@ -24,14 +24,7 @@ from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
 __all__ = ["Delayed", "delayed"]
 
 
-if _EMSCRIPTEN:
-    from dask import local
-
-    DEFAULT_GET = local.get_sync
-else:
-    from dask import threaded
-
-    DEFAULT_GET = threaded.get
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 
 def unzip(ls, nout):

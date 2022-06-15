@@ -23,9 +23,14 @@ import dask.array as da
 from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
-from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    named_schedulers,
+    tokenize,
+)
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
-from dask.compatibility import _EMSCRIPTEN
 from dask.context import globalmethod
 from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
@@ -80,14 +85,7 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-if _EMSCRIPTEN:
-    from dask import local
-
-    DEFAULT_GET = local.get_sync
-else:
-    from dask import threaded
-
-    DEFAULT_GET = threaded.get
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 

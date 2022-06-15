@@ -1547,9 +1547,16 @@ def test_compute_as_if_collection_low_level_task_graph():
 # platform. One might prefer patching `sys.platform` for a more direct test, but that
 # causes problems in other libraries.
 def check_default_scheduler(module, collection, expected, emscripten):
+    from contextlib import nullcontext
     from unittest import mock
 
-    with mock.patch("dask.compatibility._EMSCRIPTEN", emscripten):
+    from dask.local import get_sync
+
+    if emscripten:
+        ctx = mock.patch("dask.base.named_schedulers", {"sync": get_sync})
+    else:
+        ctx = nullcontext()
+    with ctx:
         import importlib
 
         if expected == "sync":
