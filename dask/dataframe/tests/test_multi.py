@@ -796,6 +796,23 @@ def test_concat_with_operation_remains_hlg():
     assert_eq(result, expected)
 
 
+def test_concat_dataframe_empty():
+    df = pd.DataFrame({"a": [100, 200, 300]}, dtype="int64")
+    empty_df = pd.DataFrame([], dtype="int64")
+    df_concat = pd.concat([df, empty_df])
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    empty_ddf = dd.from_pandas(empty_df, npartitions=1)
+    ddf_concat = dd.concat([ddf, empty_ddf])
+    assert all(df_concat.dtypes == ddf_concat.dtypes)
+
+    empty_df_with_col = pd.DataFrame([], columns=["x"], dtype="int64")
+    df_concat_with_col = pd.concat([df, empty_df_with_col])
+    empty_ddf_with_col = dd.from_pandas(empty_df_with_col, npartitions=1)
+    ddf_concat_with_col = dd.concat([ddf, empty_ddf_with_col])
+    assert all(df_concat_with_col.dtypes == ddf_concat_with_col.dtypes)
+
+
 @pytest.mark.parametrize(
     "value_1, value_2",
     [
