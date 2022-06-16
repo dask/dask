@@ -272,7 +272,7 @@ class StringAccessor(Accessor):
             meta = (self._series.name, object)
         return self._function_map(method, pat=pat, n=n, expand=expand, meta=meta)
 
-    @derived_from(pd.core.strings.StringMethods)
+    @derived_from(pd.core.strings.StringMethods, inconsistencies="Richard's Test Message.")
     def split(self, pat=None, n=-1, expand=False):
         return self._split("split", pat=pat, n=n, expand=expand)
 

@@ -666,8 +666,10 @@ def extra_titles(doc):
     return "\n".join(lines)
 
 
-def ignore_warning(doc, cls, name, extra="", skipblocks=0):
-    """Expand docstring by adding disclaimer and extra text"""
+def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=[]):
+    """Expand docstring by adding disclaimer and extra text
+    Inconsistencies: list of strings reporting known inconsistencies with method whose docstring is being copied.
+    """
     import inspect
 
     if inspect.isclass(cls):
@@ -679,6 +681,13 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     else:
         l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
+    
+    inconsistencies = None
+
+    if inconsistencies:
+        l3 = f"Known inconsistencies: \n {inconsistencies}"
+    else:
+        l3 = ""
 
     i = doc.find("\n\n")
     if i != -1:
@@ -697,7 +706,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
             more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
+        bits = [head, indent, l1, indent, l2, "\n", l3, "\n\n"] + more + [tail]
         doc = "".join(bits)
 
     return doc
@@ -718,7 +727,7 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
+def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0, inconsistencies=None):
     """Helper function for derived_from to ease testing"""
     ua_args = ua_args or []
 
@@ -748,10 +757,13 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(
-            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks, inconsistencies=inconsistencies,
         )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
+
+    # Insert known inconsistencies as list of strings
+    inconsistencies = []
 
     # Mark unsupported arguments
     try:
@@ -771,7 +783,7 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
+def derived_from(original_klass, version=None, ua_args=None, skipblocks=0, inconsistencies):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -803,6 +815,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
                 ua_args=ua_args,
                 extra=extra,
                 skipblocks=skipblocks,
+                inconsistencies=inconsistencies,
             )
             return method
 
