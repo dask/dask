@@ -804,13 +804,13 @@ def test_concat_dataframe_empty():
     ddf = dd.from_pandas(df, npartitions=1)
     empty_ddf = dd.from_pandas(empty_df, npartitions=1)
     ddf_concat = dd.concat([ddf, empty_ddf])
-    assert all(df_concat.dtypes == ddf_concat.dtypes)
+    assert_eq(df_concat, ddf_concat)
 
     empty_df_with_col = pd.DataFrame([], columns=["x"], dtype="int64")
     df_concat_with_col = pd.concat([df, empty_df_with_col])
     empty_ddf_with_col = dd.from_pandas(empty_df_with_col, npartitions=1)
     ddf_concat_with_col = dd.concat([ddf, empty_ddf_with_col])
-    assert all(df_concat_with_col.dtypes == ddf_concat_with_col.dtypes)
+    assert_eq(df_concat_with_col, ddf_concat_with_col)
 
 
 @pytest.mark.parametrize(
