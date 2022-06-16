@@ -10,11 +10,10 @@ from tlz import merge
 
 from dask import config, multiprocessing
 from dask.base import compute_as_if_collection, get_scheduler, tokenize
-from dask.dataframe.core import DataFrame, new_dd_object
-from dask.dataframe.io.io import _link
+from dask.dataframe.core import DataFrame
+from dask.dataframe.io.io import _link, from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.delayed import Delayed, delayed
-from dask.highlevelgraph import HighLevelGraph
-from dask.layers import DataFrameIOLayer
 from dask.utils import get_scheduler_lock
 
 
@@ -77,7 +76,7 @@ def to_hdf(
     compute : bool
         Whether or not to execute immediately.  If False then this returns a
         ``dask.Delayed`` value.
-    lock : Lock, optional
+    lock : bool, Lock, optional
         Lock to use to prevent concurrency issues.  By default a
         ``threading.Lock``, ``multiprocessing.Lock`` or ``SerializableLock``
         will be used depending on your scheduler if a lock is required. See
@@ -270,7 +269,7 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 
-class HDFFunctionWrapper:
+class HDFFunctionWrapper(DataFrameIOFunction):
     """
     HDF5 Function-Wrapper Class
 
@@ -278,12 +277,16 @@ class HDFFunctionWrapper:
     """
 
     def __init__(self, columns, dim, lock, common_kwargs):
-        self.columns = columns
+        self._columns = columns
         self.lock = lock
         self.common_kwargs = common_kwargs
         self.dim = dim
         if columns and dim > 1:
             self.common_kwargs = merge(common_kwargs, {"columns": columns})
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new HDFFunctionWrapper object with
@@ -427,18 +430,16 @@ def read_hdf(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
-    # Construct Layer and Collection
-    label = "read-hdf-"
-    name = label + tokenize(paths, key, start, stop, sorted_index, chunksize, mode)
-    layer = DataFrameIOLayer(
-        name,
-        columns,
-        parts,
+    # Construct the output collection with from_map
+    return from_map(
         HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
-        label=label,
+        parts,
+        meta=meta,
+        divisions=divisions,
+        label="read-hdf",
+        token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
+        enforce_metadata=False,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    return new_dd_object(graph, name, meta, divisions)
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):

@@ -36,6 +36,9 @@ class _IndexerBase:
         else:
             return self._meta_indexer[:, cindexer]
 
+    def __dask_tokenize__(self):
+        return type(self).__name__, tokenize(self.obj)
+
 
 class _iLocIndexer(_IndexerBase):
     @property
@@ -231,11 +234,19 @@ class _LocIndexer(_IndexerBase):
             stop = self.obj.npartitions - 1
 
         if iindexer.start is None and self.obj.known_divisions:
-            istart = self.obj.divisions[0]
+            istart = (
+                self.obj.divisions[0]
+                if iindexer.stop is None
+                else min(self.obj.divisions[0], iindexer.stop)
+            )
         else:
             istart = self._coerce_loc_index(iindexer.start)
         if iindexer.stop is None and self.obj.known_divisions:
-            istop = self.obj.divisions[-1]
+            istop = (
+                self.obj.divisions[-1]
+                if iindexer.start is None
+                else max(self.obj.divisions[-1], iindexer.start)
+            )
         else:
             istop = self._coerce_loc_index(iindexer.stop)
 

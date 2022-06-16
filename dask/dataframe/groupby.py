@@ -8,7 +8,9 @@ import numpy as np
 import pandas as pd
 
 from dask.base import tokenize
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.core import (
+    GROUP_KEYS_DEFAULT,
     DataFrame,
     Series,
     _extract_meta,
@@ -18,6 +20,7 @@ from dask.dataframe.core import (
     no_default,
     split_out_on_index,
 )
+from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
@@ -158,7 +161,15 @@ def _groupby_raise_unaligned(df, **kwargs):
 
 
 def _groupby_slice_apply(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
+    df,
+    grouper,
+    key,
+    func,
+    *args,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -171,7 +182,15 @@ def _groupby_slice_apply(
 
 
 def _groupby_slice_transform(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
+    df,
+    grouper,
+    key,
+    func,
+    *args,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -189,7 +208,14 @@ def _groupby_slice_transform(
 
 
 def _groupby_slice_shift(
-    df, grouper, key, shuffled, group_keys=True, dropna=None, observed=None, **kwargs
+    df,
+    grouper,
+    key,
+    shuffled,
+    group_keys=GROUP_KEYS_DEFAULT,
+    dropna=None,
+    observed=None,
+    **kwargs,
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
@@ -1023,6 +1049,13 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
+def _fillna_group(group, by, value, method, limit, fillna_axis):
+    # apply() conserves the grouped-by columns, so drop them to stay consistent with pandas groupby-fillna
+    return group.drop(columns=by).fillna(
+        value=value, method=method, limit=limit, axis=fillna_axis
+    )
+
+
 class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -1035,7 +1068,7 @@ class _GroupBy:
         The key for grouping
     slice: str, list
         The slice keys applied to GroupBy result
-    group_keys: bool
+    group_keys: bool | None
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
@@ -1053,7 +1086,7 @@ class _GroupBy:
         df,
         by=None,
         slice=None,
-        group_keys=True,
+        group_keys=GROUP_KEYS_DEFAULT,
         dropna=None,
         sort=None,
         observed=None,
@@ -1251,7 +1284,8 @@ class _GroupBy:
         # Otherwise, pandas will throw an ambiguity warning if the
         # DataFrame's index (self.obj.index) was included in the grouping
         # specification (self.by). See pandas #14432
-        by_groupers = [pd.Grouper(key=ind) for ind in by]
+        grouper = grouper_dispatch(self._meta.obj)
+        by_groupers = [grouper(key=ind) for ind in by]
         cumlast = map_partitions(
             _apply_chunk,
             cumpart_ext,
@@ -1983,6 +2017,71 @@ class _GroupBy:
             win_type=win_type,
             axis=axis,
         )
+
+    def fillna(self, value=None, method=None, limit=None, axis=None):
+        """Fill NA/NaN values using the specified method.
+
+        Parameters
+        ----------
+        value : scalar, default None
+            Value to use to fill holes (e.g. 0).
+        method : {'bfill', 'ffill', None}, default None
+            Method to use for filling holes in reindexed Series. ffill: propagate last
+            valid observation forward to next valid. bfill: use next valid observation
+            to fill gap.
+        axis : {0 or 'index', 1 or 'columns'}
+            Axis along which to fill missing values.
+        limit : int, default None
+            If method is specified, this is the maximum number of consecutive NaN values
+            to forward/backward fill. In other words, if there is a gap with more than
+            this number of consecutive NaNs, it will only be partially filled. If method
+            is not specified, this is the maximum number of entries along the entire
+            axis where NaNs will be filled. Must be greater than 0 if not None.
+
+        Returns
+        -------
+        Series or DataFrame
+            Object with missing values filled
+
+        See also
+        --------
+        pandas.core.groupby.DataFrameGroupBy.fillna
+        """
+        if not np.isscalar(value) and value is not None:
+            raise NotImplementedError(
+                "groupby-fillna with value=dict/Series/DataFrame is currently not supported"
+            )
+        meta = self._meta_nonempty.apply(
+            _fillna_group,
+            by=self.by,
+            value=value,
+            method=method,
+            limit=limit,
+            fillna_axis=axis,
+        )
+
+        result = self.apply(
+            _fillna_group,
+            by=self.by,
+            value=value,
+            method=method,
+            limit=limit,
+            fillna_axis=axis,
+            meta=meta,
+        )
+
+        if PANDAS_GT_150 and self.group_keys:
+            return result.map_partitions(M.droplevel, self.by)
+
+        return result
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def ffill(self, limit=None):
+        return self.fillna(method="ffill", limit=limit)
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def bfill(self, limit=None):
+        return self.fillna(method="bfill", limit=limit)
 
 
 class DataFrameGroupBy(_GroupBy):

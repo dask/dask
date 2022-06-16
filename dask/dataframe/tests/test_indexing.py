@@ -4,6 +4,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.base import tokenize
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
@@ -45,6 +46,8 @@ def test_loc():
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
+    assert_eq(d.loc[1000:2000], full.loc[1000:2000])
+    assert_eq(d.loc[:-1000], full.loc[:-1000])
     assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
     assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)
@@ -682,3 +685,42 @@ def test_pandas_nullable_boolean_data_type():
 
     assert_eq(ddf1[ddf2], s1[s2])
     assert_eq(ddf1.loc[ddf2], s1.loc[s2])
+
+
+def test_deterministic_hashing_series():
+    obj = pd.Series([0, 1, 2])
+
+    dask_df = dd.from_pandas(obj, npartitions=1)
+
+    ddf1 = dask_df.loc[0:1]
+    ddf2 = dask_df.loc[0:1]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf2 = dask_df.loc[0:2]
+    assert tokenize(ddf1) != tokenize(ddf2)
+
+
+def test_deterministic_hashing_dataframe():
+    # Add duplicate column names in order to use _iLocIndexer._iloc path
+    obj = pd.DataFrame([[0, 1, 2, 3], [4, 5, 6, 7]], columns=["a", "b", "c", "c"])
+
+    dask_df = dd.from_pandas(obj, npartitions=1)
+
+    ddf1 = dask_df.loc[0:1, ["a", "c"]]
+    ddf2 = dask_df.loc[0:1, ["a", "c"]]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf1 = dask_df.loc[0:1, "c"]
+    ddf2 = dask_df.loc[0:1, "c"]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf1 = dask_df.iloc[:, [0, 1]]
+    ddf2 = dask_df.iloc[:, [0, 1]]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf2 = dask_df.iloc[:, [0, 2]]
+    assert tokenize(ddf1) != tokenize(ddf2)

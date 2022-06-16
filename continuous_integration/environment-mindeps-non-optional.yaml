@@ -5,7 +5,6 @@ dependencies:
   # required dependencies
   - packaging=20.0
   - python=3.8
-  - setuptools<60.0
   - pyyaml>=5.3.1
   - cloudpickle=1.1.1
   - partd=0.3.10

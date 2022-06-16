@@ -344,7 +344,7 @@ def tensordot(lhs, rhs, axes=2):
         return intermediate.sum(axis=left_axes)
 
 
-@derived_from(np)
+@derived_from(np, ua_args=["out"])
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
@@ -1870,8 +1870,8 @@ def roll(array, shift, axis=None):
         raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
-        s = -s
-        s %= result.shape[i]
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
 
         sl1 = result.ndim * [slice(None)]
         sl2 = result.ndim * [slice(None)]

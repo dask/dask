@@ -7,15 +7,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import PANDAS_GT_140
 from dask.dataframe.core import DataFrame, Series
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import _deprecated, derived_from
-
-
-@_deprecated(after_version="2022.02.0")
-def getnanos(rule):
-    try:
-        return getattr(rule, "nanos", None)
-    except ValueError:
-        return None
+from dask.utils import derived_from
 
 
 def _resample_series(

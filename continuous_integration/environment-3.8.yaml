@@ -6,7 +6,6 @@ channels:
 dependencies:
   # required dependencies
   - python=3.8
-  - setuptools<60.0
   - packaging
   - numpy=1.19
   - pandas=1.2
@@ -15,6 +14,7 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-rerunfailures
+  - pytest-timeout
   - pytest-xdist
   - moto
   - flask
@@ -23,6 +23,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - pyspark
   # resolver was pulling in old versions, so hard-coding floor
   # https://github.com/dask/dask/pull/8505
   - tiledb>=2.5.0
@@ -48,6 +49,7 @@ dependencies:
   - cytoolz
   - distributed
   - ipython
+  - ipycytoscape
   - lz4
   - numba
   - partd

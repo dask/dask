@@ -5,6 +5,7 @@ import pytest
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
+from dask.dataframe._compat import PANDAS_GT_140
 from dask.dataframe.utils import assert_eq
 
 
@@ -196,6 +197,22 @@ def test_str_accessor_extractall(df_ddf):
     assert_eq(
         ddf.str_col.str.extractall("(.*)b(.*)"), df.str_col.str.extractall("(.*)b(.*)")
     )
+
+
+@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.parametrize("method", ["removeprefix", "removesuffix"])
+def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
+    df, ddf = df_ddf
+    prefix = df.str_col.iloc[0][:2]
+    suffix = df.str_col.iloc[0][-2:]
+    missing = "definitely a missing prefix/suffix"
+
+    def call(df, arg):
+        return getattr(df.str_col.str, method)(arg)
+
+    assert_eq(call(ddf, prefix), call(df, prefix))
+    assert_eq(call(ddf, suffix), call(df, suffix))
+    assert_eq(call(ddf, missing), call(df, missing))
 
 
 def test_str_accessor_cat(df_ddf):

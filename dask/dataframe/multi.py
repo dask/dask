@@ -375,20 +375,21 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
-    name = "hash-join-" + token
-
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    dsk = {
-        (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
-        for i in range(npartitions)
-    }
+    joined = map_partitions(
+        merge_chunk,
+        lhs2,
+        rhs2,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
 
-    divisions = [None] * (npartitions + 1)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def single_partition_join(left, right, **kwargs):
@@ -510,6 +511,13 @@ def merge(
     if on and not left_on and not right_on:
         left_on = right_on = on
         on = None
+
+    supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
+        )
 
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
@@ -917,7 +925,13 @@ def merge_asof(
         return pd.merge_asof(left, right, **kwargs)
 
     if on is not None:
+        if left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
+                "combination of both."
+            )
         left_on = right_on = on
+
     for o in [left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -938,10 +952,18 @@ def merge_asof(
     if not is_dask_collection(right):
         right = from_pandas(right, npartitions=1)
     if right_on is not None:
-        right = right.set_index(right_on, sorted=True)
+        right = right.set_index(right_on, drop=(left_on == right_on), sorted=True)
 
     if by is not None:
+        if left_by is not None or right_by is not None:
+            raise ValueError(
+                "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+            )
         kwargs["left_by"] = kwargs["right_by"] = by
+    if left_by is None and right_by is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_by is not None and right_by is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
 
     del kwargs["on"], kwargs["left_on"], kwargs["right_on"], kwargs["by"]
     kwargs["left_index"] = kwargs["right_index"] = True
@@ -1042,6 +1064,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
+    astyped_dfs = []
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
@@ -1066,7 +1089,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+
+        astyped_dfs.append(df)
+
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
@@ -1091,7 +1116,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=astyped_dfs)
+
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def concat(
@@ -1336,7 +1363,7 @@ def _split_partition(df, on, nsplits):
         if nset.intersection(set(df.columns)) == nset:
             ind = hash_object_dispatch(df[on], index=False)
             ind = ind % nsplits
-            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+            return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
     # We are not joining (purely) on columns.  Need to
     # add a "_partitions" column to perform the split.

@@ -24,11 +24,13 @@ from dask.dataframe.dispatch import (
     concat_dispatch,
     get_parallel_type,
     group_split_dispatch,
+    grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -41,7 +43,7 @@ from dask.dataframe.utils import (
     is_integer_na_dtype,
 )
 from dask.sizeof import SimpleSizeof, sizeof
-from dask.utils import is_arraylike, typename
+from dask.utils import is_arraylike, is_series_like, typename
 
 ##########
 # Pandas #
@@ -78,6 +80,13 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    import pyarrow as pa
+
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -358,8 +367,10 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    if is_series_like(c):
+        c = c.values
     indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
+        c.astype(np.intp, copy=False), k
     )
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -533,6 +544,11 @@ def tolist_pandas(obj):
 )
 def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
+
+
+@grouper_dispatch.register((pd.DataFrame, pd.Series))
+def get_grouper_pandas(obj):
+    return pd.core.groupby.Grouper
 
 
 @percentile_lookup.register((pd.Series, pd.Index))

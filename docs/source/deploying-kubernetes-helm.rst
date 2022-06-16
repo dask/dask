@@ -272,7 +272,7 @@ Sometimes you do not need to run a Jupyter server alongside your Dask cluster.
 
 .. _kubernetes-helm.multi:
 
-Helm Install Dask for Mulitple Users
+Helm Install Dask for Multiple Users
 ------------------------------------
 
 The ``dask/daskhub`` Helm Chart deploys JupyterHub_, `Dask Gateway`_, and configures

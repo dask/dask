@@ -1,4 +1,5 @@
 try:
+    import dask.dataframe._pyarrow_compat
     from dask.base import compute
     from dask.dataframe import backends, dispatch, rolling
     from dask.dataframe.core import (
@@ -18,6 +19,7 @@ try:
         from_bcolz,
         from_dask_array,
         from_delayed,
+        from_map,
         from_pandas,
         read_csv,
         read_fwf,
