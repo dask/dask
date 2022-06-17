@@ -27,6 +27,7 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    FileGroupLookup,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -39,6 +40,7 @@ from dask.dataframe.io.parquet.utils import (
 from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.delayed import Delayed
+from dask.utils import natural_sort_key
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()
@@ -368,6 +370,7 @@ class FastParquetEngine(Engine):
         ignore_metadata_file,
         metadata_task_size,
         parquet_file_extension,
+        sort_input_paths,
         kwargs,
     ):
 
@@ -472,6 +475,7 @@ class FastParquetEngine(Engine):
             pf if _metadata_exists else paths,
             aggregate_files,
             pf.file_scheme,
+            sort_input_paths,
         )
 
         # Ensure that there is no overlap between partition columns
@@ -671,10 +675,7 @@ class FastParquetEngine(Engine):
                         "file_group": file_group_lookup[part],
                     }
                     # Make sure parts are sorted by file-group
-                    for part in sorted(
-                        parts,
-                        key=lambda x: file_group_lookup[x],
-                    )
+                    for part in sorted(parts, key=file_group_lookup)
                 ],
                 [],
                 common_kwargs,
@@ -710,18 +711,18 @@ class FastParquetEngine(Engine):
             if has_metadata_file:
                 pf.row_groups = sorted(
                     pf.row_groups,
-                    key=lambda x: file_group_lookup[x.columns[0].file_path],
+                    key=lambda x: file_group_lookup(x.columns[0].file_path),
                 )
                 parts, stats = cls._collect_file_parts(pf, dataset_info_kwargs)
             else:
-                paths = sorted(paths, key=lambda x: file_group_lookup[x])
+                paths = sorted(paths, key=file_group_lookup)
                 parts, stats = cls._collect_file_parts(paths, dataset_info_kwargs)
 
         else:
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
             parts, stats = [], []
-            paths = sorted(paths, key=lambda x: file_group_lookup[x])
+            paths = sorted(paths, key=file_group_lookup)
             if len(paths):
                 # Build and compute a task graph to construct stats/parts
                 gather_parts_dsk = {}
@@ -733,7 +734,7 @@ class FastParquetEngine(Engine):
                     finalize_list.append((name, task_i))
                     gather_parts_dsk[finalize_list[-1]] = (
                         cls._collect_file_parts,
-                        paths.iloc[file_i : file_i + metadata_task_size],
+                        paths[file_i : file_i + metadata_task_size],
                         dataset_info_kwargs,
                     )
 
@@ -841,6 +842,7 @@ class FastParquetEngine(Engine):
         ignore_metadata_file=False,
         metadata_task_size=None,
         parquet_file_extension=None,
+        sort_input_paths=True,
         **kwargs,
     ):
 
@@ -858,6 +860,7 @@ class FastParquetEngine(Engine):
             ignore_metadata_file,
             metadata_task_size,
             parquet_file_extension,
+            sort_input_paths,
             kwargs,
         )
 
@@ -1308,7 +1311,7 @@ class FastParquetEngine(Engine):
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
 
     @classmethod
-    def _get_file_group_lookup(cls, pf_or_paths, aggregate_files, scheme):
+    def _get_file_group_lookup(cls, pf_or_paths, aggregate_files, scheme, natural_sort):
         # Create "file group" mapping
         #
         # We use the FileGroupLookup class to label the file
@@ -1317,7 +1320,6 @@ class FastParquetEngine(Engine):
         # to the same "file group" may be aggregated into
         # the same output partition.
         #
-        from dask.dataframe.io.parquet.utils import FileGroupLookup
 
         if isinstance(pf_or_paths, ParquetFile):
             paths = {rg.columns[0].file_path for rg in pf_or_paths.row_groups}
@@ -1332,7 +1334,13 @@ class FastParquetEngine(Engine):
 
         # Get path_depth
         # (number of partitioned cols in each path)
-        path_depth = len(paths_to_cats([paths[0]], scheme).values()) if paths else 0
+        path_depth = (
+            len(paths_to_cats([next(iter(paths))], scheme).values()) if paths else 0
+        )
+
+        # Deal with "natural" sorting
+        if natural_sort:
+            paths = sorted(paths, key=natural_sort_key)
 
         # Start by defining raw table mapping the index
         # and values of paths, along with the key values

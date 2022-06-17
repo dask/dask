@@ -14,6 +14,7 @@ from dask.core import flatten
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    FileGroupLookup,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -333,6 +334,7 @@ class ArrowDatasetEngine(Engine):
         ignore_metadata_file=False,
         metadata_task_size=0,
         parquet_file_extension=None,
+        sort_input_paths=True,
         **kwargs,
     ):
 
@@ -350,6 +352,7 @@ class ArrowDatasetEngine(Engine):
             ignore_metadata_file,
             metadata_task_size,
             parquet_file_extension,
+            sort_input_paths,
             kwargs,
         )
 
@@ -774,6 +777,7 @@ class ArrowDatasetEngine(Engine):
         ignore_metadata_file,
         metadata_task_size,
         parquet_file_extension,
+        sort_input_paths,
         kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -858,8 +862,21 @@ class ArrowDatasetEngine(Engine):
                 **_dataset_kwargs,
             )
 
+        # Make sure that any `in`-predicate filters have iterable values
+        filter_columns = set()
+        if filters is not None:
+            for filter in flatten(filters, container=list):
+                col, op, val = filter
+                if op == "in" and not isinstance(val, (set, list, tuple)):
+                    raise TypeError(
+                        "Value of 'in' filter must be a list, set or tuple."
+                    )
+                filter_columns.add(col)
+
         # Create path-lookup table
-        file_group_lookup = cls._get_file_group_lookup(ds, aggregate_files, filters)
+        file_group_lookup = cls._get_file_group_lookup(
+            ds, aggregate_files, filters, sort_input_paths
+        )
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -953,6 +970,7 @@ class ArrowDatasetEngine(Engine):
             "partition_names": partition_names,
             "metadata_task_size": metadata_task_size,
             "file_group_lookup": file_group_lookup,
+            "filter_columns": filter_columns,
             "kwargs": {
                 "dataset": _dataset_kwargs,
                 "read": read_kwargs,
@@ -1106,6 +1124,7 @@ class ArrowDatasetEngine(Engine):
         has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
         file_group_lookup = dataset_info["file_group_lookup"]
+        filter_columns = dataset_info["filter_columns"]
         kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
@@ -1113,17 +1132,6 @@ class ArrowDatasetEngine(Engine):
         metadata_task_size = _set_metadata_task_size(
             dataset_info["metadata_task_size"], fs
         )
-
-        # Make sure that any `in`-predicate filters have iterable values
-        filter_columns = set()
-        if filters is not None:
-            for filter in flatten(filters, container=list):
-                col, op, val = filter
-                if op == "in" and not isinstance(val, (set, list, tuple)):
-                    raise TypeError(
-                        "Value of 'in' filter must be a list, set or tuple."
-                    )
-                filter_columns.add(col)
 
         # Determine which columns need statistics.
         # At this point, gather_statistics is only True if
@@ -1165,10 +1173,7 @@ class ArrowDatasetEngine(Engine):
                         "file_group": file_group_lookup[path],
                     }
                     # Make sure parts are sorted by file-group
-                    for path in sorted(
-                        ds.files,
-                        key=lambda x: file_group_lookup[x],
-                    )
+                    for path in sorted(ds.files, key=file_group_lookup)
                 ],
                 [],
                 common_kwargs,
@@ -1208,7 +1213,7 @@ class ArrowDatasetEngine(Engine):
             # (ordered by "aggregation group")
             file_frags = sorted(
                 list(ds.get_fragments(ds_filters)),
-                key=lambda x: file_group_lookup[x.path],
+                key=lambda x: file_group_lookup(x.path),
             )
             parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
         else:
@@ -1220,10 +1225,7 @@ class ArrowDatasetEngine(Engine):
             # of files containing a _metadata file.  Since we used
             # the _metadata file to generate our dataset object , we need
             # to ignore any file fragments that are not in the list.
-            all_files = sorted(
-                ds.files,
-                key=lambda x: file_group_lookup[x],
-            )
+            all_files = sorted(ds.files, key=file_group_lookup)
             if valid_paths:
                 all_files = [
                     filef
@@ -1597,7 +1599,7 @@ class ArrowDatasetEngine(Engine):
             return meta
 
     @classmethod
-    def _get_file_group_lookup(cls, ds, aggregate_files, filters):
+    def _get_file_group_lookup(cls, ds, aggregate_files, filters, natural_sort):
         # Create "file group" mapping
         #
         # We use the FileGroupLookup class to label the file
@@ -1606,7 +1608,6 @@ class ArrowDatasetEngine(Engine):
         # to the same "file group" may be aggregated into
         # the same output partition.
         #
-        from dask.dataframe.io.parquet.utils import FileGroupLookup
 
         ds_filters = pq._filters_to_expression(filters) if filters is not None else None
         file_frags = list(ds.get_fragments(ds_filters))
@@ -1624,6 +1625,10 @@ class ArrowDatasetEngine(Engine):
             if file_frags
             else 0
         )
+
+        # Deal with "natural" sorting
+        if natural_sort:
+            file_frags = sorted(file_frags, key=lambda x: natural_sort_key(x.path))
 
         # Define raw lookup table
         records = []

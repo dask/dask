@@ -20,7 +20,7 @@ from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply, import_required, natural_sort_key, parse_bytes
+from dask.utils import apply, import_required, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -177,9 +177,9 @@ def read_parquet(
     ignore_metadata_file=False,
     metadata_task_size=None,
     split_row_groups=False,
-    chunksize=None,  # Same meaning [Although we should probably advise AGAINST use at scale]
-    aggregate_files=False,  # True, False, or int (file version of split_row_groups)
-    partition_boundary=None,  # str or list[str] of partitioned-column names
+    chunksize=None,
+    aggregate_files=False,
+    partition_boundary=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
@@ -234,9 +234,9 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     sort_input_paths : bool, default True
         Whether a user-specified path list should be sorted in "natural"
-        order. Note that specifying ``sort_input_paths=False`` will not
-        preserve the orginal path order if ``partition_boundary`` is also
-        specified.
+        order (in contrast to glob ordering). Note that specifying
+        ``sort_input_paths=False`` will not preserve the orginal path
+        order if ``partition_boundary`` is also specified.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     open_file_options : dict, default None
@@ -443,9 +443,8 @@ def read_parquet(
     # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
+    # Get file system and fs-compatible paths
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
-    if sort_input_paths:
-        paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
     if index is None:
@@ -463,6 +462,7 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         chunksize=chunksize,
+        sort_input_paths=sort_input_paths,
         aggregate_files=partition_boundary or bool(aggregate_files),
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,

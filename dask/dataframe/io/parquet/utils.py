@@ -591,13 +591,13 @@ def _row_groups_to_parts(
             for i in _rgs:
 
                 i_end = i + split_row_groups
+                if residual and i == 0:
+                    i_end = residual
+                    residual = 0
                 if leave_residual:
                     # Only leave residual if we know we will be
                     # able to aggregate row-groups from this file
                     # with row-groups from the next file
-                    if residual and i == 0:
-                        i_end = residual
-                        residual = 0
                     _residual = i_end - row_group_count
                     if _residual > 0:
                         residual = _residual
@@ -745,16 +745,32 @@ def _set_gather_statistics(
 
 
 class FileGroupLookup:
+    """FileGroupLookup
+
+    A convenience wrapper for mapping file paths
+    to "file group" values. The primary purpose of
+    this wrapper is to automatically translate
+    general file-path keys into standardized tuples.
+    """
+
     def __init__(self, path_depth=1):
         self._mapping = {}
         self._path_depth = path_depth
+
+    def __len__(self):
+        return len(self._mapping)
 
     def __getitem__(self, path):
         if not isinstance(path, str):
             raise ValueError
 
         key = tuple(path.split("/")[-self._path_depth :])
-        return self._mapping[key]
+        try:
+            return self._mapping[key]
+        except KeyError:
+            # This path was filtered out of mapping used
+            # to initialize FileGroupLookup
+            return -1
 
     def get(self, key, default):
         try:
@@ -770,3 +786,6 @@ class FileGroupLookup:
 
         key = tuple(path.split("/")[-self._path_depth :])
         self._mapping[key] = group
+
+    def __call__(self, path):
+        return self[path]
