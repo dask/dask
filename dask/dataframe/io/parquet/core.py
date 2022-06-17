@@ -1565,7 +1565,7 @@ def aggregate_by_files(parts, stats, partition_size_files):
             "file_group", False
         )
 
-        if multi_path_allowed and len(next_part) <= partition_size_files:
+        if multi_path_allowed and len(next_part) < partition_size_files:
 
             # Update part list
             next_part.append(part)

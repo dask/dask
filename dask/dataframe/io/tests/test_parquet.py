@@ -2789,6 +2789,61 @@ def test_split_row_groups_filter(tmpdir, engine):
     )
 
 
+@pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("partition_on", [None, "a"])
+@pytest.mark.parametrize("aggregate_files", [2, 200])
+def test_aggregate_files_int(tmpdir, engine, partition_on, metadata, aggregate_files):
+    df_size = 100
+    df1 = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "d": np.arange(df_size),
+        }
+    ).set_index("d")
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+
+    ddf1.to_parquet(
+        tmpdir,
+        engine=engine,
+        partition_on=partition_on,
+        write_metadata_file=metadata,
+    )
+
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        aggregate_files=aggregate_files,
+        partition_boundary=partition_on,
+    )
+
+    # Check that files where aggregated as expected
+    if aggregate_files == 200:
+        # Everything should be aggregated
+        # (within the partition_boundaries)
+        if partition_on:
+            assert ddf2.npartitions == 3
+        else:
+            assert ddf2.npartitions == 1
+    elif aggregate_files == 2:
+        if partition_on:
+            # Should have more than one partition
+            # per unique "a" category, but fewer
+            # than default partitioning
+            npartitions_default = dd.read_parquet(tmpdir, engine=engine).npartitions
+
+            assert ddf2.npartitions > 3
+            assert ddf2.npartitions < npartitions_default
+        else:
+            # Should have exactly half the written
+            # input partitions
+            assert ddf2.npartitions == 5
+
+    # Just check column "c" to avoid column ordering
+    assert_eq(df1["c"], ddf2["c"].compute().sort_index())
+
+
 def test_optimize_getitem_and_nonblockwise(tmpdir, engine):
     path = os.path.join(tmpdir, "path.parquet")
     df = pd.DataFrame(
