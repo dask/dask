@@ -1580,6 +1580,32 @@ def test_fiters_file_list(tmpdir, engine):
     assert len(ddf2) == 0
 
 
+@pytest.mark.parametrize("sort_input_paths", [True, False])
+def test_sort_input_paths(tmpdir, engine, sort_input_paths):
+
+    # Use from_map to generate custom ddf
+    def make_frame(val):
+        return pd.DataFrame({"x": [val]})
+
+    ddf = dd.from_map(make_frame, range(4))
+    ddf.to_parquet(str(tmpdir), engine=engine)
+
+    # Construct file list in reverse order
+    file_list = [os.path.join(tmpdir, f"part.{i}.parquet") for i in [3, 2, 1, 0]]
+    ddf_out = dd.read_parquet(
+        file_list, engine=engine, sort_input_paths=sort_input_paths
+    )
+
+    # Original path order is in descending order
+    if sort_input_paths:
+        # Paths will be sorted into ascending order
+        assert_eq(ddf, ddf_out)
+    else:
+        # Paths will be left in descending order
+        expect = ddf.compute().sort_values("x", ascending=False)
+        assert_eq(expect, ddf_out)
+
+
 def test_pyarrow_filter_divisions(tmpdir):
     pytest.importorskip("pyarrow")
 
