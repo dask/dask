@@ -1,19 +1,19 @@
-Dask Basics
-===========
+10 Minutes to Dask
+==================
 
 .. meta::
-    :description: This is a short overview of Dask basics geared towards new users. Additional Dask information can be found in the rest of the Dask documentation.
+    :description: This is a short overview of Dask geared towards new users. Additional Dask information can be found in the rest of the Dask documentation.
 
-This is a short overview of Dask basics geared towards new users.
+This is a short overview of Dask geared towards new users.
 There is much more information contained in the rest of the documentation.
 
 .. figure:: images/dask-overview.svg
-   :alt: Dask basics overview. Dask is composed of three parts: collections, task graphs, and schedulers.
+   :alt: Dask overview. Dask is composed of three parts: collections, task graphs, and schedulers.
    :align: center
 
    High level collections are used to generate task graphs which can be executed by schedulers on a single machine or a cluster.
 
-We normally import dask as follows:
+We normally import Dask as follows:
 
 .. code-block:: python
 
@@ -26,15 +26,17 @@ We normally import dask as follows:
 
 Based on the type of data you are working with, you might not need all of these.
 
-Create a High-Level Collection
-------------------------------
+Creating a Dask Object
+----------------------
 
-You can make a Dask collection from scratch by supplying existing data and optionally
+You can create a Dask object from scratch by supplying existing data and optionally
 including information about how the chunks should be structured.
 
 .. tabs::
 
    .. group-tab:: DataFrame
+
+      See :doc:`dataframe`.
 
       .. code-block:: python
 
@@ -52,7 +54,7 @@ including information about how the chunks should be structured.
          2021-12-09 23:00:00    ...     ...
          Dask Name: from_pandas, 10 tasks
 
-      Now we have a DataFrame with 2 columns and 2400 rows composed of 10 partitions where
+      Now we have a Dask DataFrame with 2 columns and 2400 rows composed of 10 partitions where
       each partition has 240 rows. Each partition represents a piece of the data.
 
       Here are some key properties of an DataFrame:
@@ -84,29 +86,33 @@ including information about how the chunks should be structured.
 
    .. group-tab:: Array
 
-      .. code-block:: python
+      See :doc:`array`.
 
-         >>> data = np.arange(100_000).reshape(200, 500)
-         ... a = da.from_array(data, chunks=(100, 100))
-         ... a
-         dask.array<array, shape=(200, 500), dtype=int64, chunksize=(100, 100), chunktype=numpy.ndarray>
+      .. jupyter-execute::
+
+         import numpy as np
+         import dask.array as da
+
+         data = np.arange(100_000).reshape(200, 500)
+         a = da.from_array(data, chunks=(100, 100))
+         a
 
       Now we have a 2D array with the shape (200, 500) composed of 10 chunks where
       each chunk has the shape (100, 100). Each chunk represents a piece of the data.
 
-      Here are some key properties of an Array:
+      Here are some key properties of a Dask Array:
 
-      .. code-block:: python
+      .. jupyter-execute::
 
-         >>> # inspect the chunks
-         ... a.chunks
-         ((100, 100), (100, 100, 100, 100, 100))
-
-         >>> # access a particular block of data
-         ... a.blocks[1, 3]
-         dask.array<blocks, shape=(100, 100), dtype=int64, chunksize=(100, 100), chunktype=numpy.ndarray>
+         # inspect the chunks
+         a.chunks
+            
+         # access a particular block of data
+         a.blocks[1, 3]
 
    .. group-tab:: Bag
+
+      See :doc:`bag`.
 
       .. code-block:: python
 
@@ -121,7 +127,7 @@ including information about how the chunks should be structured.
 Indexing
 --------
 
-Indexing Dask collections feels just like slicing numpy arrays or pandas dataframes.
+Indexing Dask collections feels just like slicing NumPy arrays or pandas DataFrame.
 
 .. tabs::
 
@@ -150,10 +156,9 @@ Indexing Dask collections feels just like slicing numpy arrays or pandas datafra
 
    .. group-tab:: Array
 
-      .. code-block:: python
+    .. jupyter-execute::
 
-         >>> a[:50, 200]
-         dask.array<getitem, shape=(50,), dtype=int64, chunksize=(50,), chunktype=numpy.ndarray>
+       a[:50, 200]
 
    .. group-tab:: Bag
 
@@ -428,7 +433,7 @@ run into code that is parallelizable, but isn't just a big DataFrame or array.
 
    .. group-tab:: Delayed: Lazy
 
-      Dask Delayed let you to wrap individual function calls into a lazily constructed task graph:
+      :doc:`delayed` lets you to wrap individual function calls into a lazily constructed task graph:
 
       .. code-block:: python
 
@@ -451,7 +456,7 @@ run into code that is parallelizable, but isn't just a big DataFrame or array.
    .. group-tab:: Futures: Immediate
 
       Unlike the interfaces described so far, Futures are eager. Computation starts as soon
-      as the function is submitted.
+      as the function is submitted (see :doc:`futures`).
 
       .. code-block:: python
 
@@ -480,7 +485,8 @@ run into code that is parallelizable, but isn't just a big DataFrame or array.
 Scheduling
 ----------
 
-After you have generated a task graph, it is the scheduler's job to execute it.
+After you have generated a task graph, it is the scheduler's job to execute it
+(see :doc:`scheduling`).
 
 By default when you call ``compute`` on a Dask object, Dask uses the thread
 pool on your computer to run computations in parallel.

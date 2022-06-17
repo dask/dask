@@ -47,6 +47,7 @@ extensions = [
     "sphinx_remove_toctrees",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
+    "jupyter_sphinx",
     "sphinx_copybutton",
     "sphinx_design",
 ]
@@ -402,7 +403,6 @@ redirect_files = [
     ("setup/custom-startup.html", "how-to/customize-initialization.html"),
     ("setup/environment.html", "how-to/manage-environments.html"),
     ("setup/prometheus.html", "how-to/setup-prometheus.html"),
-    ("10-minutes-to-dask.html", "dask-basics.html"),
 ]
 
 
