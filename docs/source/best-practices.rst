@@ -1,9 +1,12 @@
-Best Practices
-==============
+Dask Best Practices
+===================
+
+.. meta::
+    :description: This is a short overview of Dask best practices. This document specifically focuses on best practices that are shared among all of the Dask APIs. Readers may first want to investigate one of the API-specific Best Practices documents first.
 
 It is easy to get started with Dask's APIs, but using them *well* requires some
-experience. This page contains suggestions for best practices, and includes
-solutions to common problems.
+experience. This page contains suggestions for Dask best practices and
+includes solutions to common Dask problems.
 
 This document specifically focuses on best practices that are shared among all
 of the Dask APIs.  Readers may first want to investigate one of the
@@ -12,6 +15,10 @@ API-specific Best Practices documents first.
 -  :doc:`Arrays <array-best-practices>`
 -  :doc:`DataFrames <dataframe-best-practices>`
 -  :doc:`Delayed <delayed-best-practices>`
+
+.. raw:: html
+
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/Gvuf6gSGA9M" title="YouTube video player" frameborder="0" style="margin: 0 auto 20px auto; display: block;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 
 Start Small
@@ -22,7 +29,7 @@ Sometimes it's necessary for larger problems, but often it's not.
 Before adding a parallel computing system like Dask to your workload you may
 want to first try some alternatives:
 
--   **Use better algorithms or data structures**:  NumPy, Pandas, Scikit-Learn
+-   **Use better algorithms or data structures**:  NumPy, pandas, Scikit-learn
     may have faster functions for what you're trying to do.  It may be worth
     consulting with an expert or reading through their docs again to find a
     better pre-built algorithm.
@@ -55,7 +62,7 @@ In parallel and distributed computing there are new costs to be aware of and so
 your old intuition may no longer be true.  Working with the dashboard can help
 you relearn about what is fast and slow and how to deal with it.
 
-See :doc:`Documentation on Dask's dashboard <diagnostics-distributed>` for more
+See :doc:`Documentation on Dask's dashboard <dashboard>` for more
 information.
 
 
@@ -64,7 +71,8 @@ Avoid Very Large Partitions
 
 Your chunks of data should be small enough so that many of them fit in a
 worker's available memory at once.  You often control this when you select
-partition size in Dask DataFrame or chunk size in Dask Array.
+partition size in Dask DataFrame (see :ref:`DataFrame Partitions <dataframe-design-partitions>`)
+or chunk size in Dask Array (see :doc:`Array Chunks <array-chunks>`).
 
 Dask will likely manipulate as many chunks in parallel on one machine as you
 have cores on that machine.  So if you have 1 GB chunks and ten
@@ -74,10 +82,11 @@ that it always has something to work on.
 
 If you have a machine with 100 GB and 10 cores, then you might want to choose
 chunks in the 1GB range.  You have space for ten chunks per core which gives
-Dask a healthy margin, without having tasks that are too small
+Dask a healthy margin, without having tasks that are too small.
 
 Note that you also want to avoid chunk sizes that are too small.  See the next
-section for details.
+section for details. For a more detailed guide to choosing chunk sizes for
+Dask Arrays, see this blog post on `Choosing good chunk sizes <https://blog.dask.org/2021/11/02/choosing-dask-chunk-sizes>`_.
 
 
 Avoid Very Large Graphs
@@ -85,7 +94,7 @@ Avoid Very Large Graphs
 
 Dask workloads are composed of *tasks*.
 A task is a Python function, like ``np.sum`` applied onto a Python object,
-like a Pandas dataframe or NumPy array.  If you are working with Dask
+like a pandas DataFrame or NumPy array.  If you are working with Dask
 collections with many partitions, then every operation you do, like ``x + 1``
 likely generates many tasks, at least as many as partitions in your collection.
 
@@ -100,7 +109,7 @@ start to overwhelm the scheduler.
 
 There are a few things you can do to address this:
 
--   Build smaller graphs.  You can do this by ...
+-   Build smaller graphs.  You can do this by:
 
     -  **Increasing your chunk size:**  If you have a 1000 GB of data and are using
        10 MB chunks, then you have 100,000 partitions.  Every operation on such
@@ -130,15 +139,15 @@ There are a few things you can do to address this:
 Learn Techniques For Customization
 ----------------------------------
 
-The high level Dask collections (array, dataframe, bag) include common
-operations that follow standard Python APIs from NumPy and Pandas.
+The high level Dask collections (array, DataFrame, bag) include common
+operations that follow standard Python APIs from NumPy and pandas.
 However, many Python workloads are complex and may require operations that are
 not included in these high level APIs.
 
 Fortunately, there are many options to support custom workloads:
 
 -   All collections have a ``map_partitions`` or ``map_blocks`` function, that
-    applies a user provided function across every Pandas dataframe or NumPy array
+    applies a user provided function across every pandas DataFrame or NumPy array
     in the collection.  Because Dask collections are made up of normal Python
     objects, it's often quite easy to map custom functions across partitions of a
     dataset without much modification.
@@ -188,7 +197,7 @@ using normal Python again.
 
    df = dd.read_parquet("lots-of-data-*.parquet")
    df = df.groupby('name').mean()  # reduce data significantly
-   df = df.compute()               # continue on with Pandas/NumPy
+   df = df.compute()               # continue on with pandas/NumPy
 
 
 Persist When You Can
@@ -223,16 +232,19 @@ computing will often add new constraints to how your store your data,
 particularly around providing random access to blocks of your data that are in
 line with how you plan to compute on it.
 
-For example ...
+For example:
 
 -   For compression you'll probably find that you drop gzip and bz2, and embrace
     newer systems like lz4, snappy, and Z-Standard that provide better
     performance and random access.
 -   For storage formats you may find that you want self-describing formats that
     are optimized for random access, metadata storage, and binary encoding like
-    Parquet, ORC, Zarr, HDF5, GeoTIFF and so on
+    `Parquet <https://parquet.apache.org/>`_, `ORC <https://orc.apache.org/>`_,
+    `Zarr <https://zarr.readthedocs.io/en/stable/>`_,
+    `HDF5 <https://portal.hdfgroup.org/display/HDF5/HDF5>`_, and
+    `GeoTIFF <https://en.wikipedia.org/wiki/GeoTIFF>`_.
 -   When working on the cloud you may find that some older formats like HDF5 may
-    not work well
+    not work as well.
 -   You may want to partition or chunk your data in ways that align well to
     common queries.  In Dask DataFrame this might mean choosing a column to
     sort by for fast selection and joins.  For Dask Array this might mean
@@ -242,7 +254,7 @@ For example ...
 Processes and Threads
 ---------------------
 
-If you're doing mostly numeric work with Numpy, Pandas, Scikit-Learn, Numba,
+If you're doing mostly numeric work with Numpy, pandas, Scikit-learn, Numba,
 and other libraries that release the `GIL <https://docs.python.org/3/glossary.html#term-global-interpreter-lock>`_, then use mostly threads.  If you're
 doing work on text data or Python collections like lists and dicts then use
 mostly processes.
@@ -276,7 +288,7 @@ DataFrames
 
    ddf = ... a dask dataframe ...
    for fn in filenames:
-       df = pandas.read_csv(fn)  # Read locally with Pandas
+       df = pandas.read_csv(fn)  # Read locally with pandas
        ddf = ddf.append(df)            # Give to Dask
 
 .. code-block:: python
