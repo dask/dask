@@ -500,7 +500,7 @@ def read_parquet(
     # Statistics-based `parts`` filtering
     if statistics:
         # Remove empty partitions (if statistics are known)
-        parts, statistics = remove_empty_partitions(parts, statistics)
+        parts, statistics = _remove_empty_partitions(parts, statistics)
 
         # Apply filters
         if filters:
@@ -509,13 +509,19 @@ def read_parquet(
     # Aggregate parts/statistics
     if chunksize and statistics:
         # Use chunksize to aggregate adjacent row-groups/files
-        parts, statistics = aggregate_by_chunksize(parts, statistics, chunksize)
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_bytes=chunksize
+        )
     elif isinstance(split_row_groups, int) and split_row_groups > 1:
         # Use split_row_groups to aggregate adjacent row-groups/files
-        parts, statistics = aggregate_by_row_groups(parts, statistics, split_row_groups)
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_row_groups=split_row_groups
+        )
     elif isinstance(aggregate_files, int) and aggregate_files > 1:
         # Use aggregate_files to aggregate adjacent files
-        parts, statistics = aggregate_by_files(parts, statistics, aggregate_files)
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_files=aggregate_files
+        )
 
     # Parse dataset statistics from metadata (if available)
     divisions, index, index_in_columns = process_statistics(
@@ -1369,7 +1375,7 @@ def process_statistics(parts, statistics, index):
     return divisions, index, index_in_columns
 
 
-def remove_empty_partitions(parts, statistics):
+def _remove_empty_partitions(parts, statistics):
     if statistics:
         result = list(
             zip(
@@ -1442,59 +1448,38 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_by_chunksize(parts, stats, chunksize):
+def _aggregate_parts(
+    parts,
+    stats,
+    partition_size_bytes=None,
+    partition_size_row_groups=None,
+    partition_size_files=None,
+):
+    """Aggregate parts using byte size, row-group count, or file count criteria"""
 
-    if not stats:
-        return parts, stats
+    # Handle partition_size_bytes input (i.e. chunksize)
+    if partition_size_bytes:
+        partition_size_bytes = None if not stats else parse_bytes(partition_size_bytes)
 
-    parts_agg = []
-    stats_agg = []
+    def _partition_size_bytes_criteria(stat, next_stat):
+        if partition_size_bytes is None:
+            return True
+        return (
+            next_stat["total_byte_size"] + stat["total_byte_size"]
+        ) <= partition_size_bytes
 
-    chunksize = parse_bytes(chunksize)
-    next_part, next_stat = [parts[0].copy()], stats[0].copy()
-    for i in range(1, len(parts)):
-        stat, part = stats[i], parts[i]
-
-        # Criteria for aggregating parts: The parts are members
-        # of the same "file_group"
-        multi_path_allowed = next_part[-1].get("file_group", True) == part.get(
-            "file_group", False
+    def _partition_size_row_groups_criteria(part, next_row_group_count):
+        if partition_size_row_groups is None:
+            return True
+        return (
+            next_row_group_count + part.get("row_groups", 1)
+            <= partition_size_row_groups
         )
 
-        stat["num-row-groups"] = stat.get("num-row-groups", 1)
-        next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
-
-        if (
-            multi_path_allowed
-            and (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
-        ):
-
-            # Update part list
-            next_part.append(part)
-
-            # Update Statistics
-            next_stat["total_byte_size"] += stat["total_byte_size"]
-            next_stat["num-rows"] += stat["num-rows"]
-            next_stat["num-row-groups"] += stat["num-row-groups"]
-            for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                if col["name"] != col_add["name"]:
-                    raise ValueError("Columns are different!!")
-                if "min" in col:
-                    col["min"] = min(col["min"], col_add["min"])
-                if "max" in col:
-                    col["max"] = max(col["max"], col_add["max"])
-        else:
-            parts_agg.append(next_part)
-            stats_agg.append(next_stat)
-            next_part, next_stat = [part.copy()], stat.copy()
-
-    parts_agg.append(next_part)
-    stats_agg.append(next_stat)
-
-    return parts_agg, stats_agg
-
-
-def aggregate_by_row_groups(parts, stats, split_row_groups):
+    def _partition_size_files_criteria(next_part):
+        if partition_size_files is None:
+            return True
+        return len(next_part) < partition_size_files
 
     parts_agg = []
     stats_agg = []
@@ -1512,8 +1497,14 @@ def aggregate_by_row_groups(parts, stats, split_row_groups):
             "file_group", False
         )
 
-        if multi_path_allowed and (
-            next_row_group_count + part.get("row_groups", 1) <= split_row_groups
+        stat["num-row-groups"] = stat.get("num-row-groups", 1)
+        next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
+
+        if (
+            multi_path_allowed
+            and _partition_size_bytes_criteria(stat, next_stat)
+            and _partition_size_row_groups_criteria(part, next_row_group_count)
+            and _partition_size_files_criteria(next_part)
         ):
 
             # Update part list
@@ -1539,55 +1530,6 @@ def aggregate_by_row_groups(parts, stats, split_row_groups):
             if stats:
                 stats_agg.append(next_stat)
             next_row_group_count = part.get("row_groups", 1)
-            next_part, next_stat = [part.copy()], stat.copy()
-
-    parts_agg.append(next_part)
-    if stats:
-        stats_agg.append(next_stat)
-
-    return parts_agg, stats_agg
-
-
-def aggregate_by_files(parts, stats, partition_size_files):
-
-    parts_agg = []
-    stats_agg = []
-
-    next_part = [parts[0].copy()]
-    next_stat = stats[0].copy() if stats else {}
-    for i in range(1, len(parts)):
-        part = parts[i]
-        stat = stats[i] if stats else {}
-
-        # Criteria for aggregating parts: The parts are members
-        # of the same "file_group"
-        multi_path_allowed = next_part[-1].get("file_group", True) == part.get(
-            "file_group", False
-        )
-
-        if multi_path_allowed and len(next_part) < partition_size_files:
-
-            # Update part list
-            next_part.append(part)
-
-            # Update Statistics
-            if stats:
-                stat["num-row-groups"] = stat.get("num-row-groups", 1)
-                next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
-                next_stat["total_byte_size"] += stat["total_byte_size"]
-                next_stat["num-rows"] += stat["num-rows"]
-                next_stat["num-row-groups"] += stat["num-row-groups"]
-                for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                    if col["name"] != col_add["name"]:
-                        raise ValueError("Columns are different!!")
-                    if "min" in col:
-                        col["min"] = min(col["min"], col_add["min"])
-                    if "max" in col:
-                        col["max"] = max(col["max"], col_add["max"])
-        else:
-            parts_agg.append(next_part)
-            if stats:
-                stats_agg.append(next_stat)
             next_part, next_stat = [part.copy()], stat.copy()
 
     parts_agg.append(next_part)
