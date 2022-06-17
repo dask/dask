@@ -170,16 +170,16 @@ def read_parquet(
     filters=None,
     categories=None,
     index=None,
+    sort_input_paths=True,
     storage_options=None,
     engine="auto",
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
     split_row_groups=False,
-    partition_size_files=None,
-    chunksize=None,
-    aggregate_files=None,
-    sort_paths=True,
+    chunksize=None,  # Same meaning [Although we should probably advise AGAINST use at scale]
+    aggregate_files=False,  # True, False, or int (file version of split_row_groups)
+    partition_boundary=None,  # str or list[str] of partitioned-column names
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
@@ -232,6 +232,11 @@ def read_parquet(
         If a list, assumes up to 2**16-1 labels; if a dict, specify the number
         of labels expected; if None, will load categories automatically for
         data written by dask/fastparquet, not otherwise.
+    sort_input_paths : bool, default True
+        Whether a user-specified path list should be sorted in "natural"
+        order. Note that specifying ``sort_input_paths=False`` will not
+        preserve the orginal path order if ``partition_boundary`` is also
+        specified.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     open_file_options : dict, default None
@@ -270,52 +275,34 @@ def read_parquet(
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
-        partition will correspond to that number of parquet row-groups (or fewer).
+        partition will correspond to that number of Parquet row-groups (or fewer).
     chunksize : int or str, default None
-        WARNING: The ``chunksize`` argument will be deprecated in the future.
-        Please use ``split_row_groups`` to specify how many row-groups should be
-        mapped to each output partition. If you strongly oppose the deprecation of
-        ``chunksize``, please comment at https://github.com/dask/dask/issues/9043".
-
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. If specified, adjacent row-groups
-        and/or files will be aggregated into the same output partition until the
+        (uncompressed) Parquet storage space. If specified, multiple small
+        partitions will be aggregated into the same output partition until the
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
-        value. Use `aggregate_files` to enable/disable inter-file aggregation.
-    aggregate_files : bool or str, default None
-        WARNING: The ``aggregate_files`` argument will be deprecated in the future.
-        Please consider using ``from_map`` to create a DataFrame collection with a
-        custom file-to-partition mapping. If you strongly oppose the deprecation of
-        ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
+        value. Use ``aggregate_files=True`` or ``split_row_groups=True`` to
+        control the size of the pre-aggregated partitions, and use
+        ``partition_boundary`` to specify which files may be aggregated together.
 
+        WARNING: The ``chunksize`` argument requires up-front metadata parsing
+        for every row-group in the dataset. This process can be slow for large
+        datasets or remote storage. Specifying an integer to ``split_row_groups``
+        or ``aggregate_files`` is typically faster.
+    aggregate_files : bool or int, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter is only used when `chunksize` is specified
-        or when `split_row_groups` is an integer >1. A setting of True means
-        that any two file paths may be aggregated into the same output partition,
-        while False means that inter-file aggregation is prohibited.
-
-        For "hive-partitioned" datasets, a "partition"-column name can also be
-        specified. In this case, we allow the aggregation of any two files
-        sharing a file path up to, and including, the corresponding directory name.
-        For example, if ``aggregate_files`` is set to ``"section"`` for the
-        directory structure below, ``03.parquet`` and ``04.parquet`` may be
-        aggregated together, but ``01.parquet`` and ``02.parquet`` cannot be.
-        If, however, ``aggregate_files`` is set to ``"region"``, ``01.parquet``
-        may be aggregated with ``02.parquet``, and ``03.parquet`` may be aggregated
-        with ``04.parquet``::
-
-            dataset-path/
-            ├── region=1/
-            │   ├── section=a/
-            │   │   └── 01.parquet
-            │   ├── section=b/
-            │   └── └── 02.parquet
-            └── region=2/
-                ├── section=a/
-                │   ├── 03.parquet
-                └── └── 04.parquet
-
-        Note that the default behavior of ``aggregate_files`` is ``False``.
+        partition. Default is ``True`` when ``chunksize`` is specified, and
+        ``False`` otherwise. A setting of ``True`` means that any two file paths
+        may be aggregated into the same output partition, while ``False`` means
+        that inter-file aggregation is prohibited. If a positive integer value
+        is given, each output dataframe partition will correspond to that number
+        of Parquet files (or fewer). Use ``partition_boundary`` to specify which
+        files may be aggregated.
+    partition_boundary : list, default None
+        List of hive or directory-partitioned columns where categorical values
+        must match between two partitions for aggregation to be allowed. When
+        this option is specified, the paths in the dataset will be re-sorted so
+        that paths within the same "partition group" are always adjacent.
     parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
         A file extension or an iterable of extensions to use when discovering
         parquet files in a directory. Files that don't match these extensions
@@ -352,35 +339,30 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if bool(partition_size_files) > 1:
-        # partition_size_files cannot be >1 if split_row_groups
-        # is also defined. Also, aggregate_files cannot be False
-        # if partition_size_files >1
-        if bool(split_row_groups) or chunksize:
-            raise ValueError
-        aggregate_files = aggregate_files or True
-
-    # "Pre-deprecation" warning for `chunksize`
-    if chunksize:
-        warnings.warn(
-            "The `chunksize` argument will be deprecated in the future. "
-            "Please use `split_row_groups` to specify how many row-groups "
-            "should be mapped to each output partition.\n\n"
-            "If you strongly oppose the deprecation of `chunksize`, please "
-            "comment at https://github.com/dask/dask/issues/9043",
-            FutureWarning,
+    # Error on "deprecated" aggregate_files usage
+    if isinstance(aggregate_files, str):
+        ValueError(
+            "Specifying a string value to `aggregate_files` is now deprecated. "
+            "Please use the (similar) `partition_boundary` argument instead."
         )
 
-    # "Pre-deprecation" warning for `aggregate_files`
-    if aggregate_files:
-        warnings.warn(
-            "The `aggregate_files` argument will be deprecated in the future. "
-            "Please consider using `from_map` to create a DataFrame collection "
-            "with a custom file-to-partition mapping.\n\n"
-            "If you strongly oppose the deprecation of `aggregate_files`, "
-            "please comment at https://github.com/dask/dask/issues/9051",
-            FutureWarning,
-        )
+    # Check for conflicting arguments related to file aggregation
+    if int(aggregate_files) > 1:
+        if split_row_groups:
+            raise ValueError(
+                "The aggregate_files option may not be set to a positive "
+                "integer >1 when split_row_groups is also specified. Try "
+                "using aggregate_files=True."
+            )
+        if chunksize:
+            raise ValueError(
+                "The aggregate_files option may not be set to a positive "
+                "integer >1 when chunksize is also specified. Try using "
+                "aggregate_files=True."
+            )
+    elif aggregate_files is None:
+        # Default setting for aggregate_files
+        aggregate_files = bool(chunksize)
 
     if "read_from_paths" in kwargs:
         kwargs.pop("read_from_paths")
@@ -430,6 +412,7 @@ def read_parquet(
         "filters": filters,
         "categories": categories,
         "index": index,
+        "sort_input_paths": sort_input_paths,
         "storage_options": storage_options,
         "engine": engine,
         "calculate_divisions": calculate_divisions,
@@ -438,8 +421,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
-        "partition_size_files": partition_size_files,
-        "sort_paths": sort_paths,
+        "partition_boundary": partition_boundary,
         "parquet_file_extension": parquet_file_extension,
         **kwargs,
     }
@@ -462,7 +444,7 @@ def read_parquet(
     input_kwargs.update({"columns": columns, "engine": engine})
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
-    if sort_paths:
+    if sort_input_paths:
         paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -481,7 +463,7 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         chunksize=chunksize,
-        aggregate_files=aggregate_files,
+        aggregate_files=partition_boundary or bool(aggregate_files),
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
@@ -515,23 +497,25 @@ def read_parquet(
         )
         statistics = []
 
-    # Remove empty partitions (if statistics are known)
-    parts, statistics = filter_empty_partitions(parts, statistics)
+    # Statistics-based `parts`` filtering
+    if statistics:
+        # Remove empty partitions (if statistics are known)
+        parts, statistics = remove_empty_partitions(parts, statistics)
 
-    # Apply filters
-    if statistics and filters:
-        parts, statistics = apply_filters(parts, statistics, filters)
+        # Apply filters
+        if filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
 
     # Aggregate parts/statistics
-    if chunksize:
+    if chunksize and statistics:
         # Use chunksize to aggregate adjacent row-groups/files
-        parts, statistics = aggregate_chunksize(parts, statistics, chunksize)
-    elif split_row_groups and int(split_row_groups) > 1:
+        parts, statistics = aggregate_by_chunksize(parts, statistics, chunksize)
+    elif isinstance(split_row_groups, int) and split_row_groups > 1:
         # Use split_row_groups to aggregate adjacent row-groups/files
-        parts, statistics = aggregate_row_groups(parts, statistics, split_row_groups)
-    elif (partition_size_files or 1) > 1:
-        # Use partition_size_files to aggregate adjacent files
-        parts, statistics = coelesce_files(parts, statistics, partition_size_files)
+        parts, statistics = aggregate_by_row_groups(parts, statistics, split_row_groups)
+    elif isinstance(aggregate_files, int) and aggregate_files > 1:
+        # Use aggregate_files to aggregate adjacent files
+        parts, statistics = aggregate_by_files(parts, statistics, aggregate_files)
 
     # Parse dataset statistics from metadata (if available)
     divisions, index, index_in_columns = process_statistics(
@@ -1385,7 +1369,7 @@ def process_statistics(parts, statistics, index):
     return divisions, index, index_in_columns
 
 
-def filter_empty_partitions(parts, statistics):
+def remove_empty_partitions(parts, statistics):
     if statistics:
         result = list(
             zip(
@@ -1458,7 +1442,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_chunksize(parts, stats, chunksize):
+def aggregate_by_chunksize(parts, stats, chunksize):
 
     if not stats:
         return parts, stats
@@ -1510,7 +1494,7 @@ def aggregate_chunksize(parts, stats, chunksize):
     return parts_agg, stats_agg
 
 
-def aggregate_row_groups(parts, stats, split_row_groups):
+def aggregate_by_row_groups(parts, stats, split_row_groups):
 
     parts_agg = []
     stats_agg = []
@@ -1564,7 +1548,7 @@ def aggregate_row_groups(parts, stats, split_row_groups):
     return parts_agg, stats_agg
 
 
-def coelesce_files(parts, stats, partition_size_files):
+def aggregate_by_files(parts, stats, partition_size_files):
 
     parts_agg = []
     stats_agg = []

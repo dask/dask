@@ -742,3 +742,31 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+class FileGroupLookup:
+    def __init__(self, path_depth=1):
+        self._mapping = {}
+        self._path_depth = path_depth
+
+    def __getitem__(self, path):
+        if not isinstance(path, str):
+            raise ValueError
+
+        key = tuple(path.split("/")[-self._path_depth :])
+        return self._mapping[key]
+
+    def get(self, key, default):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __setitem__(self, path, group):
+        if not isinstance(path, str):
+            raise ValueError
+        if not isinstance(group, int):
+            raise ValueError
+
+        key = tuple(path.split("/")[-self._path_depth :])
+        self._mapping[key] = group

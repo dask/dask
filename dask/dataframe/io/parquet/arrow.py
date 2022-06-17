@@ -859,13 +859,7 @@ class ArrowDatasetEngine(Engine):
             )
 
         # Create path-lookup table
-        aggregation_boundary = None
-        if isinstance(aggregate_files, (list, str)):
-            aggregation_boundary = aggregate_files
-            aggregate_files = True
-        path_lookup_table = cls._get_path_lookup(
-            ds, aggregate_files, aggregation_boundary, filters
-        )
+        file_group_lookup = cls._get_file_group_lookup(ds, aggregate_files, filters)
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
@@ -958,7 +952,7 @@ class ArrowDatasetEngine(Engine):
             "partitions": partition_obj,
             "partition_names": partition_names,
             "metadata_task_size": metadata_task_size,
-            "path_lookup_table": path_lookup_table,
+            "file_group_lookup": file_group_lookup,
             "kwargs": {
                 "dataset": _dataset_kwargs,
                 "read": read_kwargs,
@@ -1111,7 +1105,7 @@ class ArrowDatasetEngine(Engine):
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
-        path_lookup_table = dataset_info["path_lookup_table"]
+        file_group_lookup = dataset_info["file_group_lookup"]
         kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
@@ -1168,11 +1162,12 @@ class ArrowDatasetEngine(Engine):
                 [
                     {
                         "piece": (path, None, None),
-                        "file_group": group,
+                        "file_group": file_group_lookup[path],
                     }
-                    for path, group in zip(
-                        path_lookup_table["path"],
-                        path_lookup_table["file_group"],
+                    # Make sure parts are sorted by file-group
+                    for path in sorted(
+                        ds.files,
+                        key=lambda x: file_group_lookup[x],
                     )
                 ],
                 [],
@@ -1195,6 +1190,7 @@ class ArrowDatasetEngine(Engine):
             "stat_col_indices": stat_col_indices,
             "chunksize": chunksize,
             "partitions": partitions,
+            "file_group_lookup": file_group_lookup,
             "dataset_options": kwargs["dataset"],
         }
 
@@ -1208,16 +1204,13 @@ class ArrowDatasetEngine(Engine):
             # Therefore, we can just loop over fragments on the client.
 
             # Start with list of file-based fragments,
-            # sorted by the index in path_lookup_table
+            # sorted by the index in file_group_lookup
             # (ordered by "aggregation group")
-            file_frags = list(
-                np.array(list(ds.get_fragments(ds_filters))).take(
-                    path_lookup_table.index
-                )
+            file_frags = sorted(
+                list(ds.get_fragments(ds_filters)),
+                key=lambda x: file_group_lookup[x.path],
             )
-            parts, stats = cls._collect_file_parts(
-                file_frags, path_lookup_table, dataset_info_kwargs
-            )
+            parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
         else:
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
@@ -1227,7 +1220,10 @@ class ArrowDatasetEngine(Engine):
             # of files containing a _metadata file.  Since we used
             # the _metadata file to generate our dataset object , we need
             # to ignore any file fragments that are not in the list.
-            all_files = path_lookup_table["path"]
+            all_files = sorted(
+                ds.files,
+                key=lambda x: file_group_lookup[x],
+            )
             if valid_paths:
                 all_files = [
                     filef
@@ -1267,7 +1263,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _collect_file_parts(
         cls,
-        path_lookup_table,
+        files_or_frags,
         dataset_info_kwargs,
     ):
 
@@ -1277,25 +1273,39 @@ class ArrowDatasetEngine(Engine):
         gather_statistics = dataset_info_kwargs["gather_statistics"]
         partitions = dataset_info_kwargs["partitions"]
         dataset_options = dataset_info_kwargs["dataset_options"]
+        file_group_lookup = dataset_info_kwargs["file_group_lookup"]
 
         # Make sure we are processing a non-empty list
-        if not len(path_lookup_table):
+        if not isinstance(files_or_frags, list):
+            files_or_frags = [files_or_frags]
+        elif not files_or_frags:
             return [], []
 
-        # Check if we are using a simple file-partition map
-        # without requiring any file or row-group statistics
-        if not (split_row_groups or partitions) and gather_statistics is False:
-            # Cool - We can return immediately
-            return [
-                {
-                    "piece": (path, None, None),
-                    "file_group": group,
-                }
-                for path, group in zip(
-                    path_lookup_table["path"],
-                    path_lookup_table["file_group"],
-                )
-            ], None
+        # Make sure we are starting with file fragments
+        if isinstance(files_or_frags[0], str):
+
+            # Check if we are using a simple file-partition map
+            # without requiring any file or row-group statistics
+            if not (split_row_groups or partitions) and gather_statistics is False:
+                # Cool - We can return immediately
+                return [
+                    {
+                        "piece": (path, None, None),
+                        "file_group": file_group_lookup[path],
+                    }
+                    for path in files_or_frags
+                ], None
+
+            # Need more information - convert the path to a fragment
+            file_frags = list(
+                pa_ds.dataset(
+                    files_or_frags,
+                    filesystem=fs,
+                    **dataset_options,
+                ).get_fragments()
+            )
+        else:
+            file_frags = files_or_frags
 
         # Collect settings from dataset_info
         filters = dataset_info_kwargs["filters"]
@@ -1305,20 +1315,13 @@ class ArrowDatasetEngine(Engine):
         chunksize = dataset_info_kwargs["chunksize"]
 
         # Intialize row-group and statistiscs data structures
-        file_aggregation_groups = {}
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         single_rg_parts = int(split_row_groups) == 1
         hive_partition_keys = {}
         cmax_last = {}
-        for file_id, file_frag in enumerate(
-            pa_ds.dataset(
-                path_lookup_table["path"],
-                filesystem=fs,
-                **dataset_options,
-            ).get_fragments()
-        ):
+        for file_frag in file_frags:
             fpath = file_frag.path
 
             # Extract hive-partition keys, and make sure they
@@ -1328,9 +1331,6 @@ class ArrowDatasetEngine(Engine):
                 (hive_part.name, raw_keys[hive_part.name]) for hive_part in partitions
             ]
 
-            file_aggregation_groups[fpath] = path_lookup_table.iloc[file_id][
-                "file_group"
-            ]
             for frag in file_frag.split_by_row_group(ds_filters, schema=schema):
                 row_group_info = frag.row_groups
                 if gather_statistics or split_row_groups:
@@ -1424,7 +1424,7 @@ class ArrowDatasetEngine(Engine):
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
-            file_aggregation_groups,
+            file_group_lookup,
             stat_col_indices,
             cls._make_part,
             make_part_kwargs={
@@ -1597,48 +1597,82 @@ class ArrowDatasetEngine(Engine):
             return meta
 
     @classmethod
-    def _get_path_lookup(cls, ds, aggregate_files, aggregation_boundary, filters):
-        # Create path-lookup table.
-        # Note that we want to use directory-partitioning info
-        # to re-order the paths to simplify file aggregation
-        # (if aggregation_boundary is defined)
-        records = []
+    def _get_file_group_lookup(cls, ds, aggregate_files, filters):
+        # Create "file group" mapping
+        #
+        # We use the FileGroupLookup class to label the file
+        # group for every file in the dataset. A "file group"
+        # corresponds to an integer value. Two files belonging
+        # to the same "file group" may be aggregated into
+        # the same output partition.
+        #
+        from dask.dataframe.io.parquet.utils import FileGroupLookup
+
         ds_filters = pq._filters_to_expression(filters) if filters is not None else None
-        for i, file_frag in enumerate(ds.get_fragments(ds_filters)):
+        file_frags = list(ds.get_fragments(ds_filters))
+
+        # Check if aggregate_files corresponds to
+        # a partition boundary
+        partition_boundary = None
+        if isinstance(aggregate_files, (list, str)):
+            partition_boundary = aggregate_files
+
+        # Get path_depth
+        # (number of partitioned cols in each path)
+        path_depth = (
+            len(pa_ds._get_partition_keys(file_frags[0].partition_expression))
+            if file_frags
+            else 0
+        )
+
+        # Define raw lookup table
+        records = []
+        for i, file_frag in enumerate(file_frags):
             record = {"file_id": i, "path": file_frag.path}
-            keys = pa_ds._get_partition_keys(file_frag.partition_expression)
-            if keys:
-                record.update(keys)
+            if partition_boundary:
+                keys = pa_ds._get_partition_keys(file_frag.partition_expression)
+                if keys:
+                    record.update(keys)
             records.append(record)
         if not records:
             records = {"file_id": [], "path": []}
+        raw_lookup_table = pd.DataFrame(records)
 
-        path_lookup_table = pd.DataFrame(records).set_index("file_id")
-
-        if aggregation_boundary:
-            parts_df = path_lookup_table.reset_index()
+        # Use partition_boundary or aggregate_files
+        # to re-order raw_lookup_table, and assign
+        # a "file_group" column
+        if partition_boundary:
             select = ["file_id"] + (
-                aggregation_boundary
-                if isinstance(aggregation_boundary, list)
-                else [aggregation_boundary]
+                partition_boundary
+                if isinstance(partition_boundary, list)
+                else [partition_boundary]
             )
             parts_df = (
-                parts_df[select]
-                .groupby(aggregation_boundary)
+                raw_lookup_table[select]
+                .groupby(partition_boundary)
                 .agg(list)
                 .reset_index(drop=True)["file_id"]
             )
 
-            # Re-order by aggregation_boundary constraints
-            path_lookup_table = path_lookup_table.take(np.concatenate(parts_df.values))
+            # Re-order by partition_boundary constraints
+            raw_lookup_table = raw_lookup_table.take(np.concatenate(parts_df.values))
             agg_group = np.concatenate(
                 [np.repeat(i, l) for i, l in enumerate(parts_df.apply(len))]
             )
         elif not aggregate_files:
             # NO file aggregation allowed
-            agg_group = np.arange(0, len(path_lookup_table))
+            agg_group = np.arange(0, len(raw_lookup_table))
         else:
             # ALL file aggregation allowed
-            agg_group = np.repeat(0, len(path_lookup_table))
+            agg_group = np.repeat(0, len(raw_lookup_table))
+        result = (
+            raw_lookup_table[["path"]]
+            .assign(file_group=agg_group)
+            .set_index("path")["file_group"]
+        )
 
-        return path_lookup_table[["path"]].assign(file_group=agg_group)
+        # Use `result` to populate a FileGroupLookup mapping
+        file_group_lookup = FileGroupLookup(path_depth + 1)
+        for k, v in result.items():
+            file_group_lookup[k] = v
+        return file_group_lookup
