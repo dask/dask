@@ -36,7 +36,7 @@ def test_register_extension_type():
 def test_reduction():
     ser = pd.Series(DecimalArray._from_sequence([Decimal("0"), Decimal("1")]))
     dser = dd.from_pandas(ser, 2)
-    assert_eq(ser.mean(skipna=False), dser.mean(skipna=False), sort_results=False)
+    assert_eq(ser.mean(skipna=False), dser.mean(skipna=False))
 
     # It's unclear whether this can be reliably provided, at least with the current
     # implementation, which uses pandas.DataFrame.sum(), returning a (homogenous)
