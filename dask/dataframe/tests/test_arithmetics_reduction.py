@@ -270,82 +270,82 @@ def check_series_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(er, pd.Series)
 
     # l, r may be repartitioned, test whether repartition keeps original data
-    assert_eq(l, el)
-    assert_eq(r, er)
+    assert_eq(l, el, sort_results=False)
+    assert_eq(r, er, sort_results=False)
 
-    assert_eq(l + r, el + er)
-    assert_eq(l * r, el * er)
-    assert_eq(l - r, el - er)
-    assert_eq(l / r, el / er)
-    assert_eq(l // r, el // er)
-    assert_eq(l**r, el**er)
-    assert_eq(l % r, el % er)
-
-    if allow_comparison_ops:
-        # comparison is allowed if data have same index
-        assert_eq(l & r, el & er)
-        assert_eq(l | r, el | er)
-        assert_eq(l ^ r, el ^ er)
-        assert_eq(l > r, el > er)
-        assert_eq(l < r, el < er)
-        assert_eq(l >= r, el >= er)
-        assert_eq(l <= r, el <= er)
-        assert_eq(l == r, el == er)
-        assert_eq(l != r, el != er)
-        assert_eq(l.lt(r), el.lt(er))
-        assert_eq(l.gt(r), el.gt(er))
-        assert_eq(l.le(r), el.le(er))
-        assert_eq(l.ge(r), el.ge(er))
-        assert_eq(l.ne(r), el.ne(er))
-        assert_eq(l.eq(r), el.eq(er))
-
-    assert_eq(l + 2, el + 2)
-    assert_eq(l * 2, el * 2)
-    assert_eq(l - 2, el - 2)
-    assert_eq(l / 2, el / 2)
-    assert_eq(l & True, el & True)
-    assert_eq(l | True, el | True)
-    assert_eq(l ^ True, el ^ True)
-    assert_eq(l // 2, el // 2)
-    assert_eq(l**2, el**2)
-    assert_eq(l % 2, el % 2)
-    assert_eq(l > 2, el > 2)
-    assert_eq(l < 2, el < 2)
-    assert_eq(l >= 2, el >= 2)
-    assert_eq(l <= 2, el <= 2)
-    assert_eq(l == 2, el == 2)
-    assert_eq(l != 2, el != 2)
-
-    assert_eq(2 + r, 2 + er)
-    assert_eq(2 * r, 2 * er)
-    assert_eq(2 - r, 2 - er)
-    assert_eq(2 / r, 2 / er)
-    assert_eq(True & r, True & er)
-    assert_eq(True | r, True | er)
-    assert_eq(True ^ r, True ^ er)
-    assert_eq(2 // r, 2 // er)
-    assert_eq(2**r, 2**er)
-    assert_eq(2 % r, 2 % er)
-    assert_eq(2 > r, 2 > er)
-    assert_eq(2 < r, 2 < er)
-    assert_eq(2 >= r, 2 >= er)
-    assert_eq(2 <= r, 2 <= er)
-    assert_eq(2 == r, 2 == er)
-    assert_eq(2 != r, 2 != er)
-
-    assert_eq(l.lt(2), el.lt(2))
-    assert_eq(l.gt(2), el.gt(2))
-    assert_eq(l.le(2), el.le(2))
-    assert_eq(l.ge(2), el.ge(2))
-    assert_eq(l.ne(2), el.ne(2))
-    assert_eq(l.eq(2), el.eq(2))
-
-    assert_eq(-l, -el)
-    assert_eq(abs(l), abs(el))
+    assert_eq(l + r, el + er, sort_results=False)
+    assert_eq(l * r, el * er, sort_results=False)
+    assert_eq(l - r, el - er, sort_results=False)
+    assert_eq(l / r, el / er, sort_results=False)
+    assert_eq(l // r, el // er, sort_results=False)
+    assert_eq(l**r, el**er, sort_results=False)
+    assert_eq(l % r, el % er, sort_results=False)
 
     if allow_comparison_ops:
         # comparison is allowed if data have same index
-        assert_eq(~(l == r), ~(el == er))
+        assert_eq(l & r, el & er, sort_results=False)
+        assert_eq(l | r, el | er, sort_results=False)
+        assert_eq(l ^ r, el ^ er, sort_results=False)
+        assert_eq(l > r, el > er, sort_results=False)
+        assert_eq(l < r, el < er, sort_results=False)
+        assert_eq(l >= r, el >= er, sort_results=False)
+        assert_eq(l <= r, el <= er, sort_results=False)
+        assert_eq(l == r, el == er, sort_results=False)
+        assert_eq(l != r, el != er, sort_results=False)
+        assert_eq(l.lt(r), el.lt(er), sort_results=False)
+        assert_eq(l.gt(r), el.gt(er), sort_results=False)
+        assert_eq(l.le(r), el.le(er), sort_results=False)
+        assert_eq(l.ge(r), el.ge(er), sort_results=False)
+        assert_eq(l.ne(r), el.ne(er), sort_results=False)
+        assert_eq(l.eq(r), el.eq(er), sort_results=False)
+
+    assert_eq(l + 2, el + 2, sort_results=False)
+    assert_eq(l * 2, el * 2, sort_results=False)
+    assert_eq(l - 2, el - 2, sort_results=False)
+    assert_eq(l / 2, el / 2, sort_results=False)
+    assert_eq(l & True, el & True, sort_results=False)
+    assert_eq(l | True, el | True, sort_results=False)
+    assert_eq(l ^ True, el ^ True, sort_results=False)
+    assert_eq(l // 2, el // 2, sort_results=False)
+    assert_eq(l**2, el**2, sort_results=False)
+    assert_eq(l % 2, el % 2, sort_results=False)
+    assert_eq(l > 2, el > 2, sort_results=False)
+    assert_eq(l < 2, el < 2, sort_results=False)
+    assert_eq(l >= 2, el >= 2, sort_results=False)
+    assert_eq(l <= 2, el <= 2, sort_results=False)
+    assert_eq(l == 2, el == 2, sort_results=False)
+    assert_eq(l != 2, el != 2, sort_results=False)
+
+    assert_eq(2 + r, 2 + er, sort_results=False)
+    assert_eq(2 * r, 2 * er, sort_results=False)
+    assert_eq(2 - r, 2 - er, sort_results=False)
+    assert_eq(2 / r, 2 / er, sort_results=False)
+    assert_eq(True & r, True & er, sort_results=False)
+    assert_eq(True | r, True | er, sort_results=False)
+    assert_eq(True ^ r, True ^ er, sort_results=False)
+    assert_eq(2 // r, 2 // er, sort_results=False)
+    assert_eq(2**r, 2**er, sort_results=False)
+    assert_eq(2 % r, 2 % er, sort_results=False)
+    assert_eq(2 > r, 2 > er, sort_results=False)
+    assert_eq(2 < r, 2 < er, sort_results=False)
+    assert_eq(2 >= r, 2 >= er, sort_results=False)
+    assert_eq(2 <= r, 2 <= er, sort_results=False)
+    assert_eq(2 == r, 2 == er, sort_results=False)
+    assert_eq(2 != r, 2 != er, sort_results=False)
+
+    assert_eq(l.lt(2), el.lt(2), sort_results=False)
+    assert_eq(l.gt(2), el.gt(2), sort_results=False)
+    assert_eq(l.le(2), el.le(2), sort_results=False)
+    assert_eq(l.ge(2), el.ge(2), sort_results=False)
+    assert_eq(l.ne(2), el.ne(2), sort_results=False)
+    assert_eq(l.eq(2), el.eq(2), sort_results=False)
+
+    assert_eq(-l, -el, sort_results=False)
+    assert_eq(abs(l), abs(el), sort_results=False)
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
+        assert_eq(~(l == r), ~(el == er), sort_results=False)
 
 
 def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
@@ -354,82 +354,82 @@ def check_frame_arithmetics(l, r, el, er, allow_comparison_ops=True):
     assert isinstance(el, pd.DataFrame)
     assert isinstance(er, pd.DataFrame)
     # l, r may be repartitioned, test whether repartition keeps original data
-    assert_eq(l, el)
-    assert_eq(r, er)
+    assert_eq(l, el, sort_results=False)
+    assert_eq(r, er, sort_results=False)
 
-    assert_eq(l + r, el + er)
-    assert_eq(l * r, el * er)
-    assert_eq(l - r, el - er)
-    assert_eq(l / r, el / er)
-    assert_eq(l // r, el // er)
-    assert_eq(l**r, el**er)
-    assert_eq(l % r, el % er)
-
-    if allow_comparison_ops:
-        # comparison is allowed if data have same index
-        assert_eq(l & r, el & er)
-        assert_eq(l | r, el | er)
-        assert_eq(l ^ r, el ^ er)
-        assert_eq(l > r, el > er)
-        assert_eq(l < r, el < er)
-        assert_eq(l >= r, el >= er)
-        assert_eq(l <= r, el <= er)
-        assert_eq(l == r, el == er)
-        assert_eq(l != r, el != er)
-        assert_eq(l.lt(r), el.lt(er))
-        assert_eq(l.gt(r), el.gt(er))
-        assert_eq(l.le(r), el.le(er))
-        assert_eq(l.ge(r), el.ge(er))
-        assert_eq(l.ne(r), el.ne(er))
-        assert_eq(l.eq(r), el.eq(er))
-
-    assert_eq(l + 2, el + 2)
-    assert_eq(l * 2, el * 2)
-    assert_eq(l - 2, el - 2)
-    assert_eq(l / 2, el / 2)
-    assert_eq(l & True, el & True)
-    assert_eq(l | True, el | True)
-    assert_eq(l ^ True, el ^ True)
-    assert_eq(l // 2, el // 2)
-    assert_eq(l**2, el**2)
-    assert_eq(l % 2, el % 2)
-    assert_eq(l > 2, el > 2)
-    assert_eq(l < 2, el < 2)
-    assert_eq(l >= 2, el >= 2)
-    assert_eq(l <= 2, el <= 2)
-    assert_eq(l == 2, el == 2)
-    assert_eq(l != 2, el != 2)
-
-    assert_eq(2 + l, 2 + el)
-    assert_eq(2 * l, 2 * el)
-    assert_eq(2 - l, 2 - el)
-    assert_eq(2 / l, 2 / el)
-    assert_eq(True & l, True & el)
-    assert_eq(True | l, True | el)
-    assert_eq(True ^ l, True ^ el)
-    assert_eq(2 // l, 2 // el)
-    assert_eq(2**l, 2**el)
-    assert_eq(2 % l, 2 % el)
-    assert_eq(2 > l, 2 > el)
-    assert_eq(2 < l, 2 < el)
-    assert_eq(2 >= l, 2 >= el)
-    assert_eq(2 <= l, 2 <= el)
-    assert_eq(2 == l, 2 == el)
-    assert_eq(2 != l, 2 != el)
-
-    assert_eq(l.lt(2), el.lt(2))
-    assert_eq(l.gt(2), el.gt(2))
-    assert_eq(l.le(2), el.le(2))
-    assert_eq(l.ge(2), el.ge(2))
-    assert_eq(l.ne(2), el.ne(2))
-    assert_eq(l.eq(2), el.eq(2))
-
-    assert_eq(-l, -el)
-    assert_eq(abs(l), abs(el))
+    assert_eq(l + r, el + er, sort_results=False)
+    assert_eq(l * r, el * er, sort_results=False)
+    assert_eq(l - r, el - er, sort_results=False)
+    assert_eq(l / r, el / er, sort_results=False)
+    assert_eq(l // r, el // er, sort_results=False)
+    assert_eq(l**r, el**er, sort_results=False)
+    assert_eq(l % r, el % er, sort_results=False)
 
     if allow_comparison_ops:
         # comparison is allowed if data have same index
-        assert_eq(~(l == r), ~(el == er))
+        assert_eq(l & r, el & er, sort_results=False)
+        assert_eq(l | r, el | er, sort_results=False)
+        assert_eq(l ^ r, el ^ er, sort_results=False)
+        assert_eq(l > r, el > er, sort_results=False)
+        assert_eq(l < r, el < er, sort_results=False)
+        assert_eq(l >= r, el >= er, sort_results=False)
+        assert_eq(l <= r, el <= er, sort_results=False)
+        assert_eq(l == r, el == er, sort_results=False)
+        assert_eq(l != r, el != er, sort_results=False)
+        assert_eq(l.lt(r), el.lt(er), sort_results=False)
+        assert_eq(l.gt(r), el.gt(er), sort_results=False)
+        assert_eq(l.le(r), el.le(er), sort_results=False)
+        assert_eq(l.ge(r), el.ge(er), sort_results=False)
+        assert_eq(l.ne(r), el.ne(er), sort_results=False)
+        assert_eq(l.eq(r), el.eq(er), sort_results=False)
+
+    assert_eq(l + 2, el + 2, sort_results=False)
+    assert_eq(l * 2, el * 2, sort_results=False)
+    assert_eq(l - 2, el - 2, sort_results=False)
+    assert_eq(l / 2, el / 2, sort_results=False)
+    assert_eq(l & True, el & True, sort_results=False)
+    assert_eq(l | True, el | True, sort_results=False)
+    assert_eq(l ^ True, el ^ True, sort_results=False)
+    assert_eq(l // 2, el // 2, sort_results=False)
+    assert_eq(l**2, el**2, sort_results=False)
+    assert_eq(l % 2, el % 2, sort_results=False)
+    assert_eq(l > 2, el > 2, sort_results=False)
+    assert_eq(l < 2, el < 2, sort_results=False)
+    assert_eq(l >= 2, el >= 2, sort_results=False)
+    assert_eq(l <= 2, el <= 2, sort_results=False)
+    assert_eq(l == 2, el == 2, sort_results=False)
+    assert_eq(l != 2, el != 2, sort_results=False)
+
+    assert_eq(2 + l, 2 + el, sort_results=False)
+    assert_eq(2 * l, 2 * el, sort_results=False)
+    assert_eq(2 - l, 2 - el, sort_results=False)
+    assert_eq(2 / l, 2 / el, sort_results=False)
+    assert_eq(True & l, True & el, sort_results=False)
+    assert_eq(True | l, True | el, sort_results=False)
+    assert_eq(True ^ l, True ^ el, sort_results=False)
+    assert_eq(2 // l, 2 // el, sort_results=False)
+    assert_eq(2**l, 2**el, sort_results=False)
+    assert_eq(2 % l, 2 % el, sort_results=False)
+    assert_eq(2 > l, 2 > el, sort_results=False)
+    assert_eq(2 < l, 2 < el, sort_results=False)
+    assert_eq(2 >= l, 2 >= el, sort_results=False)
+    assert_eq(2 <= l, 2 <= el, sort_results=False)
+    assert_eq(2 == l, 2 == el, sort_results=False)
+    assert_eq(2 != l, 2 != el, sort_results=False)
+
+    assert_eq(l.lt(2), el.lt(2), sort_results=False)
+    assert_eq(l.gt(2), el.gt(2), sort_results=False)
+    assert_eq(l.le(2), el.le(2), sort_results=False)
+    assert_eq(l.ge(2), el.ge(2), sort_results=False)
+    assert_eq(l.ne(2), el.ne(2), sort_results=False)
+    assert_eq(l.eq(2), el.eq(2), sort_results=False)
+
+    assert_eq(-l, -el, sort_results=False)
+    assert_eq(abs(l), abs(el), sort_results=False)
+
+    if allow_comparison_ops:
+        # comparison is allowed if data have same index
+        assert_eq(~(l == r), ~(el == er), sort_results=False)
 
 
 def test_scalar_arithmetics():
@@ -515,38 +515,38 @@ def test_scalar_arithmetics_with_dask_instances():
     # pandas Series
     result = pds + s  # this result pd.Series (automatically computed)
     assert isinstance(result, pd.Series)
-    assert_eq(result, pds + e)
+    assert_eq(result, pds + e, sort_results=False)
 
     result = s + pds  # this result dd.Series
     assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
+    assert_eq(result, pds + e, sort_results=False)
 
     # dask Series
     result = dds + s  # this result dd.Series
     assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
+    assert_eq(result, pds + e, sort_results=False)
 
     result = s + dds  # this result dd.Series
     assert isinstance(result, dd.Series)
-    assert_eq(result, pds + e)
+    assert_eq(result, pds + e, sort_results=False)
 
     # pandas DataFrame
     result = pdf + s  # this result pd.DataFrame (automatically computed)
     assert isinstance(result, pd.DataFrame)
-    assert_eq(result, pdf + e)
+    assert_eq(result, pdf + e, sort_results=False)
 
     result = s + pdf  # this result dd.DataFrame
     assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
+    assert_eq(result, pdf + e, sort_results=False)
 
     # dask DataFrame
     result = ddf + s  # this result dd.DataFrame
     assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
+    assert_eq(result, pdf + e, sort_results=False)
 
     result = s + ddf  # this result dd.DataFrame
     assert isinstance(result, dd.DataFrame)
-    assert_eq(result, pdf + e)
+    assert_eq(result, pdf + e, sort_results=False)
 
 
 @pytest.mark.xfail(
@@ -591,74 +591,106 @@ def test_frame_series_arithmetic_methods():
         (ds1, s, ps1, 4),
     ]:
         # l, r may be repartitioned, test whether repartition keeps original data
-        assert_eq(l, el)
-        assert_eq(r, er)
+        assert_eq(l, el, sort_results=False)
+        assert_eq(r, er, sort_results=False)
 
-        assert_eq(l.add(r, fill_value=0), el.add(er, fill_value=0))
-        assert_eq(l.sub(r, fill_value=0), el.sub(er, fill_value=0))
-        assert_eq(l.mul(r, fill_value=0), el.mul(er, fill_value=0))
-        assert_eq(l.div(r, fill_value=0), el.div(er, fill_value=0))
-        assert_eq(l.divide(r, fill_value=0), el.divide(er, fill_value=0))
-        assert_eq(l.truediv(r, fill_value=0), el.truediv(er, fill_value=0))
-        assert_eq(l.floordiv(r, fill_value=1), el.floordiv(er, fill_value=1))
-        assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0))
-        assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0))
+        assert_eq(l.add(r, fill_value=0), el.add(er, fill_value=0), sort_results=False)
+        assert_eq(l.sub(r, fill_value=0), el.sub(er, fill_value=0), sort_results=False)
+        assert_eq(l.mul(r, fill_value=0), el.mul(er, fill_value=0), sort_results=False)
+        assert_eq(l.div(r, fill_value=0), el.div(er, fill_value=0), sort_results=False)
+        assert_eq(
+            l.divide(r, fill_value=0), el.divide(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.truediv(r, fill_value=0), el.truediv(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.floordiv(r, fill_value=1),
+            el.floordiv(er, fill_value=1),
+            sort_results=False,
+        )
+        assert_eq(l.pow(r, fill_value=0), el.pow(er, fill_value=0), sort_results=False)
+        assert_eq(l.mod(r, fill_value=0), el.mod(er, fill_value=0), sort_results=False)
 
-        assert_eq(l.radd(r, fill_value=0), el.radd(er, fill_value=0))
-        assert_eq(l.rsub(r, fill_value=0), el.rsub(er, fill_value=0))
-        assert_eq(l.rmul(r, fill_value=0), el.rmul(er, fill_value=0))
-        assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
-        assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
-        assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
-        assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
+        assert_eq(
+            l.radd(r, fill_value=0), el.radd(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.rsub(r, fill_value=0), el.rsub(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.rmul(r, fill_value=0), el.rmul(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.rtruediv(r, fill_value=0),
+            el.rtruediv(er, fill_value=0),
+            sort_results=False,
+        )
+        assert_eq(
+            l.rpow(r, fill_value=0), el.rpow(er, fill_value=0), sort_results=False
+        )
+        assert_eq(
+            l.rmod(r, fill_value=0), el.rmod(er, fill_value=0), sort_results=False
+        )
 
     for l, r, el, er in [(ddf1, ds2, pdf1, ps2), (ddf1, ddf2.X, pdf1, pdf2.X)]:
-        assert_eq(l, el)
-        assert_eq(r, er)
+        assert_eq(l, el, sort_results=False)
+        assert_eq(r, er, sort_results=False)
 
         # must specify axis=0 to add Series to each column
         # axis=1 is not supported (add to each row)
-        assert_eq(l.add(r, axis=0), el.add(er, axis=0))
-        assert_eq(l.sub(r, axis=0), el.sub(er, axis=0))
-        assert_eq(l.mul(r, axis=0), el.mul(er, axis=0))
-        assert_eq(l.div(r, axis=0), el.div(er, axis=0))
-        assert_eq(l.divide(r, axis=0), el.divide(er, axis=0))
-        assert_eq(l.truediv(r, axis=0), el.truediv(er, axis=0))
-        assert_eq(l.floordiv(r, axis=0), el.floordiv(er, axis=0))
-        assert_eq(l.mod(r, axis=0), el.mod(er, axis=0))
-        assert_eq(l.pow(r, axis=0), el.pow(er, axis=0))
+        assert_eq(l.add(r, axis=0), el.add(er, axis=0), sort_results=False)
+        assert_eq(l.sub(r, axis=0), el.sub(er, axis=0), sort_results=False)
+        assert_eq(l.mul(r, axis=0), el.mul(er, axis=0), sort_results=False)
+        assert_eq(l.div(r, axis=0), el.div(er, axis=0), sort_results=False)
+        assert_eq(l.divide(r, axis=0), el.divide(er, axis=0), sort_results=False)
+        assert_eq(l.truediv(r, axis=0), el.truediv(er, axis=0), sort_results=False)
+        assert_eq(l.floordiv(r, axis=0), el.floordiv(er, axis=0), sort_results=False)
+        assert_eq(l.mod(r, axis=0), el.mod(er, axis=0), sort_results=False)
+        assert_eq(l.pow(r, axis=0), el.pow(er, axis=0), sort_results=False)
 
-        assert_eq(l.radd(r, axis=0), el.radd(er, axis=0))
-        assert_eq(l.rsub(r, axis=0), el.rsub(er, axis=0))
-        assert_eq(l.rmul(r, axis=0), el.rmul(er, axis=0))
-        assert_eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0))
-        assert_eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0))
-        assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
-        assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
+        assert_eq(l.radd(r, axis=0), el.radd(er, axis=0), sort_results=False)
+        assert_eq(l.rsub(r, axis=0), el.rsub(er, axis=0), sort_results=False)
+        assert_eq(l.rmul(r, axis=0), el.rmul(er, axis=0), sort_results=False)
+        assert_eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0), sort_results=False)
+        assert_eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0), sort_results=False)
+        assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0), sort_results=False)
+        assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0), sort_results=False)
 
         pytest.raises(ValueError, lambda: l.add(r, axis=1))
 
     for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps3, pdf1, ps3)]:
-        assert_eq(l, el)
-        assert_eq(r, er)
+        assert_eq(l, el, sort_results=False)
+        assert_eq(r, er, sort_results=False)
 
         for axis in [0, 1, "index", "columns"]:
-            assert_eq(l.add(r, axis=axis), el.add(er, axis=axis))
-            assert_eq(l.sub(r, axis=axis), el.sub(er, axis=axis))
-            assert_eq(l.mul(r, axis=axis), el.mul(er, axis=axis))
-            assert_eq(l.div(r, axis=axis), el.div(er, axis=axis))
-            assert_eq(l.divide(r, axis=axis), el.divide(er, axis=axis))
-            assert_eq(l.truediv(r, axis=axis), el.truediv(er, axis=axis))
-            assert_eq(l.floordiv(r, axis=axis), el.floordiv(er, axis=axis))
-            assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis))
-            assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
-            assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
-            assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
-            assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
-            assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
-            assert_eq(l.radd(r, axis=axis), el.radd(er, axis=axis))
-            assert_eq(l.rsub(r, axis=axis), el.rsub(er, axis=axis))
-            assert_eq(l.rmul(r, axis=axis), el.rmul(er, axis=axis))
+            assert_eq(l.add(r, axis=axis), el.add(er, axis=axis), sort_results=False)
+            assert_eq(l.sub(r, axis=axis), el.sub(er, axis=axis), sort_results=False)
+            assert_eq(l.mul(r, axis=axis), el.mul(er, axis=axis), sort_results=False)
+            assert_eq(l.div(r, axis=axis), el.div(er, axis=axis), sort_results=False)
+            assert_eq(
+                l.divide(r, axis=axis), el.divide(er, axis=axis), sort_results=False
+            )
+            assert_eq(
+                l.truediv(r, axis=axis), el.truediv(er, axis=axis), sort_results=False
+            )
+            assert_eq(
+                l.floordiv(r, axis=axis), el.floordiv(er, axis=axis), sort_results=False
+            )
+            assert_eq(l.mod(r, axis=axis), el.mod(er, axis=axis), sort_results=False)
+            assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis), sort_results=False)
+            assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis), sort_results=False)
+            assert_eq(
+                l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis), sort_results=False
+            )
+            assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis), sort_results=False)
+            assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis), sort_results=False)
+            assert_eq(l.radd(r, axis=axis), el.radd(er, axis=axis), sort_results=False)
+            assert_eq(l.rsub(r, axis=axis), el.rsub(er, axis=axis), sort_results=False)
+            assert_eq(l.rmul(r, axis=axis), el.rmul(er, axis=axis), sort_results=False)
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -848,13 +880,13 @@ def test_reductions_out(frame, axis, out, redfunc):
     else:
         np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
 
     dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
 
     dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -865,13 +897,21 @@ def test_allany(split_every):
     df["E"] = list("abcde") * 20
     ddf = dd.from_pandas(df, 10)
 
-    assert_eq(ddf.all(split_every=split_every), df.all())
-    assert_eq(ddf.all(axis=1, split_every=split_every), df.all(axis=1))
-    assert_eq(ddf.all(axis=0, split_every=split_every), df.all(axis=0))
+    assert_eq(ddf.all(split_every=split_every), df.all(), sort_results=False)
+    assert_eq(
+        ddf.all(axis=1, split_every=split_every), df.all(axis=1), sort_results=False
+    )
+    assert_eq(
+        ddf.all(axis=0, split_every=split_every), df.all(axis=0), sort_results=False
+    )
 
-    assert_eq(ddf.any(split_every=split_every), df.any())
-    assert_eq(ddf.any(axis=1, split_every=split_every), df.any(axis=1))
-    assert_eq(ddf.any(axis=0, split_every=split_every), df.any(axis=0))
+    assert_eq(ddf.any(split_every=split_every), df.any(), sort_results=False)
+    assert_eq(
+        ddf.any(axis=1, split_every=split_every), df.any(axis=1), sort_results=False
+    )
+    assert_eq(
+        ddf.any(axis=0, split_every=split_every), df.any(axis=0), sort_results=False
+    )
 
     assert_eq(ddf.A.all(split_every=split_every), df.A.all())
     assert_eq(ddf.A.any(split_every=split_every), df.A.any())
@@ -1060,32 +1100,70 @@ def test_reductions_frame(split_every):
     ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     pdf1 = ddf1.compute()
 
-    assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
-    assert_eq(ddf1.prod(split_every=split_every), pdf1.prod())
-    assert_eq(ddf1.product(split_every=split_every), pdf1.product())
-    assert_eq(ddf1.min(split_every=split_every), pdf1.min())
-    assert_eq(ddf1.max(split_every=split_every), pdf1.max())
-    assert_eq(ddf1.count(split_every=split_every), pdf1.count())
-    assert_eq(ddf1.std(split_every=split_every), pdf1.std())
-    assert_eq(ddf1.var(split_every=split_every), pdf1.var())
-    assert_eq(ddf1.sem(split_every=split_every), pdf1.sem())
-    assert_eq(ddf1.std(ddof=0, split_every=split_every), pdf1.std(ddof=0))
-    assert_eq(ddf1.var(ddof=0, split_every=split_every), pdf1.var(ddof=0))
-    assert_eq(ddf1.sem(ddof=0, split_every=split_every), pdf1.sem(ddof=0))
-    assert_eq(ddf1.mean(split_every=split_every), pdf1.mean())
+    assert_eq(ddf1.sum(split_every=split_every), pdf1.sum(), sort_results=False)
+    assert_eq(ddf1.prod(split_every=split_every), pdf1.prod(), sort_results=False)
+    assert_eq(ddf1.product(split_every=split_every), pdf1.product(), sort_results=False)
+    assert_eq(ddf1.min(split_every=split_every), pdf1.min(), sort_results=False)
+    assert_eq(ddf1.max(split_every=split_every), pdf1.max(), sort_results=False)
+    assert_eq(ddf1.count(split_every=split_every), pdf1.count(), sort_results=False)
+    assert_eq(ddf1.std(split_every=split_every), pdf1.std(), sort_results=False)
+    assert_eq(ddf1.var(split_every=split_every), pdf1.var(), sort_results=False)
+    assert_eq(ddf1.sem(split_every=split_every), pdf1.sem(), sort_results=False)
+    assert_eq(
+        ddf1.std(ddof=0, split_every=split_every), pdf1.std(ddof=0), sort_results=False
+    )
+    assert_eq(
+        ddf1.var(ddof=0, split_every=split_every), pdf1.var(ddof=0), sort_results=False
+    )
+    assert_eq(
+        ddf1.sem(ddof=0, split_every=split_every), pdf1.sem(ddof=0), sort_results=False
+    )
+    assert_eq(ddf1.mean(split_every=split_every), pdf1.mean(), sort_results=False)
 
     for axis in [0, 1, "index", "columns"]:
-        assert_eq(ddf1.sum(axis=axis, split_every=split_every), pdf1.sum(axis=axis))
-        assert_eq(ddf1.prod(axis=axis, split_every=split_every), pdf1.prod(axis=axis))
+        assert_eq(
+            ddf1.sum(axis=axis, split_every=split_every),
+            pdf1.sum(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.prod(axis=axis, split_every=split_every),
+            pdf1.prod(axis=axis),
+            sort_results=False,
+        )
         assert_eq(
             ddf1.product(axis=axis, split_every=split_every), pdf1.product(axis=axis)
         )
-        assert_eq(ddf1.min(axis=axis, split_every=split_every), pdf1.min(axis=axis))
-        assert_eq(ddf1.max(axis=axis, split_every=split_every), pdf1.max(axis=axis))
-        assert_eq(ddf1.count(axis=axis, split_every=split_every), pdf1.count(axis=axis))
-        assert_eq(ddf1.std(axis=axis, split_every=split_every), pdf1.std(axis=axis))
-        assert_eq(ddf1.var(axis=axis, split_every=split_every), pdf1.var(axis=axis))
-        assert_eq(ddf1.sem(axis=axis, split_every=split_every), pdf1.sem(axis=axis))
+        assert_eq(
+            ddf1.min(axis=axis, split_every=split_every),
+            pdf1.min(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.max(axis=axis, split_every=split_every),
+            pdf1.max(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.count(axis=axis, split_every=split_every),
+            pdf1.count(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.std(axis=axis, split_every=split_every),
+            pdf1.std(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.var(axis=axis, split_every=split_every),
+            pdf1.var(axis=axis),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf1.sem(axis=axis, split_every=split_every),
+            pdf1.sem(axis=axis),
+            sort_results=False,
+        )
         assert_eq(
             ddf1.std(axis=axis, ddof=0, split_every=split_every),
             pdf1.std(axis=axis, ddof=0),
@@ -1098,7 +1176,11 @@ def test_reductions_frame(split_every):
             ddf1.sem(axis=axis, ddof=0, split_every=split_every),
             pdf1.sem(axis=axis, ddof=0),
         )
-        assert_eq(ddf1.mean(axis=axis, split_every=split_every), pdf1.mean(axis=axis))
+        assert_eq(
+            ddf1.mean(axis=axis, split_every=split_every),
+            pdf1.mean(axis=axis),
+            sort_results=False,
+        )
 
     pytest.raises(ValueError, lambda: ddf1.sum(axis="incorrect").compute())
 
@@ -1160,32 +1242,47 @@ def test_reductions_frame_dtypes():
     df_no_timedelta = df.drop("timedelta", axis=1, inplace=False)
     ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
 
-    assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
+    assert_eq(
+        df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum(), sort_results=False
+    )
     assert_eq(
         df_no_timedelta.drop(columns="dt").mean(),
         ddf_no_timedelta.drop(columns="dt").mean(),
+        sort_results=False,
     )
 
-    assert_eq(df.prod(), ddf.prod())
-    assert_eq(df.product(), ddf.product())
-    assert_eq(df.min(), ddf.min())
-    assert_eq(df.max(), ddf.max())
-    assert_eq(df.count(), ddf.count())
-    assert_eq(df.sem(), ddf.sem())
-    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
+    assert_eq(df.prod(), ddf.prod(), sort_results=False)
+    assert_eq(df.product(), ddf.product(), sort_results=False)
+    assert_eq(df.min(), ddf.min(), sort_results=False)
+    assert_eq(df.max(), ddf.max(), sort_results=False)
+    assert_eq(df.count(), ddf.count(), sort_results=False)
+    assert_eq(df.sem(), ddf.sem(), sort_results=False)
+    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0), sort_results=False)
 
-    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
-    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-    assert_eq(df_no_timedelta.var(skipna=False), ddf_no_timedelta.var(skipna=False))
-    assert_eq(df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0))
+    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std(), sort_results=False)
+    assert_eq(
+        df_no_timedelta.std(skipna=False),
+        ddf_no_timedelta.std(skipna=False),
+        sort_results=False,
+    )
+    assert_eq(
+        df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0), sort_results=False
+    )
+    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var(), sort_results=False)
+    assert_eq(
+        df_no_timedelta.var(skipna=False),
+        ddf_no_timedelta.var(skipna=False),
+        sort_results=False,
+    )
+    assert_eq(
+        df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0), sort_results=False
+    )
     assert_eq(
         df_no_timedelta.var(ddof=0, skipna=False),
         ddf_no_timedelta.var(ddof=0, skipna=False),
     )
 
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+    assert_eq(df._get_numeric_data(), ddf._get_numeric_data(), sort_results=False)
 
     numerics = ddf[["int", "float"]]
     assert numerics._get_numeric_data().dask == numerics.dask
@@ -1195,13 +1292,13 @@ def test_reductions_frame_dtypes():
     # only timedelta
     df_td = df[["timedelta"]]
     ddf_td = dd.from_pandas(df_td, 3)
-    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0))
-    assert_eq(df_td.var(), ddf_td.var())
+    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0), sort_results=False)
+    assert_eq(df_td.var(), ddf_td.var(), sort_results=False)
 
     # only numercis
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = dd.from_pandas(df_numerics, 3)
-    assert_eq(df_numerics.var(), ddf_numerics.var())
+    assert_eq(df_numerics.var(), ddf_numerics.var(), sort_results=False)
 
 
 def test_reductions_frame_dtypes_numeric_only():
@@ -1236,25 +1333,32 @@ def test_reductions_frame_dtypes_numeric_only():
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
             check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            sort_results=False,
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
 
-    assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs))
-    assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs))
-    assert_eq(df.var(ddof=0, **kwargs), ddf.var(ddof=0, **kwargs))
-    assert_eq(df.var(skipna=False, **kwargs), ddf.var(skipna=False, **kwargs))
+    assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs), sort_results=False)
+    assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs), sort_results=False)
+    assert_eq(df.var(ddof=0, **kwargs), ddf.var(ddof=0, **kwargs), sort_results=False)
     assert_eq(
-        df.var(skipna=False, ddof=0, **kwargs), ddf.var(skipna=False, ddof=0, **kwargs)
+        df.var(skipna=False, **kwargs),
+        ddf.var(skipna=False, **kwargs),
+        sort_results=False,
+    )
+    assert_eq(
+        df.var(skipna=False, ddof=0, **kwargs),
+        ddf.var(skipna=False, ddof=0, **kwargs),
+        sort_results=False,
     )
 
     # ------ only include numerics columns ------ #
-    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+    assert_eq(df._get_numeric_data(), ddf._get_numeric_data(), sort_results=False)
 
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = ddf[["int", "float", "bool"]]
 
-    assert_eq(df_numerics, ddf._get_numeric_data())
+    assert_eq(df_numerics, ddf._get_numeric_data(), sort_results=False)
     assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
 
     for func in funcs:
@@ -1262,6 +1366,7 @@ def test_reductions_frame_dtypes_numeric_only():
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
             check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
+            sort_results=False,
         )
 
 
@@ -1275,100 +1380,151 @@ def test_reductions_frame_nan(split_every):
         }
     )
     ddf = dd.from_pandas(df, 3)
-    assert_eq(df.sum(), ddf.sum(split_every=split_every))
-    assert_eq(df.prod(), ddf.prod(split_every=split_every))
-    assert_eq(df.product(), ddf.product(split_every=split_every))
-    assert_eq(df.min(), ddf.min(split_every=split_every))
-    assert_eq(df.max(), ddf.max(split_every=split_every))
-    assert_eq(df.count(), ddf.count(split_every=split_every))
+    assert_eq(df.sum(), ddf.sum(split_every=split_every), sort_results=False)
+    assert_eq(df.prod(), ddf.prod(split_every=split_every), sort_results=False)
+    assert_eq(df.product(), ddf.product(split_every=split_every), sort_results=False)
+    assert_eq(df.min(), ddf.min(split_every=split_every), sort_results=False)
+    assert_eq(df.max(), ddf.max(split_every=split_every), sort_results=False)
+    assert_eq(df.count(), ddf.count(split_every=split_every), sort_results=False)
     with warnings.catch_warnings():
         # dask.dataframe should probably filter this, to match pandas, but
         # it seems quite difficult.
         warnings.simplefilter("ignore", RuntimeWarning)
-        assert_eq(df.std(), ddf.std(split_every=split_every))
-        assert_eq(df.var(), ddf.var(split_every=split_every))
-        assert_eq(df.sem(), ddf.sem(split_every=split_every))
-        assert_eq(df.std(ddof=0), ddf.std(ddof=0, split_every=split_every))
-        assert_eq(df.var(ddof=0), ddf.var(ddof=0, split_every=split_every))
-        assert_eq(df.sem(ddof=0), ddf.sem(ddof=0, split_every=split_every))
-    assert_eq(df.mean(), ddf.mean(split_every=split_every))
+        assert_eq(df.std(), ddf.std(split_every=split_every), sort_results=False)
+        assert_eq(df.var(), ddf.var(split_every=split_every), sort_results=False)
+        assert_eq(df.sem(), ddf.sem(split_every=split_every), sort_results=False)
+        assert_eq(
+            df.std(ddof=0), ddf.std(ddof=0, split_every=split_every), sort_results=False
+        )
+        assert_eq(
+            df.var(ddof=0), ddf.var(ddof=0, split_every=split_every), sort_results=False
+        )
+        assert_eq(
+            df.sem(ddof=0), ddf.sem(ddof=0, split_every=split_every), sort_results=False
+        )
+    assert_eq(df.mean(), ddf.mean(split_every=split_every), sort_results=False)
 
     with warnings.catch_warnings(record=True):
-        assert_eq(df.sum(skipna=False), ddf.sum(skipna=False, split_every=split_every))
         assert_eq(
-            df.prod(skipna=False), ddf.prod(skipna=False, split_every=split_every)
+            df.sum(skipna=False),
+            ddf.sum(skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
-            df.product(skipna=False), ddf.product(skipna=False, split_every=split_every)
+            df.prod(skipna=False),
+            ddf.prod(skipna=False, split_every=split_every),
+            sort_results=False,
         )
-        assert_eq(df.min(skipna=False), ddf.min(skipna=False, split_every=split_every))
-        assert_eq(df.max(skipna=False), ddf.max(skipna=False, split_every=split_every))
-        assert_eq(df.std(skipna=False), ddf.std(skipna=False, split_every=split_every))
-        assert_eq(df.var(skipna=False), ddf.var(skipna=False, split_every=split_every))
-        assert_eq(df.sem(skipna=False), ddf.sem(skipna=False, split_every=split_every))
+        assert_eq(
+            df.product(skipna=False),
+            ddf.product(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
+        assert_eq(
+            df.min(skipna=False),
+            ddf.min(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
+        assert_eq(
+            df.max(skipna=False),
+            ddf.max(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
+        assert_eq(
+            df.std(skipna=False),
+            ddf.std(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
+        assert_eq(
+            df.var(skipna=False),
+            ddf.var(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
+        assert_eq(
+            df.sem(skipna=False),
+            ddf.sem(skipna=False, split_every=split_every),
+            sort_results=False,
+        )
         assert_eq(
             df.std(skipna=False, ddof=0),
             ddf.std(skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.var(skipna=False, ddof=0),
             ddf.var(skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.sem(skipna=False, ddof=0),
             ddf.sem(skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
-            df.mean(skipna=False), ddf.mean(skipna=False, split_every=split_every)
+            df.mean(skipna=False),
+            ddf.mean(skipna=False, split_every=split_every),
+            sort_results=False,
         )
 
         assert_eq(
             df.sum(axis=1, skipna=False),
             ddf.sum(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.prod(axis=1, skipna=False),
             ddf.prod(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.product(axis=1, skipna=False),
             ddf.product(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.min(axis=1, skipna=False),
             ddf.min(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.max(axis=1, skipna=False),
             ddf.max(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.std(axis=1, skipna=False),
             ddf.std(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.var(axis=1, skipna=False),
             ddf.var(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.sem(axis=1, skipna=False),
             ddf.sem(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.std(axis=1, skipna=False, ddof=0),
             ddf.std(axis=1, skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.var(axis=1, skipna=False, ddof=0),
             ddf.var(axis=1, skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.sem(axis=1, skipna=False, ddof=0),
             ddf.sem(axis=1, skipna=False, ddof=0, split_every=split_every),
+            sort_results=False,
         )
         assert_eq(
             df.mean(axis=1, skipna=False),
             ddf.mean(axis=1, skipna=False, split_every=split_every),
+            sort_results=False,
         )
 
 
@@ -1385,6 +1541,7 @@ def test_series_comparison_nan(comparison):
     assert_eq(
         comparison_dd(ds_nan, fill_value=fill_value),
         comparison_pd(s_nan, fill_value=fill_value),
+        sort_results=False,
     )
 
 
@@ -1403,13 +1560,13 @@ def test_divmod():
 
     result = divmod(ddf1, 2.0)
     expected = divmod(df1, 2.0)
-    assert_eq(result[0], expected[0])
-    assert_eq(result[1], expected[1])
+    assert_eq(result[0], expected[0], sort_results=False)
+    assert_eq(result[1], expected[1], sort_results=False)
 
     result = divmod(ddf1, ddf2)
     expected = divmod(df1, df2)
-    assert_eq(result[0], expected[0])
-    assert_eq(result[1], expected[1])
+    assert_eq(result[0], expected[0], sort_results=False)
+    assert_eq(result[1], expected[1], sort_results=False)
 
 
 @pytest.mark.skipif("not scipy")
@@ -1431,13 +1588,13 @@ def test_empty_df_reductions(func):
     dsk_func = getattr(ddf.__class__, func)
     pd_func = getattr(pdf.__class__, func)
 
-    assert_eq(dsk_func(ddf), pd_func(pdf))
+    assert_eq(dsk_func(ddf), pd_func(pdf), sort_results=False)
 
     idx = pd.date_range("2000", periods=4)
     pdf = pd.DataFrame(index=idx)
     ddf = dd.from_pandas(pdf, npartitions=1)
 
-    assert_eq(dsk_func(ddf), pd_func(pdf))
+    assert_eq(dsk_func(ddf), pd_func(pdf), sort_results=False)
 
 
 @pytest.mark.parametrize("method", ["sum", "prod", "product"])
@@ -1461,7 +1618,7 @@ def assert_near_timedeltas(t1, t2, atol=2000):
         t2 = pd.Series([t2])
 
     assert t1.dtype == t2.dtype
-    assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol)
+    assert_eq(pd.to_numeric(t1), pd.to_numeric(t2), atol=atol, sort_results=False)
 
 
 @pytest.mark.skipif(
@@ -1483,8 +1640,8 @@ def test_datetime_std_creates_copy_cols(axis):
     ddf = dd.from_pandas(pdf, 3)
 
     # Series test (same line twice to make sure data structure wasn't mutated)
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std(), sort_results=False)
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std(), sort_results=False)
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
     assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
@@ -1570,11 +1727,17 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     # Single column always results in NaT
     assert_eq(
-        ddf[["dt1"]].std(axis=1, skipna=skipna), pdf[["dt1"]].std(axis=1, skipna=skipna)
+        ddf[["dt1"]].std(axis=1, skipna=skipna),
+        pdf[["dt1"]].std(axis=1, skipna=skipna),
+        sort_results=False,
     )
 
     # Mix of datetimes with other numeric types produces NaNs
-    assert_eq(ddf.std(axis=1, skipna=skipna), pdf.std(axis=1, skipna=skipna))
+    assert_eq(
+        ddf.std(axis=1, skipna=skipna),
+        pdf.std(axis=1, skipna=skipna),
+        sort_results=False,
+    )
 
     # Test with mix of na and truthy datetimes
     pdf2 = pd.DataFrame(
@@ -1593,7 +1756,11 @@ def test_datetime_std_across_axis1_null_results(skipna):
 
     ddf2 = dd.from_pandas(pdf2, 3)
 
-    assert_eq(ddf2.std(axis=1, skipna=skipna), pdf2.std(axis=1, skipna=skipna))
+    assert_eq(
+        ddf2.std(axis=1, skipna=skipna),
+        pdf2.std(axis=1, skipna=skipna),
+        sort_results=False,
+    )
 
 
 def test_std_raises_on_index():
