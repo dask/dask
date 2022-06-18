@@ -25,7 +25,7 @@ def test_get_dummies(data):
 
     ddata = dd.from_pandas(data, 2)
     res = dd.get_dummies(ddata)
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
     tm.assert_index_equal(res.columns, exp.columns)
 
 
@@ -42,7 +42,7 @@ def test_get_dummies_object():
     # Explicitly exclude object columns
     exp = pd.get_dummies(df, columns=["a", "c"])
     res = dd.get_dummies(ddf, columns=["a", "c"])
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
     tm.assert_index_equal(res.columns, exp.columns)
 
     with pytest.raises(NotImplementedError):
@@ -61,11 +61,11 @@ def test_get_dummies_kwargs():
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds, prefix="X", prefix_sep="-")
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
     exp = pd.get_dummies(s, drop_first=True)
     res = dd.get_dummies(ds, drop_first=True)
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
     # nan
     s = pd.Series([1, 1, 1, 2, np.nan, 3, np.nan, 5], dtype="category")
@@ -73,12 +73,12 @@ def test_get_dummies_kwargs():
 
     ds = dd.from_pandas(s, 2)
     res = dd.get_dummies(ds)
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
     # dummy_na
     exp = pd.get_dummies(s, dummy_na=True)
     res = dd.get_dummies(ds, dummy_na=True)
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
 
 def check_pandas_issue_45618_warning(test_func):
@@ -107,14 +107,14 @@ def test_get_dummies_sparse():
 
     exp = pd.get_dummies(s, sparse=True)
     res = dd.get_dummies(ds, sparse=True)
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
 
     assert res.compute().a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.a.compute())
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
     res = dd.get_dummies(ds.to_frame(name="a"), sparse=True)
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
@@ -130,7 +130,7 @@ def test_get_dummies_sparse_mix():
 
     exp = pd.get_dummies(df, sparse=True)
     res = dd.get_dummies(ddf, sparse=True)
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
 
     assert res.compute().A_a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.A_a.compute())
@@ -147,11 +147,11 @@ def test_get_dummies_dtype():
 
     exp = pd.get_dummies(df, dtype="float64")
     res = dd.get_dummies(ddf, dtype="float64")
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
     assert res.compute().A_a.dtype == "float64"
 
     # dask's get_dummies on a pandas dataframe.
-    assert_eq(dd.get_dummies(df, dtype="float64"), exp)
+    assert_eq(dd.get_dummies(df, dtype="float64"), exp, sort_results=False)
     assert res.compute().A_a.dtype == "float64"
 
 
@@ -198,7 +198,7 @@ def test_pivot_table(values, aggfunc):
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
 
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
     # method
     res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
@@ -206,7 +206,7 @@ def test_pivot_table(values, aggfunc):
     if aggfunc == "count":
         # dask result cannot be int64 dtype depending on divisions because of NaN
         exp = exp.astype(np.float64)
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
 
 @pytest.mark.parametrize("values", ["B", ["D"], ["B", "D"]])
@@ -226,13 +226,13 @@ def test_pivot_table_firstlast(values, aggfunc):
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
     exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
 
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
 
     # method
     res = ddf.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
     exp = df.pivot_table(index="A", columns="C", values=values, aggfunc=aggfunc)
 
-    assert_eq(exp, res)
+    assert_eq(exp, res, sort_results=False)
 
 
 def test_pivot_table_dtype():
@@ -251,7 +251,7 @@ def test_pivot_table_dtype():
         df, index="A", columns="B", values="C", aggfunc="count"
     ).astype(np.float64)
 
-    assert_eq(res, exp)
+    assert_eq(res, exp, sort_results=False)
 
 
 def test_pivot_table_index_dtype():
