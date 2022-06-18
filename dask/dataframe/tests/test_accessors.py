@@ -139,7 +139,7 @@ def test_str_accessor(df_ddf):
     assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper(), sort_results=False)
     assert set(ddf.string_col.str.upper().dask) == set(ddf.string_col.str.upper().dask)
 
-    assert_eq(ddf.index.str.upper(), df.index.str.upper(), sort_results=False)
+    assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
@@ -230,20 +230,13 @@ def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
 def test_str_accessor_cat(df_ddf):
     df, ddf = df_ddf
     sol = df.str_col.str.cat(df.str_col.str.upper(), sep=":")
-    assert_eq(
-        ddf.str_col.str.cat(ddf.str_col.str.upper(), sep=":"), sol, sort_results=False
-    )
-    assert_eq(
-        ddf.str_col.str.cat(df.str_col.str.upper(), sep=":"), sol, sort_results=False
-    )
+    assert_eq(ddf.str_col.str.cat(ddf.str_col.str.upper(), sep=":"), sol)
+    assert_eq(ddf.str_col.str.cat(df.str_col.str.upper(), sep=":"), sol)
     assert_eq(
         ddf.str_col.str.cat([ddf.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
         df.str_col.str.cat([df.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
-        sort_results=False,
     )
-    assert_eq(
-        ddf.str_col.str.cat(sep=":"), df.str_col.str.cat(sep=":"), sort_results=False
-    )
+    assert_eq(ddf.str_col.str.cat(sep=":"), df.str_col.str.cat(sep=":"))
 
     for o in ["foo", ["foo"]]:
         with pytest.raises(TypeError):
@@ -254,13 +247,9 @@ def test_str_accessor_cat_none():
     s = pd.Series(["a", "a", "b", "b", "c", np.nan], name="foo")
     ds = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(ds.str.cat(), s.str.cat(), sort_results=False)
-    assert_eq(ds.str.cat(na_rep="-"), s.str.cat(na_rep="-"), sort_results=False)
-    assert_eq(
-        ds.str.cat(sep="_", na_rep="-"),
-        s.str.cat(sep="_", na_rep="-"),
-        sort_results=False,
-    )
+    assert_eq(ds.str.cat(), s.str.cat())
+    assert_eq(ds.str.cat(na_rep="-"), s.str.cat(na_rep="-"))
+    assert_eq(ds.str.cat(sep="_", na_rep="-"), s.str.cat(sep="_", na_rep="-"))
 
 
 @pytest.mark.parametrize("method", ["split", "rsplit"])
