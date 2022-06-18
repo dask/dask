@@ -8,7 +8,9 @@ def test_meta():
     ds = dd.from_pandas(pd.Series(values), 2)
     assert ds.dtype == pd.BooleanDtype()
 
-    dd.utils.assert_eq(ds._meta_nonempty, pd.Series([True, pd.NA], dtype="boolean"))
+    dd.utils.assert_eq(
+        ds._meta_nonempty, pd.Series([True, pd.NA], dtype="boolean"), sort_results=False
+    )
 
     ddf = dd.from_pandas(pd.DataFrame({"A": values}), 2)
     assert ddf.dtypes["A"] == pd.BooleanDtype()
@@ -16,6 +18,7 @@ def test_meta():
     dd.utils.assert_eq(
         ddf._meta_nonempty,
         pd.DataFrame({"A": pd.array([True, pd.NA], dtype="boolean")}),
+        sort_results=False,
     )
 
 
@@ -26,6 +29,6 @@ def test_ops():
     ds1 = dd.from_pandas(s1, 2)
     ds2 = dd.from_pandas(s2, 2)
 
-    dd.utils.assert_eq(ds1 | ds2, s1 | s2)
-    dd.utils.assert_eq(ds1 & ds2, s1 & s2)
-    dd.utils.assert_eq(ds1 ^ ds2, s1 ^ s2)
+    dd.utils.assert_eq(ds1 | ds2, s1 | s2, sort_results=False)
+    dd.utils.assert_eq(ds1 & ds2, s1 & s2, sort_results=False)
+    dd.utils.assert_eq(ds1 ^ ds2, s1 ^ s2, sort_results=False)
