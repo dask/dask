@@ -880,13 +880,13 @@ def test_reductions_out(frame, axis, out, redfunc):
     else:
         np_redfunc(dsk_in, axis=axis, out=dsk_out)
 
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
     dsk_redfunc(dsk_in, axis=axis, split_every=False, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
     dsk_redfunc(dsk_in, axis=axis, split_every=2, out=dsk_out)
-    assert_eq(dsk_out, pd_redfunc(frame, axis=axis), sort_results=False)
+    assert_eq(dsk_out, pd_redfunc(frame, axis=axis))
 
 
 @pytest.mark.parametrize("split_every", [False, 2])
@@ -1640,8 +1640,8 @@ def test_datetime_std_creates_copy_cols(axis):
     ddf = dd.from_pandas(pdf, 3)
 
     # Series test (same line twice to make sure data structure wasn't mutated)
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std(), sort_results=False)
-    assert_eq(ddf["dt1"].std(), pdf["dt1"].std(), sort_results=False)
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
+    assert_eq(ddf["dt1"].std(), pdf["dt1"].std())
 
     # DataFrame test (same line twice to make sure data structure wasn't mutated)
     assert_near_timedeltas(ddf.std(axis=axis).compute(), pdf.std(axis=axis))
