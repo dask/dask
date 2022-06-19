@@ -30,25 +30,25 @@ def test_loc():
 
     assert d.loc[5].divisions == (5, 5)
 
-    assert_eq(d.loc[5], full.loc[5:5])
-    assert_eq(d.loc[3:8], full.loc[3:8])
-    assert_eq(d.loc[:8], full.loc[:8])
-    assert_eq(d.loc[3:], full.loc[3:])
-    assert_eq(d.loc[[5]], full.loc[[5]])
+    assert_eq(d.loc[5], full.loc[5:5], sort_results=False)
+    assert_eq(d.loc[3:8], full.loc[3:8], sort_results=False)
+    assert_eq(d.loc[:8], full.loc[:8], sort_results=False)
+    assert_eq(d.loc[3:], full.loc[3:], sort_results=False)
+    assert_eq(d.loc[[5]], full.loc[[5]], sort_results=False)
 
-    assert_eq(d.a.loc[5], full.a.loc[5:5])
-    assert_eq(d.a.loc[3:8], full.a.loc[3:8])
-    assert_eq(d.a.loc[:8], full.a.loc[:8])
-    assert_eq(d.a.loc[3:], full.a.loc[3:])
-    assert_eq(d.a.loc[[5]], full.a.loc[[5]])
-    assert_eq(d.a.loc[[]], full.a.loc[[]])
-    assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])])
+    assert_eq(d.a.loc[5], full.a.loc[5:5], sort_results=False)
+    assert_eq(d.a.loc[3:8], full.a.loc[3:8], sort_results=False)
+    assert_eq(d.a.loc[:8], full.a.loc[:8], sort_results=False)
+    assert_eq(d.a.loc[3:], full.a.loc[3:], sort_results=False)
+    assert_eq(d.a.loc[[5]], full.a.loc[[5]], sort_results=False)
+    assert_eq(d.a.loc[[]], full.a.loc[[]], sort_results=False)
+    assert_eq(d.a.loc[np.array([])], full.a.loc[np.array([])], sort_results=False)
 
     pytest.raises(KeyError, lambda: d.loc[1000])
-    assert_eq(d.loc[1000:], full.loc[1000:])
-    assert_eq(d.loc[1000:2000], full.loc[1000:2000])
-    assert_eq(d.loc[:-1000], full.loc[:-1000])
-    assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
+    assert_eq(d.loc[1000:], full.loc[1000:], sort_results=False)
+    assert_eq(d.loc[1000:2000], full.loc[1000:2000], sort_results=False)
+    assert_eq(d.loc[:-1000], full.loc[:-1000], sort_results=False)
+    assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000], sort_results=False)
 
     assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)
     assert sorted(d.loc[5].dask) != sorted(d.loc[6].dask)
@@ -62,11 +62,11 @@ def test_loc_non_informative_index():
 
     ddf.loc[20:30].compute(scheduler="sync")
 
-    assert_eq(ddf.loc[20:30], df.loc[20:30])
+    assert_eq(ddf.loc[20:30], df.loc[20:30], sort_results=False)
 
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[10, 20, 20, 40])
     ddf = dd.from_pandas(df, npartitions=2, sort=True)
-    assert_eq(ddf.loc[20], df.loc[20:20])
+    assert_eq(ddf.loc[20], df.loc[20:20], sort_results=False)
 
 
 def test_loc_with_text_dates():
@@ -80,19 +80,23 @@ def test_loc_with_text_dates():
     )
 
     assert s.loc["2000":"2010"].divisions == s.divisions
-    assert_eq(s.loc["2000":"2010"], s)
+    assert_eq(s.loc["2000":"2010"], s, sort_results=False)
     assert len(s.loc["2000-01-03":"2000-01-05"].compute()) == 3
 
 
 def test_loc_with_series():
-    assert_eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
+    assert_eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0], sort_results=False)
 
     assert sorted(d.loc[d.a % 2 == 0].dask) == sorted(d.loc[d.a % 2 == 0].dask)
     assert sorted(d.loc[d.a % 2 == 0].dask) != sorted(d.loc[d.a % 3 == 0].dask)
 
 
 def test_loc_with_array():
-    assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
+    assert_eq(
+        d.loc[(d.a % 2 == 0).values],
+        full.loc[(full.a % 2 == 0).values],
+        sort_results=False,
+    )
 
     assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
         d.loc[(d.a % 2 == 0).values].dask
@@ -103,12 +107,16 @@ def test_loc_with_array():
 
 
 def test_loc_with_function():
-    assert_eq(d.loc[lambda df: df["a"] > 3, :], full.loc[lambda df: df["a"] > 3, :])
+    assert_eq(
+        d.loc[lambda df: df["a"] > 3, :],
+        full.loc[lambda df: df["a"] > 3, :],
+        sort_results=False,
+    )
 
     def _col_loc_fun(_df):
         return _df.columns.str.contains("b")
 
-    assert_eq(d.loc[:, _col_loc_fun], full.loc[:, _col_loc_fun])
+    assert_eq(d.loc[:, _col_loc_fun], full.loc[:, _col_loc_fun], sort_results=False)
 
 
 def test_loc_with_array_different_partition():
@@ -119,7 +127,9 @@ def test_loc_with_array_different_partition():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(ddf.loc[(ddf.A > 0).values], df.loc[(df.A > 0).values])
+    assert_eq(
+        ddf.loc[(ddf.A > 0).values], df.loc[(df.A > 0).values], sort_results=False
+    )
     with pytest.raises(ValueError):
         ddf.loc[(ddf.A > 0).repartition(["a", "g", "k", "o", "t"]).values]
 
@@ -132,7 +142,7 @@ def test_loc_with_series_different_partition():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(ddf.loc[ddf.A > 0], df.loc[df.A > 0])
+    assert_eq(ddf.loc[ddf.A > 0], df.loc[df.A > 0], sort_results=False)
     assert_eq(
         ddf.loc[(ddf.A > 0).repartition(["a", "g", "k", "o", "t"])], df.loc[df.A > 0]
     )
@@ -173,19 +183,19 @@ def test_loc_with_non_boolean_series():
 
 def test_loc2d():
     # index indexer is always regarded as slice for duplicated values
-    assert_eq(d.loc[5, "a"], full.loc[5:5, "a"])
-    # assert_eq(d.loc[[5], 'a'], full.loc[[5], 'a'])
-    assert_eq(d.loc[5, ["a"]], full.loc[5:5, ["a"]])
-    # assert_eq(d.loc[[5], ['a']], full.loc[[5], ['a']])
+    assert_eq(d.loc[5, "a"], full.loc[5:5, "a"], sort_results=False)
+    # assert_eq(d.loc[[5], 'a'], full.loc[[5], 'a'], sort_results=False)
+    assert_eq(d.loc[5, ["a"]], full.loc[5:5, ["a"]], sort_results=False)
+    # assert_eq(d.loc[[5], ['a']], full.loc[[5], ['a']], sort_results=False)
 
-    assert_eq(d.loc[3:8, "a"], full.loc[3:8, "a"])
-    assert_eq(d.loc[:8, "a"], full.loc[:8, "a"])
-    assert_eq(d.loc[3:, "a"], full.loc[3:, "a"])
-    assert_eq(d.loc[[8], "a"], full.loc[[8], "a"])
+    assert_eq(d.loc[3:8, "a"], full.loc[3:8, "a"], sort_results=False)
+    assert_eq(d.loc[:8, "a"], full.loc[:8, "a"], sort_results=False)
+    assert_eq(d.loc[3:, "a"], full.loc[3:, "a"], sort_results=False)
+    assert_eq(d.loc[[8], "a"], full.loc[[8], "a"], sort_results=False)
 
-    assert_eq(d.loc[3:8, ["a"]], full.loc[3:8, ["a"]])
-    assert_eq(d.loc[:8, ["a"]], full.loc[:8, ["a"]])
-    assert_eq(d.loc[3:, ["a"]], full.loc[3:, ["a"]])
+    assert_eq(d.loc[3:8, ["a"]], full.loc[3:8, ["a"]], sort_results=False)
+    assert_eq(d.loc[:8, ["a"]], full.loc[:8, ["a"]], sort_results=False)
+    assert_eq(d.loc[3:, ["a"]], full.loc[3:, ["a"]], sort_results=False)
 
     # 3d
     with pytest.raises(pd.core.indexing.IndexingError):
@@ -210,12 +220,16 @@ def test_loc2d_with_known_divisions():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"])
-    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]])
-    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"])
-    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
-    assert_eq(ddf.loc[["n"], ["A"]], df.loc[["n"], ["A"]])
-    assert_eq(ddf.loc[["a", "c", "n"], ["A"]], df.loc[["a", "c", "n"], ["A"]])
+    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"], sort_results=False)
+    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]], sort_results=False)
+    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"], sort_results=False)
+    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]], sort_results=False)
+    assert_eq(ddf.loc[["n"], ["A"]], df.loc[["n"], ["A"]], sort_results=False)
+    assert_eq(
+        ddf.loc[["a", "c", "n"], ["A"]],
+        df.loc[["a", "c", "n"], ["A"]],
+        sort_results=False,
+    )
     assert_eq(ddf.loc[["t", "b"], ["A"]], df.loc[["t", "b"], ["A"]])
     assert_eq(
         ddf.loc[["r", "r", "c", "g", "h"], ["A"]],
@@ -234,10 +248,10 @@ def test_loc2d_with_unknown_divisions():
     ddf.divisions = (None,) * len(ddf.divisions)
     assert ddf.known_divisions is False
 
-    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"])
-    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]])
-    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"])
-    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
+    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"], sort_results=False)
+    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]], sort_results=False)
+    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"], sort_results=False)
+    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]], sort_results=False)
 
 
 def test_loc2d_duplicated_columns():
@@ -248,23 +262,25 @@ def test_loc2d_duplicated_columns():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"])
-    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]])
-    assert_eq(ddf.loc["j", "B"], df.loc[["j"], "B"])
-    assert_eq(ddf.loc["j", ["B"]], df.loc[["j"], ["B"]])
+    assert_eq(ddf.loc["a", "A"], df.loc[["a"], "A"], sort_results=False)
+    assert_eq(ddf.loc["a", ["A"]], df.loc[["a"], ["A"]], sort_results=False)
+    assert_eq(ddf.loc["j", "B"], df.loc[["j"], "B"], sort_results=False)
+    assert_eq(ddf.loc["j", ["B"]], df.loc[["j"], ["B"]], sort_results=False)
 
-    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"])
-    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
-    assert_eq(ddf.loc["j":"q", "B"], df.loc["j":"q", "B"])
-    assert_eq(ddf.loc["j":"q", ["B"]], df.loc["j":"q", ["B"]])
+    assert_eq(ddf.loc["a":"o", "A"], df.loc["a":"o", "A"], sort_results=False)
+    assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]], sort_results=False)
+    assert_eq(ddf.loc["j":"q", "B"], df.loc["j":"q", "B"], sort_results=False)
+    assert_eq(ddf.loc["j":"q", ["B"]], df.loc["j":"q", ["B"]], sort_results=False)
 
-    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"])
-    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"])
-    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"])
-    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"])
+    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"], sort_results=False)
+    assert_eq(ddf.loc["a":"o", "B":"D"], df.loc["a":"o", "B":"D"], sort_results=False)
+    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"], sort_results=False)
+    assert_eq(ddf.loc["j":"q", "B":"A"], df.loc["j":"q", "B":"A"], sort_results=False)
 
-    assert_eq(ddf.loc[ddf.B > 0, "B"], df.loc[df.B > 0, "B"])
-    assert_eq(ddf.loc[ddf.B > 0, ["A", "C"]], df.loc[df.B > 0, ["A", "C"]])
+    assert_eq(ddf.loc[ddf.B > 0, "B"], df.loc[df.B > 0, "B"], sort_results=False)
+    assert_eq(
+        ddf.loc[ddf.B > 0, ["A", "C"]], df.loc[df.B > 0, ["A", "C"]], sort_results=False
+    )
 
 
 def test_getitem():
@@ -277,17 +293,17 @@ def test_getitem():
         columns=list("ABC"),
     )
     ddf = dd.from_pandas(df, 2)
-    assert_eq(ddf["A"], df["A"])
+    assert_eq(ddf["A"], df["A"], sort_results=False)
     # check cache consistency
     tm.assert_series_equal(ddf["A"]._meta, ddf._meta["A"])
 
-    assert_eq(ddf[["A", "B"]], df[["A", "B"]])
+    assert_eq(ddf[["A", "B"]], df[["A", "B"]], sort_results=False)
     tm.assert_frame_equal(ddf[["A", "B"]]._meta, ddf._meta[["A", "B"]])
 
-    assert_eq(ddf[ddf.C], df[df.C])
+    assert_eq(ddf[ddf.C], df[df.C], sort_results=False)
     tm.assert_series_equal(ddf.C._meta, ddf._meta.C)
 
-    assert_eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C])
+    assert_eq(ddf[ddf.C.repartition([0, 2, 5, 8])], df[df.C], sort_results=False)
 
     pytest.raises(KeyError, lambda: df["X"])
     pytest.raises(KeyError, lambda: df[["A", "X"]])
@@ -296,8 +312,8 @@ def test_getitem():
     # not str/unicode
     df = pd.DataFrame(np.random.randn(10, 5))
     ddf = dd.from_pandas(df, 2)
-    assert_eq(ddf[0], df[0])
-    assert_eq(ddf[[1, 2]], df[[1, 2]])
+    assert_eq(ddf[0], df[0], sort_results=False)
+    assert_eq(ddf[[1, 2]], df[[1, 2]], sort_results=False)
 
     pytest.raises(KeyError, lambda: df[8])
     pytest.raises(KeyError, lambda: df[[1, 8]])
@@ -313,9 +329,9 @@ def test_getitem_slice():
         index=list("abcdefghi"),
     )
     ddf = dd.from_pandas(df, 3)
-    assert_eq(ddf["a":"e"], df["a":"e"])
-    assert_eq(ddf["a":"b"], df["a":"b"])
-    assert_eq(ddf["f":], df["f":])
+    assert_eq(ddf["a":"e"], df["a":"e"], sort_results=False)
+    assert_eq(ddf["a":"b"], df["a":"b"], sort_results=False)
+    assert_eq(ddf["f":], df["f":], sort_results=False)
 
 
 def test_getitem_integer_slice():
@@ -328,9 +344,9 @@ def test_getitem_integer_slice():
     df = pd.DataFrame({"A": range(6)}, index=[1.0, 2.0, 3.0, 5.0, 10.0, 11.0])
     ddf = dd.from_pandas(df, 2)
     # except for float dtype indexes
-    assert_eq(ddf[2:8], df[2:8])
-    assert_eq(ddf[2:], df[2:])
-    assert_eq(ddf[:8], df[:8])
+    assert_eq(ddf[2:8], df[2:8], sort_results=False)
+    assert_eq(ddf[2:], df[2:], sort_results=False)
+    assert_eq(ddf[:8], df[:8], sort_results=False)
 
 
 def test_loc_on_numpy_datetimes():
@@ -340,7 +356,7 @@ def test_loc_on_numpy_datetimes():
     a = dd.from_pandas(df, 2)
     a.divisions = tuple(map(np.datetime64, a.divisions))
 
-    assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"])
+    assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"], sort_results=False)
 
 
 def test_loc_on_pandas_datetimes():
@@ -350,7 +366,7 @@ def test_loc_on_pandas_datetimes():
     a = dd.from_pandas(df, 2)
     a.divisions = tuple(map(pd.Timestamp, a.divisions))
 
-    assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"])
+    assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"], sort_results=False)
 
 
 def test_loc_datetime_no_freq():
@@ -364,7 +380,7 @@ def test_loc_datetime_no_freq():
     slice_ = slice("2016-01-03", "2016-01-05")
     result = ddf.loc[slice_, :]
     expected = df.loc[slice_, :]
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_coerce_loc_index():
@@ -381,8 +397,12 @@ def test_loc_timestamp_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
-    assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"], sort_results=False)
+    assert_eq(
+        df.loc["2011-01-02":"2011-01-10"],
+        ddf.loc["2011-01-02":"2011-01-10"],
+        sort_results=False,
+    )
     # same reso, dask result is always DataFrame
     assert_eq(
         df.loc["2011-01-02 10:00"].to_frame().T,
@@ -391,7 +411,12 @@ def test_loc_timestamp_str():
     )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(
+        df.A.loc["2011-01-02"],
+        ddf.A.loc["2011-01-02"],
+        **CHECK_FREQ,
+        sort_results=False,
+    )
     assert_eq(
         df.A.loc["2011-01-02":"2011-01-10"],
         ddf.A.loc["2011-01-02":"2011-01-10"],
@@ -420,18 +445,24 @@ def test_loc_timestamp_str():
         index=pd.date_range("2011-01-01", freq="M", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
-    assert_eq(df.loc["2011"], ddf.loc["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"], sort_results=False)
+    assert_eq(df.loc["2011"], ddf.loc["2011"], sort_results=False)
 
-    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
-    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
+    assert_eq(
+        df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"], sort_results=False
+    )
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"], sort_results=False)
 
     # series
-    assert_eq(df.B.loc["2011-01"], ddf.B.loc["2011-01"])
-    assert_eq(df.B.loc["2011"], ddf.B.loc["2011"])
+    assert_eq(df.B.loc["2011-01"], ddf.B.loc["2011-01"], sort_results=False)
+    assert_eq(df.B.loc["2011"], ddf.B.loc["2011"], sort_results=False)
 
-    assert_eq(df.B.loc["2011-01":"2012-05"], ddf.B.loc["2011-01":"2012-05"])
-    assert_eq(df.B.loc["2011":"2015"], ddf.B.loc["2011":"2015"])
+    assert_eq(
+        df.B.loc["2011-01":"2012-05"],
+        ddf.B.loc["2011-01":"2012-05"],
+        sort_results=False,
+    )
+    assert_eq(df.B.loc["2011":"2015"], ddf.B.loc["2011":"2015"], sort_results=False)
 
 
 def test_getitem_timestamp_str():
@@ -446,21 +477,25 @@ def test_getitem_timestamp_str():
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"], sort_results=False)
     else:
-        assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
+        assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"], sort_results=False)
+    assert_eq(
+        df["2011-01-02":"2011-01-10"],
+        ddf["2011-01-02":"2011-01-10"],
+        sort_results=False,
+    )
 
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
-    assert_eq(df.loc["2011"], ddf.loc["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"], sort_results=False)
+    assert_eq(df.loc["2011"], ddf.loc["2011"], sort_results=False)
 
-    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
-    assert_eq(df["2011":"2015"], ddf["2011":"2015"])
+    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"], sort_results=False)
+    assert_eq(df["2011":"2015"], ddf["2011":"2015"], sort_results=False)
 
 
 @pytest.mark.xfail(
@@ -477,8 +512,12 @@ def test_loc_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
-    assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"], sort_results=False)
+    assert_eq(
+        df.loc["2011-01-02":"2011-01-10"],
+        ddf.loc["2011-01-02":"2011-01-10"],
+        sort_results=False,
+    )
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
@@ -486,11 +525,13 @@ def test_loc_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
-    assert_eq(df.loc["2011"], ddf.loc["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"], sort_results=False)
+    assert_eq(df.loc["2011"], ddf.loc["2011"], sort_results=False)
 
-    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
-    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
+    assert_eq(
+        df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"], sort_results=False
+    )
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"], sort_results=False)
 
 
 def test_getitem_period_str():
@@ -506,10 +547,14 @@ def test_getitem_period_str():
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"], sort_results=False)
     else:
-        assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
+        assert_eq(df["2011-01-02"], ddf["2011-01-02"], sort_results=False)
+    assert_eq(
+        df["2011-01-02":"2011-01-10"],
+        ddf["2011-01-02":"2011-01-10"],
+        sort_results=False,
+    )
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
@@ -522,20 +567,20 @@ def test_getitem_period_str():
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df.loc["2011-01"], ddf["2011-01"])
+            assert_eq(df.loc["2011-01"], ddf["2011-01"], sort_results=False)
     else:
-        assert_eq(df["2011-01"], ddf["2011-01"])
+        assert_eq(df["2011-01"], ddf["2011-01"], sort_results=False)
 
     if PANDAS_GT_120:
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df.loc["2011"], ddf["2011"])
+            assert_eq(df.loc["2011"], ddf["2011"], sort_results=False)
     else:
-        assert_eq(df["2011"], ddf["2011"])
+        assert_eq(df["2011"], ddf["2011"], sort_results=False)
 
-    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
-    assert_eq(df["2011":"2015"], ddf["2011":"2015"])
+    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"], sort_results=False)
+    assert_eq(df["2011":"2015"], ddf["2011":"2015"], sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -553,7 +598,7 @@ def test_to_series(index):
     actual = ddf.index.to_series()
 
     assert actual.known_divisions
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -571,10 +616,14 @@ def test_to_frame(index):
     actual = ddf.index.to_frame()
 
     assert actual.known_divisions
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
     # test name option
-    assert_eq(df.index.to_frame(name="foo"), ddf.index.to_frame(name="foo"))
+    assert_eq(
+        df.index.to_frame(name="foo"),
+        ddf.index.to_frame(name="foo"),
+        sort_results=False,
+    )
 
 
 @pytest.mark.parametrize("indexer", [0, [0], [0, 1], [1, 0], [False, True, True]])
@@ -585,7 +634,7 @@ def test_iloc(indexer):
     result = ddf.iloc[:, indexer]
     expected = df.iloc[:, indexer]
 
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_iloc_series():
@@ -623,16 +672,16 @@ def test_iloc_duplicate_columns():
     assert any([key.startswith("iloc") for key in selection.dask.layers.keys()])
 
     select_first = ddf.iloc[:, 1]
-    assert_eq(select_first, df.iloc[:, 1])
+    assert_eq(select_first, df.iloc[:, 1], sort_results=False)
 
     select_zeroth = ddf.iloc[:, 0]
-    assert_eq(select_zeroth, df.iloc[:, 0])
+    assert_eq(select_zeroth, df.iloc[:, 0], sort_results=False)
 
     select_list_cols = ddf.iloc[:, [0, 2]]
-    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]], sort_results=False)
 
     select_negative = ddf.iloc[:, -1:-3:-1]
-    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1], sort_results=False)
 
 
 def test_iloc_dispatch_to_getitem():
@@ -645,16 +694,16 @@ def test_iloc_dispatch_to_getitem():
     assert any([key.startswith("getitem") for key in selection.dask.layers.keys()])
 
     select_first = ddf.iloc[:, 1]
-    assert_eq(select_first, df.iloc[:, 1])
+    assert_eq(select_first, df.iloc[:, 1], sort_results=False)
 
     select_zeroth = ddf.iloc[:, 0]
-    assert_eq(select_zeroth, df.iloc[:, 0])
+    assert_eq(select_zeroth, df.iloc[:, 0], sort_results=False)
 
     select_list_cols = ddf.iloc[:, [0, 2]]
-    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]], sort_results=False)
 
     select_negative = ddf.iloc[:, -1:-3:-1]
-    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1], sort_results=False)
 
 
 def test_iloc_out_of_order_selection():
@@ -683,8 +732,8 @@ def test_pandas_nullable_boolean_data_type():
     ddf1 = dd.from_pandas(s1, npartitions=1)
     ddf2 = dd.from_pandas(s2, npartitions=1)
 
-    assert_eq(ddf1[ddf2], s1[s2])
-    assert_eq(ddf1.loc[ddf2], s1.loc[s2])
+    assert_eq(ddf1[ddf2], s1[s2], sort_results=False)
+    assert_eq(ddf1.loc[ddf2], s1.loc[s2], sort_results=False)
 
 
 def test_deterministic_hashing_series():
