@@ -588,8 +588,8 @@ def test_assert_eq_scheduler():
 
     with pytest.raises(AssertionError, match="not using custom scheduler"):
         # NOTE: we compare `ddf2` to itself in order to test both sides of the `assert_eq` logic.
-        assert_eq(ddf2, ddf2)
+        assert_eq(ddf2, ddf2, sort_results=False)
 
-    assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
+    assert_eq(ddf2, ddf2, scheduler=custom_scheduler, sort_results=False)
     with dask.config.set(scheduler=custom_scheduler):
-        assert_eq(ddf2, ddf2, scheduler=None)
+        assert_eq(ddf2, ddf2, scheduler=None, sort_results=False)
