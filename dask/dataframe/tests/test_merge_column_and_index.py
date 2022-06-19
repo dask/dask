@@ -114,7 +114,7 @@ def test_merge_known_to_single(
     result = ddf_left.merge(ddf_right_single, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
     assert result.divisions == ddf_left.divisions
     assert len(result.__dask_graph__()) < 30
 
@@ -130,7 +130,7 @@ def test_merge_single_to_known(
     result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
     assert result.divisions == ddf_right.divisions
     assert len(result.__dask_graph__()) < 30
 
@@ -201,7 +201,7 @@ def test_merge_known_to_double_bcast_right(
     assert_eq(result, expected)
     # Hash join used in disk-shuffling doesn't preserve divisions.
     if shuffle_method == "task":
-        assert_eq(result.divisions, ddf_left.divisions)
+        assert_eq(result.divisions, ddf_left.divisions, sort_results=False)
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
@@ -221,7 +221,7 @@ def test_merge_known_to_double_bcast_left(
     assert_eq(result, expected)
     # Hash join used in disk-shuffling doesn't preserve divisions.
     if shuffle_method == "task":
-        assert_eq(result.divisions, ddf_right.divisions)
+        assert_eq(result.divisions, ddf_right.divisions, sort_results=False)
 
     # Check that culling works
     result.head(1)
