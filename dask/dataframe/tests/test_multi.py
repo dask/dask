@@ -44,8 +44,8 @@ def test_align_partitions():
         assert isinstance(b, dd.DataFrame)
         assert isinstance(aa, dd.DataFrame)
         assert isinstance(bb, dd.DataFrame)
-        assert_eq(a, aa)
-        assert_eq(b, bb)
+        assert_eq(a, aa, sort_results=False)
+        assert_eq(b, bb, sort_results=False)
         assert divisions == (10, 30, 40, 60, 80, 100)
         assert isinstance(L, list)
         assert len(divisions) == 1 + len(L)
@@ -80,8 +80,8 @@ def test_align_partitions():
         (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2)),
     ]:
         (lresult, rresult), div, parts = align_partitions(lhs, rhs)
-        assert_eq(lresult, ldf)
-        assert_eq(rresult, rdf)
+        assert_eq(lresult, ldf, sort_results=False)
+        assert_eq(rresult, rdf, sort_results=False)
 
     # different index
     ldf = pd.DataFrame(
@@ -98,8 +98,8 @@ def test_align_partitions():
         (dd.from_pandas(ldf, 3), dd.from_pandas(rdf, 2)),
     ]:
         (lresult, rresult), div, parts = align_partitions(lhs, rhs)
-        assert_eq(lresult, ldf)
-        assert_eq(rresult, rdf)
+        assert_eq(lresult, ldf, sort_results=False)
+        assert_eq(rresult, rdf, sort_results=False)
 
 
 def test_align_partitions_unknown_divisions():
@@ -177,22 +177,22 @@ def test_merge_indexed_dataframe_to_indexed_dataframe():
     c = merge_indexed_dataframes(a, b, how="left")
     assert c.divisions[0] == a.divisions[0]
     assert c.divisions[-1] == max(a.divisions + b.divisions)
-    assert_eq(c, A.join(B))
+    assert_eq(c, A.join(B), sort_results=False)
 
     c = merge_indexed_dataframes(a, b, how="right")
     assert c.divisions[0] == b.divisions[0]
     assert c.divisions[-1] == b.divisions[-1]
-    assert_eq(c, A.join(B, how="right"))
+    assert_eq(c, A.join(B, how="right"), sort_results=False)
 
     c = merge_indexed_dataframes(a, b, how="inner")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == max(a.divisions + b.divisions)
-    assert_eq(c.compute(), A.join(B, how="inner"))
+    assert_eq(c.compute(), A.join(B, how="inner"), sort_results=False)
 
     c = merge_indexed_dataframes(a, b, how="outer")
     assert c.divisions[0] == 1
     assert c.divisions[-1] == 8
-    assert_eq(c.compute(), A.join(B, how="outer"))
+    assert_eq(c.compute(), A.join(B, how="outer"), sort_results=False)
 
     assert sorted(merge_indexed_dataframes(a, b, how="inner").dask) == sorted(
         merge_indexed_dataframes(a, b, how="inner").dask
@@ -276,7 +276,7 @@ def test_sequential_joins():
 
     join_dd = ddf1.join(ddf2, how="inner", lsuffix="_l", rsuffix="_r")
     multi_join_dd = join_dd.join(ddf3, how="inner", lsuffix="_l", rsuffix="_r")
-    assert_eq(multi_join_pd, multi_join_dd)
+    assert_eq(multi_join_pd, multi_join_dd, sort_results=False)
 
 
 def test_merge_asof_indexed():
@@ -294,7 +294,7 @@ def test_merge_asof_indexed():
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
     c = dd.merge_asof(a, b, left_index=True, right_index=True)
 
-    assert_eq(c, C)
+    assert_eq(c, C, sort_results=False)
 
 
 def test_merge_asof_on_basic():
@@ -305,7 +305,7 @@ def test_merge_asof_on_basic():
 
     C = pd.merge_asof(A, B, on="a")
     c = dd.merge_asof(a, b, on="a")
-    assert_eq(c, C)
+    assert_eq(c, C, sort_results=False)
 
 
 def test_merge_asof_on_lefton_righton_error():
@@ -352,7 +352,7 @@ def test_merge_asof_on(allow_exact_matches, direction):
     c = dd.merge_asof(
         a, b, on="a", allow_exact_matches=allow_exact_matches, direction=direction
     )
-    assert_eq(c, C)
+    assert_eq(c, C, sort_results=False)
 
 
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
@@ -385,7 +385,7 @@ def test_merge_asof_left_on_right_index(
         allow_exact_matches=allow_exact_matches,
         direction=direction,
     )
-    assert_eq(c, C)
+    assert_eq(c, C, sort_results=False)
 
     for nparts in [1, 2, 3]:
         for a1, idx2 in (
@@ -418,7 +418,7 @@ def test_merge_asof_left_on_right_index(
                 allow_exact_matches=allow_exact_matches,
                 direction=direction,
             )
-            assert_eq(c, C)
+            assert_eq(c, C, sort_results=False)
 
 
 def test_merge_asof_indexed_two_partitions():
@@ -429,7 +429,7 @@ def test_merge_asof_indexed_two_partitions():
 
     C = pd.merge_asof(A, B, left_index=True, right_index=True)
     c = dd.merge_asof(a, b, left_index=True, right_index=True)
-    assert_eq(c, C)
+    assert_eq(c, C, sort_results=False)
 
 
 def test_merge_asof_on_by():
@@ -481,7 +481,7 @@ def test_merge_asof_on_by():
 
     C = pd.merge_asof(B, A, on="time", by="ticker")
     c = dd.merge_asof(b, a, on="time", by="ticker")
-    assert_eq(c, C, check_index=False)
+    assert_eq(c, C, check_index=False, sort_results=False)
 
 
 def test_merge_asof_on_by_tolerance():
@@ -533,7 +533,7 @@ def test_merge_asof_on_by_tolerance():
 
     C = pd.merge_asof(B, A, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
     c = dd.merge_asof(b, a, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
-    assert_eq(c, C, check_index=False)
+    assert_eq(c, C, check_index=False, sort_results=False)
 
 
 def test_merge_asof_on_by_tolerance_no_exact_matches():
@@ -599,7 +599,7 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
         tolerance=pd.Timedelta("10ms"),
         allow_exact_matches=False,
     )
-    assert_eq(c, C, check_index=False)
+    assert_eq(c, C, check_index=False, sort_results=False)
 
 
 def test_merge_asof_unsorted_raises():
@@ -635,7 +635,7 @@ def test_merge_asof_with_empty():
         left_index=True,
         right_index=True,
     )
-    assert_eq(result_dd, result_df, check_index=False)
+    assert_eq(result_dd, result_df, check_index=False, sort_results=False)
     # left empty, right good
     result_dd = dd.merge_asof(
         empty_dd.set_index("index_col"),
@@ -649,7 +649,7 @@ def test_merge_asof_with_empty():
         left_index=True,
         right_index=True,
     )
-    assert_eq(result_dd, result_df, check_index=False)
+    assert_eq(result_dd, result_df, check_index=False, sort_results=False)
     # left/right both empty
     result_dd = dd.merge_asof(
         empty_dd.set_index("index_col"),
@@ -663,7 +663,7 @@ def test_merge_asof_with_empty():
         left_index=True,
         right_index=True,
     )
-    assert_eq(result_dd, result_df, check_index=False)
+    assert_eq(result_dd, result_df, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -689,7 +689,7 @@ def test_merge_asof_on_left_right(left_col, right_col):
         right_on=right_col,
     )
 
-    assert_eq(result_df, result_dd, check_index=False)
+    assert_eq(result_df, result_dd, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize("join", ["inner", "outer"])
@@ -742,7 +742,7 @@ def test_concat(join):
 
         expected = pd.concat([pd1, pd2], join=join, **kwargs)
         result = dd.concat([dd1, dd2], join=join, **kwargs)
-        assert_eq(result, expected)
+        assert_eq(result, expected, sort_results=False)
 
 
 @pytest.mark.parametrize("join", ["inner", "outer"])
@@ -770,7 +770,7 @@ def test_concat_series(join):
     ]:
         expected = pd.concat([pd1, pd2], join=join, **kwargs)
         result = dd.concat([dd1, dd2], join=join, **kwargs)
-        assert_eq(result, expected)
+        assert_eq(result, expected, sort_results=False)
 
 
 def test_concat_with_operation_remains_hlg():
@@ -793,7 +793,7 @@ def test_concat_with_operation_remains_hlg():
     # The third layer is the assignment to column `x`, which should remain
     # blockwise
     assert not hlg_layer_topological(result.dask, 2).is_materialized()
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -876,6 +876,7 @@ def test_merge(how, shuffle_method):
             a, b, left_index=True, right_index=True, how=how, shuffle=shuffle_method
         ),
         pd.merge(A, B, left_index=True, right_index=True, how=how),
+        sort_results=False,
     )
 
     result = dd.merge(a, b, on="y", how=how)
@@ -1014,7 +1015,7 @@ def test_merge_tasks_semi_anti_cudf(engine, how, parts):
 
     expect = emp.merge(skills, on="emp_id", how=how).sort_values(["emp_id"])
     result = dd_emp.merge(dd_skills, on="emp_id", how=how).sort_values(["emp_id"])
-    assert_eq(result, expect, check_index=False)
+    assert_eq(result, expect, check_index=False, sort_results=False)
 
 
 def test_merge_tasks_passes_through():
@@ -1102,6 +1103,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pd_merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
             assert_eq(
                 dd.merge(
@@ -1113,6 +1115,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pd_merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
 
             assert_eq(
@@ -1128,6 +1131,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                 pd_merge(
                     pdl, pdr, how=how, left_index=True, right_index=True, indicator=True
                 ),
+                sort_results=False,
             )
             assert_eq(
                 dd.merge(
@@ -1142,6 +1146,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                 pd_merge(
                     pdr, pdl, how=how, left_index=True, right_index=True, indicator=True
                 ),
+                sort_results=False,
             )
 
             assert_eq(
@@ -1153,6 +1158,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pdr.merge(pdl, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
             assert_eq(
                 ddl.merge(
@@ -1163,6 +1169,7 @@ def test_merge_by_index_patterns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pdl.merge(pdr, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
 
             # hash join
@@ -1302,10 +1309,14 @@ def test_join_by_index_patterns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method), pdl.join(pdr, how=how)
+                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                pdl.join(pdr, how=how),
+                sort_results=False,
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method), pdr.join(pdl, how=how)
+                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                pdr.join(pdl, how=how),
+                sort_results=False,
             )
 
             assert_eq(
@@ -1313,12 +1324,14 @@ def test_join_by_index_patterns(how, shuffle_method):
                     ddr, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
                 ),
                 pdl.join(pdr, how=how, lsuffix="l", rsuffix="r"),
+                sort_results=False,
             )
             assert_eq(
                 ddr.join(
                     ddl, how=how, lsuffix="l", rsuffix="r", shuffle=shuffle_method
                 ),
                 pdr.join(pdl, how=how, lsuffix="l", rsuffix="r"),
+                sort_results=False,
             )
 
             """
@@ -1326,7 +1339,7 @@ def test_join_by_index_patterns(how, shuffle_method):
             # IndexError for empty DataFrame
             # https://github.com/pydata/pandas/pull/10826
 
-            list_assert_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r'),
+            list_assert_eq(ddl.join(ddr, how=how, on='a', lsuffix='l', rsuffix='r', sort_results=False),
                     pdl.join(pdr, how=how, on='a', lsuffix='l', rsuffix='r'))
 
             list_eq(ddr.join(ddl, how=how, on='c', lsuffix='l', rsuffix='r'),
@@ -1355,7 +1368,7 @@ def test_join_gives_proper_divisions():
     actual = ddf.join(right_df, how="inner", on="a")
     assert actual.divisions == ddf.divisions
 
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 @pytest.mark.parametrize("how", ["inner", "outer", "left", "right"])
@@ -1420,10 +1433,14 @@ def test_merge_by_multiple_columns(how, shuffle_method):
             ddr = dd.from_pandas(pdr, rpart)
 
             assert_eq(
-                ddl.join(ddr, how=how, shuffle=shuffle_method), pdl.join(pdr, how=how)
+                ddl.join(ddr, how=how, shuffle=shuffle_method),
+                pdl.join(pdr, how=how),
+                sort_results=False,
             )
             assert_eq(
-                ddr.join(ddl, how=how, shuffle=shuffle_method), pdr.join(pdl, how=how)
+                ddr.join(ddl, how=how, shuffle=shuffle_method),
+                pdr.join(pdl, how=how),
+                sort_results=False,
             )
 
             assert_eq(
@@ -1436,6 +1453,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pd.merge(pdl, pdr, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
             assert_eq(
                 dd.merge(
@@ -1447,6 +1465,7 @@ def test_merge_by_multiple_columns(how, shuffle_method):
                     shuffle=shuffle_method,
                 ),
                 pd.merge(pdr, pdl, how=how, left_index=True, right_index=True),
+                sort_results=False,
             )
 
             # hash join
@@ -1594,13 +1613,13 @@ def test_cheap_single_parition_merge_left_right(how, flip):
     expected = pd.merge(*pd_inputs, left_index=True, right_on="x", how=how)
 
     assert not hlg_layer_topological(actual.dask, -1).is_materialized()
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
     actual = dd.merge(*inputs, left_on="x", right_index=True, how=how)
     expected = pd.merge(*pd_inputs, left_on="x", right_index=True, how=how)
 
     assert not hlg_layer_topological(actual.dask, -1).is_materialized()
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
 
 def test_cheap_single_partition_merge_on_index():
@@ -1622,7 +1641,7 @@ def test_cheap_single_partition_merge_on_index():
 
     assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
     actual = bb.merge(aa, right_index=True, left_on="x", how="inner")
     expected = b.merge(a, right_index=True, left_on="x", how="inner")
@@ -1630,7 +1649,7 @@ def test_cheap_single_partition_merge_on_index():
 
     assert not hlg_layer_topological(actual.dask, -1).is_materialized()
     assert not actual.known_divisions
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
 
 def test_merge_maintains_columns():
@@ -1708,7 +1727,9 @@ def test_concat_unknown_divisions():
     assert not aa.known_divisions
 
     with pytest.warns(UserWarning):
-        assert_eq(pd.concat([a, b], axis=1), dd.concat([aa, bb], axis=1))
+        assert_eq(
+            pd.concat([a, b], axis=1), dd.concat([aa, bb], axis=1), sort_results=False
+        )
 
     cc = dd.from_pandas(b, npartitions=1, sort=False)
     with pytest.raises(ValueError):
@@ -1775,14 +1796,14 @@ def test_concat2():
         result = dd.concat(case)
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
-        assert_eq(expected, result)
+        assert_eq(expected, result, sort_results=False)
         assert set(result.dask) == set(dd.concat(case).dask)
 
         expected = pd.concat(pdcase, join="inner", sort=False)
         result = dd.concat(case, join="inner")
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
-        assert_eq(result, result)
+        assert_eq(result, result, sort_results=False)
         assert set(result.dask) == set(dd.concat(case, join="inner").dask)
 
 
@@ -1804,10 +1825,12 @@ def test_concat3():
     result = dd.concat([ddf1, ddf2])
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
     assert_eq(
-        dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
+        dd.concat([ddf1, ddf2], interleave_partitions=True),
+        pd.concat([pdf1, pdf2]),
+        sort_results=False,
     )
 
     expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
@@ -1818,11 +1841,12 @@ def test_concat3():
     assert result.npartitions == (
         ddf1.npartitions + ddf2.npartitions + ddf3.npartitions
     )
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
     assert_eq(
         dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
         pd.concat([pdf1, pdf2, pdf3]),
+        sort_results=False,
     )
 
 
@@ -1934,6 +1958,7 @@ def test_concat5():
         assert_eq(
             dd.concat(case, axis=1, join="inner"),
             pd.concat(pdcase, axis=1, join="inner"),
+            sort_results=False,
         )
 
     # Dask + pandas
@@ -1963,6 +1988,7 @@ def test_concat5():
         assert_eq(
             dd.concat(case, axis=1, join="inner"),
             pd.concat(pdcase, axis=1, join="inner"),
+            sort_results=False,
         )
 
 
@@ -2061,7 +2087,7 @@ def test_concat_categorical_mixed_simple():
 
     expected = concat([a.to_frame("A"), b.to_frame("A")])
     result = dd.concat([da, db])
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_concat_datetimeindex():
@@ -2086,7 +2112,7 @@ def test_concat_datetimeindex():
 
     result = dd.concat([db2, db3])
     expected = pd.concat([b2, b3])
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
@@ -2094,11 +2120,11 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
         with pytest.warns(FutureWarning, match="append method is deprecated"):
             expected = pandas_obj.append(pandas_append)
             result = dask_obj.append(dask_append)
-            assert_eq(result, expected)
+            assert_eq(result, expected, sort_results=False)
     else:
         expected = pandas_obj.append(pandas_append)
         result = dask_obj.append(dask_append)
-        assert_eq(result, expected)
+        assert_eq(result, expected, sort_results=False)
 
     return result
 
@@ -2247,7 +2273,7 @@ def test_repartition_repeated_divisions():
     ddf = dd.from_pandas(df, npartitions=2).set_index("x")
 
     ddf2 = ddf.repartition(divisions=(0, 0), force=True)
-    assert_eq(ddf2, df.set_index("x"))
+    assert_eq(ddf2, df.set_index("x"), sort_results=False)
 
 
 def test_multi_duplicate_divisions():
@@ -2265,7 +2291,7 @@ def test_multi_duplicate_divisions():
     sf2 = df2.set_index("x")
     r2 = sf1.merge(sf2, how="left", left_index=True, right_index=True)
 
-    assert_eq(r1, r2)
+    assert_eq(r1, r2, sort_results=False)
 
 
 def test_merge_outer_empty():
@@ -2283,6 +2309,7 @@ def test_merge_outer_empty():
             df[df.cluster == x],
             check_index=False,
             check_divisions=False,
+            sort_results=False,
         )
 
 
@@ -2343,7 +2370,7 @@ def test_groupby_concat_cudf(engine):
         warnings.simplefilter("ignore", UserWarning)
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
 
-    assert_eq(res_dd.compute().sort_index(), res.sort_index())
+    assert_eq(res_dd.compute().sort_index(), res.sort_index(), sort_results=False)
 
 
 @pytest.mark.parametrize("ordered", [True, False])
@@ -2367,7 +2394,7 @@ def test_concat_ignore_order(ordered):
     expected = pd.concat([pdf1, pdf2])
     expected["x"] = expected["x"].astype("category")
     result = dd.concat([ddf1, ddf2], ignore_order=True)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_categorical_join():
@@ -2392,7 +2419,7 @@ def test_categorical_join():
 
     actual = actual_dask.compute()
     assert actual.join_col.dtype == "category"
-    assert assert_eq(expected, actual)
+    assert assert_eq(expected, actual, sort_results=False)
 
 
 def test_categorical_merge_with_columns_missing_from_left():
@@ -2409,7 +2436,7 @@ def test_categorical_merge_with_columns_missing_from_left():
     assert actual.B.dtype == "category"
     assert actual.A.dtype == "int64"
     assert actual.index.dtype == "int64"
-    assert assert_eq(expected, actual)
+    assert assert_eq(expected, actual, sort_results=False)
 
 
 def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
@@ -2426,7 +2453,7 @@ def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
     assert actual.B.dtype == "category"
     assert actual.A.dtype == "int64"
     assert actual.index.dtype == "int64"
-    assert assert_eq(expected, actual)
+    assert assert_eq(expected, actual, sort_results=False)
 
 
 def test_categorical_merge_retains_category_dtype():
@@ -2455,7 +2482,7 @@ def test_categorical_merge_does_not_raise_setting_with_copy_warning():
     ddf1 = dd.from_pandas(df1, npartitions=1)
 
     df2 = df2.astype({"B": "category"})
-    assert_eq(df1.join(df2), ddf1.join(df2))
+    assert_eq(df1.join(df2), ddf1.join(df2), sort_results=False)
 
 
 @pytest.mark.parametrize("how", ["inner", "left", "right"])
@@ -2518,6 +2545,7 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         dd_result.compute().sort_values("y"),
         pd_result.sort_values("y"),
         check_index=False,
+        sort_results=False,
     )
 
 
@@ -2566,4 +2594,4 @@ def test_pairwise_merge_results_in_identical_output_df(
 
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
-    assert_eq(ddf_pairwise, ddf_loop)
+    assert_eq(ddf_pairwise, ddf_loop, sort_results=False)
