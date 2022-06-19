@@ -267,7 +267,7 @@ def test_shuffle_sort(shuffle_method):
     df2 = df.set_index("x").sort_index()
     ddf2 = ddf.set_index("x", shuffle=shuffle_method)
 
-    assert_eq(ddf2.loc[2:3], df2.loc[2:3])
+    assert_eq(ddf2.loc[2:3], df2.loc[2:3], sort_results=False)
 
 
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
@@ -406,7 +406,7 @@ def test_set_index_divisions_compute():
     d2 = d.set_index("b", divisions=[0, 2, 9], compute=False)
     d3 = d.set_index("b", divisions=[0, 2, 9], compute=True)
 
-    assert_eq(d2, d3)
+    assert_eq(d2, d3, sort_results=False)
     assert_eq(d2, full.set_index("b"))
     assert_eq(d3, full.set_index("b"))
     assert len(d2.dask) > len(d3.dask)
@@ -415,7 +415,7 @@ def test_set_index_divisions_compute():
     d5 = d.set_index(d.b, divisions=[0, 2, 9], compute=True)
     exp = full.copy()
     exp.index = exp.b
-    assert_eq(d4, d5)
+    assert_eq(d4, d5, sort_results=False)
     assert_eq(d4, exp)
     assert_eq(d5, exp)
     assert len(d4.dask) > len(d5.dask)
@@ -436,11 +436,11 @@ def test_set_index_divisions_sorted():
 
     with dask.config.set(scheduler=throw):
         res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
-    assert_eq(res, df.set_index("x"))
+    assert_eq(res, df.set_index("x"), sort_results=False)
 
     with dask.config.set(scheduler=throw):
         res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
-    assert_eq(res, df.set_index("y"))
+    assert_eq(res, df.set_index("y"), sort_results=False)
 
     # with sorted=True, divisions must be same length as df.divisions
     with pytest.raises(ValueError):
@@ -843,13 +843,20 @@ def test_set_index_sorted_true():
     assert set(a.dask).issubset(set(b.dask))
 
     for drop in [True, False]:
-        assert_eq(a.set_index("x", drop=drop), df.set_index("x", drop=drop))
         assert_eq(
-            a.set_index(a.x, sorted=True, drop=drop), df.set_index(df.x, drop=drop)
+            a.set_index("x", drop=drop),
+            df.set_index("x", drop=drop),
+            sort_results=False,
+        )
+        assert_eq(
+            a.set_index(a.x, sorted=True, drop=drop),
+            df.set_index(df.x, drop=drop),
+            sort_results=False,
         )
         assert_eq(
             a.set_index(a.x + 1, sorted=True, drop=drop),
             df.set_index(df.x + 1, drop=drop),
+            sort_results=False,
         )
 
     with pytest.raises(ValueError):
@@ -859,7 +866,7 @@ def test_set_index_sorted_true():
 def test_set_index_sorted_single_partition():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=1)
-    assert_eq(ddf.set_index("x", sorted=True), df.set_index("x"))
+    assert_eq(ddf.set_index("x", sorted=True), df.set_index("x"), sort_results=False)
 
 
 def test_set_index_sorted_min_max_same():
@@ -893,7 +900,7 @@ def test_set_index_empty_partition():
         )
 
         assert any(ddf.get_partition(p).compute().empty for p in range(ddf.npartitions))
-        assert assert_eq(ddf.set_index("x"), df.set_index("x"))
+        assert assert_eq(ddf.set_index("x"), df.set_index("x"), sort_results=False)
 
 
 def test_set_index_on_empty():
@@ -909,7 +916,7 @@ def test_set_index_on_empty():
         ddf = ddf[ddf.y > df.y.max()].set_index("x")
         expected_df = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df, **CHECK_FREQ)
+        assert assert_eq(ddf, expected_df, sort_results=False, **CHECK_FREQ)
         assert ddf.npartitions == 1
 
 
@@ -943,7 +950,7 @@ def test_set_index_with_empty_and_overlap():
     expected = df[df.b == 1].set_index("a")
 
     assert result.divisions == (1.0, 3.0, 3.0)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_compute_divisions():
@@ -958,7 +965,7 @@ def test_compute_divisions():
 
     b = compute_and_set_divisions(copy(a))
 
-    assert_eq(a, b, check_divisions=False)
+    assert_eq(a, b, check_divisions=False, sort_results=False)
     assert b.known_divisions
 
 
@@ -1070,8 +1077,8 @@ def test_set_index_timestamp():
         assert ts1.value == ts2.value
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
-    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
+    assert_eq(df2, ddf_new_div, sort_results=False, **CHECK_FREQ)
+    assert_eq(df2, ddf.set_index("A"), sort_results=False, **CHECK_FREQ)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
@@ -1146,7 +1153,7 @@ def test_dataframe_shuffle_on_arg(on, ignore_index, max_branch, shuffle_method):
     )
     df_out_2 = df_in.shuffle(ext_on, shuffle=shuffle_method, ignore_index=ignore_index)
 
-    assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
+    assert_eq(df_out_1, df_out_2, check_index=(not ignore_index), sort_results=False)
 
     # disk shuffling doesn't support ignore_index
     if ignore_index and shuffle_method == "tasks":
@@ -1160,7 +1167,7 @@ def test_set_index_overlap():
     a = dd.from_pandas(A, npartitions=2)
     a = a.set_index("key", sorted=True)
     b = a.repartition(divisions=a.divisions)
-    assert_eq(a, b)
+    assert_eq(a, b, sort_results=False)
 
 
 def test_set_index_overlap_2():
@@ -1173,7 +1180,7 @@ def test_set_index_overlap_2():
     ddf1 = dd.from_pandas(data, npartitions=2)
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
 
-    assert_eq(ddf1, ddf2)
+    assert_eq(ddf1, ddf2, sort_results=False)
     assert ddf2.npartitions == 8
 
 
@@ -1183,14 +1190,14 @@ def test_compute_current_divisions_nan_partition():
     divisions = a.compute_current_divisions("a")
     assert divisions == (4, 5, 8, 9)
     a.divisions = divisions
-    assert_eq(a, a, check_divisions=False)
+    assert_eq(a, a, check_divisions=False, sort_results=False)
 
     # Compute divisions with 0 null partitions
     a = d[d.a > 1].sort_values("a")
     divisions = a.compute_current_divisions("a")
     assert divisions == (2, 4, 7, 9)
     a.divisions = divisions
-    assert_eq(a, a, check_divisions=False)
+    assert_eq(a, a, check_divisions=False, sort_results=False)
 
 
 def test_compute_current_divisions_overlap():
@@ -1287,7 +1294,7 @@ def test_set_index_nan_partition():
     d[d.a > 3].set_index("a")  # Set index with 1 null partition
     d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
     a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
-    assert_eq(a, a)
+    assert_eq(a, a, sort_results=False)
 
 
 def test_set_index_with_dask_dt_index():
@@ -1308,7 +1315,7 @@ def test_set_index_with_dask_dt_index():
     expected = dd.from_pandas(
         pd.DataFrame(values, index=date_index.floor("D")), npartitions=3
     )
-    assert_eq(day_df, expected)
+    assert_eq(day_df, expected, sort_results=False)
 
     # specify an index with shifted dates
     one_day = pd.Timedelta(days=1)
@@ -1316,13 +1323,13 @@ def test_set_index_with_dask_dt_index():
     expected = dd.from_pandas(
         pd.DataFrame(values, index=date_index + one_day), npartitions=3
     )
-    assert_eq(next_day_df, expected)
+    assert_eq(next_day_df, expected, sort_results=False)
 
     # try a different index type
     no_dates = dd.from_pandas(pd.DataFrame(values), npartitions=3)
     range_df = ddf.set_index(no_dates.index)
     expected = dd.from_pandas(pd.DataFrame(values), npartitions=3)
-    assert_eq(range_df, expected)
+    assert_eq(range_df, expected, sort_results=False)
 
 
 def test_set_index_with_series_uses_fastpath():
@@ -1344,7 +1351,7 @@ def test_set_index_with_series_uses_fastpath():
 
     res = ddf.set_index(ddf.d2 + one_day)
     expected = df.set_index(df.d2 + one_day)
-    assert_eq(res, expected)
+    assert_eq(res, expected, sort_results=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -1378,7 +1385,7 @@ def test_sort_values_single_partition(nelem, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize("na_position", ["first", "last"])
@@ -1406,7 +1413,7 @@ def test_sort_values_with_nulls(data, nparts, by, ascending, na_position):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending, na_position=na_position)
     expect = df.sort_values(by=by, ascending=ascending, na_position=na_position)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 def test_shuffle_values_raises():
@@ -1424,7 +1431,7 @@ def test_shuffle_by_as_list():
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=["a"], npartitions="auto", ascending=True)
     expect = pd.DataFrame({"a": [1, 2, 3]})
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 def test_noop():
@@ -1449,7 +1456,7 @@ def test_sort_values_custom_function(by, nparts):
             by=by[0], sort_function=f, sort_function_kwargs={"by_columns": by}
         )
     expect = df.sort_values(by=by)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 def test_sort_values_bool_ascending():
