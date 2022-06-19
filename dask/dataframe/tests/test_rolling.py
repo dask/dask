@@ -50,12 +50,12 @@ def test_map_overlap(npartitions):
         # DataFrame
         res = ddf.map_overlap(shifted_sum, before, after, before, after, c=2)
         sol = shifted_sum(df, before, after, c=2)
-        assert_eq(res, sol)
+        assert_eq(res, sol, sort_results=False)
 
         # Series
         res = ddf.b.map_overlap(shifted_sum, before, after, before, after, c=2)
         sol = shifted_sum(df.b, before, after, c=2)
-        assert_eq(res, sol)
+        assert_eq(res, sol, sort_results=False)
 
 
 def test_map_overlap_names():
@@ -105,7 +105,7 @@ def test_map_overlap_provide_meta():
         lambda df: df.rolling(2).sum(), 2, 0, meta={"x": "i8", "y": "i8"}
     )
     sol = df.rolling(2).sum()
-    assert_eq(res, sol)
+    assert_eq(res, sol, sort_results=False)
 
 
 def mad(x):
@@ -161,6 +161,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
+        sort_results=False,
         **check_less_precise,
     )
 
@@ -170,6 +171,7 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
+        sort_results=False,
         **check_less_precise,
     )
 
@@ -180,12 +182,12 @@ def test_rolling_cov(window, center):
     # DataFrame
     prolling = df.drop("a", axis=1).rolling(window, center=center)
     drolling = ddf.drop("a", axis=1).rolling(window, center=center)
-    assert_eq(prolling.cov(), drolling.cov())
+    assert_eq(prolling.cov(), drolling.cov(), sort_results=False)
 
     # Series
     prolling = df.b.rolling(window, center=center)
     drolling = ddf.b.rolling(window, center=center)
-    assert_eq(prolling.cov(), drolling.cov())
+    assert_eq(prolling.cov(), drolling.cov(), sort_results=False)
 
 
 def test_rolling_raises():
@@ -212,20 +214,33 @@ def test_rolling_axis():
     df = pd.DataFrame(np.random.randn(20, 16))
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean())
-    assert_eq(df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean())
+    assert_eq(
+        df.rolling(3, axis=0).mean(), ddf.rolling(3, axis=0).mean(), sort_results=False
+    )
+    assert_eq(
+        df.rolling(3, axis=1).mean(), ddf.rolling(3, axis=1).mean(), sort_results=False
+    )
     assert_eq(
         df.rolling(3, min_periods=1, axis=1).mean(),
         ddf.rolling(3, min_periods=1, axis=1).mean(),
+        sort_results=False,
     )
     assert_eq(
-        df.rolling(3, axis="columns").mean(), ddf.rolling(3, axis="columns").mean()
+        df.rolling(3, axis="columns").mean(),
+        ddf.rolling(3, axis="columns").mean(),
+        sort_results=False,
     )
-    assert_eq(df.rolling(3, axis="rows").mean(), ddf.rolling(3, axis="rows").mean())
+    assert_eq(
+        df.rolling(3, axis="rows").mean(),
+        ddf.rolling(3, axis="rows").mean(),
+        sort_results=False,
+    )
 
     s = df[3]
     ds = ddf[3]
-    assert_eq(s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std())
+    assert_eq(
+        s.rolling(5, axis=0).std(), ds.rolling(5, axis=0).std(), sort_results=False
+    )
 
 
 def test_rolling_partition_size():
@@ -233,8 +248,8 @@ def test_rolling_partition_size():
     ddf = dd.from_pandas(df, npartitions=5)
 
     for obj, dobj in [(df, ddf), (df[0], ddf[0])]:
-        assert_eq(obj.rolling(10).mean(), dobj.rolling(10).mean())
-        assert_eq(obj.rolling(11).mean(), dobj.rolling(11).mean())
+        assert_eq(obj.rolling(10).mean(), dobj.rolling(10).mean(), sort_results=False)
+        assert_eq(obj.rolling(11).mean(), dobj.rolling(11).mean(), sort_results=False)
         with pytest.raises(NotImplementedError):
             dobj.rolling(12).mean().compute()
 
@@ -282,6 +297,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
+        sort_results=False,
         **check_less_precise,
     )
 
@@ -291,6 +307,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
+        sort_results=False,
         **check_less_precise,
     )
 
@@ -300,12 +317,12 @@ def test_time_rolling_cov(window):
     # DataFrame
     prolling = ts.drop("a", axis=1).rolling(window)
     drolling = dts.drop("a", axis=1).rolling(window)
-    assert_eq(prolling.cov(), drolling.cov())
+    assert_eq(prolling.cov(), drolling.cov(), sort_results=False)
 
     # Series
     prolling = ts.b.rolling(window)
     drolling = dts.b.rolling(window)
-    assert_eq(prolling.cov(), drolling.cov())
+    assert_eq(prolling.cov(), drolling.cov(), sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -321,9 +338,11 @@ def test_time_rolling_large_window_fixed_chunks(window, N):
     )
     df = df.set_index("a")
     ddf = dd.from_pandas(df, 5)
-    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
-    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
-    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum(), sort_results=False)
+    assert_eq(
+        ddf.rolling(window).count(), df.rolling(window).count(), sort_results=False
+    )
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean(), sort_results=False)
 
 
 @pytest.mark.parametrize("window", ["2s", "5s", "20s", "10h"])
@@ -338,9 +357,11 @@ def test_time_rolling_large_window_variable_chunks(window):
     ddf = ddf.repartition(divisions=[0, 5, 20, 28, 33, 54, 79, 80, 82, 99])
     df = df.set_index("a")
     ddf = ddf.set_index("a")
-    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum())
-    assert_eq(ddf.rolling(window).count(), df.rolling(window).count())
-    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
+    assert_eq(ddf.rolling(window).sum(), df.rolling(window).sum(), sort_results=False)
+    assert_eq(
+        ddf.rolling(window).count(), df.rolling(window).count(), sort_results=False
+    )
+    assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean(), sort_results=False)
 
 
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
@@ -350,7 +371,7 @@ def test_time_rolling(before, after):
     after = pd.Timedelta(after)
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
     expected = dts.compute().rolling(window).count()
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_rolling_agg_aggregate():
@@ -360,27 +381,32 @@ def test_rolling_agg_aggregate():
     assert_eq(
         df.rolling(window=3).agg([np.mean, np.std]),
         ddf.rolling(window=3).agg([np.mean, np.std]),
+        sort_results=False,
     )
 
     assert_eq(
         df.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
         ddf.rolling(window=3).agg({"A": np.sum, "B": lambda x: np.std(x, ddof=1)}),
+        sort_results=False,
     )
 
     assert_eq(
         df.rolling(window=3).agg([np.sum, np.mean]),
         ddf.rolling(window=3).agg([np.sum, np.mean]),
+        sort_results=False,
     )
 
     assert_eq(
         df.rolling(window=3).agg({"A": [np.sum, np.mean]}),
         ddf.rolling(window=3).agg({"A": [np.sum, np.mean]}),
+        sort_results=False,
     )
 
     kwargs = {"raw": True}
     assert_eq(
         df.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
         ddf.rolling(window=3).apply(lambda x: np.std(x, ddof=1), **kwargs),
+        sort_results=False,
     )
 
 
@@ -400,6 +426,7 @@ def test_rolling_numba_engine():
     assert_eq(
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
+        sort_results=False,
     )
 
 
