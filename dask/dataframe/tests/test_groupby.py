@@ -76,7 +76,7 @@ def test_groupby_internal_repr():
     assert isinstance(dp, dd.groupby.DataFrameGroupBy)
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj, sort_results=False)
 
     gp = pdf.groupby("y")["x"]
     dp = ddf.groupby("y")["x"]
@@ -89,7 +89,7 @@ def test_groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj, sort_results=False)
 
     gp = pdf.groupby(pdf.y)["x"]
     dp = ddf.groupby(ddf.y)["x"]
@@ -102,7 +102,7 @@ def test_groupby_internal_repr():
     assert isinstance(dp._meta, pd.core.groupby.DataFrameGroupBy)
     # slicing should not affect to internal
     assert isinstance(dp.obj, dd.DataFrame)
-    assert_eq(dp.obj, gp.obj)
+    assert_eq(dp.obj, gp.obj, sort_results=False)
 
 
 def test_groupby_error():
@@ -283,7 +283,9 @@ def test_groupby_on_index(scheduler):
 
     ddf2 = ddf.set_index("a")
     pdf2 = pdf.set_index("a")
-    assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
+    assert_eq(
+        ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean(), sort_results=False
+    )
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
@@ -387,7 +389,7 @@ def test_groupby_multilevel_agg():
 
     sol = df.groupby(["a"]).mean()
     res = ddf.groupby(["a"]).mean()
-    assert_eq(res, sol)
+    assert_eq(res, sol, sort_results=False)
 
     sol = df.groupby(["a", "c"]).mean()
     res = ddf.groupby(["a", "c"]).mean()
@@ -412,11 +414,15 @@ def test_groupby_get_group():
         ddgrouped = d.groupby(ddkey)
         pdgrouped = full.groupby(pdkey)
         # DataFrame
-        assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2))
-        assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3))
+        assert_eq(ddgrouped.get_group(2), pdgrouped.get_group(2), sort_results=False)
+        assert_eq(ddgrouped.get_group(3), pdgrouped.get_group(3), sort_results=False)
         # Series
-        assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
-        assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+        assert_eq(
+            ddgrouped.a.get_group(3), pdgrouped.a.get_group(3), sort_results=False
+        )
+        assert_eq(
+            ddgrouped.a.get_group(2), pdgrouped.a.get_group(2), sort_results=False
+        )
 
 
 def test_dataframe_groupby_nunique():
@@ -425,7 +431,7 @@ def test_dataframe_groupby_nunique():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    assert_eq(s.groupby("strings")["data"].nunique(), expected, sort_results=False)
 
 
 def test_dataframe_groupby_nunique_across_group_same_value():
@@ -434,7 +440,7 @@ def test_dataframe_groupby_nunique_across_group_same_value():
     ps = pd.DataFrame(dict(strings=strings, data=data))
     s = dd.from_pandas(ps, npartitions=3)
     expected = ps.groupby("strings")["data"].nunique()
-    assert_eq(s.groupby("strings")["data"].nunique(), expected)
+    assert_eq(s.groupby("strings")["data"].nunique(), expected, sort_results=False)
 
 
 def test_series_groupby_propagates_names():
@@ -444,7 +450,7 @@ def test_series_groupby_propagates_names():
     with pytest.warns(UserWarning):  # meta inference
         result = ddf.groupby("x").apply(func)
     expected = df.groupby("x").apply(func)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 @pytest.mark.parametrize("npartitions", (1, 2))
@@ -457,7 +463,7 @@ def test_series_groupby_cumfunc_with_named_index(npartitions, func):
     assert ddf.npartitions == npartitions
     expected = getattr(df["y"].groupby("x"), func)()
     result = getattr(ddf["y"].groupby("x"), func)()
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_series_groupby():
@@ -471,14 +477,14 @@ def test_series_groupby():
     dask_group2 = ss.groupby(ss + 1)
 
     for dg, pdg in [(dask_group, pd_group), (pd_group2, dask_group2)]:
-        assert_eq(dg.count(), pdg.count())
-        assert_eq(dg.sum(), pdg.sum())
-        assert_eq(dg.min(), pdg.min())
-        assert_eq(dg.max(), pdg.max())
-        assert_eq(dg.size(), pdg.size())
-        assert_eq(dg.first(), pdg.first())
-        assert_eq(dg.last(), pdg.last())
-        assert_eq(dg.prod(), pdg.prod())
+        assert_eq(dg.count(), pdg.count(), sort_results=False)
+        assert_eq(dg.sum(), pdg.sum(), sort_results=False)
+        assert_eq(dg.min(), pdg.min(), sort_results=False)
+        assert_eq(dg.max(), pdg.max(), sort_results=False)
+        assert_eq(dg.size(), pdg.size(), sort_results=False)
+        assert_eq(dg.first(), pdg.first(), sort_results=False)
+        assert_eq(dg.last(), pdg.last(), sort_results=False)
+        assert_eq(dg.prod(), pdg.prod(), sort_results=False)
 
 
 def test_series_groupby_errors():
@@ -907,8 +913,8 @@ def test_numeric_column_names():
     # This ensures that we cast all column iterables to list beforehand.
     df = pd.DataFrame({0: [0, 1, 0, 1], 1: [1, 2, 3, 4], 2: [0, 1, 0, 1]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum())
-    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum())
+    assert_eq(ddf.groupby(0).sum(), df.groupby(0).sum(), sort_results=False)
+    assert_eq(ddf.groupby([0, 2]).sum(), df.groupby([0, 2]).sum(), sort_results=False)
     assert_eq(
         ddf.groupby(0).apply(lambda x: x, meta={0: int, 1: int, 2: int}),
         df.groupby(0).apply(lambda x: x),
@@ -945,6 +951,7 @@ def test_groupby_multiprocessing():
         assert_eq(
             ddf.groupby("B").apply(lambda x: x, meta={"A": int, "B": object}),
             df.groupby("B").apply(lambda x: x),
+            sort_results=False,
         )
 
 
@@ -983,7 +990,7 @@ def test_aggregate__single_element_groups(agg_func):
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 
-    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec))
+    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec), sort_results=False)
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
@@ -1114,14 +1121,17 @@ def test_fillna(axis, group_keys, method, limit):
     assert_eq(
         df.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
         ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+        sort_results=False,
     )
     assert_eq(
         df.groupby("A", group_keys=group_keys).B.fillna(0),
         ddf.groupby("A", group_keys=group_keys).B.fillna(0),
+        sort_results=False,
     )
     assert_eq(
         df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        sort_results=False,
     )
     assert_eq(
         df.groupby("A", group_keys=group_keys).fillna(
@@ -1130,6 +1140,7 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby("A", group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
         ),
+        sort_results=False,
     )
     assert_eq(
         df.groupby(["A", "B"], group_keys=group_keys).fillna(
@@ -1138,6 +1149,7 @@ def test_fillna(axis, group_keys, method, limit):
         ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
             method=method, limit=limit, axis=axis
         ),
+        sort_results=False,
     )
 
     with pytest.raises(NotImplementedError):
@@ -1164,14 +1176,17 @@ def test_ffill():
     assert_eq(
         df.groupby("A").ffill(),
         ddf.groupby("A").ffill(),
+        sort_results=False,
     )
     assert_eq(
         df.groupby("A").B.ffill(),
         ddf.groupby("A").B.ffill(),
+        sort_results=False,
     )
     assert_eq(
         df.groupby(["A", "B"]).ffill(),
         ddf.groupby(["A", "B"]).ffill(),
+        sort_results=False,
     )
 
 
@@ -1189,14 +1204,17 @@ def test_bfill():
     assert_eq(
         df.groupby("A").bfill(),
         ddf.groupby("A").bfill(),
+        sort_results=False,
     )
     assert_eq(
         df.groupby("A").B.bfill(),
         ddf.groupby("A").B.bfill(),
+        sort_results=False,
     )
     assert_eq(
         df.groupby(["A", "B"]).bfill(),
         ddf.groupby(["A", "B"]).bfill(),
+        sort_results=False,
     )
 
 
@@ -1231,6 +1249,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         assert_eq(
             call(pdf.groupby(grouper(pdf))["c"], agg_func),
             call(ddf.groupby(grouper(ddf))["c"], agg_func, split_every=2),
+            sort_results=False,
         )
 
     # not supported by pandas
@@ -1238,6 +1257,7 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         assert_eq(
             call(pdf.groupby(grouper(pdf))[["c", "d"]], agg_func),
             call(ddf.groupby(grouper(ddf))[["c", "d"]], agg_func, split_every=2),
+            sort_results=False,
         )
 
         if agg_func in ("cov", "corr"):
@@ -1249,11 +1269,12 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
             dddf = dddf.sort_index()
             cols = sorted(list(dddf.columns))
             dddf = dddf[cols]
-            assert_eq(df, dddf)
+            assert_eq(df, dddf, sort_results=False)
         else:
             assert_eq(
                 call(pdf.groupby(grouper(pdf)), agg_func),
                 call(ddf.groupby(grouper(ddf)), agg_func, split_every=2),
+                sort_results=False,
             )
 
 
@@ -1295,6 +1316,7 @@ def test_series_aggregations_multilevel(grouper, agg_func):
         # for pandas ~ 0.18, the name is not not properly propagated for
         # the mean aggregation
         check_names=(agg_func not in {"mean", "nunique"}),
+        sort_results=False,
     )
 
 
@@ -1338,8 +1360,8 @@ def test_groupby_meta_content(group_and_slice, grouper):
     meta = group_and_slice(ddf, grouper)._meta.first()
     meta_nonempty = group_and_slice(ddf, grouper)._meta_nonempty.first().head(0)
 
-    assert_eq(expected, meta)
-    assert_eq(expected, meta_nonempty)
+    assert_eq(expected, meta, sort_results=False)
+    assert_eq(expected, meta_nonempty, sort_results=False)
 
 
 def test_groupy_non_aligned_index():
@@ -1492,7 +1514,7 @@ def test_cumulative(func, key, sel):
     ddf = dd.from_pandas(df, npartitions=10)
 
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
-    assert_eq(getattr(g, func)(), getattr(dg, func)())
+    assert_eq(getattr(g, func)(), getattr(dg, func)(), sort_results=False)
 
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
@@ -1507,7 +1529,9 @@ def test_cumulative_axis1(func):
     df.iloc[-6, -1] = np.nan
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(
-        getattr(df.groupby("a"), func)(axis=1), getattr(ddf.groupby("a"), func)(axis=1)
+        getattr(df.groupby("a"), func)(axis=1),
+        getattr(ddf.groupby("a"), func)(axis=1),
+        sort_results=False,
     )
 
 
@@ -1625,7 +1649,7 @@ def test_groupby_slice_agg_reduces():
     a = dd.from_pandas(d, npartitions=2)
     result = a.groupby("a")["b"].agg(["min", "max"])
     expected = d.groupby("a")["b"].agg(["min", "max"])
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_groupby_agg_grouper_single():
@@ -1635,7 +1659,7 @@ def test_groupby_agg_grouper_single():
 
     result = a.groupby("a")["a"].agg(["min", "max"])
     expected = d.groupby("a")["a"].agg(["min", "max"])
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 @pytest.mark.parametrize("slice_", ["a", ["a"], ["a", "b"], ["b"]])
@@ -1646,7 +1670,7 @@ def test_groupby_agg_grouper_multiple(slice_):
 
     result = a.groupby("a")[slice_].agg(["min", "max"])
     expected = d.groupby("a")[slice_].agg(["min", "max"])
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -1692,10 +1716,10 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         expected = expected.astype(float)
 
     result = call(ddf.groupby(["idx", "a"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
     result = call(ddf_no_divs.groupby(["idx", "a"]), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
     # apply-combine-apply aggregation functions
     aca_agg = {"sum", "mean", "var", "size", "std", "count", "first", "last", "prod"}
@@ -1703,7 +1727,7 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
     # Test aggregate strings
     if agg_func in aca_agg:
         result = ddf_no_divs.groupby(["idx", "a"]).agg(agg_func)
-        assert_eq(expected, result)
+        assert_eq(expected, result, sort_results=False)
 
     # Column and then index
 
@@ -1731,15 +1755,15 @@ def test_groupby_column_and_index_agg_funcs(agg_func):
         expected = expected.astype(float)
 
     result = call(ddf.groupby("idx"), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
     result = call(ddf_no_divs.groupby("idx"), agg_func)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
     # Test aggregate strings
     if agg_func in aca_agg:
         result = ddf_no_divs.groupby("idx").agg(agg_func)
-        assert_eq(expected, result)
+        assert_eq(expected, result, sort_results=False)
 
 
 @pytest.mark.parametrize("group_args", [["idx", "a"], ["a", "idx"], ["idx"], "idx"])
@@ -1810,7 +1834,7 @@ def test_dataframe_groupby_agg_custom_sum(pandas_spec, dask_spec, check_dtype):
     expected = df.groupby("g").aggregate(pandas_spec)
     result = ddf.groupby("g").aggregate(dask_spec)
 
-    assert_eq(result, expected, check_dtype=check_dtype)
+    assert_eq(result, expected, check_dtype=check_dtype, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -1828,7 +1852,7 @@ def test_series_groupby_agg_custom_mean(pandas_spec, dask_spec):
     expected = d["b"].groupby(d["g"]).aggregate(pandas_spec)
     result = a["b"].groupby(a["g"]).aggregate(dask_spec)
 
-    assert_eq(result, expected, check_dtype=False)
+    assert_eq(result, expected, check_dtype=False, sort_results=False)
 
 
 def test_groupby_agg_custom__name_clash_with_internal_same_column():
@@ -1860,7 +1884,7 @@ def test_groupby_agg_custom__name_clash_with_internal_different_column():
     result = a.groupby("g").aggregate({"b": agg_func, "c": "sum"})
     expected = d.groupby("g").aggregate({"b": "mean", "c": "sum"})
 
-    assert_eq(result, expected, check_dtype=False)
+    assert_eq(result, expected, check_dtype=False, sort_results=False)
 
 
 def test_groupby_agg_custom__mode():
@@ -1899,7 +1923,7 @@ def test_groupby_agg_custom__mode():
     expected = pd.DataFrame({"g0": [0, 1], "g1": [0, 1], "cc": [4, 6]})
     expected = expected["cc"].groupby([expected["g0"], expected["g1"]]).agg("sum")
 
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
 
 @pytest.mark.parametrize("func", ["var", list])
@@ -1913,7 +1937,7 @@ def test_groupby_select_column_agg(func):
     ddf = dd.from_pandas(pdf, npartitions=4)
     actual = ddf.groupby("A")["B"].agg(func)
     expected = pdf.groupby("A")["B"].agg(func)
-    assert_eq(actual, expected)
+    assert_eq(actual, expected, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -1931,7 +1955,7 @@ def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(func(df), func(ddf))
+    assert_eq(func(df), func(ddf), sort_results=False)
 
 
 def test_std_columns_int():
@@ -1946,7 +1970,7 @@ def test_std_columns_int():
 
 def test_timeseries():
     df = dask.datasets.timeseries().partitions[:2]
-    assert_eq(df.groupby("name").std(), df.groupby("name").std())
+    assert_eq(df.groupby("name").std(), df.groupby("name").std(), sort_results=False)
 
 
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
@@ -1990,11 +2014,13 @@ def test_groupby_group_keys(group_keys):
 
     func = lambda g: g.copy()
     expected = pdf.groupby("a").apply(func)
-    assert_eq(expected, ddf.groupby("a").apply(func, meta=expected))
+    assert_eq(expected, ddf.groupby("a").apply(func, meta=expected), sort_results=False)
 
     expected = pdf.groupby("a", group_keys=group_keys).apply(func)
     assert_eq(
-        expected, ddf.groupby("a", group_keys=group_keys).apply(func, meta=expected)
+        expected,
+        ddf.groupby("a", group_keys=group_keys).apply(func, meta=expected),
+        sort_results=False,
     )
 
 
@@ -2020,9 +2046,9 @@ def test_groupby_cov(columns):
         result = result.compute()
         # don't bother checking index -- MultiIndex levels are in a frozenlist
         result.columns = result.columns.astype(np.dtype("O"))
-        assert_eq(expected, result, check_index=False)
+        assert_eq(expected, result, check_index=False, sort_results=False)
     else:
-        assert_eq(expected, result)
+        assert_eq(expected, result, sort_results=False)
 
 
 def test_df_groupby_idxmin():
@@ -2037,8 +2063,8 @@ def test_df_groupby_idxmin():
     result_pd = pdf.groupby("group").idxmin()
     result_dd = ddf.groupby("group").idxmin()
 
-    assert_eq(result_pd, result_dd)
-    assert_eq(expected, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
+    assert_eq(expected, result_dd, sort_results=False)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -2056,7 +2082,7 @@ def test_df_groupby_idxmin_skipna(skipna):
     result_pd = pdf.groupby("group").idxmin(skipna=skipna)
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
 
-    assert_eq(result_pd, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
 
 
 def test_df_groupby_idxmax():
@@ -2071,8 +2097,8 @@ def test_df_groupby_idxmax():
     result_pd = pdf.groupby("group").idxmax()
     result_dd = ddf.groupby("group").idxmax()
 
-    assert_eq(result_pd, result_dd)
-    assert_eq(expected, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
+    assert_eq(expected, result_dd, sort_results=False)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -2090,7 +2116,7 @@ def test_df_groupby_idxmax_skipna(skipna):
     result_pd = pdf.groupby("group").idxmax(skipna=skipna)
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
 
-    assert_eq(result_pd, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
 
 
 def test_series_groupby_idxmin():
@@ -2107,8 +2133,8 @@ def test_series_groupby_idxmin():
     result_pd = pdf.groupby("group")["value"].idxmin()
     result_dd = ddf.groupby("group")["value"].idxmin()
 
-    assert_eq(result_pd, result_dd)
-    assert_eq(expected, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
+    assert_eq(expected, result_dd, sort_results=False)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -2126,7 +2152,7 @@ def test_series_groupby_idxmin_skipna(skipna):
     result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
 
-    assert_eq(result_pd, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
 
 
 def test_series_groupby_idxmax():
@@ -2143,8 +2169,8 @@ def test_series_groupby_idxmax():
     result_pd = pdf.groupby("group")["value"].idxmax()
     result_dd = ddf.groupby("group")["value"].idxmax()
 
-    assert_eq(result_pd, result_dd)
-    assert_eq(expected, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
+    assert_eq(expected, result_dd, sort_results=False)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -2162,7 +2188,7 @@ def test_series_groupby_idxmax_skipna(skipna):
     result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
 
-    assert_eq(result_pd, result_dd)
+    assert_eq(result_pd, result_dd, sort_results=False)
 
 
 def test_groupby_unique():
@@ -2176,7 +2202,7 @@ def test_groupby_unique():
     dd_gb = ddf.groupby("foo")["bar"].unique()
 
     # Use explode because each DataFrame row is a list; equality fails
-    assert_eq(dd_gb.explode(), pd_gb.explode())
+    assert_eq(dd_gb.explode(), pd_gb.explode(), sort_results=False)
 
 
 def test_groupby_value_counts():
@@ -2248,11 +2274,13 @@ def test_groupby_shift_lazy_input():
     assert_eq(
         pdf.groupby(pdf.c).shift(periods=1),
         ddf.groupby(ddf.c).shift(periods=delayed_periods, meta={"a": int, "b": int}),
+        sort_results=False,
     )
     with pytest.warns(UserWarning):
         assert_eq(
             pdf.groupby(pdf.c).shift(periods=1, fill_value=pdf.b.max()),
             ddf.groupby(ddf.c).shift(periods=1, fill_value=ddf.b.max()),
+            sort_results=False,
         )
 
 
@@ -2295,7 +2323,11 @@ def test_groupby_shift_with_freq():
         **CHECK_FREQ,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
-    assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
+    assert_eq(
+        df_result,
+        ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result),
+        sort_results=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -2383,10 +2415,12 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     ddf = dd.from_pandas(pdf, 2)
 
     # DataFrameGroupBy
-    assert_eq(agg(grouping(pdf)), agg(grouping(ddf)))
+    assert_eq(agg(grouping(pdf)), agg(grouping(ddf)), sort_results=False)
 
     # SeriesGroupBy
-    assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
+    assert_eq(
+        agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]), sort_results=False
+    )
 
 
 @pytest.mark.xfail(
@@ -2402,7 +2436,7 @@ def test_groupby_dropna_pandas(dropna):
 
     dask_result = ddf.groupby("a", dropna=dropna).e.sum()
     pd_result = df.groupby("a", dropna=dropna).e.sum()
-    assert_eq(dask_result, pd_result)
+    assert_eq(dask_result, pd_result, sort_results=False)
 
 
 @pytest.mark.gpu
@@ -2452,7 +2486,7 @@ def test_groupby_dropna_cudf(dropna, by, group_keys):
         dask_result = dask_result.compute()
         dask_result.index.name = cudf_result.index.name
 
-    assert_eq(dask_result, cudf_result)
+    assert_eq(dask_result, cudf_result, sort_results=False)
 
 
 @pytest.mark.gpu
@@ -2478,7 +2512,7 @@ def test_groupby_grouper_dispatch(key):
     expect = pdf.groupby(pd_grouper).sum()
     got = gdf.groupby(gd_grouper).sum()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, sort_results=False)
 
 
 @pytest.mark.xfail(
@@ -2494,7 +2528,7 @@ def test_groupby_dropna_with_agg():
 
     ddf = dd.from_pandas(df, 1, sort=False)
     actual = ddf.groupby(["id1", "id2"], dropna=False).agg("sum")
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 def test_groupby_observed_with_agg():
@@ -2509,7 +2543,7 @@ def test_groupby_observed_with_agg():
 
     ddf = dd.from_pandas(df, 2)
     actual = ddf.groupby(["cat_1", "cat_2"], observed=True).agg("sum")
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 def test_rounding_negative_var():
@@ -2519,7 +2553,7 @@ def test_rounding_negative_var():
     df = pd.DataFrame({"ids": ids, "x": x})
 
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std())
+    assert_eq(ddf.groupby("ids").x.std(), df.groupby("ids").x.std(), sort_results=False)
 
 
 @pytest.mark.parametrize("split_out", [2, 3])
@@ -2544,7 +2578,7 @@ def test_groupby_split_out_multiindex(split_out, column):
         ddf.groupby(column).a.mean(split_out=split_out).compute().sort_values().dropna()
     )
 
-    assert_eq(ddf_result, ddf_result_so1, check_index=False)
+    assert_eq(ddf_result, ddf_result_so1, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -2571,6 +2605,7 @@ def test_groupby_large_ints_exception(backend):
     assert_eq(
         df.groupby("x").std(),
         ddf.groupby("x").std().compute(scheduler="single-threaded"),
+        sort_results=False,
     )
 
 
@@ -2688,6 +2723,7 @@ def test_groupby_aggregate_categorical_observed(
     assert_eq(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
+        sort_results=False,
     )
 
 
@@ -2711,7 +2747,7 @@ def test_empty_partitions_with_value_counts():
     expected = df.groupby("A")["B"].value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 def test_groupby_with_pd_grouper():
@@ -2751,7 +2787,7 @@ def test_groupby_empty_partitions_with_rows_operation(operation):
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
@@ -2775,7 +2811,7 @@ def test_groupby_with_row_operations(operation):
     expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby("A")["B"])
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
@@ -2799,7 +2835,7 @@ def test_groupby_multi_index_with_row_operations(operation):
     expected = caller(df.groupby(["A", df["A"].eq("a1")])["B"])
     ddf = dd.from_pandas(df, npartitions=3)
     actual = caller(ddf.groupby(["A", ddf["A"].eq("a1")])["B"])
-    assert_eq(expected, actual)
+    assert_eq(expected, actual, sort_results=False)
 
 
 def test_groupby_iter_fails():
