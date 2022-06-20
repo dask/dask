@@ -54,13 +54,6 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
-      - name: Hack around https://github.com/ipython/ipython/issues/12197
-        # This upstream issue causes an interpreter crash when running
-        # test_base.py::test_tokenize_object_with_recursion_error_returns_uuid
-        shell: bash -l {0}
-        if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.9' }}
-        run: mamba uninstall ipython
-
       - name: Install
         shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
