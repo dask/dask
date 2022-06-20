@@ -16,7 +16,7 @@ div.jupyter_container {
 
 .jupyter_container div.code_cell {
     padding: 10px;
-    max-width: None;
+    max-width: None !important;
 }
 
 .jupyter_container .output {
