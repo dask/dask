@@ -20,10 +20,16 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core, threaded
+from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
-from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    named_schedulers,
+    tokenize,
+)
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
@@ -78,6 +84,8 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 
@@ -163,7 +171,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return first, ()
@@ -345,7 +353,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()

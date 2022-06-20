@@ -7,11 +7,12 @@ from dataclasses import fields, is_dataclass
 
 from tlz import concat, curry, merge, unique
 
-from dask import config, threaded
+from dask import config
 from dask.base import (
     DaskMethodsMixin,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     replace_name_in_key,
 )
 from dask.base import tokenize as _tokenize
@@ -21,6 +22,9 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
+
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 
 def unzip(ls, nout):
@@ -518,7 +522,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self.key
 
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
     __dask_optimize__ = globalmethod(optimize, key="delayed_optimize")
 
     def __dask_postcompute__(self):

@@ -1,5 +1,6 @@
 import dataclasses
 import datetime
+import inspect
 import os
 import subprocess
 import sys
@@ -1543,3 +1544,59 @@ def test_compute_as_if_collection_low_level_task_graph():
     )[0]
     assert optimized
     da.utils.assert_eq(x, result)
+
+
+# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# patched. This allows for checking for different default schedulers depending on the
+# platform. One might prefer patching `sys.platform` for a more direct test, but that
+# causes problems in other libraries.
+def check_default_scheduler(module, collection, expected, emscripten):
+    from contextlib import nullcontext
+    from unittest import mock
+
+    from dask.local import get_sync
+
+    if emscripten:
+        ctx = mock.patch("dask.base.named_schedulers", {"sync": get_sync})
+    else:
+        ctx = nullcontext()
+    with ctx:
+        import importlib
+
+        if expected == "sync":
+            from dask.local import get_sync as get
+        elif expected == "threads":
+            from dask.threaded import get
+        elif expected == "processes":
+            from dask.multiprocessing import get
+
+        mod = importlib.import_module(module)
+
+        assert getattr(mod, collection).__dask_scheduler__ == get
+
+
+@pytest.mark.parametrize(
+    "params",
+    (
+        "'dask.dataframe', '_Frame', 'sync', True",
+        "'dask.dataframe', '_Frame', 'threads', False",
+        "'dask.array', 'Array', 'sync', True",
+        "'dask.array', 'Array', 'threads', False",
+        "'dask.bag', 'Bag', 'sync', True",
+        "'dask.bag', 'Bag', 'processes', False",
+    ),
+)
+def test_emscripten_default_scheduler(params):
+    pytest.importorskip("dask.array")
+    pytest.importorskip("dask.dataframe")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                inspect.getsource(check_default_scheduler)
+                + f"check_default_scheduler({params})\n"
+            ),
+        ]
+    )
+    proc.check_returncode()
