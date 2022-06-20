@@ -213,6 +213,28 @@ def test_ufunc_wrapped(ufunc):
     np.testing.assert_array_equal(dafunc(df), npfunc(df))
 
 
+def test_ufunc_wrapped_not_implemented():
+    s = pd.Series(
+        np.random.randint(1, 100, size=20), index=list("abcdefghijklmnopqrst")
+    )
+    ds = dd.from_pandas(s, 3)
+    with pytest.raises(NotImplementedError, match="This method is not implemented"):
+        np.repeat(ds, 10)
+
+    df = pd.DataFrame(
+        {
+            "A": np.random.randint(1, 100, size=20),
+            "B": np.random.randint(1, 100, size=20),
+            "C": np.abs(np.random.randn(20)),
+        },
+        index=list("abcdefghijklmnopqrst"),
+    )
+    ddf = dd.from_pandas(df, 3)
+
+    with pytest.raises(NotImplementedError, match="This method is not implemented"):
+        np.repeat(ddf, 10)
+
+
 _UFUNCS_2ARG = [
     "logaddexp",
     "logaddexp2",
