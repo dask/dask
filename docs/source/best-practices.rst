@@ -107,34 +107,31 @@ become troublesome, both because overhead is now in the 10 minutes to hours
 range, and also because the overhead of dealing with such a large graph can
 start to overwhelm the scheduler.
 
-There are a few things you can do to address this:
+You can build smaller graphs by:
 
--   Build smaller graphs.  You can do this by:
+-  **Increasing your chunk size:**  If you have a 1,000 GB of data and are using
+   10 MB chunks, then you have 100,000 partitions.  Every operation on such
+   a collection will generate at least 100,000 tasks.
 
-    -  **Increasing your chunk size:**  If you have a 1000 GB of data and are using
-       10 MB chunks, then you have 100,000 partitions.  Every operation on such
-       a collection will generate at least 100,000 tasks.
+   However if you increase your chunksize to 1 GB or even a few GB then you
+   reduce the overhead by orders of magnitude.  This requires that your
+   workers have much more than 1 GB of memory, but that's typical for larger
+   workloads.
 
-       However if you increase your chunksize to 1 GB or even a few GB then you
-       reduce the overhead by orders of magnitude.  This requires that your
-       workers have much more than 1 GB of memory, but that's typical for larger
-       workloads.
+-  **Fusing operations together:** Dask will do a bit of this on its own, but you
+   can help it.  If you have a very complex operation with dozens of
+   sub-operations, maybe you can pack that into a single Python function
+   and use a function like ``da.map_blocks`` or ``dd.map_partitions``.
 
-    -  **Fusing operations together:** Dask will do a bit of this on its own, but you
-       can help it.  If you have a very complex operation with dozens of
-       sub-operations, maybe you can pack that into a single Python function
-       and use a function like ``da.map_blocks`` or ``dd.map_partitions``.
+   In general, the more administrative work you can move into your functions
+   the better.  That way the Dask scheduler doesn't need to think about all
+   of the fine-grained operations.
 
-       In general, the more administrative work you can move into your functions
-       the better.  That way the Dask scheduler doesn't need to think about all
-       of the fine-grained operations.
-
-    -  **Breaking up your computation:** For very large workloads you may also want to
-       try sending smaller chunks to Dask at a time.  For example if you're
-       processing a petabyte of data but find that Dask is only happy with 100
-       TB, maybe you can break up your computation into ten pieces and submit
-       them one after the other.
-
+-  **Breaking up your computation:** For very large workloads you may also want to
+   try sending smaller chunks to Dask at a time.  For example if you're
+   processing a petabyte of data but find that Dask is only happy with 100
+   TB, maybe you can break up your computation into ten pieces and submit
+   them one after the other.
 
 Learn Techniques For Customization
 ----------------------------------
