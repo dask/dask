@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 import warnings
 
@@ -8,6 +9,7 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
+import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar
@@ -177,6 +179,7 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    use_operation_api=False,
     **kwargs,
 ):
     """
@@ -445,7 +448,9 @@ def read_parquet(
         path = stringify_path(path)
 
     # Update input_kwargs
-    input_kwargs.update({"columns": columns, "engine": engine})
+    input_kwargs.update(
+        {"columns": columns, "engine": engine, "use_operation_api": use_operation_api}
+    )
 
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
@@ -531,21 +536,33 @@ def read_parquet(
             common_kwargs,
         )
 
-    # Construct the output collection with from_map
-    return from_map(
-        io_func,
-        parts,
-        meta=meta,
-        divisions=divisions,
-        label="read-parquet",
-        token=tokenize(path, **input_kwargs),
-        enforce_metadata=False,
-        creation_info={
-            "func": read_parquet,
-            "args": (path,),
-            "kwargs": input_kwargs,
-        },
-    )
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        # Construct the output collection with from_map
+        return from_map(
+            io_func,
+            parts,
+            meta=meta,
+            divisions=divisions,
+            label="read-parquet",
+            token=tokenize(path, **input_kwargs),
+            enforce_metadata=False,
+            creation_info={
+                "func": read_parquet,
+                "args": (path,),
+                "kwargs": input_kwargs,
+            },
+            use_operation_api=use_operation_api,
+        )
 
 
 def check_multi_support(engine):
@@ -869,32 +886,43 @@ def to_parquet(
         if len(set(filenames)) < len(filenames):
             raise ValueError("``name_function`` must produce unique filenames.")
 
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
     # Create Blockwise layer for parquet-data write
-    data_write = df.map_partitions(
-        ToParquetFunctionWrapper(
-            engine,
-            path,
-            fs,
-            partition_on,
-            write_metadata_file,
-            i_offset,
-            name_function,
-            toolz.merge(
-                kwargs,
-                {"compression": compression, "custom_metadata": custom_metadata},
-                extra_write_kwargs,
+    with ctx:
+        data_write = df.map_partitions(
+            ToParquetFunctionWrapper(
+                engine,
+                path,
+                fs,
+                partition_on,
+                write_metadata_file,
+                i_offset,
+                name_function,
+                toolz.merge(
+                    kwargs,
+                    {"compression": compression, "custom_metadata": custom_metadata},
+                    extra_write_kwargs,
+                ),
             ),
-        ),
-        BlockIndex((df.npartitions,)),
-        # Pass in the original metadata to avoid
-        # metadata emulation in `map_partitions`.
-        # This is necessary, because we are not
-        # expecting a dataframe-like output.
-        meta=df._meta,
-        enforce_metadata=False,
-        transform_divisions=False,
-        align_dataframes=False,
-    )
+            BlockIndex((df.npartitions,)),
+            # Pass in the original metadata to avoid
+            # metadata emulation in `map_partitions`.
+            # This is necessary, because we are not
+            # expecting a dataframe-like output.
+            meta=df._meta,
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
+        )
 
     # Collect metadata and write _metadata.
     # TODO: Use tree-reduction layer (when available)

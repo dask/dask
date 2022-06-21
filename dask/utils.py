@@ -1484,7 +1484,27 @@ def format_time(n: float) -> str:
     '123.45 us'
     >>> format_time(123.456)
     '123.46 s'
+    >>> format_time(1234.567)
+    '20m 34s'
+    >>> format_time(12345.67)
+    '3hr 25m'
+    >>> format_time(123456.78)
+    '34hr 17m'
+    >>> format_time(1234567.89)
+    '14d 6hr'
     """
+    if n > 24 * 60 * 60 * 2:
+        d = int(n / 3600 / 24)
+        h = int((n - d * 3600 * 24) / 3600)
+        return f"{d}d {h}hr"
+    if n > 60 * 60 * 2:
+        h = int(n / 3600)
+        m = int((n - h * 3600) / 60)
+        return f"{h}hr {m}m"
+    if n > 60 * 10:
+        m = int(n / 60)
+        s = int(n - m * 60)
+        return f"{m}m {s}s"
     if n >= 1:
         return "%.2f s" % n
     if n >= 1e-3:
@@ -1601,6 +1621,7 @@ timedelta_sizes = {
     "m": 60,
     "h": 3600,
     "d": 3600 * 24,
+    "w": 7 * 3600 * 24,
 }
 
 tds2 = {
@@ -1608,6 +1629,7 @@ tds2 = {
     "minute": 60,
     "hour": 60 * 60,
     "day": 60 * 60 * 24,
+    "week": 7 * 60 * 60 * 24,
     "millisecond": 1e-3,
     "microsecond": 1e-6,
     "nanosecond": 1e-9,

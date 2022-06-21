@@ -31,7 +31,7 @@ from fsspec import get_mapper
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
-from dask import compute, config, core, threaded
+from dask import compute, config, core
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -49,6 +49,7 @@ from dask.base import (
     compute_as_if_collection,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     persist,
     tokenize,
 )
@@ -83,6 +84,8 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -1406,7 +1409,7 @@ class Array(DaskMethodsMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="array_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()

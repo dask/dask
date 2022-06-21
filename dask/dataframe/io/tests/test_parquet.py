@@ -156,16 +156,6 @@ def test_get_engine_fastparquet():
     assert get_engine("fastparquet") == FastParquetEngine
 
 
-@PYARROW_MARK
-@FASTPARQUET_MARK
-def test_get_engine_auto_warning_if_both_installed():
-    from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
-
-    with pytest.warns(FutureWarning, match="engine='auto' will switch"):
-        engine = get_engine("auto", True)
-        assert engine == FastParquetEngine
-
-
 @write_read_engines()
 @pytest.mark.parametrize("has_metadata", [False, True])
 def test_local(tmpdir, write_engine, read_engine, has_metadata):
@@ -768,6 +758,25 @@ def test_partition_on_cats_pyarrow(tmpdir, stats, meta):
     d = dd.from_pandas(d, 2)
     d.to_parquet(tmp, partition_on=["b"], engine="pyarrow", write_metadata_file=meta)
     df = dd.read_parquet(tmp, engine="pyarrow", calculate_divisions=stats)
+    assert set(df.b.cat.categories) == {"x", "y", "z"}
+
+
+def test_partition_parallel_metadata(tmpdir, engine):
+    # Check that parallel metadata collection works
+    # for hive-partitioned data
+    tmp = str(tmpdir)
+    d = pd.DataFrame(
+        {
+            "a": np.random.rand(50),
+            "b": np.random.choice(["x", "y", "z"], size=50),
+            "c": np.random.choice(["x", "y", "z"], size=50),
+        }
+    )
+    d = dd.from_pandas(d, 2)
+    d.to_parquet(tmp, partition_on=["b"], engine=engine, write_metadata_file=False)
+    df = dd.read_parquet(
+        tmp, engine=engine, calculate_divisions=True, metadata_task_size=1
+    )
     assert set(df.b.cat.categories) == {"x", "y", "z"}
 
 
@@ -1822,23 +1831,6 @@ def check_compression(engine, filename, compression):
                     assert (
                         column.total_compressed_size != column.total_uncompressed_size
                     )
-
-
-def test_explicit_compression_default_deprecated(tmpdir, engine):
-    """TODO: remove this test when `compression="default"` is fully removed"""
-    fn = str(tmpdir)
-
-    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
-    df.index.name = "index"
-    ddf = dd.from_pandas(df, npartitions=3)
-
-    with pytest.warns(FutureWarning, match="compression='default'"):
-        ddf.to_parquet(
-            fn, compression="default", engine=engine, write_metadata_file=True
-        )
-    out = dd.read_parquet(fn, engine=engine, calculate_divisions=True)
-    assert_eq(out, ddf)
-    check_compression(engine, fn, "default")
 
 
 @pytest.mark.parametrize("compression,", [None, "gzip", "snappy"])
@@ -3859,18 +3851,27 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
-def test_extra_file(tmpdir, engine):
+@pytest.mark.parametrize("partition_on", ("b", None))
+def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
     # See: https://github.com/dask/dask/issues/8087
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    df = df.assign(b=df.b.astype("category"))
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmpdir, engine=engine, write_metadata_file=True)
+    ddf.to_parquet(
+        tmpdir,
+        engine=engine,
+        write_metadata_file=True,
+        partition_on=partition_on,
+    )
     open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
     open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # For "fastparquet" and "pyarrow", we can pass the
     # expected file extension, or avoid checking file extensions
@@ -3892,7 +3893,9 @@ def test_extra_file(tmpdir, engine):
         **_parquet_file_extension(".parquet"),
         calculate_divisions=True,
     )
-    assert_eq(out, df)
+    # Weird two-step since that we don't care if category ordering changes
+    assert_eq(out, df, check_categorical=False)
+    assert_eq(out.b, df.b, check_category_order=False)
 
     # Should Work (with FutureWarning)
     with pytest.warns(FutureWarning, match="require_extension is deprecated"):
@@ -3902,7 +3905,6 @@ def test_extra_file(tmpdir, engine):
             **_parquet_file_extension(".parquet", legacy=True),
             calculate_divisions=True,
         )
-        assert_eq(out, df)
 
     # Should Fail (for not capturing the _SUCCESS and crc files)
     with pytest.raises((OSError, pa.lib.ArrowInvalid)):
@@ -4185,3 +4187,72 @@ def test_deprecate_gather_statistics(tmp_path, engine):
             gather_statistics=True,
         )
     assert_eq(out, df)
+
+
+@pytest.mark.gpu
+def test_gpu_write_parquet_simple(tmpdir):
+    fn = str(tmpdir)
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+    from dask.dataframe.dispatch import pyarrow_schema_dispatch
+
+    @pyarrow_schema_dispatch.register((cudf.DataFrame,))
+    def get_pyarrow_schema_cudf(obj):
+        return obj.to_arrow().schema
+
+    df = cudf.DataFrame(
+        {
+            "a": ["abc", "def"],
+            "b": ["a", "z"],
+        }
+    )
+    ddf = dask_cudf.from_cudf(df, 3)
+    ddf.to_parquet(fn)
+    got = dask_cudf.read_parquet(fn)
+    assert_eq(df, got)
+
+
+@PYARROW_MARK
+def test_retries_on_remote_filesystem(tmpdir):
+    # Fake a remote filesystem with a cached one
+    fn = str(tmpdir)
+    remote_fn = f"simplecache://{tmpdir}"
+    storage_options = {"target_protocol": "file"}
+
+    df = pd.DataFrame({"a": range(10)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn)
+
+    # Check that we set retries for reading and writing to parquet when not otherwise set
+    scalar = ddf.to_parquet(remote_fn, compute=False, storage_options=storage_options)
+    layer = hlg_layer(scalar.dask, "to-parquet")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
+
+    ddf2 = dd.read_parquet(remote_fn, storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-parquet")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
+
+    # But not for a local filesystem
+    scalar = ddf.to_parquet(fn, compute=False, storage_options=storage_options)
+    layer = hlg_layer(scalar.dask, "to-parquet")
+    assert not layer.annotations
+
+    ddf2 = dd.read_parquet(fn, storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-parquet")
+    assert not layer.annotations
+
+    # And we don't overwrite existing retries
+    with dask.annotate(retries=2):
+        scalar = ddf.to_parquet(
+            remote_fn, compute=False, storage_options=storage_options
+        )
+        layer = hlg_layer(scalar.dask, "to-parquet")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2
+
+        ddf2 = dd.read_parquet(remote_fn, storage_options=storage_options)
+        layer = hlg_layer(ddf2.dask, "read-parquet")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2

@@ -36,6 +36,9 @@ class _IndexerBase:
         else:
             return self._meta_indexer[:, cindexer]
 
+    def __dask_tokenize__(self):
+        return type(self).__name__, tokenize(self.obj)
+
 
 class _iLocIndexer(_IndexerBase):
     @property
