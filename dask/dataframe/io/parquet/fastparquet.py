@@ -476,6 +476,7 @@ class FastParquetEngine(Engine):
             aggregate_files,
             pf.file_scheme,
             sort_input_paths,
+            sep=fs.sep,
         )
 
         # Ensure that there is no overlap between partition columns
@@ -1311,7 +1312,9 @@ class FastParquetEngine(Engine):
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
 
     @classmethod
-    def _get_file_group_lookup(cls, pf_or_paths, aggregate_files, scheme, natural_sort):
+    def _get_file_group_lookup(
+        cls, pf_or_paths, aggregate_files, scheme, natural_sort, sep="/"
+    ):
         # Create "file group" mapping
         #
         # We use the FileGroupLookup class to label the file
@@ -1338,7 +1341,7 @@ class FastParquetEngine(Engine):
             path_depth = len(paths_to_cats([path], scheme).values()) if path else 0
 
             # path -> file-group mapping is already known
-            file_group_lookup = FileGroupLookup(path_depth + 1)
+            file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
             for k, v in aggregate_files.items():
                 file_group_lookup[k] = v
             return file_group_lookup
@@ -1415,7 +1418,7 @@ class FastParquetEngine(Engine):
         )
 
         # Use `result` to populate a FileGroupLookup mapping
-        file_group_lookup = FileGroupLookup(path_depth + 1)
+        file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
         for k, v in result.items():
             file_group_lookup[k] = v
         return file_group_lookup

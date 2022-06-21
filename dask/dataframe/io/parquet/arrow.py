@@ -875,7 +875,7 @@ class ArrowDatasetEngine(Engine):
 
         # Create path-lookup table
         file_group_lookup = cls._get_file_group_lookup(
-            ds, aggregate_files, filters, sort_input_paths
+            ds, aggregate_files, filters, sort_input_paths, sep=fs.sep
         )
 
         # Deal with directory partitioning
@@ -1599,7 +1599,9 @@ class ArrowDatasetEngine(Engine):
             return meta
 
     @classmethod
-    def _get_file_group_lookup(cls, ds, aggregate_files, filters, natural_sort):
+    def _get_file_group_lookup(
+        cls, ds, aggregate_files, filters, natural_sort, sep="/"
+    ):
         # Create "file group" mapping
         #
         # We use the FileGroupLookup class to label the file
@@ -1623,7 +1625,7 @@ class ArrowDatasetEngine(Engine):
             )
 
             # path -> file-group mapping is already known
-            file_group_lookup = FileGroupLookup(path_depth + 1)
+            file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
             for k, v in aggregate_files.items():
                 file_group_lookup[k] = v
             return file_group_lookup
@@ -1693,7 +1695,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Use `result` to populate a FileGroupLookup mapping
-        file_group_lookup = FileGroupLookup(path_depth + 1)
+        file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
         for k, v in result.items():
             file_group_lookup[k] = v
         return file_group_lookup

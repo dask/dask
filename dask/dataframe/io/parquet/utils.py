@@ -753,9 +753,10 @@ class FileGroupLookup:
     general file-path keys into standardized tuples.
     """
 
-    def __init__(self, path_depth=1):
+    def __init__(self, path_depth=1, sep="/"):
         self._mapping = {}
         self._path_depth = path_depth
+        self._sep = sep
 
     def __len__(self):
         return len(self._mapping)
@@ -764,7 +765,7 @@ class FileGroupLookup:
         if not isinstance(path, str):
             raise ValueError
 
-        key = tuple(path.split("/")[-self._path_depth :])
+        key = tuple(path.split(self._sep)[-self._path_depth :])
         try:
             return self._mapping[key]
         except KeyError:
@@ -784,7 +785,7 @@ class FileGroupLookup:
         if not isinstance(group, int):
             raise ValueError
 
-        key = tuple(path.split("/")[-self._path_depth :])
+        key = tuple(path.split(self._sep)[-self._path_depth :])
         self._mapping[key] = group
 
     def __call__(self, path):
