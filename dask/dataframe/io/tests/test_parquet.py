@@ -2841,7 +2841,7 @@ def test_aggregate_files_int(tmpdir, engine, partition_on, metadata, aggregate_f
             assert ddf2.npartitions == 5
 
     # Just check column "c" to avoid column ordering
-    assert_eq(df1["c"], ddf2["c"].compute())  # .sort_index())
+    assert_eq(df1["c"], ddf2["c"].compute())
 
 
 @pytest.mark.parametrize("metadata", [True, False])
@@ -2857,9 +2857,7 @@ def test_file_groups(tmpdir, engine, metadata):
     # Construct `file_groups` input so that we have
     # two partitions: (1) Even "x" values, and then
     # (2) Odd "x" values
-    file_groups = {
-        os.path.join(tmpdir, f"part.{i}.parquet"): i % 2 for i in range(nfiles)
-    }
+    file_groups = {f"part.{i}.parquet": i % 2 for i in range(nfiles)}
     ddf_out = dd.read_parquet(
         tmpdir,
         engine=engine,

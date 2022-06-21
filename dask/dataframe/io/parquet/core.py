@@ -300,12 +300,12 @@ def read_parquet(
         may be aggregated.
     file_groups : list or dict, default None
         List of hive or directory-partitioned columns where categorical values
-        must match for files within the same file group. The file group for
-        each path may also be specified as as key-value dictionary (where keys
-        are file paths and values are integer "file group" labels). Note that
+        must match for files within the same file group. The group for each
+        file name may also be specified as as key-value dictionary (where keys
+        are file names and values are integer "file group" labels). Note that
         Dask will only aggregate two distinct files into the same DataFrame
         partition if they belong to the same file group. If this option is
-        specified, the user-specified dataset paths will always be sorted in
+        defined, the user-specified dataset paths will always be sorted in
         file-group order.
     parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
         A file extension or an iterable of extensions to use when discovering
