@@ -772,7 +772,8 @@ class FileGroupLookup:
             # This path was filtered out of mapping used
             # to initialize FileGroupLookup
             raise KeyError(
-                f"path={path}, path_depth={self._path_depth}, sep={self._sep}, key={key}\n"
+                f"path={path}, path_depth={self._path_depth}, sep={self._sep}, key={key}\n\n"
+                f"all_keys={list(self._mapping.keys())}\n"
             )
             return -1
 
