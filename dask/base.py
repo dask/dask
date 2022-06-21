@@ -22,14 +22,15 @@ from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from dask import config, local, threaded
-from dask.compatibility import _PY_VERSION
+from dask import config, local
+from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
+from dask.typing import SchedulerGetCallable
 from dask.utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
@@ -1284,19 +1285,24 @@ def _colorize(t):
     return "#" + h
 
 
-named_schedulers = {
+named_schedulers: dict[str, SchedulerGetCallable] = {
     "sync": local.get_sync,
     "synchronous": local.get_sync,
     "single-threaded": local.get_sync,
-    "threads": threaded.get,
-    "threading": threaded.get,
 }
 
-try:
+if not _EMSCRIPTEN:
+    from dask import threaded
+
+    named_schedulers.update(
+        {
+            "threads": threaded.get,
+            "threading": threaded.get,
+        }
+    )
+
     from dask import multiprocessing as dask_multiprocessing
-except ImportError:
-    pass
-else:
+
     named_schedulers.update(
         {
             "processes": dask_multiprocessing.get,
