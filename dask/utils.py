@@ -722,7 +722,9 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0, inconsistencies=None):
+def _derived_from(
+    cls, method, ua_args=None, extra="", skipblocks=0, inconsistencies=None
+):
     """Helper function for derived_from to ease testing"""
     ua_args = ua_args or []
 
@@ -752,7 +754,12 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0, inconsisten
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(
-            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks, inconsistencies=inconsistencies,
+            doc,
+            cls,
+            method.__name__,
+            extra=extra,
+            skipblocks=skipblocks,
+            inconsistencies=inconsistencies,
         )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
@@ -775,7 +782,9 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0, inconsisten
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=None, skipblocks=0, inconsistencies=None):
+def derived_from(
+    original_klass, version=None, ua_args=None, skipblocks=0, inconsistencies=None
+):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -796,7 +805,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0, incon
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
     inconsistencies: list
-        List of known inconsistencies with method whose docstrings are being 
+        List of known inconsistencies with method whose docstrings are being
         copied.
     """
     ua_args = ua_args or []
