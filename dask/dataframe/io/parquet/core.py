@@ -522,6 +522,9 @@ def read_parquet(
         parts, statistics = _aggregate_parts(
             parts, statistics, partition_size_files=aggregate_files
         )
+    elif aggregate_files is True and not split_row_groups:
+        # Unconstrained aggregation within each file group
+        parts, statistics = _aggregate_parts(parts, statistics)
 
     # Parse dataset statistics from metadata (if available)
     divisions, index, index_in_columns = process_statistics(
