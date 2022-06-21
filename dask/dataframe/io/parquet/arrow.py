@@ -1633,7 +1633,9 @@ class ArrowDatasetEngine(Engine):
         elif isinstance(aggregate_files, (list, str)):
             partition_boundary = aggregate_files
 
-        ds_filters = pq._filters_to_expression(filters) if filters is not None else None
+        ds_filters = (
+            None  # pq._filters_to_expression(filters) if filters is not None else None
+        )
         file_frags = list(ds.get_fragments(ds_filters))
 
         # Get path_depth

@@ -771,6 +771,9 @@ class FileGroupLookup:
         except KeyError:
             # This path was filtered out of mapping used
             # to initialize FileGroupLookup
+            raise KeyError(
+                f"path={path}, path_depth={self._path_depth}, sep={self._sep}, key={key}\n"
+            )
             return -1
 
     def get(self, key, default):

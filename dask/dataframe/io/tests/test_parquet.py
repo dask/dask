@@ -2841,7 +2841,7 @@ def test_aggregate_files_int(tmpdir, engine, partition_on, metadata, aggregate_f
             assert ddf2.npartitions == 5
 
     # Just check column "c" to avoid column ordering
-    assert_eq(df1["c"], ddf2["c"].compute().sort_index())
+    assert_eq(df1["c"], ddf2["c"].compute())  # .sort_index())
 
 
 @pytest.mark.parametrize("metadata", [True, False])
