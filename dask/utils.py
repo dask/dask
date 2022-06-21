@@ -679,7 +679,6 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
     else:
         l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
-    l3 = f"Known inconsistencies: \n {inconsistencies}"
 
     i = doc.find("\n\n")
     if i != -1:
@@ -698,7 +697,11 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None)
             more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        bits = [head, indent, l1, l2, "\n\n", l3, "\n\n"] + more + [tail]
+        if inconsistencies is not None:
+            l3 = f"Known inconsistencies: \n {inconsistencies}"
+            bits = [head, indent, l1, l2, "\n\n", l3, "\n\n"] + more + [tail]
+        else:
+            bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
         doc = "".join(bits)
 
     return doc
