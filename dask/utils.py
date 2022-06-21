@@ -591,7 +591,7 @@ class Dispatch:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
-                register = self._lazy.pop(toplevel)
+                register = self._lazy[toplevel]
             except KeyError:
                 pass
             else:
