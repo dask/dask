@@ -1321,16 +1321,35 @@ class FastParquetEngine(Engine):
         # the same output partition.
         #
 
+        # Check if aggregate_files corresponds to
+        # a dictionary or partition boundary
+        partition_boundary = None
+        if isinstance(aggregate_files, dict):
+
+            # Get path_depth (number of partitioned cols in each path)
+            if isinstance(pf_or_paths, ParquetFile):
+                path = (
+                    pf_or_paths.row_groups[0].columns[0].file_path
+                    if (pf_or_paths.row_groups and pf_or_paths.row_groups[0].columns)
+                    else None
+                )
+            else:
+                path = pf_or_paths[0] if pf_or_paths else None
+            path_depth = len(paths_to_cats([path], scheme).values()) if path else 0
+
+            # path -> file-group mapping is already known
+            file_group_lookup = FileGroupLookup(path_depth + 1)
+            for k, v in aggregate_files.items():
+                file_group_lookup[k] = v
+            return file_group_lookup
+
+        elif isinstance(aggregate_files, (list, str)):
+            partition_boundary = aggregate_files
+
         if isinstance(pf_or_paths, ParquetFile):
             paths = {rg.columns[0].file_path for rg in pf_or_paths.row_groups}
         else:
             paths = pf_or_paths
-
-        # Check if aggregate_files corresponds to
-        # a partition boundary
-        partition_boundary = None
-        if isinstance(aggregate_files, (list, str)):
-            partition_boundary = aggregate_files
 
         # Get path_depth
         # (number of partitioned cols in each path)

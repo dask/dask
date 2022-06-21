@@ -2815,7 +2815,7 @@ def test_aggregate_files_int(tmpdir, engine, partition_on, metadata, aggregate_f
         tmpdir,
         engine=engine,
         aggregate_files=aggregate_files,
-        partition_boundary=partition_on,
+        file_groups=partition_on,
     )
 
     # Check that files where aggregated as expected
@@ -2842,6 +2842,38 @@ def test_aggregate_files_int(tmpdir, engine, partition_on, metadata, aggregate_f
 
     # Just check column "c" to avoid column ordering
     assert_eq(df1["c"], ddf2["c"].compute().sort_index())
+
+
+@pytest.mark.parametrize("metadata", [True, False])
+def test_file_groups(tmpdir, engine, metadata):
+    # Use from_map to generate custom ddf
+    def make_frame(val):
+        return pd.DataFrame({"x": [val]})
+
+    nfiles = 16
+    ddf1 = dd.from_map(make_frame, range(nfiles))
+    ddf1.to_parquet(tmpdir, engine=engine, write_metadata_file=metadata)
+
+    # Construct `file_groups` input so that we have
+    # two partitions: (1) Even "x" values, and then
+    # (2) Odd "x" values
+    file_groups = {
+        os.path.join(tmpdir, f"part.{i}.parquet"): i % 2 for i in range(nfiles)
+    }
+    ddf_out = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        file_groups=file_groups,
+        metadata_task_size=8,
+        aggregate_files=True,
+    )
+
+    # Two partitions: [<even>, <odd>]
+    assert ddf_out.npartitions == 2
+    for residual in [0, 1]:
+        assert all(
+            [v % 2 == residual for v in ddf_out.partitions[residual]["x"].compute()]
+        )
 
 
 def test_optimize_getitem_and_nonblockwise(tmpdir, engine):
@@ -2925,7 +2957,7 @@ def test_chunksize_files(
         engine=read_engine,
         chunksize=chunksize,
         aggregate_files=True,
-        partition_boundary=partition_on,
+        file_groups=partition_on,
     )
 
     # Check that files where aggregated as expected
@@ -2947,10 +2979,8 @@ def test_chunksize_files(
 
 
 @write_read_engines()
-@pytest.mark.parametrize("partition_boundary", ["a", ["a", "b"]])
-def test_chunksize_aggregate_files(
-    tmpdir, write_engine, read_engine, partition_boundary
-):
+@pytest.mark.parametrize("file_groups", ["a", ["a", "b"]])
+def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, file_groups):
 
     chunksize = "1MiB"
     partition_on = ["a", "b"]
@@ -2976,13 +3006,13 @@ def test_chunksize_aggregate_files(
         engine=read_engine,
         chunksize=chunksize,
         aggregate_files=True,
-        partition_boundary=partition_boundary,
+        file_groups=file_groups,
     )
 
     # Check that files where aggregated as expected
-    if partition_boundary == "a":
+    if file_groups == "a":
         assert ddf2.npartitions == 3
-    elif partition_boundary == ["a", "b"]:
+    elif file_groups == ["a", "b"]:
         assert ddf2.npartitions == 6
 
     # Check that the final data is correct

@@ -1609,14 +1609,30 @@ class ArrowDatasetEngine(Engine):
         # the same output partition.
         #
 
+        # Check if aggregate_files corresponds to
+        # a dictionary or partition boundary
+        partition_boundary = None
+        if isinstance(aggregate_files, dict):
+
+            # Get path_depth (number of partitioned cols in each path)
+            file_frag = next(iter(ds.get_fragments()))
+            path_depth = (
+                len(pa_ds._get_partition_keys(file_frag.partition_expression))
+                if file_frag
+                else 0
+            )
+
+            # path -> file-group mapping is already known
+            file_group_lookup = FileGroupLookup(path_depth + 1)
+            for k, v in aggregate_files.items():
+                file_group_lookup[k] = v
+            return file_group_lookup
+
+        elif isinstance(aggregate_files, (list, str)):
+            partition_boundary = aggregate_files
+
         ds_filters = pq._filters_to_expression(filters) if filters is not None else None
         file_frags = list(ds.get_fragments(ds_filters))
-
-        # Check if aggregate_files corresponds to
-        # a partition boundary
-        partition_boundary = None
-        if isinstance(aggregate_files, (list, str)):
-            partition_boundary = aggregate_files
 
         # Get path_depth
         # (number of partitioned cols in each path)

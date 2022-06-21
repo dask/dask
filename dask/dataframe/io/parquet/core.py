@@ -179,7 +179,7 @@ def read_parquet(
     split_row_groups=False,
     chunksize=None,
     aggregate_files=False,
-    partition_boundary=None,
+    file_groups=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
@@ -236,7 +236,7 @@ def read_parquet(
         Whether a user-specified path list should be sorted in "natural"
         order (in contrast to glob ordering). Note that specifying
         ``sort_input_paths=False`` will not preserve the orginal path
-        order if ``partition_boundary`` is also specified.
+        order if ``file_groups`` is also specified.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     open_file_options : dict, default None
@@ -283,7 +283,7 @@ def read_parquet(
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
         value. Use ``aggregate_files=True`` or ``split_row_groups=True`` to
         control the size of the pre-aggregated partitions, and use
-        ``partition_boundary`` to specify which files may be aggregated together.
+        ``file_groups`` to specify which files may be aggregated together.
 
         WARNING: The ``chunksize`` argument requires up-front metadata parsing
         for every row-group in the dataset. This process can be slow for large
@@ -296,13 +296,17 @@ def read_parquet(
         may be aggregated into the same output partition, while ``False`` means
         that inter-file aggregation is prohibited. If a positive integer value
         is given, each output dataframe partition will correspond to that number
-        of Parquet files (or fewer). Use ``partition_boundary`` to specify which
-        files may be aggregated.
-    partition_boundary : list, default None
+        of Parquet files (or fewer). Use ``file_groups`` to specify which files
+        may be aggregated.
+    file_groups : list or dict, default None
         List of hive or directory-partitioned columns where categorical values
-        must match between two partitions for aggregation to be allowed. When
-        this option is specified, the paths in the dataset will be re-sorted so
-        that paths within the same "partition group" are always adjacent.
+        must match for files within the same file group. The file group for
+        each path may also be specified as as key-value dictionary (where keys
+        are file paths and values are integer "file group" labels). Note that
+        Dask will only aggregate two distinct files into the same DataFrame
+        partition if they belong to the same file group. If this option is
+        specified, the user-specified dataset paths will always be sorted in
+        file-group order.
     parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
         A file extension or an iterable of extensions to use when discovering
         parquet files in a directory. Files that don't match these extensions
@@ -343,7 +347,7 @@ def read_parquet(
     if isinstance(aggregate_files, str):
         ValueError(
             "Specifying a string value to `aggregate_files` is now deprecated. "
-            "Please use the (similar) `partition_boundary` argument instead."
+            "Please use the (similar) `file_groups` argument instead."
         )
 
     # Check for conflicting arguments related to file aggregation
@@ -421,7 +425,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
-        "partition_boundary": partition_boundary,
+        "file_groups": file_groups,
         "parquet_file_extension": parquet_file_extension,
         **kwargs,
     }
@@ -463,7 +467,7 @@ def read_parquet(
         split_row_groups=split_row_groups,
         chunksize=chunksize,
         sort_input_paths=sort_input_paths,
-        aggregate_files=partition_boundary or bool(aggregate_files),
+        aggregate_files=file_groups or bool(aggregate_files),
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
