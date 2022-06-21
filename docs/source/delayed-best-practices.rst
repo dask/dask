@@ -158,6 +158,7 @@ find good places to break up a computation.
 |            data = load(filename)   |            data = load(filename)     |
 |            data = process(data)    |            data = process(data)      |
 |            result = save(data)     |            result = save(data)       |
+|            results.append(result)  |            results.append(result)    |
 |                                    |                                      |
 |        return results              |        return results                |
 |                                    |                                      |
