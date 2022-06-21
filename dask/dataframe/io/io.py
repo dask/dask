@@ -23,7 +23,6 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.dataframe.operation import FrameCreation
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
@@ -850,7 +849,6 @@ def from_map(
     label=None,
     token=None,
     enforce_metadata=True,
-    use_operation_api=False,
     **kwargs,
 ):
     """Create a DataFrame collection from a custom function map
@@ -1058,40 +1056,21 @@ def from_map(
     else:
         io_func = func
 
-    divisions = divisions or [None] * (len(inputs) + 1)
-    if use_operation_api:
-        operation = FrameCreation(
-            io_func,
-            inputs,
-            label,
-            meta,
-            tuple(divisions),
-            # token=token,
-            # columns=column_projection,
-            # creation_info=creation_info,
-        )
-        dd_kwargs = {"operation": operation}
-
-    else:
-        # Construct DataFrameIOLayer
-        layer = DataFrameIOLayer(
-            name,
-            column_projection,
-            inputs,
-            io_func,
-            label=label,
-            produces_tasks=produces_tasks,
-            creation_info=creation_info,
-        )
-        dd_kwargs = {
-            "dsk": HighLevelGraph.from_collections(name, layer, dependencies=[]),
-            "name": name,
-            "meta": meta,
-            "divisions": divisions,
-        }
+    # Construct DataFrameIOLayer
+    layer = DataFrameIOLayer(
+        name,
+        column_projection,
+        inputs,
+        io_func,
+        label=label,
+        produces_tasks=produces_tasks,
+        creation_info=creation_info,
+    )
 
     # Return new DataFrame-collection object
-    return new_dd_object(**dd_kwargs)
+    divisions = divisions or [None] * (len(inputs) + 1)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__
