@@ -272,7 +272,10 @@ class StringAccessor(Accessor):
             meta = (self._series.name, object)
         return self._function_map(method, pat=pat, n=n, expand=expand, meta=meta)
 
-    @derived_from(pd.core.strings.StringMethods, inconsistencies="``expand=True`` with unknown ``n`` will raise a ``NotImplementedError``")
+    @derived_from(
+        pd.core.strings.StringMethods,
+        inconsistencies="``expand=True`` with unknown ``n`` will raise a ``NotImplementedError``",
+    )
     def split(self, pat=None, n=-1, expand=False):
         return self._split("split", pat=pat, n=n, expand=expand)
 
