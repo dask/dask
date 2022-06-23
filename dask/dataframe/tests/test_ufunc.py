@@ -218,7 +218,7 @@ def test_ufunc_wrapped_not_implemented():
         np.random.randint(1, 100, size=20), index=list("abcdefghijklmnopqrst")
     )
     ds = dd.from_pandas(s, 3)
-    with pytest.raises(NotImplementedError, match="This method is not implemented"):
+    with pytest.raises(NotImplementedError, match="`repeat` is not implemented"):
         np.repeat(ds, 10)
 
     df = pd.DataFrame(
@@ -231,7 +231,7 @@ def test_ufunc_wrapped_not_implemented():
     )
     ddf = dd.from_pandas(df, 3)
 
-    with pytest.raises(NotImplementedError, match="This method is not implemented"):
+    with pytest.raises(NotImplementedError, match="`repeat` is not implemented"):
         np.repeat(ddf, 10)
 
 

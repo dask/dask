@@ -3378,8 +3378,14 @@ class Series(_Frame):
             else:
                 index = context[1][0].index
         else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
             raise NotImplementedError(
-                "This method is not implemented for `dask.dataframe.Series`."
+                f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
 
         return pd.Series(array, index=index, name=self.name)
@@ -4317,8 +4323,15 @@ class DataFrame(_Frame):
             else:
                 index = context[1][0].index
         else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+
             raise NotImplementedError(
-                "This method is not implemented for `dask.dataframe.DataFrame`."
+                f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
         return pd.DataFrame(array, index=index, columns=self.columns)
