@@ -85,6 +85,8 @@ class ParquetFunctionWrapper:
             self.engine,
             self.meta,
             [
+                # Temporary workaround for HLG serialization bug
+                # (see: https://github.com/dask/dask/issues/8581)
                 (p.data["piece"], p.data.get("kwargs", {}))
                 if hasattr(p, "data")
                 else (p["piece"], p.get("kwargs", {}))
