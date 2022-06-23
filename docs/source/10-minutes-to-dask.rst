@@ -106,6 +106,8 @@ including information about how the chunks should be structured.
 
          # inspect the chunks
          a.chunks
+
+      .. jupyter-execute::        
             
          # access a particular block of data
          a.blocks[1, 3]
