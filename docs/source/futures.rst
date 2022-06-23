@@ -3,14 +3,21 @@ Futures
 
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
-interface.  This interface is good for arbitrary task scheduling like
+interface. Dask futures reimplements most of the Python futures API, allowing
+you to scale your Python futures workflow across a Dask cluster with minimal
+code changes. 
+
+This interface is good for arbitrary task scheduling like
 :doc:`dask.delayed <delayed>`, but is immediate rather than lazy, which
 provides some more flexibility in situations where the computations may evolve
-over time.
-
-These features depend on the second generation task scheduler found in
+over time. These features depend on the second generation task scheduler found in
 `dask.distributed <https://distributed.dask.org/en/latest>`_ (which,
 despite its name, runs very well on a single machine).
+
+Though Dask futures is one of Dask's more powerful APIs, it is often not needed unless
+you have a particular use case for handling concurrency on the client. One of the higher-level
+Dask APIs, e.g. Dask Array or Dask Delayed, will suit most users' needs, without introducing
+the additional complexity the comes with concurrency. See :doc:`best-practices`.
 
 .. raw:: html
 
