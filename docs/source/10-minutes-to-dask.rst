@@ -38,42 +38,60 @@ including information about how the chunks should be structured.
 
       See :doc:`dataframe`.
 
-      .. jupyter-execute::
-        :hide-code:
+      .. code-block:: python
 
-         import pandas as pd
-         import numpy as np
-         import dask.dataframe as dd
-         import dask.array as da
-         import dask.bag as db
-
-      .. jupyter-execute::
-
-         index = pd.date_range("2021-09-01", periods=2400, freq="1H")
-         df = pd.DataFrame({"a": np.arange(2400), "b": list("abcaddbe" * 300)}, index=index)
-         ddf = dd.from_pandas(df, npartitions=10)
-         ddf
+         >>> index = pd.date_range("2021-09-01", periods=2400, freq="1H")
+         ... df = pd.DataFrame({"a": np.arange(2400), "b": list("abcaddbe" * 300)}, index=index)
+         ... ddf = dd.from_pandas(df, npartitions=10)
+         ... ddf
+         Dask DataFrame Structure:
+                                 a       b
+         npartitions=10
+         2021-09-01 00:00:00  int64  object
+         2021-09-11 00:00:00    ...     ...
+         ...                    ...     ...
+         2021-11-30 00:00:00    ...     ...
+         2021-12-09 23:00:00    ...     ...
+         Dask Name: from_pandas, 10 tasks
 
       Now we have a Dask DataFrame with 2 columns and 2400 rows composed of 10 partitions where
       each partition has 240 rows. Each partition represents a piece of the data.
 
       Here are some key properties of an DataFrame:
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         # check the index values covered by each partition
-         ddf.divisions
+         >>> # check the index values covered by each partition
+         ... ddf.divisions
+         (Timestamp('2021-09-01 00:00:00', freq='H'),
+         Timestamp('2021-09-11 00:00:00', freq='H'),
+         Timestamp('2021-09-21 00:00:00', freq='H'),
+         Timestamp('2021-10-01 00:00:00', freq='H'),
+         Timestamp('2021-10-11 00:00:00', freq='H'),
+         Timestamp('2021-10-21 00:00:00', freq='H'),
+         Timestamp('2021-10-31 00:00:00', freq='H'),
+         Timestamp('2021-11-10 00:00:00', freq='H'),
+         Timestamp('2021-11-20 00:00:00', freq='H'),
+         Timestamp('2021-11-30 00:00:00', freq='H'),
+         Timestamp('2021-12-09 23:00:00', freq='H'))
 
-      .. jupyter-execute::
-
-         # access a particular partition
-         ddf.partitions[1]
+         >>> # access a particular partition
+         ... ddf.partitions[1]
+         Dask DataFrame Structure:
+                           a       b
+         npartitions=1
+         2021-09-11     int64  object
+         2021-09-21       ...     ...
+         Dask Name: blocks, 11 tasks
 
    .. group-tab:: Array
 
       See :doc:`array`.
 
       .. jupyter-execute::
+
+         import numpy as np
+         import dask.array as da
 
          data = np.arange(100_000).reshape(200, 500)
          a = da.from_array(data, chunks=(100, 100))
@@ -88,8 +106,6 @@ including information about how the chunks should be structured.
 
          # inspect the chunks
          a.chunks
-
-      .. jupyter-execute::
             
          # access a particular block of data
          a.blocks[1, 3]
@@ -98,10 +114,11 @@ including information about how the chunks should be structured.
 
       See :doc:`bag`.
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         b = db.from_sequence([1, 2, 3, 4, 5, 6, 2, 1], npartitions=2)
-         b
+         >>> b = db.from_sequence([1, 2, 3, 4, 5, 6, 2, 1], npartitions=2)
+         ... b
+         dask.bag<from_sequence, npartitions=2>
 
       Now we have a sequence with 8 items composed of 2 partitions where each partition
       has 4 items in it. Each partition represents a piece of the data.
@@ -116,13 +133,26 @@ Indexing Dask collections feels just like slicing NumPy arrays or pandas DataFra
 
    .. group-tab:: DataFrame
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         ddf.b
+         >>> ddf.b
+         Dask Series Structure:
+         npartitions=10
+         2021-09-01 00:00:00    object
+         2021-09-11 00:00:00       ...
+                                 ...
+         2021-11-30 00:00:00       ...
+         2021-12-09 23:00:00       ...
+         Name: b, dtype: object
+         Dask Name: getitem, 20 tasks
 
-      .. jupyter-execute::
-
-         ddf["2021-10-01": "2021-10-09 5:00"]
+         >>> ddf["2021-10-01": "2021-10-09 5:00"]
+         Dask DataFrame Structure:
+                                          a       b
+         npartitions=1
+         2021-10-01 00:00:00.000000000  int64  object
+         2021-10-09 05:00:59.999999999    ...     ...
+         Dask Name: loc, 11 tasks
 
    .. group-tab:: Array
 
@@ -149,21 +179,42 @@ Anytime you have a Dask object and you want to get the result, call ``compute``:
 
    .. group-tab:: DataFrame
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         ddf["2021-10-01": "2021-10-09 5:00"].compute()
+         >>> ddf["2021-10-01": "2021-10-09 5:00"].compute()
+                              a  b
+         2021-10-01 00:00:00  720  a
+         2021-10-01 01:00:00  721  b
+         2021-10-01 02:00:00  722  c
+         2021-10-01 03:00:00  723  a
+         2021-10-01 04:00:00  724  d
+         ...                  ... ..
+         2021-10-09 01:00:00  913  b
+         2021-10-09 02:00:00  914  c
+         2021-10-09 03:00:00  915  a
+         2021-10-09 04:00:00  916  d
+         2021-10-09 05:00:00  917  d
+
+         [198 rows x 2 columns]
 
    .. group-tab:: Array
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         a[:50, 200].compute()
+         >>> a[:50, 200].compute()
+         array([  200,   700,  1200,  1700,  2200,  2700,  3200,  3700,  4200,
+               4700,  5200,  5700,  6200,  6700,  7200,  7700,  8200,  8700,
+               9200,  9700, 10200, 10700, 11200, 11700, 12200, 12700, 13200,
+               13700, 14200, 14700, 15200, 15700, 16200, 16700, 17200, 17700,
+               18200, 18700, 19200, 19700, 20200, 20700, 21200, 21700, 22200,
+               22700, 23200, 23700, 24200, 24700])
 
    .. group-tab:: Bag
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-        b.compute()
+         >>> b.compute()
+         [1, 2, 3, 4, 5, 6, 2, 1]
 
 
 Methods
@@ -176,101 +227,138 @@ Call the method to set up the task graph, and then call ``compute`` to get the r
 
    .. group-tab:: DataFrame
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         ddf.a.mean()
+         >>> ddf.a.mean()
+         dd.Scalar<series-..., dtype=float64>
 
-      .. jupyter-execute::
+         >>> ddf.a.mean().compute()
+         1199.5
 
-         ddf.a.mean().compute()
+         >>> ddf.b.unique()
+         Dask Series Structure:
+         npartitions=1
+            object
+               ...
+         Name: b, dtype: object
+         Dask Name: unique-agg, 33 tasks
 
-      .. jupyter-execute::
-
-         ddf.b.unique()
-
-      .. jupyter-execute::
-
-         ddf.b.unique().compute()
+         >>> ddf.b.unique().compute()
+         0    a
+         1    b
+         2    c
+         3    d
+         4    e
+         Name: b, dtype: object
 
       Methods can be chained together just like in pandas
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         result = ddf["2021-10-01": "2021-10-09 5:00"].a.cumsum() - 100
-         result
+         >>> result = ddf["2021-10-01": "2021-10-09 5:00"].a.cumsum() - 100
+         ... result
+         Dask Series Structure:
+         npartitions=1
+         2021-10-01 00:00:00.000000000    int64
+         2021-10-09 05:00:59.999999999      ...
+         Name: a, dtype: int64
+         Dask Name: sub, 16 tasks
 
-      .. jupyter-execute::
-
-         result.compute()
+         >>> result.compute()
+         2021-10-01 00:00:00       620
+         2021-10-01 01:00:00      1341
+         2021-10-01 02:00:00      2063
+         2021-10-01 03:00:00      2786
+         2021-10-01 04:00:00      3510
+                                 ...
+         2021-10-09 01:00:00    158301
+         2021-10-09 02:00:00    159215
+         2021-10-09 03:00:00    160130
+         2021-10-09 04:00:00    161046
+         2021-10-09 05:00:00    161963
+         Freq: H, Name: a, Length: 198, dtype: int64
 
    .. group-tab:: Array
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         a.mean()
+         >>> a.mean()
+         dask.array<mean_agg-aggregate, shape=(), dtype=float64, chunksize=(), chunktype=numpy.ndarray>
 
-      .. jupyter-execute::
+         >>> a.mean().compute()
+         49999.5
 
-         a.mean().compute()
+         >>> np.sin(a)
+         dask.array<sin, shape=(200, 500), dtype=float64, chunksize=(100, 100), chunktype=numpy.ndarray>
 
-      .. jupyter-execute::         
+         >>> np.sin(a).compute()
+         array([[ 0.        ,  0.84147098,  0.90929743, ...,  0.58781939,
+                  0.99834363,  0.49099533],
+               [-0.46777181, -0.9964717 , -0.60902011, ..., -0.89796748,
+               -0.85547315, -0.02646075],
+               [ 0.82687954,  0.9199906 ,  0.16726654, ...,  0.99951642,
+                  0.51387502, -0.4442207 ],
+               ...,
+               [-0.99720859, -0.47596473,  0.48287891, ..., -0.76284376,
+                  0.13191447,  0.90539115],
+               [ 0.84645538,  0.00929244, -0.83641393, ...,  0.37178568,
+               -0.5802765 , -0.99883514],
+               [-0.49906936,  0.45953849,  0.99564877, ...,  0.10563876,
+                  0.89383946,  0.86024828]])
 
-         np.sin(a)
+         >>> a.T
+         dask.array<transpose, shape=(500, 200), dtype=int64, chunksize=(100, 100), chunktype=numpy.ndarray>
 
-      .. jupyter-execute::
-
-         np.sin(a).compute()
-
-      .. jupyter-execute::
-         
-         a.T
-
-      .. jupyter-execute::
-
-         a.T.compute()
+         >>> a.T.compute()
+         array([[    0,   500,  1000, ..., 98500, 99000, 99500],
+               [    1,   501,  1001, ..., 98501, 99001, 99501],
+               [    2,   502,  1002, ..., 98502, 99002, 99502],
+               ...,
+               [  497,   997,  1497, ..., 98997, 99497, 99997],
+               [  498,   998,  1498, ..., 98998, 99498, 99998],
+               [  499,   999,  1499, ..., 98999, 99499, 99999]])
 
       Methods can be chained together just like in NumPy
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         a_max = a.max(axis=1)[::-1] + 10
-         a_max
+         >>> b = a.max(axis=1)[::-1] + 10
+         ... b
+         dask.array<add, shape=(200,), dtype=int64, chunksize=(100,), chunktype=numpy.ndarray>
 
-      .. jupyter-execute::
-
-         a_max[:10].compute()
+         >>> b[:10].compute()
+         array([100009,  99509,  99009,  98509,  98009,  97509,  97009,  96509,
+               96009,  95509])
 
    .. group-tab:: Bag
 
       Dask Bag implements operations like ``map``, ``filter``, ``fold``, and
       ``groupby`` on collections of generic Python objects.
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         b.filter(lambda x: x % 2)
+         >>> b.filter(lambda x: x % 2)
+         dask.bag<filter-lambda, npartitions=2>
 
-      .. jupyter-execute::
+         >>> b.filter(lambda x: x % 2).compute()
+         [1, 3, 5, 1]
 
-         b.filter(lambda x: x % 2).compute()
+         >>> b.distinct()
+         dask.bag<distinct-aggregate, npartitions=1>
 
-      .. jupyter-execute::
-
-         b.distinct()
-      
-      .. jupyter-execute::
-
-         b.distinct().compute()
+         >>> b.distinct().compute()
+         [1, 2, 3, 4, 5, 6]
 
       Methods can be chained together.
 
-      .. jupyter-execute::
+      .. code-block:: python
 
-         c = db.zip(b, b.map(lambda x: x * 10))
-         c
+         >>> c = db.zip(b, b.map(lambda x: x * 10))
+         ... c
+         dask.bag<zip, npartitions=2>
 
-      .. jupyter-execute::
-
-         c.compute()
+         >>> c.compute()
+         [(1, 10), (2, 20), (3, 30), (4, 40), (5, 50), (6, 60), (2, 20), (1, 10)]
 
 
 Visualize the Task Graph
@@ -305,7 +393,7 @@ triggering computation, we can inspect the task graph to figure out what's going
 
       .. code-block:: python
 
-         >>> a_max.dask
+         >>> b.dask
          HighLevelGraph with 6 layers.
          <dask.highlevelgraph.HighLevelGraph object at 0x7fd33a4aa400>
          1. array-ef3148ecc2e8957c6abe629e08306680
@@ -315,7 +403,7 @@ triggering computation, we can inspect the task graph to figure out what's going
          5. getitem-f9e225a2fd32b3d2f5681070d2c3d767
          6. add-f54f3a929c7efca76a23d6c42cdbbe84
 
-         >>> a_max.visualize()
+         >>> b.visualize()
 
       .. image:: images/10_minutes_array_graph.png
          :alt: Dask task graph for the Dask array computation. The task graph shows many "amax" operations on each chunk of the Dask array, that are then aggregated to find "amax" along the first array axis, then reversing the order of the array values with a "getitem" slicing operation, before an "add" operation to get the final result.
