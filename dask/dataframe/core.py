@@ -861,15 +861,39 @@ Dask Name: {name}, {task} tasks"""
         ----------
         func : function
             Function applied to each partition.
-        before : int
-            The number of rows to prepend to partition ``i`` from the end of
+        before : int or timedelta
+            The rows to prepend to partition ``i`` from the end of
             partition ``i - 1``.
-        after : int
-            The number of rows to append to partition ``i`` from the beginning
+        after : int or timedelta
+            The rows to append to partition ``i`` from the beginning
             of partition ``i + 1``.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Notes

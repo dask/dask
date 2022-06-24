@@ -1,3 +1,5 @@
+import datetime
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -24,16 +26,23 @@ idx = (
     )
 )[:N]
 
+idx_constant_freq = (pd.date_range("2016-01-01", freq="1s", periods=100))[:N]
+
+ts_data = {
+    "a": np.random.randn(N).cumsum(),
+    "b": np.random.randint(100, size=(N,)),
+    "c": np.random.randint(100, size=(N,)),
+    "d": np.random.randint(100, size=(N,)),
+    "e": np.random.randint(100, size=(N,)),
+}
+
 ts = pd.DataFrame(
-    {
-        "a": np.random.randn(N).cumsum(),
-        "b": np.random.randint(100, size=(N,)),
-        "c": np.random.randint(100, size=(N,)),
-        "d": np.random.randint(100, size=(N,)),
-        "e": np.random.randint(100, size=(N,)),
-    },
+    ts_data,
     index=idx,
 )
+
+ts_constant_freq = pd.DataFrame(ts_data, index=idx_constant_freq)
+
 dts = dd.from_pandas(ts, 3)
 
 
@@ -62,26 +71,51 @@ def test_map_overlap(npartitions):
 @pytest.mark.parametrize("enforce_metadata", [True, False])
 @pytest.mark.parametrize("transform_divisions", [True, False])
 @pytest.mark.parametrize("align_dataframes", [True, False])
-@pytest.mark.parametrize("overlap", [(0, 3), (3, 0), (3, 3), (0, 0)])
+@pytest.mark.parametrize(
+    "overlap_setup",
+    [
+        (df, 0, 3),
+        (df, 3, 0),
+        (df, 3, 3),
+        (df, 0, 0),
+        (
+            ts_constant_freq,
+            datetime.timedelta(seconds=3),
+            datetime.timedelta(seconds=3),
+        ),
+        (ts_constant_freq, datetime.timedelta(seconds=3), 0),
+    ],
+)
 def test_map_overlap_multiple_dataframes(
-    npartitions, enforce_metadata, transform_divisions, align_dataframes, overlap
+    npartitions, enforce_metadata, transform_divisions, align_dataframes, overlap_setup
 ):
-    ddf = dd.from_pandas(df, npartitions)
-    ddf2 = dd.from_pandas(df * 2, npartitions)
-    before, after = overlap
+    dataframe, before, after = overlap_setup
+
+    ddf = dd.from_pandas(dataframe, npartitions)
+    ddf2 = dd.from_pandas(dataframe * 2, npartitions)
+
+    def get_shifted_sum_arg(overlap):
+        return (
+            overlap.seconds - 1 if isinstance(overlap, datetime.timedelta) else overlap
+        )
+
+    before_shifted_sum, after_shifted_sum = get_shifted_sum_arg(
+        before
+    ), get_shifted_sum_arg(after)
+
     # DataFrame
     res = ddf.map_overlap(
         shifted_sum,
         before,
         after,
-        before,
-        after,
+        before_shifted_sum,
+        after_shifted_sum,
         ddf2,
         align_dataframes=align_dataframes,
         transform_divisions=transform_divisions,
         enforce_metadata=enforce_metadata,
     )
-    sol = shifted_sum(df, before, after, df * 2)
+    sol = shifted_sum(dataframe, before_shifted_sum, after_shifted_sum, dataframe * 2)
     assert_eq(res, sol)
 
     # Series
@@ -89,14 +123,16 @@ def test_map_overlap_multiple_dataframes(
         shifted_sum,
         before,
         after,
-        before,
-        after,
+        before_shifted_sum,
+        after_shifted_sum,
         ddf2.b,
         align_dataframes=align_dataframes,
         transform_divisions=transform_divisions,
         enforce_metadata=enforce_metadata,
     )
-    sol = shifted_sum(df.b, before, after, df.b * 2)
+    sol = shifted_sum(
+        dataframe.b, before_shifted_sum, after_shifted_sum, dataframe.b * 2
+    )
     assert_eq(res, sol)
 
 
