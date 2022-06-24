@@ -426,6 +426,11 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_timedelta():
+    assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
+    assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+
+
 @pytest.mark.parametrize("enum_type", [Enum, IntEnum, IntFlag, Flag])
 def test_tokenize_enum(enum_type):
     class Color(enum_type):
