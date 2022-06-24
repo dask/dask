@@ -1984,3 +1984,45 @@ def cached_cumsum(seq, initial_zero=False):
         # Construct a temporary tuple, and look up by value.
         result = _cumsum(tuple(seq), initial_zero)
     return result
+
+
+def show_versions() -> None:
+    """Provide version information for bug reports."""
+
+    from importlib.metadata import PackageNotFoundError, version
+    from json import dumps
+    from platform import uname
+    from sys import stdout, version_info
+
+    from distributed import __version__ as distributed_version
+
+    from dask import __version__ as dask_version
+
+    deps = [
+        "numpy",
+        "pandas",
+        "cloudpickle",
+        "fsspec",
+        "bokeh",
+        "fastparquet",
+        "pyarrow",
+        "zarr",
+    ]
+
+    result: dict[str, str | None] = {
+        # note: only major, minor, micro are extracted
+        "Python": ".".join([str(i) for i in version_info[:3]]),
+        "Platform": uname().system,
+        "dask": dask_version,
+        "distributed": distributed_version,
+    }
+
+    for modname in deps:
+        try:
+            result[modname] = version(modname)
+        except PackageNotFoundError:
+            result[modname] = None
+
+    stdout.writelines(dumps(result, indent=2))
+
+    return
