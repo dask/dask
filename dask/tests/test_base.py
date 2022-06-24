@@ -7,6 +7,7 @@ import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
+from enum import Enum, Flag, IntEnum, IntFlag
 from operator import add, mul
 from typing import Union
 
@@ -428,6 +429,16 @@ def test_tokenize_ordered_dict():
 def test_tokenize_timedelta():
     assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
     assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+
+
+@pytest.mark.parametrize("enum_type", [Enum, IntEnum, IntFlag, Flag])
+def test_tokenize_enum(enum_type):
+    class Color(enum_type):
+        RED = 1
+        BLUE = 2
+
+    assert tokenize(Color.RED) == tokenize(Color.RED)
+    assert tokenize(Color.RED) != tokenize(Color.BLUE)
 
 
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])

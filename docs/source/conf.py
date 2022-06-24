@@ -47,6 +47,7 @@ extensions = [
     "sphinx_remove_toctrees",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
+    "jupyter_sphinx",
     "sphinx_copybutton",
     "sphinx_design",
 ]
