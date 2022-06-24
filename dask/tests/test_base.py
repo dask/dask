@@ -433,6 +433,7 @@ def test_tokenize_enum(enum_type):
         BLUE = 2
 
     assert tokenize(Color.RED) == tokenize(Color.RED)
+    assert tokenize(Color.RED) != tokenize(Color.BLUE)
 
 
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
