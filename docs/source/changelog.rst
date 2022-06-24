@@ -1,6 +1,49 @@
 Changelog
 =========
 
+.. _v2022.6.1:
+
+2022.6.1
+--------
+
+Released on June 24, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Dask in pyodide (:pr:`9053`) `Ian Rose`_
+- Create ``dask.utils.show_versions`` (:pr:`9144`) `Sultan Orazbayev`_
+- Better error message for unsupported numpy operations on dask.dataframe objects. (:pr:`9201`) `Julia Signell`_
+- Add ``allow_rechunk`` kwarg to ``dask.array.overlap`` function (:pr:`7776`) `Genevieve Buckley`_
+- Add minutes and hours to ``dask.utils.format_time`` (:pr:`9116`) `Matthew Rocklin`_
+- More retries when writing parquet to remote filesystem (:pr:`9175`) `Ian Rose`_
+
+Bug Fixes
+^^^^^^^^^
+- Timedelta deterministic hashing (:pr:`9213`) `Fabien Aulaire`_
+- Enum deterministic hashing (:pr:`9212`) `Fabien Aulaire`_
+- ``shuffle_group()``: avoid converting to arrays (:pr:`9157`) `Mads R. B. Kristensen`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate extra ``format_time`` utility (:pr:`9184`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Better SEO for 10 Minutes to Dask (:pr:`9182`) `Sarah Charlotte Johnson`_
+- Better SEO for Delayed and Best Practices (:pr:`9194`) `Sarah Charlotte Johnson`_
+- Include known inconsistency in DataFrame ``str.split`` accessor docstring  (:pr:`9177`) `Richard Pelgrim`_
+- Add ``inconsistencies`` keyword to ``derived_from`` (:pr:`9192`) `Richard Pelgrim`_
+- Add missing ``append`` in ``delayed`` best practices example (:pr:`9202`) `Ben`_
+- Fix indentation in Best Practices (:pr:`9196`) `Sarah Charlotte Johnson`_
+- Add link to `Genevieve Buckley`_'s blog on chunk sizes (:pr:`9199`) `Pavithra Eswaramoorthy`_
+- Update ``to_csv`` docstring (:pr:`9094`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Update versioneer: change from using ``SafeConfigParser`` to ``ConfigParser`` (:pr:`9205`) `Thomas A Caswell`_
+- Remove ipython hack in CI(:pr:`9200`) `crusaderky`_
+
+
 .. _v2022.6.0:
 
 2022.6.0
@@ -294,6 +337,11 @@ Maintenance
 
 Released on April 1, 2022
 
+.. note::
+
+    This is the first release with support for Python 3.10
+
+
 New Features
 ^^^^^^^^^^^^
 - Add Python 3.10 support (:pr:`8566`) `James Bourbeau`_
@@ -469,6 +517,10 @@ Maintenance
 ---------
 
 Released on February 11, 2022
+
+.. note::
+
+    This is the last release with support for Python 3.7
 
 New Features
 ^^^^^^^^^^^^
@@ -5653,3 +5705,6 @@ Other
 .. _`Fabien Aulaire`: https://github.com/faulaire
 .. _`Alex-JG3`: https://github.com/Alex-JG3
 .. _`Christopher Akiki`: https://github.com/cakiki
+.. _`Sultan Orazbayev`: https://github.com/SultanOrazbayev
+.. _`Richard Pelgrim`: https://github.com/rrpelgrim
+.. _`Ben`: https://github.com/benjaminhduncan
