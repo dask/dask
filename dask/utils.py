@@ -1955,9 +1955,11 @@ def show_versions() -> None:
     from platform import uname
     from sys import stdout, version_info
 
+    from distributed import __version__ as distributed_version
+
+    from dask import __version__ as dask_version
+
     deps = [
-        "dask",
-        "distributed",
         "numpy",
         "pandas",
         "cloudpickle",
@@ -1972,6 +1974,8 @@ def show_versions() -> None:
         # note: only major, minor, micro are extracted
         "Python": ".".join([str(i) for i in version_info[:3]]),
         "Platform": uname().system,
+        "dask": dask_version,
+        "distributed": distributed_version,
     }
 
     for modname in deps:
