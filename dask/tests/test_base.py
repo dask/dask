@@ -425,6 +425,11 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_timedelta():
+    assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
+    assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+
+
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
 BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])  # type: ignore
 
