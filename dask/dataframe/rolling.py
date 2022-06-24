@@ -170,7 +170,7 @@ def map_overlap(
     if name is not None:
         token = tokenize(meta, before, after, *args, **kwargs)
     else:
-        name = funcname(func)
+        name = "overlap-" + funcname(func)
         token = tokenize(func, meta, before, after, *args, **kwargs)
     name = f"{name}-{token}"
 
