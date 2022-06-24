@@ -1,6 +1,9 @@
 Futures
 =======
 
+.. meta::
+    :description: Dask futures reimplements the Python futures API so you can scale your Python futures workflow across a Dask cluster.
+
 Dask supports a real-time task framework that extends Python's
 `concurrent.futures <https://docs.python.org/3/library/concurrent.futures.html>`_
 interface. Dask futures reimplements most of the Python futures API, allowing
@@ -10,8 +13,9 @@ code changes.
 .. figure:: images/concurrent-futures-threaded.webp
     :alt: Conceptual diagram of Python futures threading executor
     :align: center
+    :width: 75%
 
-    Using the Python futures `ThreadPoolExecutor` you can improve efficiency
+    Using the Python futures ``ThreadPoolExecutor`` you can improve efficiency
     by using multiple threads to have multiple requests at the same time.
     Image from `Jim Anderson 2019 <https://realpython.com/python-concurrency/#threading-version>`_.
 
@@ -25,7 +29,7 @@ despite its name, runs very well on a single machine).
 Though Dask futures is one of Dask's more powerful APIs, it is often not needed unless
 you have a particular use case for handling concurrency on the client. One of the higher-level
 Dask APIs, e.g. Dask Array or Dask Delayed, will suit most users' needs, without introducing
-the additional complexity the comes with concurrency. See :doc:`best-practices`.
+the additional complexity that comes with concurrency.
 
 .. raw:: html
 
