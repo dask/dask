@@ -72,8 +72,12 @@ Releasing dask and distributed:
         
         conda search 'conda-forge::dask-core=YYYY.M.X'
     
-    Once `dask-core` is available, you can restart the `distributed` tests. `dask` is similar
-    but it depends on `dask-core` _and_ `distributed`.
+    Once `dask-core` is available, you can restart the `distributed` tests by commenting 
+    on the PR:
+
+        @conda-forge-admin, please restart CI
+    
+    `dask` is similar but it depends on `dask-core` _and_ `distributed`.
 
 *   [dask-docker](https://github.com/dask/dask-docker) PRs should be automatically created, 
     but they might need a small modification. Check by grepping for the old release string.
