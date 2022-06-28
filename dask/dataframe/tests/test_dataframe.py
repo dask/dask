@@ -2925,7 +2925,7 @@ def test_to_dask_array_raises(as_frame):
 @pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
-    a = dd.from_pandas(s, chunksize=2)
+    a = dd.from_pandas(s, npartitions=2)
 
     if as_frame:
         a = a.to_frame()

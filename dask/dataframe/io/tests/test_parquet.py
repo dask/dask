@@ -2388,11 +2388,11 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, divisions, remove_co
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, calculate_divisions=divisions)
     assert_eq(ddf, ddf2, check_divisions=False)
-    assert ddf.divisions == tuple(range(0, 420, 30))
+    assert None not in ddf.divisions
     if divisions is False:
-        assert ddf2.divisions == (None,) * 14
+        assert ddf2.divisions == (None,) * (ddf.npartitions + 1)
     else:
-        assert ddf2.divisions == tuple(range(0, 420, 30))
+        assert ddf2.divisions == ddf.divisions
 
 
 @write_read_engines()
@@ -2402,8 +2402,8 @@ def test_statistics_nometa(tmpdir, write_engine, read_engine):
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, calculate_divisions=True)
     assert_eq(ddf, ddf2)
-    assert ddf.divisions == tuple(range(0, 420, 30))
-    assert ddf2.divisions == tuple(range(0, 420, 30))
+    assert None not in ddf.divisions
+    assert ddf2.divisions == ddf.divisions
 
 
 @pytest.mark.parametrize("schema", ["infer", None])
@@ -4054,9 +4054,7 @@ def test_custom_filename_with_partition(tmpdir, engine):
             )
         for file in files:
             assert file in (
-                "0-cool.parquet",
-                "1-cool.parquet",
-                "2-cool.parquet",
+                *[f"{i}-cool.parquet" for i in range(df.npartitions)],
                 "_common_metadata",
                 "_metadata",
             )
