@@ -479,7 +479,12 @@ def test_merge_asof_on_by():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(B, A, on="time", by="ticker")
     c = dd.merge_asof(b, a, on="time", by="ticker")
@@ -531,7 +536,12 @@ def test_merge_asof_on_by_tolerance():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(B, A, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
     c = dd.merge_asof(b, a, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
@@ -583,7 +593,12 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(
         B,

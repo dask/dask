@@ -727,7 +727,7 @@ def test_set_index_timezone():
     s_naive = pd.Series(pd.date_range("20130101", periods=3))
     s_aware = pd.Series(pd.date_range("20130101", periods=3, tz="US/Eastern"))
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
-    d = dd.from_pandas(df, 2)
+    d = dd.from_pandas(df, npartitions=1)  # TODO: Use npartitions=2
 
     d1 = d.set_index("notz", npartitions=1)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)

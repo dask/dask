@@ -758,25 +758,6 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if npartitions:
         chunksize = ceil(len(seq) / npartitions)
 
-    if False:
-        positions = [0]
-        values = [seq[0]]
-        for pos in range(0, len(seq), chunksize):
-            if pos <= positions[-1]:
-                continue
-            while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
-                pos += 1
-            values.append(seq[pos])
-            if pos == len(seq) - 1:
-                pos += 1
-            positions.append(pos)
-
-        if positions[-1] != len(seq):
-            positions.append(len(seq))
-            values.append(seq[-1])
-
-        return values, positions
-
     # Find unique-offset array (if duplicates exist)
     seqarr_unique = np.unique(seq)  # Unique elements of seq
     duplicates = len(seqarr_unique) < len(seq)
