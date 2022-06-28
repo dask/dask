@@ -178,7 +178,8 @@ def from_pandas(
         the size and index of the dataframe, the output may have fewer
         partitions than requested.
     chunksize : int, optional
-        The number of rows per index partition to use.
+        The number of rows per index partition to use. Note that depending on
+        the size and index of the dataframe, actual partition sizes may vary.
     sort: bool
         Sort the input by index first to obtain cleanly divided partitions
         (with known divisions).  If False, the input will not be sorted, and
@@ -743,10 +744,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
     >>> L = ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C']
     >>> sorted_division_locations(L, chunksize=3)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(L, chunksize=2)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(['A'], chunksize=2)
     (['A', 'A'], [0, 1])
@@ -757,23 +758,53 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if npartitions:
         chunksize = ceil(len(seq) / npartitions)
 
-    positions = [0]
-    values = [seq[0]]
-    for pos in range(0, len(seq), chunksize):
-        if pos <= positions[-1]:
-            continue
-        while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
-            pos += 1
-        values.append(seq[pos])
-        if pos == len(seq) - 1:
-            pos += 1
-        positions.append(pos)
+    # Convert seq to numpy arrays
+    seqarr = np.array(seq)  # All elements of seq
+    seqarr_unique = np.unique(seqarr)  # Unique elements of seq
 
-    if positions[-1] != len(seq):
-        positions.append(len(seq))
-        values.append(seq[-1])
+    # Find unique-offset array (if duplicates exist)
+    duplicates = len(seqarr_unique) < len(seqarr)
+    offsets = seqarr.searchsorted(seqarr_unique, side="left") if duplicates else []
 
-    return values, positions
+    # Always start with 0th item in seqarr,
+    # and then try to take chunksize steps
+    # along the seqarr array
+    divisions = [seq[0]]
+    locations = [0]
+    i = chunksize
+    ind = None  # ind cache (sometimes avoids np.where)
+    while i < len(seqarr):
+        # Map current position selection (i)
+        # to the corresponding division value (div)
+        div = seq[i]
+        # pos is the position of the first occurance of
+        # div (which is i when seq has no duplicates)
+        if duplicates:
+            if ind is None:
+                ind = np.where(seqarr_unique == seqarr[i])[0][0]
+            pos = offsets[ind]
+        else:
+            pos = i
+        if div <= divisions[-1]:
+            # pos overlaps with divisions.
+            # Try the next element on the following pass
+            ind += 1
+            i = offsets[ind]
+        else:
+            # pos does not overlap with divisions.
+            # Append candidate pos/div combination, and
+            # take another chunksize step
+            divisions.append(div)
+            locations.append(pos)
+            i = pos + chunksize
+            ind = None
+
+    # The final element of divisions/locations
+    # will always be the same
+    divisions.append(seq[-1])
+    locations.append(len(seq))
+
+    return divisions, locations
 
 
 class _PackedArgCallable(DataFrameIOFunction):

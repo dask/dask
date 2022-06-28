@@ -377,6 +377,14 @@ def test_from_pandas_with_wrong_args():
         dd.from_pandas(df, chunksize=18.27)
 
 
+def test_from_pandas_chunksize_one():
+    # See: https://github.com/dask/dask/issues/9218
+    df = pd.DataFrame(np.random.randint(0, 10, size=(10, 4)), columns=list('ABCD'))
+    ddf = dd.from_pandas(df, chunksize=1)
+    num_rows = list(ddf.map_partitions(lambda df: len(df)).compute())
+    assert num_rows == [1] * 10
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
