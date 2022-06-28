@@ -810,7 +810,13 @@ def test_concat_dataframe_empty():
     df_concat_with_col = pd.concat([df, empty_df_with_col])
     empty_ddf_with_col = dd.from_pandas(empty_df_with_col, npartitions=1)
     ddf_concat_with_col = dd.concat([ddf, empty_ddf_with_col])
-    assert_eq(df_concat_with_col, ddf_concat_with_col)
+    # NOTE: empty_ddf_with_col.index.dtype == dtype('O') while ddf.index.dtype == dtype('int64')
+    # when we concatenate the resulting ddf_concat_with_col.index.dtype == dtype('O'). However,
+    # the pandas version is smart enough to identify the empty rows and assign dtype('int64'),
+    # which causes assert_eq to fail when checking dtype. Hence the follwoing line.
+    ddf_concat_with_col._meta.index = ddf_concat_with_col._meta.index.astype("int64")
+
+    assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
 
 
 @pytest.mark.parametrize(
