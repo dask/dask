@@ -758,13 +758,13 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if npartitions:
         chunksize = ceil(len(seq) / npartitions)
 
-    # Convert seq to numpy arrays
-    seqarr = np.array(seq)  # All elements of seq
-    seqarr_unique = np.unique(seqarr)  # Unique elements of seq
-
     # Find unique-offset array (if duplicates exist)
-    duplicates = len(seqarr_unique) < len(seqarr)
-    offsets = seqarr.searchsorted(seqarr_unique, side="left") if duplicates else []
+    seqarr_unique = np.unique(seq)  # Unique elements of seq
+    duplicates = len(seqarr_unique) < len(seq)
+    if duplicates:
+        offsets = np.array(seq).searchsorted(seqarr_unique, side="left")
+    else:
+        offsets = seqarr_unique = None
 
     # Always start with 0th item in seqarr,
     # and then try to take chunksize steps
@@ -773,7 +773,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     locations = [0]
     i = chunksize
     ind = None  # ind cache (sometimes avoids np.where)
-    while i < len(seqarr):
+    while i < len(seq):
         # Map current position selection (i)
         # to the corresponding division value (div)
         div = seq[i]
@@ -781,15 +781,18 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         # div (which is i when seq has no duplicates)
         if duplicates:
             if ind is None:
-                ind = np.where(seqarr_unique == seqarr[i])[0][0]
+                ind = np.where(seqarr_unique == seq[i])[0][0]
             pos = offsets[ind]
         else:
             pos = i
         if div <= divisions[-1]:
             # pos overlaps with divisions.
             # Try the next element on the following pass
-            ind += 1
-            i = offsets[ind]
+            if duplicates:
+                ind += 1
+                i = offsets[ind]
+            else:
+                i += 1
         else:
             # pos does not overlap with divisions.
             # Append candidate pos/div combination, and
