@@ -1237,6 +1237,12 @@ def concat(
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     axis = DataFrame._validate_axis(axis)
+    try:
+        # remove any empty DataFrames
+        dfs = [df for df in dfs if bool(len(df.columns))]
+    except AttributeError:
+        # 'Series' object has no attribute 'columns'
+        pass
     dasks = [df for df in dfs if isinstance(df, _Frame)]
     dfs = _maybe_from_pandas(dfs)
 
