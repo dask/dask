@@ -379,9 +379,11 @@ def test_from_pandas_with_wrong_args():
 
 def test_from_pandas_chunksize_one():
     # See: https://github.com/dask/dask/issues/9218
-    df = pd.DataFrame(np.random.randint(0, 10, size=(10, 4)), columns=list('ABCD'))
+    df = pd.DataFrame(np.random.randint(0, 10, size=(10, 4)), columns=list("ABCD"))
     ddf = dd.from_pandas(df, chunksize=1)
     num_rows = list(ddf.map_partitions(lambda df: len(df)).compute())
+    # chunksize=1 with range index should
+    # always have unit-length partitions
     assert num_rows == [1] * 10
 
 
