@@ -790,7 +790,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             # Try the next element on the following pass
             if duplicates:
                 ind += 1
-                i = offsets[ind]
+                i = offsets[ind] if ind < len(offsets) else len(seq)
             else:
                 i += 1
         else:

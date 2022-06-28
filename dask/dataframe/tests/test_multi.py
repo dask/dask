@@ -305,7 +305,8 @@ def test_merge_asof_on_basic():
 
     C = pd.merge_asof(A, B, on="a")
     c = dd.merge_asof(a, b, on="a")
-    assert_eq(c, C)
+    # merge_asof does not preserve index
+    assert_eq(c, C, check_index=False)
 
 
 def test_merge_asof_on_lefton_righton_error():
@@ -352,7 +353,8 @@ def test_merge_asof_on(allow_exact_matches, direction):
     c = dd.merge_asof(
         a, b, on="a", allow_exact_matches=allow_exact_matches, direction=direction
     )
-    assert_eq(c, C)
+    # merge_asof does not preserve index
+    assert_eq(c, C, check_index=False)
 
 
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
