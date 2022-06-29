@@ -4732,9 +4732,9 @@ class DataFrame(_Frame):
         if not isinstance(other, str):
 
             # It may refer to several columns
-            if isinstance(other, Sequence):
+            if isinstance(other, Sequence):  # type: ignore[unreachable]
                 # Accept ["a"], but not [["a"]]
-                if len(other) == 1 and (
+                if len(other) == 1 and (  # type: ignore[unreachable]
                     isinstance(other[0], str) or not isinstance(other[0], Sequence)
                 ):
                     other = other[0]
