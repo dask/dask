@@ -714,7 +714,7 @@ def test_set_index_interpolate_large_uint(engine):
 
     if engine == "cudf":
         gdf = cudf.from_pandas(df)
-        d = dask_cudf.from_cudf(gdf, npartitions=2)
+        d = dask_cudf.from_cudf(gdf, npartitions=1)
     else:
         d = dd.from_pandas(df, 1)
 
