@@ -175,8 +175,8 @@ def from_pandas(
         The DataFrame/Series with which to construct a Dask DataFrame/Series
     npartitions : int, optional
         The number of partitions of the index to create. Note that if there
-        are duplicate values in ``data.index``, the output may have fewer
-        partitions than requested.
+        are duplicate values or insufficient elements in ``data.index``, the
+        output may have fewer partitions than requested.
     chunksize : int, optional
         The desired number of rows per index partition to use. Note that
         depending on the size and index of the dataframe, actual partition
