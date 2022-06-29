@@ -759,17 +759,19 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     # Find unique-offset array (if duplicates exist)
-    seqarr_unique = np.unique(seq)  # Unique elements of seq
-    duplicates = len(seqarr_unique) < len(seq)
+    seq_unique = (
+        seq.unique() if hasattr(seq, "unique") else np.unique(seq)
+    )  # Unique elements of seq
+    duplicates = len(seq_unique) < len(seq)
     if duplicates:
         offsets = (
             # Avoid numpy conversion (necessary for dask-cudf)
-            seq.searchsorted(seqarr_unique, side="left")
+            seq.searchsorted(seq_unique, side="left")
             if hasattr(seq, "searchsorted")
-            else np.array(seq).searchsorted(seqarr_unique, side="left")
+            else np.array(seq).searchsorted(seq_unique, side="left")
         )
     else:
-        offsets = seqarr_unique = None
+        offsets = seq_unique = None
 
     # Define chunksize and residual so that
     # npartitions can be exactly satisfied
@@ -789,7 +791,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     divisions = [seq[0]]
     locations = [0]
     i = chunksizes(0)
-    ind = None  # ind cache (sometimes avoids np.where)
+    ind = None  # ind cache (sometimes avoids nonzero call)
     while i < len(seq):
         # Map current position selection (i)
         # to the corresponding division value (div)
@@ -799,7 +801,8 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         if duplicates:
             # Note: cupy requires casts to `int` below
             if ind is None:
-                ind = int(np.where(seqarr_unique == seq[i])[0][0])
+                ind = int((seq_unique == seq[i]).nonzero()[0][0])
+
             pos = int(offsets[ind])
         else:
             pos = i
