@@ -52,11 +52,10 @@ def checkpoint(
     :doc:`delayed` yielding None
     """
     if split_every is None:
-        # FIXME https://github.com/python/typeshed/issues/5074
-        split_every = 8  # type: ignore
+        split_every = 8
     elif split_every is not False:
-        split_every = int(split_every)  # type: ignore
-        if split_every < 2:  # type: ignore
+        split_every = int(split_every)
+        if split_every < 2:
             raise ValueError("split_every must be False, None, or >= 2")
 
     collections, _ = unpack_collections(*collections)
@@ -206,7 +205,7 @@ def bind(
     parents,
     *,
     omit=None,
-    seed: Hashable = None,
+    seed: Hashable | None = None,
     assume_layers: bool = True,
     split_every: float | Literal[False] | None = None,
 ) -> T:

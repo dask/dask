@@ -278,4 +278,4 @@ if _numpy_120:
 else:
     from typing import Any
 
-    ArrayLike = DTypeLike = Any  # type: ignore
+    ArrayLike = DTypeLike = Any

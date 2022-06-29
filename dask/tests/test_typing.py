@@ -161,7 +161,7 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
 
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
-def test_isinstance_core(protocol: Any) -> None:
+def test_isinstance_core(protocol):
     from dask.array import Array
     from dask.bag import Bag
     from dask.dataframe import DataFrame

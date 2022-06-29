@@ -53,8 +53,8 @@ class Layer(Mapping):
 
     def __init__(
         self,
-        annotations: Mapping[str, Any] = None,
-        collection_annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
+        collection_annotations: Mapping[str, Any] | None = None,
     ):
         """Initialize Layer object.
 
@@ -1031,7 +1031,7 @@ class HighLevelGraph(Mapping):
         self,
         client,
         client_keys: Iterable[Hashable],
-        annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
     ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
