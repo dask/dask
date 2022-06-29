@@ -1137,7 +1137,7 @@ def test_drop_duplicates_subset():
 
 def test_get_partition():
     pdf = pd.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
-    ddf = dd.from_pandas(pdf, 3)
+    ddf = dd.from_pandas(pdf, chunksize=4)
     assert ddf.divisions == (0, 4, 8, 9)
 
     # DataFrame
@@ -3096,7 +3096,7 @@ def test_round():
 def test_cov():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, npartitions=6)
+    ddf = dd.from_pandas(df, chunksize=5)
 
     res = ddf.cov()
     res2 = ddf.cov(split_every=2)
@@ -3116,8 +3116,8 @@ def test_cov():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    da = dd.from_pandas(a, chunksize=5)
+    db = dd.from_pandas(b, chunksize=5)
 
     res = da.cov(db)
     res2 = da.cov(db, split_every=2)
@@ -3138,7 +3138,7 @@ def test_cov():
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, npartitions=6)
+    ddf = dd.from_pandas(df, chunksize=5)
 
     res = ddf.corr()
     res2 = ddf.corr(split_every=2)
@@ -3160,8 +3160,8 @@ def test_corr():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    da = dd.from_pandas(a, chunksize=5)
+    db = dd.from_pandas(b, chunksize=5)
 
     res = da.corr(db)
     res2 = da.corr(db, split_every=2)
