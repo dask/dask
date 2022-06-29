@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Hashable, Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import ClassVar
+from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -20,10 +20,16 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core, threaded
+from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
-from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    named_schedulers,
+    tokenize,
+)
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
@@ -78,6 +84,8 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 no_default = "__no_default__"
 
@@ -163,7 +171,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return first, ()
@@ -333,7 +341,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
@@ -345,7 +353,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
@@ -417,7 +425,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._divisions = value
 
     @property
-    def npartitions(self):
+    def npartitions(self) -> int:
         """Return number of partitions"""
         return len(self.divisions) - 1
 
@@ -736,14 +744,20 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         func : function
-            Function applied to each partition.
+            The function applied to each partition. If this function accepts
+            the special ``partition_info`` keyword argument, it will receive
+            information on the partition's relative location within the
+            dataframe.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
-            or regular python objects. DataFrame-like args (both dask and
-            pandas) will be repartitioned to align  (if necessary) before
-            applying the function (see ``align_dataframes`` to control).
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
         enforce_metadata : bool, default True
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
@@ -785,6 +799,12 @@ Dask Name: {name}, {task} tasks"""
         >>> res = ddf.map_partitions(myadd, 1, b=2)
         >>> res.dtype
         dtype('float64')
+
+        Here we apply a function to a Series resulting in a Series:
+
+        >>> res = ddf.x.map_partitions(lambda x: len(x)) # ddf.x is a Dask Series Structure
+        >>> res.dtype
+        dtype('int64')
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -1467,9 +1487,7 @@ Dask Name: {name}, {task} tasks"""
         axis = self._validate_axis(axis)
         if method is None and limit is not None:
             raise NotImplementedError("fillna with set limit and method=None")
-        if isinstance(value, _Frame):
-            test_value = value._meta_nonempty.values[0]
-        elif isinstance(value, Scalar):
+        if isinstance(value, (_Frame, Scalar)):
             test_value = value._meta_nonempty
         else:
             test_value = value
@@ -3367,6 +3385,16 @@ class Series(_Frame):
                 index = None
             else:
                 index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.Series`."
+            )
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -4011,6 +4039,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_increasing_chunk,
+            combine=methods.monotonic_increasing_combine,
             aggregate=methods.monotonic_increasing_aggregate,
             meta=bool,
             token="monotonic_increasing",
@@ -4022,6 +4051,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_decreasing_chunk,
+            combine=methods.monotonic_decreasing_combine,
             aggregate=methods.monotonic_decreasing_aggregate,
             meta=bool,
             token="monotonic_decreasing",
@@ -4300,6 +4330,17 @@ class DataFrame(_Frame):
                 index = None
             else:
                 index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
+            )
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
@@ -4519,14 +4560,14 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by,
-        npartitions=None,
-        ascending=True,
-        na_position="last",
-        sort_function=None,
-        sort_function_kwargs=None,
+        by: str,
+        npartitions: int | Literal["auto"] | None = None,
+        ascending: bool = True,
+        na_position: Literal["first"] | Literal["last"] = "last",
+        sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        sort_function_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -4571,12 +4612,12 @@ class DataFrame(_Frame):
 
     def set_index(
         self,
-        other,
-        drop=True,
-        sorted=False,
-        npartitions=None,
-        divisions=None,
-        inplace=False,
+        other: str | Series,
+        drop: bool = True,
+        sorted: bool = False,
+        npartitions: int | Literal["auto"] | None = None,
+        divisions: Sequence | None = None,
+        inplace: bool = False,
         **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
@@ -4606,6 +4647,7 @@ class DataFrame(_Frame):
         Parameters
         ----------
         other: string or Dask Series
+            Column to use as index.
         drop: boolean, default True
             Delete column to be used as the new index.
         sorted: bool, optional
@@ -4680,15 +4722,56 @@ class DataFrame(_Frame):
         >>> # ^ Now copy-paste this and edit the line above to:
         >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
+
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
         pre_sorted = sorted
         del sorted
 
-        if isinstance(other, Series) and other._name == self.index._name:
-            # Index is equal to current index, no-op
-            return self
+        # Check other can be translated to column name or column object, possibly flattening it
+        if not isinstance(other, str):
 
+            # It may refer to several columns
+            if isinstance(other, Sequence):
+                # Accept ["a"], but not [["a"]]
+                if len(other) == 1 and (
+                    isinstance(other[0], str) or not isinstance(other[0], Sequence)
+                ):
+                    other = other[0]
+                else:
+                    raise NotImplementedError(
+                        "Dask dataframe does not yet support multi-indexes.\n"
+                        f"You tried to index with this index: {other}\n"
+                        "Indexes must be single columns only."
+                    )
+
+            # Or be a frame directly
+            elif isinstance(other, DataFrame):
+                raise NotImplementedError(
+                    "Dask dataframe does not yet support multi-indexes.\n"
+                    f"You tried to index with a frame with these columns: {list(other.columns)}\n"
+                    "Indexes must be single columns only."
+                )
+
+        # If already a series
+        if isinstance(other, Series):
+            # If it's already the index, there's nothing to do
+            if other._name == self.index._name:
+                return self
+
+        # If the name of a column/index
+        else:
+            # With the same name as the index, there's nothing to do either
+            if other == self.index.name:
+                return self
+
+            # If a missing column, KeyError
+            if other not in self.columns:
+                raise KeyError(
+                    f"Data has no column '{other}': use any column of {list(self.columns)}"
+                )
+
+        # Check divisions
         if divisions is not None:
             check_divisions(divisions)
         elif (
@@ -4702,6 +4785,7 @@ class DataFrame(_Frame):
             pre_sorted = True
             divisions = other.divisions
 
+        # If index is already sorted, take advantage of that with set_sorted_index
         if pre_sorted:
             from dask.dataframe.shuffle import set_sorted_index
 
@@ -5750,6 +5834,50 @@ class DataFrame(_Frame):
             and key in self.columns
         )
 
+    @classmethod
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
+        """
+        Construct a Dask DataFrame from a Python Dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The number of partitions of the index to create. Note that depending on
+            the size and index of the dataframe, the output may have fewer
+            partitions than requested.
+        orient : {'columns', 'index', 'tight'}, default 'columns'
+            The "orientation" of the data. If the keys of the passed dict
+            should be the columns of the resulting DataFrame, pass 'columns'
+            (default). Otherwise if the keys should be rows, pass 'index'.
+            If 'tight', assume a dict with keys
+            ['index', 'columns', 'data', 'index_names', 'column_names'].
+        dtype: bool
+            Data type to force, otherwise infer.
+        columns: string, optional
+            Column labels to use when ``orient='index'``. Raises a ValueError
+            if used with ``orient='columns'`` or ``orient='tight'``.
+
+        Examples
+        --------
+        >>> import dask.dataframe as dd
+        >>> ddf = dd.DataFrame.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
+        """
+        from dask.dataframe.io import from_pandas
+
+        collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
+        if collection_types:
+            raise NotImplementedError(
+                "from_dict doesn't currently support Dask collections as inputs. "
+                f"Objects of type {collection_types} were given in the input dict."
+            )
+        pdf = pd.DataFrame.from_dict(data, orient, dtype, columns)
+        ddf = from_pandas(pdf, npartitions)
+        return ddf
+
 
 # bind operators
 # TODO: dynamically bound operators are defeating type annotations
@@ -5969,7 +6097,10 @@ def handle_out(out, result):
         msg = (
             "The out parameter is not fully supported."
             " Received type %s, expected %s "
-            % (typename(type(out)), typename(type(result)))
+            % (
+                typename(type(out)),
+                typename(type(result)),
+            )
         )
         raise NotImplementedError(msg)
     else:
@@ -5997,10 +6128,7 @@ def hash_shard(
         h = df
 
     h = hash_object_dispatch(h, index=False)
-    if is_series_like(h):
-        h = h.values
-    np.mod(h, nparts, out=h)
-    return group_split_dispatch(df, h, nparts, ignore_index=ignore_index)
+    return group_split_dispatch(df, h % nparts, nparts, ignore_index=ignore_index)
 
 
 def split_evenly(df, k):
@@ -6303,7 +6431,13 @@ def map_partitions(
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
-        args = _maybe_align_partitions(args)
+        try:
+            args = _maybe_align_partitions(args)
+        except ValueError as e:
+            raise ValueError(
+                f"{e}. If you don't want the partitions to be aligned, and are "
+                "calling `map_partitions` directly, pass `align_dataframes=False`."
+            ) from e
 
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
@@ -6398,9 +6532,9 @@ def map_partitions(
 
         args2.insert(0, BlockwiseDepDict(partition_info))
         orig_func = func
-        func = lambda partition_info, *args, **kwargs: orig_func(
-            *args, **kwargs, partition_info=partition_info
-        )
+
+        def func(partition_info, *args, **kwargs):
+            return orig_func(*args, **kwargs, partition_info=partition_info)
 
     if enforce_metadata:
         dsk = partitionwise_graph(
@@ -6893,12 +7027,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     ----------
     a : tuple
         old divisions
-    b : tuple, list
-        new divisions
-    name : str
-        name of old dataframe
-    out1 : str
-        name of temporary splits
+    b : tuple, listmypy
     out2 : str
         name of new dataframe
     force : bool, default False

@@ -411,10 +411,13 @@ DataFrame Groupby
 
    DataFrameGroupBy.aggregate
    DataFrameGroupBy.apply
+   DataFrameGroupBy.bfill
    DataFrameGroupBy.count
    DataFrameGroupBy.cumcount
    DataFrameGroupBy.cumprod
    DataFrameGroupBy.cumsum
+   DataFrameGroupBy.fillna
+   DataFrameGroupBy.ffill
    DataFrameGroupBy.get_group
    DataFrameGroupBy.max
    DataFrameGroupBy.mean
@@ -440,10 +443,13 @@ Series Groupby
 
    SeriesGroupBy.aggregate
    SeriesGroupBy.apply
+   SeriesGroupBy.bfill
    SeriesGroupBy.count
    SeriesGroupBy.cumcount
    SeriesGroupBy.cumprod
    SeriesGroupBy.cumsum
+   SeriesGroupBy.fillna
+   SeriesGroupBy.ffill
    SeriesGroupBy.get_group
    SeriesGroupBy.max
    SeriesGroupBy.mean
@@ -520,7 +526,9 @@ Create DataFrames
    from_bcolz
    from_dask_array
    from_delayed
+   from_map
    from_pandas
+   DataFrame.from_dict
 
 .. currentmodule:: dask.bag
 

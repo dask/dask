@@ -429,6 +429,7 @@ class FastParquetEngine(Engine):
                     paths = [
                         path for path in paths if path.endswith(parquet_file_extension)
                     ]
+                    fns = [fn for fn in fns if fn.endswith(parquet_file_extension)]
                     if len0 and paths == []:
                         raise ValueError(
                             "No files satisfy the `parquet_file_extension` criteria "
@@ -535,13 +536,11 @@ class FastParquetEngine(Engine):
             ) = _parse_pandas_metadata(pandas_md)
             #  auto-ranges should not be created by fastparquet
             column_names.extend(pf.cats)
-
         else:
             index_names = []
             column_names = pf.columns + list(pf.cats)
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
-
         if index is None and len(index_names) > 0:
             if len(index_names) == 1 and index_names[0] is not None:
                 index = index_names[0]
@@ -1114,7 +1113,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        schema=None,
+        schema="infer",
         object_encoding="utf8",
         index_cols=None,
         custom_metadata=None,
@@ -1171,13 +1170,21 @@ class FastParquetEngine(Engine):
                     ignore_divisions = True
             if not ignore_divisions:
                 minmax = fastparquet.api.sorted_partitioned_columns(pf)
-                old_end = minmax[index_cols[0]]["max"][-1]
+                # If fastparquet detects that a partitioned column isn't sorted, it won't
+                # appear in the resulting min/max dictionary
+                old_end = (
+                    minmax[index_cols[0]]["max"][-1]
+                    if index_cols[0] in minmax
+                    else None
+                )
                 divisions = division_info["divisions"]
-                if divisions[0] < old_end:
+                if old_end is not None and divisions[0] <= old_end:
                     raise ValueError(
-                        "Appended divisions overlapping with previous ones."
-                        "\n"
-                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                        "The divisions of the appended dataframe overlap with "
+                        "previously written divisions. If this is desired, set "
+                        "``ignore_divisions=True`` to append anyway.\n"
+                        "- End of last written partition: {old_end}\n"
+                        "- Start of first new partition: {divisions[0]}"
                     )
         else:
             fmd = fastparquet.writer.make_metadata(
@@ -1218,9 +1225,11 @@ class FastParquetEngine(Engine):
         # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
         for s in fmd.schema:
-            if isinstance(s.name, bytes):
+            try:
                 # can be coerced to bytes on copy
                 s.name = s.name.decode()
+            except AttributeError:
+                pass
         if custom_metadata and fmd is not None:
             fmd.key_value_metadata = fmd.key_value_metadata + (
                 [

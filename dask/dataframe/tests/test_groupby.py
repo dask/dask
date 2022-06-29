@@ -11,6 +11,7 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
+from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -1093,6 +1094,110 @@ def test_aggregate_dask():
                 other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
                 assert len(other.dask) == len(result1.dask)
                 assert len(other.dask) == len(result2.dask)
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_fillna(axis, group_keys, method, limit):
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+        ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+    )
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).B.fillna(0),
+        ddf.groupby("A", group_keys=group_keys).B.fillna(0),
+    )
+    assert_eq(
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+    )
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+    )
+    assert_eq(
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+    )
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna({"A": 0})
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna(pd.Series(dtype=int))
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna(pd.DataFrame)
+
+
+def test_ffill():
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A").ffill(),
+        ddf.groupby("A").ffill(),
+    )
+    assert_eq(
+        df.groupby("A").B.ffill(),
+        ddf.groupby("A").B.ffill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).ffill(),
+        ddf.groupby(["A", "B"]).ffill(),
+    )
+
+
+def test_bfill():
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [np.nan, 4, np.nan, 5],
+            "E": [np.nan, 6, np.nan, 7],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A").bfill(),
+        ddf.groupby("A").bfill(),
+    )
+    assert_eq(
+        df.groupby("A").B.bfill(),
+        ddf.groupby("A").B.bfill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).bfill(),
+        ddf.groupby(["A", "B"]).bfill(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -2348,6 +2453,32 @@ def test_groupby_dropna_cudf(dropna, by, group_keys):
         dask_result.index.name = cudf_result.index.name
 
     assert_eq(dask_result, cudf_result)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("key", ["a", "b"])
+def test_groupby_grouper_dispatch(key):
+    cudf = pytest.importorskip("cudf")
+
+    # not directly used but must be imported
+    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: F841
+
+    pdf = pd.DataFrame(
+        {
+            "a": ["a", "b", "c", "d", "e", "f", "g", "h"],
+            "b": [1, 2, 3, 4, 5, 6, 7, 8],
+            "c": [1.0, 2.0, 3.5, 4.1, 5.5, 6.6, 7.9, 8.8],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pd_grouper = grouper_dispatch(pdf)(key=key)
+    gd_grouper = grouper_dispatch(gdf)(key=key)
+
+    expect = pdf.groupby(pd_grouper).sum()
+    got = gdf.groupby(gd_grouper).sum()
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.xfail(

@@ -31,7 +31,7 @@ from fsspec import get_mapper
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
-from dask import compute, config, core, threaded
+from dask import compute, config, core
 from dask.array import chunk
 from dask.array.chunk import getitem
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -49,6 +49,7 @@ from dask.base import (
     compute_as_if_collection,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     persist,
     tokenize,
 )
@@ -83,6 +84,8 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -478,7 +481,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
         msg = None
     if msg is not None:
         raise ValueError(msg)
-    return o.dtype if nout is None else tuple(e.dtype for e in o)
+    return getattr(o, "dtype", type(o)) if nout is None else tuple(e.dtype for e in o)
 
 
 def normalize_arg(x):
@@ -523,6 +526,7 @@ def map_blocks(
     chunks=None,
     drop_axis=[],
     new_axis=None,
+    enforce_ndim=False,
     meta=None,
     **kwargs,
 ):
@@ -555,6 +559,11 @@ def map_blocks(
     new_axis : number or iterable, optional
         New dimensions created by the function. Note that these are applied
         after ``drop_axis`` (if present).
+    enforce_ndim : bool, default False
+        Whether to enforce at runtime that the dimensionality of the array
+        produced by ``func`` actually matches that of the array returned by
+        ``map_blocks``.
+        If True, this will raise an error when there is a mismatch.
     token : string, optional
         The key prefix to use for the output array. If not provided, will be
         determined from the function name.
@@ -834,19 +843,36 @@ def map_blocks(
     else:
         adjust_chunks = None
 
-    out = blockwise(
-        func,
-        out_ind,
-        *concat(argpairs),
-        name=name,
-        new_axes=new_axes,
-        dtype=dtype,
-        concatenate=True,
-        align_arrays=False,
-        adjust_chunks=adjust_chunks,
-        meta=meta,
-        **kwargs,
-    )
+    if enforce_ndim:
+        out = blockwise(
+            apply_and_enforce,
+            out_ind,
+            *concat(argpairs),
+            expected_ndim=len(out_ind),
+            _func=func,
+            name=name,
+            new_axes=new_axes,
+            dtype=dtype,
+            concatenate=True,
+            align_arrays=False,
+            adjust_chunks=adjust_chunks,
+            meta=meta,
+            **kwargs,
+        )
+    else:
+        out = blockwise(
+            func,
+            out_ind,
+            *concat(argpairs),
+            name=name,
+            new_axes=new_axes,
+            dtype=dtype,
+            concatenate=True,
+            align_arrays=False,
+            adjust_chunks=adjust_chunks,
+            meta=meta,
+            **kwargs,
+        )
 
     extra_argpairs = []
     extra_names = []
@@ -968,6 +994,22 @@ def map_blocks(
             **kwargs,
         )
 
+    return out
+
+
+def apply_and_enforce(*args, **kwargs):
+    """Apply a function, and enforce the output.ndim to match expected_ndim
+
+    Ensures the output has the expected dimensionality."""
+    func = kwargs.pop("_func")
+    expected_ndim = kwargs.pop("expected_ndim")
+    out = func(*args, **kwargs)
+    if getattr(out, "ndim", 0) != expected_ndim:
+        out_ndim = getattr(out, "ndim", 0)
+        raise ValueError(
+            f"Dimension mismatch: expected output of {func} "
+            f"to have dims = {expected_ndim}.  Got {out_ndim} instead."
+        )
     return out
 
 
@@ -1367,7 +1409,7 @@ class Array(DaskMethodsMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="array_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
@@ -1815,7 +1857,7 @@ class Array(DaskMethodsMixin):
 
     def __setitem__(self, key, value):
         if value is np.ma.masked:
-            value = np.ma.masked_all(())
+            value = np.ma.masked_all((), dtype=self.dtype)
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -1830,7 +1872,9 @@ class Array(DaskMethodsMixin):
                     "Boolean index assignment in Dask "
                     "expects equally shaped arrays.\nExample: da1[da2] = da3 "
                     "where da1.shape == (4,), da2.shape == (4,) "
-                    "and da3.shape == (4,)."
+                    "and da3.shape == (4,).\n"
+                    "Alternatively, you can use the extended API that supports"
+                    "indexing with tuples.\nExample: da1[(da2,)] = da3."
                 ) from e
             self._meta = y._meta
             self.dask = y.dask
@@ -4903,7 +4947,7 @@ def chunks_from_arrays(arrays):
 
     def shape(x):
         try:
-            return x.shape
+            return x.shape if x.shape else (1,)
         except AttributeError:
             return (1,)
 

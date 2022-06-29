@@ -11,7 +11,7 @@ import tlz as toolz
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, ensure_set, key_split, stringify
+from dask.utils import ensure_dict, ensure_set, import_required, key_split, stringify
 from dask.widgets import get_template
 
 
@@ -478,7 +478,7 @@ class Layer(Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+    def _repr_html_(self, layer_index="", highlevelgraph_key="", dependencies=()):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
@@ -503,6 +503,7 @@ class Layer(Mapping):
             layer_index=layer_index,
             highlevelgraph_key=highlevelgraph_key,
             info=self.layer_info_dict(),
+            dependencies=dependencies,
             svg_repr=svg_repr,
         )
 
@@ -1135,6 +1136,7 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            layer_dependencies=self.dependencies,
             n_outputs=len(self.get_all_external_keys()),
         )
 
@@ -1149,7 +1151,16 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from dask.dot import graphviz, label, name
+    from dask.dot import label, name
+
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz visualization engine requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}

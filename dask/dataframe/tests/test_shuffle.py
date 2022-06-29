@@ -370,7 +370,7 @@ def test_set_index_with_explicit_divisions():
     def throw(*args, **kwargs):
         raise Exception()
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
@@ -434,11 +434,11 @@ def test_set_index_divisions_sorted():
     def throw(*args, **kwargs):
         raise Exception("Shouldn't have computed")
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index("x"))
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
     assert_eq(res, df.set_index("y"))
 
@@ -1361,7 +1361,7 @@ def test_sort_values(nelem, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])

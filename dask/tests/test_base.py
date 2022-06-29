@@ -1,11 +1,13 @@
 import dataclasses
 import datetime
+import inspect
 import os
 import subprocess
 import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
+from enum import Enum, Flag, IntEnum, IntFlag
 from operator import add, mul
 from typing import Union
 
@@ -255,6 +257,16 @@ def test_tokenize_object():
             normalize_token(o)
 
 
+def test_tokenize_function_cloudpickle():
+    a, b = (lambda x: x, lambda x: x)
+    # No error by default
+    tokenize(a)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
+            tokenize(b)
+
+
 def test_tokenize_callable():
     def my_func(a, b, c=1):
         return a + b + c
@@ -414,6 +426,21 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
+def test_tokenize_timedelta():
+    assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
+    assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+
+
+@pytest.mark.parametrize("enum_type", [Enum, IntEnum, IntFlag, Flag])
+def test_tokenize_enum(enum_type):
+    class Color(enum_type):
+        RED = 1
+        BLUE = 2
+
+    assert tokenize(Color.RED) == tokenize(Color.RED)
+    assert tokenize(Color.RED) != tokenize(Color.BLUE)
+
+
 ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
 BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])  # type: ignore
 
@@ -507,6 +534,10 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32" and sys.version_info[:2] == (3, 9),
+    reason="https://github.com/ipython/ipython/issues/12197",
+)
 def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
@@ -541,7 +572,6 @@ def test_is_dask_collection():
     assert is_dask_collection(x)
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
-    assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
 
 
@@ -616,8 +646,6 @@ def test_get_collection_names():
 
     with pytest.raises(TypeError):
         get_collection_names(object())
-    with pytest.raises(TypeError):
-        get_collection_names(DummyCollection(None, []))
     # Keys must either be a string or a tuple where the first element is a string
     with pytest.raises(TypeError):
         get_collection_names(DummyCollection({1: 2}, [1]))
@@ -1012,6 +1040,7 @@ def test_compute_nested():
 )
 def test_visualize():
     pytest.importorskip("graphviz")
+    pytest.importorskip("ipycytoscape")
     with tmpdir() as d:
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, "mydask"))
@@ -1030,6 +1059,20 @@ def test_visualize():
         x = Tuple(dsk, ["a", "b", "c"])
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
+
+        x = Tuple(dsk, ["a", "b", "c"])
+        visualize(x, filename=os.path.join(d, "cyt"), engine="cytoscape")
+        assert os.path.exists(os.path.join(d, "cyt.html"))
+
+        visualize(x, filename=os.path.join(d, "cyt2.html"), engine="ipycytoscape")
+        assert os.path.exists(os.path.join(d, "cyt2.html"))
+
+        with dask.config.set(visualization__engine="cytoscape"):
+            visualize(x, filename=os.path.join(d, "cyt3.html"))
+            assert os.path.exists(os.path.join(d, "cyt3.html"))
+
+        with pytest.raises(ValueError, match="not-real"):
+            visualize(x, engine="not-real")
 
         # To see if visualize() works when the filename parameter is set to None
         # If the function raises an error, the test will fail
@@ -1517,3 +1560,59 @@ def test_compute_as_if_collection_low_level_task_graph():
     )[0]
     assert optimized
     da.utils.assert_eq(x, result)
+
+
+# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# patched. This allows for checking for different default schedulers depending on the
+# platform. One might prefer patching `sys.platform` for a more direct test, but that
+# causes problems in other libraries.
+def check_default_scheduler(module, collection, expected, emscripten):
+    from contextlib import nullcontext
+    from unittest import mock
+
+    from dask.local import get_sync
+
+    if emscripten:
+        ctx = mock.patch("dask.base.named_schedulers", {"sync": get_sync})
+    else:
+        ctx = nullcontext()
+    with ctx:
+        import importlib
+
+        if expected == "sync":
+            from dask.local import get_sync as get
+        elif expected == "threads":
+            from dask.threaded import get
+        elif expected == "processes":
+            from dask.multiprocessing import get
+
+        mod = importlib.import_module(module)
+
+        assert getattr(mod, collection).__dask_scheduler__ == get
+
+
+@pytest.mark.parametrize(
+    "params",
+    (
+        "'dask.dataframe', '_Frame', 'sync', True",
+        "'dask.dataframe', '_Frame', 'threads', False",
+        "'dask.array', 'Array', 'sync', True",
+        "'dask.array', 'Array', 'threads', False",
+        "'dask.bag', 'Bag', 'sync', True",
+        "'dask.bag', 'Bag', 'processes', False",
+    ),
+)
+def test_emscripten_default_scheduler(params):
+    pytest.importorskip("dask.array")
+    pytest.importorskip("dask.dataframe")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                inspect.getsource(check_default_scheduler)
+                + f"check_default_scheduler({params})\n"
+            ),
+        ]
+    )
+    proc.check_returncode()

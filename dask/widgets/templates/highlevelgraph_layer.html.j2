@@ -25,6 +25,19 @@
                         <td style="text-align: left;">{{ val }}</td>
                     </tr>
                 {% endfor %}
+                {% for dep in dependencies %}
+                    {% if loop.index > 1 %}
+                        <tr>
+                            <th style="text-align: left; width: 150px;"></th>
+                            <td style="text-align: left;">{{ dep }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <th style="text-align: left; width: 150px;"> depends on </th>
+                            <td style="text-align: left;">{{ dep }}</td>
+                        </tr>
+                    {% endif %}
+                {% endfor %}
                 </table>
             </td>
             <td>

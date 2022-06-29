@@ -199,6 +199,9 @@ class BlockwiseDepDict(BlockwiseDep):
                 return self.mapping[flat_idx]
             raise err
 
+    def __len__(self) -> int:
+        return len(self.mapping)
+
     def __dask_distributed_pack__(
         self, required_indices: tuple | list[tuple[int, ...]] | None = None
     ):
@@ -300,7 +303,7 @@ def blockwise(
     ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
     allowing for collections it can accept BlockwiseDep instances, which allows for lazy
     evaluation of arguments to ``func`` which might be different for different
-    chunks/paritions.
+    chunks/partitions.
 
     See Also
     --------
@@ -788,10 +791,10 @@ class Blockwise(Layer):
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
 
-        output_blocks = set()
+        output_blocks: set[tuple[int, ...]] = set()
         for key in keys:
             if key[0] == self.output:
-                output_blocks.add(key[1:])
+                output_blocks.add(tuple(map(int, key[1:])))
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
@@ -821,7 +824,7 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if k in names:
+            if idxv is not None and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)
             indices.append((k, idxv))
@@ -1168,7 +1171,7 @@ def make_blockwise_graph(
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
+            # of to_serialize if we know that are no embedded
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
