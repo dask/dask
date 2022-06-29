@@ -841,7 +841,5 @@ def test_parquet_processes_false(tmpdir):
         processes=False,
     ) as cluster:
         with distributed.Client(cluster, asynchronous=False):
-            dd.DataFrame.from_dict(
-                {"a": range(10)}, npartitions=2
-            ).to_parquet(tmpdir)
+            dd.DataFrame.from_dict({"a": range(10)}, npartitions=2).to_parquet(tmpdir)
             dd.read_parquet(tmpdir).compute()
