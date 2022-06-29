@@ -763,7 +763,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     duplicates = len(seqarr_unique) < len(seq)
     if duplicates:
         offsets = (
-            # Avoid cudf -> numpy conversion in dask-cudf
+            # Avoid numpy conversion (necessary for dask-cudf)
             seq.searchsorted(seqarr_unique, side="left")
             if hasattr(seq, "searchsorted")
             else np.array(seq).searchsorted(seqarr_unique, side="left")
