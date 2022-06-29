@@ -775,3 +775,23 @@ def test_set_index_no_resursion_error(c):
         ddf.compute()
     except RecursionError:
         pytest.fail("dd.set_index triggered a recursion error")
+
+
+def test_parquet_processes_false(tmpdir):
+    # Check dask#8581 Parquet work-around
+    # See: https://github.com/dask/dask/pull/9015
+    dd = pytest.importorskip("dask.dataframe")
+
+    with distributed.LocalCluster(
+        scheduler_port=0,
+        dashboard_address=":0",
+        asynchronous=False,
+        n_workers=1,
+        nthreads=1,
+        processes=False,
+    ) as cluster:
+        with distributed.Client(cluster, asynchronous=False):
+            dd.DataFrame.from_dict(
+                {"a": range(10)}, npartitions=2
+            ).to_parquet(tmpdir)
+            dd.read_parquet(tmpdir).compute()
