@@ -6,10 +6,7 @@ from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
-    try:
-        from IPython.display import DisplayObject
-    except ImportError:
-        DisplayObject = Any
+    from IPython.display import DisplayObject
 
 
 CollType = TypeVar("CollType", bound="DaskCollection")
