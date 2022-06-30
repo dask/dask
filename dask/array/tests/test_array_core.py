@@ -19,6 +19,7 @@ from operator import add, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
+from packaging.version import parse as parse_version
 from tlz import concat, countby, merge
 from tlz.curried import identity
 
@@ -4509,119 +4510,207 @@ def test_pandas_from_dask_array():
         assert_eq(s.values, a)
 
 
-def test_from_zarr_unique_name():
+def _version_kwargs(version, protocol_version):
+    """Generate version-dependent zarr and dask kwargs.
+
+    Paramters
+    ---------
+    version : str
+        Installed zarr package version (zarr.__version__)
+    protocol_version : {2, 3}
+        The zarr protocol version to test.
+
+    Returns
+    -------
+    dask_kwargs : dict
+        keywords to pass to `dask.array.to_zarr` or `dask.array.from_zarr`.
+    zarr_kwargs : dict
+        keywords to pass to zarr creation functions (`zarr.zeros`, etc.).
+    """
+    if protocol_version == 2:
+        # v2 does not require a component kwarg or zarr_version kwarg
+        return {}, {}
+    elif parse_version(version) < parse_version("3.0"):
+        # skip v3 tests for older zarr versions
+        pytest.skip()
+    else:
+        dask_kwargs = {"component": "ztest", "zarr_version": protocol_version}
+        zarr_kwargs = {"path": "ztest", "zarr_version": protocol_version}
+        return dask_kwargs, zarr_kwargs
+
+
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_from_zarr_unique_name(protocol_version):
     zarr = pytest.importorskip("zarr")
-    a = zarr.array([1, 2, 3])
-    b = zarr.array([4, 5, 6])
+    dask_kwargs, zarr_kwargs = _version_kwargs(zarr.__version__, protocol_version)
+    a = zarr.array([1, 2, 3], **zarr_kwargs)
+    b = zarr.array([4, 5, 6], **zarr_kwargs)
 
-    assert da.from_zarr(a).name != da.from_zarr(b).name
+    assert da.from_zarr(a, **dask_kwargs).name != da.from_zarr(b, **dask_kwargs).name
 
 
-def test_from_zarr_name():
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_from_zarr_name(protocol_version):
     zarr = pytest.importorskip("zarr")
-    a = zarr.array([1, 2, 3])
-    assert da.from_zarr(a, name="foo").name == "foo"
+    dask_kwargs, zarr_kwargs = _version_kwargs(zarr.__version__, protocol_version)
+    a = zarr.array([1, 2, 3], **zarr_kwargs)
+    assert da.from_zarr(a, name="foo", **dask_kwargs).name == "foo"
 
 
-def test_zarr_roundtrip():
-    pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_zarr_roundtrip(protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(d)
-        a2 = da.from_zarr(d)
+        a.to_zarr(d, **dask_kwargs)
+        a2 = da.from_zarr(d, **dask_kwargs)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
 
-def test_zarr_roundtrip_with_path_like():
-    pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_zarr_roundtrip_with_path_like(protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     with tmpdir() as d:
         path = pathlib.Path(d)
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(path)
-        a2 = da.from_zarr(path)
+        a.to_zarr(path, **dask_kwargs)
+        a2 = da.from_zarr(path, **dask_kwargs)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.parametrize("protocol_version", [2, 3])
 @pytest.mark.parametrize("compute", [False, True])
-def test_zarr_return_stored(compute):
-    pytest.importorskip("zarr")
+def test_zarr_return_stored(compute, protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
-        a2 = a.to_zarr(d, compute=compute, return_stored=True)
+        a2 = a.to_zarr(d, compute=compute, return_stored=True, **dask_kwargs)
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
 
 
+@pytest.mark.parametrize("protocol_version", [2, 3])
 @pytest.mark.parametrize("inline_array", [True, False])
-def test_zarr_inline_array(inline_array):
+def test_zarr_inline_array(inline_array, protocol_version):
     zarr = pytest.importorskip("zarr")
-    a = zarr.array([1, 2, 3])
-    dsk = dict(da.from_zarr(a, inline_array=inline_array).dask)
+    dask_kwargs, zarr_kwargs = _version_kwargs(zarr.__version__, protocol_version)
+    a = zarr.array([1, 2, 3], **zarr_kwargs)
+    dsk = dict(da.from_zarr(a, inline_array=inline_array, **dask_kwargs).dask)
     assert len(dsk) == (0 if inline_array else 1) + 1
     assert (a in dsk.values()) is not inline_array
 
 
-def test_zarr_existing_array():
-    zarr = pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_zarr_existing_array(protocol_version):
+    zarr = pytest.importorskip(
+        "zarr",
+    )
+    dask_kwargs, zarr_kwargs = _version_kwargs(zarr.__version__, protocol_version)
     c = (1, 1)
     a = da.ones((3, 3), chunks=c)
-    z = zarr.zeros_like(a, chunks=c)
-    a.to_zarr(z)
-    a2 = da.from_zarr(z)
+    z = zarr.zeros_like(a, chunks=c, **zarr_kwargs)
+    a.to_zarr(z, **dask_kwargs)
+    a2 = da.from_zarr(z, **dask_kwargs)
     assert_eq(a, a2)
     assert a2.chunks == a.chunks
 
 
-def test_to_zarr_unknown_chunks_raises():
-    pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_to_zarr_unknown_chunks_raises(protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     a = da.random.random((10,), chunks=(3,))
     a = a[a > 0.5]
     with pytest.raises(ValueError, match="unknown chunk sizes"):
-        a.to_zarr({})
+        a.to_zarr({}, **dask_kwargs)
 
 
-def test_read_zarr_chunks():
-    pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_read_zarr_chunks(protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     a = da.zeros((9,), chunks=(3,))
     with tmpdir() as d:
-        a.to_zarr(d)
-        arr = da.from_zarr(d, chunks=(5,))
+        a.to_zarr(d, **dask_kwargs)
+        arr = da.from_zarr(d, chunks=(5,), **dask_kwargs)
         assert arr.chunks == ((5, 4),)
 
 
-def test_zarr_pass_mapper():
-    pytest.importorskip("zarr")
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_zarr_pass_mapper(protocol_version):
+    zarr = pytest.importorskip("zarr")
+    dask_kwargs, _ = _version_kwargs(zarr.__version__, protocol_version)
     import zarr.storage
 
+    if protocol_version == 3:
+        try:
+            StoreClass = zarr.storage.DirectoryStoreV3
+        except ImportError:
+            import zarr.storage_v3
+
+            StoreClass = zarr.storage_v3.DirectoryStoreV3
+    else:
+        StoreClass = zarr.DirectoryStore
     with tmpdir() as d:
-        mapper = zarr.storage.DirectoryStore(d)
+        mapper = StoreClass(d)
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(mapper)
-        a2 = da.from_zarr(mapper)
+        a.to_zarr(mapper, **dask_kwargs)
+        a2 = da.from_zarr(mapper, **dask_kwargs)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
 
-def test_zarr_group():
+@pytest.mark.parametrize("protocol_version", [2, 3])
+def test_zarr_group(protocol_version):
     zarr = pytest.importorskip("zarr")
+
+    dask_kwargs, zarr_kwargs = _version_kwargs(zarr.__version__, protocol_version)
+    # remove default component/path (component already set below)
+    dask_kwargs.pop("component", None)
+    zarr_kwargs.pop("path", None)
+
     with tmpdir() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(d, component="test")
+        a.to_zarr(d, component="test", **dask_kwargs)
         with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", overwrite=False)
-        a.to_zarr(d, component="test", overwrite=True)
+            a.to_zarr(d, component="test", overwrite=False, **dask_kwargs)
+        a.to_zarr(d, component="test", overwrite=True, **dask_kwargs)
 
         # second time is fine, group exists
-        a.to_zarr(d, component="test2", overwrite=False)
-        a.to_zarr(d, component="nested/test", overwrite=False)
-        group = zarr.open_group(d, mode="r")
-        assert list(group) == ["nested", "test", "test2"]
-        assert "test" in group["nested"]
+        a.to_zarr(d, component="test2", overwrite=False, **dask_kwargs)
+        a.to_zarr(d, component="nested/test", overwrite=False, **dask_kwargs)
+        if protocol_version != 3:
+            # open the base path as a group
+            group = zarr.open_group(d, mode="r", **zarr_kwargs)
+            assert list(group) == ["nested", "test", "test2"]
+            assert "test" in group["nested"]
+        else:
+            # Note: cannot open a v3 group at the base path=''
+            #       (xtensor-zarr and zarrita have a separate Hierarchy class
+            #        for this purpose)
+            with pytest.raises(ValueError):
+                group = zarr.open_group(d, mode="r", **zarr_kwargs)
 
-        a2 = da.from_zarr(d, component="test")
+            # Note: also cannot open the implicit v3 group 'nested'
+            #       (because there is no nested.group.json metadata)
+            with pytest.raises(ValueError):
+                group = zarr.open_group(d, mode="r", path="nested", **zarr_kwargs)
+
+            # can open each of the arrays
+            a1 = zarr.open_array(d, mode="r", path="test", **zarr_kwargs)
+            np.testing.assert_array_equal(a, a1)
+            a2 = zarr.open_array(d, mode="r", path="test2", **zarr_kwargs)
+            np.testing.assert_array_equal(a, a2)
+            a3 = zarr.open_array(d, mode="r", path="nested/test", **zarr_kwargs)
+            np.testing.assert_array_equal(a, a3)
+
+        a2 = da.from_zarr(d, component="test", **dask_kwargs)
         assert_eq(a, a2)
         assert a2.chunks == a.chunks
 
