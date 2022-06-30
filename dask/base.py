@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import inspect
 import os
+import pathlib
 import pickle
 import threading
 import uuid
@@ -950,6 +951,7 @@ normalize_token.register(
         type(Ellipsis),
         datetime.date,
         datetime.timedelta,
+        pathlib.Path,
     ),
     identity,
 )
