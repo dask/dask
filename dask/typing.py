@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
-try:
-    from IPython.display import DisplayObject
-except ImportError:
-    DisplayObject = Any
+if TYPE_CHECKING:
+    # IPython import is relatively slow. Avoid if not necessary
+    try:
+        from IPython.display import DisplayObject
+    except ImportError:
+        DisplayObject = Any
 
 
 CollType = TypeVar("CollType", bound="DaskCollection")
