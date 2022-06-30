@@ -1,8 +1,8 @@
 import dataclasses
 import datetime
 import inspect
-import pathlib
 import os
+import pathlib
 import subprocess
 import sys
 import time
@@ -244,7 +244,14 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25), pathlib.PurePath("/this/that")]:
+    for i in [
+        1,
+        1.1,
+        "1",
+        slice(1, 2, 3),
+        datetime.date(2021, 6, 25),
+        pathlib.PurePath("/this/that"),
+    ]:
         assert normalize_token(i) is i
 
 
