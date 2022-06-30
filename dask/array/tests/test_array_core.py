@@ -3005,6 +3005,38 @@ def test_long_slice():
     assert_eq(d[8000:8200], x[8000:8200])
 
 
+@pytest.mark.parametrize("ndim", [0, 1, 2])
+@pytest.mark.parametrize("dtype", [bool, int, float, complex])
+def test_item_singleton(ndim, dtype):
+    for s in range(ndim):
+        a = np.ones(s * (1,), dtype=dtype)
+        d = da.from_array(a, chunks=1)
+        result = d.item()
+        assert isinstance(result, Delayed)
+        result = result.compute()
+        assert a.item() == result
+        assert type(result) == dtype
+
+
+@pytest.mark.parametrize("dtype", [int, float, complex])
+def test_item_non_singleton(dtype):
+    s, c = (4, 5), (2, 2)
+
+    a = np.arange(np.prod(s), dtype=dtype).reshape(s)
+    d = da.from_array(a, chunks=c)
+
+    with pytest.raises(ValueError, match="can only"):
+        d.item()
+
+    assert a.item(9) == d.item(9).compute()
+    assert a.item(3, 2) == d.item(3, 2).compute()
+    # assert_eq(a.item(3, 2), d.item(3, 2))
+    # assert_eq(a.item((2, 4)), d.item((2, 4)))
+
+    with pytest.raises(ValueError, match="Indices mismatch"):
+        d.item((1, 2, 3))
+
+
 def test_h5py_newaxis():
     h5py = pytest.importorskip("h5py")
 

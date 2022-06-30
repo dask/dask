@@ -2678,6 +2678,32 @@ class Array(DaskMethodsMixin):
         return cumprod(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
+    def item(self, *args):
+        """
+        .. note::
+
+           The Dask version returns a :class:`dask.delayed.Delayed` object.
+           Calling ``.compute()`` on the result will return the Python
+           scalar.
+        """
+        if len(args) == 0:
+            if self.size != 1:
+                raise ValueError(
+                    "can only convert an array of size 1 to a Python scalar"
+                )
+            args = self.ndim * (0,)
+        elif len(args) == 1:
+            if isinstance(args, tuple) and isinstance(args[0], tuple):
+                args = args[0]
+            else:
+                args = np.unravel_index(args[0], self.shape)
+
+        if len(args) != self.ndim:
+            raise ValueError("Indices mismatch with array rank.")
+
+        return self[args].to_delayed().item().item()
+
+    @derived_from(np.ndarray)
     def squeeze(self, axis=None):
         from dask.array.routines import squeeze
 
