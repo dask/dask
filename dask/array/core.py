@@ -3017,7 +3017,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
         limit
         / dtype.itemsize
         / largest_block
-        / math.prod(r for r in result.values() if r != 0)
+        / math.prod(r for r in result.values() if r)
     )
 
 
