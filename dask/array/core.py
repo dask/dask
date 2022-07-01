@@ -5682,7 +5682,7 @@ class BlockView:
             return NotImplemented
 
     @property
-    def size(self) -> int:
+    def size(self) -> int | np.signedinteger:
         """
         The total number of blocks in the array.
         """
