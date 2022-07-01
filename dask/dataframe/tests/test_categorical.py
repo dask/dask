@@ -435,6 +435,11 @@ class TestCategoricalAccessor:
             da.cat.categories
         with pytest.raises(NotImplementedError):
             da.cat.codes
+        # Also AttributeError so glob searching in IPython such as `da.cat.*?` works
+        with pytest.raises(AttributeError):
+            da.cat.categories
+        with pytest.raises(AttributeError):
+            da.cat.codes
 
         db = da.cat.set_categories(["a", "b", "c"])
         assert db.cat.known

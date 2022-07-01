@@ -46,6 +46,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
     PANDAS_GT_120,
+    AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -4412,7 +4413,7 @@ class DataFrame(_Frame):
 
     @property
     def empty(self):
-        raise NotImplementedError(
+        raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
             "However, checking the number of columns is fast. "
             "Depending on which of these results you need, use either "
