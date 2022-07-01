@@ -624,7 +624,7 @@ def numel(x, **kwargs):
     dtype = kwargs.get("dtype", np.float64)
 
     if axis is None:
-        prod = math.prod(shape, dtype=dtype)
+        prod = np.prod(shape, dtype=dtype)
         return (
             np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
             if keepdims is True
