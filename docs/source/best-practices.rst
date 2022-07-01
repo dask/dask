@@ -216,8 +216,9 @@ Then it is a good time to *persist* your data in RAM
 
     df = df.persist()  # trigger computation, persist in distributed RAM
 
-Note that this is only relevant if you are on a distributed machine (otherwise,
-as mentioned above, you should probably continue on without Dask).
+.. note:: This is only relevant if you are on a distributed machine. On a local
+    machine (using single-machine schedulers) ``persist`` just triggers immediate
+    computation like ``compute``.
 
 
 Store Data Efficiently
