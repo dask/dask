@@ -313,6 +313,43 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
+def _align_on_dtypes(left, left_on, right, right_on):
+    # Upcast "on" dtypes if left and right are inconsistent.
+    #
+    # Note that this step is required for cudf, because
+    # hashing behavior will vary between int32 and int64.
+    # This means the same "number" (e.g. 1) may be shuffled
+    # to a different output partition for int32 than it
+    # would for int64.
+
+    if is_dask_collection(left_on) or is_dask_collection(right_on):
+        # dtype casting not yet supported when
+        # joining on dask collections
+        return left, right
+
+    def _on(on):
+        if isinstance(on, str):
+            return [on]
+        elif pd.api.types.is_list_like(on):
+            return list(on)
+        raise TypeError  # Untested
+
+    lhs, rhs = left, right
+    for l, r in zip(_on(left_on), _on(right_on)):
+        try:
+            typ = max(left[l].dtype, right[r].dtype)
+        except TypeError:
+            continue
+        if left[l].dtype != typ:
+            # Upcast left dtype to match right
+            lhs[l] = left[l].astype(typ)
+        if right[r].dtype != typ:
+            # Upcast right dtype to match left
+            rhs[l] = right[r].astype(typ)
+
+    return lhs, rhs
+
+
 def hash_join(
     lhs,
     left_on,
@@ -335,6 +372,7 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
+    lhs, rhs = _align_on_dtypes(lhs, left_on, rhs, right_on)
     lhs2 = shuffle_func(
         lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
     )
