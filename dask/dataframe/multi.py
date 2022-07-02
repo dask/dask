@@ -327,25 +327,44 @@ def _align_on_dtypes(left, left_on, right, right_on):
         # joining on dask collections
         return left, right
 
-    def _on(on):
+    def _list(on):
         if isinstance(on, str):
             return [on]
         elif pd.api.types.is_list_like(on):
             return list(on)
         raise TypeError  # Untested
 
+    def _get(df, key):
+        if key in df.columns:
+            return df[key]
+        elif key == df.index.name:
+            return df.index
+        else:
+            raise KeyError  # Untested
+
+    def _set(df, key, value):
+        if key in df.columns:
+            df[key] = value
+        elif key == df.index.name:
+            df.set_index(value)
+        else:
+            raise KeyError  # Untested
+
     lhs, rhs = left, right
-    for l, r in zip(_on(left_on), _on(right_on)):
+    for l, r in zip(_list(left_on), _list(right_on)):
         try:
-            typ = max(left[l].dtype, right[r].dtype)
+            # import pdb; pdb.set_trace()
+            _l = _get(left, l)
+            _r = _get(right, r)
+            typ = max(_l.dtype, _r.dtype)
         except TypeError:
             continue
-        if left[l].dtype != typ:
+        if _l.dtype != typ:
             # Upcast left dtype to match right
-            lhs[l] = left[l].astype(typ)
-        if right[r].dtype != typ:
+            _set(lhs, l, _l.astype(typ))
+        elif _r.dtype != typ:
             # Upcast right dtype to match left
-            rhs[l] = right[r].astype(typ)
+            _set(rhs, r, _r.astype(typ))
 
     return lhs, rhs
 
