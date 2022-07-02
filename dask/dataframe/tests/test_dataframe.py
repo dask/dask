@@ -87,13 +87,13 @@ def test_Dataframe():
         [2, 3, 4, 5, 6, 7, 8, 9, 10], index=[0, 1, 3, 5, 6, 8, 9, 9, 9], name="a"
     )
 
-    assert_eq(d["a"] + 1, expected)
+    assert_eq(d["a"] + 1, expected, sort_results=False)
 
     tm.assert_index_equal(d.columns, pd.Index(["a", "b"]))
 
-    assert_eq(d[d["b"] > 2], full[full["b"] > 2])
-    assert_eq(d[["a", "b"]], full[["a", "b"]])
-    assert_eq(d.a, full.a)
+    assert_eq(d[d["b"] > 2], full[full["b"] > 2], sort_results=False)
+    assert_eq(d[["a", "b"]], full[["a", "b"]], sort_results=False)
+    assert_eq(d.a, full.a, sort_results=False)
     assert d.b.mean().compute() == full.b.mean()
     assert np.allclose(d.b.var().compute(), full.b.var())
     assert np.allclose(d.b.std().compute(), full.b.std())
@@ -104,12 +104,12 @@ def test_Dataframe():
 
 
 def test_head_tail():
-    assert_eq(d.head(2), full.head(2))
-    assert_eq(d.head(3), full.head(3))
-    assert_eq(d.head(2), dsk[("x", 0)].head(2))
-    assert_eq(d["a"].head(2), full["a"].head(2))
-    assert_eq(d["a"].head(3), full["a"].head(3))
-    assert_eq(d["a"].head(2), dsk[("x", 0)]["a"].head(2))
+    assert_eq(d.head(2), full.head(2), sort_results=False)
+    assert_eq(d.head(3), full.head(3), sort_results=False)
+    assert_eq(d.head(2), dsk[("x", 0)].head(2), sort_results=False)
+    assert_eq(d["a"].head(2), full["a"].head(2), sort_results=False)
+    assert_eq(d["a"].head(3), full["a"].head(3), sort_results=False)
+    assert_eq(d["a"].head(2), dsk[("x", 0)]["a"].head(2), sort_results=False)
     assert sorted(d.head(2, compute=False).dask) == sorted(
         d.head(2, compute=False).dask
     )
@@ -117,12 +117,12 @@ def test_head_tail():
         d.head(3, compute=False).dask
     )
 
-    assert_eq(d.tail(2), full.tail(2))
-    assert_eq(d.tail(3), full.tail(3))
-    assert_eq(d.tail(2), dsk[("x", 2)].tail(2))
-    assert_eq(d["a"].tail(2), full["a"].tail(2))
-    assert_eq(d["a"].tail(3), full["a"].tail(3))
-    assert_eq(d["a"].tail(2), dsk[("x", 2)]["a"].tail(2))
+    assert_eq(d.tail(2), full.tail(2), sort_results=False)
+    assert_eq(d.tail(3), full.tail(3), sort_results=False)
+    assert_eq(d.tail(2), dsk[("x", 2)].tail(2), sort_results=False)
+    assert_eq(d["a"].tail(2), full["a"].tail(2), sort_results=False)
+    assert_eq(d["a"].tail(3), full["a"].tail(3), sort_results=False)
+    assert_eq(d["a"].tail(2), dsk[("x", 2)]["a"].tail(2), sort_results=False)
     assert sorted(d.tail(2, compute=False).dask) == sorted(
         d.tail(2, compute=False).dask
     )
@@ -132,11 +132,11 @@ def test_head_tail():
 
 
 def test_head_npartitions():
-    assert_eq(d.head(5, npartitions=2), full.head(5))
-    assert_eq(d.head(5, npartitions=2, compute=False), full.head(5))
-    assert_eq(d.head(5, npartitions=-1), full.head(5))
-    assert_eq(d.head(7, npartitions=-1), full.head(7))
-    assert_eq(d.head(2, npartitions=-1), full.head(2))
+    assert_eq(d.head(5, npartitions=2), full.head(5), sort_results=False)
+    assert_eq(d.head(5, npartitions=2, compute=False), full.head(5), sort_results=False)
+    assert_eq(d.head(5, npartitions=-1), full.head(5), sort_results=False)
+    assert_eq(d.head(7, npartitions=-1), full.head(7), sort_results=False)
+    assert_eq(d.head(2, npartitions=-1), full.head(2), sort_results=False)
     with pytest.raises(ValueError):
         d.head(2, npartitions=5)
 
@@ -177,7 +177,7 @@ def test_index_head():
 def test_Series():
     assert isinstance(d.a, dd.Series)
     assert isinstance(d.a + 1, dd.Series)
-    assert_eq((d + 1), full + 1)
+    assert_eq((d + 1), full + 1, sort_results=False)
 
 
 def test_Index():
@@ -263,9 +263,9 @@ def test_columns_named_divisions_and_meta():
     ddf = dd.from_pandas(df, 2)
 
     assert ddf.divisions == (0, 3, 5)
-    assert_eq(ddf["divisions"], df.divisions)
+    assert_eq(ddf["divisions"], df.divisions, sort_results=False)
     assert all(ddf._meta.columns == ["_meta", "divisions"])
-    assert_eq(ddf["_meta"], df._meta)
+    assert_eq(ddf["_meta"], df._meta, sort_results=False)
 
 
 def test_index_names():
@@ -309,7 +309,7 @@ def test_rename_columns():
     df.columns = ["x", "y"]
     tm.assert_index_equal(ddf.columns, pd.Index(["x", "y"]))
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
-    assert_eq(ddf, df)
+    assert_eq(ddf, df, sort_results=False)
 
     msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
     with pytest.raises(ValueError) as err:
@@ -324,7 +324,7 @@ def test_rename_columns():
     ddf.columns = ["x", "y"]
     tm.assert_index_equal(ddf.columns, pd.Index(["x", "y"]))
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
-    assert_eq(ddf, df)
+    assert_eq(ddf, df, sort_results=False)
 
 
 def test_rename_series():
@@ -335,7 +335,7 @@ def test_rename_series():
     s.name = "renamed"
     ds.name = "renamed"
     assert s.name == "renamed"
-    assert_eq(ds, s)
+    assert_eq(ds, s, sort_results=False)
 
     ind = s.index
     dind = ds.index
@@ -350,11 +350,11 @@ def test_rename_series_method():
     s = pd.Series([1, 2, 3, 4, 5, 6, 7], name="x")
     ds = dd.from_pandas(s, 2)
 
-    assert_eq(ds.rename("y"), s.rename("y"))
+    assert_eq(ds.rename("y"), s.rename("y"), sort_results=False)
     assert ds.name == "x"  # no mutation
-    assert_eq(ds.rename(), s.rename())
+    assert_eq(ds.rename(), s.rename(), sort_results=False)
 
-    assert_eq(ds, s)
+    assert_eq(ds, s, sort_results=False)
 
 
 def test_rename_series_method_2():
@@ -364,30 +364,30 @@ def test_rename_series_method_2():
 
     for is_sorted in [True, False]:
         res = ds.rename(lambda x: x**2, sorted_index=is_sorted)
-        assert_eq(res, s.rename(lambda x: x**2))
+        assert_eq(res, s.rename(lambda x: x**2), sort_results=False)
         assert res.known_divisions == is_sorted
 
         res = ds.rename(s, sorted_index=is_sorted)
-        assert_eq(res, s.rename(s))
+        assert_eq(res, s.rename(s), sort_results=False)
         assert res.known_divisions == is_sorted
 
     with pytest.raises(ValueError):
         ds.rename(lambda x: -x, sorted_index=True)
-    assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x))
+    assert_eq(ds.rename(lambda x: -x), s.rename(lambda x: -x), sort_results=False)
 
     res = ds.rename(ds)
-    assert_eq(res, s.rename(s))
+    assert_eq(res, s.rename(s), sort_results=False)
     assert not res.known_divisions
 
     ds2 = ds.clear_divisions()
     res = ds2.rename(lambda x: x**2, sorted_index=True)
-    assert_eq(res, s.rename(lambda x: x**2))
+    assert_eq(res, s.rename(lambda x: x**2), sort_results=False)
     assert not res.known_divisions
 
     res = ds.rename(lambda x: x**2, inplace=True, sorted_index=True)
     assert res is ds
     s.rename(lambda x: x**2, inplace=True)
-    assert_eq(ds, s)
+    assert_eq(ds, s, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -410,15 +410,25 @@ def test_describe_numeric(method, test_values):
 
     test_quantiles = [0.25, 0.75]
 
-    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
-    assert_eq(s.describe(), ds.describe(percentiles_method=method))
+    assert_eq(
+        df.describe(), ddf.describe(percentiles_method=method), sort_results=False
+    )
+    assert_eq(s.describe(), ds.describe(percentiles_method=method), sort_results=False)
 
     assert_eq(
         df.describe(percentiles=test_quantiles),
         ddf.describe(percentiles=test_quantiles, percentiles_method=method),
     )
-    assert_eq(s.describe(), ds.describe(split_every=2, percentiles_method=method))
-    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
+    assert_eq(
+        s.describe(),
+        ds.describe(split_every=2, percentiles_method=method),
+        sort_results=False,
+    )
+    assert_eq(
+        df.describe(),
+        ddf.describe(split_every=2, percentiles_method=method),
+        sort_results=False,
+    )
 
     # remove string columns
     df = pd.DataFrame(
@@ -429,8 +439,14 @@ def test_describe_numeric(method, test_values):
         }
     )
     ddf = dd.from_pandas(df, test_values[0])
-    assert_eq(df.describe(), ddf.describe(percentiles_method=method))
-    assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
+    assert_eq(
+        df.describe(), ddf.describe(percentiles_method=method), sort_results=False
+    )
+    assert_eq(
+        df.describe(),
+        ddf.describe(split_every=2, percentiles_method=method),
+        sort_results=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -542,7 +558,7 @@ def test_describe_without_datetime_is_numeric():
     ddf = dd.from_pandas(df, 2)
 
     # Assert
-    assert_eq(ddf.describe(), df.describe())
+    assert_eq(ddf.describe(), df.describe(), sort_results=False)
 
     # Check series
     for col in ["a", "c"]:
@@ -557,7 +573,7 @@ def test_describe_without_datetime_is_numeric():
         ):
             ddf.e.describe()
     else:
-        assert_eq(df.e.describe(), ddf.e.describe())
+        assert_eq(df.e.describe(), ddf.e.describe(), sort_results=False)
         with pytest.raises(
             NotImplementedError,
             match="datetime_is_numeric=True is only supported for pandas >= 1.1.0",
@@ -603,8 +619,16 @@ def test_describe_empty_tdigest():
         # dask.dataframe should probably filter this, to match pandas, but
         # it seems quite difficult.
         warnings.simplefilter("ignore", RuntimeWarning)
-        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method="tdigest"))
-        assert_eq(df_len0.describe(), ddf_len0.describe(percentiles_method="tdigest"))
+        assert_eq(
+            df_len0.describe(),
+            ddf_len0.describe(percentiles_method="tdigest"),
+            sort_results=False,
+        )
+        assert_eq(
+            df_len0.describe(),
+            ddf_len0.describe(percentiles_method="tdigest"),
+            sort_results=False,
+        )
 
     with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method="tdigest").compute()
@@ -640,38 +664,38 @@ def test_cumulative():
     ddf = dd.from_pandas(df, 5)
     ddf_out = dd.from_pandas(df_out, 5)
 
-    assert_eq(ddf.cumsum(), df.cumsum())
-    assert_eq(ddf.cumprod(), df.cumprod())
-    assert_eq(ddf.cummin(), df.cummin())
-    assert_eq(ddf.cummax(), df.cummax())
+    assert_eq(ddf.cumsum(), df.cumsum(), sort_results=False)
+    assert_eq(ddf.cumprod(), df.cumprod(), sort_results=False)
+    assert_eq(ddf.cummin(), df.cummin(), sort_results=False)
+    assert_eq(ddf.cummax(), df.cummax(), sort_results=False)
 
-    assert_eq(ddf.cumsum(axis=1), df.cumsum(axis=1))
-    assert_eq(ddf.cumprod(axis=1), df.cumprod(axis=1))
-    assert_eq(ddf.cummin(axis=1), df.cummin(axis=1))
-    assert_eq(ddf.cummax(axis=1), df.cummax(axis=1))
+    assert_eq(ddf.cumsum(axis=1), df.cumsum(axis=1), sort_results=False)
+    assert_eq(ddf.cumprod(axis=1), df.cumprod(axis=1), sort_results=False)
+    assert_eq(ddf.cummin(axis=1), df.cummin(axis=1), sort_results=False)
+    assert_eq(ddf.cummax(axis=1), df.cummax(axis=1), sort_results=False)
 
     np.cumsum(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumsum())
+    assert_eq(ddf_out, df.cumsum(), sort_results=False)
     np.cumprod(ddf, out=ddf_out)
-    assert_eq(ddf_out, df.cumprod())
+    assert_eq(ddf_out, df.cumprod(), sort_results=False)
     ddf.cummin(out=ddf_out)
-    assert_eq(ddf_out, df.cummin())
+    assert_eq(ddf_out, df.cummin(), sort_results=False)
     ddf.cummax(out=ddf_out)
-    assert_eq(ddf_out, df.cummax())
+    assert_eq(ddf_out, df.cummax(), sort_results=False)
 
     np.cumsum(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumsum(axis=1))
+    assert_eq(ddf_out, df.cumsum(axis=1), sort_results=False)
     np.cumprod(ddf, out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cumprod(axis=1))
+    assert_eq(ddf_out, df.cumprod(axis=1), sort_results=False)
     ddf.cummin(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummin(axis=1))
+    assert_eq(ddf_out, df.cummin(axis=1), sort_results=False)
     ddf.cummax(out=ddf_out, axis=1)
-    assert_eq(ddf_out, df.cummax(axis=1))
+    assert_eq(ddf_out, df.cummax(axis=1), sort_results=False)
 
-    assert_eq(ddf.a.cumsum(), df.a.cumsum())
-    assert_eq(ddf.a.cumprod(), df.a.cumprod())
-    assert_eq(ddf.a.cummin(), df.a.cummin())
-    assert_eq(ddf.a.cummax(), df.a.cummax())
+    assert_eq(ddf.a.cumsum(), df.a.cumsum(), sort_results=False)
+    assert_eq(ddf.a.cumprod(), df.a.cumprod(), sort_results=False)
+    assert_eq(ddf.a.cummin(), df.a.cummin(), sort_results=False)
+    assert_eq(ddf.a.cummax(), df.a.cummax(), sort_results=False)
 
     # With NaNs
     df = pd.DataFrame(
@@ -683,25 +707,41 @@ def test_cumulative():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(df.cumsum(), ddf.cumsum())
-    assert_eq(df.cummin(), ddf.cummin())
-    assert_eq(df.cummax(), ddf.cummax())
-    assert_eq(df.cumprod(), ddf.cumprod())
+    assert_eq(df.cumsum(), ddf.cumsum(), sort_results=False)
+    assert_eq(df.cummin(), ddf.cummin(), sort_results=False)
+    assert_eq(df.cummax(), ddf.cummax(), sort_results=False)
+    assert_eq(df.cumprod(), ddf.cumprod(), sort_results=False)
 
-    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
-    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
-    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
-    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False), sort_results=False)
+    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False), sort_results=False)
+    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False), sort_results=False)
+    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False), sort_results=False)
 
-    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
-    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
-    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
-    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1), sort_results=False)
+    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1), sort_results=False)
+    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1), sort_results=False)
+    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1), sort_results=False)
 
-    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
-    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
-    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
-    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+    assert_eq(
+        df.cumsum(axis=1, skipna=False),
+        ddf.cumsum(axis=1, skipna=False),
+        sort_results=False,
+    )
+    assert_eq(
+        df.cummin(axis=1, skipna=False),
+        ddf.cummin(axis=1, skipna=False),
+        sort_results=False,
+    )
+    assert_eq(
+        df.cummax(axis=1, skipna=False),
+        ddf.cummax(axis=1, skipna=False),
+        sort_results=False,
+    )
+    assert_eq(
+        df.cumprod(axis=1, skipna=False),
+        ddf.cumprod(axis=1, skipna=False),
+        sort_results=False,
+    )
 
 
 @pytest.mark.parametrize(
@@ -730,11 +770,11 @@ def test_cumulative():
 def test_cumulative_empty_partitions(func):
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
-    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]), sort_results=False)
 
     df = pd.DataFrame({"x": [1, 2, 3, 4, None, 5, 6, None, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=5)
-    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]))
+    assert_eq(func(df[df.x < 5]), func(ddf[ddf.x < 5]), sort_results=False)
 
 
 def test_dropna():
@@ -748,39 +788,41 @@ def test_dropna():
     )
     ddf = dd.from_pandas(df, 3)
 
-    assert_eq(ddf.x.dropna(), df.x.dropna())
-    assert_eq(ddf.y.dropna(), df.y.dropna())
-    assert_eq(ddf.z.dropna(), df.z.dropna())
+    assert_eq(ddf.x.dropna(), df.x.dropna(), sort_results=False)
+    assert_eq(ddf.y.dropna(), df.y.dropna(), sort_results=False)
+    assert_eq(ddf.z.dropna(), df.z.dropna(), sort_results=False)
 
-    assert_eq(ddf.dropna(), df.dropna())
-    assert_eq(ddf.dropna(how="all"), df.dropna(how="all"))
-    assert_eq(ddf.dropna(subset=["x"]), df.dropna(subset=["x"]))
-    assert_eq(ddf.dropna(subset=["y", "z"]), df.dropna(subset=["y", "z"]))
+    assert_eq(ddf.dropna(), df.dropna(), sort_results=False)
+    assert_eq(ddf.dropna(how="all"), df.dropna(how="all"), sort_results=False)
+    assert_eq(ddf.dropna(subset=["x"]), df.dropna(subset=["x"]), sort_results=False)
+    assert_eq(
+        ddf.dropna(subset=["y", "z"]), df.dropna(subset=["y", "z"]), sort_results=False
+    )
     assert_eq(
         ddf.dropna(subset=["y", "z"], how="all"),
         df.dropna(subset=["y", "z"], how="all"),
     )
 
     # threshold
-    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
-    assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
+    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]], sort_results=False)
+    assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None), sort_results=False)
 
-    assert_eq(df.dropna(thresh=0), df.loc[:])
-    assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0))
+    assert_eq(df.dropna(thresh=0), df.loc[:], sort_results=False)
+    assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0), sort_results=False)
 
-    assert_eq(df.dropna(thresh=1), df.loc[[10, 20, 30, 40, 60]])
-    assert_eq(ddf.dropna(thresh=1), df.dropna(thresh=1))
+    assert_eq(df.dropna(thresh=1), df.loc[[10, 20, 30, 40, 60]], sort_results=False)
+    assert_eq(ddf.dropna(thresh=1), df.dropna(thresh=1), sort_results=False)
 
-    assert_eq(df.dropna(thresh=2), df.loc[[10, 20, 30, 40, 60]])
-    assert_eq(ddf.dropna(thresh=2), df.dropna(thresh=2))
+    assert_eq(df.dropna(thresh=2), df.loc[[10, 20, 30, 40, 60]], sort_results=False)
+    assert_eq(ddf.dropna(thresh=2), df.dropna(thresh=2), sort_results=False)
 
-    assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
-    assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+    assert_eq(df.dropna(thresh=3), df.loc[[20, 40]], sort_results=False)
+    assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3), sort_results=False)
 
     # Regression test for https://github.com/dask/dask/issues/6540
     df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]))
+    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]), sort_results=False)
 
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
@@ -794,13 +836,21 @@ def test_clip(lower, upper):
     s = pd.Series([1, 2, 3, 4, 5, 6, 7, 8, 9])
     ds = dd.from_pandas(s, 3)
 
-    assert_eq(ddf.clip(lower=lower, upper=upper), df.clip(lower=lower, upper=upper))
-    assert_eq(ddf.clip(lower=lower), df.clip(lower=lower))
-    assert_eq(ddf.clip(upper=upper), df.clip(upper=upper))
+    assert_eq(
+        ddf.clip(lower=lower, upper=upper),
+        df.clip(lower=lower, upper=upper),
+        sort_results=False,
+    )
+    assert_eq(ddf.clip(lower=lower), df.clip(lower=lower), sort_results=False)
+    assert_eq(ddf.clip(upper=upper), df.clip(upper=upper), sort_results=False)
 
-    assert_eq(ds.clip(lower=lower, upper=upper), s.clip(lower=lower, upper=upper))
-    assert_eq(ds.clip(lower=lower), s.clip(lower=lower))
-    assert_eq(ds.clip(upper=upper), s.clip(upper=upper))
+    assert_eq(
+        ds.clip(lower=lower, upper=upper),
+        s.clip(lower=lower, upper=upper),
+        sort_results=False,
+    )
+    assert_eq(ds.clip(lower=lower), s.clip(lower=lower), sort_results=False)
+    assert_eq(ds.clip(upper=upper), s.clip(upper=upper), sort_results=False)
 
 
 def test_squeeze():
@@ -812,8 +862,8 @@ def test_squeeze():
     ddf2 = dd.from_pandas(df2, 3)
     ds = dd.from_pandas(s, 2)
 
-    assert_eq(df.squeeze(), ddf.squeeze())
-    assert_eq(pd.Series([0], name="x"), ddf2.squeeze())
+    assert_eq(df.squeeze(), ddf.squeeze(), sort_results=False)
+    assert_eq(pd.Series([0], name="x"), ddf2.squeeze(), sort_results=False)
     assert_eq(ds.squeeze(), s.squeeze())
 
     with pytest.raises(NotImplementedError) as info:
@@ -892,33 +942,49 @@ def test_where_mask():
         assert isinstance(pdf, pd.DataFrame)
         assert isinstance(pdcond, pd.DataFrame)
 
-        assert_eq(ddf.where(ddcond), pdf.where(pdcond))
-        assert_eq(ddf.mask(ddcond), pdf.mask(pdcond))
-        assert_eq(ddf.where(ddcond, -ddf), pdf.where(pdcond, -pdf))
-        assert_eq(ddf.mask(ddcond, -ddf), pdf.mask(pdcond, -pdf))
+        assert_eq(ddf.where(ddcond), pdf.where(pdcond), sort_results=False)
+        assert_eq(ddf.mask(ddcond), pdf.mask(pdcond), sort_results=False)
+        assert_eq(ddf.where(ddcond, -ddf), pdf.where(pdcond, -pdf), sort_results=False)
+        assert_eq(ddf.mask(ddcond, -ddf), pdf.mask(pdcond, -pdf), sort_results=False)
 
-        assert_eq(ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf))
-        assert_eq(ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf))
-        assert_eq(ddf.a.where(ddcond.a), pdf.a.where(pdcond.a))
-        assert_eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a))
-        assert_eq(ddf.a.where(ddcond.a, -ddf.a), pdf.a.where(pdcond.a, -pdf.a))
-        assert_eq(ddf.a.mask(ddcond.a, -ddf.a), pdf.a.mask(pdcond.a, -pdf.a))
+        assert_eq(
+            ddf.where(ddcond.a, -ddf), pdf.where(pdcond.a, -pdf), sort_results=False
+        )
+        assert_eq(
+            ddf.mask(ddcond.a, -ddf), pdf.mask(pdcond.a, -pdf), sort_results=False
+        )
+        assert_eq(ddf.a.where(ddcond.a), pdf.a.where(pdcond.a), sort_results=False)
+        assert_eq(ddf.a.mask(ddcond.a), pdf.a.mask(pdcond.a), sort_results=False)
+        assert_eq(
+            ddf.a.where(ddcond.a, -ddf.a),
+            pdf.a.where(pdcond.a, -pdf.a),
+            sort_results=False,
+        )
+        assert_eq(
+            ddf.a.mask(ddcond.a, -ddf.a),
+            pdf.a.mask(pdcond.a, -pdf.a),
+            sort_results=False,
+        )
 
 
 def test_map_partitions_multi_argument():
-    assert_eq(dd.map_partitions(lambda a, b: a + b, d.a, d.b), full.a + full.b)
+    assert_eq(
+        dd.map_partitions(lambda a, b: a + b, d.a, d.b),
+        full.a + full.b,
+        sort_results=False,
+    )
     assert_eq(
         dd.map_partitions(lambda a, b, c: a + b + c, d.a, d.b, 1), full.a + full.b + 1
     )
 
 
 def test_map_partitions():
-    assert_eq(d.map_partitions(lambda df: df, meta=d), full)
-    assert_eq(d.map_partitions(lambda df: df), full)
+    assert_eq(d.map_partitions(lambda df: df, meta=d), full, sort_results=False)
+    assert_eq(d.map_partitions(lambda df: df), full, sort_results=False)
     result = d.map_partitions(lambda df: df.sum(axis=1))
     layer = hlg_layer(result.dask, "lambda-")
     assert not layer.is_materialized(), layer
-    assert_eq(result, full.sum(axis=1))
+    assert_eq(result, full.sum(axis=1), sort_results=False)
 
     assert_eq(
         d.map_partitions(lambda df: 1),
@@ -976,15 +1042,15 @@ def test_map_partitions_column_info():
 
     b = dd.map_partitions(lambda x: x, a, meta=a)
     tm.assert_index_equal(b.columns, a.columns)
-    assert_eq(df, b)
+    assert_eq(df, b, sort_results=False)
 
     b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
-    assert_eq(df.x, b)
+    assert_eq(df.x, b, sort_results=False)
 
     b = dd.map_partitions(lambda x: x, a.x, meta=a.x)
     assert b.name == a.x.name
-    assert_eq(df.x, b)
+    assert_eq(df.x, b, sort_results=False)
 
     b = dd.map_partitions(lambda df: df.x + df.y, a)
     assert isinstance(b, dd.Series)
@@ -1026,11 +1092,11 @@ def test_map_partitions_propagates_index_metadata():
         meta=[("A", "i4"), ("B", "i4"), ("C", "i4")],
     )
     sol = df.assign(C=df.A + df.B)
-    assert_eq(res, sol)
+    assert_eq(res, sol, sort_results=False)
 
     res = ddf.map_partitions(lambda df: df.rename_axis("newindex"))
     sol = df.rename_axis("newindex")
-    assert_eq(res, sol)
+    assert_eq(res, sol, sort_results=False)
 
 
 @pytest.mark.xfail(reason="now we use SubgraphCallables")
@@ -1046,7 +1112,7 @@ def test_map_partitions_keeps_kwargs_readable():
     # NOTE: we'd like to ensure that we keep the keyword arguments readable
     # in the dask graph
     assert "['x', 5]" in str(dict(b.dask)) or "{'x': 5}" in str(dict(b.dask))
-    assert_eq(df.x + 5, b)
+    assert_eq(df.x + 5, b, sort_results=False)
 
     assert a.x.map_partitions(f, x=5)._name != a.x.map_partitions(f, x=6)._name
 
@@ -1072,7 +1138,7 @@ def test_metadata_inference_single_partition_aligned_args():
         return df
 
     res = dd.map_partitions(check, ddf, ddf.x)
-    assert_eq(res, ddf)
+    assert_eq(res, ddf, sort_results=False)
 
 
 def test_align_dataframes():
@@ -1086,28 +1152,32 @@ def test_align_dataframes():
         pd.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
     )
     expected = pd.merge(df1, df2, left_on="A", right_on="A", how="left")
-    assert_eq(actual, expected, check_index=False, check_divisions=False)
+    assert_eq(
+        actual, expected, check_index=False, check_divisions=False, sort_results=False
+    )
 
     actual = ddf2.map_partitions(
         pd.merge, ddf1, align_dataframes=False, left_on="A", right_on="A", how="right"
     )
     expected = pd.merge(df2, df1, left_on="A", right_on="A", how="right")
-    assert_eq(actual, expected, check_index=False, check_divisions=False)
+    assert_eq(
+        actual, expected, check_index=False, check_divisions=False, sort_results=False
+    )
 
 
 def test_drop_duplicates():
     res = d.drop_duplicates()
     res2 = d.drop_duplicates(split_every=2)
     sol = full.drop_duplicates()
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
+    assert_eq(res, sol, sort_results=False)
+    assert_eq(res2, sol, sort_results=False)
     assert res._name != res2._name
 
     res = d.a.drop_duplicates()
     res2 = d.a.drop_duplicates(split_every=2)
     sol = full.a.drop_duplicates()
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
+    assert_eq(res, sol, sort_results=False)
+    assert_eq(res2, sol, sort_results=False)
     assert res._name != res2._name
 
     res = d.index.drop_duplicates()
@@ -1126,13 +1196,21 @@ def test_drop_duplicates_subset():
     ddf = dd.from_pandas(df, npartitions=2)
 
     for kwarg in [{"keep": "first"}, {"keep": "last"}]:
-        assert_eq(df.x.drop_duplicates(**kwarg), ddf.x.drop_duplicates(**kwarg))
+        assert_eq(
+            df.x.drop_duplicates(**kwarg),
+            ddf.x.drop_duplicates(**kwarg),
+            sort_results=False,
+        )
         for ss in [["x"], "y", ["x", "y"]]:
             assert_eq(
                 df.drop_duplicates(subset=ss, **kwarg),
                 ddf.drop_duplicates(subset=ss, **kwarg),
             )
-            assert_eq(df.drop_duplicates(ss, **kwarg), ddf.drop_duplicates(ss, **kwarg))
+            assert_eq(
+                df.drop_duplicates(ss, **kwarg),
+                ddf.drop_duplicates(ss, **kwarg),
+                sort_results=False,
+            )
 
 
 def test_get_partition():
@@ -1143,21 +1221,21 @@ def test_get_partition():
     # DataFrame
     div1 = ddf.get_partition(0)
     assert isinstance(div1, dd.DataFrame)
-    assert_eq(div1, pdf.loc[0:3])
+    assert_eq(div1, pdf.loc[0:3], sort_results=False)
     div2 = ddf.get_partition(1)
-    assert_eq(div2, pdf.loc[4:7])
+    assert_eq(div2, pdf.loc[4:7], sort_results=False)
     div3 = ddf.get_partition(2)
-    assert_eq(div3, pdf.loc[8:9])
+    assert_eq(div3, pdf.loc[8:9], sort_results=False)
     assert len(div1) + len(div2) + len(div3) == len(pdf)
 
     # Series
     div1 = ddf.a.get_partition(0)
     assert isinstance(div1, dd.Series)
-    assert_eq(div1, pdf.a.loc[0:3])
+    assert_eq(div1, pdf.a.loc[0:3], sort_results=False)
     div2 = ddf.a.get_partition(1)
-    assert_eq(div2, pdf.a.loc[4:7])
+    assert_eq(div2, pdf.a.loc[4:7], sort_results=False)
     div3 = ddf.a.get_partition(2)
-    assert_eq(div3, pdf.a.loc[8:9])
+    assert_eq(div3, pdf.a.loc[8:9], sort_results=False)
     assert len(div1) + len(div2) + len(div3) == len(pdf.a)
 
     with pytest.raises(ValueError):
@@ -1182,9 +1260,9 @@ def test_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     result = ddf.x.value_counts()
     expected = df.x.value_counts()
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
     result2 = ddf.x.value_counts(split_every=2)
-    assert_eq(result2, expected)
+    assert_eq(result2, expected, sort_results=False)
     assert result._name != result2._name
 
 
@@ -1193,7 +1271,7 @@ def test_value_counts_not_sorted():
     ddf = dd.from_pandas(df, npartitions=3)
     result = ddf.x.value_counts(sort=False)
     expected = df.x.value_counts(sort=False)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
     result2 = ddf.x.value_counts(split_every=2)
     assert_eq(result2, expected)
     assert result._name != result2._name
@@ -1220,10 +1298,10 @@ def test_value_counts_with_normalize():
     ddf = dd.from_pandas(df, npartitions=3)
     result = ddf.x.value_counts(normalize=True)
     expected = df.x.value_counts(normalize=True)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
     result2 = ddf.x.value_counts(split_every=2, normalize=True)
-    assert_eq(result2, expected)
+    assert_eq(result2, expected, sort_results=False)
     assert result._name != result2._name
 
     result3 = ddf.x.value_counts(split_out=2, normalize=True)
@@ -1261,11 +1339,19 @@ def test_unique():
         }
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
-    assert_eq(ddf.x.unique(), pd.Series(pdf.x.unique(), name="x"))
-    assert_eq(ddf.y.unique(), pd.Series(pdf.y.unique(), name="y"))
+    assert_eq(ddf.x.unique(), pd.Series(pdf.x.unique(), name="x"), sort_results=False)
+    assert_eq(ddf.y.unique(), pd.Series(pdf.y.unique(), name="y"), sort_results=False)
 
-    assert_eq(ddf.x.unique(split_every=2), pd.Series(pdf.x.unique(), name="x"))
-    assert_eq(ddf.y.unique(split_every=2), pd.Series(pdf.y.unique(), name="y"))
+    assert_eq(
+        ddf.x.unique(split_every=2),
+        pd.Series(pdf.x.unique(), name="x"),
+        sort_results=False,
+    )
+    assert_eq(
+        ddf.y.unique(split_every=2),
+        pd.Series(pdf.y.unique(), name="y"),
+        sort_results=False,
+    )
     assert_eq(ddf.index.unique(), pdf.index.unique())
 
     assert ddf.x.unique(split_every=2)._name != ddf.x.unique()._name
@@ -1277,20 +1363,24 @@ def test_isin():
     f_dict = {"a": [0, 3], "b": [1, 2]}
 
     # Series
-    assert_eq(d.a.isin(f_list), full.a.isin(f_list))
-    assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    assert_eq(d.a.isin(f_list), full.a.isin(f_list), sort_results=False)
+    assert_eq(d.a.isin(f_series), full.a.isin(f_series), sort_results=False)
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # Index
-    da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
-    da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    da.utils.assert_eq(
+        d.index.isin(f_list), full.index.isin(f_list), sort_results=False
+    )
+    da.utils.assert_eq(
+        d.index.isin(f_series), full.index.isin(f_series), sort_results=False
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # DataFrame test
-    assert_eq(d.isin(f_list), full.isin(f_list))
-    assert_eq(d.isin(f_dict), full.isin(f_dict))
+    assert_eq(d.isin(f_list), full.isin(f_list), sort_results=False)
+    assert_eq(d.isin(f_dict), full.isin(f_dict), sort_results=False)
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
@@ -1392,7 +1482,7 @@ def test_quantile_missing(method):
     ddf = dd.from_pandas(df, 2)
     expected = df.quantile()
     result = ddf.quantile(method=method)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
     expected = df.A.quantile()
     result = ddf.A.quantile(method=method)
@@ -1409,7 +1499,7 @@ def test_empty_quantile(method):
 
     assert result.name == "b"
     assert result.compute().name == "b"
-    assert_eq(result, exp)
+    assert_eq(result, exp, sort_results=False)
 
 
 # TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
@@ -1479,7 +1569,9 @@ def test_dataframe_quantile(method, expected):
 
     assert (result == expected[1]).all().all()
 
-    assert_eq(ddf.quantile(axis=1, method=method), df.quantile(axis=1))
+    assert_eq(
+        ddf.quantile(axis=1, method=method), df.quantile(axis=1), sort_results=False
+    )
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
 
@@ -1523,12 +1615,12 @@ def test_quantile_trivial_partitions():
     df = pd.DataFrame({"A": []})
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.quantile(0.5)
-    assert_eq(ddf.quantile(0.5), expected)
+    assert_eq(ddf.quantile(0.5), expected, sort_results=False)
 
     df = pd.DataFrame({"A": [np.nan, np.nan, np.nan, np.nan]})
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.quantile(0.5)
-    assert_eq(ddf.quantile(0.5), expected)
+    assert_eq(ddf.quantile(0.5), expected, sort_results=False)
 
 
 def test_index():
@@ -1568,14 +1660,14 @@ def test_assign():
         g=lambda x: x.a + x.c,
         dt=pd.Timestamp(2018, 2, 13),
     )
-    assert_eq(res, sol)
-    assert_eq(res_unknown, sol)
+    assert_eq(res, sol, sort_results=False)
+    assert_eq(res_unknown, sol, sort_results=False)
 
     res = ddf.assign(c=df.a + 1)
-    assert_eq(res, df.assign(c=df.a + 1))
+    assert_eq(res, df.assign(c=df.a + 1), sort_results=False)
 
     res = ddf.assign(c=ddf.index)
-    assert_eq(res, df.assign(c=df.index))
+    assert_eq(res, df.assign(c=df.index), sort_results=False)
 
     # divisions unknown won't work with pandas
     with pytest.raises(ValueError):
@@ -1598,14 +1690,14 @@ def test_assign():
     ddf = dd.from_pandas(pd.DataFrame({"A": [1, 2]}), npartitions=2)
     ddf.assign(B=lambda df: df["A"], C=lambda df: df.A + df.B)
 
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
 
 def test_assign_callable():
     df = dd.from_pandas(pd.DataFrame({"A": range(10)}), npartitions=2)
     a = df.assign(B=df.A.shift())
     b = df.assign(B=lambda x: x.A.shift())
-    assert_eq(a, b)
+    assert_eq(a, b, sort_results=False)
 
 
 def test_assign_dtypes():
@@ -1632,15 +1724,15 @@ def test_map():
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
+    assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1), sort_results=False)
     lk = {v: v + 1 for v in df.a.values}
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
+    assert_eq(ddf.a.map(lk), df.a.map(lk), sort_results=False)
+    assert_eq(ddf.b.map(lk), df.b.map(lk), sort_results=False)
     lk = pd.Series(lk)
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
+    assert_eq(ddf.a.map(lk), df.a.map(lk), sort_results=False)
+    assert_eq(ddf.b.map(lk), df.b.map(lk), sort_results=False)
+    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk), sort_results=False)
+    assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk), sort_results=False)
 
 
 def test_concat():
@@ -1652,8 +1744,8 @@ def test_concat():
 def test_args():
     e = d.assign(c=d.a + 1)
     f = type(e)(*e._args)
-    assert_eq(e, f)
-    assert_eq(d.a, type(d.a)(*d.a._args))
+    assert_eq(e, f, sort_results=False)
+    assert_eq(d.a, type(d.a)(*d.a._args), sort_results=False)
     assert_eq(d.a.sum(), type(d.a.sum())(*d.a.sum()._args))
 
 
@@ -1674,7 +1766,7 @@ def test_unknown_divisions():
     full = d.compute(scheduler="sync")
 
     assert_eq(d.a.sum(), full.a.sum())
-    assert_eq(d.a + d.b + 1, full.a + full.b + 1)
+    assert_eq(d.a + d.b + 1, full.a + full.b + 1, sort_results=False)
 
 
 def test_with_min_count():
@@ -1815,11 +1907,17 @@ def test_combine():
     ]:
         for func, fill_value in runs:
             sol = a.combine(b, func, fill_value=fill_value)
-            assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
-            assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
+            assert_eq(
+                dda.combine(ddb, func, fill_value=fill_value), sol, sort_results=False
+            )
+            assert_eq(
+                dda.combine(b, func, fill_value=fill_value), sol, sort_results=False
+            )
 
     assert_eq(
-        ddf1.combine(ddf2, add, overwrite=False), df1.combine(df2, add, overwrite=False)
+        ddf1.combine(ddf2, add, overwrite=False),
+        df1.combine(df2, add, overwrite=False),
+        sort_results=False,
     )
     assert dda.combine(ddb, add)._name == dda.combine(ddb, add)._name
 
@@ -1842,15 +1940,23 @@ def test_combine_first():
     ddf2 = dd.from_pandas(df2, 5)
 
     # DataFrame
-    assert_eq(ddf1.combine_first(ddf2), df1.combine_first(df2))
-    assert_eq(ddf1.combine_first(df2), df1.combine_first(df2))
+    assert_eq(ddf1.combine_first(ddf2), df1.combine_first(df2), sort_results=False)
+    assert_eq(ddf1.combine_first(df2), df1.combine_first(df2), sort_results=False)
 
     # Series
-    assert_eq(ddf1.A.combine_first(ddf2.A), df1.A.combine_first(df2.A))
-    assert_eq(ddf1.A.combine_first(df2.A), df1.A.combine_first(df2.A))
+    assert_eq(
+        ddf1.A.combine_first(ddf2.A), df1.A.combine_first(df2.A), sort_results=False
+    )
+    assert_eq(
+        ddf1.A.combine_first(df2.A), df1.A.combine_first(df2.A), sort_results=False
+    )
 
-    assert_eq(ddf1.B.combine_first(ddf2.B), df1.B.combine_first(df2.B))
-    assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
+    assert_eq(
+        ddf1.B.combine_first(ddf2.B), df1.B.combine_first(df2.B), sort_results=False
+    )
+    assert_eq(
+        ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B), sort_results=False
+    )
 
 
 def test_dataframe_picklable():
@@ -1865,15 +1971,15 @@ def test_dataframe_picklable():
 
     # dataframe
     df2 = loads(dumps(df))
-    assert_eq(df, df2)
+    assert_eq(df, df2, sort_results=False)
     df2 = cp_loads(cp_dumps(df))
-    assert_eq(df, df2)
+    assert_eq(df, df2, sort_results=False)
 
     # series
     a2 = loads(dumps(df.A))
-    assert_eq(df.A, a2)
+    assert_eq(df.A, a2, sort_results=False)
     a2 = cp_loads(cp_dumps(df.A))
-    assert_eq(df.A, a2)
+    assert_eq(df.A, a2, sort_results=False)
 
     # index
     i2 = loads(dumps(df.index))
@@ -1902,8 +2008,8 @@ def test_random_partitions():
 
     a, b = d.random_split([0.5, 0.5], 42, True)
     a2, b2 = d.random_split([0.5, 0.5], 42, True)
-    assert_eq(a, a2)
-    assert_eq(b, b2)
+    assert_eq(a, a2, sort_results=False)
+    assert_eq(b, b2, sort_results=False)
     with pytest.raises(AssertionError):
         np.testing.assert_array_equal(a.index, sorted(a.index))
 
@@ -1919,7 +2025,7 @@ def test_random_partitions():
 def test_series_round():
     ps = pd.Series([1.123, 2.123, 3.123, 1.234, 2.234, 3.234], name="a")
     s = dd.from_pandas(ps, npartitions=3)
-    assert_eq(s.round(), ps.round())
+    assert_eq(s.round(), ps.round(), sort_results=False)
 
 
 @pytest.mark.slow
@@ -1931,8 +2037,8 @@ def test_repartition():
         sp = pd.concat(
             [compute_as_if_collection(dd.DataFrame, d.dask, k) for k in keys]
         )
-        assert_eq(orig, sp)
-        assert_eq(orig, d)
+        assert_eq(orig, sp, sort_results=False)
+        assert_eq(orig, d, sort_results=False)
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6], "y": list("abdabd")}, index=[10, 20, 30, 40, 50, 60]
@@ -1941,8 +2047,12 @@ def test_repartition():
 
     b = a.repartition(divisions=[10, 20, 50, 60])
     assert b.divisions == (10, 20, 50, 60)
-    assert_eq(a, b)
-    assert_eq(compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)), df.iloc[:1])
+    assert_eq(a, b, sort_results=False)
+    assert_eq(
+        compute_as_if_collection(dd.DataFrame, b.dask, (b._name, 0)),
+        df.iloc[:1],
+        sort_results=False,
+    )
 
     for div in [
         [20, 60],
@@ -1959,7 +2069,7 @@ def test_repartition():
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
     for p in range(1, 7):
         ddf = dd.from_pandas(pdf, p)
-        assert_eq(ddf, pdf)
+        assert_eq(ddf, pdf, sort_results=False)
         for div in [
             [0, 6],
             [0, 6, 6],
@@ -1973,24 +2083,24 @@ def test_repartition():
             rddf = ddf.repartition(divisions=div)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
-            assert_eq(pdf, rddf)
+            assert_eq(pdf, rddf, sort_results=False)
 
             rds = ddf.x.repartition(divisions=div)
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
-            assert_eq(pdf.x, rds)
+            assert_eq(pdf.x, rds, sort_results=False)
 
         # expand divisions
         for div in [[-5, 10], [-2, 3, 5, 6], [0, 4, 5, 9, 10]]:
             rddf = ddf.repartition(divisions=div, force=True)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
-            assert_eq(pdf, rddf)
+            assert_eq(pdf, rddf, sort_results=False)
 
             rds = ddf.x.repartition(divisions=div, force=True)
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
-            assert_eq(pdf.x, rds)
+            assert_eq(pdf.x, rds, sort_results=False)
 
     pdf = pd.DataFrame(
         {"x": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "y": [9, 8, 7, 6, 5, 4, 3, 2, 1, 0]},
@@ -1998,7 +2108,7 @@ def test_repartition():
     )
     for p in range(1, 7):
         ddf = dd.from_pandas(pdf, p)
-        assert_eq(ddf, pdf)
+        assert_eq(ddf, pdf, sort_results=False)
         for div in [
             list("aj"),
             list("ajj"),
@@ -2013,24 +2123,24 @@ def test_repartition():
             rddf = ddf.repartition(divisions=div)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
-            assert_eq(pdf, rddf)
+            assert_eq(pdf, rddf, sort_results=False)
 
             rds = ddf.x.repartition(divisions=div)
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
-            assert_eq(pdf.x, rds)
+            assert_eq(pdf.x, rds, sort_results=False)
 
         # expand divisions
         for div in [list("Yadijm"), list("acmrxz"), list("Yajz")]:
             rddf = ddf.repartition(divisions=div, force=True)
             _check_split_data(ddf, rddf)
             assert rddf.divisions == tuple(div)
-            assert_eq(pdf, rddf)
+            assert_eq(pdf, rddf, sort_results=False)
 
             rds = ddf.x.repartition(divisions=div, force=True)
             _check_split_data(ddf.x, rds)
             assert rds.divisions == tuple(div)
-            assert_eq(pdf.x, rds)
+            assert_eq(pdf.x, rds, sort_results=False)
 
 
 def test_repartition_divisions():
@@ -2061,12 +2171,12 @@ def test_repartition_on_pandas_dataframe():
     ddf = dd.repartition(df, divisions=[10, 20, 50, 60])
     assert isinstance(ddf, dd.DataFrame)
     assert ddf.divisions == (10, 20, 50, 60)
-    assert_eq(ddf, df)
+    assert_eq(ddf, df, sort_results=False)
 
     ddf = dd.repartition(df.y, divisions=[10, 20, 50, 60])
     assert isinstance(ddf, dd.Series)
     assert ddf.divisions == (10, 20, 50, 60)
-    assert_eq(ddf, df.y)
+    assert_eq(ddf, df.y, sort_results=False)
 
 
 @pytest.mark.parametrize("use_index", [True, False])
@@ -2082,7 +2192,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(k)
-    assert_eq(a, b)
+    assert_eq(a, b, sort_results=False)
     assert b.npartitions == k
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
@@ -2100,7 +2210,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
-    assert_eq(a, b, check_divisions=False)
+    assert_eq(a, b, check_divisions=False, sort_results=False)
     assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
@@ -2137,7 +2247,7 @@ def test_repartition_npartitions_numeric_edge_case():
     a = dd.from_pandas(df, npartitions=15)
     assert a.npartitions == 15
     b = a.repartition(npartitions=11)
-    assert_eq(a, b)
+    assert_eq(a, b, sort_results=False)
 
 
 def test_repartition_object_index():
@@ -2170,7 +2280,7 @@ def test_repartition_freq(npartitions, freq, start, end):
     ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
 
     ddf2 = ddf.repartition(freq=freq)
-    assert_eq(ddf2, df)
+    assert_eq(ddf2, df, sort_results=False)
 
 
 def test_repartition_freq_divisions():
@@ -2205,7 +2315,7 @@ def test_repartition_freq_month():
     )
     ddf = dd.from_pandas(df, npartitions=1).repartition(freq="MS")
 
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
     assert ddf.divisions == (
         pd.Timestamp("2015-1-1 00:00:00"),
@@ -2228,7 +2338,7 @@ def test_repartition_freq_day():
     ]
     pdf = pd.DataFrame(index=index, data={"foo": "foo"})
     ddf = dd.from_pandas(pdf, npartitions=1).repartition(freq="D")
-    assert_eq(ddf, pdf)
+    assert_eq(ddf, pdf, sort_results=False)
     assert ddf.npartitions == 2
     assert ddf.divisions == (
         pd.Timestamp("2020-1-1"),
@@ -2281,19 +2391,19 @@ def test_embarrassingly_parallel_operations():
     )
     a = dd.from_pandas(df, 2)
 
-    assert_eq(a.x.astype("float32"), df.x.astype("float32"))
+    assert_eq(a.x.astype("float32"), df.x.astype("float32"), sort_results=False)
     assert a.x.astype("float32").compute().dtype == "float32"
 
-    assert_eq(a.x.dropna(), df.x.dropna())
+    assert_eq(a.x.dropna(), df.x.dropna(), sort_results=False)
 
-    assert_eq(a.x.between(2, 4), df.x.between(2, 4))
+    assert_eq(a.x.between(2, 4), df.x.between(2, 4), sort_results=False)
 
-    assert_eq(a.x.clip(2, 4), df.x.clip(2, 4))
+    assert_eq(a.x.clip(2, 4), df.x.clip(2, 4), sort_results=False)
 
-    assert_eq(a.x.notnull(), df.x.notnull())
-    assert_eq(a.x.isnull(), df.x.isnull())
-    assert_eq(a.notnull(), df.notnull())
-    assert_eq(a.isnull(), df.isnull())
+    assert_eq(a.x.notnull(), df.x.notnull(), sort_results=False)
+    assert_eq(a.x.isnull(), df.x.isnull(), sort_results=False)
+    assert_eq(a.notnull(), df.notnull(), sort_results=False)
+    assert_eq(a.isnull(), df.isnull(), sort_results=False)
 
     assert len(a.sample(frac=0.5).compute()) < len(df)
 
@@ -2302,29 +2412,50 @@ def test_fillna():
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
-    assert_eq(ddf.fillna(100), df.fillna(100))
-    assert_eq(ddf.A.fillna(100), df.A.fillna(100))
-    assert_eq(ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()))
+    assert_eq(ddf.fillna(100), df.fillna(100), sort_results=False)
+    assert_eq(ddf.A.fillna(100), df.A.fillna(100), sort_results=False)
+    assert_eq(
+        ddf.A.fillna(ddf["A"].mean()), df.A.fillna(df["A"].mean()), sort_results=False
+    )
 
-    assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"))
-    assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"))
+    assert_eq(ddf.fillna(method="pad"), df.fillna(method="pad"), sort_results=False)
+    assert_eq(ddf.A.fillna(method="pad"), df.A.fillna(method="pad"), sort_results=False)
 
-    assert_eq(ddf.fillna(method="bfill"), df.fillna(method="bfill"))
-    assert_eq(ddf.A.fillna(method="bfill"), df.A.fillna(method="bfill"))
+    assert_eq(ddf.fillna(method="bfill"), df.fillna(method="bfill"), sort_results=False)
+    assert_eq(
+        ddf.A.fillna(method="bfill"), df.A.fillna(method="bfill"), sort_results=False
+    )
 
-    assert_eq(ddf.fillna(method="pad", limit=2), df.fillna(method="pad", limit=2))
-    assert_eq(ddf.A.fillna(method="pad", limit=2), df.A.fillna(method="pad", limit=2))
+    assert_eq(
+        ddf.fillna(method="pad", limit=2),
+        df.fillna(method="pad", limit=2),
+        sort_results=False,
+    )
+    assert_eq(
+        ddf.A.fillna(method="pad", limit=2),
+        df.A.fillna(method="pad", limit=2),
+        sort_results=False,
+    )
 
-    assert_eq(ddf.fillna(method="bfill", limit=2), df.fillna(method="bfill", limit=2))
+    assert_eq(
+        ddf.fillna(method="bfill", limit=2),
+        df.fillna(method="bfill", limit=2),
+        sort_results=False,
+    )
     assert_eq(
         ddf.A.fillna(method="bfill", limit=2), df.A.fillna(method="bfill", limit=2)
     )
 
-    assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1))
-    assert_eq(ddf.fillna(method="pad", axis=1), df.fillna(method="pad", axis=1))
+    assert_eq(ddf.fillna(100, axis=1), df.fillna(100, axis=1), sort_results=False)
+    assert_eq(
+        ddf.fillna(method="pad", axis=1),
+        df.fillna(method="pad", axis=1),
+        sort_results=False,
+    )
     assert_eq(
         ddf.fillna(method="pad", limit=2, axis=1),
         df.fillna(method="pad", limit=2, axis=1),
+        sort_results=False,
     )
 
     pytest.raises(ValueError, lambda: ddf.A.fillna(0, axis=1))
@@ -2335,7 +2466,11 @@ def test_fillna():
     df.iloc[:15, 0] = np.nan  # all NaN partition
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.fillna(method="pad").compute())
-    assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
+    assert_eq(
+        df.fillna(method="pad", limit=3),
+        ddf.fillna(method="pad", limit=3),
+        sort_results=False,
+    )
 
 
 @pytest.mark.parametrize("optimize", [True, False])
@@ -2363,7 +2498,7 @@ def test_delayed_roundtrip(optimize):
     df4 = df3 - 1 - 1
 
     df4.dask.validate()
-    assert_eq(df4, (full + 2) * 2 - full.a.mean() - 2)
+    assert_eq(df4, (full + 2) * 2 - full.a.mean() - 2, sort_results=False)
 
 
 def test_from_delayed_lazy_if_meta_provided():
@@ -2383,7 +2518,7 @@ def test_from_delayed_lazy_if_meta_provided():
 def test_from_delayed_empty_meta_provided():
     ddf = dd.from_delayed([], meta=dict(a=float))
     expected = pd.DataFrame({"a": [0.1]}).iloc[:0]
-    assert_eq(ddf, expected)
+    assert_eq(ddf, expected, sort_results=False)
 
 
 def test_fillna_duplicate_index():
@@ -2400,8 +2535,8 @@ def test_fillna_multi_dataframe():
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
-    assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B))
-    assert_eq(ddf.B.fillna(ddf.A), df.B.fillna(df.A))
+    assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B), sort_results=False)
+    assert_eq(ddf.B.fillna(ddf.A), df.B.fillna(df.A), sort_results=False)
 
 
 def test_fillna_dask_dataframe_input():
@@ -2415,17 +2550,17 @@ def test_fillna_dask_dataframe_input():
     ddf_unknown = dd.from_pandas(df, npartitions=5, sort=False)
     with pytest.raises(ValueError, match="Not all divisions are known"):
         # Fails when divisions are unknown
-        assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
+        assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1), sort_results=False)
 
 
 def test_ffill_bfill():
     df = _compat.makeMissingDataframe()
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
 
-    assert_eq(ddf.ffill(), df.ffill())
-    assert_eq(ddf.bfill(), df.bfill())
-    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1))
-    assert_eq(ddf.bfill(axis=1), df.bfill(axis=1))
+    assert_eq(ddf.ffill(), df.ffill(), sort_results=False)
+    assert_eq(ddf.bfill(), df.bfill(), sort_results=False)
+    assert_eq(ddf.ffill(axis=1), df.ffill(axis=1), sort_results=False)
+    assert_eq(ddf.bfill(axis=1), df.bfill(axis=1), sort_results=False)
 
 
 def test_fillna_series_types():
@@ -2433,7 +2568,7 @@ def test_fillna_series_types():
     df = pd.DataFrame({"A": [1, np.nan, 3], "B": [1, np.nan, 3]})
     ddf = dd.from_pandas(df, npartitions=2)
     fill_value = pd.Series([1, 10], index=["A", "C"])
-    assert_eq(ddf.fillna(fill_value), df.fillna(fill_value))
+    assert_eq(ddf.fillna(fill_value), df.fillna(fill_value), sort_results=False)
 
 
 def test_sample():
@@ -2445,11 +2580,11 @@ def test_sample():
 
     b = a.sample(frac=0.5)
 
-    assert_eq(b, b)
+    assert_eq(b, b, sort_results=False)
 
     c = a.sample(frac=0.5, random_state=1234)
     d = a.sample(frac=0.5, random_state=1234)
-    assert_eq(c, d)
+    assert_eq(c, d, sort_results=False)
 
     assert a.sample(frac=0.5)._name != a.sample(frac=0.5)._name
 
@@ -2477,7 +2612,7 @@ def test_sample_raises():
     with pytest.warns(UserWarning):
         b = a.sample(0.5, random_state=1234)
     c = a.sample(frac=0.5, random_state=1234)
-    assert_eq(b, c)
+    assert_eq(b, c, sort_results=False)
 
     with pytest.raises(ValueError):
         a.sample(n=10)
@@ -2503,10 +2638,11 @@ def test_query():
 
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.query("x**2 > y"), df.query("x**2 > y"))
+    assert_eq(ddf.query("x**2 > y"), df.query("x**2 > y"), sort_results=False)
     assert_eq(
         ddf.query("x**2 > @value", local_dict={"value": 4}),
         df.query("x**2 > @value", local_dict={"value": 4}),
+        sort_results=False,
     )
 
 
@@ -2516,8 +2652,12 @@ def test_eval():
     p = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
     d = dd.from_pandas(p, npartitions=2)
 
-    assert_eq(p.eval("x + y"), d.eval("x + y"))
-    assert_eq(p.eval("z = x + y", inplace=False), d.eval("z = x + y", inplace=False))
+    assert_eq(p.eval("x + y"), d.eval("x + y"), sort_results=False)
+    assert_eq(
+        p.eval("z = x + y", inplace=False),
+        d.eval("z = x + y", inplace=False),
+        sort_results=False,
+    )
     with pytest.raises(NotImplementedError):
         d.eval("z = x + y", inplace=True)
 
@@ -2544,7 +2684,7 @@ def test_select_dtypes(include, exclude):
     a = dd.from_pandas(df, npartitions=2)
     result = a.select_dtypes(include=include, exclude=exclude)
     expected = df.select_dtypes(include=include, exclude=exclude)
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
     # count dtypes
     tm.assert_series_equal(a.dtypes.value_counts(), df.dtypes.value_counts())
@@ -2626,7 +2766,7 @@ def test_aca_meta_infer():
 
     res = aca([ddf, 2.0], chunk=chunk, aggregate=agg, chunk_kwargs=dict(constant=2.0))
     sol = (df + 2.0 + 2.0).head()
-    assert_eq(res, sol)
+    assert_eq(res, sol, sort_results=False)
 
     # Should infer as a scalar
     res = aca(
@@ -2718,13 +2858,13 @@ def test_reduction_method():
     # Output of chunk is a series
     res = ddf.reduction(chunk, aggregate=agg)
     assert res._name == ddf.reduction(chunk, aggregate=agg)._name
-    assert_eq(res, df.count())
+    assert_eq(res, df.count(), sort_results=False)
 
     # Test with keywords
     res2 = ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})
     res2._name == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
     assert res2._name != res._name
-    assert_eq(res2, (df >= 25).sum())
+    assert_eq(res2, (df >= 25).sum(), sort_results=False)
 
     # Output of chunk is a dataframe
     def sum_and_count(x):
@@ -2732,7 +2872,9 @@ def test_reduction_method():
 
     res = ddf.reduction(sum_and_count, aggregate=lambda x: x.groupby(level=0).sum())
 
-    assert_eq(res, pd.DataFrame({"sum": df.sum(), "count": df.count()}))
+    assert_eq(
+        res, pd.DataFrame({"sum": df.sum(), "count": df.count()}), sort_results=False
+    )
 
 
 def test_reduction_method_split_every():
@@ -2803,8 +2945,8 @@ def test_pipe():
     def f(x, y, z=0):
         return x + y + z
 
-    assert_eq(ddf.pipe(f, 1, z=2), f(ddf, 1, z=2))
-    assert_eq(ddf.x.pipe(f, 1, z=2), f(ddf.x, 1, z=2))
+    assert_eq(ddf.pipe(f, 1, z=2), f(ddf, 1, z=2), sort_results=False)
+    assert_eq(ddf.x.pipe(f, 1, z=2), f(ddf.x, 1, z=2), sort_results=False)
 
 
 def test_gh_517():
@@ -2821,15 +2963,19 @@ def test_drop_axis_1():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8], "z": [9, 10, 11, 12]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(ddf.drop("y", axis=1), df.drop("y", axis=1))
-    assert_eq(ddf.drop(["y", "z"], axis=1), df.drop(["y", "z"], axis=1))
+    assert_eq(ddf.drop("y", axis=1), df.drop("y", axis=1), sort_results=False)
+    assert_eq(
+        ddf.drop(["y", "z"], axis=1), df.drop(["y", "z"], axis=1), sort_results=False
+    )
     with pytest.raises(ValueError):
         ddf.drop(["a", "x"], axis=1)
     assert_eq(
         ddf.drop(["a", "x"], axis=1, errors="ignore"),
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
-    assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
+    assert_eq(
+        ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]), sort_results=False
+    )
 
 
 @pytest.mark.parametrize("columns", [["b"], []])
@@ -2847,14 +2993,14 @@ def test_drop_columns(columns):
     ddf2 = ddf.drop(columns=columns)
     ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
 
-    assert_eq(df.drop(columns=columns), ddf2)
+    assert_eq(df.drop(columns=columns), ddf2, sort_results=False)
 
 
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
-    assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
-    assert_eq(np.cos(df["x"]), np.cos(ddf["x"]))
+    assert_eq(np.cos(df["x"]), np.cos(ddf["x"]), sort_results=False)
+    assert_eq(np.cos(df["x"]), np.cos(ddf["x"]), sort_results=False)
 
 
 def test_gh6305():
@@ -2868,12 +3014,16 @@ def test_gh6305():
 
 def test_rename_dict():
     renamer = {"a": "A", "b": "B"}
-    assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    assert_eq(
+        d.rename(columns=renamer), full.rename(columns=renamer), sort_results=False
+    )
 
 
 def test_rename_function():
     renamer = lambda x: x.upper()
-    assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    assert_eq(
+        d.rename(columns=renamer), full.rename(columns=renamer), sort_results=False
+    )
 
 
 def test_rename_index():
@@ -2885,16 +3035,18 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ)
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ, sort_results=False)
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
+        sort_results=False,
         **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
+        sort_results=False,
         **CHECK_FREQ,
     )
 
@@ -2903,8 +3055,8 @@ def test_to_frame():
     s = pd.Series([1, 2, 3], name="foo")
     a = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(s.to_frame(), a.to_frame())
-    assert_eq(s.to_frame("bar"), a.to_frame("bar"))
+    assert_eq(s.to_frame(), a.to_frame(), sort_results=False)
+    assert_eq(s.to_frame("bar"), a.to_frame("bar"), sort_results=False)
 
 
 @pytest.mark.parametrize("as_frame", [False, False])
@@ -2977,17 +3129,21 @@ def test_apply():
 
     func = lambda row: row["x"] + row["y"]
     assert_eq(
-        ddf.x.apply(lambda x: x + 1, meta=("x", int)), df.x.apply(lambda x: x + 1)
+        ddf.x.apply(lambda x: x + 1, meta=("x", int)),
+        df.x.apply(lambda x: x + 1),
+        sort_results=False,
     )
 
     # specify meta
     assert_eq(
         ddf.apply(lambda xy: xy[0] + xy[1], axis=1, meta=(None, int)),
         df.apply(lambda xy: xy[0] + xy[1], axis=1),
+        sort_results=False,
     )
     assert_eq(
         ddf.apply(lambda xy: xy[0] + xy[1], axis="columns", meta=(None, int)),
         df.apply(lambda xy: xy[0] + xy[1], axis="columns"),
+        sort_results=False,
     )
 
     # inference
@@ -2996,18 +3152,27 @@ def test_apply():
         assert_eq(
             ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
             df.apply(lambda xy: xy[0] + xy[1], axis=1),
+            sort_results=False,
         )
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
+        assert_eq(
+            ddf.apply(lambda xy: xy, axis=1),
+            df.apply(lambda xy: xy, axis=1),
+            sort_results=False,
+        )
 
     # specify meta
     func = lambda x: pd.Series([x, x])
-    assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
+    assert_eq(
+        ddf.x.apply(func, meta=[(0, int), (1, int)]),
+        df.x.apply(func),
+        sort_results=False,
+    )
     # inference
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", UserWarning)
-        assert_eq(ddf.x.apply(func), df.x.apply(func))
+        assert_eq(ddf.x.apply(func), df.x.apply(func), sort_results=False)
 
     # axis=0
     with pytest.raises(NotImplementedError):
@@ -3051,23 +3216,29 @@ def test_apply_warns_with_invalid_meta():
 def test_applymap():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
+    assert_eq(
+        ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1), sort_results=False
+    )
 
-    assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+    assert_eq(
+        ddf.applymap(lambda x: (x, x)),
+        df.applymap(lambda x: (x, x)),
+        sort_results=False,
+    )
 
 
 def test_add_prefix():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
-    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
+    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"), sort_results=False)
+    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"), sort_results=False)
 
 
 def test_add_suffix():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
-    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
+    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"), sort_results=False)
+    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"), sort_results=False)
 
 
 def test_abs():
@@ -3079,8 +3250,8 @@ def test_abs():
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.A.abs(), df.A.abs())
-    assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs())
+    assert_eq(ddf.A.abs(), df.A.abs(), sort_results=False)
+    assert_eq(ddf[["A", "B"]].abs(), df[["A", "B"]].abs(), sort_results=False)
     pytest.raises(ValueError, lambda: ddf.C.abs())
     pytest.raises(TypeError, lambda: ddf.abs())
 
@@ -3088,8 +3259,8 @@ def test_abs():
 def test_round():
     df = pd.DataFrame({"col1": [1.123, 2.123, 3.123], "col2": [1.234, 2.234, 3.234]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.round(), df.round())
-    assert_eq(ddf.round(2), df.round(2))
+    assert_eq(ddf.round(), df.round(), sort_results=False)
+    assert_eq(ddf.round(2), df.round(2), sort_results=False)
 
 
 def test_cov():
@@ -3103,10 +3274,10 @@ def test_cov():
     res4 = ddf.cov(10, split_every=2)
     sol = df.cov()
     sol2 = df.cov(10)
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert_eq(res3, sol2)
-    assert_eq(res4, sol2)
+    assert_eq(res, sol, sort_results=False)
+    assert_eq(res2, sol, sort_results=False)
+    assert_eq(res3, sol2, sort_results=False)
+    assert_eq(res4, sol2, sort_results=False)
     assert res._name == ddf.cov()._name
     assert res._name != res2._name
     assert res3._name != res4._name
@@ -3145,10 +3316,10 @@ def test_corr():
     res4 = ddf.corr(min_periods=10, split_every=2)
     sol = df.corr()
     sol2 = df.corr(min_periods=10)
-    assert_eq(res, sol)
-    assert_eq(res2, sol)
-    assert_eq(res3, sol2)
-    assert_eq(res4, sol2)
+    assert_eq(res, sol, sort_results=False)
+    assert_eq(res2, sol, sort_results=False)
+    assert_eq(res3, sol2, sort_results=False)
+    assert_eq(res4, sol2, sort_results=False)
     assert res._name == ddf.corr()._name
     assert res._name != res2._name
     assert res3._name != res4._name
@@ -3206,8 +3377,8 @@ def test_cov_corr_meta():
         index=pd.Index([1, 2, 3], name="myindex"),
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf.corr(), df.corr())
-    assert_eq(ddf.cov(), df.cov())
+    assert_eq(ddf.corr(), df.corr(), sort_results=False)
+    assert_eq(ddf.cov(), df.cov(), sort_results=False)
     assert ddf.a.cov(ddf.b)._meta.dtype == "f8"
     assert ddf.a.corr(ddf.b)._meta.dtype == "f8"
 
@@ -3216,8 +3387,8 @@ def test_cov_corr_meta():
 def test_cov_corr_stable():
     df = pd.DataFrame(np.random.uniform(-1, 1, (20000000, 2)), columns=["a", "b"])
     ddf = dd.from_pandas(df, npartitions=50)
-    assert_eq(ddf.cov(split_every=8), df.cov())
-    assert_eq(ddf.corr(split_every=8), df.corr())
+    assert_eq(ddf.cov(split_every=8), df.cov(), sort_results=False)
+    assert_eq(ddf.corr(split_every=8), df.corr(), sort_results=False)
 
 
 def test_cov_corr_mixed():
@@ -3242,8 +3413,12 @@ def test_cov_corr_mixed():
     df["unique_id"] = df["unique_id"].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=20)
-    assert_eq(ddf.corr(split_every=4), df.corr(), check_divisions=False)
-    assert_eq(ddf.cov(split_every=4), df.cov(), check_divisions=False)
+    assert_eq(
+        ddf.corr(split_every=4), df.corr(), check_divisions=False, sort_results=False
+    )
+    assert_eq(
+        ddf.cov(split_every=4), df.cov(), check_divisions=False, sort_results=False
+    )
 
 
 def test_autocorr():
@@ -3270,7 +3445,7 @@ def test_apply_infer_columns():
         result = ddf.apply(return_df, axis=1)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["sum", "mean"]))
-    assert_eq(result, df.apply(return_df, axis=1))
+    assert_eq(result, df.apply(return_df, axis=1), sort_results=False)
 
     # DataFrame to Series
     with warnings.catch_warnings():
@@ -3278,7 +3453,7 @@ def test_apply_infer_columns():
         result = ddf.apply(lambda x: 1, axis=1)
     assert isinstance(result, dd.Series)
     assert result.name is None
-    assert_eq(result, df.apply(lambda x: 1, axis=1))
+    assert_eq(result, df.apply(lambda x: 1, axis=1), sort_results=False)
 
     def return_df2(x):
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
@@ -3289,7 +3464,7 @@ def test_apply_infer_columns():
         result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
-    assert_eq(result, df.x.apply(return_df2))
+    assert_eq(result, df.x.apply(return_df2), sort_results=False)
 
     # Series to Series
     with warnings.catch_warnings():
@@ -3297,7 +3472,7 @@ def test_apply_infer_columns():
         result = ddf.x.apply(lambda x: 1)
     assert isinstance(result, dd.Series)
     assert result.name == "x"
-    assert_eq(result, df.x.apply(lambda x: 1))
+    assert_eq(result, df.x.apply(lambda x: 1), sort_results=False)
 
 
 def test_index_time_properties():
@@ -3328,22 +3503,22 @@ def test_nlargest_nsmallest():
         res = f(ddf, 5, "a")
         res2 = f(ddf, 5, "a", split_every=2)
         sol = f(df, 5, "a")
-        assert_eq(res, sol)
-        assert_eq(res2, sol)
+        assert_eq(res, sol, sort_results=False)
+        assert_eq(res2, sol, sort_results=False)
         assert res._name != res2._name
 
         res = f(ddf, 5, ["a", "c"])
         res2 = f(ddf, 5, ["a", "c"], split_every=2)
         sol = f(df, 5, ["a", "c"])
-        assert_eq(res, sol)
-        assert_eq(res2, sol)
+        assert_eq(res, sol, sort_results=False)
+        assert_eq(res2, sol, sort_results=False)
         assert res._name != res2._name
 
         res = f(ddf.a, 5)
         res2 = f(ddf.a, 5, split_every=2)
         sol = f(df.a, 5)
-        assert_eq(res, sol)
-        assert_eq(res2, sol)
+        assert_eq(res, sol, sort_results=False)
+        assert_eq(res2, sol, sort_results=False)
         assert res._name != res2._name
 
 
@@ -3354,22 +3529,22 @@ def test_reset_index():
     sol = df.reset_index()
     res = ddf.reset_index()
     assert all(d is None for d in res.divisions)
-    assert_eq(res, sol, check_index=False)
+    assert_eq(res, sol, check_index=False, sort_results=False)
 
     sol = df.reset_index(drop=True)
     res = ddf.reset_index(drop=True)
     assert all(d is None for d in res.divisions)
-    assert_eq(res, sol, check_index=False)
+    assert_eq(res, sol, check_index=False, sort_results=False)
 
     sol = df.x.reset_index()
     res = ddf.x.reset_index()
     assert all(d is None for d in res.divisions)
-    assert_eq(res, sol, check_index=False)
+    assert_eq(res, sol, check_index=False, sort_results=False)
 
     sol = df.x.reset_index(drop=True)
     res = ddf.x.reset_index(drop=True)
     assert all(d is None for d in res.divisions)
-    assert_eq(res, sol, check_index=False)
+    assert_eq(res, sol, check_index=False, sort_results=False)
 
 
 def test_dataframe_compute_forward_kwargs():
@@ -3448,7 +3623,7 @@ def test_dataframe_items(columns):
     ddf = dd.from_pandas(df, npartitions=2)
     for (a, b) in zip(df.items(), ddf.items()):
         assert a[0] == b[0]  # column name
-        assert_eq(a[1], b[1].compute())  # column values
+        assert_eq(a[1], b[1].compute(), sort_results=False)  # column values
 
 
 def test_dataframe_itertuples_with_index_false():
@@ -3474,8 +3649,8 @@ def test_astype():
     )
     a = dd.from_pandas(df, 2)
 
-    assert_eq(a.astype(float), df.astype(float))
-    assert_eq(a.x.astype(float), df.x.astype(float))
+    assert_eq(a.astype(float), df.astype(float), sort_results=False)
+    assert_eq(a.x.astype(float), df.x.astype(float), sort_results=False)
 
 
 def test_astype_categoricals():
@@ -3538,8 +3713,8 @@ def test_groupby_callable():
     def iseven(x):
         return x % 2 == 0
 
-    assert_eq(a.groupby(iseven).y.sum(), b.groupby(iseven).y.sum())
-    assert_eq(a.y.groupby(iseven).sum(), b.y.groupby(iseven).sum())
+    assert_eq(a.groupby(iseven).y.sum(), b.groupby(iseven).y.sum(), sort_results=False)
+    assert_eq(a.y.groupby(iseven).sum(), b.y.groupby(iseven).sum(), sort_results=False)
 
 
 def test_methods_tokenize_differently():
@@ -3678,7 +3853,7 @@ def test_gh_1301():
     df = pd.DataFrame([["1", "2"], ["3", "4"]])
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.assign(y=ddf[1].astype(int))
-    assert_eq(ddf2, df.assign(y=df[1].astype(int)))
+    assert_eq(ddf2, df.assign(y=df[1].astype(int)), sort_results=False)
 
     assert ddf2.dtypes["y"] == np.dtype(int)
 
@@ -3737,7 +3912,7 @@ def test_column_assignment():
     ddf["z"] = ddf.x + ddf.y
     df["z"] = df.x + df.y
 
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
     assert "z" not in orig.columns
 
 
@@ -3751,7 +3926,7 @@ def test_array_assignment():
 
     df["z"] = arr
     ddf["z"] = darr
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
     assert "z" not in orig.columns
 
     arr = np.array(np.random.normal(size=(50, 50)))
@@ -3777,7 +3952,7 @@ def test_columns_assignment():
     ddf2 = ddf.assign(y=ddf.x + 1, z=ddf.x - 1)
     ddf[["a", "b"]] = ddf2[["y", "z"]]
 
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
 
 def test_attribute_assignment():
@@ -3785,7 +3960,7 @@ def test_attribute_assignment():
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.y = ddf.x + ddf.y
-    assert_eq(ddf, df.assign(y=df.x + df.y))
+    assert_eq(ddf, df.assign(y=df.x + df.y), sort_results=False)
 
 
 def test_setitem_triggering_realign():
@@ -3801,8 +3976,8 @@ def test_inplace_operators():
 
     ddf.y **= 0.5
 
-    assert_eq(ddf.y, df.y**0.5)
-    assert_eq(ddf, df.assign(y=df.y**0.5))
+    assert_eq(ddf.y, df.y**0.5, sort_results=False)
+    assert_eq(ddf, df.assign(y=df.y**0.5), sort_results=False)
 
 
 @pytest.mark.parametrize("skipna", [True, False])
@@ -3826,16 +4001,28 @@ def test_idxmaxmin(idx, skipna):
     )
 
     with warnings.catch_warnings(record=True):
-        assert_eq(df.idxmax(axis=1, skipna=skipna), ddf.idxmax(axis=1, skipna=skipna))
-        assert_eq(df.idxmin(axis=1, skipna=skipna), ddf.idxmin(axis=1, skipna=skipna))
+        assert_eq(
+            df.idxmax(axis=1, skipna=skipna),
+            ddf.idxmax(axis=1, skipna=skipna),
+            sort_results=False,
+        )
+        assert_eq(
+            df.idxmin(axis=1, skipna=skipna),
+            ddf.idxmin(axis=1, skipna=skipna),
+            sort_results=False,
+        )
 
         assert_eq(
-            df.idxmax(skipna=skipna), ddf.idxmax(skipna=skipna), check_dtype=check_dtype
+            df.idxmax(skipna=skipna),
+            ddf.idxmax(skipna=skipna),
+            check_dtype=check_dtype,
+            sort_results=False,
         )
         assert_eq(
             df.idxmax(skipna=skipna),
             ddf.idxmax(skipna=skipna, split_every=2),
             check_dtype=check_dtype,
+            sort_results=False,
         )
         assert (
             ddf.idxmax(skipna=skipna)._name
@@ -3843,12 +4030,16 @@ def test_idxmaxmin(idx, skipna):
         )
 
         assert_eq(
-            df.idxmin(skipna=skipna), ddf.idxmin(skipna=skipna), check_dtype=check_dtype
+            df.idxmin(skipna=skipna),
+            ddf.idxmin(skipna=skipna),
+            check_dtype=check_dtype,
+            sort_results=False,
         )
         assert_eq(
             df.idxmin(skipna=skipna),
             ddf.idxmin(skipna=skipna, split_every=2),
             check_dtype=check_dtype,
+            sort_results=False,
         )
         assert (
             ddf.idxmin(skipna=skipna)._name
@@ -3886,11 +4077,16 @@ def test_idxmaxmin_empty_partitions():
     )
 
     for skipna in [True, False]:
-        assert_eq(ddf.idxmin(skipna=skipna, split_every=3), df.idxmin(skipna=skipna))
+        assert_eq(
+            ddf.idxmin(skipna=skipna, split_every=3),
+            df.idxmin(skipna=skipna),
+            sort_results=False,
+        )
 
     assert_eq(
         ddf[["a", "b", "d"]].idxmin(skipna=skipna, split_every=3),
         df[["a", "b", "d"]].idxmin(skipna=skipna),
+        sort_results=False,
     )
 
     assert_eq(ddf.b.idxmax(split_every=3), df.b.idxmax())
@@ -3909,15 +4105,17 @@ def test_getitem_meta():
     df = pd.DataFrame(data=data, columns=["col1", "col2"])
     ddf = dd.from_pandas(df, npartitions=1)
 
-    assert_eq(df.col2[df.col1 == "a"], ddf.col2[ddf.col1 == "a"])
+    assert_eq(df.col2[df.col1 == "a"], ddf.col2[ddf.col1 == "a"], sort_results=False)
 
 
 def test_getitem_multilevel():
     pdf = pd.DataFrame({("A", "0"): [1, 2, 2], ("B", "1"): [1, 2, 3]})
     ddf = dd.from_pandas(pdf, npartitions=3)
 
-    assert_eq(pdf["A", "0"], ddf["A", "0"])
-    assert_eq(pdf[[("A", "0"), ("B", "1")]], ddf[[("A", "0"), ("B", "1")]])
+    assert_eq(pdf["A", "0"], ddf["A", "0"], sort_results=False)
+    assert_eq(
+        pdf[[("A", "0"), ("B", "1")]], ddf[[("A", "0"), ("B", "1")]], sort_results=False
+    )
 
 
 def test_getitem_string_subclass():
@@ -3929,7 +4127,7 @@ def test_getitem_string_subclass():
 
     column_1 = string_subclass("column_1")
 
-    assert_eq(df[column_1], ddf[column_1])
+    assert_eq(df[column_1], ddf[column_1], sort_results=False)
 
 
 @pytest.mark.parametrize("col_type", [list, np.array, pd.Series, pd.Index])
@@ -3938,20 +4136,20 @@ def test_getitem_column_types(col_type):
     ddf = dd.from_pandas(df, 2)
     cols = col_type(["C", "A", "B"])
 
-    assert_eq(df[cols], ddf[cols])
+    assert_eq(df[cols], ddf[cols], sort_results=False)
 
 
 def test_getitem_with_bool_dataframe_as_key():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
-    assert_eq(df[df > 3], ddf[ddf > 3])
+    assert_eq(df[df > 3], ddf[ddf > 3], sort_results=False)
 
 
 def test_getitem_with_non_series():
     s = pd.Series(list(range(10)), index=list("abcdefghij"))
     ds = dd.from_pandas(s, npartitions=3)
 
-    assert_eq(s[["a", "b"]], ds[["a", "b"]])
+    assert_eq(s[["a", "b"]], ds[["a", "b"]], sort_results=False)
 
 
 def test_ipython_completion():
@@ -3968,17 +4166,17 @@ def test_diff():
     df = pd.DataFrame(np.random.randn(100, 5), columns=list("abcde"))
     ddf = dd.from_pandas(df, 5)
 
-    assert_eq(ddf.diff(), df.diff())
-    assert_eq(ddf.diff(0), df.diff(0))
-    assert_eq(ddf.diff(2), df.diff(2))
-    assert_eq(ddf.diff(-2), df.diff(-2))
+    assert_eq(ddf.diff(), df.diff(), sort_results=False)
+    assert_eq(ddf.diff(0), df.diff(0), sort_results=False)
+    assert_eq(ddf.diff(2), df.diff(2), sort_results=False)
+    assert_eq(ddf.diff(-2), df.diff(-2), sort_results=False)
 
-    assert_eq(ddf.diff(2, axis=1), df.diff(2, axis=1))
+    assert_eq(ddf.diff(2, axis=1), df.diff(2, axis=1), sort_results=False)
 
-    assert_eq(ddf.a.diff(), df.a.diff())
-    assert_eq(ddf.a.diff(0), df.a.diff(0))
-    assert_eq(ddf.a.diff(2), df.a.diff(2))
-    assert_eq(ddf.a.diff(-2), df.a.diff(-2))
+    assert_eq(ddf.a.diff(), df.a.diff(), sort_results=False)
+    assert_eq(ddf.a.diff(0), df.a.diff(0), sort_results=False)
+    assert_eq(ddf.a.diff(2), df.a.diff(2), sort_results=False)
+    assert_eq(ddf.a.diff(-2), df.a.diff(-2), sort_results=False)
 
     assert ddf.diff(2)._name == ddf.diff(2)._name
     assert ddf.diff(2)._name != ddf.diff(3)._name
@@ -3990,18 +4188,18 @@ def test_shift():
     ddf = dd.from_pandas(df, npartitions=4)
 
     # DataFrame
-    assert_eq(ddf.shift(), df.shift())
-    assert_eq(ddf.shift(0), df.shift(0))
-    assert_eq(ddf.shift(2), df.shift(2))
-    assert_eq(ddf.shift(-2), df.shift(-2))
+    assert_eq(ddf.shift(), df.shift(), sort_results=False)
+    assert_eq(ddf.shift(0), df.shift(0), sort_results=False)
+    assert_eq(ddf.shift(2), df.shift(2), sort_results=False)
+    assert_eq(ddf.shift(-2), df.shift(-2), sort_results=False)
 
-    assert_eq(ddf.shift(2, axis=1), df.shift(2, axis=1))
+    assert_eq(ddf.shift(2, axis=1), df.shift(2, axis=1), sort_results=False)
 
     # Series
-    assert_eq(ddf.A.shift(), df.A.shift())
-    assert_eq(ddf.A.shift(0), df.A.shift(0))
-    assert_eq(ddf.A.shift(2), df.A.shift(2))
-    assert_eq(ddf.A.shift(-2), df.A.shift(-2))
+    assert_eq(ddf.A.shift(), df.A.shift(), sort_results=False)
+    assert_eq(ddf.A.shift(0), df.A.shift(0), sort_results=False)
+    assert_eq(ddf.A.shift(2), df.A.shift(2), sort_results=False)
+    assert_eq(ddf.A.shift(-2), df.A.shift(-2), sort_results=False)
 
     with pytest.raises(TypeError):
         ddf.shift(1.5)
@@ -4031,7 +4229,7 @@ def test_shift_with_freq_PeriodIndex(data_freq, divs):
     ddf = dd.from_pandas(df, npartitions=4)
     for d, p in [(ddf, df), (ddf.A, df.A)]:
         res = d.shift(2, freq=data_freq)
-        assert_eq(res, p.shift(2, freq=data_freq))
+        assert_eq(res, p.shift(2, freq=data_freq), sort_results=False)
         assert res.known_divisions == divs
     # PeriodIndex.shift doesn't have `freq` parameter
     res = ddf.index.shift(2)
@@ -4081,8 +4279,8 @@ def test_first_and_last(method):
         )
         ddf = dd.from_pandas(df, npartitions=10)
         for offset in offsets:
-            assert_eq(f(ddf, offset), f(df, offset))
-            assert_eq(f(ddf.A, offset), f(df.A, offset))
+            assert_eq(f(ddf, offset), f(df, offset), sort_results=False)
+            assert_eq(f(ddf.A, offset), f(df.A, offset), sort_results=False)
 
 
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
@@ -4147,10 +4345,10 @@ def test_values():
     )
     ddf = dd.from_pandas(df, 2)
 
-    assert_eq(df.values, ddf.values)
-    assert_eq(df.x.values, ddf.x.values)
-    assert_eq(df.y.values, ddf.y.values)
-    assert_eq(df.index.values, ddf.index.values)
+    assert_eq(df.values, ddf.values, sort_results=False)
+    assert_eq(df.x.values, ddf.x.values, sort_results=False)
+    assert_eq(df.y.values, ddf.y.values, sort_results=False)
+    assert_eq(df.index.values, ddf.index.values, sort_results=False)
 
 
 def test_copy():
@@ -4162,8 +4360,8 @@ def test_copy():
 
     a["y"] = a.x * 2
 
-    assert_eq(b, df)
-    assert_eq(c, df)
+    assert_eq(b, df, sort_results=False)
+    assert_eq(c, df, sort_results=False)
 
     deep_err = (
         "The `deep` value must be False. This is strictly a shallow copy "
@@ -4183,10 +4381,10 @@ def test_del():
     b = a.copy()
 
     del a["x"]
-    assert_eq(b, df)
+    assert_eq(b, df, sort_results=False)
 
     del df["x"]
-    assert_eq(a, df)
+    assert_eq(a, df, sort_results=False)
 
 
 @pytest.mark.parametrize("index", [True, False])
@@ -4198,6 +4396,7 @@ def test_memory_usage(index, deep):
     assert_eq(
         df.memory_usage(index=index, deep=deep),
         ddf.memory_usage(index=index, deep=deep),
+        sort_results=False,
     )
     assert (
         df.x.memory_usage(index=index, deep=deep)
@@ -4223,14 +4422,14 @@ def test_memory_usage_per_partition(index, deep):
         for part in ddf.partitions
     )
     result = ddf.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
     # Series.memory_usage_per_partition
     expected = pd.Series(
         part.x.compute().memory_usage(index=index, deep=deep) for part in ddf.partitions
     )
     result = ddf.x.memory_usage_per_partition(index=index, deep=deep)
-    assert_eq(expected, result)
+    assert_eq(expected, result, sort_results=False)
 
 
 @pytest.mark.parametrize(
@@ -4255,7 +4454,9 @@ def test_dataframe_reductions_arithmetic(reduction):
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(
-        ddf - (getattr(ddf, reduction)() + 1), df - (getattr(df, reduction)() + 1)
+        ddf - (getattr(ddf, reduction)() + 1),
+        df - (getattr(df, reduction)() + 1),
+        sort_results=False,
     )
 
 
@@ -4265,25 +4466,27 @@ def test_dataframe_mode():
     df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(ddf.mode(), df.mode())
+    assert_eq(ddf.mode(), df.mode(), sort_results=False)
     # name is not preserved in older pandas
-    assert_eq(ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GT_140)
+    assert_eq(
+        ddf.Name.mode(), df.Name.mode(), check_names=PANDAS_GT_140, sort_results=False
+    )
 
     # test empty
     df = pd.DataFrame(columns=["a", "b"])
     ddf = dd.from_pandas(df, npartitions=1)
     # check_index=False should be removed once https://github.com/pandas-dev/pandas/issues/33321 is resolved.
-    assert_eq(ddf.mode(), df.mode(), check_index=False)
+    assert_eq(ddf.mode(), df.mode(), check_index=False, sort_results=False)
 
 
 def test_datetime_loc_open_slicing():
     dtRange = pd.date_range("01.01.2015", "05.05.2015")
     df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
     ddf = dd.from_pandas(df, npartitions=5)
-    assert_eq(df.loc[:"02.02.2015"], ddf.loc[:"02.02.2015"])
-    assert_eq(df.loc["02.02.2015":], ddf.loc["02.02.2015":])
-    assert_eq(df[0].loc[:"02.02.2015"], ddf[0].loc[:"02.02.2015"])
-    assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":])
+    assert_eq(df.loc[:"02.02.2015"], ddf.loc[:"02.02.2015"], sort_results=False)
+    assert_eq(df.loc["02.02.2015":], ddf.loc["02.02.2015":], sort_results=False)
+    assert_eq(df[0].loc[:"02.02.2015"], ddf[0].loc[:"02.02.2015"], sort_results=False)
+    assert_eq(df[0].loc["02.02.2015":], ddf[0].loc["02.02.2015":], sort_results=False)
 
 
 def test_to_datetime():
@@ -4291,7 +4494,7 @@ def test_to_datetime():
     df.index.name = "ix"
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf))
+    assert_eq(pd.to_datetime(df), dd.to_datetime(ddf), sort_results=False)
 
     s = pd.Series(["3/11/2000", "3/12/2000", "3/13/2000"] * 100)
     s.index = s.values
@@ -4300,6 +4503,7 @@ def test_to_datetime():
     assert_eq(
         pd.to_datetime(s, infer_datetime_format=True),
         dd.to_datetime(ds, infer_datetime_format=True),
+        sort_results=False,
     )
     assert_eq(
         pd.to_datetime(s.index, infer_datetime_format=True),
@@ -4309,6 +4513,7 @@ def test_to_datetime():
     assert_eq(
         pd.to_datetime(s, utc=True),
         dd.to_datetime(ds, utc=True),
+        sort_results=False,
     )
 
     for arg in ("2021-08-03", 2021):
@@ -4320,16 +4525,22 @@ def test_to_timedelta():
     s = pd.Series(range(10))
     ds = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
-    assert_eq(pd.to_timedelta(s, unit="h"), dd.to_timedelta(ds, unit="h"))
+    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds), sort_results=False)
+    assert_eq(
+        pd.to_timedelta(s, unit="h"), dd.to_timedelta(ds, unit="h"), sort_results=False
+    )
 
     s = pd.Series([1, 2, "this will error"])
     ds = dd.from_pandas(s, npartitions=2)
-    assert_eq(pd.to_timedelta(s, errors="coerce"), dd.to_timedelta(ds, errors="coerce"))
+    assert_eq(
+        pd.to_timedelta(s, errors="coerce"),
+        dd.to_timedelta(ds, errors="coerce"),
+        sort_results=False,
+    )
 
     s = pd.Series(["1", 2, "1 day 2 hours"])
     ds = dd.from_pandas(s, npartitions=2)
-    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
+    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds), sort_results=False)
 
     if PANDAS_GT_110:
         with pytest.raises(
@@ -4343,7 +4554,7 @@ def test_isna(values):
     s = pd.Series(values)
     ds = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(pd.isna(s), dd.isna(ds))
+    assert_eq(pd.isna(s), dd.isna(ds), sort_results=False)
 
 
 @pytest.mark.parametrize("drop", [0, 9])
@@ -4488,7 +4699,7 @@ def test_cumulative_multiple_columns():
             d[c + "cmax"] = d[c].cummax()
             d[c + "cp"] = d[c].cumprod()
 
-    assert_eq(ddf, df)
+    assert_eq(ddf, df, sort_results=False)
 
 
 @pytest.mark.parametrize("func", [np.asarray, M.to_records])
@@ -4508,7 +4719,9 @@ def test_map_partition_array(func):
         except Exception:
             continue
         x = pre(ddf).map_partitions(func)
-        assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
+        assert_eq(
+            x, expected, check_type=False, sort_results=False
+        )  # TODO: make check_type pass
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)
@@ -4541,13 +4754,13 @@ def test_mixed_dask_array_operations():
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4, 5, 6])
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(df.x + df.x.values, ddf.x + ddf.x.values)
-    assert_eq(df.x.values + df.x, ddf.x.values + ddf.x)
+    assert_eq(df.x + df.x.values, ddf.x + ddf.x.values, sort_results=False)
+    assert_eq(df.x.values + df.x, ddf.x.values + ddf.x, sort_results=False)
 
-    assert_eq(df.x + df.index.values, ddf.x + ddf.index.values)
-    assert_eq(df.index.values + df.x, ddf.index.values + ddf.x)
+    assert_eq(df.x + df.index.values, ddf.x + ddf.index.values, sort_results=False)
+    assert_eq(df.index.values + df.x, ddf.index.values + ddf.x, sort_results=False)
 
-    assert_eq(df.x + df.x.values.sum(), ddf.x + ddf.x.values.sum())
+    assert_eq(df.x + df.x.values.sum(), ddf.x + ddf.x.values.sum(), sort_results=False)
 
 
 def test_mixed_dask_array_operations_errors():
@@ -4576,9 +4789,9 @@ def test_mixed_dask_array_multi_dimensional():
     x = (df.values + 1).astype(float)
     dx = (ddf.values + 1).astype(float)
 
-    assert_eq(ddf + dx + 1, df + x + 1)
-    assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1)
-    assert_eq(ddf[["y", "x"]] + dx + 1, df[["y", "x"]] + x + 1)
+    assert_eq(ddf + dx + 1, df + x + 1, sort_results=False)
+    assert_eq(ddf + dx.rechunk((None, 1)) + 1, df + x + 1, sort_results=False)
+    assert_eq(ddf[["y", "x"]] + dx + 1, df[["y", "x"]] + x + 1, sort_results=False)
 
 
 def test_meta_raises():
@@ -4613,7 +4826,7 @@ def test_meta_nonempty_uses_meta_value_if_provided():
         warnings.simplefilter("ignore", UserWarning)
         expected = base + offsets
         actual = dask_base + dask_offsets
-        assert_eq(expected, actual)
+        assert_eq(expected, actual, sort_results=False)
 
 
 def test_dask_dataframe_holds_scipy_sparse_containers():
@@ -4648,9 +4861,9 @@ def test_partitions_indexer():
     df = pd.DataFrame({"x": range(10)})
     ddf = dd.from_pandas(df, npartitions=5)
 
-    assert_eq(ddf.partitions[0], ddf.get_partition(0))
-    assert_eq(ddf.partitions[3], ddf.get_partition(3))
-    assert_eq(ddf.partitions[-1], ddf.get_partition(4))
+    assert_eq(ddf.partitions[0], ddf.get_partition(0), sort_results=False)
+    assert_eq(ddf.partitions[3], ddf.get_partition(3), sort_results=False)
+    assert_eq(ddf.partitions[-1], ddf.get_partition(4), sort_results=False)
 
     assert ddf.partitions[:3].npartitions == 3
     assert ddf.x.partitions[:3].npartitions == 3
@@ -4661,10 +4874,10 @@ def test_partitions_indexer():
 def test_mod_eq():
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
-    assert_eq(df, ddf)
-    assert_eq(df.a, ddf.a)
-    assert_eq(df.a + 2, ddf.a + 2)
-    assert_eq(df.a + 2 == 0, ddf.a + 2 == 0)
+    assert_eq(df, ddf, sort_results=False)
+    assert_eq(df.a, ddf.a, sort_results=False)
+    assert_eq(df.a + 2, ddf.a + 2, sort_results=False)
+    assert_eq(df.a + 2 == 0, ddf.a + 2 == 0, sort_results=False)
 
 
 def test_setitem():
@@ -4672,7 +4885,7 @@ def test_setitem():
     ddf = dd.from_pandas(df.copy(), 2)
     df[df.columns] = 1
     ddf[ddf.columns] = 1
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
 
 def test_setitem_with_bool_dataframe_as_key():
@@ -4680,7 +4893,7 @@ def test_setitem_with_bool_dataframe_as_key():
     ddf = dd.from_pandas(df.copy(), 2)
     df[df > 2] = 5
     ddf[ddf > 2] = 5
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
 
 def test_setitem_with_bool_series_as_key():
@@ -4688,7 +4901,7 @@ def test_setitem_with_bool_series_as_key():
     ddf = dd.from_pandas(df.copy(), 2)
     df[df["A"] > 2] = 5
     ddf[ddf["A"] > 2] = 5
-    assert_eq(df, ddf)
+    assert_eq(df, ddf, sort_results=False)
 
 
 def test_setitem_with_numeric_column_name_raises_not_implemented():
@@ -4704,14 +4917,16 @@ def test_setitem_with_numeric_column_name_raises_not_implemented():
 def test_broadcast():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf - (ddf.sum() + 1), df - (df.sum() + 1))
+    assert_eq(ddf - (ddf.sum() + 1), df - (df.sum() + 1), sort_results=False)
 
 
 def test_scalar_with_array():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    da.utils.assert_eq(df.x.values + df.x.mean(), ddf.x.values + ddf.x.mean())
+    da.utils.assert_eq(
+        df.x.values + df.x.mean(), ddf.x.values + ddf.x.mean(), sort_results=False
+    )
 
 
 def test_has_parallel_type():
@@ -4753,8 +4968,8 @@ def test_assign_index():
     expected = df.copy()
     expected.index = expected.index * 10
 
-    assert_eq(ddf, expected)
-    assert_eq(ddf_copy, df)
+    assert_eq(ddf, expected, sort_results=False)
+    assert_eq(ddf_copy, df, sort_results=False)
 
 
 def test_index_divisions():
@@ -4770,10 +4985,14 @@ def test_replace():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(df.replace(1, 10), ddf.replace(1, 10))
-    assert_eq(df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}))
-    assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10))
-    assert_eq(df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}))
+    assert_eq(df.replace(1, 10), ddf.replace(1, 10), sort_results=False)
+    assert_eq(
+        df.replace({1: 10, 2: 20}), ddf.replace({1: 10, 2: 20}), sort_results=False
+    )
+    assert_eq(df.x.replace(1, 10), ddf.x.replace(1, 10), sort_results=False)
+    assert_eq(
+        df.x.replace({1: 10, 2: 20}), ddf.x.replace({1: 10, 2: 20}), sort_results=False
+    )
 
 
 def test_map_partitions_delays_lists():
@@ -4835,7 +5054,7 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dask_base = dd.from_pandas(base, npartitions=base_npart, sort=False)
     dask_map = dd.from_pandas(mapper, npartitions=map_npart, sort=False)
     result = dask_base.map(dask_map)
-    dd.utils.assert_eq(expected, result)
+    dd.utils.assert_eq(expected, result, sort_results=False)
 
 
 def test_dataframe_explode():
@@ -4844,7 +5063,7 @@ def test_dataframe_explode():
     ddf = dd.from_pandas(df, npartitions=2)
     exploded_ddf = ddf.explode("A")
     assert ddf.divisions == exploded_ddf.divisions
-    assert_eq(exploded_ddf.compute(), exploded_df)
+    assert_eq(exploded_ddf.compute(), exploded_df, sort_results=False)
 
 
 def test_series_explode():
@@ -4852,7 +5071,7 @@ def test_series_explode():
     exploded_s = s.explode()
     ds = dd.from_pandas(s, npartitions=2)
     exploded_ds = ds.explode()
-    assert_eq(exploded_ds, exploded_s)
+    assert_eq(exploded_ds, exploded_s, sort_results=False)
     assert ds.divisions == exploded_ds.divisions
 
 
@@ -4864,7 +5083,7 @@ def test_pop():
     s = ddf.pop("y")
     assert s.name == "y"
     assert ddf.columns == ["x"]
-    assert_eq(ddf, df[["x"]])
+    assert_eq(ddf, df[["x"]], sort_results=False)
 
 
 @pytest.mark.parametrize("dropna", [True, False])
@@ -4876,7 +5095,9 @@ def test_nunique(dropna, axis):
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf["y"].nunique(dropna=dropna), df["y"].nunique(dropna=dropna))
     assert_eq(
-        ddf.nunique(dropna=dropna, axis=axis), df.nunique(dropna=dropna, axis=axis)
+        ddf.nunique(dropna=dropna, axis=axis),
+        df.nunique(dropna=dropna, axis=axis),
+        sort_results=False,
     )
 
 
@@ -4897,8 +5118,8 @@ def test_view():
 
     df = pd.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=2)
-    assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"))
-    assert_eq(ddf["y"].view("int64"), df["y"].view("int64"))
+    assert_eq(ddf["x"].view("uint8"), df["x"].view("uint8"), sort_results=False)
+    assert_eq(ddf["y"].view("int64"), df["y"].view("int64"), sort_results=False)
 
 
 def test_simple_map_partitions():
@@ -4923,15 +5144,15 @@ def test_iter():
 def test_dataframe_groupby_cumsum_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
-    assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
-    assert_eq(ddf[ddf.x > 5].x.cumsum(), df[df.x > 5].x.cumsum())
+    assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum(), sort_results=False)
+    assert_eq(ddf[ddf.x > 5].x.cumsum(), df[df.x > 5].x.cumsum(), sort_results=False)
 
 
 def test_dataframe_groupby_cumprod_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
-    assert_eq(ddf[ddf.x < 5].x.cumprod(), df[df.x < 5].x.cumprod())
-    assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
+    assert_eq(ddf[ddf.x < 5].x.cumprod(), df[df.x < 5].x.cumprod(), sort_results=False)
+    assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod(), sort_results=False)
 
 
 def test_fuse_roots():
@@ -4983,7 +5204,7 @@ def test_join_series():
     ddf = dd.from_pandas(df, npartitions=1)
     expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
-    assert_eq(actual_df, expected_df)
+    assert_eq(actual_df, expected_df, sort_results=False)
 
 
 def test_dask_layers():
@@ -5234,7 +5455,7 @@ def test_from_dict(dtype, orient, npartitions):
         assert result.npartitions == 1
     else:
         assert result.npartitions == npartitions
-    assert_eq(result, expected)
+    assert_eq(result, expected, sort_results=False)
 
 
 def test_from_dict_raises():
