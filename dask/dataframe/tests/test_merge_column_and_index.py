@@ -130,7 +130,7 @@ def test_merge_single_to_known(
     result = ddf_left_single.merge(ddf_right, on=on, how=how, shuffle=shuffle_method)
 
     # Assertions
-    assert_eq(result, expected, sort_results=False)
+    assert_eq(result, expected)
     assert result.divisions == ddf_right.divisions
     assert len(result.__dask_graph__()) < 30
 
