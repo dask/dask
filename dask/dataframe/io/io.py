@@ -4,7 +4,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import Optional, Union
+from typing import TYPE_CHECKING, Iterable, Literal, Optional, Union
 
 import numpy as np
 import pandas as pd
@@ -30,10 +30,14 @@ from dask.dataframe.utils import (
     is_series_like,
     make_meta,
 )
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
 from dask.utils import M, _deprecated, funcname, is_arraylike
+
+if TYPE_CHECKING:
+    import distributed
+
 
 lock = Lock()
 
@@ -646,24 +650,25 @@ def to_records(df):
     return df.map_partitions(M.to_records)
 
 
-# TODO: type this -- causes lots of papercuts
 @insert_meta_param_description
 def from_delayed(
-    dfs,
+    dfs: Union[Delayed, Iterable[Union[Delayed, distributed.Future]]],
     meta=None,
-    divisions=None,
-    prefix="from-delayed",
-    verify_meta=True,
+    divisions=Union[tuple, Literal["sorted"], None],
+    prefix: str = "from-delayed",
+    verify_meta: bool = True,
 ):
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
     ----------
-    dfs : list of Delayed or Future
-        An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` or an iterable of ``distributed.Future`` objects,
-        such as come from ``client.submit`` interface. These comprise the individual
+    dfs : Delayed, list[Delayed, Future]
+        A ``dask.delayed.Delayed`` or an iterable of these objects, e.g. returned by
+        ``dask.delayed`` or an iterable of ``distributed.Future`` ,
+        e.g. returned by ``client.submit``. These comprise the individual
         partitions of the resulting dataframe.
+        If a single object is provided (not an iterable), then the resulting dataframe
+        will have only one partition.
     $META
     divisions : tuple, str, optional
         Partition boundaries along the index.
