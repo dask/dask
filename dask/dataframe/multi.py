@@ -353,7 +353,6 @@ def _align_on_dtypes(left, left_on, right, right_on):
     lhs, rhs = left, right
     for l, r in zip(_list(left_on), _list(right_on)):
         try:
-            # import pdb; pdb.set_trace()
             _l = _get(left, l)
             _r = _get(right, r)
             typ = max(_l.dtype, _r.dtype)
