@@ -2298,7 +2298,11 @@ def test_merge_outer_empty():
         {"user": ["A", "B", "C", "D", "E", "F"], "cluster": [1, 1, 2, 2, 3, 3]}
     )
     df = dd.from_pandas(df, npartitions=10)
-    empty_df = dd.from_pandas(pd.DataFrame(), npartitions=10)
+    empty_df = dd.from_pandas(
+        # Set dtype to avoid mismatched-dtype warning
+        pd.DataFrame(index=np.array([], dtype="int")),
+        npartitions=10,
+    )
 
     for x in range(0, k_clusters + 1):
         assert_eq(
@@ -2315,7 +2319,17 @@ def test_dtype_equality_warning():
     df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.longlong))})
 
     with warnings.catch_warnings(record=True) as record:
-        dd.multi.warn_dtype_mismatch(df1, df2, "a", "a")
+        dd.multi.handle_dtype_mismatch(df1, df2, "a", "a")
+    assert not record
+
+
+def test_dtype_equality_warning_ints():
+    # Check that there is no mismatch warning for simple integers
+    df1 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int64))})
+    df2 = pd.DataFrame({"a": np.array([1, 2], dtype=np.dtype(np.int32))})
+
+    with warnings.catch_warnings(record=True) as record:
+        dd.multi.handle_dtype_mismatch(df1, df2, "a", "a")
     assert not record
 
 

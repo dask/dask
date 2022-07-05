@@ -313,62 +313,6 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
-def _align_on_dtypes(left, left_on, right, right_on):
-    # Upcast "on" dtypes if left and right are inconsistent.
-    #
-    # Note that this step is required for cudf, because
-    # hashing behavior will vary between int32 and int64.
-    # This means the same "number" (e.g. 1) may be shuffled
-    # to a different output partition for int32 than it
-    # would for int64.
-
-    if is_dask_collection(left_on) or is_dask_collection(right_on):
-        # dtype casting not yet supported when
-        # joining on dask collections
-        return left, right
-
-    def _list(on):
-        if isinstance(on, str):
-            return [on]
-        elif pd.api.types.is_list_like(on):
-            return list(on)
-        raise TypeError  # Untested
-
-    def _get(df, key):
-        if key in df.columns:
-            return df[key]
-        elif key == df.index.name:
-            return df.index
-        else:
-            raise KeyError  # Untested
-
-    def _set(df, key, value):
-        if key in df.columns:
-            df[key] = value
-        elif key == df.index.name:
-            df.set_index(value)
-        else:
-            raise KeyError  # Untested
-
-    lhs, rhs = left, right
-    for l, r in zip(_list(left_on), _list(right_on)):
-        try:
-            # import pdb; pdb.set_trace()
-            _l = _get(left, l)
-            _r = _get(right, r)
-            typ = max(_l.dtype, _r.dtype)
-        except TypeError:
-            continue
-        if _l.dtype != typ:
-            # Upcast left dtype to match right
-            _set(lhs, l, _l.astype(typ))
-        elif _r.dtype != typ:
-            # Upcast right dtype to match left
-            _set(rhs, r, _r.astype(typ))
-
-    return lhs, rhs
-
-
 def hash_join(
     lhs,
     left_on,
@@ -391,7 +335,6 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs, rhs = _align_on_dtypes(lhs, left_on, rhs, right_on)
     lhs2 = shuffle_func(
         lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
     )
@@ -507,35 +450,79 @@ def single_partition_join(left, right, **kwargs):
     return joined
 
 
-def warn_dtype_mismatch(left, right, left_on, right_on):
-    """Checks for merge column dtype mismatches and throws a warning (#4574)"""
+def handle_dtype_mismatch(lhs, rhs, left_on, right_on):
+    """Checks for merge column dtype mismatches, and
+    throws a warning if the mismatch cannot be addressed
+    by a simple integer up-cast (#4574)
+    """
 
+    left, right = lhs, rhs
     if not isinstance(left_on, list):
         left_on = [left_on]
     if not isinstance(right_on, list):
         right_on = [right_on]
 
-    if all(col in left.columns for col in left_on) and all(
-        col in right.columns for col in right_on
-    ):
-        dtype_mism = [
-            ((lo, ro), left.dtypes[lo], right.dtypes[ro])
-            for lo, ro in zip(left_on, right_on)
-            if not is_dtype_equal(left.dtypes[lo], right.dtypes[ro])
-        ]
+    def _get(df, key):
+        # Get column or index of `df`
+        if key in df.columns:
+            return df[key]
+        elif key == df.index.name:
+            return df.index
+        else:
+            raise KeyError
 
-        if dtype_mism:
-            col_tb = asciitable(
-                ("Merge columns", "left dtype", "right dtype"), dtype_mism
-            )
+    def _set(df, key, value):
+        # Set column or index of `df` to `value`
+        if key in df.columns:
+            df[key] = value
+        elif key == df.index.name:
+            df.set_index(value)
+        else:
+            raise KeyError
 
-            warnings.warn(
-                (
-                    "Merging dataframes with merge column data "
-                    "type mismatches: \n{}\nCast dtypes explicitly to "
-                    "avoid unexpected results."
-                ).format(col_tb)
-            )
+    dtype_mism = []
+    for lo, ro in zip(left_on, right_on):
+        _left, _right = _get(left, lo), _get(right, ro)
+        if not is_dtype_equal(_left.dtype, _right.dtype):
+            try:
+                simple_numpy_int = np.issubdtype(
+                    _left.dtype, np.integer
+                ) and np.issubdtype(_right.dtype, np.integer)
+            except TypeError:
+                simple_numpy_int = False
+            if simple_numpy_int:
+                # Upcast lower dtype if both sides
+                # are simple numpy integers
+                typ = max(_left.dtype, _right.dtype)
+                if _left.dtype != typ:
+                    _set(left, lo, _left.astype(typ))
+                elif _right.dtype != typ:
+                    _set(right, ro, _right.astype(typ))
+            else:
+                # Raise a warning for all other mismatches
+                dtype_mism.append(
+                    (
+                        (
+                            lo if lo in left.columns else "index",
+                            ro if ro in right.columns else "index",
+                        ),
+                        _left.dtype,
+                        _right.dtype,
+                    )
+                )
+
+    if dtype_mism:
+        col_tb = asciitable(("Merge columns", "left dtype", "right dtype"), dtype_mism)
+
+        warnings.warn(
+            (
+                "Merging dataframes with merge column data "
+                "type mismatches: \n{}\nCast dtypes explicitly to "
+                "avoid unexpected results."
+            ).format(col_tb)
+        )
+
+    return lhs, rhs
 
 
 @wraps(pd.merge)
@@ -702,8 +689,11 @@ def merge(
         )
     # Catch all hash join
     else:
-        if left_on and right_on:
-            warn_dtype_mismatch(left, right, left_on, right_on)
+
+        left, right = handle_dtype_mismatch(left, right, left_on, right_on)
+
+        # if left_on and right_on:
+        #     warn_dtype_mismatch(left, right, left_on, right_on)
 
         # Check if we should use a broadcast_join
         # See note on `broadcast_bias` below.
