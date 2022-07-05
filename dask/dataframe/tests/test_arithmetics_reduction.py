@@ -7,13 +7,16 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_120, PANDAS_VERSION
+from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_150, PANDAS_VERSION
 from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
     import scipy
 except ImportError:
     scipy = None
+
+
+NUMERIC_ONLY = True if PANDAS_GT_150 else None
 
 
 @pytest.mark.slow
@@ -1162,27 +1165,50 @@ def test_reductions_frame_dtypes():
 
     assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
     assert_eq(
-        df_no_timedelta.drop(columns="dt").mean(),
-        ddf_no_timedelta.drop(columns="dt").mean(),
+        df_no_timedelta.drop(columns="dt").mean(numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.drop(columns="dt").mean(numeric_only=NUMERIC_ONLY),
     )
 
-    assert_eq(df.prod(), ddf.prod())
-    assert_eq(df.product(), ddf.product())
+    assert_eq(df.prod(numeric_only=NUMERIC_ONLY), ddf.prod(numeric_only=NUMERIC_ONLY))
+    assert_eq(
+        df.product(numeric_only=NUMERIC_ONLY), ddf.product(numeric_only=NUMERIC_ONLY)
+    )
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
-    assert_eq(df.sem(), ddf.sem())
-    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
-
-    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
-    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-    assert_eq(df_no_timedelta.var(skipna=False), ddf_no_timedelta.var(skipna=False))
-    assert_eq(df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0))
+    assert_eq(df.sem(numeric_only=NUMERIC_ONLY), ddf.sem(numeric_only=NUMERIC_ONLY))
     assert_eq(
-        df_no_timedelta.var(ddof=0, skipna=False),
-        ddf_no_timedelta.var(ddof=0, skipna=False),
+        df.sem(ddof=0, numeric_only=NUMERIC_ONLY),
+        ddf.sem(ddof=0, numeric_only=NUMERIC_ONLY),
+    )
+
+    assert_eq(
+        df_no_timedelta.std(numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.std(numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.std(skipna=False, numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.std(skipna=False, numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.std(ddof=0, numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.std(ddof=0, numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.var(numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.var(numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.var(skipna=False, numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.var(skipna=False, numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.var(ddof=0, numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.var(ddof=0, numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_no_timedelta.var(ddof=0, skipna=False, numeric_only=NUMERIC_ONLY),
+        ddf_no_timedelta.var(ddof=0, skipna=False, numeric_only=NUMERIC_ONLY),
     )
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
@@ -1195,13 +1221,21 @@ def test_reductions_frame_dtypes():
     # only timedelta
     df_td = df[["timedelta"]]
     ddf_td = dd.from_pandas(df_td, 3)
-    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0))
-    assert_eq(df_td.var(), ddf_td.var())
+    assert_eq(
+        df_td.var(ddof=0, numeric_only=NUMERIC_ONLY),
+        ddf_td.var(ddof=0, numeric_only=NUMERIC_ONLY),
+    )
+    assert_eq(
+        df_td.var(numeric_only=NUMERIC_ONLY), ddf_td.var(numeric_only=NUMERIC_ONLY)
+    )
 
     # only numercis
     df_numerics = df[["int", "float", "bool"]]
     ddf_numerics = dd.from_pandas(df_numerics, 3)
-    assert_eq(df_numerics.var(), ddf_numerics.var())
+    assert_eq(
+        df_numerics.var(numeric_only=NUMERIC_ONLY),
+        ddf_numerics.var(numeric_only=NUMERIC_ONLY),
+    )
 
 
 def test_reductions_frame_dtypes_numeric_only():
