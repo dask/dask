@@ -522,7 +522,7 @@ def handle_dtype_mismatch(lhs, rhs, left_on, right_on):
             ).format(col_tb)
         )
 
-    return lhs, rhs
+    return left, right
 
 
 @wraps(pd.merge)
