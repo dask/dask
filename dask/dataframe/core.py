@@ -4413,6 +4413,7 @@ class DataFrame(_Frame):
 
     @property
     def empty(self):
+        # __getattr__ will be called after we raise this, so we'll raise it again from there
         raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
             "However, checking the number of columns is fast. "
@@ -4525,7 +4526,11 @@ class DataFrame(_Frame):
         if key in self.columns:
             return self[key]
         elif key == "empty":
-            # To raise informative exception
+            # self.empty raises AttributeNotImplementedError, which includes
+            # AttributeError, which means we end up here in self.__getattr__,
+            # because DataFrame.__getattribute__ doesn't think the attribute exists
+            # and uses __getattr__ as the fallback. So, get `self.empty` more
+            # forcefully via object.__getattribute__ to raise informative error.
             object.__getattribute__(self, key)
         else:
             raise AttributeError("'DataFrame' object has no attribute %r" % key)
