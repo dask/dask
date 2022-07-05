@@ -690,10 +690,12 @@ def merge(
     # Catch all hash join
     else:
 
-        left, right = handle_dtype_mismatch(left, right, left_on, right_on)
-
-        # if left_on and right_on:
-        #     warn_dtype_mismatch(left, right, left_on, right_on)
+        left, right = handle_dtype_mismatch(
+            left,
+            right,
+            left.index.name if left_index else left_on,
+            right.index.name if right_index else right_on,
+        )
 
         # Check if we should use a broadcast_join
         # See note on `broadcast_bias` below.
