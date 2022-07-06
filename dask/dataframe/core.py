@@ -46,6 +46,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
     PANDAS_GT_120,
+    AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -4412,7 +4413,8 @@ class DataFrame(_Frame):
 
     @property
     def empty(self):
-        raise NotImplementedError(
+        # __getattr__ will be called after we raise this, so we'll raise it again from there
+        raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
             "However, checking the number of columns is fast. "
             "Depending on which of these results you need, use either "
@@ -4523,6 +4525,13 @@ class DataFrame(_Frame):
     def __getattr__(self, key):
         if key in self.columns:
             return self[key]
+        elif key == "empty":
+            # self.empty raises AttributeNotImplementedError, which includes
+            # AttributeError, which means we end up here in self.__getattr__,
+            # because DataFrame.__getattribute__ doesn't think the attribute exists
+            # and uses __getattr__ as the fallback. So, get `self.empty` more
+            # forcefully via object.__getattribute__ to raise informative error.
+            object.__getattribute__(self, key)
         else:
             raise AttributeError("'DataFrame' object has no attribute %r" % key)
 

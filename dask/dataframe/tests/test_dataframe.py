@@ -5242,3 +5242,10 @@ def test_from_dict_raises():
     ds = dd.from_pandas(s, npartitions=2)
     with pytest.raises(NotImplementedError, match="Dask collections as inputs"):
         dd.DataFrame.from_dict({"a": ds}, npartitions=2)
+
+
+def test_empty():
+    with pytest.raises(NotImplementedError, match="may be expensive"):
+        d.empty
+    with pytest.raises(AttributeError, match="may be expensive"):
+        d.empty
