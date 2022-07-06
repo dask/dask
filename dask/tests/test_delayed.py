@@ -14,6 +14,7 @@ import dask.bag as db
 from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
 from dask.highlevelgraph import HighLevelGraph
+from dask.layers import LeafObject
 from dask.utils_test import inc
 
 
@@ -37,10 +38,22 @@ class Tuple:
         return tuple, ()
 
 
+def is_leaf_object(x: Delayed):
+    # Return whether Delayed-object `x`
+    # is wrapping a `LeafObject` Layer
+    try:
+        vals = list(x.dask.layers.values())
+        return isinstance(vals[0], LeafObject) if len(vals) == 1 else False
+    except AttributeError:
+        return False
+
+
 @pytest.mark.filterwarnings("ignore:The dask.delayed:UserWarning")
 def test_to_task_dask():
     a = delayed(1, name="a")
     b = delayed(2, name="b")
+    assert is_leaf_object(a)
+    assert is_leaf_object(b)
     task, dask = to_task_dask([a, b, 3])
     assert task == ["a", "b", 3]
 
@@ -81,6 +94,7 @@ def test_to_task_dask():
 
 def test_delayed():
     add2 = delayed(add)
+    assert is_leaf_object(add2)
     assert add2(1, 2).compute() == 3
     assert (add2(1, 2) + 3).compute() == 6
     assert add2(add2(1, 2), 3).compute() == 6
@@ -113,6 +127,7 @@ def test_delayed_with_dataclass():
 
 def test_operators():
     a = delayed([1, 2, 3])
+    assert is_leaf_object(a)
     assert a[0].compute() == 1
     assert (a + a).compute() == [1, 2, 3, 1, 2, 3]
     b = delayed(2)
@@ -139,6 +154,7 @@ def test_operators():
 
 def test_methods():
     a = delayed("a b c d e")
+    assert is_leaf_object(a)
     assert a.split(" ").compute() == ["a", "b", "c", "d", "e"]
     assert a.upper().replace("B", "A").split().count("A").compute() == 2
     assert a.split(" ", pure=True).key == a.split(" ", pure=True).key
@@ -148,6 +164,7 @@ def test_methods():
 
 def test_attributes():
     a = delayed(2 + 1j)
+    assert is_leaf_object(a)
     assert a.real._key == a.real._key
     assert a.real.compute() == 2
     assert a.imag.compute() == 1
@@ -168,7 +185,9 @@ def test_np_dtype_of_delayed():
     x = delayed(1)
     with pytest.raises(TypeError):
         np.dtype(x)
-    assert delayed(np.array([1], dtype="f8")).dtype.compute() == np.dtype("f8")
+    a = delayed(np.array([1], dtype="f8"))
+    assert is_leaf_object(a)
+    assert a.dtype.compute() == np.dtype("f8")
 
 
 def test_delayed_visualise_warn():

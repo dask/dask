@@ -1565,6 +1565,8 @@ class LeafObject(Layer):
 
     This class is used by ``dask.delayed`` to represent
     an explicit Python object as a un-materialized Layer.
+    The primary purpose of this class is to avoid using
+    `MaterializedLayer` for trivial graphs.
 
     Parameters
     ----------
@@ -1622,22 +1624,3 @@ class LeafObject(Layer):
         if self.name not in keys:
             return LeafObject("empty-" + self.name, None), {}
         return self, {}
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        from distributed.protocol.serialize import to_serialize
-
-        # Serialize possibly un-pickleable object
-        return {
-            "name": self.name,
-            "object": to_serialize(self.object),
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.protocol.serialize import to_serialize
-
-        # Must use `to_serialize` on the entire task
-        # and return empty deps
-        dsk = {state["name"]: to_serialize(state["object"])}
-        deps = {k: set() for k in dsk.keys()}
-        return {"dsk": dsk, "deps": deps}
