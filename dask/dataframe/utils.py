@@ -727,3 +727,7 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
         columns = [columns]
     df2.drop(columns=columns, inplace=True, errors=errors)
     return df2
+
+
+class AttributeNotImplementedError(NotImplementedError, AttributeError):
+    """NotImplementedError and AttributeError"""
