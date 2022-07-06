@@ -3087,10 +3087,7 @@ Dask Name: {name}, {task} tasks"""
         # - avoid serializing data in every task
         # - avoid cost of traversal of large list in optimizations
         return self.map_partitions(
-            M.isin,
-            delayed(values),
-            meta=meta,
-            enforce_metadata=False,
+            M.isin, delayed(values), meta=meta, enforce_metadata=False
         )
 
     @derived_from(pd.DataFrame)
