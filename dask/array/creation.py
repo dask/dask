@@ -496,7 +496,7 @@ def indices(dimensions, dtype=int, chunks="auto"):
         xi.append(arange(dimensions[i], dtype=dtype, chunks=(chunks[i],)))
 
     grid = []
-    if np.prod(dimensions):
+    if all(dimensions):
         grid = meshgrid(*xi, indexing="ij")
 
     if grid:

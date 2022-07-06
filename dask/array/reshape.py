@@ -1,3 +1,4 @@
+import math
 import warnings
 from collections import Counter
 from functools import reduce
@@ -65,8 +66,8 @@ def reshape_rechunk(inshape, outshape, inchunks):
             if all(len(inchunks[i]) == inshape[i] for i in range(ii)):
                 for i in range(ii + 1):
                     result_inchunks[i] = inchunks[i]
-                result_outchunks[oi] = inchunks[ii] * np.prod(
-                    list(map(len, inchunks[ileft:ii]))
+                result_outchunks[oi] = inchunks[ii] * math.prod(
+                    map(len, inchunks[ileft:ii])
                 )
             else:
                 for i in range(ileft + 1, ii + 1):  # need single-shape dimensions
