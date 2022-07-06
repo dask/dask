@@ -5686,7 +5686,7 @@ class BlockView:
         """
         The total number of blocks in the array.
         """
-        return np.prod(self.shape)  # type: ignore
+        return np.prod(self.shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
