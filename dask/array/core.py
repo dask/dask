@@ -2096,8 +2096,11 @@ class Array(DaskMethodsMixin):
         """
         return self.blocks
 
-    @derived_from(np.ndarray)
     def dot(self, other):
+        """Dot product of self and other.
+
+        Refer to :func:`dask.array.tensordot` for full documentation.
+        """
         from dask.array.routines import tensordot
 
         return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
@@ -2110,8 +2113,11 @@ class Array(DaskMethodsMixin):
     def T(self):
         return self.transpose()
 
-    @derived_from(np.ndarray)
     def transpose(self, *axes):
+        """Reverse or permute the axes of an array. Return the modified array.
+
+        Refer to :func:`dask.array.transpose` for full documentation.
+        """
         from dask.array.routines import transpose
 
         if not axes:
@@ -2124,27 +2130,30 @@ class Array(DaskMethodsMixin):
         else:
             return transpose(self, axes=axes)
 
-    @derived_from(np.ndarray)
     def ravel(self):
+        """Return a flattened array.
+
+        Refer to :func:`dask.array.ravel` for full documentation.
+        """
         from dask.array.routines import ravel
 
         return ravel(self)
 
     flatten = ravel
 
-    @derived_from(np.ndarray)
     def choose(self, choices):
+        """Use an index array to construct a new array from a set of choices.
+
+        Refer to :func:`dask.array.choose` for full documentation.
+        """
         from dask.array.routines import choose
 
         return choose(self, choices)
 
-    @derived_from(np.ndarray)
     def reshape(self, *shape, merge_chunks=True, limit=None):
-        """
-        .. note::
+        """Reshape array to new shape
 
-           See :meth:`dask.array.reshape` for an explanation of
-           the ``merge_chunks`` and `limit` keywords.
+        Refer to :func:`dask.array.reshape` for full documentation.
         """
         from dask.array.reshape import reshape
 
@@ -2155,7 +2164,7 @@ class Array(DaskMethodsMixin):
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
-        See :func:`dask.array.topk` for docstring.
+        Refer to :func:`dask.array.topk` for full documentation.
 
         """
         from dask.array.reductions import topk
@@ -2165,7 +2174,7 @@ class Array(DaskMethodsMixin):
     def argtopk(self, k, axis=-1, split_every=None):
         """The indices of the top k elements of an array.
 
-        See :func:`dask.array.argtopk` for docstring.
+        Refer to :func:`dask.array.argtopk` for full doctumentation.
 
         """
         from dask.array.reductions import argtopk
@@ -2376,8 +2385,11 @@ class Array(DaskMethodsMixin):
 
         return divmod(other, self)
 
-    @derived_from(np.ndarray)
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
+        """Returns True if any of the elements of `a` evaluate to True.
+
+        Refer to :func:`dask.array.any` for full documentation.
+        """
         from dask.array.reductions import any
 
         return any(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
@@ -2505,38 +2517,8 @@ class Array(DaskMethodsMixin):
     ):
         """Calculate the nth centralized moment.
 
-        Parameters
-        ----------
-        order : int
-            Order of the moment that is returned, must be >= 2.
-        axis : int, optional
-            Axis along which the central moment is computed. The default is to
-            compute the moment of the flattened array.
-        dtype : data-type, optional
-            Type to use in computing the moment. For arrays of integer type the
-            default is float64; for arrays of float types it is the same as the
-            array type.
-        keepdims : bool, optional
-            If this is set to True, the axes which are reduced are left in the
-            result as dimensions with size one. With this option, the result
-            will broadcast correctly against the original array.
-        ddof : int, optional
-            "Delta Degrees of Freedom": the divisor used in the calculation is
-            N - ddof, where N represents the number of elements. By default
-            ddof is zero.
-
-        Returns
-        -------
-        moment : ndarray
-
-        References
-        ----------
-        .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
-           Computation of Covariances and Arbitrary-Order Statistical Moments",
-           Technical Report SAND2008-6212, Sandia National Laboratories.
-
+        Refer to :func:`dask.array.moment` for the full documentation.
         """
-
         from dask.array.reductions import moment
 
         return moment(
@@ -2557,85 +2539,7 @@ class Array(DaskMethodsMixin):
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
         """Map a function over blocks of the array with some overlap
 
-        We share neighboring zones between blocks of the array, then map a
-        function, then trim away the neighboring strips.
-
-        Note that this function will attempt to automatically determine the output
-        array type before computing it, please refer to the ``meta`` keyword argument
-        in :func:`map_blocks <dask.array.core.map_blocks>` if you expect that the function will not succeed when
-        operating on 0-d arrays.
-
-        Parameters
-        ----------
-        func: function
-            The function to apply to each extended block
-        depth: int, tuple, or dict
-            The number of elements that each block should share with its neighbors
-            If a tuple or dict then this can be different per axis
-        boundary: str, tuple, dict
-            How to handle the boundaries.
-            Values include 'reflect', 'periodic', 'nearest', 'none',
-            or any constant value like 0 or np.nan
-        trim: bool
-            Whether or not to trim ``depth`` elements from each block after
-            calling the map function.
-            Set this to False if your mapping function already does this for you
-        **kwargs:
-            Other keyword arguments valid in :func:`map_blocks <dask.array.core.map_blocks>`.
-
-        Examples
-        --------
-        >>> import dask.array as da
-        >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
-        >>> x = da.from_array(x, chunks=5)
-        >>> def derivative(x):
-        ...     return x - np.roll(x, 1)
-
-        >>> y = x.map_overlap(derivative, depth=1, boundary=0)
-        >>> y.compute()
-        array([ 1,  0,  1,  1,  0,  0, -1, -1,  0])
-
-        >>> import dask.array as da
-        >>> x = np.arange(16).reshape((4, 4))
-        >>> d = da.from_array(x, chunks=(2, 2))
-        >>> y = d.map_overlap(lambda x: x + x.size, depth=1, boundary='reflect')
-        >>> y.compute()
-        array([[16, 17, 18, 19],
-               [20, 21, 22, 23],
-               [24, 25, 26, 27],
-               [28, 29, 30, 31]])
-
-        >>> func = lambda x: x + x.size
-        >>> depth = {0: 1, 1: 1}
-        >>> boundary = {0: 'reflect', 1: 'none'}
-        >>> d.map_overlap(func, depth, boundary).compute()  # doctest: +NORMALIZE_WHITESPACE
-        array([[12,  13,  14,  15],
-               [16,  17,  18,  19],
-               [20,  21,  22,  23],
-               [24,  25,  26,  27]])
-
-        >>> x = np.arange(16).reshape((4, 4))
-        >>> d = da.from_array(x, chunks=(2, 2))
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=np.array(()))
-        >>> y
-        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
-        >>> y.compute()
-        array([[ 4,  6,  8, 10],
-               [ 8, 10, 12, 14],
-               [20, 22, 24, 26],
-               [24, 26, 28, 30]])
-
-        >>> import cupy  # doctest: +SKIP
-        >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
-        >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, boundary='reflect', meta=cupy.array(()))  # doctest: +SKIP
-        >>> y  # doctest: +SKIP
-        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
-        >>> y.compute()  # doctest: +SKIP
-        array([[ 4,  6,  8, 10],
-               [ 8, 10, 12, 14],
-               [20, 22, 24, 26],
-               [24, 26, 28, 30]])
+        Refer to :func:`dask.array.map_overlap` for full documentation.
         """
         from dask.array.overlap import map_overlap
 
@@ -2643,42 +2547,29 @@ class Array(DaskMethodsMixin):
             func, self, depth=depth, boundary=boundary, trim=trim, **kwargs
         )
 
-    @derived_from(np.ndarray)
     def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
-        """Dask added an additional keyword-only argument ``method``.
+        """Return the cumulative sum of the elements along the given axis.
 
-        method : {'sequential', 'blelloch'}, optional
-            Choose which method to use to perform the cumsum.  Default is 'sequential'.
-
-            * 'sequential' performs the cumsum of each prior block before the current block.
-            * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
-              first taking the sum of each block and combines the sums via a binary tree.
-              This method may be faster or more memory efficient depending on workload,
-              scheduler, and hardware.  More benchmarking is necessary.
+        Refer to :func:`dask.array.cumsum` for full documentation.
         """
         from dask.array.reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out, method=method)
 
-    @derived_from(np.ndarray)
     def cumprod(self, axis, dtype=None, out=None, *, method="sequential"):
-        """Dask added an additional keyword-only argument ``method``.
+        """Return the cumulative product of the elements along the given axis.
 
-        method : {'sequential', 'blelloch'}, optional
-            Choose which method to use to perform the cumprod.  Default is 'sequential'.
-
-            * 'sequential' performs the cumprod of each prior block before the current block.
-            * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
-              taking the product of each block and combines the products via a binary tree.
-              This method may be faster or more memory efficient depending on workload,
-              scheduler, and hardware.  More benchmarking is necessary.
+        Refer to :func:`dask.array.cumprod` for full documentation.
         """
         from dask.array.reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out, method=method)
 
-    @derived_from(np.ndarray)
     def squeeze(self, axis=None):
+        """Remove axes of length one from `a`.
+
+        Refer to :func:`dask.array.squeeze` for full documentation.
+        """
         from dask.array.routines import squeeze
 
         return squeeze(self, axis)
@@ -2686,7 +2577,10 @@ class Array(DaskMethodsMixin):
     def rechunk(
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
-        """See da.rechunk for docstring"""
+        """Convert blocks in dask array x for new chunks.
+
+        Refer to :func:`dask.array.rechunk` for full documentation.
+        """
         from dask.array.rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
@@ -5558,14 +5452,16 @@ def to_npy_stack(dirname, x, axis=0):
 def from_npy_stack(dirname, mmap_mode="r"):
     """Load dask array from stack of npy files
 
-    See :func:`dask.array.to_npy_stack` for docstring.
-
     Parameters
     ----------
     dirname: string
         Directory of .npy files
     mmap_mode: (None or 'r')
         Read data in memory map mode
+
+    See Also
+    --------
+    to_npy_stack
     """
     with open(os.path.join(dirname, "info"), "rb") as f:
         info = pickle.load(f)
