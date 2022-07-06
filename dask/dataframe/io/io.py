@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import os
 from collections.abc import Iterable
 from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal, Optional, Union
+from typing import TYPE_CHECKING, Any, Iterable, Literal
 
 import numpy as np
 import pandas as pd
@@ -152,11 +154,11 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
 
 
 def from_pandas(
-    data: Union[pd.DataFrame, pd.Series],
-    npartitions: Optional[int] = None,
-    chunksize: Optional[int] = None,
+    data: pd.DataFrame | pd.Series,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
     sort: bool = True,
-    name: Optional[str] = None,
+    name: str | None = None,
 ) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
@@ -652,12 +654,12 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs: Delayed | Iterable[Delayed | distributed.Future],
+    dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
     meta=None,
     divisions: tuple[Any, ...] | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
     verify_meta: bool = True,
-):
+) -> DataFrame:
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
@@ -683,16 +685,16 @@ def from_delayed(
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed):
+    if isinstance(dfs, (Delayed, distributed.Future)):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
 
-    for df in dfs:
-        if not isinstance(df, Delayed):
-            raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
+    for item in dfs:
+        if not isinstance(item, Delayed):
+            raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     if meta is None:
         meta = delayed(make_meta)(dfs[0]).compute()
@@ -705,7 +707,7 @@ def from_delayed(
     if divisions is None or divisions == "sorted":
         divs = [None] * (len(dfs) + 1)
     else:
-        divs = tuple(divisions)
+        divs = list(divisions)
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
@@ -728,7 +730,7 @@ def from_delayed(
     if divisions == "sorted":
         from dask.dataframe.shuffle import compute_and_set_divisions
 
-        df = compute_and_set_divisions(df)
+        return compute_and_set_divisions(df)
 
     return df
 
