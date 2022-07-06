@@ -1558,3 +1558,88 @@ class DataFrameTreeReduction(Layer):
         # `Serialized` functions nested within them should be deserialzed
         # automatically by the comm.
         return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
+
+
+class LeafObject(Layer):
+    """LeafObject Layer
+
+    This layer class is used by `delayed` to wrap
+    explicit "leaf" objects.
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    object : Any
+        Object to return.
+    """
+
+    name: str
+    object: Any
+
+    def __init__(
+        self,
+        name: str,
+        object: Any,
+        annotations: dict[str, Any] | None = None,
+    ):
+        super().__init__(annotations=annotations)
+        self.name = name
+        self.object = object
+
+    def __repr__(self):
+        return f"LeafObject<type='{type(self.object)}'>"
+
+    def get_output_keys(self):
+        # Materialized graph may only contain one element
+        return {self.name}
+
+    def is_materialized(self):
+        # There is no significant difference between a
+        # "materialized" and "unmaterialized" LeafObject.
+        # So, just return False in all cases
+        return False
+
+    @property
+    def _dict(self):
+        # Materialized graph may only contain one element
+        return {self.name: self.object}
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        # Materialized graph may only contain one element
+        return 1
+
+    def cull(self, keys, all_keys):
+        # Culling should do nothing, or return
+        # a new LeafObject wrapping `None`.
+        # There are no dependencies to return
+        if self.name not in keys:
+            return LeafObject('empty-'+self.name, None), {}
+        return self, {}
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        from distributed.protocol.serialize import to_serialize
+
+        # Serialize possibly un-pickleable object
+        return {
+            "name": self.name,
+            "object": to_serialize(self.object),
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.protocol.serialize import to_serialize
+
+        # Must use `to_serialize` on the entire task
+        # and return empty deps
+        dsk = {
+            state["name"]: to_serialize(state["object"])
+        }
+        deps = {k: set() for k in dsk.keys()}
+        return {"dsk": dsk, "deps": deps}

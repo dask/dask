@@ -457,9 +457,11 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = f"{prefix}-{token}"
         return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
+        from dask.layers import LeafObject
+
         if not name:
             name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
-        layer = {name: task}
+        layer = {name: task} if collections else LeafObject(name, task)
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
         return Delayed(name, graph, nout)
 
@@ -655,8 +657,10 @@ class DelayedLeaf(Delayed):
 
     @property
     def dask(self):
+        from dask.layers import LeafObject
+
         return HighLevelGraph.from_collections(
-            self._key, {self._key: self._obj}, dependencies=()
+            self._key, LeafObject(self._key, self._obj), dependencies=()
         )
 
     def __call__(self, *args, **kwargs):
