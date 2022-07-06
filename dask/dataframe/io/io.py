@@ -652,7 +652,7 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs: Union[Delayed, Iterable[Union[Delayed, distributed.Future]]],
+    dfs: Delayed | Iterable[Delayed | distributed.Future],
     meta=None,
     divisions=Union[tuple, Literal["sorted"], None],
     prefix: str = "from-delayed",
