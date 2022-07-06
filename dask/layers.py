@@ -1563,8 +1563,8 @@ class DataFrameTreeReduction(Layer):
 class LeafObject(Layer):
     """LeafObject Layer
 
-    This layer class is used by `delayed` to wrap
-    explicit "leaf" objects.
+    This class is used by ``dask.delayed`` to represent
+    an explicit Python object as a un-materialized Layer.
 
     Parameters
     ----------
@@ -1620,7 +1620,7 @@ class LeafObject(Layer):
         # a new LeafObject wrapping `None`.
         # There are no dependencies to return
         if self.name not in keys:
-            return LeafObject('empty-'+self.name, None), {}
+            return LeafObject("empty-" + self.name, None), {}
         return self, {}
 
     def __dask_distributed_pack__(self, *args, **kwargs):
@@ -1638,8 +1638,6 @@ class LeafObject(Layer):
 
         # Must use `to_serialize` on the entire task
         # and return empty deps
-        dsk = {
-            state["name"]: to_serialize(state["object"])
-        }
+        dsk = {state["name"]: to_serialize(state["object"])}
         deps = {k: set() for k in dsk.keys()}
         return {"dsk": dsk, "deps": deps}
