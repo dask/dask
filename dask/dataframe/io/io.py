@@ -654,7 +654,7 @@ def to_records(df):
 def from_delayed(
     dfs: Delayed | Iterable[Delayed | distributed.Future],
     meta=None,
-    divisions=Union[tuple, Literal["sorted"], None],
+    divisions: tuple[Any, ...] | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
     verify_meta: bool = True,
 ):
