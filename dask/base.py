@@ -951,7 +951,7 @@ normalize_token.register(
         type(Ellipsis),
         datetime.date,
         datetime.timedelta,
-        pathlib.Path,
+        pathlib.PurePath,
     ),
     identity,
 )
