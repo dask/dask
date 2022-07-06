@@ -46,6 +46,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
     PANDAS_GT_120,
+    AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -875,15 +876,39 @@ Dask Name: {name}, {task} tasks"""
         ----------
         func : function
             Function applied to each partition.
-        before : int
-            The number of rows to prepend to partition ``i`` from the end of
+        before : int or timedelta
+            The rows to prepend to partition ``i`` from the end of
             partition ``i - 1``.
-        after : int
-            The number of rows to append to partition ``i`` from the beginning
+        after : int or timedelta
+            The rows to append to partition ``i`` from the beginning
             of partition ``i + 1``.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Notes
@@ -904,8 +929,6 @@ Dask Name: {name}, {task} tasks"""
            partition.
 
         5. Trim ``after`` rows from the end of all but the last partition.
-
-        Note that the index and divisions are assumed to remain unchanged.
 
         Examples
         --------
@@ -4390,7 +4413,8 @@ class DataFrame(_Frame):
 
     @property
     def empty(self):
-        raise NotImplementedError(
+        # __getattr__ will be called after we raise this, so we'll raise it again from there
+        raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
             "However, checking the number of columns is fast. "
             "Depending on which of these results you need, use either "
@@ -4501,6 +4525,13 @@ class DataFrame(_Frame):
     def __getattr__(self, key):
         if key in self.columns:
             return self[key]
+        elif key == "empty":
+            # self.empty raises AttributeNotImplementedError, which includes
+            # AttributeError, which means we end up here in self.__getattr__,
+            # because DataFrame.__getattribute__ doesn't think the attribute exists
+            # and uses __getattr__ as the fallback. So, get `self.empty` more
+            # forcefully via object.__getattribute__ to raise informative error.
+            object.__getattribute__(self, key)
         else:
             raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
@@ -4732,9 +4763,9 @@ class DataFrame(_Frame):
         if not isinstance(other, str):
 
             # It may refer to several columns
-            if isinstance(other, Sequence):
+            if isinstance(other, Sequence):  # type: ignore[unreachable]
                 # Accept ["a"], but not [["a"]]
-                if len(other) == 1 and (
+                if len(other) == 1 and (  # type: ignore[unreachable]
                     isinstance(other[0], str) or not isinstance(other[0], Sequence)
                 ):
                     other = other[0]
@@ -6440,18 +6471,8 @@ def map_partitions(
             ) from e
 
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
-    if parent_meta is None and dfs:
-        parent_meta = dfs[0]._meta
 
-    if meta is no_default:
-        # Use non-normalized kwargs here, as we want the real values (not
-        # delayed values)
-        meta = _emulate(func, *args, udf=True, **kwargs)
-        meta_is_emulated = True
-    else:
-        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-        meta_is_emulated = False
+    meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -6464,20 +6485,6 @@ def map_partitions(
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        if not meta_is_emulated:
-            warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-                "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns. In the future the meta you passed will not work.",
-                FutureWarning,
-            )
-        # If `meta` is not a pandas object, the concatenated results will be a
-        # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
-
-    # Ensure meta is empty series
-    meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -6504,25 +6511,9 @@ def map_partitions(
         if collections:
             simple = False
 
-    if align_dataframes:
-        divisions = dfs[0].divisions
-    else:
-        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
-        # use longest divisions found
-        divisions = max((d.divisions for d in dfs), key=len)
-
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = func(
-                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+    divisions = _get_divisions_map_partitions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
 
     if has_keyword(func, "partition_info"):
         partition_info = {
@@ -6554,6 +6545,69 @@ def map_partitions(
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _get_divisions_map_partitions(
+    align_dataframes, transform_divisions, dfs, func, args, kwargs
+):
+    """
+    Helper to get divisions for map_partitions and map_overlap output.
+    """
+    if align_dataframes:
+        divisions = dfs[0].divisions
+    else:
+        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
+        # use longest divisions found
+        divisions = max((d.divisions for d in dfs), key=len)
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = func(
+                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
+            )
+            if isinstance(divisions, pd.Index):
+                divisions = methods.tolist(divisions)
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+    return divisions
+
+
+def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
+    """
+    Helper to generate metadata for map_partitions and map_overlap output.
+    """
+    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
+    if meta is no_default:
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+        meta_is_emulated = False
+
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not all(
+        isinstance(arg, Scalar) for arg in args
+    ):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]), index=meta_index)
+
+    # Ensure meta is empty series
+    meta = make_meta(meta, parent_meta=parent_meta)
+
+    return meta
 
 
 def apply_and_enforce(*args, **kwargs):
