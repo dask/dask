@@ -616,7 +616,7 @@ def numel(x, **kwargs):
     """A reduction to count the number of elements"""
 
     if hasattr(x, "mask"):
-        return chunk.sum(np.ones_like(x), **kwargs)
+        return chunk.sum(np.broadcast_to(1, shape=x.shape), **kwargs)
 
     shape = x.shape
     keepdims = kwargs.get("keepdims", False)
@@ -626,7 +626,7 @@ def numel(x, **kwargs):
     if axis is None:
         prod = np.prod(shape, dtype=dtype)
         return (
-            np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
+            np.broadcast_to(np.array(prod, dtype=dtype), shape=(1,) * len(shape))
             if keepdims is True
             else prod
         )
@@ -641,12 +641,13 @@ def numel(x, **kwargs):
         )
     else:
         new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return np.full_like(x, prod, shape=new_shape, dtype=dtype)
+    return np.broadcast_to(np.array(prod, dtype=dtype), new_shape)
 
 
 def nannumel(x, **kwargs):
     """A reduction to count the number of elements"""
-    return chunk.sum(~(np.isnan(x)), **kwargs)
+    n = chunk.sum(~(np.isnan(x)), **kwargs)
+    return n.todense() if hasattr(n, "todense") else n
 
 
 def mean_chunk(
