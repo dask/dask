@@ -3430,7 +3430,6 @@ def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
         lambda x: pd.DataFrame({"a": [x], "b": [x]}),
         "abcdefg",
     )
-    ddf["b"] = ddf["b"].astype("category")
     ddf.to_parquet(tmpdir, engine=engine, partition_on=["b"])
 
     # Check List[Tuple] filters
@@ -3440,10 +3439,12 @@ def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
         filters=[("b", "==", "c")],
     )
     assert read_ddf.npartitions == 1
+    # Select column "a" to avoid an
+    # unnecessary object-category comparison
     assert_eq(read_ddf["a"], ddf.partitions[2]["a"])
 
-    # Check List[List[Tuple]] filters
-    # for "pyarrow" engine only
+    # Check List[List[Tuple]] filter for pyarrow only
+    # (fastparquet doesn't support this format)
     if engine == "pyarrow":
         read_ddf = dd.read_parquet(
             tmpdir,
