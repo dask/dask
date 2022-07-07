@@ -7,3 +7,4 @@ e = np.e
 inf = np.inf
 nan = np.nan
 pi = np.pi
+newaxis = np.newaxis
