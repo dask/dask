@@ -3424,6 +3424,36 @@ def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
     )
 
 
+def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/9246
+    ddf = dd.from_map(
+        lambda x: pd.DataFrame({"a": [x], "b": [x]}),
+        "abcdefg",
+    )
+    ddf["b"] = ddf["b"].astype("category")
+    ddf.to_parquet(tmpdir, engine=engine, partition_on=["b"])
+
+    # Check List[Tuple] filters
+    read_ddf = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        filters=[("b", "==", "c")],
+    )
+    assert read_ddf.npartitions == 1
+    assert_eq(read_ddf["a"], ddf.partitions[2]["a"])
+
+    # Check List[List[Tuple]] filters
+    # for "pyarrow" engine only
+    if engine == "pyarrow":
+        read_ddf = dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            filters=[[("b", "==", "c")]],
+        )
+        assert read_ddf.npartitions == 1
+        assert_eq(read_ddf["a"], ddf.partitions[2]["a"])
+
+
 @PYARROW_MARK
 def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     # https://github.com/dask/dask/issues/6600
