@@ -1489,13 +1489,14 @@ def test_squeeze(is_func, axis):
     assert d_s.chunks == exp_d_s_chunks
 
 
-def test_squeeze_1d_array():
-    a = np.empty(1)
-    a[0] = 2
+@pytest.mark.parametrize("shape", [(1,), (1, 1)])
+def test_squeeze_1d_array(shape):
+    a = np.full(shape=shape, fill_value=2)
     a_s = np.squeeze(a)
     d = da.from_array(a, chunks=(1))
     d_s = da.squeeze(d)
     assert isinstance(d_s, da.Array)
+    assert isinstance(d_s.compute(), np.ndarray)
     assert_eq(d_s, a_s)
 
 

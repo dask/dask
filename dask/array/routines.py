@@ -1935,9 +1935,11 @@ def squeeze(a, axis=None):
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
     # Return 0d Dask Array if all axes are squeezed,
-    # to be consistent with NumPy
-    if sl == 0 and a.shape == (1,):
-        return a
+    # to be consistent with NumPy. Ref: https://github.com/dask/dask/issues/9183#issuecomment-1155626619
+    if all(s == 0 for s in sl) and all(s == 1 for s in a.shape):
+        return a.map_blocks(
+            np.squeeze, meta=a._meta, drop_axis=tuple(range(len(a.shape)))
+        )
 
     a = a[sl]
 
