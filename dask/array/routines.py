@@ -1934,6 +1934,11 @@ def squeeze(a, axis=None):
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
 
+    # Return 0d Dask Array if all axes are squeezed,
+    # to be consistent with NumPy
+    if sl == 0 and a.shape == (1,):
+        return a
+
     a = a[sl]
 
     return a

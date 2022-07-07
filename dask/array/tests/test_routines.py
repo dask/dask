@@ -1489,6 +1489,16 @@ def test_squeeze(is_func, axis):
     assert d_s.chunks == exp_d_s_chunks
 
 
+def test_squeeze_1d_array():
+    a = np.empty(1)
+    a[0] = 2
+    a_s = np.squeeze(a)
+    d = da.from_array(a, chunks=(1))
+    d_s = da.squeeze(d)
+    assert isinstance(d_s, da.Array)
+    assert_eq(d_s, a_s)
+
+
 def test_vstack():
     x = np.arange(5)
     y = np.ones(5)
