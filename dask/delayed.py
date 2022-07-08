@@ -4,6 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass
+from typing import Generic, TypeVar, Any, Optional
 
 from tlz import concat, curry, merge, unique
 
@@ -210,7 +211,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, pure=None, **kwargs):
+def tokenize(*args: Any, pure: Optional[bool]=None, **kwargs: Any) -> str:
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -231,8 +232,7 @@ def tokenize(*args, pure=None, **kwargs):
         return str(uuid.uuid4())
 
 
-@curry
-def delayed(obj, name=None, pure=None, nout=None, traverse=True):
+def delayed(obj, name: Optional[str]=None, pure: Optional[bool]=None, nout: Optional[int]=None, traverse: bool=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -482,7 +482,9 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-class Delayed(DaskMethodsMixin, OperatorMethodMixin):
+T = TypeVar("T")
+
+class Delayed(DaskMethodsMixin[T], OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.

@@ -1,3 +1,5 @@
+from jinja2 import Environment, Template
+
 try:
     from dask.widgets.widgets import (
         FILTERS,
@@ -17,8 +19,8 @@ except ImportError as e:
     FILTERS = {}
     TEMPLATE_PATHS = []
 
-    def get_environment():
+    def get_environment() -> Environment:
         raise ImportError(msg) from exception
 
-    def get_template(name: str):
+    def get_template(name: str) -> Template:
         raise ImportError(msg) from exception

@@ -58,12 +58,12 @@ def checkpoint(
         if split_every < 2:
             raise ValueError("split_every must be False, None, or >= 2")
 
-    collections, _ = unpack_collections(*collections)
-    if len(collections) == 1:
-        return _checkpoint_one(collections[0], split_every)
+    unpacked, _ = unpack_collections(*collections)
+    if len(unpacked) == 1:
+        return _checkpoint_one(unpacked[0], split_every)
     else:
         return delayed(chunks.checkpoint)(
-            *(_checkpoint_one(c, split_every) for c in collections)
+            *(_checkpoint_one(c, split_every) for c in unpacked)
         )
 
 

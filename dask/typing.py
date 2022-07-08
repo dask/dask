@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable, NewType
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
@@ -12,6 +12,7 @@ if TYPE_CHECKING:
 CollType = TypeVar("CollType", bound="DaskCollection")
 CollType_co = TypeVar("CollType_co", bound="DaskCollection", covariant=True)
 PostComputeCallable = Callable
+DaskGraph = NewType("DaskGraph", dict[str, Any])
 
 
 class SchedulerGetCallable(Protocol):

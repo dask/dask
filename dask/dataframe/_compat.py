@@ -16,7 +16,7 @@ PANDAS_GT_140 = PANDAS_VERSION >= parse_version("1.4.0")
 # FIXME: Using `.release` below as versions like `1.5.0.dev0+268.gbe8d1ec880`
 # are less than `1.5.0` with `packaging.version`. Update to use `parse_version("1.5.0")`
 # below once `pandas=1.5.0` is released
-PANDAS_GT_150 = PANDAS_VERSION.release >= (1, 5, 0)
+PANDAS_GT_150 = PANDAS_VERSION.release is not None and PANDAS_VERSION.release >= (1, 5, 0)
 
 import pandas.testing as tm
 

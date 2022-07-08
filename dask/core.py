@@ -1,6 +1,13 @@
+from __future__ import annotations
 from collections import defaultdict
+from typing import Any, overload, NewType, TypeVar, Generic
+from typing_extensions import TypeGuard
+
+from dask.base import DaskGraph
 
 no_default = "__no_default__"
+
+Task = TypeVar("Task", bound=tuple)
 
 
 def ishashable(x):
@@ -21,7 +28,7 @@ def ishashable(x):
         return False
 
 
-def istask(x):
+def istask(x: Any) -> TypeGuard[Task]:
     """Is x a runnable task?
 
     A task is a tuple with a callable first argument
@@ -35,7 +42,7 @@ def istask(x):
     >>> istask(1)
     False
     """
-    return type(x) is tuple and x and callable(x[0])
+    return type(x) is tuple and bool(x) and callable(x[0])
 
 
 def has_tasks(dsk, x):
@@ -78,8 +85,18 @@ def lists_to_tuples(res, keys):
         return tuple(lists_to_tuples(r, k) for r, k in zip(res, keys))
     return res
 
+T = TypeVar("T")
 
-def _execute_task(arg, cache, dsk=None):
+@overload
+def _execute_task(arg: list, cache: dict, dsk: None = None) -> list:
+    ...
+@overload
+def _execute_task(arg: Task, cache: dict, dsk: None = None) -> Any:
+    ...
+@overload
+def _execute_task(arg: T, cache: dict, dsk: None = None) -> T:
+    ...
+def _execute_task(arg, cache, dsk = None):
     """Do the actual work of collecting data and executing a function
 
     Examples
@@ -125,6 +142,12 @@ def _execute_task(arg, cache, dsk=None):
         return arg
 
 
+@overload
+def get(dsk: DaskGraph, out: list, cache: dict | None=None) -> tuple:
+    ...
+@overload
+def get(dsk: DaskGraph, out: Any, cache: dict | None=None) -> Any:
+    ...
 def get(dsk, out, cache=None):
     """Get value from Dask
 

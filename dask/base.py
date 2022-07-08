@@ -18,10 +18,13 @@ from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
-from typing import Literal
+from typing import Literal, NewType, Any, Generic, Tuple, Protocol, \
+    TypedDict, TypeVar, Union, TYPE_CHECKING, overload, Optional
 
 from packaging.version import parse as parse_version
-from tlz import curry, groupby, identity, merge
+from typing_extensions import Unpack, TypeGuard, TypeAlias
+
+from tlz import curry, groupby, identity, merge, Curry
 from tlz.functoolz import Compose
 
 from dask import config, local
@@ -32,8 +35,14 @@ from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
-from dask.typing import SchedulerGetCallable
+from dask.typing import SchedulerGetCallable, DaskCollection, DaskGraph
 from dask.utils import Dispatch, apply, ensure_dict, key_split
+from dask.dot import FormatOption
+
+if TYPE_CHECKING:
+    from dask.highlevelgraph import HighLevelGraph
+    from IPython.core.display import DisplayObject
+
 
 __all__ = (
     "DaskMethodsMixin",
@@ -50,6 +59,7 @@ __all__ = (
     "replace_name_in_key",
     "clone_key",
 )
+
 
 
 @contextmanager
@@ -162,7 +172,7 @@ def annotate(**annotations):
         yield
 
 
-def is_dask_collection(x) -> bool:
+def is_dask_collection(x) -> TypeGuard[DaskCollection]:
     """Returns ``True`` if ``x`` is a dask collection.
 
     Parameters
@@ -188,13 +198,14 @@ def is_dask_collection(x) -> bool:
     except (AttributeError, TypeError):
         return False
 
+T = TypeVar("T")
 
-class DaskMethodsMixin:
+class DaskMethodsMixin(Generic[T]):
     """A mixin adding standard dask collection methods"""
 
     __slots__ = ()
 
-    def visualize(self, filename="mydask", format=None, optimize_graph=False, **kwargs):
+    def visualize(self: DaskCollection, filename: str="mydask", format:FormatOption=None, optimize_graph:bool=False, **kwargs) -> DisplayObject:
         """Render the computation of this object's task graph using graphviz.
 
         Requires ``graphviz`` to be installed.
@@ -246,7 +257,7 @@ class DaskMethodsMixin:
             **kwargs,
         )
 
-    def persist(self, **kwargs):
+    def persist(self: DaskCollection, **kwargs):
         """Persist this dask collection into memory
 
         This turns a lazy Dask collection into a Dask collection with the same
@@ -288,7 +299,7 @@ class DaskMethodsMixin:
         (result,) = persist(self, traverse=False, **kwargs)
         return result
 
-    def compute(self, **kwargs):
+    def compute(self: DaskCollection, **kwargs):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
@@ -315,7 +326,7 @@ class DaskMethodsMixin:
         (result,) = compute(self, traverse=False, **kwargs)
         return result
 
-    def __await__(self):
+    def __await__(self: DaskCollection):
         try:
             from distributed import futures_of, wait
         except ImportError as e:
@@ -355,7 +366,7 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwargs):
+def collections_to_dsk(collections, optimize_graph: bool=True, optimizations:tuple[Callable[..., HighLevelGraph], ...]=(), **kwargs) -> HighLevelGraph:
     """
     Convert many collections into a single dask graph, after optimization
     """
@@ -405,7 +416,9 @@ def _extract_graph_and_keys(vals):
     return graph, keys
 
 
-def unpack_collections(*args, traverse=True):
+# Once mypy supports ParamSpec (https://github.com/python/mypy/issues/11855),
+# the signature of repack can be better typed
+def unpack_collections(*args: Any, traverse=True) -> Tuple[list[DaskCollection], Callable]:
     """Extract collections in preparation for compute/persist/etc...
 
     Intended use is to find all collections in a set of (possibly nested)
@@ -432,12 +445,12 @@ def unpack_collections(*args, traverse=True):
         they were in the original ``args``.
     """
 
-    collections = []
-    repack_dsk = {}
+    collections: list[DaskCollection] = []
+    repack_dsk = DaskGraph({})
 
     collections_token = uuid.uuid4().hex
 
-    def _unpack(expr):
+    def _unpack(expr: Any) -> str:
         if is_dask_collection(expr):
             tok = tokenize(expr)
             if tok not in repack_dsk:
@@ -477,8 +490,8 @@ def unpack_collections(*args, traverse=True):
     out = uuid.uuid4().hex
     repack_dsk[out] = (tuple, [_unpack(i) for i in args])
 
-    def repack(results):
-        dsk = repack_dsk.copy()
+    def repack(results: list[DaskCollection]):
+        dsk = DaskGraph(repack_dsk.copy())
         dsk[collections_token] = quote(results)
         return simple_get(dsk, out)
 
@@ -604,14 +617,48 @@ def compute(
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 
 
+VisualiseColorOptions: TypeAlias = Union[
+    Literal["order"], Literal["ages"], Literal["freed"], Literal["memoryincreases"],
+    Literal["memorydecreases"], Literal["memorypressure"], None]
+
+class VisualizeKwargs(TypedDict, total=False):
+    format: FormatOption
+    color: VisualiseColorOptions
+    collapse_outputs: bool | None
+    verbose: bool | None
+
+@overload
 def visualize(
-    *args,
-    filename="mydask",
-    traverse=True,
-    optimize_graph=False,
+    *args: Any,
+    filename: str="mydask",
+    traverse: bool=True,
+    optimize_graph: bool=False,
     maxval=None,
     engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
-    **kwargs,
+    format: FormatOption | None,
+    color: VisualiseColorOptions | None,
+    collapse_outputs: bool | None,
+    verbose: bool | None
+    ) -> DisplayObject:
+    ...
+@overload
+def visualize(
+        *args: Any,
+        filename: str="mydask",
+        traverse: bool=True,
+        optimize_graph: bool=False,
+        maxval=None,
+        engine: Literal["cytoscape", "ipycytoscape", "graphviz"] | None = None,
+) -> DisplayObject:
+    ...
+def visualize(
+        *args: Any,
+        filename="mydask",
+        traverse=True,
+        optimize_graph=False,
+        maxval=None,
+        engine= None,
+        **kwargs
 ):
     """
     Visualize several dask graphs simultaneously.
@@ -621,21 +668,21 @@ def visualize(
 
     Parameters
     ----------
-    args : object
+    args :
         Any number of objects. If it is a dask collection (for example, a
         dask DataFrame, Array, Bag, or Delayed), its associated graph
         will be included in the output of visualize. By default, python builtin
         collections are also traversed to look for dask objects (for more
         information see the ``traverse`` keyword). Arguments lacking an
         associated graph will be ignored.
-    filename : str or None, optional
+    filename :
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
         If `filename` is None, no file will be written, and we communicate
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
-    traverse : bool, optional
+    traverse :
         By default, dask traverses builtin python collections looking for dask
         objects passed to ``visualize``. For large collections this can be
         expensive. If none of the arguments contain any dask objects, set
@@ -692,9 +739,9 @@ def visualize(
 
     https://docs.dask.org/en/latest/optimize.html
     """
-    args, _ = unpack_collections(*args, traverse=traverse)
+    unpacked, _ = unpack_collections(*args, traverse=traverse)
 
-    dsk = dict(collections_to_dsk(args, optimize_graph=optimize_graph))
+    dsk = DaskGraph(dict(collections_to_dsk(unpacked, optimize_graph=optimize_graph)))
 
     color = kwargs.get("color")
 
@@ -1050,7 +1097,7 @@ def normalize_function(func: Callable) -> Callable | tuple | str | bytes:
         return _normalize_function(func)
 
 
-def _normalize_function(func: Callable) -> tuple | str | bytes:
+def _normalize_function(func: Callable | Compose | partial | curry) -> tuple | str | bytes:
     if isinstance(func, Compose):
         first = getattr(func, "first", None)
         funcs = reversed((first,) + func.funcs) if first else func.funcs
