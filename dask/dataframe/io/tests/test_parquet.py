@@ -3426,33 +3426,31 @@ def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
 
 def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/9246
+    df = pd.DataFrame({"val": range(7), "part": list("abcdefg")})
+    df["part"] = df["part"].astype("category")
     ddf = dd.from_map(
-        lambda x: pd.DataFrame({"a": [x], "b": [x]}),
-        "abcdefg",
+        lambda i: df.iloc[i : i + 1],
+        range(7),
     )
-    ddf.to_parquet(tmpdir, engine=engine, partition_on=["b"])
+    ddf.to_parquet(tmpdir, engine=engine, partition_on=["part"])
 
-    # Check List[Tuple] filters
+    # Check that List[Tuple] filters are applied
     read_ddf = dd.read_parquet(
         tmpdir,
         engine=engine,
-        filters=[("b", "==", "c")],
+        filters=[("part", "==", "c")],
     )
-    assert read_ddf.npartitions == 1
-    # Select column "a" to avoid an
-    # unnecessary object-category comparison
-    assert_eq(read_ddf["a"], ddf.partitions[2]["a"])
+    assert_eq(df.iloc[2:3], read_ddf)
 
-    # Check List[List[Tuple]] filter for pyarrow only
+    # Check that List[List[Tuple]] filter are aplied.
     # (fastparquet doesn't support this format)
     if engine == "pyarrow":
         read_ddf = dd.read_parquet(
             tmpdir,
             engine=engine,
-            filters=[[("b", "==", "c")]],
+            filters=[[("part", "==", "c")]],
         )
-        assert read_ddf.npartitions == 1
-        assert_eq(read_ddf["a"], ddf.partitions[2]["a"])
+        assert_eq(df.iloc[2:3], read_ddf)
 
 
 @PYARROW_MARK
