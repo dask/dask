@@ -615,10 +615,10 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     >>> import dask
     >>> with dask.config.set({"array.slicing.split-large-chunks": True}):
-    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
+    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (2000, 2000), (2000, 2000)],
     ...                        [0] + [1] * 6 + [2], axis=0, itemsize=8)
     >>> chunks
-    ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
+    ((1, 3, 3, 1), (2000, 2000), (2000, 2000))
     """
     from dask.array.core import PerformanceWarning
 
