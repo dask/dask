@@ -1624,7 +1624,7 @@ class Array(DaskMethodsMixin):
             cbytes = None
         elif not math.isnan(self.nbytes):
             nbytes = format_bytes(self.nbytes)
-            cbytes = format_bytes(np.prod(self.chunksize) * self.dtype.itemsize)
+            cbytes = format_bytes(math.prod(self.chunksize) * self.dtype.itemsize)
         else:
             nbytes = "unknown"
             cbytes = "unknown"
@@ -3017,7 +3017,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
         limit
         / dtype.itemsize
         / largest_block
-        / np.prod(list(r if r != 0 else 1 for r in result.values()))
+        / math.prod(r for r in result.values() if r)
     )
 
 
@@ -3083,8 +3083,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
     limit = max(1, limit)
 
-    largest_block = np.prod(
-        [cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"]
+    largest_block = math.prod(
+        cs if isinstance(cs, Number) else max(cs) for cs in chunks if cs != "auto"
     )
 
     if previous_chunks:
@@ -3831,7 +3831,7 @@ def unify_chunks(*args, **kwargs):
             nameinds.append((a, ind))
 
     chunkss = broadcast_dimensions(nameinds, blockdim_dict, consolidate=common_blockdim)
-    nparts = np.prod(list(map(len, chunkss.values())))
+    nparts = math.prod(map(len, chunkss.values()))
 
     if warn and nparts and nparts >= max_parts * 10:
         warnings.warn(
@@ -5682,11 +5682,11 @@ class BlockView:
             return NotImplemented
 
     @property
-    def size(self) -> int | np.signedinteger:
+    def size(self) -> int:
         """
         The total number of blocks in the array.
         """
-        return np.prod(self.shape)
+        return math.prod(self.shape)
 
     @property
     def shape(self) -> tuple[int, ...]:
