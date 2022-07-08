@@ -3427,7 +3427,6 @@ def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
 def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
     # See: https://github.com/dask/dask/issues/9246
     df = pd.DataFrame({"val": range(7), "part": list("abcdefg")})
-    df["part"] = df["part"].astype("category")
     ddf = dd.from_map(
         lambda i: df.iloc[i : i + 1],
         range(7),
@@ -3440,6 +3439,7 @@ def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
         engine=engine,
         filters=[("part", "==", "c")],
     )
+    read_ddf["part"] = read_ddf["part"].astype("object")
     assert_eq(df.iloc[2:3], read_ddf)
 
     # Check that List[List[Tuple]] filter are aplied.
@@ -3450,6 +3450,7 @@ def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
             engine=engine,
             filters=[[("part", "==", "c")]],
         )
+        read_ddf["part"] = read_ddf["part"].astype("object")
         assert_eq(df.iloc[2:3], read_ddf)
 
 
