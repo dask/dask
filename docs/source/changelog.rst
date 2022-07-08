@@ -1,6 +1,38 @@
 Changelog
 =========
 
+.. _v2022.7.0:
+
+2022.7.0
+--------
+
+Released on July 8, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Support ``pathlib.PurePath`` in ``normalize_token`` (:pr:`9229`) `Angus Hollands`_
+- Add ``AttributeNotImplementedError`` for properties so IPython glob search works (:pr:`9231`) `Erik Welch`_
+- ``map_overlap``: multiple dataframe handling (:pr:`9145`) `Fabien Aulaire`_
+- Read entrypoints in ``dask.sizeof`` (:pr:`7688`) `Angus Hollands`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``TypeError: 'Serialize' object is not subscriptable`` when writing parquet dataset with ``Client(processes=False)`` (:pr:`9015`) `Lucas Miguel Ponce`_
+- Correct dtypes when ``concat`` with an empty dataframe (:pr:`9193`) `Pavithra Eswaramoorthy`_
+
+Documentation
+^^^^^^^^^^^^^
+- Highlight note about persist (:pr:`9234`) `Pavithra Eswaramoorthy`_
+- Update release-procedure to include more detail and helpful commands (:pr:`9215`) `Julia Signell`_
+- Better SEO for Futures and Dask vs. Spark pages (:pr:`9217`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``math.prod`` instead of ``np.prod`` on lists, tuples, and iters (:pr:`9232`) `crusaderky`_
+- Only import IPython if type checking (:pr:`9230`) `Florian Jetter`_
+- Tougher mypy checks (:pr:`9206`) `crusaderky`_
+
+
 .. _v2022.6.1:
 
 2022.6.1
@@ -5708,3 +5740,5 @@ Other
 .. _`Sultan Orazbayev`: https://github.com/SultanOrazbayev
 .. _`Richard Pelgrim`: https://github.com/rrpelgrim
 .. _`Ben`: https://github.com/benjaminhduncan
+.. _`Angus Hollands`: https://github.com/agoose77
+.. _`Lucas Miguel Ponce`: https://github.com/lucasmsp
