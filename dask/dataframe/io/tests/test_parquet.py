@@ -3442,7 +3442,7 @@ def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
     read_ddf["part"] = read_ddf["part"].astype("object")
     assert_eq(df.iloc[2:3], read_ddf)
 
-    # Check that List[List[Tuple]] filter are aplied.
+    # Check that List[List[Tuple]] filters are aplied.
     # (fastparquet doesn't support this format)
     if engine == "pyarrow":
         read_ddf = dd.read_parquet(
