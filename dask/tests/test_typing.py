@@ -10,6 +10,7 @@ import dask.threaded
 from dask.base import DaskMethodsMixin, dont_optimize, tokenize
 from dask.context import globalmethod
 from dask.delayed import Delayed, delayed
+from dask.dot import FormatOption
 from dask.typing import (
     DaskCollection,
     HLGDaskCollection,
@@ -77,7 +78,7 @@ class Inheriting(DaskCollection):
     def visualize(
         self,
         filename: str = "mydask",
-        format: str | None = None,
+        format: FormatOption = None,
         optimize_graph: bool = False,
         **kwargs: Any,
     ) -> DisplayObject | None:

@@ -3,7 +3,8 @@ from __future__ import annotations
 import os
 import re
 from functools import partial
-from typing import TYPE_CHECKING, Type, Callable, Literal, Union, Optional
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Type, Union
+
 from typing_extensions import TypeAlias
 
 from dask.base import DaskGraph
@@ -11,9 +12,9 @@ from dask.core import get_dependencies, ishashable, istask
 from dask.utils import apply, funcname, import_required, key_split
 
 if TYPE_CHECKING:
-    from IPython.core.display import DisplayObject
-    from ipycytoscape import CytoscapeWidget
     import graphviz
+    from ipycytoscape import CytoscapeWidget
+    from IPython.core.display import DisplayObject
 
 
 def task_label(task):
@@ -128,12 +129,12 @@ def box_label(key, verbose=False):
 
 def to_graphviz(
     dsk: DaskGraph,
-    data_attributes: Optional[dict]=None,
-    function_attributes: Optional[dict]=None,
+    data_attributes: dict | None = None,
+    function_attributes: dict | None = None,
     rankdir=Literal["TB", "BT", "LR", "RL"],
-    graph_attr: Optional[dict]=None,
-    node_attr: Optional[dict]=None,
-    edge_attr: Optional[dict]=None,
+    graph_attr: dict | None = None,
+    node_attr: dict | None = None,
+    edge_attr: dict | None = None,
     collapse_outputs=False,
     verbose=False,
     **kwargs,
@@ -209,10 +210,12 @@ def to_graphviz(
 IPYTHON_IMAGE_FORMATS = frozenset(["jpeg", "png"])
 IPYTHON_NO_DISPLAY_FORMATS = frozenset(["dot", "pdf"])
 
-FormatOption: TypeAlias = Union[Literal["png", "pdf", "dot", "svg", "jpeg", "jpg"], None]
+FormatOption: TypeAlias = Union[
+    Literal["png", "pdf", "dot", "svg", "jpeg", "jpg"], None
+]
 
 
-def _get_display_cls(format: FormatOption) -> Callable[..., Optional[DisplayObject]]:
+def _get_display_cls(format: FormatOption) -> Callable[..., DisplayObject | None]:
     """
     Get the appropriate IPython display class for `format`.
 
@@ -242,7 +245,9 @@ def _get_display_cls(format: FormatOption) -> Callable[..., Optional[DisplayObje
         raise ValueError("Unknown format '%s' passed to `dot_graph`" % format)
 
 
-def dot_graph(dsk: DaskGraph, filename: str="mydask", format: FormatOption=None, **kwargs) -> Optional[DisplayObject]:
+def dot_graph(
+    dsk: DaskGraph, filename: str = "mydask", format: FormatOption = None, **kwargs
+) -> DisplayObject | None:
     """
     Render a task graph using dot.
 
@@ -284,7 +289,7 @@ def dot_graph(dsk: DaskGraph, filename: str="mydask", format: FormatOption=None,
     return graphviz_to_file(g, filename, format)
 
 
-def graphviz_to_file(g, filename, format) -> Optional[DisplayObject]:
+def graphviz_to_file(g, filename, format) -> DisplayObject | None:
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
 
     if (

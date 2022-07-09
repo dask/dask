@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable, NewType
+from typing import TYPE_CHECKING, Any, NewType, Protocol, TypeVar, runtime_checkable
+
+from dask.dot import FormatOption
 
 if TYPE_CHECKING:
     # IPython import is relatively slow. Avoid if not necessary
@@ -330,7 +332,7 @@ class DaskCollection(Protocol):
     def visualize(
         self,
         filename: str = "mydask",
-        format: str | None = None,
+        format: FormatOption = None,
         optimize_graph: bool = False,
         **kwargs: Any,
     ) -> DisplayObject | None:

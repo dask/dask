@@ -6,10 +6,10 @@ from tlz import concat
 
 from dask.bag.core import from_delayed
 from dask.bytes import read_bytes
-from dask.delayed import delayed
+from dask.delayed import delayed as original_delayed
 from dask.utils import parse_bytes, system_encoding
 
-delayed = delayed(pure=True)
+delayed = original_delayed(pure=True)
 
 
 def read_text(
