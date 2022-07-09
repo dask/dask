@@ -85,7 +85,14 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-T_IntOrNaN = Union[int, Literal[np.nan]]
+if TYPE_CHECKING:
+    from enum import Enum
+
+    class _Nan(Enum):
+        nan: np.nan
+
+
+    T_IntOrNaN = Union[int, Literal[_Nan.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
