@@ -24,7 +24,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, Literal, TypeVar, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union, cast
 
 import numpy as np
 from fsspec import get_mapper
