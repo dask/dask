@@ -16,7 +16,7 @@ from concurrent.futures import Executor
 from contextlib import contextmanager
 from enum import Enum
 from functools import partial
-from numbers import Integral, Number, Real
+from numbers import Number
 from operator import getitem
 from typing import (
     TYPE_CHECKING,
@@ -33,9 +33,9 @@ from typing import (
 )
 
 from packaging.version import parse as parse_version
-from tlz import Curry, curry, groupby, identity, merge
+from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
-from typing_extensions import Self, TypeAlias, TypeGuard, Unpack
+from typing_extensions import TypeAlias, TypeGuard
 
 from dask import config, local
 from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
@@ -894,7 +894,13 @@ def visualize(
         raise ValueError(f"Visualization engine {engine} not recognized")
 
 
-def persist(*args: Any, traverse: bool=True, optimize_graph: bool=True, scheduler=None, **kwargs) -> Iterable:
+def persist(
+    *args: Any,
+    traverse: bool = True,
+    optimize_graph: bool = True,
+    scheduler=None,
+    **kwargs,
+) -> Iterable:
     """Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
@@ -1432,24 +1438,46 @@ or with a Dask client
     x.compute(scheduler=client)
 """.strip()
 
+
 class Client(Protocol):
     def get(self) -> Any:
         ...
+
 
 def is_client(val) -> TypeGuard[Client]:
     return "Client" in type(val).__name__ and hasattr(val, "get")
 
 
 @overload
-def get_scheduler(get:None = None, scheduler: None = None, collections: None=None, cls=None) -> None:
+def get_scheduler(
+    get: None = None, scheduler: None = None, collections: None = None, cls=None
+) -> None:
     ...
+
+
 @overload
-def get_scheduler(*, get=None, scheduler: Callable | Client | str | Executor, collections: Collection[DaskCollection] | None=None, cls=None) -> Callable:
+def get_scheduler(
+    *,
+    get=None,
+    scheduler: Callable | Client | str | Executor,
+    collections: Collection[DaskCollection] | None = None,
+    cls=None,
+) -> Callable:
     ...
+
+
 @overload
-def get_scheduler(*, get=None, scheduler: Callable | Client | str | Executor |None= None, collections: Collection[DaskCollection], cls=None) -> Callable:
+def get_scheduler(
+    *,
+    get=None,
+    scheduler: Callable | Client | str | Executor | None = None,
+    collections: Collection[DaskCollection],
+    cls=None,
+) -> Callable:
     ...
-def get_scheduler(get=None, scheduler = None, collections=None, cls=None):
+
+
+def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     """Get scheduler function
 
     There are various ways to specify the scheduler to use:

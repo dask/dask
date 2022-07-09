@@ -4,7 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass
-from typing import Any, Callable, Generic, Optional, TypeVar, overload
+from typing import Any, Callable, Optional, TypeVar, overload
 
 from tlz import concat, curry, merge, unique
 
@@ -231,36 +231,44 @@ def tokenize(*args: Any, pure: Optional[bool] = None, **kwargs: Any) -> str:
     else:
         return str(uuid.uuid4())
 
+
 T = TypeVar("T")
+
 
 @overload
 def delayed(
-        obj: Callable[..., T],
-        name: Optional[str] = None,
-        pure: Optional[bool] = None,
-        nout: Optional[int] = None,
-        traverse: bool = True,
+    obj: Callable[..., T],
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
 ) -> "Delayed[T]":
     ...
+
+
 @overload
 def delayed(
-        name: Optional[str] = None,
-        pure: Optional[bool] = None,
-        nout: Optional[int] = None,
-        traverse: bool = True,
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
 ) -> curry["Delayed"]:
     ...
+
+
 @overload
 def delayed(
-        obj: T,
-        name: Optional[str] = None,
-        pure: Optional[bool] = None,
-        nout: Optional[int] = None,
-        traverse: bool = True,
+    obj: T,
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
 ) -> "Delayed[T]":
     ...
+
+
 @curry
-def delayed(obj, name= None, pure = None, nout = None, traverse= True):
+def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -508,7 +516,6 @@ def optimize(dsk, keys, **kwargs):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
     dsk = dsk.cull(set(flatten(keys)))
     return dsk
-
 
 
 class Delayed(DaskMethodsMixin[T], OperatorMethodMixin):

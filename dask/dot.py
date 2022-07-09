@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Type, Union
+from typing import TYPE_CHECKING, Callable, Literal, Union
 
 from typing_extensions import TypeAlias
 

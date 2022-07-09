@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import Any, Generic, NewType, TypeVar, overload
+from typing import Any, TypeVar, overload
 
 from typing_extensions import TypeGuard
 
