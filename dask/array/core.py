@@ -1499,7 +1499,7 @@ class Array(DaskMethodsMixin):
         return x
 
     @cached_property
-    def shape(self):
+    def shape(self) -> tuple[int, ...]:
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
     @property
@@ -1637,21 +1637,21 @@ class Array(DaskMethodsMixin):
         )
 
     @cached_property
-    def ndim(self):
+    def ndim(self) -> int:
         return len(self.shape)
 
     @cached_property
-    def size(self):
+    def size(self) -> int:
         """Number of elements in array"""
         return reduce(mul, self.shape, 1)
 
     @property
-    def nbytes(self):
+    def nbytes(self) -> int:
         """Number of bytes in array"""
         return self.size * self.dtype.itemsize
 
     @property
-    def itemsize(self):
+    def itemsize(self) -> int:
         """Length of one array element in bytes"""
         return self.dtype.itemsize
 
