@@ -24,7 +24,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Literal, TypeVar, Union, cast
+from typing import Any, TypeVar, Union, cast
 
 import numpy as np
 from fsspec import get_mapper
@@ -85,13 +85,7 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
-if TYPE_CHECKING:
-    from enum import Enum
-
-    class _Nan(Enum):
-        nan: np.nan
-
-    T_IntOrNaN = Union[int, Literal[_Nan.nan]]
+T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
