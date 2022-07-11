@@ -906,3 +906,8 @@ def test_is_integer_string_hypothesis(x):
 @given(x=st.floats().filter(lambda x: not x.is_integer()))
 def test_is_integer_floats_hypothesis(x):
     assert not is_integer(x)
+
+
+@given(x=st.floats(allow_nan=False, allow_infinity=False))
+def test_format_time_hypothesis(x):
+    format_time(x)
