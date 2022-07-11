@@ -16,6 +16,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - hypothesis
   - moto
   - flask
   - fastparquet>=0.8.0
@@ -67,4 +68,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+      - git+https://github.com/dask/distributed

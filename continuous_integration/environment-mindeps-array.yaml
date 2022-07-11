@@ -18,3 +18,4 @@ dependencies:
   - pytest-cov
   - pytest-rerunfailures
   - pytest-xdist
+  - hypothesis

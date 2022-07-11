@@ -4,7 +4,9 @@ import operator
 import pickle
 from array import array
 
+import hypothesis.strategies as st
 import pytest
+from hypothesis import given
 from tlz import curry
 
 from dask import get
@@ -30,6 +32,7 @@ from dask.utils import (
     getargspec,
     has_keyword,
     is_arraylike,
+    is_integer,
     itemgetter,
     iter_chunks,
     memory_repr,
@@ -888,3 +891,18 @@ def test_factors():
     assert factors(2) == {1, 2}
     assert factors(12) == {1, 2, 3, 4, 6, 12}
     assert factors(15) == {1, 3, 5, 15}
+
+
+@given(x=st.integers())
+def test_is_integer_hypothesis(x):
+    assert is_integer(x)
+
+
+@given(x=st.text())
+def test_is_integer_string_hypothesis(x):
+    assert not is_integer(x)
+
+
+@given(x=st.floats().filter(lambda x: not x.is_integer()))
+def test_is_integer_floats_hypothesis(x):
+    assert not is_integer(x)
