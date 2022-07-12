@@ -24,7 +24,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, mul
 from threading import Lock
-from typing import Any, TypeVar, cast
+from typing import Any, TypeVar, Union, cast
 
 import numpy as np
 from fsspec import get_mapper
@@ -84,6 +84,8 @@ from dask.utils import (
     typename,
 )
 from dask.widgets import get_template
+
+T_IntOrNaN = Union[int, float]  # Should be Union[int, Literal[np.nan]]
 
 DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
@@ -1499,11 +1501,11 @@ class Array(DaskMethodsMixin):
         return x
 
     @cached_property
-    def shape(self):
+    def shape(self) -> tuple[T_IntOrNaN, ...]:
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
     @property
-    def chunksize(self):
+    def chunksize(self) -> tuple[T_IntOrNaN, ...]:
         return tuple(max(c) for c in self.chunks)
 
     @property
@@ -1637,21 +1639,21 @@ class Array(DaskMethodsMixin):
         )
 
     @cached_property
-    def ndim(self):
+    def ndim(self) -> int:
         return len(self.shape)
 
     @cached_property
-    def size(self):
+    def size(self) -> T_IntOrNaN:
         """Number of elements in array"""
         return reduce(mul, self.shape, 1)
 
     @property
-    def nbytes(self):
+    def nbytes(self) -> T_IntOrNaN:
         """Number of bytes in array"""
         return self.size * self.dtype.itemsize
 
     @property
-    def itemsize(self):
+    def itemsize(self) -> int:
         """Length of one array element in bytes"""
         return self.dtype.itemsize
 
