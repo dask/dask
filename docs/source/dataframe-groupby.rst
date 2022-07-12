@@ -222,3 +222,9 @@ column you can use:
     ...     finalize=lambda s1: s1.apply(lambda final: len(set(final))),
     ... )
     >>> ddf.groupby('a').agg({'b':nunique, 'c':nunique})
+
+To access NumPy functions use ``apply`` with a lambda function such as ``.apply(lambda r: np.sum(r))``. Here's an example of how a sum of squares aggregation would look like:
+
+.. code-block:: python
+
+    >>> dd.Aggregation(name="sum_of_squares", chunk=lambda s: s.apply(lambda r: np.sum(np.power(r, 2))), agg=lambda s: s.sum())
