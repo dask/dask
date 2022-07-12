@@ -1160,7 +1160,7 @@ class ArrowDatasetEngine(Engine):
 
         # Check if this is a very simple case where we can just return
         # the path names
-        if gather_statistics is False and not split_row_groups:
+        if gather_statistics is False and not (split_row_groups or filters):
             return (
                 [
                     {"piece": (full_path, None, None)}
