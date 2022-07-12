@@ -330,7 +330,12 @@ def test_plot_multiple():
     p = visualize(
         [prof, rprof], label_size=50, title="Not the default", show=False, save=False
     )
-    figures = [r[0] for r in p.children[1].children]
+    # Grid plot layouts changed in Bokeh 3.
+    # See https://github.com/dask/dask/issues/9257 for more details
+    if BOKEH_VERSION().major < 3:
+        figures = [r[0] for r in p.children[1].children]
+    else:
+        figures = [r[0] for r in p.children]
     assert len(figures) == 2
     assert figures[0].title.text == "Not the default"
     assert figures[0].xaxis[0].axis_label is None
