@@ -2100,6 +2100,10 @@ class Array(DaskMethodsMixin):
         """Dot product of self and other.
 
         Refer to :func:`dask.array.tensordot` for full documentation.
+
+        See Also
+        --------
+        dask.array.dot
         """
         from dask.array.routines import tensordot
 
@@ -2117,6 +2121,10 @@ class Array(DaskMethodsMixin):
         """Reverse or permute the axes of an array. Return the modified array.
 
         Refer to :func:`dask.array.transpose` for full documentation.
+
+        See Also
+        --------
+        dask.array.transpose
         """
         from dask.array.routines import transpose
 
@@ -2134,6 +2142,10 @@ class Array(DaskMethodsMixin):
         """Return a flattened array.
 
         Refer to :func:`dask.array.ravel` for full documentation.
+
+        See Also
+        --------
+        dask.array.ravel
         """
         from dask.array.routines import ravel
 
@@ -2145,6 +2157,10 @@ class Array(DaskMethodsMixin):
         """Use an index array to construct a new array from a set of choices.
 
         Refer to :func:`dask.array.choose` for full documentation.
+
+        See Also
+        --------
+        dask.array.choose
         """
         from dask.array.routines import choose
 
@@ -2154,6 +2170,10 @@ class Array(DaskMethodsMixin):
         """Reshape array to new shape
 
         Refer to :func:`dask.array.reshape` for full documentation.
+
+        See Also
+        --------
+        dask.array.reshape
         """
         from dask.array.reshape import reshape
 
@@ -2166,6 +2186,9 @@ class Array(DaskMethodsMixin):
 
         Refer to :func:`dask.array.topk` for full documentation.
 
+        See Also
+        --------
+        dask.array.topk
         """
         from dask.array.reductions import topk
 
@@ -2176,6 +2199,9 @@ class Array(DaskMethodsMixin):
 
         Refer to :func:`dask.array.argtopk` for full doctumentation.
 
+        See Also
+        --------
+        dask.array.argtopk
         """
         from dask.array.reductions import argtopk
 
@@ -2626,7 +2652,7 @@ class Array(DaskMethodsMixin):
         """Map a function over blocks of the array with some overlap
 
         Refer to :func:`dask.array.map_overlap` for full documentation.
-        
+
         See Also
         --------
         dask.array.map_overlap : equivalent function
