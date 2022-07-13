@@ -95,23 +95,6 @@ GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
 pd.set_option("compute.use_numexpr", False)
 
 
-def _numeric_only(func):
-    """Decorator for methods that accept a numeric_only kwarg"""
-
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        # numeric_only is None by default - in that case self = self.
-        if kwargs.get("numeric_only") is False:
-            raise NotImplementedError(
-                "'numeric_only=False' is not implemented in Dask."
-            )
-        elif kwargs.get("numeric_only") is True:
-            self = self._get_numeric_data()
-        return func(self, *args, **kwargs)
-
-    return wrapper
-
-
 def _concat(args, ignore_index=False):
     if not args:
         return args
@@ -1876,16 +1859,31 @@ Dask Name: {name}, {task} tasks"""
         )
         return maybe_shift_divisions(out, periods, freq=freq)
 
-    def _reduction_agg(self, name, axis=None, skipna=True, split_every=False, out=None):
+    def _reduction_agg(
+        self,
+        name,
+        axis=None,
+        skipna=True,
+        split_every=False,
+        out=None,
+        numeric_only=None,
+    ):
         axis = self._validate_axis(axis)
 
-        meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
+        meta = getattr(self._meta_nonempty, name)(
+            axis=axis, skipna=skipna, numeric_only=None
+        )
         token = self._token_prefix + name
 
         method = getattr(M, name)
         if axis == 1:
             result = self.map_partitions(
-                method, meta=meta, token=token, skipna=skipna, axis=axis
+                method,
+                meta=meta,
+                token=token,
+                skipna=skipna,
+                axis=axis,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         else:
@@ -1896,6 +1894,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 axis=axis,
                 split_every=split_every,
+                numeric_only=numeric_only,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -1933,7 +1932,6 @@ Dask Name: {name}, {task} tasks"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -1946,7 +1944,12 @@ Dask Name: {name}, {task} tasks"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "sum",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -1959,7 +1962,6 @@ Dask Name: {name}, {task} tasks"""
         else:
             return result
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -1972,7 +1974,12 @@ Dask Name: {name}, {task} tasks"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "prod", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "prod",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -1987,26 +1994,34 @@ Dask Name: {name}, {task} tasks"""
 
     product = prod  # aliased dd.product
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def max(
         self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
     ):
         return self._reduction_agg(
-            "max", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "max",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def min(
         self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
     ):
         return self._reduction_agg(
-            "min", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "min",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, axis=None, skipna=True, split_every=False):
+    def idxmax(self, axis=None, skipna=True, split_every=False, numeric_only=None):
         fn = "idxmax"
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.idxmax(axis=axis, skipna=skipna)
@@ -2019,6 +2034,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2039,10 +2055,10 @@ Dask Name: {name}, {task} tasks"""
             return result
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, axis=None, skipna=True, split_every=False):
+    def idxmin(self, axis=None, skipna=True, split_every=False, numeric_only=None):
         fn = "idxmin"
         axis = self._validate_axis(axis)
-        meta = self._meta_nonempty.idxmax(axis=axis)
+        meta = self._meta_nonempty.idxmax(axis=axis, numeric_only=numeric_only)
         if axis == 1:
             return map_partitions(
                 M.idxmin,
@@ -2052,6 +2068,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
         else:
             scalar = not is_series_like(meta)
@@ -2071,15 +2088,19 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def count(self, axis=None, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
-            meta = self._meta_nonempty.count(axis=axis)
+            meta = self._meta_nonempty.count(axis=axis, numeric_only=numeric_only)
             return self.map_partitions(
-                M.count, meta=meta, token=token, axis=axis, enforce_metadata=False
+                M.count,
+                meta=meta,
+                token=token,
+                axis=axis,
+                enforce_metadata=False,
+                numeric_only=numeric_only,
             )
         else:
             meta = self._meta_nonempty.count()
@@ -2109,7 +2130,6 @@ Dask Name: {name}, {task} tasks"""
         mode_series.name = self.name
         return mode_series
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def mean(
         self,
@@ -2122,7 +2142,9 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
-        meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.mean(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.mean,
@@ -2132,6 +2154,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         else:
@@ -2152,7 +2175,6 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
         self,
@@ -2166,7 +2188,9 @@ Dask Name: {name}, {task} tasks"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.var(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2177,6 +2201,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         else:
@@ -2297,7 +2322,6 @@ Dask Name: {name}, {task} tasks"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def std(
         self,
@@ -2313,7 +2337,9 @@ Dask Name: {name}, {task} tasks"""
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
-        meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        meta = self._meta_nonempty.std(
+            axis=axis, skipna=skipna, numeric_only=numeric_only
+        )
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2339,6 +2365,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
                 enforce_metadata=False,
                 parent_meta=self._meta,
             )
@@ -2405,7 +2432,6 @@ Dask Name: {name}, {task} tasks"""
 
         return numeric_dd, needs_time_conversion
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def skew(
         self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
@@ -2425,7 +2451,7 @@ Dask Name: {name}, {task} tasks"""
         """
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
-        meta = self._meta_nonempty.skew()
+        meta = self._meta_nonempty.skew(numeric_only=numeric_only)
         if axis == 1:
             result = map_partitions(
                 M.skew,
@@ -2433,6 +2459,7 @@ Dask Name: {name}, {task} tasks"""
                 meta=meta,
                 token=self._token_prefix + "skew",
                 axis=axis,
+                numeric_only=numeric_only,
                 enforce_metadata=False,
             )
             return handle_out(out, result)
@@ -2508,7 +2535,6 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
         self,
@@ -2533,7 +2559,7 @@ Dask Name: {name}, {task} tasks"""
         """
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "kurtosis")
-        meta = self._meta_nonempty.kurtosis()
+        meta = self._meta_nonempty.kurtosis(numeric_only=numeric_only)
         if axis == 1:
             result = map_partitions(
                 M.kurtosis,
@@ -2541,6 +2567,7 @@ Dask Name: {name}, {task} tasks"""
                 meta=meta,
                 token=self._token_prefix + "kurtosis",
                 axis=axis,
+                numeric_only=numeric_only,
                 enforce_metadata=False,
             )
             return handle_out(out, result)
@@ -2628,12 +2655,13 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.kurtosis(), divisions=[None, None]
         )
 
-    @_numeric_only
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
-        meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
+        meta = self._meta_nonempty.sem(
+            axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
+        )
         if axis == 1:
             return map_partitions(
                 M.sem,
@@ -2643,6 +2671,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                numeric_only=numeric_only,
                 parent_meta=self._meta,
             )
         else:
@@ -2656,6 +2685,7 @@ Dask Name: {name}, {task} tasks"""
                 meta=meta,
                 token=name,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
                 parent_meta=self._meta,
             )
 

@@ -1140,8 +1140,9 @@ def test_reductions_frame(split_every):
 
 
 @pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
+    "ignore:Dropping of nuisance columns:FutureWarning",
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 def test_reductions_frame_dtypes():
     df = pd.DataFrame(
         {
@@ -1550,8 +1551,9 @@ def test_datetime_std_with_larger_dataset(axis, skipna):
     not PANDAS_GT_120, reason="std() for datetime only added in pandas>=1.2"
 )
 @pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
+    "ignore:Dropping of nuisance columns:FutureWarning",
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.parametrize("skipna", [False, True])
 def test_datetime_std_across_axis1_null_results(skipna):
     pdf = pd.DataFrame(
