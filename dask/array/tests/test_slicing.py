@@ -874,7 +874,13 @@ def test_slicing_plan(chunks, index, expected):
 def test_getitem_avoids_large_chunks():
     with dask.config.set({"array.chunk-size": "0.1Mb"}):
         a = np.arange(2 * 128 * 128, dtype="int64").reshape(2, 128, 128)
-        arr = da.from_array(a, chunks=(1, 128, 128))
+        arr = da.from_array(a, chunks=(1, 8, 8))
+        indexer = [0] + [1] * 11
+        result = arr[
+            indexer
+        ]  # small chunks within the chunk-size limit should NOT raise PerformanceWarning
+
+        arr = da.from_array(a, chunks=(1, 128, 128))  # large chunks
         indexer = [0] + [1] * 11
         expected = a[indexer]
 
