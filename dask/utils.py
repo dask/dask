@@ -1328,7 +1328,7 @@ def is_arraylike(x) -> bool:
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
         # We special case scipy.sparse and cupyx.scipy.sparse arrays as having partial
-        # support for them is useful in scenerios where we mostly call `map_partitions`
+        # support for them is useful in scenarios where we mostly call `map_partitions`
         # or `map_blocks` with scikit-learn functions on dask arrays and dask dataframes.
         # https://github.com/dask/dask/pull/3738
         and (is_duck_array or "scipy.sparse" in typename(type(x)))
