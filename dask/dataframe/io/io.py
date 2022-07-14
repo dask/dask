@@ -665,10 +665,9 @@ def from_delayed(
     Parameters
     ----------
     dfs :
-        A ``dask.delayed.Delayed`` or an iterable of these objects, e.g. returned by
-        ``dask.delayed`` or an iterable of ``distributed.Future`` ,
-        e.g. returned by ``client.submit``. These comprise the individual
-        partitions of the resulting dataframe.
+        A ``dask.delayed.Delayed``, a ``distributed.Future``, or an iterable of either
+        of these objects, e.g. returned by ``client.submit``. These comprise the
+        individual partitions of the resulting dataframe.
         If a single object is provided (not an iterable), then the resulting dataframe
         will have only one partition.
     $META
