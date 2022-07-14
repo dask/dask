@@ -685,7 +685,7 @@ def from_delayed(
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed) or type(dfs).__name__ == "Future":
+    if isinstance(dfs, Delayed) or hasattr(df, "key"):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
