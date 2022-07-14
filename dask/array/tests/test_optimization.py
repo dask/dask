@@ -517,9 +517,20 @@ def test_double_dependencies():
     assert_eq(X.compute(optimize_graph=False), X)
 
 
+def _assert_materialized_input(x):
+    # The following assertion will fail if/when
+    # the current test is not using a materialized
+    # Layer for IO. When that happens, this test
+    # will no longer be testing fuse_roots behavior,
+    # and so it should be modified or removed
+    assert hasattr(x.dask.layers[x._name], "mapping")
+
+
 def test_fuse_roots():
     x = da.from_array(np.ones(10), chunks=(2,))
     y = da.from_array(np.zeros(10), chunks=(2,))
+    _assert_materialized_input(x)
+
     z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
     assert len(zz.dask.layers) == 1
@@ -531,6 +542,7 @@ def test_fuse_roots():
 def test_fuse_roots_annotations():
     x = da.from_array(np.ones(10), chunks=(2,))
     y = da.from_array(np.zeros(10), chunks=(2,))
+    _assert_materialized_input(x)
 
     with dask.annotate(foo="bar"):
         y = y**2
