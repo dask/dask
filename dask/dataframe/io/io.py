@@ -664,7 +664,7 @@ def from_delayed(
 
     Parameters
     ----------
-    dfs : Delayed, list[Delayed, Future]
+    dfs :
         A ``dask.delayed.Delayed`` or an iterable of these objects, e.g. returned by
         ``dask.delayed`` or an iterable of ``distributed.Future`` ,
         e.g. returned by ``client.submit``. These comprise the individual
@@ -672,15 +672,15 @@ def from_delayed(
         If a single object is provided (not an iterable), then the resulting dataframe
         will have only one partition.
     $META
-    divisions : tuple, str, optional
+    divisions :
         Partition boundaries along the index.
         For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
         For string 'sorted' will compute the delayed values to find index
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
-    prefix : str, optional
+    prefix :
         Prefix to prepend to the keys.
-    verify_meta : bool, optional
+    verify_meta :
         If True check that the partitions have consistent metadata, defaults to True.
     """
     from dask.delayed import Delayed
