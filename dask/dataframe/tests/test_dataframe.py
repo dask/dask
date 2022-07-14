@@ -4934,13 +4934,20 @@ def test_dataframe_groupby_cumprod_agg_empty_partitions():
     assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
 
 
+def _materialize_dd_graph(ddf):
+    # Materialize a Dask-DataFrame graph to test fuse_roots
+    # (Otherwise we are just testing blockwise fusion)
+    return dd.DataFrame(ddf.dask.to_dict(), ddf._name, ddf._meta, ddf.divisions)
+
+
 def test_fuse_roots():
     pdf1 = pd.DataFrame(
         {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
     )
-    ddf1 = dd.from_pandas(pdf1, 2)
+    ddf1 = _materialize_dd_graph(dd.from_pandas(pdf1, 2))
+
     pdf2 = pd.DataFrame({"a": [True, False, True] * 3, "b": [False, False, True] * 3})
-    ddf2 = dd.from_pandas(pdf2, 2)
+    ddf2 = _materialize_dd_graph(dd.from_pandas(pdf2, 2))
 
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())

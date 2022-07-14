@@ -517,19 +517,15 @@ def test_double_dependencies():
     assert_eq(X.compute(optimize_graph=False), X)
 
 
-def _assert_materialized_input(x):
-    # The following assertion will fail if/when
-    # the current test is not using a materialized
-    # Layer for IO. When that happens, this test
-    # will no longer be testing fuse_roots behavior,
-    # and so it should be modified or removed
-    assert hasattr(x.dask.layers[x._name], "mapping")
+def _materialize_da_graph(x):
+    # Materialize a Dask-Array graph to test fuse_roots
+    # (Otherwise we are just testing blockwise fusion)
+    return da.Array(x.dask.to_dict(), x._name, x.chunks, dtype=x.dtype)
 
 
 def test_fuse_roots():
-    x = da.from_array(np.ones(10), chunks=(2,))
-    y = da.from_array(np.zeros(10), chunks=(2,))
-    _assert_materialized_input(x)
+    x = _materialize_da_graph(da.ones(10, chunks=(2,)))
+    y = _materialize_da_graph(da.zeros(10, chunks=(2,)))
 
     z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
@@ -540,9 +536,8 @@ def test_fuse_roots():
 
 
 def test_fuse_roots_annotations():
-    x = da.from_array(np.ones(10), chunks=(2,))
-    y = da.from_array(np.zeros(10), chunks=(2,))
-    _assert_materialized_input(x)
+    x = _materialize_da_graph(da.ones(10, chunks=(2,)))
+    y = _materialize_da_graph(da.zeros(10, chunks=(2,)))
 
     with dask.annotate(foo="bar"):
         y = y**2
