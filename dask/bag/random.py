@@ -53,7 +53,8 @@ def choices(population, k=1):
     >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
-    return _sample_with_replacement(population=population, k=k)
+    res = _sample_with_replacement(population=population, k=k)
+    return res.map_partitions(first)
 
 
 def _sample_reduce(reduce_iter, k, replace):
