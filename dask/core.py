@@ -169,7 +169,7 @@ def get(dsk, out, cache=None):
     --------
 
     >>> inc = lambda x: x + 1
-    >>> d = {'x': 1, 'y': (inc, 'x')}
+    >>> d = DaskGraph({'x': 1, 'y': (inc, 'x')})
 
     >>> get(d, 'x')
     1
