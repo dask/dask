@@ -6,7 +6,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Any, Iterable, Literal
+from typing import TYPE_CHECKING, Iterable, Literal
 
 import numpy as np
 import pandas as pd
@@ -685,7 +685,7 @@ def from_delayed(
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed) or hasattr(df, "key"):
+    if isinstance(dfs, Delayed) or hasattr(dfs, "key"):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
