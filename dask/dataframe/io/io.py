@@ -705,7 +705,7 @@ def from_delayed(
         dfs = [delayed(make_meta)(meta)]
 
     if divisions is None or divisions == "sorted":
-        divs = [None] * (len(dfs) + 1)
+        divs: list | tuple = [None] * (len(dfs) + 1)
     else:
         divs = list(divisions)
         if len(divs) != len(dfs) + 1:
