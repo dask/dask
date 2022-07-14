@@ -61,6 +61,12 @@ def test_sample_size_exactly_k():
     assert len(set(li)) == len(li)
 
 
+def test_sample_with_more_bag_partitons():
+    seq = range(100)
+    sut = db.from_sequence(seq, npartitions=10)
+    random.sample(sut, k=10).compute()
+
+
 def test_sample_k_bigger_than_bag_size():
     seq = range(3)
     sut = db.from_sequence(seq, npartitions=3)
