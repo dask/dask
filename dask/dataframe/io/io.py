@@ -685,7 +685,7 @@ def from_delayed(
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed) or type(dfs).__name__ == "Future":
+    if isinstance(dfs, Delayed) or hasattr(df, "key"):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
@@ -705,7 +705,7 @@ def from_delayed(
         dfs = [delayed(make_meta)(meta)]
 
     if divisions is None or divisions == "sorted":
-        divs = [None] * (len(dfs) + 1)
+        divs: list | tuple = [None] * (len(dfs) + 1)
     else:
         divs = list(divisions)
         if len(divs) != len(dfs) + 1:
