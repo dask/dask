@@ -751,6 +751,9 @@ def test_split_apply_combine_on_series(empty):
     assert_dask_graph(ddf.groupby("b").size(), "dataframe-groupby-size")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
@@ -1200,6 +1203,9 @@ def test_bfill():
     )
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.parametrize(
     "grouper",
     [
@@ -1916,6 +1922,9 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.parametrize(
     "func",
     [
@@ -2574,6 +2583,9 @@ def test_groupby_large_ints_exception(backend):
     )
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.parametrize("by", ["a", "b", "c", ["a", "b"], ["a", "c"]])
 @pytest.mark.parametrize("agg", ["count", "mean", "std"])
 @pytest.mark.parametrize("sort", [True, False])
@@ -2644,6 +2656,9 @@ def test_groupby_sort_true_split_out():
         M.sum(ddf.groupby("x", sort=True), split_out=2)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default value of numeric_only:FutureWarning",
+)
 @pytest.mark.skipif(
     not PANDAS_GT_110, reason="observed only supported for newer pandas"
 )
