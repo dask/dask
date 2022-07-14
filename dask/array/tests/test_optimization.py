@@ -518,25 +518,25 @@ def test_double_dependencies():
 
 
 def test_fuse_roots():
-    x = da.ones(10, chunks=(2,))
-    y = da.zeros(10, chunks=(2,))
+    x = da.from_array(np.ones(10), chunks=(2,))
+    y = da.from_array(np.zeros(10), chunks=(2,))
     z = (x + 1) + (2 * y**2)
     (zz,) = dask.optimize(z)
-    # assert len(zz.dask) == 5
+    assert len(zz.dask.layers) == 1
+    assert len(zz.dask.to_dict()) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
 
 
 def test_fuse_roots_annotations():
-    x = da.ones(10, chunks=(2,))
-    y = da.zeros(10, chunks=(2,))
+    x = da.from_array(np.ones(10), chunks=(2,))
+    y = da.from_array(np.zeros(10), chunks=(2,))
 
     with dask.annotate(foo="bar"):
         y = y**2
 
     z = (x + 1) + (2 * y)
-    hlg = dask.blockwise.optimize_blockwise(z.dask)
-    assert len(hlg.layers) == 3
+    hlg = dask.blockwise.fuse_roots(z.dask, z.__dask_keys__())
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
