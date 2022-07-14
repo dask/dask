@@ -3604,7 +3604,7 @@ def test_read_write_overwrite_is_true(tmpdir, engine):
     ddf = ddf.reset_index(drop=True)
     dd.to_parquet(ddf, tmpdir, engine=engine, overwrite=True)
 
-    # Keep the contents of the DataFrame constatn but change the # of partitions
+    # Keep the contents of the DataFrame constant but change the # of partitions
     ddf2 = ddf.repartition(npartitions=3)
 
     # Overwrite the existing Dataset with the new dataframe and evaluate
