@@ -1659,21 +1659,20 @@ def _make_dims(indices, numblocks, new_axes):
 
 def fuse_roots(graph: HighLevelGraph, keys: list):
     """
-    Fuse nearby layers if they don't have dependencies
+    Fuse input layers if they are simple and don't have dependencies
 
     Often Blockwise sections of the graph fill out all of the computation
     except for the initial data access or data loading layers::
 
-      Large Blockwise Layer
-        |       |       |
-        X       Y       Z
+      Blockwise Layer
+        |         |
+        X         Y
 
-    This can be troublesome because X, Y, and Z tasks may be executed on
+    This can be troublesome because X and Y tasks may be executed on
     different machines, and then require communication to move around.
 
-    This optimization identifies this situation, lowers all of the graphs to
-    concrete dicts, and then calls ``fuse`` on them, with a width equal to the
-    number of layers like X, Y, and Z.
+    This optimization identifies this situation, and fuses the X and Y
+    tasks into the Blockwise layer by updating the io_deps attribute.
 
     This is currently used within array and dataframe optimizations.
 
@@ -1689,6 +1688,8 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
     Blockwise
     fuse
     """
+    from dask.highlevelgraph import MaterializedLayer
+
     layers = ensure_dict(graph.layers, copy=True)
     dependencies = ensure_dict(graph.dependencies, copy=True)
     dependents = reverse_dict(dependencies)
@@ -1702,14 +1703,90 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             and all(len(dependents[dep]) == 1 for dep in deps)
             and all(layer.annotations == graph.layers[dep].annotations for dep in deps)
         ):
-            new = toolz.merge(layer, *[layers[dep] for dep in deps])
-            new, _ = fuse(new, keys, ave_width=len(deps))
+            # Loop through layer.indices, and populate/update
+            # io_deps with the literal tasks defined in deps
+            # whenever possible
+            new_io_deps = {k: v for k, v in layer.io_deps.items()}
+            new_deps = {dep for dep in deps}
+            for _name, _ind in layer.indices:
+                if _ind is None:
+                    # Not a "collection" dependency, skip this indice
+                    continue
+                if _name in deps:
+                    _l = layers[_name]
+                    if isinstance(_l, MaterializedLayer):
+                        # Must be a materialized layer
+                        dsk = _l.mapping
+                        if not all(
+                            [
+                                k
+                                for k in dsk.keys()
+                                if (isinstance(k, tuple) and k and k[0] == _name)
+                            ]
+                        ):
+                            # Not a "simple" graph, skip this indice
+                            continue
+                        # At this point, we know that dep is a simple materialized
+                        # graph that can be "fused" into our Blockwise layer by
+                        # adding a new element to the io_deps attribute
+                        new_io_deps[_name] = BlockwiseDepDict(
+                            {tuple(key[1:]): task for key, task in dsk.items()},
+                            produces_tasks=True,
+                        )
+                        new_deps -= {_name}  # _name is no longer an external dep
+                else:
+                    blockwise_dep = layer.io_deps.get(_name, None)
+                    if isinstance(blockwise_dep, BlockwiseDepDict):
+                        # This Blockwise layer already defines an io_deps
+                        # element for this dependency. Check if the dependency
+                        # corresponds to a "delayed" task that we can fuse
+                        new_dep_dict = blockwise_dep.mapping.copy()
+                        produces_keys = blockwise_dep.produces_keys
+                        for ind, key in blockwise_dep.mapping.items():
+                            _l = layers[key]
+                            if isinstance(_l, MaterializedLayer):
+                                if (
+                                    isinstance(key, str)
+                                    and key in deps
+                                    and len(_l.mapping) == 1
+                                    and isinstance(_l.mapping[key], tuple)
+                                ):
+                                    # Great. This is a simple single-task graph that
+                                    # we can express more explicitly in io_deps
+                                    new_dep_dict[ind] = _l.mapping[key]
+                                    new_deps -= {
+                                        key
+                                    }  # key is no longer an external dep
+                                    produces_keys = False
+                        # Build a fresh BlockwiseDep object for this element
+                        # of the new io_deps attribute
+                        new_io_deps[_name] = BlockwiseDepDict(
+                            new_dep_dict,
+                            produces_tasks=True,
+                            produces_keys=produces_keys,
+                        )
 
-            for dep in deps:
+            # Initalize a new Blockwise layer
+            new = Blockwise(
+                layer.output,
+                layer.output_indices,
+                layer.dsk,
+                layer.indices,
+                layer.numblocks,
+                concatenate=layer.concatenate,
+                new_axes=layer.new_axes,
+                output_blocks=layer.output_blocks,
+                annotations=layer.annotations,
+                io_deps=new_io_deps,
+            )
+
+            for dep in deps - new_deps:
+                # Some deps may have been changed
+                # from "external" to io_deps
                 del layers[dep]
                 del dependencies[dep]
 
             layers[name] = new
-            dependencies[name] = set()
+            dependencies[name] = new_deps  # External deps only
 
     return HighLevelGraph(layers, dependencies)
