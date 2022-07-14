@@ -656,10 +656,10 @@ def to_records(df):
 def from_delayed(
     dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
     meta=None,
-    divisions: tuple[Any, ...] | Literal["sorted"] | None = None,
+    divisions: tuple | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
     verify_meta: bool = True,
-) -> DataFrame:
+) -> DataFrame | Series:
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters

@@ -7,7 +7,7 @@ from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import TYPE_CHECKING, Any, Callable, ClassVar, Literal, Mapping
+from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -4777,7 +4777,8 @@ class DataFrame(_Frame):
                     )
 
             # Or be a frame directly
-            elif not TYPE_CHECKING and isinstance(other, DataFrame):
+            # type: ignore[unreachable]
+            elif isinstance(other, DataFrame):
                 raise NotImplementedError(
                     "Dask dataframe does not yet support multi-indexes.\n"
                     f"You tried to index with a frame with these columns: {list(other.columns)}\n"
