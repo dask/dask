@@ -221,7 +221,7 @@ def read_parquet(
         of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
+        as an AND conjunction. To express OR in predicates, one must use the
         (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
@@ -1241,7 +1241,7 @@ def apply_filters(parts, statistics, filters):
         filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
+        as an AND conjunction. To express OR in predicates, one must use the
         (preferred) List[List[Tuple]] notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
