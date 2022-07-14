@@ -1744,20 +1744,18 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
                         produces_keys = blockwise_dep.produces_keys
                         for ind, key in blockwise_dep.mapping.items():
                             _l = layers[key]
-                            if isinstance(_l, MaterializedLayer):
-                                if (
-                                    isinstance(key, str)
-                                    and key in deps
-                                    and len(_l.mapping) == 1
-                                    and isinstance(_l.mapping[key], tuple)
-                                ):
-                                    # Great. This is a simple single-task graph that
-                                    # we can express more explicitly in io_deps
-                                    new_dep_dict[ind] = _l.mapping[key]
-                                    new_deps -= {
-                                        key
-                                    }  # key is no longer an external dep
-                                    produces_keys = False
+                            if (
+                                isinstance(_l, MaterializedLayer)
+                                and isinstance(key, str)
+                                and key in deps
+                                and len(_l.mapping) == 1
+                                and isinstance(_l.mapping[key], tuple)
+                            ):
+                                # Great. This is a simple single-task graph that
+                                # we can express more explicitly in io_deps
+                                new_dep_dict[ind] = _l.mapping[key]
+                                new_deps -= {key}  # key is no longer an external dep
+                                produces_keys = False
                         # Build a fresh BlockwiseDep object for this element
                         # of the new io_deps attribute
                         new_io_deps[_name] = BlockwiseDepDict(
