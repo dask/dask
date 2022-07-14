@@ -587,6 +587,7 @@ def map_blocks(
 
     See Also
     --------
+    dask.array.map_overlap : Generalized operation with overlap between neighbors.
     dask.array.blockwise : Generalized operation with control over block alignment.
 
     Examples
@@ -1788,7 +1789,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        da.store
+        dask.array.store
         h5py.File.create_dataset
         """
         return to_hdf5(filename, datapath, self, **kwargs)
@@ -2103,7 +2104,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.dot
+        dask.array.dot : equivalent function
         """
         from dask.array.routines import tensordot
 
@@ -2124,7 +2125,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.transpose
+        dask.array.transpose : equivalent function
         """
         from dask.array.routines import transpose
 
@@ -2145,7 +2146,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.ravel
+        dask.array.ravel : equivalent function
         """
         from dask.array.routines import ravel
 
@@ -2160,7 +2161,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.choose
+        dask.array.choose : equivalent function
         """
         from dask.array.routines import choose
 
@@ -2173,7 +2174,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.reshape
+        dask.array.reshape : equivalent function
         """
         from dask.array.reshape import reshape
 
@@ -2188,7 +2189,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.topk
+        dask.array.topk : equivalent function
         """
         from dask.array.reductions import topk
 
@@ -2201,7 +2202,7 @@ class Array(DaskMethodsMixin):
 
         See Also
         --------
-        dask.array.argtopk
+        dask.array.argtopk : equivalent function
         """
         from dask.array.reductions import argtopk
 
@@ -2893,16 +2894,24 @@ class Array(DaskMethodsMixin):
 
         See https://zarr.readthedocs.io for details about the format.
 
-        See function :func:`dask.array.to_zarr` for parameters.
+        Refer to :func:`dask.array.to_zarr` for full documentation.
+
+        See also
+        --------
+        dask.array.to_zarr : equivalent function
         """
         return to_zarr(self, *args, **kwargs)
 
     def to_tiledb(self, uri, *args, **kwargs):
         """Save array to the TileDB storage manager
 
+        See https://docs.tiledb.io for details about the format and engine.
+
         See function :func:`dask.array.to_tiledb` for argument documentation.
 
-        See https://docs.tiledb.io for details about the format and engine.
+        See also
+        --------
+        dask.array.to_tiledb : equivalent function
         """
         from dask.array.tiledb_io import to_tiledb
 

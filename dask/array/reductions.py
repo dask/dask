@@ -863,6 +863,8 @@ def moment(
 
     Parameters
     ----------
+    a : Array
+        Data over which to compute moment
     order : int
         Order of the moment that is returned, must be >= 2.
     axis : int, optional
@@ -883,7 +885,7 @@ def moment(
 
     Returns
     -------
-    moment : ndarray
+    moment : Array
 
     References
     ----------
