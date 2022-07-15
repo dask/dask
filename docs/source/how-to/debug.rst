@@ -161,9 +161,7 @@ recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc.  *Many* problems can be correctly diagnosed by
 inspecting these pages.  By default, these are available at
-``http://scheduler:8787/``, ``http://scheduler:8788/``, and ``http://worker:8789/``,
-where ``scheduler`` and ``worker`` should be replaced by the addresses of the
-scheduler and each of the workers. See `diagnosing performance docs
+``http://scheduler:8787/``. See `diagnosing performance docs
 <https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ for more information.
 
 Logs
