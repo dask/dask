@@ -159,7 +159,7 @@ def from_pandas(
     chunksize: int | None = None,
     sort: bool = True,
     name: str | None = None,
-) -> DataFrame:
+) -> DataFrame | Series:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
