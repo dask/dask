@@ -2837,7 +2837,6 @@ def test_groupby_scalar_column():
     ["op"],
     [
         [lambda s: s.agg("sum")],
-        [lambda s: s.cov()],
         [lambda s: s.var()],
     ],
 )
