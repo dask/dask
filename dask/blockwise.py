@@ -36,8 +36,6 @@ class BlockwiseDep:
 
     Parameters
     ----------
-    dimensions: int
-        The number of dimensions required for a tuple key.
     numblocks: tuple[int, ...]
         The number of blocks/partitions the object can support
         along each dimension.
@@ -51,7 +49,6 @@ class BlockwiseDep:
     dask.blockwise.BlockwiseDepDict
     """
 
-    dimensions: int
     numblocks: tuple[int, ...]
     produces_tasks: bool
 
@@ -246,7 +243,7 @@ class BlockIndex(BlockwiseDep):
         self.numblocks = numblocks
 
     def __getitem__(self, idx: tuple[int, ...]) -> tuple[int, ...]:
-        return idx[: len(self.numblocks)]
+        return idx
 
     def __dask_distributed_pack__(self, **kwargs):
         return {"numblocks": self.numblocks}
