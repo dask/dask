@@ -615,10 +615,10 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     >>> import dask
     >>> with dask.config.set({"array.slicing.split-large-chunks": True}):
-    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
+    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (2000, 2000), (2000, 2000)],
     ...                        [0] + [1] * 6 + [2], axis=0, itemsize=8)
     >>> chunks
-    ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
+    ((1, 3, 3, 1), (2000, 2000), (2000, 2000))
     """
     from dask.array.core import PerformanceWarning
 
@@ -639,7 +639,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     # configured chunk size.
     nbytes = utils.parse_bytes(config.get("array.chunk-size"))
     other_chunks = [chunks[i] for i in range(len(chunks)) if i != axis]
-    other_numel = math.prod(sum(x) for x in other_chunks)
+    other_numel = math.prod(max(x) for x in other_chunks)
 
     if math.isnan(other_numel) or other_numel == 0:
         warnsize = maxsize = math.inf
