@@ -36,6 +36,8 @@ class BlockwiseDep:
 
     Parameters
     ----------
+    dimensions: int
+        The number of dimensions required for a tuple key.
     numblocks: tuple[int, ...]
         The number of blocks/partitions the object can support
         along each dimension.
@@ -49,6 +51,7 @@ class BlockwiseDep:
     dask.blockwise.BlockwiseDepDict
     """
 
+    dimensions: int
     numblocks: tuple[int, ...]
     produces_tasks: bool
 
@@ -243,7 +246,7 @@ class BlockIndex(BlockwiseDep):
         self.numblocks = numblocks
 
     def __getitem__(self, idx: tuple[int, ...]) -> tuple[int, ...]:
-        return idx
+        return idx[: len(self.numblocks)]
 
     def __dask_distributed_pack__(self, **kwargs):
         return {"numblocks": self.numblocks}
@@ -1144,20 +1147,19 @@ def make_blockwise_graph(
                     tups = lol_product((arg,), arg_coords)
                     if arg not in io_deps:
                         deps.update(flatten(tups))
-
+                    if arg in io_deps:
+                        # Replace "place-holder" IO keys with "real" args
+                        tups = [io_deps[arg].get(key[1:], key[1:]) for key in tups]
                     if concatenate:
                         tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
                         deps.add(tups)
-                # Replace "place-holder" IO keys with "real" args
-                if arg in io_deps:
-                    # We don't want to stringify keys for args
-                    # we are replacing here
-                    idx = tups[1:]
-                    args.append(io_deps[arg].get(idx, idx))
-                elif deserializing:
+                    if arg in io_deps:
+                        # Replace "place-holder" IO keys with "real" args
+                        tups = io_deps[arg].get(tups[1:], tups[1:])
+                if deserializing and arg not in io_deps:
                     args.append(stringify_collection_keys(tups))
                 else:
                     args.append(tups)
@@ -1732,6 +1734,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
                         new_io_deps[_name] = BlockwiseDepDict(
                             {tuple(key[1:]): task for key, task in dsk.items()},
                             produces_tasks=True,
+                            numblocks=max(dsk.keys())[1:],
                         )
                         new_deps -= {_name}  # _name is no longer an external dep
                 else:
@@ -1760,29 +1763,35 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
                         # of the new io_deps attribute
                         new_io_deps[_name] = BlockwiseDepDict(
                             new_dep_dict,
+                            numblocks=blockwise_dep.numblocks,
                             produces_tasks=True,
                             produces_keys=produces_keys,
                         )
 
-            # Initalize a new Blockwise layer
-            new = Blockwise(
-                layer.output,
-                layer.output_indices,
-                layer.dsk,
-                layer.indices,
-                layer.numblocks,
-                concatenate=layer.concatenate,
-                new_axes=layer.new_axes,
-                output_blocks=layer.output_blocks,
-                annotations=layer.annotations,
-                io_deps=new_io_deps,
-            )
-
-            for dep in deps - new_deps:
+            fused_deps = deps - new_deps
+            for dep in fused_deps:
                 # Some deps may have been changed
                 # from "external" to io_deps
                 del layers[dep]
                 del dependencies[dep]
+
+            # Initalize a new Blockwise layer
+            new = (
+                Blockwise(
+                    layer.output,
+                    layer.output_indices,
+                    layer.dsk,
+                    layer.indices,
+                    layer.numblocks,
+                    concatenate=layer.concatenate,
+                    new_axes=layer.new_axes,
+                    output_blocks=layer.output_blocks,
+                    annotations=layer.annotations,
+                    io_deps=new_io_deps,
+                )
+                if fused_deps
+                else layer
+            )
 
             layers[name] = new
             dependencies[name] = new_deps  # External deps only
