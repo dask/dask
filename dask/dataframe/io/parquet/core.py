@@ -257,7 +257,9 @@ def read_parquet(
         This option will be ignored if ``index`` is not specified and there is
         no physical index column specified in the custom "pandas" Parquet
         metadata. Note that ``calculate_divisions=True`` may be extremely slow
-        on some systems, and should be avoided when reading from remote storage.
+        when no global ``_metadata`` file is present, especially when reading
+        from remote storage. Set this to ``True`` only when known divisions
+        are needed for your workload (see :ref:`dataframe-design-partitions).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
