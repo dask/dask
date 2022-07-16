@@ -1,3 +1,5 @@
+from dask import __version__
+
 try:
     import click
 except ImportError as e:
@@ -11,21 +13,22 @@ except ImportError as e:
 
 
 @click.group
+@click.version_option(__version__)
 def cli():
     """Dask command line interface."""
     pass
 
 
 @cli.command
-def version():
-    """Print installed Dask version."""
-    from dask import __version__ as v
+def docs():
+    """Open Dask documentation in a web browser."""
+    import webbrowser
 
-    print(v)
+    webbrowser.open("https://docs.dask.org")
 
 
 @cli.command
-def versions():
+def info():
     """Print versions of Dask related projects."""
     from dask.utils import show_versions
 
