@@ -1902,10 +1902,6 @@ class Array(DaskMethodsMixin):
         self._chunks = y.chunks
 
     def __getitem__(self, index):
-        if any([np.isnan(chunk).any() for chunk in self.chunks]):
-            raise ValueError(
-                f"Arrays chunk sizes are unknown: {self.chunks}{unknown_chunk_message}"
-            )
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
