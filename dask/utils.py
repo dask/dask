@@ -1994,7 +1994,10 @@ def show_versions() -> None:
     from platform import uname
     from sys import stdout, version_info
 
-    from distributed import __version__ as distributed_version
+    try:
+        from distributed import __version__ as distributed_version
+    except ImportError:
+        distributed_version = None
 
     from dask import __version__ as dask_version
 
