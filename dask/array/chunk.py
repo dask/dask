@@ -418,10 +418,9 @@ def getitem(obj, index):
         result = obj[index]
     except IndexError as e:
         raise ValueError(
-            f"{e}.\n"
             "Array chunk size or shape is unknown. "
             "Possible solution with x.compute_chunk_sizes()"
-        )
+        ) from e
 
     try:
         if not result.flags.owndata and obj.size >= 2 * result.size:
