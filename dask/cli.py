@@ -7,7 +7,7 @@ except ImportError as e:
         " conda install click"
         " pip install click"
     )
-    raise ImportError
+    raise ImportError(msg) from e
 
 
 @click.group
