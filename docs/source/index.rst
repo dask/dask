@@ -169,6 +169,7 @@ messy situations in everyday problems.
    :caption: Reference
 
    api.rst
+   cli.rst
    develop.rst
    changelog.rst
    configuration.rst
