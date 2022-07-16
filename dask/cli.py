@@ -27,8 +27,14 @@ def docs():
     webbrowser.open("https://docs.dask.org")
 
 
-@cli.command
+@cli.group("info")
 def info():
+    """Information about your dask installation."""
+    pass
+
+
+@info.command()
+def versions():
     """Print versions of Dask related projects."""
     from dask.utils import show_versions
 
