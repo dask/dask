@@ -53,8 +53,8 @@ class Layer(Mapping):
 
     def __init__(
         self,
-        annotations: Mapping[str, Any] = None,
-        collection_annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
+        collection_annotations: Mapping[str, Any] | None = None,
     ):
         """Initialize Layer object.
 
@@ -931,6 +931,8 @@ class HighLevelGraph(Mapping):
         hlg: HighLevelGraph
             Culled high level graph
         """
+        from dask.layers import Blockwise
+
         keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
@@ -957,7 +959,12 @@ class HighLevelGraph(Mapping):
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
-                ret_key_deps.update(culled_deps)
+                if isinstance(layer, Blockwise) or (
+                    layer.is_materialized() and (len(layer) == len(culled_deps))
+                ):
+                    # Don't use culled_deps to update ret_key_deps
+                    # unless they are "direct" key dependencies
+                    ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
@@ -1031,7 +1038,7 @@ class HighLevelGraph(Mapping):
         self,
         client,
         client_keys: Iterable[Hashable],
-        annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
     ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 

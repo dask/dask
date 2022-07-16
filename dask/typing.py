@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
-try:
+if TYPE_CHECKING:
+    # IPython import is relatively slow. Avoid if not necessary
     from IPython.display import DisplayObject
-except ImportError:
-    DisplayObject = Any
 
 
 CollType = TypeVar("CollType", bound="DaskCollection")
@@ -20,7 +19,7 @@ class SchedulerGetCallable(Protocol):
 
     def __call__(
         self,
-        dask: Mapping,
+        dsk: Mapping,
         keys: Sequence[Hashable] | Hashable,
         **kwargs: Any,
     ) -> Any:

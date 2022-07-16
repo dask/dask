@@ -5,6 +5,7 @@ import datetime
 import hashlib
 import inspect
 import os
+import pathlib
 import pickle
 import threading
 import uuid
@@ -13,6 +14,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping
 from concurrent.futures import Executor
 from contextlib import contextmanager
+from enum import Enum
 from functools import partial
 from numbers import Integral, Number
 from operator import getitem
@@ -22,14 +24,15 @@ from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from dask import config, local, threaded
-from dask.compatibility import _PY_VERSION
+from dask import config, local
+from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
+from dask.typing import SchedulerGetCallable
 from dask.utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
@@ -334,13 +337,8 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
     """Compute a graph as if it were of type cls.
 
     Allows for applying the same optimizations and default scheduler."""
-    from dask.highlevelgraph import HighLevelGraph
-
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
     dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
-    # see https://github.com/dask/dask/issues/8991.
-    # This merge should be removed once the underlying issue is fixed.
-    dsk2 = HighLevelGraph.merge(dsk2)
     return schedule(dsk2, keys, **kwargs)
 
 
@@ -947,6 +945,8 @@ normalize_token.register(
         complex,
         type(Ellipsis),
         datetime.date,
+        datetime.timedelta,
+        pathlib.PurePath,
     ),
     identity,
 )
@@ -996,6 +996,11 @@ def normalize_literal(lit):
 @normalize_token.register(range)
 def normalize_range(r):
     return list(map(normalize_token, [r.start, r.stop, r.step]))
+
+
+@normalize_token.register(Enum)
+def normalize_enum(e):
+    return type(e).__name__, e.name, e.value
 
 
 @normalize_token.register(object)
@@ -1284,19 +1289,24 @@ def _colorize(t):
     return "#" + h
 
 
-named_schedulers = {
+named_schedulers: dict[str, SchedulerGetCallable] = {
     "sync": local.get_sync,
     "synchronous": local.get_sync,
     "single-threaded": local.get_sync,
-    "threads": threaded.get,
-    "threading": threaded.get,
 }
 
-try:
+if not _EMSCRIPTEN:
+    from dask import threaded
+
+    named_schedulers.update(
+        {
+            "threads": threaded.get,
+            "threading": threaded.get,
+        }
+    )
+
     from dask import multiprocessing as dask_multiprocessing
-except ImportError:
-    pass
-else:
+
     named_schedulers.update(
         {
             "processes": dask_multiprocessing.get,

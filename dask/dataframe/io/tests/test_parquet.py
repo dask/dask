@@ -3424,6 +3424,36 @@ def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
     )
 
 
+def test_pyarrow_dataset_filter_on_partitioned(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/9246
+    df = pd.DataFrame({"val": range(7), "part": list("abcdefg")})
+    ddf = dd.from_map(
+        lambda i: df.iloc[i : i + 1],
+        range(7),
+    )
+    ddf.to_parquet(tmpdir, engine=engine, partition_on=["part"])
+
+    # Check that List[Tuple] filters are applied
+    read_ddf = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        filters=[("part", "==", "c")],
+    )
+    read_ddf["part"] = read_ddf["part"].astype("object")
+    assert_eq(df.iloc[2:3], read_ddf)
+
+    # Check that List[List[Tuple]] filters are aplied.
+    # (fastparquet doesn't support this format)
+    if engine == "pyarrow":
+        read_ddf = dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            filters=[[("part", "==", "c")]],
+        )
+        read_ddf["part"] = read_ddf["part"].astype("object")
+        assert_eq(df.iloc[2:3], read_ddf)
+
+
 @PYARROW_MARK
 def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     # https://github.com/dask/dask/issues/6600
@@ -3574,7 +3604,7 @@ def test_read_write_overwrite_is_true(tmpdir, engine):
     ddf = ddf.reset_index(drop=True)
     dd.to_parquet(ddf, tmpdir, engine=engine, overwrite=True)
 
-    # Keep the contents of the DataFrame constatn but change the # of partitions
+    # Keep the contents of the DataFrame constant but change the # of partitions
     ddf2 = ddf.repartition(npartitions=3)
 
     # Overwrite the existing Dataset with the new dataframe and evaluate

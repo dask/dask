@@ -1,6 +1,81 @@
 Changelog
 =========
 
+.. _v2022.7.0:
+
+2022.7.0
+--------
+
+Released on July 8, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Support ``pathlib.PurePath`` in ``normalize_token`` (:pr:`9229`) `Angus Hollands`_
+- Add ``AttributeNotImplementedError`` for properties so IPython glob search works (:pr:`9231`) `Erik Welch`_
+- ``map_overlap``: multiple dataframe handling (:pr:`9145`) `Fabien Aulaire`_
+- Read entrypoints in ``dask.sizeof`` (:pr:`7688`) `Angus Hollands`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``TypeError: 'Serialize' object is not subscriptable`` when writing parquet dataset with ``Client(processes=False)`` (:pr:`9015`) `Lucas Miguel Ponce`_
+- Correct dtypes when ``concat`` with an empty dataframe (:pr:`9193`) `Pavithra Eswaramoorthy`_
+
+Documentation
+^^^^^^^^^^^^^
+- Highlight note about persist (:pr:`9234`) `Pavithra Eswaramoorthy`_
+- Update release-procedure to include more detail and helpful commands (:pr:`9215`) `Julia Signell`_
+- Better SEO for Futures and Dask vs. Spark pages (:pr:`9217`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``math.prod`` instead of ``np.prod`` on lists, tuples, and iters (:pr:`9232`) `crusaderky`_
+- Only import IPython if type checking (:pr:`9230`) `Florian Jetter`_
+- Tougher mypy checks (:pr:`9206`) `crusaderky`_
+
+
+.. _v2022.6.1:
+
+2022.6.1
+--------
+
+Released on June 24, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Dask in pyodide (:pr:`9053`) `Ian Rose`_
+- Create ``dask.utils.show_versions`` (:pr:`9144`) `Sultan Orazbayev`_
+- Better error message for unsupported numpy operations on dask.dataframe objects. (:pr:`9201`) `Julia Signell`_
+- Add ``allow_rechunk`` kwarg to ``dask.array.overlap`` function (:pr:`7776`) `Genevieve Buckley`_
+- Add minutes and hours to ``dask.utils.format_time`` (:pr:`9116`) `Matthew Rocklin`_
+- More retries when writing parquet to remote filesystem (:pr:`9175`) `Ian Rose`_
+
+Bug Fixes
+^^^^^^^^^
+- Timedelta deterministic hashing (:pr:`9213`) `Fabien Aulaire`_
+- Enum deterministic hashing (:pr:`9212`) `Fabien Aulaire`_
+- ``shuffle_group()``: avoid converting to arrays (:pr:`9157`) `Mads R. B. Kristensen`_
+
+Deprecations
+^^^^^^^^^^^^
+- Deprecate extra ``format_time`` utility (:pr:`9184`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Better SEO for 10 Minutes to Dask (:pr:`9182`) `Sarah Charlotte Johnson`_
+- Better SEO for Delayed and Best Practices (:pr:`9194`) `Sarah Charlotte Johnson`_
+- Include known inconsistency in DataFrame ``str.split`` accessor docstring  (:pr:`9177`) `Richard Pelgrim`_
+- Add ``inconsistencies`` keyword to ``derived_from`` (:pr:`9192`) `Richard Pelgrim`_
+- Add missing ``append`` in ``delayed`` best practices example (:pr:`9202`) `Ben`_
+- Fix indentation in Best Practices (:pr:`9196`) `Sarah Charlotte Johnson`_
+- Add link to `Genevieve Buckley`_'s blog on chunk sizes (:pr:`9199`) `Pavithra Eswaramoorthy`_
+- Update ``to_csv`` docstring (:pr:`9094`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Update versioneer: change from using ``SafeConfigParser`` to ``ConfigParser`` (:pr:`9205`) `Thomas A Caswell`_
+- Remove ipython hack in CI(:pr:`9200`) `crusaderky`_
+
+
 .. _v2022.6.0:
 
 2022.6.0
@@ -294,6 +369,11 @@ Maintenance
 
 Released on April 1, 2022
 
+.. note::
+
+    This is the first release with support for Python 3.10
+
+
 New Features
 ^^^^^^^^^^^^
 - Add Python 3.10 support (:pr:`8566`) `James Bourbeau`_
@@ -469,6 +549,10 @@ Maintenance
 ---------
 
 Released on February 11, 2022
+
+.. note::
+
+    This is the last release with support for Python 3.7
 
 New Features
 ^^^^^^^^^^^^
@@ -5653,3 +5737,8 @@ Other
 .. _`Fabien Aulaire`: https://github.com/faulaire
 .. _`Alex-JG3`: https://github.com/Alex-JG3
 .. _`Christopher Akiki`: https://github.com/cakiki
+.. _`Sultan Orazbayev`: https://github.com/SultanOrazbayev
+.. _`Richard Pelgrim`: https://github.com/rrpelgrim
+.. _`Ben`: https://github.com/benjaminhduncan
+.. _`Angus Hollands`: https://github.com/agoose77
+.. _`Lucas Miguel Ponce`: https://github.com/lucasmsp
