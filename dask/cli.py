@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 try:
     import click
 except ImportError as e:
@@ -12,10 +10,17 @@ except ImportError as e:
     raise ImportError
 
 
-@click.group()
+@click.group
 def cli():
     """Top Level CLI function."""
     pass
+
+
+@cli.command
+def version():
+    from dask import __version__ as v
+
+    print(v)
 
 
 def register_third_party(cli):
