@@ -226,3 +226,27 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
             # Check whether we imported `lib` on the scheduler
             assert not any(module.startswith(lib) for module in new_modules)
+
+
+def _shuffle_op(ddf):
+    return ddf.shuffle("x", shuffle="tasks")
+
+
+def _groupby_op(ddf):
+    return ddf.groupby("name").agg({"x": "mean"})
+
+
+@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
+def test_dataframe_cull_key_dependencies(op):
+    # Test that HighLevelGraph.cull does not populate the
+    # output graph with incorrect key_dependencies for
+    # "complex" DataFrame Layers
+    # See: https://github.com/dask/dask/pull/9267
+
+    datasets = pytest.importorskip("dask.datasets")
+
+    result = op(datasets.timeseries(end="2000-01-15")).count()
+    graph = result.dask
+    culled_graph = graph.cull(result.__dask_keys__())
+
+    assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
