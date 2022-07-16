@@ -12,15 +12,24 @@ except ImportError as e:
 
 @click.group
 def cli():
-    """Top Level CLI function."""
+    """Dask command line interface."""
     pass
 
 
 @cli.command
 def version():
+    """Print installed Dask version."""
     from dask import __version__ as v
 
     print(v)
+
+
+@cli.command
+def versions():
+    """Print versions of Dask related projects."""
+    from dask.utils import show_versions
+
+    show_versions()
 
 
 def register_third_party(cli):
