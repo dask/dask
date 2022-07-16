@@ -531,14 +531,18 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         # Create a mapping of chunk number in the incoming array to
         # (start row, stop row) tuples. These tuples will be used to create a sequential
         # RangeIndex later on that is continuous over the whole DataFrame.
+        chunksizes = pd.Series(x.chunks[0])
+        chunk_divisions = chunksizes.cumsum()
+        nrows = chunk_divisions.iloc[-1]
+        # Correctly index empty partitions at the end
+        chunk_divisions.loc[chunk_divisions == nrows] = nrows - 1
+
         divisions = [0]
-        stop = 0
         index_mapping = {}
-        for i, increment in enumerate(x.chunks[0]):
-            stop += increment
-            index_mapping[(i,)] = (divisions[i], stop)
-            divisions.append(stop)
-        divisions[-1] -= 1
+        for i, increment in chunk_divisions.iteritems():
+            index_mapping[(i,)] = (divisions[i], increment)
+            divisions.append(increment)
+
         arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
     if is_series_like(meta):
