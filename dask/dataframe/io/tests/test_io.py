@@ -11,7 +11,7 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
-from dask.dataframe.io.io import _meta_from_array, from_dask_array
+from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
@@ -555,23 +555,23 @@ def test_from_dask_array_unknown_chunks():
 
 def test_from_dask_array_empty_chunks():
     # Empty chunks at the end
-    chunksizes = (1,2,3,0)
+    chunksizes = (1, 2, 3, 0)
     monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-    
+
     df = dd.from_dask_array(monotonic_index)
     assert df.divisions == (0, 1, 3, 5, 5)
 
     # Empty chunks at the beginning
-    chunksizes = (0,1,2,3)
+    chunksizes = (0, 1, 2, 3)
     monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-    
+
     df = dd.from_dask_array(monotonic_index)
     assert df.divisions == (0, 0, 1, 3, 5)
 
     # Empty chunks in the middle
-    chunksizes = (1,0,2,3)
+    chunksizes = (1, 0, 2, 3)
     monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-    
+
     df = dd.from_dask_array(monotonic_index)
     assert df.divisions == (0, 1, 1, 3, 5)
 
