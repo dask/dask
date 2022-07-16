@@ -6,8 +6,8 @@ except ImportError as e:
     msg = (
         "The Dask CLI requires click to be installed.\n\n"
         "Install with conda or pip:\n\n"
-        " conda install click"
-        " pip install click"
+        " conda install click\n"
+        " pip install click\n"
     )
     raise ImportError(msg) from e
 
