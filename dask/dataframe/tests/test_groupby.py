@@ -2826,6 +2826,7 @@ def test_groupby_scalar_column():
             [0, 1, 2],
         ],
         columns=[2, 1, 0],
+        dtype="float64",
     )
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.groupby(2).cov()
@@ -2849,6 +2850,7 @@ def test_groupby_falsy_slice(op):
             [0, 1, 2],
         ],
         columns=[2, 1, 0],
+        dtype="float64",
     )
     ddf = dd.from_pandas(df, npartitions=2)
     expected = op(df.groupby([2])[0])
