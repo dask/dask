@@ -14,13 +14,13 @@ except ImportError as e:
 
 @click.group
 @click.version_option(__version__)
-def cli() -> None:
+def cli():
     """Dask command line interface."""
     pass
 
 
 @cli.command
-def docs() -> None:
+def docs():
     """Open Dask documentation in a web browser."""
     import webbrowser
 
@@ -28,20 +28,20 @@ def docs() -> None:
 
 
 @cli.group("info")
-def info() -> None:
+def info():
     """Information about your dask installation."""
     pass
 
 
 @info.command()
-def versions() -> None:
+def versions():
     """Print versions of Dask related projects."""
     from dask.utils import show_versions
 
     show_versions()
 
 
-def register_third_party(cli: click.Group) -> None:
+def register_third_party(cli):
     """Discover third party dask_cli entry points.
 
     If a package includes the "dask_cli" entry point category, this
@@ -51,11 +51,9 @@ def register_third_party(cli: click.Group) -> None:
     `dask_cli` category.
 
     """
-    import importlib.metadata
+    from importlib.metadata import entry_points
 
-    eps = importlib.metadata.entry_points()
-
-    for ep in eps.select(group="dask_cli"):
+    for ep in entry_points(group="dask_cli"):
         command = ep.load()
         if not isinstance(command, (click.Command, click.Group)):
             raise TypeError(
