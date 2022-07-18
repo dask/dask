@@ -5258,5 +5258,4 @@ def test_repr_materialize():
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
     s.__repr__()
     s.to_frame().__repr__()
-    s.to_frame()._repr_html_()
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
