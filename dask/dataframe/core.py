@@ -1413,11 +1413,17 @@ Dask Name: {name}, {task} tasks"""
         The second-to-last item is the lower bound of the last partition, and the last
         (extra) item is the upper bound of the last partition.
 
+        Also note that `partition_size` will not necessarily be reflected on disk.
+
         Examples
         --------
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
+
+        See Also
+        --------
+        dask.DataFrame.memory_usage_per_partition
         """
         if isinstance(divisions, int):
             npartitions = divisions
