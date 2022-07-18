@@ -341,7 +341,7 @@ def tensordot(lhs, rhs, axes=2):
     if concatenate:
         return intermediate
     else:
-        return intermediate.sum(axis=left_axes)
+        return intermediate.sum(axis=left_axes, dtype=dt)
 
 
 @derived_from(np, ua_args=["out"])
