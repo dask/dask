@@ -5249,3 +5249,14 @@ def test_empty():
         d.empty
     with pytest.raises(AttributeError, match="may be expensive"):
         d.empty
+
+
+def test_repr_materialize():
+    # DataFrame/Series repr should not materialize
+    # any layers in timeseries->shuffle->getitem
+    s = timeseries(end="2000-01-03").shuffle("id", shuffle="tasks")["id"]
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])
+    s.__repr__()
+    s.to_frame().__repr__()
+    s.to_frame()._repr_html_()
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])
