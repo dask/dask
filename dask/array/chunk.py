@@ -9,6 +9,7 @@ from tlz import concat
 
 from dask.core import flatten
 
+identity = 9223372036854775807
 
 def keepdims_wrapper(a_callable):
     """
@@ -43,12 +44,26 @@ def keepdims_wrapper(a_callable):
 
     return keepdims_wrapped_callable
 
+def identity_wrapper(a_callable, identity):
+    """
+    A wrapper for min/max functions
+    """
+    
+    @wraps(a_callable)
+    def identity_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
+        
+        r = np.array([a_callable(x, axis=axis, initial = identity, *args, **kwargs)])
+        return r
+    
+    return identity_wrapped_callable
+
 
 # Wrap NumPy functions to ensure they provide keepdims.
+
 sum = np.sum
 prod = np.prod
-min = np.min
-max = np.max
+min = identity_wrapper(np.min, identity)
+max = identity_wrapper(np.max, -identity)
 argmin = keepdims_wrapper(np.argmin)
 nanargmin = keepdims_wrapper(np.nanargmin)
 argmax = keepdims_wrapper(np.argmax)
