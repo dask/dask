@@ -4289,6 +4289,11 @@ class Index(Series):
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
 
+    @derived_from(pd.Index)
+    def memory_usage(self, deep=False):
+        result = self.map_partitions(M.memory_usage, deep=deep, enforce_metadata=False)
+        return delayed(sum)(result.to_delayed())
+
 
 class DataFrame(_Frame):
     """
