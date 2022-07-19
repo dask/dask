@@ -1386,7 +1386,7 @@ Dask Name: {name}, {task} tasks"""
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
             ignored. Note that the size reflects the number of bytes used as
-            computed by :ref:`pandas.DataFrame.memory_usage`, which will not
+            computed by ``pandas.DataFrame.memory_usage``, which will not
             necessarily match the size when storing to disk.
 
             .. warning::
