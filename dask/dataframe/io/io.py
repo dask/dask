@@ -534,16 +534,15 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         chunksizes = pd.Series(x.chunks[0])
         chunk_divisions = chunksizes.cumsum()
         nrows = chunk_divisions.iloc[-1]
-        # Correctly index empty partitions at the end
-        chunk_divisions.loc[chunk_divisions == nrows] = nrows - 1
 
         divisions = [0]
         index_mapping = {}
         for i, increment in chunk_divisions.iteritems():
-            divisions.append(increment)
-            if i == len(chunk_divisions) - 1:
-                increment += 1
             index_mapping[(i,)] = (divisions[i], increment)
+            # Set division for the last chunk and all empty chunks at the end
+            if increment == nrows:
+                increment -= 1
+            divisions.append(increment)
 
         arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
