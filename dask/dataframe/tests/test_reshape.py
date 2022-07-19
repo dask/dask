@@ -29,6 +29,15 @@ def test_get_dummies(data):
     tm.assert_index_equal(res.columns, exp.columns)
 
 
+def test_get_dummies_categories_order():
+    df = pd.DataFrame({"a": [0.0, 0.0, 1.0, 1.0, 0.0], "b": [1.0, 0.0, 1.0, 0.0, 1.0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf = ddf.categorize(columns=["a", "b"])
+    res_p = pd.get_dummies(df.astype("category"))
+    res_d = dd.get_dummies(ddf)
+    assert_eq(res_d, res_p)
+
+
 def test_get_dummies_object():
     df = pd.DataFrame(
         {
