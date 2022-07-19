@@ -1385,7 +1385,9 @@ Dask Name: {name}, {task} tasks"""
         partition_size: int or string, optional
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
-            ignored.
+            ignored. Note that the size reflects the number of bytes used as
+            computed by :ref:`pandas.DataFrame.memory_usage`, which will not
+            necessarily match the size when storing to disk.
 
             .. warning::
 
@@ -1413,8 +1415,6 @@ Dask Name: {name}, {task} tasks"""
         The second-to-last item is the lower bound of the last partition, and the last
         (extra) item is the upper bound of the last partition.
 
-        Also note that `partition_size` will not necessarily be reflected on disk.
-
         Examples
         --------
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
@@ -1423,7 +1423,7 @@ Dask Name: {name}, {task} tasks"""
 
         See Also
         --------
-        dask.DataFrame.memory_usage_per_partition
+        DataFrame.memory_usage_per_partition
         """
         if isinstance(divisions, int):
             npartitions = divisions
