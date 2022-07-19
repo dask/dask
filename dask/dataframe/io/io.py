@@ -540,8 +540,10 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         divisions = [0]
         index_mapping = {}
         for i, increment in chunk_divisions.iteritems():
-            index_mapping[(i,)] = (divisions[i], increment)
             divisions.append(increment)
+            if i == len(chunk_divisions) - 1:
+                increment += 1
+            index_mapping[(i,)] = (divisions[i], increment)
 
         arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
