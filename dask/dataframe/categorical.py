@@ -153,6 +153,9 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         df.__class__, dsk, (prefix, 0), **kwargs
     )
 
+    # some operations like get_dummies() rely on the order of categories
+    categories = {k: v.sort_values() for k, v in categories.items()}
+
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
 
