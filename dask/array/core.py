@@ -2198,7 +2198,7 @@ class Array(DaskMethodsMixin):
     def argtopk(self, k, axis=-1, split_every=None):
         """The indices of the top k elements of an array.
 
-        Refer to :func:`dask.array.argtopk` for full doctumentation.
+        Refer to :func:`dask.array.argtopk` for full documentation.
 
         See Also
         --------
@@ -2413,7 +2413,7 @@ class Array(DaskMethodsMixin):
         return divmod(other, self)
 
     def any(self, axis=None, keepdims=False, split_every=None, out=None):
-        """Returns True if any of the elements of `a` evaluate to True.
+        """Returns True if any of the elements evaluate to True.
 
         Refer to :func:`dask.array.any` for full documentation.
 
@@ -2691,7 +2691,7 @@ class Array(DaskMethodsMixin):
         return cumprod(self, axis, dtype, out=out, method=method)
 
     def squeeze(self, axis=None):
-        """Remove axes of length one from `a`.
+        """Remove axes of length one from array.
 
         Refer to :func:`dask.array.squeeze` for full documentation.
 
@@ -2801,7 +2801,7 @@ class Array(DaskMethodsMixin):
         )
 
     def swapaxes(self, axis1, axis2):
-        """Return a view of the array with `axis1` and `axis2` interchanged.
+        """Return a view of the array with ``axis1`` and ``axis2`` interchanged.
 
         Refer to :func:`dask.array.swapaxes` for full documentation.
 
@@ -2814,7 +2814,7 @@ class Array(DaskMethodsMixin):
         return swapaxes(self, axis1, axis2)
 
     def round(self, decimals=0):
-        """Return `a` with each element rounded to the given number of decimals.
+        """Return array with each element rounded to the given number of decimals.
 
         Refer to :func:`dask.array.round` for full documentation.
 
