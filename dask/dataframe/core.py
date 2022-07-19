@@ -1424,6 +1424,7 @@ Dask Name: {name}, {task} tasks"""
         See Also
         --------
         DataFrame.memory_usage_per_partition
+        pandas.DataFrame.memory_usage
         """
         if isinstance(divisions, int):
             npartitions = divisions
