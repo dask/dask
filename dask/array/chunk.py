@@ -414,10 +414,18 @@ def getitem(obj, index):
     Selection obj[index]
 
     """
-    result = obj[index]
+    try:
+        result = obj[index]
+    except IndexError as e:
+        raise ValueError(
+            "Array chunk size or shape is unknown. "
+            "Possible solution with x.compute_chunk_sizes()"
+        ) from e
+
     try:
         if not result.flags.owndata and obj.size >= 2 * result.size:
             result = result.copy()
     except AttributeError:
         pass
+
     return result
