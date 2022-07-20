@@ -55,12 +55,11 @@ def _register_command_ep(interface, entry_point):
     Parameters
     ----------
     interface : click.Command or click.Group
-        The click interface to augment with `entry_point`
+        The click interface to augment with `entry_point`.
     entry_point : importlib.metadata.EntryPoint
         The entry point which loads to a ``click.Command`` or
-        ``click.Group`` object to be added as a sub-command or
+        ``click.Group`` instance to be added as a sub-command or
         sub-group in `interface`.
-
 
     """
     command = entry_point.load()
