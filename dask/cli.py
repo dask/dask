@@ -12,7 +12,13 @@ except ImportError as e:
     raise ImportError(msg) from e
 
 
-@click.group
+CONTEXT_SETTINGS = {
+    "help_option_names": ["-h", "--help"],
+    "max_content_width": 88,
+}
+
+
+@click.group(context_settings=CONTEXT_SETTINGS)
 @click.version_option(__version__)
 def cli():
     """Dask command line interface."""
@@ -21,7 +27,7 @@ def cli():
 
 @cli.command
 def docs():
-    """Open Dask documentation in a web browser."""
+    """Open Dask documentation (https://docs.dask.org/) in a web browser."""
     import webbrowser
 
     webbrowser.open("https://docs.dask.org")
@@ -41,7 +47,7 @@ def versions():
     show_versions()
 
 
-def _register_third_party(cli):
+def _register_third_party(top_level_cli):
     """Discover third party dask_cli entry points.
 
     If a package includes the "dask_cli" entry point category, this
@@ -60,9 +66,10 @@ def _register_third_party(cli):
                 "entry points in 'dask_cli' must be instances of "
                 "click.Command or click.Group"
             )
-        cli.add_command(command)
+        top_level_cli.add_command(command)
 
 
 def run_cli() -> None:
+    """Run the dask command line interface."""
     _register_third_party(cli)
     cli()
