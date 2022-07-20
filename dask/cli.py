@@ -41,7 +41,7 @@ def versions():
     show_versions()
 
 
-def register_third_party(cli):
+def _register_third_party(cli):
     """Discover third party dask_cli entry points.
 
     If a package includes the "dask_cli" entry point category, this
@@ -64,5 +64,5 @@ def register_third_party(cli):
 
 
 def run_cli() -> None:
-    register_third_party(cli)
+    _register_third_party(cli)
     cli()
