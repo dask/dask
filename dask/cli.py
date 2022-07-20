@@ -1,3 +1,5 @@
+from importlib.metadata import entry_points
+
 from dask import __version__
 
 try:
@@ -47,29 +49,35 @@ def versions():
     show_versions()
 
 
-def _register_third_party(top_level_cli):
-    """Discover third party dask_cli entry points.
+def _register_command_ep(interface, entry_point):
+    """Add `entry_point` command to `interface`.
 
-    If a package includes the "dask_cli" entry point category, this
-    function discovers and loads the associated entry points with
-    ``importlib.metadata``. We only consider ``click.Command`` and
-    ``click.Group`` instances to be valid entry points for the
-    `dask_cli` category.
+    Parameters
+    ----------
+    interface : click.Command or click.Group
+        The click interface to augment with `entry_point`
+    entry_point : importlib.metadata.EntryPoint
+        The entry point which loads to a ``click.Command`` or
+        ``click.Group`` object to be added as a sub-command or
+        sub-group in `interface`.
+
 
     """
-    from importlib.metadata import entry_points
-
-    for ep in entry_points(group="dask_cli"):
-        command = ep.load()
-        if not isinstance(command, (click.Command, click.Group)):
-            raise TypeError(
-                "entry points in 'dask_cli' must be instances of "
-                "click.Command or click.Group"
-            )
-        top_level_cli.add_command(command)
+    command = entry_point.load()
+    if not isinstance(command, (click.Command, click.Group)):
+        raise TypeError(
+            "entry points in 'dask_cli' must be instances of "
+            "click.Command or click.Group"
+        )
+    interface.add_command(command)
 
 
-def run_cli() -> None:
+def run_cli():
     """Run the dask command line interface."""
-    _register_third_party(cli)
+
+    # discover "dask_cli" entry points and try to register them to the
+    # top level `cli`.
+    for ep in entry_points(group="dask_cli"):
+        _register_command_ep(cli, ep)
+
     cli()
