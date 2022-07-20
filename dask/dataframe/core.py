@@ -1385,7 +1385,9 @@ Dask Name: {name}, {task} tasks"""
         partition_size: int or string, optional
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
-            ignored.
+            ignored. Note that the size reflects the number of bytes used as
+            computed by ``pandas.DataFrame.memory_usage``, which will not
+            necessarily match the size when storing to disk.
 
             .. warning::
 
@@ -1418,6 +1420,11 @@ Dask Name: {name}, {task} tasks"""
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
+
+        See Also
+        --------
+        DataFrame.memory_usage_per_partition
+        pandas.DataFrame.memory_usage
         """
         if isinstance(divisions, int):
             npartitions = divisions
