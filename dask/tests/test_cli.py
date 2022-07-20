@@ -56,7 +56,7 @@ def good_command():
     pass
 
 
-def test_register_third_party():
+def test_register_command_ep():
     from dask.cli import _register_command_ep
 
     bad_ep = importlib.metadata.EntryPoint(
