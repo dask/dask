@@ -4784,7 +4784,7 @@ class DataFrame(_Frame):
                     )
 
             # Or be a frame directly
-            elif isinstance(other, DataFrame):
+            elif isinstance(other, DataFrame):  # type: ignore[unreachable]
                 raise NotImplementedError(
                     "Dask dataframe does not yet support multi-indexes.\n"
                     f"You tried to index with a frame with these columns: {list(other.columns)}\n"
