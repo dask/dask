@@ -4,6 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass
+from typing import Any, Callable, Optional, TypeVar, overload
 
 from tlz import concat, curry, merge, unique
 
@@ -210,7 +211,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, pure=None, **kwargs):
+def tokenize(*args: Any, pure: Optional[bool] = None, **kwargs: Any) -> str:
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -229,6 +230,41 @@ def tokenize(*args, pure=None, **kwargs):
         return _tokenize(*args, **kwargs)
     else:
         return str(uuid.uuid4())
+
+
+T = TypeVar("T")
+
+
+@overload
+def delayed(
+    obj: Callable[..., T],
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
+) -> "Delayed[T]":
+    ...
+
+
+@overload
+def delayed(
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
+) -> curry["Delayed"]:
+    ...
+
+
+@overload
+def delayed(
+    obj: T,
+    name: Optional[str] = None,
+    pure: Optional[bool] = None,
+    nout: Optional[int] = None,
+    traverse: bool = True,
+) -> "Delayed[T]":
+    ...
 
 
 @curry
@@ -482,10 +518,11 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-class Delayed(DaskMethodsMixin, OperatorMethodMixin):
+class Delayed(DaskMethodsMixin[T], OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
     Equivalent to the output from a single key in a dask graph.
+    The generic type parameter T represents the return value of the ``compute`` method
     """
 
     __slots__ = ("_key", "_dask", "_length", "_layer")

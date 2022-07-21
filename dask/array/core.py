@@ -1213,7 +1213,9 @@ def store(
         store_dsk = HighLevelGraph(layers, dependencies)
         load_store_dsk: HighLevelGraph | dict[tuple, Any] = store_dsk
         if compute:
-            store_dlyds = [Delayed(k, store_dsk, layer=k[0]) for k in map_keys]
+            store_dlyds: Iterable[Delayed] = [
+                Delayed(k, store_dsk, layer=k[0]) for k in map_keys
+            ]
             store_dlyds = persist(*store_dlyds, **kwargs)
             store_dsk_2 = HighLevelGraph.merge(*[e.dask for e in store_dlyds])
             load_store_dsk = retrieve_from_ooc(map_keys, store_dsk, store_dsk_2)

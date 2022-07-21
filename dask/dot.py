@@ -3,9 +3,18 @@ from __future__ import annotations
 import os
 import re
 from functools import partial
+from typing import TYPE_CHECKING, Callable, Literal, Union
 
+from typing_extensions import TypeAlias
+
+from dask.base import DaskGraph
 from dask.core import get_dependencies, ishashable, istask
 from dask.utils import apply, funcname, import_required, key_split
+
+if TYPE_CHECKING:
+    import graphviz
+    from ipycytoscape import CytoscapeWidget
+    from IPython.core.display import DisplayObject
 
 
 def task_label(task):
@@ -119,17 +128,17 @@ def box_label(key, verbose=False):
 
 
 def to_graphviz(
-    dsk,
-    data_attributes=None,
-    function_attributes=None,
-    rankdir="BT",
-    graph_attr=None,
-    node_attr=None,
-    edge_attr=None,
+    dsk: DaskGraph,
+    data_attributes: dict | None = None,
+    function_attributes: dict | None = None,
+    rankdir=Literal["TB", "BT", "LR", "RL"],
+    graph_attr: dict | None = None,
+    node_attr: dict | None = None,
+    edge_attr: dict | None = None,
     collapse_outputs=False,
     verbose=False,
     **kwargs,
-):
+) -> graphviz.Digraph:
     graphviz = import_required(
         "graphviz",
         "Drawing dask graphs with the graphviz engine requires the `graphviz` "
@@ -201,8 +210,12 @@ def to_graphviz(
 IPYTHON_IMAGE_FORMATS = frozenset(["jpeg", "png"])
 IPYTHON_NO_DISPLAY_FORMATS = frozenset(["dot", "pdf"])
 
+FormatOption: TypeAlias = Union[
+    Literal["png", "pdf", "dot", "svg", "jpeg", "jpg"], None
+]
 
-def _get_display_cls(format):
+
+def _get_display_cls(format: FormatOption) -> Callable[..., DisplayObject | None]:
     """
     Get the appropriate IPython display class for `format`.
 
@@ -232,7 +245,9 @@ def _get_display_cls(format):
         raise ValueError("Unknown format '%s' passed to `dot_graph`" % format)
 
 
-def dot_graph(dsk, filename="mydask", format=None, **kwargs):
+def dot_graph(
+    dsk: DaskGraph, filename: str = "mydask", format: FormatOption = None, **kwargs
+) -> DisplayObject | None:
     """
     Render a task graph using dot.
 
@@ -274,7 +289,7 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
     return graphviz_to_file(g, filename, format)
 
 
-def graphviz_to_file(g, filename, format):
+def graphviz_to_file(g, filename, format) -> DisplayObject | None:
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
 
     if (
@@ -414,7 +429,7 @@ def _to_cytoscape_json(
 
 
 def cytoscape_graph(
-    dsk,
+    dsk: DaskGraph,
     filename: str | None = "mydask",
     format: str | None = None,
     *,
@@ -425,7 +440,7 @@ def cytoscape_graph(
     node_style: dict[str, str] | None = None,
     edge_style: dict[str, str] | None = None,
     **kwargs,
-):
+) -> CytoscapeWidget:
     """
     Create an ipycytoscape widget for a dask graph.
 
