@@ -413,7 +413,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
-        chunk.min,
+        chunk.min_wrapped,
         chunk.min,
         axis=axis,
         keepdims=keepdims,
@@ -428,7 +428,7 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
-        chunk.max,
+        chunk.max_wrapped,
         chunk.max,
         axis=axis,
         keepdims=keepdims,
