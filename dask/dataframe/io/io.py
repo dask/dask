@@ -263,7 +263,9 @@ def from_pandas(
             chunksize=chunksize,
         )
     else:
-        chunksize = chunksize or int(ceil(nrows / npartitions))
+        if chunksize is None:
+            assert isinstance(npartitions, int)
+            chunksize = int(ceil(nrows / npartitions))
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 

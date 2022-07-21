@@ -387,6 +387,19 @@ def test_from_pandas_chunksize_one():
     assert num_rows == [1] * 10
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["A", "B", "B", "B", "B", "B", "B", "C"],
+        ["A", "A", "A", "A", "A", "B", "B", "C"],
+    ],
+)
+def test_from_pandas_npartitions_duplicates(index):
+    df = pd.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
