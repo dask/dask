@@ -761,9 +761,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     # Find unique-offset array (if duplicates exist)
-    seq_unique = (
-        seq.unique() if hasattr(seq, "unique") else np.unique(seq)
-    )  # Unique elements of seq
+    seq_unique = np.unique(seq)
     duplicates = len(seq_unique) < len(seq)
     if duplicates:
         offsets = (

@@ -3097,7 +3097,7 @@ def test_round():
 def test_cov():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, chunksize=6)
+    ddf = dd.from_pandas(df, npartitions=6)
 
     res = ddf.cov()
     res2 = ddf.cov(split_every=2)
@@ -3117,8 +3117,8 @@ def test_cov():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, chunksize=6)
-    db = dd.from_pandas(b, chunksize=6)
+    da = dd.from_pandas(a, npartitions=6)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.cov(db)
     res2 = da.cov(db, split_every=2)
@@ -3139,7 +3139,7 @@ def test_cov():
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, chunksize=6)
+    ddf = dd.from_pandas(df, npartitions=6)
 
     res = ddf.corr()
     res2 = ddf.corr(split_every=2)
@@ -3161,8 +3161,8 @@ def test_corr():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, chunksize=6)
-    db = dd.from_pandas(b, chunksize=6)
+    da = dd.from_pandas(a, npartitions=6)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.corr(db)
     res2 = da.corr(db, split_every=2)
