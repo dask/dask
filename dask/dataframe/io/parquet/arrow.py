@@ -1160,7 +1160,7 @@ class ArrowDatasetEngine(Engine):
 
         # Check if this is a very simple case where we can just return
         # the path names
-        if gather_statistics is False and not split_row_groups:
+        if gather_statistics is False and not (split_row_groups or filters):
             return (
                 [
                     {"piece": (full_path, None, None)}
@@ -1302,7 +1302,7 @@ class ArrowDatasetEngine(Engine):
         aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         chunksize = dataset_info_kwargs["chunksize"]
 
-        # Intialize row-group and statistiscs data structures
+        # Intialize row-group and statistics data structures
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -1492,7 +1492,7 @@ class ArrowDatasetEngine(Engine):
                 )
 
                 # Extract hive-partition keys, and make sure they
-                # are orderd the same as they are in `partitions`
+                # are ordered the same as they are in `partitions`
                 raw_keys = pa_ds._get_partition_keys(frag.partition_expression)
                 partition_keys = [
                     (hive_part.name, raw_keys[hive_part.name])
