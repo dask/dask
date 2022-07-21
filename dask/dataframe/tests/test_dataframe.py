@@ -1390,6 +1390,7 @@ def test_quantile_missing(method):
         pytest.importorskip("crick")
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     # TODO: Test npartitions=2
+    # (see https://github.com/dask/dask/issues/9227)
     ddf = dd.from_pandas(df, npartitions=1)
     expected = df.quantile()
     result = ddf.quantile(method=method)
@@ -3096,7 +3097,7 @@ def test_round():
 def test_cov():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, chunksize=5)
+    ddf = dd.from_pandas(df, chunksize=6)
 
     res = ddf.cov()
     res2 = ddf.cov(split_every=2)
@@ -3116,8 +3117,8 @@ def test_cov():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, chunksize=5)
-    db = dd.from_pandas(b, chunksize=5)
+    da = dd.from_pandas(a, chunksize=6)
+    db = dd.from_pandas(b, chunksize=6)
 
     res = da.cov(db)
     res2 = da.cov(db, split_every=2)
@@ -3138,7 +3139,7 @@ def test_cov():
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
-    ddf = dd.from_pandas(df, chunksize=5)
+    ddf = dd.from_pandas(df, chunksize=6)
 
     res = ddf.corr()
     res2 = ddf.corr(split_every=2)
@@ -3160,8 +3161,8 @@ def test_corr():
     # Series
     a = df.A
     b = df.B
-    da = dd.from_pandas(a, chunksize=5)
-    db = dd.from_pandas(b, chunksize=5)
+    da = dd.from_pandas(a, chunksize=6)
+    db = dd.from_pandas(b, chunksize=6)
 
     res = da.corr(db)
     res2 = da.corr(db, split_every=2)

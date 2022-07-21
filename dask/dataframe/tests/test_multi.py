@@ -480,6 +480,7 @@ def test_merge_asof_on_by():
         columns=["time", "ticker", "price", "quantity"],
     )
     # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
     b = dd.from_map(
         lambda x: x,
         [B.iloc[0:2], B.iloc[2:5]],
@@ -537,6 +538,7 @@ def test_merge_asof_on_by_tolerance():
         columns=["time", "ticker", "price", "quantity"],
     )
     # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
     b = dd.from_map(
         lambda x: x,
         [B.iloc[0:2], B.iloc[2:5]],
@@ -594,6 +596,7 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
         columns=["time", "ticker", "price", "quantity"],
     )
     # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
     b = dd.from_map(
         lambda x: x,
         [B.iloc[0:2], B.iloc[2:5]],
