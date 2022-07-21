@@ -60,7 +60,7 @@ def test_dataframe_format():
         "3                ...     ...              ...\n"
         "6                ...     ...              ...\n"
         "7                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -120,7 +120,7 @@ def test_dataframe_format():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -130,7 +130,7 @@ def test_dataframe_format():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
@@ -155,7 +155,7 @@ def test_dataframe_format_with_index():
         "D                ...     ...              ...\n"
         "G                ...     ...              ...\n"
         "H                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -205,7 +205,7 @@ def test_dataframe_format_with_index():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -215,7 +215,7 @@ def test_dataframe_format_with_index():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
@@ -242,7 +242,7 @@ def test_dataframe_format_unknown_divisions():
         "                 ...     ...              ...\n"
         "                 ...     ...              ...\n"
         "                 ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -302,7 +302,7 @@ def test_dataframe_format_unknown_divisions():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -312,7 +312,7 @@ def test_dataframe_format_unknown_divisions():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
@@ -337,7 +337,7 @@ def test_dataframe_format_long():
         "...               ...     ...              ...\n"
         "72                ...     ...              ...\n"
         "79                ...     ...              ...\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ddf) == exp
     assert str(ddf) == exp
@@ -404,7 +404,7 @@ def test_dataframe_format_long():
 
     exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 {exp_table}
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         exp_table=exp_table
     )
     assert ddf.to_html() == exp
@@ -414,7 +414,7 @@ def test_dataframe_format_long():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
@@ -430,7 +430,7 @@ D      ...
 G      ...
 H      ...
 dtype: int64
-Dask Name: from_pandas, 1 layers"""
+Dask Name: from_pandas, 1 layer"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -450,7 +450,7 @@ D      ...
 G      ...
 H      ...
 Name: XXX, dtype: int64
-Dask Name: from_pandas, 1 layers"""
+Dask Name: from_pandas, 1 layer"""
     assert repr(ds) == exp
     assert str(ds) == exp
 
@@ -461,7 +461,7 @@ def test_series_format_long():
     exp = (
         "Dask Series Structure:\nnpartitions=10\nA    int64\nB      ...\n"
         "     ...  \nJ      ...\nJ      ...\ndtype: int64\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ds) == exp
     assert str(ds) == exp
@@ -514,7 +514,7 @@ def test_categorical_format():
         "0    category[known]\n"
         "2                ...\n"
         "dtype: category\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(known) == exp
     exp = (
@@ -523,7 +523,7 @@ def test_categorical_format():
         "0    category[unknown]\n"
         "2                  ...\n"
         "dtype: category\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(unknown) == exp
 
@@ -542,7 +542,7 @@ def test_empty_repr():
         "Empty Dask DataFrame Structure:\n"
         "Columns: []\n"
         "Divisions: [, ]\n"
-        "Dask Name: from_pandas, 1 layers"
+        "Dask Name: from_pandas, 1 layer"
     )
     assert repr(ddf) == exp
     exp_table = """<table border="1" class="dataframe">
@@ -567,7 +567,7 @@ def test_empty_repr():
 <div>
 {style}{exp_table}
 </div>
-<div>Dask Name: from_pandas, 1 layers</div>""".format(
+<div>Dask Name: from_pandas, 1 layer</div>""".format(
         style=style, exp_table=exp_table
     )
     assert ddf._repr_html_() == exp
