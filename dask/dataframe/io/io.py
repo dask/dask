@@ -228,17 +228,16 @@ def from_pandas(
     if not has_parallel_type(data):
         raise TypeError("Input must be a pandas DataFrame or Series.")
 
-    if (npartitions is None) == (none_chunksize := (chunksize is None)):
+    if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
-    if none_chunksize:
+    if chunksize is None:
         if not isinstance(npartitions, int):
             raise TypeError(
                 "Please provide npartitions as an int, or possibly as None if you specify chunksize."
             )
-        chunksize = int(ceil(nrows / npartitions))
     elif not isinstance(chunksize, int):
         raise TypeError(
             "Please provide chunksize as an int, or possibly as None if you specify npartitions."
@@ -261,9 +260,10 @@ def from_pandas(
         divisions, locations = sorted_division_locations(
             data.index,
             npartitions=npartitions,
-            chunksize=None if none_chunksize else chunksize,
+            chunksize=chunksize,
         )
     else:
+        chunksize = chunksize or int(ceil(nrows / npartitions))
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
