@@ -2387,12 +2387,7 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, divisions, remove_co
         os.unlink(os.path.join(tmp_path, "_common_metadata"))
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, calculate_divisions=divisions)
-    assert_eq(ddf, ddf2, check_divisions=False)
-    assert None not in ddf.divisions
-    if divisions is False:
-        assert ddf2.divisions == (None,) * (ddf.npartitions + 1)
-    else:
-        assert ddf2.divisions == ddf.divisions
+    assert_eq(ddf, ddf2, check_divisions=divisions)
 
 
 @write_read_engines()
@@ -2402,8 +2397,6 @@ def test_statistics_nometa(tmpdir, write_engine, read_engine):
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, calculate_divisions=True)
     assert_eq(ddf, ddf2)
-    assert None not in ddf.divisions
-    assert ddf2.divisions == ddf.divisions
 
 
 @pytest.mark.parametrize("schema", ["infer", None])
