@@ -55,14 +55,21 @@ def test_choices_with_more_bag_partitons():
     # test with npartitions > split_every (split_every=8 by default)
     seq = range(100)
     sut = db.from_sequence(seq, npartitions=10)
-    random.sample(sut, k=10).compute()
+    li = list(random.choices(sut, k=10).compute())
+    assert sut.map_partitions(len).compute() == (10, 10, 10, 10, 10, 10, 10, 10, 10, 10)
+    assert len(li) == 10
+    assert all(i in seq for i in li)
 
 
 def test_sample_with_more_bag_partitons():
     # test with npartitions > split_every (split_every=8 by default)
     seq = range(100)
     sut = db.from_sequence(seq, npartitions=10)
-    random.sample(sut, k=10).compute()
+    li = list(random.sample(sut, k=10).compute())
+    assert sut.map_partitions(len).compute() == (10, 10, 10, 10, 10, 10, 10, 10, 10, 10)
+    assert len(li) == 10
+    assert all(i in seq for i in li)
+    assert len(set(li)) == len(li)
 
 
 def test_sample_size_exactly_k():
