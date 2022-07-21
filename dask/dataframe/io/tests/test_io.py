@@ -400,6 +400,16 @@ def test_from_pandas_npartitions_duplicates(index):
     assert ddf.divisions == ("A", "B", "C", "C")
 
 
+@pytest.mark.gpu
+def test_gpu_from_pandas_npartitions_duplicates():
+    cudf = pytest.importorskip("cudf")
+
+    index = ["A", "A", "A", "A", "A", "B", "B", "C"]
+    df = cudf.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
