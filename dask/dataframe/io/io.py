@@ -777,9 +777,11 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     # npartitions can be exactly satisfied
     # when duplicates is False
     residual = 0
+    subtract_drift = False
     if npartitions:
         chunksize = len(seq) // npartitions
         residual = len(seq) % npartitions
+        subtract_drift = True
 
     def chunksizes(ind):
         # Helper function to satisfy npartitions
@@ -792,6 +794,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     locations = [0]
     i = chunksizes(0)
     ind = None  # ind cache (sometimes avoids nonzero call)
+    drift = 0  # accumulated drift away from ideal chunksizes
     while i < len(seq):
         # Map current position selection (i)
         # to the corresponding division value (div)
@@ -819,7 +822,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             # pos does not overlap with divisions.
             # Append candidate pos/div combination, and
             # take another chunksize step
-            i = pos + chunksizes(len(divisions))
+            if subtract_drift:
+                # Only subtract drift when user specified npartitions
+                drift = drift + ((pos - locations[-1]) - chunksizes(len(divisions) - 1))
+            i = pos + max(1, chunksizes(len(divisions)) - drift)
             divisions.append(div)
             locations.append(pos)
             ind = None
