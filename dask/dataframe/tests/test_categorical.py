@@ -130,12 +130,16 @@ def test_unknown_categoricals(shuffle_method):
     # Compute
     df = ddf.compute()
 
-    assert_eq(ddf.w.value_counts(), df.w.value_counts())
+    assert_eq(ddf.w.value_counts(), df.w.value_counts(), sort_results=False)
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
-    assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
-    assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
+    assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum(), sort_results=False)
+    assert_eq(
+        ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique(), sort_results=False
+    )
+    assert_eq(
+        ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count(), sort_results=False
+    )
 
 
 def test_is_categorical_dtype():
@@ -173,31 +177,46 @@ def test_categorize():
         assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
-        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+        assert_eq(
+            ddf2,
+            df.astype({"v": "category"}),
+            check_categorical=False,
+            sort_results=False,
+        )
 
         # Specifying split_every works
         ddf2 = ddf.categorize(index=index, split_every=2)
         assert ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
-        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+        assert_eq(
+            ddf2,
+            df.astype({"v": "category"}),
+            check_categorical=False,
+            sort_results=False,
+        )
 
         # Specifying one column doesn't affect others
         ddf2 = ddf.categorize("v", index=index)
         assert not ddf2.y_.cat.known
         assert ddf2.v.cat.known
         assert ddf2.index.cat.known == known_index
-        assert_eq(ddf2, df.astype({"v": "category"}), check_categorical=False)
+        assert_eq(
+            ddf2,
+            df.astype({"v": "category"}),
+            check_categorical=False,
+            sort_results=False,
+        )
 
         ddf2 = ddf.categorize("y_", index=index)
         assert ddf2.y_.cat.known
         assert ddf2.v.dtype == "object"
         assert ddf2.index.cat.known == known_index
-        assert_eq(ddf2, df)
+        assert_eq(ddf2, df, sort_results=False)
 
     ddf_known_index = ddf.categorize(columns=[], index=True)
     assert ddf_known_index.index.cat.known
-    assert_eq(ddf_known_index, df)
+    assert_eq(ddf_known_index, df, sort_results=False)
 
     # Specifying known categorical or no columns is a no-op:
     assert ddf.categorize(["w"], index=False) is ddf
@@ -243,6 +262,7 @@ def test_categorize_index():
         df.set_index(pd.CategoricalIndex(df.index)),
         check_divisions=False,
         check_categorical=False,
+        sort_results=False,
     )
 
     assert ddf.categorize(index=False) is ddf
@@ -258,6 +278,7 @@ def test_categorize_index():
         df.set_index(pd.CategoricalIndex(df.index)),
         check_divisions=False,
         check_categorical=False,
+        sort_results=False,
     )
 
     assert ddf.categorize() is ddf
@@ -311,8 +332,8 @@ def test_repartition_on_categoricals(npartitions):
 
     df = df.copy()
     df["y"] = df["y"].astype("category")
-    assert_eq(df, ddf)
-    assert_eq(df, ddf2)
+    assert_eq(df, ddf, sort_results=False)
+    assert_eq(df, ddf2, sort_results=False)
 
 
 def test_categorical_accessor_presence():
@@ -457,7 +478,7 @@ class TestCategoricalAccessor:
         da = dd.from_pandas(a, 2)
         result = da.str.upper()
         expected = a.str.upper()
-        assert_eq(result, expected)
+        assert_eq(result, expected, sort_results=False)
 
     def test_categorical_non_string_raises(self):
         a = pd.Series([1, 2, 3], dtype="category")

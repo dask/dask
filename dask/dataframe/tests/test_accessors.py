@@ -133,18 +133,24 @@ def test_str_accessor(df_ddf):
     assert not hasattr(ddf.str_col.str, "get_dummies")
 
     # Test simple method on both series and index
-    assert_eq(ddf.str_col.str.upper(), df.str_col.str.upper())
+    assert_eq(ddf.str_col.str.upper(), df.str_col.str.upper(), sort_results=False)
     assert set(ddf.str_col.str.upper().dask) == set(ddf.str_col.str.upper().dask)
 
-    assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper())
+    assert_eq(ddf.string_col.str.upper(), df.string_col.str.upper(), sort_results=False)
     assert set(ddf.string_col.str.upper().dask) == set(ddf.string_col.str.upper().dask)
 
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
     # make sure to pass through args & kwargs
-    assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
-    assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
+    assert_eq(
+        ddf.str_col.str.contains("a"), df.str_col.str.contains("a"), sort_results=False
+    )
+    assert_eq(
+        ddf.string_col.str.contains("a"),
+        df.string_col.str.contains("a"),
+        sort_results=False,
+    )
     assert set(ddf.str_col.str.contains("a").dask) == set(
         ddf.str_col.str.contains("a").dask
     )
@@ -152,6 +158,7 @@ def test_str_accessor(df_ddf):
     assert_eq(
         ddf.str_col.str.contains("d", case=False),
         df.str_col.str.contains("d", case=False),
+        sort_results=False,
     )
     assert set(ddf.str_col.str.contains("d", case=False).dask) == set(
         ddf.str_col.str.contains("d", case=False).dask
@@ -159,7 +166,9 @@ def test_str_accessor(df_ddf):
 
     for na in [True, False]:
         assert_eq(
-            ddf.str_col.str.contains("a", na=na), df.str_col.str.contains("a", na=na)
+            ddf.str_col.str.contains("a", na=na),
+            df.str_col.str.contains("a", na=na),
+            sort_results=False,
         )
         assert set(ddf.str_col.str.contains("a", na=na).dask) == set(
             ddf.str_col.str.contains("a", na=na).dask
@@ -169,6 +178,7 @@ def test_str_accessor(df_ddf):
         assert_eq(
             ddf.str_col.str.contains("a", regex=regex),
             df.str_col.str.contains("a", regex=regex),
+            sort_results=False,
         )
         assert set(ddf.str_col.str.contains("a", regex=regex).dask) == set(
             ddf.str_col.str.contains("a", regex=regex).dask
@@ -188,14 +198,16 @@ def test_str_accessor_not_available(df_ddf):
 
 def test_str_accessor_getitem(df_ddf):
     df, ddf = df_ddf
-    assert_eq(ddf.str_col.str[:2], df.str_col.str[:2])
-    assert_eq(ddf.str_col.str[1], df.str_col.str[1])
+    assert_eq(ddf.str_col.str[:2], df.str_col.str[:2], sort_results=False)
+    assert_eq(ddf.str_col.str[1], df.str_col.str[1], sort_results=False)
 
 
 def test_str_accessor_extractall(df_ddf):
     df, ddf = df_ddf
     assert_eq(
-        ddf.str_col.str.extractall("(.*)b(.*)"), df.str_col.str.extractall("(.*)b(.*)")
+        ddf.str_col.str.extractall("(.*)b(.*)"),
+        df.str_col.str.extractall("(.*)b(.*)"),
+        sort_results=False,
     )
 
 
@@ -210,9 +222,9 @@ def test_str_accessor_removeprefix_removesuffix(df_ddf, method):
     def call(df, arg):
         return getattr(df.str_col.str, method)(arg)
 
-    assert_eq(call(ddf, prefix), call(df, prefix))
-    assert_eq(call(ddf, suffix), call(df, suffix))
-    assert_eq(call(ddf, missing), call(df, missing))
+    assert_eq(call(ddf, prefix), call(df, prefix), sort_results=False)
+    assert_eq(call(ddf, suffix), call(df, suffix), sort_results=False)
+    assert_eq(call(ddf, missing), call(df, missing), sort_results=False)
 
 
 def test_str_accessor_cat(df_ddf):
@@ -249,7 +261,9 @@ def test_str_accessor_split_noexpand(method):
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:
-        assert_eq(call(s, n=n, expand=False), call(ds, n=n, expand=False))
+        assert_eq(
+            call(s, n=n, expand=False), call(ds, n=n, expand=False), sort_results=False
+        )
 
     assert call(ds, n=1, expand=False).name == "foo"
 
@@ -265,7 +279,9 @@ def test_str_accessor_split_expand(method):
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:
-        assert_eq(call(s, n=n, expand=True), call(ds, n=n, expand=True))
+        assert_eq(
+            call(s, n=n, expand=True), call(ds, n=n, expand=True), sort_results=False
+        )
 
     with pytest.raises(NotImplementedError) as info:
         call(ds, expand=True)
@@ -277,7 +293,9 @@ def test_str_accessor_split_expand(method):
 
     for n in [1, 2, 3]:
         assert_eq(
-            call(s, pat=",", n=n, expand=True), call(ds, pat=",", n=n, expand=True)
+            call(s, pat=",", n=n, expand=True),
+            call(ds, pat=",", n=n, expand=True),
+            sort_results=False,
         )
 
 
@@ -286,7 +304,11 @@ def test_str_accessor_split_expand_more_columns():
     s = pd.Series(["a b c d", "aa", "aaa bbb ccc dddd"])
     ds = dd.from_pandas(s, npartitions=2)
 
-    assert_eq(s.str.split(n=3, expand=True), ds.str.split(n=3, expand=True))
+    assert_eq(
+        s.str.split(n=3, expand=True),
+        ds.str.split(n=3, expand=True),
+        sort_results=False,
+    )
 
     s = pd.Series(["a b c", "aa bb cc", "aaa bbb ccc"])
     ds = dd.from_pandas(s, npartitions=2)
@@ -296,5 +318,9 @@ def test_str_accessor_split_expand_more_columns():
 
 def test_string_nullable_types(df_ddf):
     df, ddf = df_ddf
-    assert_eq(ddf.string_col.str.count("A"), df.string_col.str.count("A"))
-    assert_eq(ddf.string_col.str.isalpha(), df.string_col.str.isalpha())
+    assert_eq(
+        ddf.string_col.str.count("A"), df.string_col.str.count("A"), sort_results=False
+    )
+    assert_eq(
+        ddf.string_col.str.isalpha(), df.string_col.str.isalpha(), sort_results=False
+    )
