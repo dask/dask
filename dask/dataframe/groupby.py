@@ -1604,7 +1604,7 @@ class _GroupBy:
             token=token,
         )
 
-    def aggregate(self, arg, split_every, split_out=1):
+    def aggregate(self, arg, split_every, split_out=1, shuffle=False):
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1693,6 +1693,7 @@ class _GroupBy:
             split_out=split_out,
             split_out_setup=split_out_on_index,
             sort=self.sort,
+            shuffle=shuffle,
         )
 
     @insert_meta_param_description(pad=12)
@@ -2117,15 +2118,19 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def aggregate(self, arg, split_every=None, split_out=1):
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=False):
         if arg == "size":
             return self.size()
 
-        return super().aggregate(arg, split_every=split_every, split_out=split_out)
+        return super().aggregate(
+            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+        )
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def agg(self, arg, split_every=None, split_out=1):
-        return self.aggregate(arg, split_every=split_every, split_out=split_out)
+    def agg(self, arg, split_every=None, split_out=1, shuffle=False):
+        return self.aggregate(
+            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+        )
 
 
 class SeriesGroupBy(_GroupBy):
@@ -2192,8 +2197,10 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def aggregate(self, arg, split_every=None, split_out=1):
-        result = super().aggregate(arg, split_every=split_every, split_out=split_out)
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=False):
+        result = super().aggregate(
+            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+        )
         if self._slice:
             result = result[self._slice]
 
@@ -2203,8 +2210,10 @@ class SeriesGroupBy(_GroupBy):
         return result
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def agg(self, arg, split_every=None, split_out=1):
-        return self.aggregate(arg, split_every=split_every, split_out=split_out)
+    def agg(self, arg, split_every=None, split_out=1, shuffle=False):
+        return self.aggregate(
+            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+        )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def value_counts(self, split_every=None, split_out=1):
