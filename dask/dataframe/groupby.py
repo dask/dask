@@ -1604,7 +1604,7 @@ class _GroupBy:
             token=token,
         )
 
-    def aggregate(self, arg, split_every, split_out=1, shuffle=False):
+    def aggregate(self, arg, split_every, split_out=1, shuffle=None):
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1670,6 +1670,12 @@ class _GroupBy:
             raise NotImplementedError(
                 "dropna is not a valid argument for dask.groupby.agg"
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+            )
+
+        # Rough heuristic to switch from tree reduction to shuffle
+        if shuffle is None:
+            shuffle = (self.obj.npartitions > 8) and (
+                split_out > int(self.obj.npartitions * 0.6)
             )
 
         return aca(
@@ -2118,7 +2124,7 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=False):
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if arg == "size":
             return self.size()
 
@@ -2127,7 +2133,7 @@ class DataFrameGroupBy(_GroupBy):
         )
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
-    def agg(self, arg, split_every=None, split_out=1, shuffle=False):
+    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
         return self.aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
         )
@@ -2197,7 +2203,7 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=False):
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         result = super().aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
         )
@@ -2210,7 +2216,7 @@ class SeriesGroupBy(_GroupBy):
         return result
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def agg(self, arg, split_every=None, split_out=1, shuffle=False):
+    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
         return self.aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
         )
