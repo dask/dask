@@ -1,5 +1,6 @@
 import collections
 import itertools as it
+import math
 import operator
 import warnings
 from numbers import Integral
@@ -1674,9 +1675,12 @@ class _GroupBy:
 
         # Rough heuristic to switch from tree reduction to shuffle
         if shuffle is None:
-            shuffle = (self.obj.npartitions > 8) and (
-                split_out > int(self.obj.npartitions * 0.6)
-            )
+            # Check if rough estimate of shuffle-task count is
+            # less than that of a tree-reduction
+            l = self.obj.npartitions
+            N_tree = (split_every * l - 1) / (split_every - 1) * split_out
+            N_shuf = 2 * l * math.log(l, split_every)  # Over estimate
+            shuffle = N_shuf < N_tree
 
         return aca(
             chunk_args,
