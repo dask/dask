@@ -6,7 +6,7 @@ try:
     import click
 except ImportError as e:
     msg = (
-        "The Dask CLI requires click to be installed.\n\n"
+        "The dask.cli module requires click to be installed.\n\n"
         "Install with conda or pip:\n\n"
         " conda install click\n"
         " pip install click\n"
