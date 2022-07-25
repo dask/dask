@@ -6330,7 +6330,7 @@ def apply_concat_apply(
         # for high-cardinality group indices. However, the shuffle
         # step requires that the result of `chunk` produces a
         # proper DataFrame type
-        chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
+        chunk_name = f"{token or funcname(chunk)}-chunk"
         shuffle_kwarg = {} if shuffle is True else {"shuffle": shuffle}
         chunked = map_partitions(
             chunk,

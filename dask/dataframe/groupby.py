@@ -1674,7 +1674,7 @@ class _GroupBy:
             )
 
         # Rough heuristic to switch from tree reduction to shuffle
-        if shuffle is None:
+        if shuffle is None and split_out > 1:
             # Check if rough estimate of shuffle-task count is
             # less than that of a tree-reduction
             l = self.obj.npartitions
