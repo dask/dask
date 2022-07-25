@@ -4403,7 +4403,10 @@ def insert_to_ooc(
 
     slices = slices_from_chunks(chunks)
     if region:
-        slices = [fuse_slice(region, slc) for slc in slices]
+        if not all(
+            map(lambda s: s.start is None and s.stop is None and s.step is None, region)
+        ):
+            slices = [fuse_slice(region, slc) for slc in slices]
 
     if return_stored and load_stored:
         func = load_store_chunk
