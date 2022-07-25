@@ -765,6 +765,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     # for newer versions of numpy/pandas
     seq_unique = seq.unique() if hasattr(seq, "unique") else np.unique(seq)
     duplicates = len(seq_unique) < len(seq)
+    enforce_exact = False
     if duplicates:
         offsets = (
             # Avoid numpy conversion (necessary for dask-cudf)
@@ -772,6 +773,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             if hasattr(seq, "searchsorted")
             else np.array(seq).searchsorted(seq_unique, side="left")
         )
+        enforce_exact = npartitions and len(offsets) >= npartitions
     else:
         offsets = seq_unique = None
 
@@ -797,6 +799,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     i = chunksizes(0)
     ind = None  # ind cache (sometimes avoids nonzero call)
     drift = 0  # accumulated drift away from ideal chunksizes
+    divs_remain = npartitions - len(divisions) if enforce_exact else None
     while i < len(seq):
         # Map current position selection (i)
         # to the corresponding division value (div)
@@ -807,6 +810,15 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             # Note: cupy requires casts to `int` below
             if ind is None:
                 ind = int((seq_unique == seq[i]).nonzero()[0][0])
+            if enforce_exact:
+                # Avoid "over-stepping" too many unique
+                # values when npartitions is approximately
+                # equal to len(offsets)
+                offs_remain = len(offsets) - ind
+                if divs_remain > offs_remain:
+                    ind -= divs_remain - offs_remain
+                    i = offsets[ind]
+                    div = seq[i]
             pos = int(offsets[ind])
         else:
             pos = i
@@ -826,6 +838,8 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             if subtract_drift:
                 # Only subtract drift when user specified npartitions
                 drift = drift + ((pos - locations[-1]) - chunksizes(len(divisions) - 1))
+            if enforce_exact:
+                divs_remain -= 1
             i = pos + max(1, chunksizes(len(divisions)) - drift)
             divisions.append(div)
             locations.append(pos)

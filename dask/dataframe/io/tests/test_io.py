@@ -390,6 +390,7 @@ def test_from_pandas_chunksize_one():
 @pytest.mark.parametrize(
     "index",
     [
+        ["A", "B", "C", "C", "C", "C", "C", "C"],
         ["A", "B", "B", "B", "B", "B", "B", "C"],
         ["A", "A", "A", "A", "A", "B", "B", "C"],
     ],
