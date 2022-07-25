@@ -1678,8 +1678,14 @@ class _GroupBy:
             # Check if rough estimate of shuffle-task count is
             # less than that of a tree-reduction
             l = self.obj.npartitions
-            N_tree = (split_every * l - 1) / (split_every - 1) * split_out
-            N_shuf = 2 * l * math.log(l, split_every)  # Over estimate
+            if split_every is None:
+                k = 8
+            elif split_every is False:
+                k = self.obj.npartitions
+            else:
+                k = l
+            N_tree = (k * l - 1) / (k - 1) * split_out
+            N_shuf = 2 * l * math.log(l, k)  # Over estimate
             shuffle = N_shuf < N_tree
 
         return aca(
