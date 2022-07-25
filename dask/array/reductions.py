@@ -363,7 +363,11 @@ def partial_reduce(
         if len(out_chunks) == 0:
             meta = meta.sum()
         else:
-            meta = meta.reshape((0,) * len(out_chunks))
+            try:
+                if meta.size == 0:
+                    meta = meta.reshape((0,) * len(out_chunks))
+            except AttributeError:
+                meta = meta.reshape((0,) * len(out_chunks))
 
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
@@ -425,10 +429,12 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
 
 @implements(np.max, np.amax)
 @derived_from(np)
-def max(a, axis=None, keepdims=False, split_every=None, out=None):
+def max(
+    a, axis=None, keepdims=False, split_every=None, out=None, maxtype=chunk.max_wrapped
+):
     return reduction(
         a,
-        chunk.max_wrapped,
+        maxtype,
         chunk.max,
         axis=axis,
         keepdims=keepdims,

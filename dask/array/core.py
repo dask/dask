@@ -2398,7 +2398,17 @@ class Array(DaskMethodsMixin):
     def max(self, axis=None, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import max
 
-        return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
+        # Included the maxtype argument to allow chunk.max to be used in cases
+        # in which an empty array is expected to be returned (e.g., some searchsorted method cases),
+        # which is not possible with chunk.max_wrapped.
+        return max(
+            self,
+            axis=axis,
+            keepdims=keepdims,
+            split_every=split_every,
+            out=out,
+            maxtype=chunk.max,
+        )
 
     @derived_from(np.ndarray)
     def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):

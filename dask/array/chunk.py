@@ -1,9 +1,9 @@
 """ A set of NumPy functions to apply per chunk """
 import contextlib
+import sys
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 from numbers import Integral
-import sys
 
 import numpy as np
 from tlz import concat
@@ -44,18 +44,22 @@ def keepdims_wrapper(a_callable):
 
     return keepdims_wrapped_callable
 
+
 def identity_wrapper(a_callable, identity):
     """
     A wrapper for min/max functions
     """
-    
+
     @wraps(a_callable)
     def identity_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
- 
-        r = a_callable(x, axis=axis, keepdims=keepdims, initial=identity, *args, **kwargs)
-        return r
-    
+        if x.size == 0:
+            return np.array([identity])
+        else:
+            r = a_callable(x, axis=axis, keepdims=keepdims, *args, **kwargs)
+            return r
+
     return identity_wrapped_callable
+
 
 # Wrap NumPy functions to ensure they provide keepdims.
 
