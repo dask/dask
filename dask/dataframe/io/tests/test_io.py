@@ -553,27 +553,18 @@ def test_from_dask_array_unknown_chunks():
     assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
 
 
-def test_from_dask_array_empty_chunks():
-    # Empty chunks at the end
-    chunksizes = (1, 2, 3, 0)
-    monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-
+@pytest.mark.parametrize(
+    "chunksizes, expected_divisions",
+    [
+        pytest.param((1, 2, 3, 0), (0, 1, 3, 5, 5)),
+        pytest.param((0, 1, 2, 3), (0, 0, 1, 3, 5)),
+        pytest.param((1, 0, 2, 3), (0, 1, 1, 3, 5)),
+    ],
+)
+def test_from_dask_array_empty_chunks(chunksizes, expected_divisions):
+    monotonic_index = da.from_array(np.arange(6), chunks=chunksizes)
     df = dd.from_dask_array(monotonic_index)
-    assert df.divisions == (0, 1, 3, 5, 5)
-
-    # Empty chunks at the beginning
-    chunksizes = (0, 1, 2, 3)
-    monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-
-    df = dd.from_dask_array(monotonic_index)
-    assert df.divisions == (0, 0, 1, 3, 5)
-
-    # Empty chunks in the middle
-    chunksizes = (1, 0, 2, 3)
-    monotonic_index = da.from_array(np.arange(sum(chunksizes)), chunks=chunksizes)
-
-    df = dd.from_dask_array(monotonic_index)
-    assert df.divisions == (0, 1, 1, 3, 5)
+    assert df.divisions == expected_divisions
 
 
 def test_from_dask_array_unknown_width_error():
