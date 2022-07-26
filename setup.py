@@ -15,7 +15,7 @@ extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2022.04.0"],
+    "distributed": ["distributed == 2022.7.1"],
     "diagnostics": [
         "bokeh >= 2.4.2",
         "jinja2",
@@ -92,5 +92,5 @@ setup(
     tests_require=["pytest"],
     extras_require=extras_require,
     include_package_data=True,
-    zip_safe=False,
+    zip_safe=False,  # https://mypy.readthedocs.io/en/latest/installed_packages.html
 )

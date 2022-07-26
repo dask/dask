@@ -4,17 +4,19 @@ distributed = pytest.importorskip("distributed")
 
 import asyncio
 import os
+import sys
 from functools import partial
 from operator import add
 
-from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
-from distributed.utils_test import loop  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, varying
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
 
 import dask
 import dask.bag as db
 from dask import compute, delayed, persist
+from dask.blockwise import Blockwise
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
@@ -23,6 +25,21 @@ from dask.utils import get_named_args, tmpdir, tmpfile
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
     cluster = partial(cluster, should_check_state=False)
+
+
+# TODO: the fixture teardown for `cluster_fixture` is failing periodically with
+# a PermissionError on windows only (in CI). Since this fixture lives in the
+# distributed codebase and is nested within other fixtures we use, it's hard to
+# patch it from the dask codebase. And since the error is during fixture
+# teardown, an xfail won't cut it. As a hack, for now we skip all these tests
+# on windows. See https://github.com/dask/dask/issues/8877.
+pytestmark = pytest.mark.skipif(
+    sys.platform == "win32",
+    reason=(
+        "The teardown of distributed.utils_test.cluster_fixture "
+        "fails on windows CI currently"
+    ),
+)
 
 
 def test_can_import_client():
@@ -77,8 +94,23 @@ def test_futures_to_delayed_dataframe(c):
     ddf = dd.from_delayed(futures)
     dd.utils.assert_eq(ddf.compute(), pd.concat([df, df], axis=0))
 
+    # Make sure from_delayed is Blockwise
+    assert isinstance(ddf.dask.layers[ddf._name], Blockwise)
+
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
+
+
+def test_from_delayed_dataframe(c):
+    # Check that Delayed keys in the form of a tuple
+    # are properly serialized in `from_delayed`
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": range(20)})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_delayed(ddf.to_delayed())
+    dd.utils.assert_eq(ddf, df, scheduler=c)
 
 
 @pytest.mark.parametrize("fuse", [True, False])
@@ -454,6 +486,28 @@ def test_blockwise_different_optimization(c):
     np.testing.assert_equal(y_value, expected)
 
 
+def test_blockwise_cull_allows_numpy_dtype_keys(c):
+    # Regression test for https://github.com/dask/dask/issues/9072
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    # Create a multi-block array.
+    x = da.ones((100, 100), chunks=(10, 10))
+
+    # Make a layer that pulls a block out of the array, but
+    # refers to that block using a numpy.int64 for the key rather
+    # than a python int.
+    name = next(iter(x.dask.layers))
+    block = {("block", 0, 0): (name, np.int64(0), np.int64(1))}
+    dsk = HighLevelGraph.from_collections("block", block, [x])
+    arr = da.Array(dsk, "block", ((10,), (10,)), dtype=x.dtype)
+
+    # Stick with high-level optimizations to force serialization of
+    # the blockwise layer.
+    with dask.config.set({"optimization.fuse.active": False}):
+        da.assert_eq(np.ones((10, 10)), arr, scheduler=c)
+
+
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
@@ -723,3 +777,18 @@ async def test_non_recursive_df_reduce(c, s, a, b):
     )
 
     assert (await c.compute(result)).val == 170
+
+
+def test_set_index_no_resursion_error(c):
+    # see: https://github.com/dask/dask/issues/8955
+    pytest.importorskip("dask.dataframe")
+    try:
+        ddf = (
+            dask.datasets.timeseries(start="2000-01-01", end="2000-07-01", freq="12h")
+            .reset_index()
+            .astype({"timestamp": str})
+        )
+        ddf = ddf.set_index("timestamp", sorted=True)
+        ddf.compute()
+    except RecursionError:
+        pytest.fail("dd.set_index triggered a recursion error")

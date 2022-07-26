@@ -7,6 +7,7 @@ from numbers import Number
 import pytest
 from numpy import AxisError
 
+import dask
 from dask.delayed import delayed
 
 np = pytest.importorskip("numpy")
@@ -1351,6 +1352,12 @@ def test_roll_always_results_in_a_new_array():
     assert y is not x
 
 
+def test_roll_works_even_if_shape_is_0():
+    expected = np.roll(np.zeros(0), 0)
+    actual = da.roll(da.zeros(0), 0)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize("shape", [(10,), (5, 10), (5, 10, 10)])
 def test_shape_and_ndim(shape):
     x = da.random.random(shape)
@@ -1480,6 +1487,17 @@ def test_squeeze(is_func, axis):
 
     exp_d_s_chunks = tuple(c for i, c in enumerate(d.chunks) if i not in axis)
     assert d_s.chunks == exp_d_s_chunks
+
+
+@pytest.mark.parametrize("shape", [(1,), (1, 1)])
+def test_squeeze_1d_array(shape):
+    a = np.full(shape=shape, fill_value=2)
+    a_s = np.squeeze(a)
+    d = da.from_array(a, chunks=(1))
+    d_s = da.squeeze(d)
+    assert isinstance(d_s, da.Array)
+    assert isinstance(d_s.compute(), np.ndarray)
+    assert_eq(d_s, a_s)
 
 
 def test_vstack():
@@ -2012,7 +2030,7 @@ def test_unravel_index():
         for i in range(len(indices)):
             assert_eq(d_indices[i], indices[i])
 
-        assert_eq(darr.vindex[d_indices], arr[indices])
+        assert_eq(darr.vindex[dask.compute(*d_indices)], arr[indices])
 
 
 @pytest.mark.parametrize(

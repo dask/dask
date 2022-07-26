@@ -1,3 +1,5 @@
+.. _high-level-graphs:
+
 High Level Graphs
 =================
 

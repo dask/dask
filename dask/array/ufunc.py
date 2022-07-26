@@ -7,34 +7,16 @@ from dask import core
 from dask.array.core import Array, apply_infer_dtype, asarray, blockwise, elemwise
 from dask.base import is_dask_collection, normalize_function
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import (
-    derived_from,
-    funcname,
-    is_dataframe_like,
-    is_index_like,
-    is_series_like,
-)
+from dask.utils import derived_from, funcname
 
 
-def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
-    return x.__array_wrap__(numpy_ufunc(x, *args, **kwargs))
-
-
-def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
+def wrap_elemwise(numpy_ufunc, source=np):
     """Wrap up numpy function into dask.array"""
 
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, "_elemwise")]
         if len(dsk) > 0:
-            is_dataframe = (
-                is_dataframe_like(dsk[0])
-                or is_series_like(dsk[0])
-                or is_index_like(dsk[0])
-            )
-            if array_wrap and is_dataframe:
-                return dsk[0]._elemwise(__array_wrap__, numpy_ufunc, *args, **kwargs)
-            else:
-                return dsk[0]._elemwise(numpy_ufunc, *args, **kwargs)
+            return dsk[0]._elemwise(numpy_ufunc, *args, **kwargs)
         else:
             return numpy_ufunc(*args, **kwargs)
 
@@ -195,6 +177,7 @@ logaddexp2 = ufunc(np.logaddexp2)
 true_divide = ufunc(np.true_divide)
 floor_divide = ufunc(np.floor_divide)
 negative = ufunc(np.negative)
+positive = ufunc(np.positive)
 power = ufunc(np.power)
 float_power = ufunc(np.float_power)
 remainder = ufunc(np.remainder)
@@ -255,6 +238,8 @@ bitwise_or = ufunc(np.bitwise_or)
 bitwise_xor = ufunc(np.bitwise_xor)
 bitwise_not = ufunc(np.bitwise_not)
 invert = bitwise_not
+left_shift = ufunc(np.left_shift)
+right_shift = ufunc(np.right_shift)
 
 # floating functions
 isfinite = ufunc(np.isfinite)
@@ -280,24 +265,25 @@ rint = ufunc(np.rint)
 fabs = ufunc(np.fabs)
 sign = ufunc(np.sign)
 absolute = ufunc(np.absolute)
+abs = absolute
 
 # non-ufunc elementwise functions
 clip = wrap_elemwise(np.clip)
-isreal = wrap_elemwise(np.isreal, array_wrap=True)
-iscomplex = wrap_elemwise(np.iscomplex, array_wrap=True)
-real = wrap_elemwise(np.real, array_wrap=True)
-imag = wrap_elemwise(np.imag, array_wrap=True)
-fix = wrap_elemwise(np.fix, array_wrap=True)
-i0 = wrap_elemwise(np.i0, array_wrap=True)
-sinc = wrap_elemwise(np.sinc, array_wrap=True)
-nan_to_num = wrap_elemwise(np.nan_to_num, array_wrap=True)
+isreal = wrap_elemwise(np.isreal)
+iscomplex = wrap_elemwise(np.iscomplex)
+real = wrap_elemwise(np.real)
+imag = wrap_elemwise(np.imag)
+fix = wrap_elemwise(np.fix)
+i0 = wrap_elemwise(np.i0)
+sinc = wrap_elemwise(np.sinc)
+nan_to_num = wrap_elemwise(np.nan_to_num)
 
 
 @derived_from(np)
 def angle(x, deg=0):
     deg = bool(deg)
     if hasattr(x, "_elemwise"):
-        return x._elemwise(__array_wrap__, np.angle, x, deg)
+        return x._elemwise(np.angle, x, deg)
     return np.angle(x, deg=deg)
 
 

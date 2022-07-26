@@ -10,12 +10,9 @@ import sys
 import threading
 import warnings
 from collections.abc import Mapping, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any, Literal
 
 import yaml
-
-if TYPE_CHECKING:
-    from typing_extensions import Literal
 
 no_default = "__no_default__"
 
@@ -242,7 +239,9 @@ def collect_env(env: Mapping[str, str] | None = None) -> dict:
     return result
 
 
-def ensure_file(source: str, destination: str = None, comment: bool = True) -> None:
+def ensure_file(
+    source: str, destination: str | None = None, comment: bool = True
+) -> None:
     """
     Copy file to default location if it does not already exist
 
@@ -345,7 +344,7 @@ class set:
 
     def __init__(
         self,
-        arg: Mapping = None,
+        arg: Mapping | None = None,
         config: dict = config,
         lock: threading.Lock = config_lock,
         **kwargs,
@@ -427,7 +426,7 @@ class set:
             self._assign(keys[1:], value, d[key], path, record=record)
 
 
-def collect(paths: list[str] = paths, env: Mapping[str, str] = None) -> dict:
+def collect(paths: list[str] = paths, env: Mapping[str, str] | None = None) -> dict:
     """
     Collect configuration from paths and environment variables
 

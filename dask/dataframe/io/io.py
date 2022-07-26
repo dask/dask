@@ -1,21 +1,30 @@
+from __future__ import annotations
+
 import os
+from collections.abc import Iterable
+from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
+from typing import TYPE_CHECKING, Iterable, Literal
 
 import numpy as np
 import pandas as pd
-from tlz import merge
 
 import dask.array as da
 from dask.base import tokenize
+from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.core import (
     DataFrame,
     Index,
     Series,
+    _concat,
+    _emulate,
+    apply_and_enforce,
     has_parallel_type,
     new_dd_object,
 )
+from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
@@ -23,9 +32,14 @@ from dask.dataframe.utils import (
     is_series_like,
     make_meta,
 )
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M, _deprecated, ensure_dict
+from dask.layers import DataFrameIOLayer
+from dask.utils import M, _deprecated, funcname, is_arraylike
+
+if TYPE_CHECKING:
+    import distributed
+
 
 lock = Lock()
 
@@ -139,7 +153,13 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
+def from_pandas(
+    data: pd.DataFrame | pd.Series,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
+) -> DataFrame | Series:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -210,24 +230,38 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
     if not has_parallel_type(data):
-        raise TypeError("Input must be a pandas DataFrame or Series")
+        raise TypeError("Input must be a pandas DataFrame or Series.")
 
-    if (npartitions is None) == (chunksize is None):
+    if (npartitions is None) == (none_chunksize := (chunksize is None)):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
-    if chunksize is None:
+    if none_chunksize:
+        if not isinstance(npartitions, int):
+            raise TypeError(
+                "Please provide npartitions as an int, or possibly as None if you specify chunksize."
+            )
         chunksize = int(ceil(nrows / npartitions))
+    elif not isinstance(chunksize, int):
+        raise TypeError(
+            "Please provide chunksize as an int, or possibly as None if you specify npartitions."
+        )
 
     name = name or ("from_pandas-" + tokenize(data, chunksize))
 
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if sort and not data.index.is_monotonic_increasing:
-        data = data.sort_index(ascending=True)
+    if data.index.isna().any() and not data.index.is_numeric():
+        raise NotImplementedError(
+            "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
+            "Consider passing `data.loc[~data.isna()]` instead."
+        )
+
     if sort:
+        if not data.index.is_monotonic_increasing:
+            data = data.sort_index(ascending=True)
         divisions, locations = sorted_division_locations(
             data.index, chunksize=chunksize
         )
@@ -407,6 +441,26 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
     return result
 
 
+def _partition_from_array(data, index=None, initializer=None, **kwargs):
+    """Create a Dask partition for either a DataFrame or Series.
+
+    Designed to be used with :func:`dask.blockwise.blockwise`. ``data`` is the array
+    from which the partition will be created. ``index`` can be:
+
+    1. ``None``, in which case each partition has an independent RangeIndex
+    2. a `tuple` with two elements, the start and stop values for a RangeIndex for
+       this partition, which gives a continuously varying RangeIndex over the
+       whole Dask DataFrame
+    3. an instance of a ``pandas.Index`` or a subclass thereof
+
+    The ``kwargs`` _must_ contain an ``initializer`` key which is set by calling
+    ``type(meta)``.
+    """
+    if isinstance(index, tuple):
+        index = pd.RangeIndex(*index)
+    return initializer(data, index=index, **kwargs)
+
+
 def from_dask_array(x, columns=None, index=None, meta=None):
     """Create a Dask DataFrame from a Dask Array.
 
@@ -454,15 +508,14 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     """
     meta = _meta_from_array(x, columns, index, meta=meta)
 
-    if x.ndim == 2 and len(x.chunks[1]) > 1:
-        x = x.rechunk({1: x.shape[1]})
-
-    name = "from-dask-array" + tokenize(x, columns)
-    to_merge = []
+    name = "from-dask-array-" + tokenize(x, columns)
+    graph_dependencies = [x]
+    arrays_and_indices = [x.name, "ij" if x.ndim == 2 else "i"]
+    numblocks = {x.name: x.numblocks}
 
     if index is not None:
-        if not isinstance(index, Index):
-            raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        # An index is explicitly given by the caller, so we can pass it through to the
+        # initializer after a few checks.
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
@@ -470,32 +523,54 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             )
             raise ValueError(msg)
         divisions = index.divisions
-        to_merge.append(ensure_dict(index.dask))
-        index = index.__dask_keys__()
+        graph_dependencies.append(index)
+        arrays_and_indices.extend([index._name, "i"])
+        numblocks[index._name] = (index.npartitions,)
 
     elif np.isnan(sum(x.shape)):
+        # The shape of the incoming array is not known in at least one dimension. As
+        # such, we can't create an index for the entire output DataFrame and we set
+        # the divisions to None to represent that.
         divisions = [None] * (len(x.chunks[0]) + 1)
-        index = [None] * len(x.chunks[0])
     else:
+        # The shape of the incoming array is known and we don't have an explicit index.
+        # Create a mapping of chunk number in the incoming array to
+        # (start row, stop row) tuples. These tuples will be used to create a sequential
+        # RangeIndex later on that is continuous over the whole DataFrame.
+        n_elements = sum(x.chunks[0])
         divisions = [0]
-        for c in x.chunks[0]:
-            divisions.append(divisions[-1] + c)
-        index = [
-            (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
-        ]
-        divisions[-1] -= 1
+        stop = 0
+        index_mapping = {}
+        for i, increment in enumerate(x.chunks[0]):
+            stop += increment
+            index_mapping[(i,)] = (divisions[i], stop)
 
-    dsk = {}
-    for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
-        if x.ndim == 2:
-            chunk = chunk[0]
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), chunk, ind, x.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), chunk, ind, meta.columns)
+            # last division corrected, even if there are empty chunk(s) at the end
+            if stop == n_elements:
+                stop -= 1
 
-    to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+            divisions.append(stop)
+
+        arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
+
+    if is_series_like(meta):
+        kwargs = {"dtype": x.dtype, "name": meta.name, "initializer": type(meta)}
+    else:
+        kwargs = {"columns": meta.columns, "initializer": type(meta)}
+
+    blk = blockwise(
+        _partition_from_array,
+        name,
+        "i",
+        *arrays_and_indices,
+        numblocks=numblocks,
+        concatenate=True,
+        # kwargs passed through to the DataFrame/Series initializer
+        **kwargs,
+    )
+
+    graph = HighLevelGraph.from_collections(name, blk, dependencies=graph_dependencies)
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def _link(token, result):
@@ -585,41 +660,46 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
-):
+    dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
+    meta=None,
+    divisions: tuple | Literal["sorted"] | None = None,
+    prefix: str = "from-delayed",
+    verify_meta: bool = True,
+) -> DataFrame | Series:
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
     ----------
-    dfs : list of Delayed or Future
-        An iterable of ``dask.delayed.Delayed`` objects, such as come from
-        ``dask.delayed`` or an iterable of ``distributed.Future`` objects,
-        such as come from ``client.submit`` interface. These comprise the individual
-        partitions of the resulting dataframe.
+    dfs :
+        A ``dask.delayed.Delayed``, a ``distributed.Future``, or an iterable of either
+        of these objects, e.g. returned by ``client.submit``. These comprise the
+        individual partitions of the resulting dataframe.
+        If a single object is provided (not an iterable), then the resulting dataframe
+        will have only one partition.
     $META
-    divisions : tuple, str, optional
+    divisions :
         Partition boundaries along the index.
         For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
         For string 'sorted' will compute the delayed values to find index
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
-    prefix : str, optional
+    prefix :
         Prefix to prepend to the keys.
-    verify_meta : bool, optional
+    verify_meta :
         If True check that the partitions have consistent metadata, defaults to True.
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed):
+    if isinstance(dfs, Delayed) or hasattr(dfs, "key"):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
 
-    for df in dfs:
-        if not isinstance(df, Delayed):
-            raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
+    for item in dfs:
+        if not isinstance(item, Delayed):
+            raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     if meta is None:
         meta = delayed(make_meta)(dfs[0]).compute()
@@ -629,30 +709,33 @@ def from_delayed(
     if not dfs:
         dfs = [delayed(make_meta)(meta)]
 
-    name = prefix + "-" + tokenize(*dfs)
-    dsk = {}
-    if verify_meta:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = (check_meta, df.key, meta, "from_delayed")
-    else:
-        for (i, df) in enumerate(dfs):
-            dsk[(name, i)] = df.key
-
     if divisions is None or divisions == "sorted":
-        divs = [None] * (len(dfs) + 1)
+        divs: list | tuple = [None] * (len(dfs) + 1)
     else:
-        divs = tuple(divisions)
+        divs = list(divisions)
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
+    name = prefix + "-" + tokenize(*dfs)
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=BlockwiseDepDict(
+            {(i,): inp.key for i, inp in enumerate(dfs)},
+            produces_keys=True,
+        ),
+        io_func=partial(check_meta, meta=meta, funcname="from_delayed")
+        if verify_meta
+        else lambda x: x,
+    )
     df = new_dd_object(
-        HighLevelGraph.from_collections(name, dsk, dfs), name, meta, divs
+        HighLevelGraph.from_collections(name, layer, dfs), name, meta, divs
     )
 
     if divisions == "sorted":
         from dask.dataframe.shuffle import compute_and_set_divisions
 
-        df = compute_and_set_divisions(df)
+        return compute_and_set_divisions(df)
 
     return df
 
@@ -703,6 +786,303 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
         values.append(seq[-1])
 
     return values, positions
+
+
+class _PackedArgCallable(DataFrameIOFunction):
+    """Packed-argument wrapper for DataFrameIOFunction
+
+    This is a private helper class for ``from_map``. This class
+    ensures that packed positional arguments will be expanded
+    before the underlying function (``func``) is called. This class
+    also handles optional metadata enforcement and column projection
+    (when ``func`` satisfies the ``DataFrameIOFunction`` protocol).
+    """
+
+    def __init__(
+        self,
+        func,
+        args=None,
+        kwargs=None,
+        meta=None,
+        packed=False,
+        enforce_metadata=False,
+    ):
+        self.func = func
+        self.args = args
+        self.kwargs = kwargs
+        self.meta = meta
+        self.enforce_metadata = enforce_metadata
+        self.packed = packed
+        self.is_dataframe_io_func = isinstance(self.func, DataFrameIOFunction)
+
+    @property
+    def columns(self):
+        if self.is_dataframe_io_func:
+            return self.func.columns
+        return None
+
+    def project_columns(self, columns):
+        if self.is_dataframe_io_func:
+            return _PackedArgCallable(
+                self.func.project_columns(columns),
+                args=self.args,
+                kwargs=self.kwargs,
+                meta=self.meta[columns],
+                packed=self.packed,
+                enforce_metadata=self.enforce_metadata,
+            )
+        return self
+
+    def __call__(self, packed_arg):
+        if not self.packed:
+            packed_arg = [packed_arg]
+        if self.enforce_metadata:
+            return apply_and_enforce(
+                *packed_arg,
+                *(self.args or []),
+                _func=self.func,
+                _meta=self.meta,
+                **(self.kwargs or {}),
+            )
+        return self.func(
+            *packed_arg,
+            *(self.args or []),
+            **(self.kwargs or {}),
+        )
+
+
+@insert_meta_param_description
+def from_map(
+    func,
+    *iterables,
+    args=None,
+    meta=None,
+    divisions=None,
+    label=None,
+    token=None,
+    enforce_metadata=True,
+    **kwargs,
+):
+    """Create a DataFrame collection from a custom function map
+
+    WARNING: The ``from_map`` API is experimental, and stability is not
+    yet guaranteed. Use at your own risk!
+
+    Parameters
+    ----------
+    func : callable
+        Function used to create each partition. If ``func`` satisfies the
+        ``DataFrameIOFunction`` protocol, column projection will be enabled.
+    *iterables : Iterable objects
+        Iterable objects to map to each output partition. All iterables must
+        be the same length. This length determines the number of partitions
+        in the output collection (only one element of each iterable will
+        be passed to ``func`` for each partition).
+    args : list or tuple, optional
+        Positional arguments to broadcast to each output partition. Note
+        that these arguments will always be passed to ``func`` after the
+        ``iterables`` positional arguments.
+    $META
+    divisions : tuple, str, optional
+        Partition boundaries along the index.
+        For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
+        For string 'sorted' will compute the delayed values to find index
+        values.  Assumes that the indexes are mutually sorted.
+        If None, then won't use index information
+    label : str, optional
+        String to use as the function-name label in the output
+        collection-key names.
+    token : str, optional
+        String to use as the "token" in the output collection-key names.
+    enforce_metadata : bool, default True
+        Whether to enforce at runtime that the structure of the DataFrame
+        produced by ``func`` actually matches the structure of ``meta``.
+        This will rename and reorder columns for each partition,
+        and will raise an error if this doesn't work or types don't match.
+    **kwargs:
+        Key-word arguments to broadcast to each output partition. These
+        same arguments will be passed to ``func`` for every output partition.
+
+    Examples
+    --------
+    >>> import pandas as pd
+    >>> import dask.dataframe as dd
+    >>> func = lambda x, size=0: pd.Series([x] * size)
+    >>> inputs = ["A", "B"]
+    >>> dd.from_map(func, inputs, size=2).compute()
+    0    A
+    1    A
+    0    B
+    1    B
+    dtype: object
+
+    This API can also be used as an alternative to other file-based
+    IO functions, like ``read_parquet`` (which are already just
+    ``from_map`` wrapper functions):
+
+    >>> import pandas as pd
+    >>> import dask.dataframe as dd
+    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
+    >>> dd.from_map(pd.read_parquet, paths).head()  # doctest: +SKIP
+                        name
+    timestamp
+    2000-01-01 00:00:00   Laura
+    2000-01-01 00:00:01  Oliver
+    2000-01-01 00:00:02   Alice
+    2000-01-01 00:00:03  Victor
+    2000-01-01 00:00:04     Bob
+
+    Since ``from_map`` allows you to map an arbitrary function
+    to any number of iterable objects, it can be a very convenient
+    means of implementing functionality that may be missing from
+    from other DataFrame-creation methods. For example, if you
+    happen to have apriori knowledge about the number of rows
+    in each of the files in a dataset, you can generate a
+    DataFrame collection with a global RangeIndex:
+
+    >>> import pandas as pd
+    >>> import numpy as np
+    >>> import dask.dataframe as dd
+    >>> paths = ["0.parquet", "1.parquet", "2.parquet"]
+    >>> file_sizes = [86400, 86400, 86400]
+    >>> def func(path, row_offset):
+    ...     # Read parquet file and set RangeIndex offset
+    ...     df = pd.read_parquet(path)
+    ...     return df.set_index(
+    ...         pd.RangeIndex(row_offset, row_offset+len(df))
+    ...     )
+    >>> def get_ddf(paths, file_sizes):
+    ...     offsets = [0] + list(np.cumsum(file_sizes))
+    ...     return dd.from_map(
+    ...         func, paths, offsets[:-1], divisions=offsets
+    ...     )
+    >>> ddf = get_ddf(paths, file_sizes)  # doctest: +SKIP
+    >>> ddf.index  # doctest: +SKIP
+    Dask Index Structure:
+    npartitions=3
+    0         int64
+    86400       ...
+    172800      ...
+    259200      ...
+    dtype: int64
+    Dask Name: myfunc, 6 tasks
+
+    See Also
+    --------
+    dask.dataframe.from_delayed
+    dask.layers.DataFrameIOLayer
+    """
+
+    # Input validation
+    if not callable(func):
+        raise ValueError("`func` argument must be `callable`")
+    lengths = set()
+    iterables = list(iterables)
+    for i, iterable in enumerate(iterables):
+        if not isinstance(iterable, Iterable):
+            raise ValueError(
+                f"All elements of `iterables` must be Iterable, got {type(iterable)}"
+            )
+        try:
+            lengths.add(len(iterable))
+        except (AttributeError, TypeError):
+            iterables[i] = list(iterable)
+            lengths.add(len(iterables[i]))
+    if len(lengths) == 0:
+        raise ValueError("`from_map` requires at least one Iterable input")
+    elif len(lengths) > 1:
+        raise ValueError("All `iterables` must have the same length")
+    if lengths == {0}:
+        raise ValueError("All `iterables` must have a non-zero length")
+
+    # Check for `produces_tasks` and `creation_info`.
+    # These options are included in the function signature,
+    # because they are not intended for "public" use.
+    produces_tasks = kwargs.pop("produces_tasks", False)
+    creation_info = kwargs.pop("creation_info", None)
+
+    if produces_tasks or len(iterables) == 1:
+        if len(iterables) > 1:
+            # Tasks are not detected correctly when they are "packed"
+            # within an outer list/tuple
+            raise ValueError(
+                "Multiple iterables not supported when produces_tasks=True"
+            )
+        inputs = iterables[0]
+        packed = False
+    else:
+        inputs = list(zip(*iterables))
+        packed = True
+
+    # Define collection name
+    label = label or funcname(func)
+    token = token or tokenize(
+        func, meta, inputs, args, divisions, enforce_metadata, **kwargs
+    )
+    name = f"{label}-{token}"
+
+    # Get "projectable" column selection.
+    # Note that this relies on the IO function
+    # ducktyping with DataFrameIOFunction
+    column_projection = func.columns if isinstance(func, DataFrameIOFunction) else None
+
+    # NOTE: Most of the metadata-handling logic used here
+    # is copied directly from `map_partitions`
+    if meta is None:
+        meta = _emulate(
+            func,
+            *(inputs[0] if packed else inputs[:1]),
+            *(args or []),
+            udf=True,
+            **kwargs,
+        )
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta)
+        meta_is_emulated = False
+
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
+        if not meta_is_emulated:
+            raise TypeError(
+                "Meta is not valid, `from_map` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns."
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]))
+
+    # Ensure meta is empty DataFrame
+    meta = make_meta(meta)
+
+    # Define io_func
+    if packed or args or kwargs or enforce_metadata:
+        io_func = _PackedArgCallable(
+            func,
+            args=args,
+            kwargs=kwargs,
+            meta=meta if enforce_metadata else None,
+            enforce_metadata=enforce_metadata,
+            packed=packed,
+        )
+    else:
+        io_func = func
+
+    # Construct DataFrameIOLayer
+    layer = DataFrameIOLayer(
+        name,
+        column_projection,
+        inputs,
+        io_func,
+        label=label,
+        produces_tasks=produces_tasks,
+        creation_info=creation_info,
+    )
+
+    # Return new DataFrame-collection object
+    divisions = divisions or [None] * (len(inputs) + 1)
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
+    return new_dd_object(graph, name, meta, divisions)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

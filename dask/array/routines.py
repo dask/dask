@@ -344,7 +344,7 @@ def tensordot(lhs, rhs, axes=2):
         return intermediate.sum(axis=left_axes)
 
 
-@derived_from(np)
+@derived_from(np, ua_args=["out"])
 def dot(a, b):
     return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
 
@@ -1870,8 +1870,8 @@ def roll(array, shift, axis=None):
         raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
-        s = -s
-        s %= result.shape[i]
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
 
         sl1 = result.ndim * [slice(None)]
         sl2 = result.ndim * [slice(None)]
@@ -1933,6 +1933,13 @@ def squeeze(a, axis=None):
     axis = validate_axis(axis, a.ndim)
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
+
+    # Return 0d Dask Array if all axes are squeezed,
+    # to be consistent with NumPy. Ref: https://github.com/dask/dask/issues/9183#issuecomment-1155626619
+    if all(s == 0 for s in sl) and all(s == 1 for s in a.shape):
+        return a.map_blocks(
+            np.squeeze, meta=a._meta, drop_axis=tuple(range(len(a.shape)))
+        )
 
     a = a[sl]
 

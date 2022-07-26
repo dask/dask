@@ -13,7 +13,11 @@ from dask.dataframe.dispatch import (  # noqa: F401
     categorical_dtype_dispatch,
     is_categorical_dtype,
 )
-from dask.dataframe.utils import clear_known_categories, has_known_categories
+from dask.dataframe.utils import (
+    AttributeNotImplementedError,
+    clear_known_categories,
+    has_known_categories,
+)
 
 
 def _categorize_block(df, categories, index):
@@ -149,6 +153,9 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
         df.__class__, dsk, (prefix, 0), **kwargs
     )
 
+    # some operations like get_dummies() rely on the order of categories
+    categories = {k: v.sort_values() for k, v in categories.items()}
+
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
 
@@ -235,7 +242,7 @@ class CategoricalAccessor(Accessor):
                 "supported.  Please use `column.cat.as_known()` or "
                 "`df.categorize()` beforehand to ensure known categories"
             )
-            raise NotImplementedError(msg)
+            raise AttributeNotImplementedError(msg)
         return self._delegate_property(self._series._meta, "cat", "categories")
 
     @property
@@ -249,7 +256,7 @@ class CategoricalAccessor(Accessor):
                 "supported.  Please use `column.cat.as_known()` or "
                 "`df.categorize()` beforehand to ensure known categories"
             )
-            raise NotImplementedError(msg)
+            raise AttributeNotImplementedError(msg)
         return self._property_map("codes")
 
     def remove_unused_categories(self):
