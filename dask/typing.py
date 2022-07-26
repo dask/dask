@@ -2,12 +2,11 @@ from __future__ import annotations
 
 import abc
 from collections.abc import Callable, Hashable, Mapping, Sequence
-from typing import Any, Protocol, TypeVar, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypeVar, runtime_checkable
 
-try:
+if TYPE_CHECKING:
+    # IPython import is relatively slow. Avoid if not necessary
     from IPython.display import DisplayObject
-except ImportError:
-    DisplayObject = Any
 
 
 CollType = TypeVar("CollType", bound="DaskCollection")
@@ -20,7 +19,7 @@ class SchedulerGetCallable(Protocol):
 
     def __call__(
         self,
-        dask: Mapping,
+        dsk: Mapping,
         keys: Sequence[Hashable] | Hashable,
         **kwargs: Any,
     ) -> Any:
@@ -155,7 +154,7 @@ class DaskCollection(Protocol):
         Returns
         -------
         PostComputeCallable
-            Callable that recieves the sequence of the results of each
+            Callable that receives the sequence of the results of each
             final key along with optional arguments. An example signature
             would be ``finalize(results: Sequence[Any], *args)``.
         tuple[Any, ...]
@@ -169,7 +168,7 @@ class DaskCollection(Protocol):
 
     @abc.abstractmethod
     def __dask_postpersist__(self) -> tuple[PostPersistCallable, tuple]:
-        """Rebuilder function and optional arguments to contruct a persisted collection.
+        """Rebuilder function and optional arguments to construct a persisted collection.
 
         See also the documentation for :py:class:`dask.typing.PostPersistCallable`.
 
@@ -187,7 +186,7 @@ class DaskCollection(Protocol):
             :py:func:`dask.persist`, the new graph will have just the
             output keys and the values already computed.
         tuple[Any, ...]
-            Optional arugments passed to the rebuild callable. If no
+            Optional arguments passed to the rebuild callable. If no
             additional arguments are to be passed then this must be an
             empty tuple.
 

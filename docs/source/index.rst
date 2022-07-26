@@ -134,10 +134,10 @@ messy situations in everyday problems.
    :hidden:
    :caption: Getting Started
 
-   install.rst
+   Install Dask <install.rst>
    10-minutes-to-dask.rst
    presentations.rst
-   best-practices.rst
+   Best Practices <best-practices.rst>
    faq.rst
 
 .. toctree::
@@ -147,8 +147,8 @@ messy situations in everyday problems.
 
    array.rst
    bag.rst
-   dataframe.rst
-   delayed.rst
+   DataFrame <dataframe.rst>
+   Delayed <delayed.rst>
    futures.rst
    deploying.rst
 

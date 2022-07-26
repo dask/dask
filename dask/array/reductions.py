@@ -1,10 +1,10 @@
 import builtins
 import contextlib
+import math
 import operator
 from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
-from math import ceil, factorial, log, log2
 from numbers import Integral, Number
 
 import numpy as np
@@ -266,7 +266,7 @@ def _tree_reduce(
     depth = 1
     for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
-            depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
+            depth = int(builtins.max(depth, math.ceil(math.log(n, split_every[i]))))
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=sorted(axis)))
@@ -634,7 +634,7 @@ def numel(x, **kwargs):
     if not isinstance(axis, tuple or list):
         axis = [axis]
 
-    prod = np.prod([shape[dim] for dim in axis])
+    prod = math.prod(shape[dim] for dim in axis)
     if keepdims is True:
         new_shape = tuple(
             shape[dim] if dim not in axis else 1 for dim in range(len(shape))
@@ -763,7 +763,7 @@ def _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs):
         ns * inner_term**order, axis=axis, **kwargs
     )
     for k in range(1, order - 1):
-        coeff = factorial(order) / (factorial(k) * factorial(order - k))
+        coeff = math.factorial(order) / (math.factorial(k) * math.factorial(order - k))
         M += coeff * sum(Ms[..., order - k - 2] * inner_term**k, axis=axis, **kwargs)
     return M
 
@@ -859,6 +859,41 @@ def moment_agg(
 def moment(
     a, order, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=None
 ):
+    """Calculate the nth centralized moment.
+
+    Parameters
+    ----------
+    a : Array
+        Data over which to compute moment
+    order : int
+        Order of the moment that is returned, must be >= 2.
+    axis : int, optional
+        Axis along which the central moment is computed. The default is to
+        compute the moment of the flattened array.
+    dtype : data-type, optional
+        Type to use in computing the moment. For arrays of integer type the
+        default is float64; for arrays of float types it is the same as the
+        array type.
+    keepdims : bool, optional
+        If this is set to True, the axes which are reduced are left in the
+        result as dimensions with size one. With this option, the result
+        will broadcast correctly against the original array.
+    ddof : int, optional
+        "Delta Degrees of Freedom": the divisor used in the calculation is
+        N - ddof, where N represents the number of elements. By default
+        ddof is zero.
+
+    Returns
+    -------
+    moment : Array
+
+    References
+    ----------
+    .. [1] Pebay, Philippe (2008), "Formulas for Robust, One-Pass Parallel
+        Computation of Covariances and Arbitrary-Order Statistical Moments",
+        Technical Report SAND2008-6212, Sandia National Laboratories.
+
+    """
     if not isinstance(order, Integral) or order < 0:
         raise ValueError("Order must be an integer >= 0")
 
@@ -1355,7 +1390,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
         # Downsweep
         # With `n_vals == 3`, we would have `stride = 1` and `stride = 0`, but we need
         # to do a downsweep iteration, so make sure stride2 is at least 2.
-        stride2 = builtins.max(2, 2 ** ceil(log2(n_vals // 2)))
+        stride2 = builtins.max(2, 2 ** math.ceil(math.log2(n_vals // 2)))
         stride = stride2 // 2
         while stride > 0:
             for i in range(stride2 + stride - 1, n_vals, stride2):
@@ -1433,7 +1468,8 @@ def cumreduction(
           This method may be faster or more memory efficient depending on workload,
           scheduler, and hardware.  More benchmarking is necessary.
     preop: callable, optional
-        Function used by 'blelloch' method like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
+        Function used by 'blelloch' method,
+        like ``np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------

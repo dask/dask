@@ -1237,6 +1237,12 @@ def concat(
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     axis = DataFrame._validate_axis(axis)
+    try:
+        # remove any empty DataFrames
+        dfs = [df for df in dfs if bool(len(df.columns))]
+    except AttributeError:
+        # 'Series' object has no attribute 'columns'
+        pass
     dasks = [df for df in dfs if isinstance(df, _Frame)]
     dfs = _maybe_from_pandas(dfs)
 
@@ -1363,7 +1369,7 @@ def _split_partition(df, on, nsplits):
         if nset.intersection(set(df.columns)) == nset:
             ind = hash_object_dispatch(df[on], index=False)
             ind = ind % nsplits
-            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+            return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
     # We are not joining (purely) on columns.  Need to
     # add a "_partitions" column to perform the split.

@@ -8,10 +8,10 @@ import sys
 from functools import partial
 from operator import add
 
-from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cleanup  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
-from distributed.utils_test import loop  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, varying
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
 
 import dask
 import dask.bag as db
@@ -374,11 +374,6 @@ def test_blockwise_array_creation(c, io, fuse):
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse, from_futures):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-
-    # TODO: this configuration is flaky on osx in CI
-    # See https://github.com/dask/dask/issues/8816
-    if from_futures and sys.platform == "darwin":
-        pytest.xfail("This test sometimes fails on osx in CI")
 
     df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
 
@@ -797,36 +792,3 @@ def test_set_index_no_resursion_error(c):
         ddf.compute()
     except RecursionError:
         pytest.fail("dd.set_index triggered a recursion error")
-
-
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/8991", strict=True)
-@gen_cluster(client=True)
-async def test_gh_8991(c, s, a, b):
-    # Test illustrating something amiss with HighLevelGraph.key_dependencies.
-    # The intention is for this to be a cache, so if we clear it, things
-    # should still work.
-
-    # This is a bad test, and we should rethink/remove it as soon as the issue is
-    # resolved whether, it's fixing the underlying problem or removing
-    # HighLevelGraph.key_dependencies alltogether.
-    datasets = pytest.importorskip("dask.datasets")
-    result = datasets.timeseries().shuffle("x").to_orc("tmp", compute=False)
-
-    # Create a dsk and mock sending it to the scheduler.
-    dsk_opt = result.__dask_optimize__(result.dask, result.key)
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(
-        dsk_opt.__dask_distributed_pack__(c, result.key)
-    )
-    deps = unpacked["deps"]
-
-    # Create a version of the dsk without the key_dependencies and mock sending it to
-    # the scheduler as well.
-    dsk_opt_nokeys = dsk_opt.copy()
-    dsk_opt_nokeys.key_dependencies.clear()
-    unpacked_nokeys = HighLevelGraph.__dask_distributed_unpack__(
-        dsk_opt_nokeys.__dask_distributed_pack__(c, result.key)
-    )
-    deps_nokeys = unpacked_nokeys["deps"]
-
-    # The recalculated dependencies should still be the same!
-    assert deps == deps_nokeys
