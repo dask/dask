@@ -53,7 +53,7 @@ window.addEventListener('load', (event) => {
  * @return {object} The parsed data
  */
 function parseYAML(raw) {
-    return jsyaml.load(raw)
+    return YAML.parse(raw)
 }
 
 /**
@@ -79,6 +79,7 @@ function parseEnv(raw) {
             }
             try {
                 value = JSON.parse(value)
+                break
             } catch (err) {
                 break
             }
@@ -116,15 +117,18 @@ function parseCode(raw) {
         while (true) {
             if (value === "True") {
                 value = true
+                break
             }
             if (value === "False") {
                 value = false
+                break
             }
             if (value === true || value === false) {
                 break
             }
             try {
                 value = JSON.parse(value)
+                break
             } catch (err) {
                 break
             }
@@ -147,7 +151,7 @@ function parseCode(raw) {
  * @return {str} YAML configuration
  */
 function dumpYAML(config) {
-    return jsyaml.dump(config)
+    return YAML.stringify(config, 10, 2)
 }
 
 /**
