@@ -2130,7 +2130,7 @@ class Array(DaskMethodsMixin):
             raise TypeError(
                 f"astype does not take the following keyword arguments: {list(extra)}"
             )
-        casting = kwargs.get("casting", "unsafe")
+        casting = kwargs.get("casting", "unsafe", "order")
         dtype = np.dtype(dtype)
         if self.dtype == dtype:
             return self
