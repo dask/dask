@@ -15,7 +15,7 @@ extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2022.7.0"],
+    "distributed": ["distributed == 2022.7.1"],
     "diagnostics": [
         "bokeh >= 2.4.2",
         "jinja2",
@@ -25,6 +25,7 @@ extras_require: dict[str, list[str]] = {
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
 extras_require["test"] = [
+    "pandas[test]",
     "pytest",
     "pytest-rerunfailures",
     "pytest-xdist",

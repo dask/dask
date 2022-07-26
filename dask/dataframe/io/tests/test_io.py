@@ -587,6 +587,20 @@ def test_from_dask_array_unknown_chunks():
     assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
 
 
+@pytest.mark.parametrize(
+    "chunksizes, expected_divisions",
+    [
+        pytest.param((1, 2, 3, 0), (0, 1, 3, 5, 5)),
+        pytest.param((0, 1, 2, 3), (0, 0, 1, 3, 5)),
+        pytest.param((1, 0, 2, 3), (0, 1, 1, 3, 5)),
+    ],
+)
+def test_from_dask_array_empty_chunks(chunksizes, expected_divisions):
+    monotonic_index = da.from_array(np.arange(6), chunks=chunksizes)
+    df = dd.from_dask_array(monotonic_index)
+    assert df.divisions == expected_divisions
+
+
 def test_from_dask_array_unknown_width_error():
     dsk = {("x", 0, 0): np.random.random((2, 3)), ("x", 1, 0): np.random.random((5, 3))}
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)

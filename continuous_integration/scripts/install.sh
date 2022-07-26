@@ -13,16 +13,16 @@ if [[ ${UPSTREAM_DEV} ]]; then
     mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force numpy pandas fastparquet
+    # mamba uninstall --force ...
+    conda uninstall --force numpy pandas fastparquet bokeh scipy
 
-    # TODO: Add development version of scipy once
-    # https://github.com/dask/dask/issues/8682 is resolved
-    conda uninstall --force numpy pandas fastparquet
+    mamba install -y -c bokeh/label/dev bokeh
 
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
-        pandas
+        pandas \
+        scipy
 
     python -m pip install \
         --upgrade \
