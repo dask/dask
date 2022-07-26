@@ -4037,10 +4037,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def memory_usage(self, index=True, deep=False):
-        result = self.map_partitions(
-            M.memory_usage, index=index, deep=deep, enforce_metadata=False
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"index": index, "deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
         )
-        return delayed(sum)(result.to_delayed())
 
     def __divmod__(self, other):
         res1 = self // other
@@ -4295,6 +4298,16 @@ class Index(Series):
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
+
+    @derived_from(pd.Index)
+    def memory_usage(self, deep=False):
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
+        )
 
 
 class DataFrame(_Frame):
