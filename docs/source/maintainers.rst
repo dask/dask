@@ -17,8 +17,8 @@ Pull requests from non-maintainers should be reviewed and approved by at
 least one maintainer before being merged.
 
 Ideally, pull requests from maintainers should also be reviewed before
-merging. However, because reviewer bandiwdth is limited, mainainers will
-sometimes self-merge their own pull requests if the contents of the pull
+merging. However, because reviewer bandwidth is limited, maintainers will
+sometimes self-merge their own pull requests if the content of the pull
 request is viewed as uncontroversial (e.g. typo fix). If a maintainer has
 a substantial pull request which hasn't received a review, and the maintainer
 is confident in the proposed changes, they should post a final comment along
@@ -30,7 +30,7 @@ No maintainer should merge a pull request that they're not comfortable with.
 Squash merge pull requests
 --------------------------
 
-Use squash merging when merging pull requests, as opposed other merging
+Use squash merging when merging pull requests, as opposed to other merging
 strategies like rebase merging. To streamline this process, all non-squash
 merging strategies have been disabled in repository GitHub settings.
 
@@ -39,7 +39,7 @@ Use clean merge commits
 
 Dask aims to have a straightforward, yet meaningful, ``git log``. To
 accomplish this, maintainers ensure that both the squashed merge commit
-title and (optional) message meaningfully reflects the content of the pull
+title and (optional) message meaningfully reflect the content of the pull
 request before merging. For example, a merge commit title of "fix typo" should
 be updated to something along the lines of "Fix typo in ``Array.max`` docstring".
 
