@@ -108,17 +108,17 @@ functions = [
     pytest.param(
         lambda x: np.angle(x),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("11.0.0rc2"),
-            reason="Requires CuPy 11.0.0rc2 or newer "
-            "(with https://github.com/cupy/cupy/pull/6905)",
+            not dask.utils.has_keyword(cupy.angle, "deg"),
+            reason="Requires `deg` argument in `cupy.angle()` introduced in "
+            "https://github.com/cupy/cupy/pull/6905",
         ),
     ),
     pytest.param(
         lambda x: np.angle(x, True),
         marks=pytest.mark.skipif(
-            cupy_version < parse_version("11.0.0rc2"),
-            reason="Requires CuPy 11.0.0rc2 or newer "
-            "(with https://github.com/cupy/cupy/pull/6905)",
+            not dask.utils.has_keyword(cupy.angle, "deg"),
+            reason="Requires `deg` argument in `cupy.angle()` introduced in "
+            "https://github.com/cupy/cupy/pull/6905",
         ),
     ),
 ]
