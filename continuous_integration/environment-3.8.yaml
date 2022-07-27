@@ -36,6 +36,7 @@ dependencies:
   - blosc
   - boto3
   - botocore
+  - aws-sam-translator=1.47.0
   - bokeh
   - httpretty
   - aiohttp
