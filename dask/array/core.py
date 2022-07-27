@@ -2231,10 +2231,15 @@ class Array(DaskMethodsMixin):
             By default, astype always returns a newly allocated array. If this
             is set to False and the `dtype` requirement is satisfied, the input
             array is returned instead of a copy.
+        order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+            Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+            ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+            representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+            otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
         """
-        # Scalars don't take `casting` or `copy` kwargs - as such we only pass
+        # Scalars don't take `casting`, `copy` or `order`` kwargs - as such we only pass
         # them to `map_blocks` if specified by user (different than defaults).
-        extra = set(kwargs) - {"casting", "copy"}
+        extra = set(kwargs) - {"casting", "copy", "order"}
         if extra:
             raise TypeError(
                 f"astype does not take the following keyword arguments: {list(extra)}"
