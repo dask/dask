@@ -15,6 +15,21 @@ where parallelism may not be possible,
 or areas where many tasks depend on each other,
 which may cause a great deal of communication.
 
+
+Requirements
+^^^^^^^^^^^^
+
+You need to have the optional ``grahpviz`` dependency installed,
+in order to use this feature.
+Graphviz can be installed with conda, or with pip.
+
+.. code-block:: bash
+
+   conda install python-graphviz -c conda-forge
+   # or
+   pip install graphviz
+
+
 Visualize the low level graph
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
