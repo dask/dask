@@ -105,6 +105,22 @@ functions = [
     lambda x: np.nanprod(x),
     lambda x: np.nanmin(x),
     lambda x: np.nanmax(x),
+    pytest.param(
+        lambda x: np.angle(x),
+        marks=pytest.mark.skipif(
+            not dask.utils.has_keyword(cupy.angle, "deg"),
+            reason="Requires `deg` argument in `cupy.angle()` introduced in "
+            "https://github.com/cupy/cupy/pull/6905",
+        ),
+    ),
+    pytest.param(
+        lambda x: np.angle(x, True),
+        marks=pytest.mark.skipif(
+            not dask.utils.has_keyword(cupy.angle, "deg"),
+            reason="Requires `deg` argument in `cupy.angle()` introduced in "
+            "https://github.com/cupy/cupy/pull/6905",
+        ),
+    ),
 ]
 
 
