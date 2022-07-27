@@ -583,6 +583,15 @@ def test_array_cumreduction_out(func):
     assert_eq(x, func(np.ones((10, 10)), axis=0))
 
 
+@pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
+def test_cumreduction_with_cupy(func):
+    cupy = pytest.importorskip("cupy")
+    a = cupy.ones((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+    result = func(b, axis=0)
+    assert_eq(result, func(a, axis=0))
+
+
 @pytest.mark.parametrize(
     "npfunc,daskfunc", [(np.sort, da.topk), (np.argsort, da.argtopk)]
 )
