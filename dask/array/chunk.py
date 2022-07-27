@@ -1,6 +1,5 @@
 """ A set of NumPy functions to apply per chunk """
 import contextlib
-import sys
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 from numbers import Integral
@@ -45,29 +44,11 @@ def keepdims_wrapper(a_callable):
     return keepdims_wrapped_callable
 
 
-def identity_wrapper(a_callable, identity):
-    """
-    A wrapper for min/max functions
-    """
-
-    @wraps(a_callable)
-    def identity_wrapped_callable(x, axis=None, keepdims=None, *args, **kwargs):
-        if x.size == 0:
-            return np.array([identity])
-        else:
-            r = a_callable(x, axis=axis, keepdims=keepdims, *args, **kwargs)
-            return r
-
-    return identity_wrapped_callable
-
-
 # Wrap NumPy functions to ensure they provide keepdims.
 
 sum = np.sum
 prod = np.prod
-min_wrapped = identity_wrapper(np.min, sys.maxsize)
 min = np.min
-max_wrapped = identity_wrapper(np.max, -sys.maxsize)
 max = np.max
 argmin = keepdims_wrapper(np.argmin)
 nanargmin = keepdims_wrapper(np.nanargmin)

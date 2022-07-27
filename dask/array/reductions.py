@@ -2,6 +2,7 @@ import builtins
 import contextlib
 import math
 import operator
+import sys
 from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
@@ -417,7 +418,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
-        chunk.min_wrapped,
+        chunk_min,
         chunk.min,
         axis=axis,
         keepdims=keepdims,
@@ -427,14 +428,20 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
+def chunk_min(x, axis=None, keepdims=None, *args, **kwargs):
+    if x.size == 0:
+        return np.array([sys.maxsize])
+    else:
+        r = np.min(x, axis=axis, keepdims=keepdims, *args, **kwargs)
+        return r
+
+
 @implements(np.max, np.amax)
 @derived_from(np)
-def max(
-    a, axis=None, keepdims=False, split_every=None, out=None, maxtype=chunk.max_wrapped
-):
+def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
-        maxtype,
+        chunk_max,
         chunk.max,
         axis=axis,
         keepdims=keepdims,
@@ -442,6 +449,14 @@ def max(
         split_every=split_every,
         out=out,
     )
+
+
+def chunk_max(x, axis=None, keepdims=None, *args, **kwargs):
+    if x.size == 0:
+        return np.array([-sys.maxsize])
+    else:
+        r = np.max(x, axis=axis, keepdims=keepdims, *args, **kwargs)
+        return r
 
 
 @derived_from(np)
