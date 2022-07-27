@@ -3575,6 +3575,18 @@ def test_astype_gh1151():
     assert_eq(a.astype(np.int16), b.astype(np.int16))
 
 
+def test_astype_gh9318():
+    # `order`` kwarg in `astype` should not cause an error
+    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], order="C")
+    b = da.from_array(a, chunks=(2, 2))
+    a.astype(float, order="F")
+    b.astype(float, order="F")  # if no error at this line, pytest passes
+    # This assertion currently failing because of issue https://github.com/dask/dask/issues/9316
+    # result = b.compute()
+    # assert a.flags.c_contiguous == result.flags.c_contiguous
+    # assert a.flags.f_contiguous == result.flags.f_contiguous
+
+
 def test_elemwise_name():
     assert (da.ones(5, chunks=2) + 1).name.startswith("add-")
 
