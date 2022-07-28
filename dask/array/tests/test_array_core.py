@@ -3608,6 +3608,12 @@ def test_array_picklable(array):
     a2 = loads(dumps(array))
     assert_eq(array, a2)
 
+    a3 = da.ma.masked_equal(array, 0)
+    assert isinstance(a3._meta, np.ma.MaskedArray)
+    a4 = loads(dumps(a3))
+    assert_eq(a3, a4)
+    assert isinstance(a4._meta, np.ma.MaskedArray)
+
 
 def test_from_array_raises_on_bad_chunks():
     x = np.ones(10)
