@@ -57,7 +57,7 @@ including information about how the chunks should be structured.
       Now we have a Dask DataFrame with 2 columns and 2400 rows composed of 10 partitions where
       each partition has 240 rows. Each partition represents a piece of the data.
 
-      Here are some key properties of an DataFrame:
+      Here are some key properties of a DataFrame:
 
       .. code-block:: python
 
