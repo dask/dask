@@ -62,6 +62,7 @@ Keyword arguments in custom Dask graphs
 
 Sometimes, you may want to pass keyword arguments to a function 
 in a custom Dask graph.
+You can do that using the :func:`dask.utils.apply`, like this:
 
 .. code-block:: python
 
