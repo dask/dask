@@ -549,7 +549,7 @@ Dask Name: {name}, {layers}"""
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
-            layers=maybe_pluralize(len(self.dask.layers), "layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @property
@@ -3504,7 +3504,7 @@ Dask Name: {name}, {layers}""".format(
             data=self.to_string(),
             footer=footer,
             name=key_split(self._name),
-            layers=maybe_pluralize(len(self.dask.layers), "layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def rename(self, index=None, inplace=False, sorted_index=False):
@@ -5799,7 +5799,7 @@ class DataFrame(_Frame):
         return get_template("dataframe.html.j2").render(
             data=data,
             name=self._name,
-            layers=maybe_pluralize(len(self.dask.layers), "layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _repr_data(self):
@@ -5821,7 +5821,7 @@ class DataFrame(_Frame):
         return get_template("dataframe.html.j2").render(
             data=data,
             name=self._name,
-            layers=maybe_pluralize(len(self.dask.layers), "layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _select_columns_or_index(self, columns_or_index):
