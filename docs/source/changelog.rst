@@ -1,6 +1,42 @@
 Changelog
 =========
 
+.. _v2022.7.1:
+
+2022.7.1
+--------
+
+Released on July 22, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Return Dask array if all axes are squeezed (:pr:`9250`) `Pavithra Eswaramoorthy`_
+- Make cycle reported by toposort shorter (:pr:`9068`) `Erik Welch`_
+- Unknown chunk slicing - raise informative error (:pr:`9285`) `Naty Clementi`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in ``HighLevelGraph.cull`` (:pr:`9267`) `Richard (Rick) Zamora`_
+- Sort categories (:pr:`9264`) `Pavithra Eswaramoorthy`_
+- Use ``max`` (instead of ``sum``) for calculating ``warnsize`` (:pr:`9235`) `Pavithra Eswaramoorthy`_
+- Fix bug when filtering on partitioned column with pyarrow (:pr:`9252`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Updated repartition documentation to add note about ``partition_size`` (:pr:`9288`) `Dylan Stewart`_
+- Don't include docs in ``Array`` methods, just refer to module docs (:pr:`9244`) `Julia Signell`_
+- Remove outdated reference to scheduler and worker dashboards (:pr:`9278`) `Pavithra Eswaramoorthy`_
+- Fix a few typos (:pr:`9270`) `Tim Gates`_
+- Adds an custom aggregate example using numpy methods (:pr:`9260`) `geraninam`_
+
+Maintenance
+^^^^^^^^^^^
+- Add type annotations to ``dd.from_pandas`` and ``dd.from_delayed`` (:pr:`9237`) `Michael Milton`_
+- Update ``calculate_divisions`` docstring (:pr:`9275`) `Tom Augspurger`_
+- Update ``test_plot_multiple`` for upcoming ``bokeh`` release (:pr:`9261`) `James Bourbeau`_
+- Add typing to common array properties (:pr:`9255`) `Illviljan`_
+
+
 .. _v2022.7.0:
 
 2022.7.0
@@ -5742,3 +5778,6 @@ Other
 .. _`Ben`: https://github.com/benjaminhduncan
 .. _`Angus Hollands`: https://github.com/agoose77
 .. _`Lucas Miguel Ponce`: https://github.com/lucasmsp
+.. _`Dylan Stewart`: https://github.com/drstewart19
+.. _`geraninam`: https://github.com/geraninam
+.. _`Michael Milton`: https://github.com/multimeric

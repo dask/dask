@@ -537,14 +537,20 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         # Create a mapping of chunk number in the incoming array to
         # (start row, stop row) tuples. These tuples will be used to create a sequential
         # RangeIndex later on that is continuous over the whole DataFrame.
+        n_elements = sum(x.chunks[0])
         divisions = [0]
         stop = 0
         index_mapping = {}
         for i, increment in enumerate(x.chunks[0]):
             stop += increment
             index_mapping[(i,)] = (divisions[i], stop)
+
+            # last division corrected, even if there are empty chunk(s) at the end
+            if stop == n_elements:
+                stop -= 1
+
             divisions.append(stop)
-        divisions[-1] -= 1
+
         arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
     if is_series_like(meta):
