@@ -3,7 +3,7 @@
 set -e
 
 if [[ $PARALLEL == 'true' ]]; then
-    export XTRATESTARGS="$XTRATESTARGS"
+    export XTRATESTARGS="-n4 $XTRATESTARGS"
 fi
 
 if [[ $COVERAGE == 'true' ]]; then
