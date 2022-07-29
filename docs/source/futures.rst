@@ -877,7 +877,7 @@ parameter to avoid asynchronous blocking:
 
 .. code-block:: python
 
-   df3 = await client.compute(dd.read_parquet('/tmp/some.parquet', compute=False))
+   df3 = await client.compute(dd.to_parquet('/tmp/some.parquet', compute=False))
 
 API
 ---
