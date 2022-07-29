@@ -872,7 +872,7 @@ All operations that require talking to the remote worker are awaitable:
 
        n = await counter.n  # attribute access also must be awaited
 
-Generally, all I/O operations should be done using the :code:`compute=False` 
+Generally, all I/O operations that trigger computations (e.g. ``to_parquet``) should be done using the ``compute=False`` 
 parameter to avoid asynchronous blocking:
 
 .. code-block:: python
