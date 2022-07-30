@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 import warnings
 
@@ -8,6 +9,7 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
+import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar
@@ -88,7 +90,14 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.fs,
             self.engine,
             self.meta,
-            [(p["piece"], p.get("kwargs", {})) for p in part],
+            [
+                # Temporary workaround for HLG serialization bug
+                # (see: https://github.com/dask/dask/issues/8581)
+                (p.data["piece"], p.data.get("kwargs", {}))
+                if hasattr(p, "data")
+                else (p["piece"], p.get("kwargs", {}))
+                for p in part
+            ],
             self.columns,
             self.index,
             self.common_kwargs,
@@ -212,7 +221,7 @@ def read_parquet(
         of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
+        as an AND conjunction. To express OR in predicates, one must use the
         (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
@@ -248,7 +257,9 @@ def read_parquet(
         This option will be ignored if ``index`` is not specified and there is
         no physical index column specified in the custom "pandas" Parquet
         metadata. Note that ``calculate_divisions=True`` may be extremely slow
-        on some systems, and should be avoided when reading from remote storage.
+        when no global ``_metadata`` file is present, especially when reading
+        from remote storage. Set this to ``True`` only when known divisions
+        are needed for your workload (see :ref:`dataframe-design-partitions).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
@@ -531,21 +542,32 @@ def read_parquet(
             common_kwargs,
         )
 
-    # Construct the output collection with from_map
-    return from_map(
-        io_func,
-        parts,
-        meta=meta,
-        divisions=divisions,
-        label="read-parquet",
-        token=tokenize(path, **input_kwargs),
-        enforce_metadata=False,
-        creation_info={
-            "func": read_parquet,
-            "args": (path,),
-            "kwargs": input_kwargs,
-        },
-    )
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        # Construct the output collection with from_map
+        return from_map(
+            io_func,
+            parts,
+            meta=meta,
+            divisions=divisions,
+            label="read-parquet",
+            token=tokenize(path, **input_kwargs),
+            enforce_metadata=False,
+            creation_info={
+                "func": read_parquet,
+                "args": (path,),
+                "kwargs": input_kwargs,
+            },
+        )
 
 
 def check_multi_support(engine):
@@ -869,32 +891,43 @@ def to_parquet(
         if len(set(filenames)) < len(filenames):
             raise ValueError("``name_function`` must produce unique filenames.")
 
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
     # Create Blockwise layer for parquet-data write
-    data_write = df.map_partitions(
-        ToParquetFunctionWrapper(
-            engine,
-            path,
-            fs,
-            partition_on,
-            write_metadata_file,
-            i_offset,
-            name_function,
-            toolz.merge(
-                kwargs,
-                {"compression": compression, "custom_metadata": custom_metadata},
-                extra_write_kwargs,
+    with ctx:
+        data_write = df.map_partitions(
+            ToParquetFunctionWrapper(
+                engine,
+                path,
+                fs,
+                partition_on,
+                write_metadata_file,
+                i_offset,
+                name_function,
+                toolz.merge(
+                    kwargs,
+                    {"compression": compression, "custom_metadata": custom_metadata},
+                    extra_write_kwargs,
+                ),
             ),
-        ),
-        BlockIndex((df.npartitions,)),
-        # Pass in the original metadata to avoid
-        # metadata emulation in `map_partitions`.
-        # This is necessary, because we are not
-        # expecting a dataframe-like output.
-        meta=df._meta,
-        enforce_metadata=False,
-        transform_divisions=False,
-        align_dataframes=False,
-    )
+            BlockIndex((df.npartitions,)),
+            # Pass in the original metadata to avoid
+            # metadata emulation in `map_partitions`.
+            # This is necessary, because we are not
+            # expecting a dataframe-like output.
+            meta=df._meta,
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
+        )
 
     # Collect metadata and write _metadata.
     # TODO: Use tree-reduction layer (when available)
@@ -1210,7 +1243,7 @@ def apply_filters(parts, statistics, filters):
         filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
+        as an AND conjunction. To express OR in predicates, one must use the
         (preferred) List[List[Tuple]] notation.
 
         Note that the "fastparquet" engine does not currently support DNF for

@@ -23,8 +23,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
-  # resolver was pulling in old versions, so hard-coding floor
-  # https://github.com/dask/dask/pull/8505
+  - pyspark
   - tiledb>=2.5.0
   - xarray
   - fsspec
@@ -38,6 +37,10 @@ dependencies:
   - blosc
   - boto3
   - botocore
+  # `werkzeug=2.2.0` caused S3-related tests to hang. Temporarily
+  # pinning as a workaround. See https://github.com/dask/dask/issues/9323
+  # for more details.
+  - werkzeug<2.2.0
   - bokeh
   - httpretty
   - aiohttp
