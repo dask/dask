@@ -2565,7 +2565,21 @@ def test_average(a, returned):
     assert_eq(np_avg, da_avg)
 
 
-def test_average_weights():
+@pytest.mark.parametrize("a", [np.arange(11), np.arange(6).reshape((3, 2))])
+def test_average_keepdims(a):
+    d_a = da.from_array(a, chunks=2)
+
+    # np.average only takes keepdims keyword from v1.23, so use reshape to form
+    # the expected array.
+    expected_shape = (1,) * a.ndim
+    np_avg = np.average(a).reshape(expected_shape)
+    da_avg = da.average(d_a, keepdims=True)
+
+    assert_eq(np_avg, da_avg)
+
+
+@pytest.mark.parametrize("keepdims", [False, True])
+def test_average_weights(keepdims):
     a = np.arange(6).reshape((3, 2))
     d_a = da.from_array(a, chunks=2)
 
@@ -2573,7 +2587,12 @@ def test_average_weights():
     d_weights = da.from_array(weights, chunks=2)
 
     np_avg = np.average(a, weights=weights, axis=1)
-    da_avg = da.average(d_a, weights=d_weights, axis=1)
+    if keepdims:
+        # np.average only takes keepdims keyword from v1.23, so use reshape to
+        # form the expected array.
+        np_avg = np_avg.reshape((3, 1))
+
+    da_avg = da.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
     assert_eq(np_avg, da_avg)
 

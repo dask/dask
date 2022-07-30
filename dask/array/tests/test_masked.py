@@ -369,7 +369,8 @@ def test_set_fill_value():
         da.ma.set_fill_value(dmx, dx)
 
 
-def test_average_weights_with_masked_array():
+@pytest.mark.parametrize("keepdims", [False, True])
+def test_average_weights_with_masked_array(keepdims):
     mask = np.array([[True, False], [True, True], [False, True]])
     data = np.arange(6).reshape((3, 2))
     a = np.ma.array(data, mask=mask)
@@ -379,7 +380,11 @@ def test_average_weights_with_masked_array():
     d_weights = da.from_array(weights, chunks=2)
 
     np_avg = np.ma.average(a, weights=weights, axis=1)
-    da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
+    if keepdims:
+        # np.average only takes keepdims keyword from v1.23, so use reshape to
+        # form the expected array.
+        np_avg = np_avg.reshape((3, 1))
+    da_avg = da.ma.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
     assert_eq(np_avg, da_avg)
 
