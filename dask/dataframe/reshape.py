@@ -92,7 +92,7 @@ def get_dummies(
     0              uint8  uint8  uint8
     2                ...    ...    ...
     3                ...    ...    ...
-    Dask Name: get_dummies, 4 tasks
+    Dask Name: get_dummies, 2 graph layers
     >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
        a  b  c
     0  1  0  0
