@@ -760,6 +760,7 @@ def _get_symmat(size):
     return lA.dot(lA.T)
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9335", strict=False)
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (30, 6)])
 def test_solve_sym_pos(shape, chunk):
     np.random.seed(1)
