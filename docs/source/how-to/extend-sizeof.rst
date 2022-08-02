@@ -1,5 +1,5 @@
 Extend `sizeof`
-============
+===============
 
 When Dask needs to compute the size of an object in bytes, e.g. to determine which objects to spill to disk, it uses the ``dask.sizeof.sizeof`` registration mechanism. Users who need to define a ``sizeof`` implementation for their own objects can use ``sizeof.register``:
 
