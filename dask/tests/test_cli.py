@@ -35,8 +35,8 @@ def test_info_versions():
     assert table["Platform"] == platform.uname().system
 
     try:
-        distributed_version = importlib.metadata.version("distributed")
-    except importlib.metadata.PackageNotFoundError:
+        from distributed import __version__ as distributed_version
+    except ImportError:
         distributed_version = None
 
     assert table["distributed"] == distributed_version
