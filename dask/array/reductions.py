@@ -23,9 +23,9 @@ from dask.array.core import (
     unknown_chunk_message,
 )
 from dask.array.creation import arange, diagonal
-
-# Keep empty_lookup here for backwards compatibility
-from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
+from dask.array.dispatch import divide_lookup
+from dask.array.dispatch import nannumel_lookup as nannumel
+from dask.array.dispatch import numel_lookup as numel
 from dask.array.utils import (
     asarray_safe,
     compute_meta,
@@ -610,44 +610,6 @@ def _nanmax_skip(x_chunk, axis, keepdims):
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
         )
-
-
-def numel(x, **kwargs):
-    """A reduction to count the number of elements"""
-
-    if hasattr(x, "mask"):
-        return chunk.sum(np.ones_like(x), **kwargs)
-
-    shape = x.shape
-    keepdims = kwargs.get("keepdims", False)
-    axis = kwargs.get("axis", None)
-    dtype = kwargs.get("dtype", np.float64)
-
-    if axis is None:
-        prod = np.prod(shape, dtype=dtype)
-        return (
-            np.broadcast_to(np.array(prod, dtype=dtype), shape=(1,) * len(shape))
-            if keepdims is True
-            else prod
-        )
-
-    if not isinstance(axis, tuple or list):
-        axis = [axis]
-
-    prod = math.prod(shape[dim] for dim in axis)
-    if keepdims is True:
-        new_shape = tuple(
-            shape[dim] if dim not in axis else 1 for dim in range(len(shape))
-        )
-    else:
-        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return np.broadcast_to(np.array(prod, dtype=dtype), new_shape)
-
-
-def nannumel(x, **kwargs):
-    """A reduction to count the number of elements"""
-    n = chunk.sum(~(np.isnan(x)), **kwargs)
-    return n.todense() if hasattr(n, "todense") else n
 
 
 def mean_chunk(

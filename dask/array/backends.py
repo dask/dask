@@ -1,10 +1,15 @@
+import math
+
 import numpy as np
 
+from dask.array import chunk
 from dask.array.dispatch import (
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
     empty_lookup,
+    nannumel_lookup,
+    numel_lookup,
     percentile_lookup,
     tensordot_lookup,
 )
@@ -120,6 +125,8 @@ def register_cupy():
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
     percentile_lookup.register(cupy.ndarray, percentile)
+    numel_lookup.register(cupy.ndarray, _numel_arraylike)
+    nannumel_lookup.register(cupy.ndarray, _nannumel)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
@@ -165,6 +172,8 @@ def register_sparse():
 
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
+    numel_lookup.register(sparse.COO, _numel_ndarray)
+    nannumel_lookup.register(sparse.COO, _nannumel_sparse)
 
 
 @tensordot_lookup.register_lazy("scipy")
@@ -203,3 +212,61 @@ def _tensordot_scipy_sparse(a, b, axes):
         return a * b
     elif a_axis == 1 and b_axis == 1:
         return a * b.T
+
+
+@numel_lookup.register(np.ma.masked_array)
+def _numel_masked(x, **kwargs):
+    return chunk.sum(np.ones_like(x), **kwargs)
+
+
+@numel_lookup.register((object, np.ndarray))
+def _numel_ndarray(x, **kwargs):
+    return _numel(x, coerce_ndarray=True, **kwargs)
+
+
+def _numel_arraylike(x, **kwargs):
+    return _numel(x, coerce_ndarray=False, **kwargs)
+
+
+def _numel(x, coerce_ndarray: bool, **kwargs):
+    """A reduction to count the number of elements"""
+    shape = x.shape
+    keepdims = kwargs.get("keepdims", False)
+    axis = kwargs.get("axis", None)
+    dtype = kwargs.get("dtype", np.float64)
+
+    if axis is None:
+        prod = np.prod(shape, dtype=dtype)
+        if keepdims is False:
+            return prod
+
+        if coerce_ndarray:
+            return np.broadcast_to(np.array(prod, dtype=dtype), shape=(1,) * len(shape))
+        else:
+            return np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
+
+    if not isinstance(axis, (tuple, list)):
+        axis = [axis]
+
+    prod = math.prod(shape[dim] for dim in axis)
+    if keepdims is True:
+        new_shape = tuple(
+            shape[dim] if dim not in axis else 1 for dim in range(len(shape))
+        )
+    else:
+        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
+
+    if coerce_ndarray:
+        return np.broadcast_to(np.array(prod, dtype=dtype), new_shape)
+    else:
+        return np.full_like(x, prod, shape=new_shape, dtype=dtype)
+
+
+@nannumel_lookup.register((object, np.ndarray))
+def _nannumel(x, **kwargs):
+    """A reduction to count the number of elements, excluding nans"""
+    return chunk.sum(~(np.isnan(x)), **kwargs)
+
+
+def _nannumel_sparse(x, **kwargs):
+    return _nannumel(x, **kwargs).todense()
