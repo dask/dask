@@ -616,7 +616,7 @@ def numel(x, **kwargs):
     """A reduction to count the number of elements"""
 
     if hasattr(x, "mask"):
-        return chunk.sum(np.broadcast_to(1, shape=x.shape), **kwargs)
+        return chunk.sum(np.ones_like(x), **kwargs)
 
     shape = x.shape
     keepdims = kwargs.get("keepdims", False)
