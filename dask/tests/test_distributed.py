@@ -9,9 +9,15 @@ from functools import partial
 from operator import add
 
 from distributed.utils_test import cleanup  # noqa F401
-from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
+from distributed.utils_test import (  # noqa F401
+    cluster,
+    cluster_fixture,
+    gen_cluster,
+    loop,
+    loop_in_thread,
+    varying,
+)
 
 import dask
 import dask.bag as db
@@ -21,6 +27,7 @@ from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
+from dask.utils_test import inc
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
