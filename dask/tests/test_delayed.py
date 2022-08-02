@@ -1,6 +1,7 @@
 import pickle
 import types
 from collections import namedtuple
+from dataclasses import dataclass, field
 from functools import partial
 from operator import add, matmul, setitem
 from random import random
@@ -93,22 +94,56 @@ def test_delayed():
 
 
 def test_delayed_with_dataclass():
-    dataclasses = pytest.importorskip("dataclasses")
-
-    # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass(
-        "ADataClass", [("a", int), ("b", int, dataclasses.field(init=False))]
-    )
+    @dataclass
+    class ADataClass:
+        a: int
 
     literal = dask.delayed(3)
-    with_class = dask.delayed({"a": ADataClass(a=literal)})
+    with_class = dask.delayed({"data": ADataClass(a=literal)})
 
     def return_nested(obj):
-        return obj["a"].a
+        return obj["data"].a
 
     final = delayed(return_nested)(with_class)
 
     assert final.compute() == 3
+
+
+def test_delayed_with_dataclass_with_custom_init():
+    @dataclass
+    class ADataClass:
+        a: int
+
+        def __init__(self, b: int):
+            self.a = b
+
+    literal = dask.delayed(3)
+
+    with pytest.raises(TypeError) as e:
+        dask.delayed({"data": ADataClass(b=literal)})
+
+    assert e.match(r"ADataClass")
+    assert e.match(r"custom __init__ is not supported")
+
+
+def test_delayed_with_dataclass_with_uninitialized_field():
+    @dataclass
+    class ADataClass:
+        a: int
+        b: int = field(init=False)
+
+    literal = dask.delayed(3)
+
+    def init_nested(a):
+        data = ADataClass(a=a)
+        data.b = 4
+        return {"data": data}
+
+    with pytest.raises(ValueError) as e:
+        dask.delayed(init_nested(literal))
+
+    e.match(r"ADataClass")
+    e.match(r"init=False")
 
 
 def test_operators():

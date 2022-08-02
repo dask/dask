@@ -3,7 +3,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 
 from tlz import concat, curry, merge, unique
 
@@ -111,6 +111,23 @@ def unpack_collections(expr):
         return (slice,) + tuple(args), collections
 
     if is_dataclass(expr):
+        try:
+            _fields = {
+                f.name: getattr(expr, f.name)
+                for f in fields(expr)
+                if hasattr(expr, f.name)
+            }
+            replace(expr, **_fields)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using a custom __init__ is not supported."
+            ) from e
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using fields with `init=False` are not supported."
+            ) from e
         args, collections = unpack_collections(
             [
                 [f.name, getattr(expr, f.name)]
