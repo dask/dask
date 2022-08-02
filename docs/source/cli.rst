@@ -16,7 +16,7 @@ Command to open the Dask documentation website.
 dask info
 ~~~~~~~~~
 
-Command to inspect information about a Dask installation.
+Command to inspect the details of your Dask installation.
 
 Extending the Dask CLI
 ----------------------
