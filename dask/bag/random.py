@@ -9,7 +9,7 @@ from tlz import first
 from dask.bag.core import Bag
 
 
-def sample(population, k):
+def sample(population, k, split_every=None):
     """Chooses k unique random elements from a bag.
 
     Returns a new bag containing elements from the population while
@@ -21,6 +21,9 @@ def sample(population, k):
         Elements to sample.
     k: integer, optional
         Number of elements to sample.
+    split_every: int (optional)
+        Group partitions into groups of this size while performing reduction.
+        Defaults to 8.
 
     Examples
     --------
@@ -30,11 +33,11 @@ def sample(population, k):
     >>> list(random.sample(b, 3).compute())  # doctest: +SKIP
     [1, 3, 5]
     """
-    res = _sample(population=population, k=k)
+    res = _sample(population=population, k=k, split_every=split_every)
     return res.map_partitions(first)
 
 
-def choices(population, k=1):
+def choices(population, k=1, split_every=None):
     """
     Return a k sized list of elements chosen with replacement.
 
@@ -44,6 +47,9 @@ def choices(population, k=1):
         Elements to sample.
     k: integer, optional
         Number of elements to sample.
+    split_every: int (optional)
+        Group partitions into groups of this size while performing reduction.
+        Defaults to 8.
 
     Examples
     --------
@@ -53,7 +59,7 @@ def choices(population, k=1):
     >>> list(random.choices(b, 3).compute())  # doctest: +SKIP
     [1, 1, 5]
     """
-    res = _sample_with_replacement(population=population, k=k)
+    res = _sample_with_replacement(population=population, k=k, split_every=split_every)
     return res.map_partitions(first)
 
 
@@ -104,11 +110,12 @@ def _weighted_sampling_without_replacement(population, weights, k):
     return [population[x[1]] for x in heapq.nlargest(k, elt)]
 
 
-def _sample(population, k):
+def _sample(population, k, split_every):
     return population.reduction(
         partial(_sample_map_partitions, k=k),
         partial(_sample_reduce, k=k, replace=False),
         out_type=Bag,
+        split_every=split_every,
     )
 
 
@@ -137,11 +144,12 @@ def _sample_map_partitions(population, k):
     return reservoir, stream_length
 
 
-def _sample_with_replacement(population, k):
+def _sample_with_replacement(population, k, split_every):
     return population.reduction(
         partial(_sample_with_replacement_map_partitions, k=k),
         partial(_sample_reduce, k=k, replace=True),
         out_type=Bag,
+        split_every=split_every,
     )
 
 
