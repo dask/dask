@@ -916,23 +916,15 @@ def test_getitem_avoids_large_chunks():
             assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
-@pytest.mark.parametrize(
-    "chunks",
-    [
-        ((1, 1, 1, 1), (np.nan,), (np.nan,)),
-        pytest.param(
-            ((np.nan, np.nan, np.nan, np.nan), (500,), (500,)),
-            marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6586"),
-        ),
-    ],
-)
 def test_getitem_avoids_large_chunks_missing(chunks):
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    with dask.config.set({"array.slicing.split-large-chunks": True}):
+    with dask.config.set(
+        {"array.chunk-size": "0.1Mb", "array.slicing.split-large-chunks": True}
+    ):
         a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
         arr = da.from_array(a, chunks=(1, 500, 500))
-        arr._chunks = chunks
+        arr._chunks = ((1, 1, 1, 1), (np.nan,), (np.nan,))
         indexer = [0, 1] + [2] * 100 + [3]
         expected = a[indexer]
         result = arr[indexer]
