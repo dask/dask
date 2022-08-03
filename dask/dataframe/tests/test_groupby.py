@@ -2030,7 +2030,7 @@ def test_df_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group")
 
@@ -2051,7 +2051,7 @@ def test_df_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmin(skipna=skipna)
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
@@ -2085,7 +2085,7 @@ def test_df_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmax(skipna=skipna)
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
@@ -2098,7 +2098,7 @@ def test_series_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = (
         pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group").squeeze()
@@ -2121,7 +2121,7 @@ def test_series_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
@@ -2157,7 +2157,7 @@ def test_series_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)

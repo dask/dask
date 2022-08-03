@@ -1137,7 +1137,7 @@ def test_drop_duplicates_subset():
 
 def test_get_partition():
     pdf = pd.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
-    ddf = dd.from_pandas(pdf, 3)
+    ddf = dd.from_pandas(pdf, chunksize=4)
     assert ddf.divisions == (0, 4, 8, 9)
 
     # DataFrame
@@ -1389,7 +1389,9 @@ def test_quantile_missing(method):
     if method == "tdigest":
         pytest.importorskip("crick")
     df = pd.DataFrame({"A": [0, np.nan, 2]})
-    ddf = dd.from_pandas(df, 2)
+    # TODO: Test npartitions=2
+    # (see https://github.com/dask/dask/issues/9227)
+    ddf = dd.from_pandas(df, npartitions=1)
     expected = df.quantile()
     result = ddf.quantile(method=method)
     assert_eq(result, expected)
@@ -2077,7 +2079,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([1, 2, 3, 4, 5, 6] * 10, dtype=dtype),
+        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -2925,7 +2927,7 @@ def test_to_dask_array_raises(as_frame):
 @pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
-    a = dd.from_pandas(s, chunksize=2)
+    a = dd.from_pandas(s, npartitions=2)
 
     if as_frame:
         a = a.to_frame()
@@ -2948,7 +2950,7 @@ def test_to_dask_array_unknown(as_frame):
 @pytest.mark.parametrize(
     "lengths,as_frame,meta",
     [
-        ([2, 3], False, None),
+        ([2, 2, 1], False, None),
         (True, False, None),
         (True, False, np.array([], dtype="f4")),
     ],
@@ -2963,7 +2965,7 @@ def test_to_dask_array(meta, as_frame, lengths):
     result = a.to_dask_array(lengths=lengths, meta=meta)
     assert isinstance(result, da.Array)
 
-    expected_chunks = ((2, 3),)
+    expected_chunks = ((2, 2, 1),)
 
     if as_frame:
         expected_chunks = expected_chunks + ((1,),)
@@ -3116,7 +3118,7 @@ def test_cov():
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.cov(db)
     res2 = da.cov(db, split_every=2)
@@ -3160,7 +3162,7 @@ def test_corr():
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.corr(db)
     res2 = da.corr(db, split_every=2)
@@ -3199,11 +3201,11 @@ def test_corr_same_name():
 def test_cov_corr_meta():
     df = pd.DataFrame(
         {
-            "a": np.array([1, 2, 3]),
-            "b": np.array([1.0, 2.0, 3.0], dtype="f4"),
-            "c": np.array([1.0, 2.0, 3.0]),
+            "a": np.array([1, 2, 3, 4]),
+            "b": np.array([1.0, 2.0, 3.0, 4.0], dtype="f4"),
+            "c": np.array([1.0, 2.0, 3.0, 4.0]),
         },
-        index=pd.Index([1, 2, 3], name="myindex"),
+        index=pd.Index([1, 2, 3, 4], name="myindex"),
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.corr(), df.corr())
@@ -3648,7 +3650,17 @@ def test_categorize_info():
         {"x": [1, 2, 3, 4], "y": pd.Series(list("aabc")), "z": pd.Series(list("aabc"))},
         index=[0, 1, 2, 3],
     )
-    ddf = dd.from_pandas(df, npartitions=4).categorize(["y"])
+
+    # Use from_map to construct custom partitioning
+    def myfunc(bounds):
+        start, stop = bounds
+        return df.iloc[start:stop]
+
+    ddf = dd.from_map(
+        myfunc,
+        [(0, 1), (1, 2), (2, 4)],
+        divisions=[0, 1, 2, 3],
+    ).categorize(["y"])
 
     # Verbose=False
     buf = StringIO()
@@ -4194,7 +4206,12 @@ def test_del():
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
 def test_memory_usage_dataframe(index, deep):
-    df = pd.DataFrame({"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]})
+    df = pd.DataFrame(
+        {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]},
+        # Dask will use more memory for a multi-partition
+        # RangeIndex, so we must set an index explicitly
+        index=[1, 2, 3],
+    )
     ddf = dd.from_pandas(df, npartitions=2)
     expected = df.memory_usage(index=index, deep=deep)
     result = ddf.memory_usage(index=index, deep=deep)
@@ -5246,7 +5263,7 @@ def test_from_dict(dtype, orient, npartitions):
     )
     if orient == "index":
         # DataFrame only has two rows with this orientation
-        assert result.npartitions == 1
+        assert result.npartitions == min(npartitions, 2)
     else:
         assert result.npartitions == npartitions
     assert_eq(result, expected)
