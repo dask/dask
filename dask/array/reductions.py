@@ -37,7 +37,14 @@ from dask.array.wrap import ones, zeros
 from dask.base import tokenize
 from dask.blockwise import lol_tuples
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import deepmap, derived_from, funcname, getargspec, is_series_like
+from dask.utils import (
+    apply,
+    deepmap,
+    derived_from,
+    funcname,
+    getargspec,
+    is_series_like,
+)
 
 
 def divide(a, b, dtype=None):
@@ -1512,7 +1519,12 @@ def cumreduction(
     dsk = dict()
     for ind in indices:
         shape = tuple(x.chunks[i][ii] if i != axis else 1 for i, ii in enumerate(ind))
-        dsk[(name, "extra") + ind] = (np.full, shape, ident, m.dtype)
+        dsk[(name, "extra") + ind] = (
+            apply,
+            np.full_like,
+            (x._meta, ident, m.dtype),
+            {"shape": shape},
+        )
         dsk[(name,) + ind] = (m.name,) + ind
 
     for i in range(1, n):
@@ -1532,7 +1544,7 @@ def cumreduction(
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    result = Array(graph, name, x.chunks, m.dtype)
+    result = Array(graph, name, x.chunks, m.dtype, meta=x._meta)
     return handle_out(out, result)
 
 
