@@ -919,9 +919,7 @@ def test_getitem_avoids_large_chunks():
 def test_getitem_avoids_large_chunks_missing():
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    with dask.config.set(
-        {"array.chunk-size": "0.1Mb", "array.slicing.split-large-chunks": True}
-    ):
+    with dask.config.set({"array.chunk-size": "0.1Mb"}):
         a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
         arr = da.from_array(a, chunks=(1, 500, 500))
         arr._chunks = ((1, 1, 1, 1), (np.nan,), (np.nan,))
