@@ -27,7 +27,7 @@ def cli():
     pass
 
 
-@cli.command
+@cli.command()
 def docs():
     """Open Dask documentation (https://docs.dask.org/) in a web browser."""
     import webbrowser
