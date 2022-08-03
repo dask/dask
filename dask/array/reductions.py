@@ -1521,9 +1521,9 @@ def cumreduction(
         shape = tuple(x.chunks[i][ii] if i != axis else 1 for i, ii in enumerate(ind))
         dsk[(name, "extra") + ind] = (
             apply,
-            np.full,
-            (shape, ident, m.dtype),
-            {"like": x._meta},
+            np.full_like,
+            (x._meta, ident, m.dtype),
+            {"shape": shape},
         )
         dsk[(name,) + ind] = (m.name,) + ind
 
