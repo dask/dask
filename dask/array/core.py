@@ -3329,6 +3329,12 @@ def from_array(
         If False then chunks are passed through unchanged.
         If None (default) then we use True if the ``__array_function__`` method
         is undefined.
+
+        .. note::
+
+            Dask does not preserve the memory layout of the original array when
+            the array is created using Fortran rather than C ordering.
+
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.
