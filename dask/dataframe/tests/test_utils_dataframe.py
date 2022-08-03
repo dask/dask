@@ -126,12 +126,18 @@ def test_make_meta():
     assert len(meta.index) == 0
 
     # Categoricals
-    meta = make_meta({"a": "category"}, parent_meta=df)
+    meta = make_meta({"a": "category"}, parent_meta=df)  # fails
     assert len(meta.a.cat.categories) == 1
     assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
     meta = make_meta(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+
+    # Categorials with Index
+    meta = make_meta({"a": "category", "b": "int64"}, index=idx)
+    assert len(meta.a.cat.categories) == 1
+    assert meta.index.dtype == "int64"
+    assert len(meta.index) == 0
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
