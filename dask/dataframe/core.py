@@ -7362,7 +7362,9 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        original_divisions = divisions = pd.Series(df.divisions)
+        # Drop duplcates in case last partition has same
+        # value for min and max division
+        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)
