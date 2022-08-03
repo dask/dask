@@ -117,6 +117,8 @@ def _tensordot(a, b, axes=2):
 
 @tensordot_lookup.register_lazy("cupy")
 @concatenate_lookup.register_lazy("cupy")
+@nannumel_lookup.register_lazy("cupy")
+@numel_lookup.register_lazy("cupy")
 def register_cupy():
     import cupy
 
@@ -167,6 +169,8 @@ def register_cupyx():
 
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
+@nannumel_lookup.register_lazy("sparse")
+@numel_lookup.register_lazy("sparse")
 def register_sparse():
     import sparse
 

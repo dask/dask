@@ -23,9 +23,7 @@ from dask.array.core import (
     unknown_chunk_message,
 )
 from dask.array.creation import arange, diagonal
-from dask.array.dispatch import divide_lookup
-from dask.array.dispatch import nannumel_lookup as nannumel
-from dask.array.dispatch import numel_lookup as numel
+from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
 from dask.array.utils import (
     asarray_safe,
     compute_meta,
@@ -44,6 +42,14 @@ def divide(a, b, dtype=None):
     key = lambda x: getattr(x, "__array_priority__", float("-inf"))
     f = divide_lookup.dispatch(type(builtins.max(a, b, key=key)))
     return f(a, b, dtype=dtype)
+
+
+def numel(x, **kwargs):
+    return numel_lookup(x, **kwargs)
+
+
+def nannumel(x, **kwargs):
+    return nannumel_lookup(x, **kwargs)
 
 
 def reduction(
