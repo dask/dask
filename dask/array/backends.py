@@ -176,6 +176,9 @@ def register_sparse():
 
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
+    # Enforce ndarray for the numel result, since the sparse
+    # array will wind up being dense with an unpredictable fill_value.
+    # https://github.com/dask/dask/issues/7169
     numel_lookup.register(sparse.COO, _numel_ndarray)
     nannumel_lookup.register(sparse.COO, _nannumel_sparse)
 
@@ -220,20 +223,29 @@ def _tensordot_scipy_sparse(a, b, axes):
 
 @numel_lookup.register(np.ma.masked_array)
 def _numel_masked(x, **kwargs):
+    """Numel implementation for masked arrays."""
     return chunk.sum(np.ones_like(x), **kwargs)
 
 
 @numel_lookup.register((object, np.ndarray))
 def _numel_ndarray(x, **kwargs):
+    """Numel implementation for arrays that want to return numel of type ndarray."""
     return _numel(x, coerce_ndarray=True, **kwargs)
 
 
 def _numel_arraylike(x, **kwargs):
+    """Numel implementation for arrays that want to return numel of the same type."""
     return _numel(x, coerce_ndarray=False, **kwargs)
 
 
 def _numel(x, coerce_ndarray: bool, **kwargs):
-    """A reduction to count the number of elements"""
+    """
+    A reduction to count the number of elements.
+
+    This has an additional kwarg in coerce_ndarray, which determines
+    whether to ensure that the resulting array is an ndarray, or whether
+    we allow it to be other array types via `np.full_like`.
+    """
     shape = x.shape
     keepdims = kwargs.get("keepdims", False)
     axis = kwargs.get("axis", None)
@@ -273,4 +285,11 @@ def _nannumel(x, **kwargs):
 
 
 def _nannumel_sparse(x, **kwargs):
+    """
+    A reduction to count the number of elements in a sparse array, excluding nans.
+    This will in general result in a dense matrix with an unpredictable fill value.
+    So make it official and convert it to dense.
+
+    https://github.com/dask/dask/issues/7169
+    """
     return _nannumel(x, **kwargs).todense()
