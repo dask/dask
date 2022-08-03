@@ -3724,9 +3724,11 @@ def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf2 = ddf.set_index(ddf.index)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    ddf = ddf.set_index("x", drop=False)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
 
@@ -5262,3 +5264,13 @@ def test_empty():
         d.empty
     with pytest.raises(AttributeError, match="may be expensive"):
         d.empty
+
+
+def test_repr_materialize():
+    # DataFrame/Series repr should not materialize
+    # any layers in timeseries->shuffle->getitem
+    s = timeseries(end="2000-01-03").shuffle("id", shuffle="tasks")["id"]
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])
+    s.__repr__()
+    s.to_frame().__repr__()
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])
