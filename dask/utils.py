@@ -37,7 +37,12 @@ if system_encoding == "ascii":
 
 
 def apply(func, args, kwargs=None):
-    """Apply a function with Dask.
+    """Apply a function given its positional and keyword arguments.
+
+    Equivalent to ``func(*args, **kwargs)``
+    Most Dask users will never need to use the ``apply`` function.
+    It is typically only used by people who need to inject
+    keyword argument values into a low level Dask task graph.
 
     Parameters
     ----------
