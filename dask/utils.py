@@ -37,6 +37,31 @@ if system_encoding == "ascii":
 
 
 def apply(func, args, kwargs=None):
+    """Apply a function with Dask.
+
+    Parameters
+    ----------
+    func : callable
+        The function you want to apply.
+    args : tuple
+        A tuple containing all the positional arguments needed for ``func``
+        (eg: ``(arg_1, arg_2, arg_3)``)
+    kwargs : dict, optional
+        A dictionary mapping the keyword arguments
+        (eg: ``{"kwarg_1": value, "kwarg_2": value}``
+
+    Examples
+    --------
+    >>> from dask.utils import apply
+    >>> def add(number, second_number=5):
+    ...     return number + second_number
+    ...
+    >>> apply(add, (10,), {"second_number": 2})  # equivalent to func(*args, **kwargs)
+
+    >>> from dask.utils import apply
+    >>> task = (apply, func, args, kwargs)  # equivalent to func(*args, **kwargs)
+    >>> dsk = {'task-name': task}  # adds the task to a low level Dask task graph
+    """
     if kwargs:
         return func(*args, **kwargs)
     else:
