@@ -3332,7 +3332,7 @@ def from_array(
 
         .. note::
 
-            Dask does not preserve the memory layout of the original arrray when
+            Dask does not preserve the memory layout of the original array when
             the array is created using Fortran rather than C ordering.
 
     fancy : bool, optional
