@@ -916,7 +916,7 @@ def test_getitem_avoids_large_chunks():
             assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
-def test_getitem_avoids_large_chunks_missing(chunks):
+def test_getitem_avoids_large_chunks_missing():
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
     with dask.config.set(
