@@ -1,7 +1,7 @@
 import pickle
 import types
 from collections import namedtuple
-from dataclasses import dataclass, field
+from dataclasses import FrozenInstanceError, dataclass, field
 from functools import partial
 from operator import add, matmul, setitem
 from random import random
@@ -94,7 +94,7 @@ def test_delayed():
 
 
 def test_delayed_with_dataclass():
-    @dataclass
+    @dataclass()
     class ADataClass:
         a: int
 
@@ -109,8 +109,21 @@ def test_delayed_with_dataclass():
     assert final.compute() == 3
 
 
+def test_delayed_with_frozen_dataclass():
+    @dataclass(frozen=True)
+    class ADataClass:
+        a: int
+
+    literal = dask.delayed(3)
+
+    with pytest.raises(FrozenInstanceError) as e:
+        dask.delayed({"data": ADataClass(a=literal)})
+    e.match(r"ADataClass")
+    e.match(r"frozen dataclasses are not supported")
+
+
 def test_delayed_with_dataclass_with_custom_init():
-    @dataclass
+    @dataclass()
     class ADataClass:
         a: int
 
@@ -119,14 +132,17 @@ def test_delayed_with_dataclass_with_custom_init():
 
     literal = dask.delayed(3)
 
-    with pytest.raises(TypeError) as e:
-        dask.delayed({"data": ADataClass(b=literal)})
+    with_class = dask.delayed({"data": ADataClass(b=literal)})
 
-    assert e.match(r"ADataClass")
-    assert e.match(r"custom __init__ is not supported")
+    def return_nested(obj):
+        return obj["data"].a
+
+    dask.delayed({"data": ADataClass(b=literal)})
+    final = delayed(return_nested)(with_class)
+    assert final.compute() == 3
 
 
-def test_delayed_with_dataclass_with_uninitialized_field():
+def test_delayed_with_dataclass_with_eager_init_false_field():
     @dataclass
     class ADataClass:
         a: int
@@ -134,16 +150,38 @@ def test_delayed_with_dataclass_with_uninitialized_field():
 
     literal = dask.delayed(3)
 
-    def init_nested(a):
+    def prep_dataclass(a):
         data = ADataClass(a=a)
         data.b = 4
-        return {"data": data}
+        return data
 
-    with pytest.raises(ValueError) as e:
-        dask.delayed(init_nested(literal))
+    with_class = dask.delayed(prep_dataclass(literal))
+    final = delayed(lambda obj: obj.a)(with_class)
+    assert final.compute() == 3
 
-    e.match(r"ADataClass")
-    e.match(r"init=False")
+    final = delayed(lambda obj: obj.b)(with_class)
+    assert final.compute() == 4
+
+
+def test_delayed_with_dataclass_with_delayed_init_false_field():
+    @dataclass
+    class ADataClass:
+        a: int
+        b: int = field(init=False)
+
+    literal = dask.delayed(3)
+
+    def prep_dataclass(b):
+        data = ADataClass(a=4)
+        data.b = b
+        return data
+
+    with_class = dask.delayed(prep_dataclass(literal))
+    final = delayed(lambda obj: obj.a)(with_class)
+    assert final.compute() == 4
+
+    final = delayed(lambda obj: obj.b)(with_class)
+    assert final.compute() == 3
 
 
 def test_operators():

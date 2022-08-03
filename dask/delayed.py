@@ -3,7 +3,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
-from dataclasses import fields, is_dataclass, replace
+from dataclasses import FrozenInstanceError, fields, is_dataclass
 
 from tlz import concat, curry, merge, unique
 
@@ -111,32 +111,40 @@ def unpack_collections(expr):
         return (slice,) + tuple(args), collections
 
     if is_dataclass(expr):
-        try:
-            _fields = {
-                f.name: getattr(expr, f.name)
-                for f in fields(expr)
-                if hasattr(expr, f.name)
-            }
-            replace(expr, **_fields)
-        except TypeError as e:
-            raise TypeError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using a custom __init__ is not supported."
-            ) from e
-        except ValueError as e:
-            raise ValueError(
-                f"Failed to unpack {typ} instance. "
-                "Note that using fields with `init=False` are not supported."
-            ) from e
-        args, collections = unpack_collections(
-            [
-                [f.name, getattr(expr, f.name)]
-                for f in fields(expr)
-                if hasattr(expr, f.name)  # if init=False, field might not exist
-            ]
-        )
+        args = {}
+        collections = ()
+        for field in fields(expr):
+            if not hasattr(expr, field.name):
+                continue
+            field_args, field_collections = unpack_collections(
+                getattr(expr, field.name)
+            )
+            if not field_collections:
+                continue
+            args[field.name] = field_args
+            collections += field_collections
+        if not collections:
+            return expr, ()
 
-        return (apply, typ, (), (dict, args)), collections
+        try:
+            for key in args:
+                expr.__setattr__(key, None)
+        except FrozenInstanceError as e:
+            raise FrozenInstanceError(
+                f"Failed to unpack {typ} instance. "
+                "Note that frozen dataclasses are not supported."
+            ) from e
+
+        def reconstitute_dataclass(obj, changes):
+            for key, val in changes.items():
+                expr.__setattr__(key, val)
+            return obj
+
+        return (
+            reconstitute_dataclass,
+            expr,
+            (dict, [[k, v] for k, v in args.items()]),
+        ), collections
 
     return expr, ()
 
