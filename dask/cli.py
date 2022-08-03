@@ -35,7 +35,7 @@ def docs():
     webbrowser.open("https://docs.dask.org")
 
 
-@cli.group("info")
+@cli.group()
 def info():
     """Information about your dask installation."""
     pass
