@@ -3724,9 +3724,11 @@ def test_set_index_with_index():
     "Setting the index with the existing index is a no-op"
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf2 = ddf.set_index(ddf.index)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf2 = ddf.set_index(ddf.index)
     assert ddf2 is ddf
-    ddf = ddf.set_index("x", drop=False)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf = ddf.set_index("x", drop=False)
     assert ddf2 is ddf
 
 

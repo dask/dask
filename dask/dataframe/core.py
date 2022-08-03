@@ -4809,12 +4809,18 @@ class DataFrame(_Frame):
         if isinstance(other, Series):
             # If it's already the index, there's nothing to do
             if other._name == self.index._name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
         # If the name of a column/index
         else:
             # With the same name as the index, there's nothing to do either
             if other == self.index.name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
             # If a missing column, KeyError

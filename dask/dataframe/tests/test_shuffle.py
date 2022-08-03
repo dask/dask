@@ -193,7 +193,6 @@ def test_set_index_general(npartitions, shuffle_method):
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
-    assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -203,7 +202,8 @@ def test_set_index_self_index(shuffle_method):
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    b = a.set_index(a.index, shuffle=shuffle_method)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        b = a.set_index(a.index, shuffle=shuffle_method)
     assert a is b
 
     assert_eq(b, df.set_index(df.index))
