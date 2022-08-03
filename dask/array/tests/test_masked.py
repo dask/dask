@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.numpy_compat import _numpy_123
 from dask.array.utils import assert_eq
 from dask.base import tokenize
 
@@ -379,14 +380,12 @@ def test_average_weights_with_masked_array(keepdims):
     weights = np.array([0.25, 0.75])
     d_weights = da.from_array(weights, chunks=2)
 
-    np_avg = np.ma.average(a, weights=weights, axis=1)
-    if keepdims:
-        # np.average only takes keepdims keyword from v1.23, so use reshape to
-        # form the expected array.
-        np_avg = np_avg.reshape((3, 1))
     da_avg = da.ma.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    assert_eq(np_avg, da_avg)
+    if _numpy_123:
+        assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1, keepdims=keepdims))
+    elif not keepdims:
+        assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1))
 
 
 def test_arithmetic_results_in_masked():
