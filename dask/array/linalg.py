@@ -1217,7 +1217,7 @@ def solve(a, b, assume_a="gen"):
         Note that Dask does not support "her" and "sym" types.
 
         .. versionchanged:: 2022.8.0
-            ``assume_a = "pos"`` was previously defined as ``sym_pos=True``.
+            ``assume_a="pos"`` was previously defined as ``sym_pos=True``.
 
     Returns
     -------
