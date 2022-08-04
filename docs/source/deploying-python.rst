@@ -96,3 +96,4 @@ Reference
 
 .. autoclass:: LocalCluster
    :members:
+   :undoc-members: memory_limit
