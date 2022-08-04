@@ -2233,7 +2233,14 @@ class Array(DaskMethodsMixin):
             By default, astype always returns a newly allocated array. If this
             is set to False and the `dtype` requirement is satisfied, the input
             array is returned instead of a copy.
+
+            .. note::
+
+                Dask does not respect the contiguous memory layout of the array,
+                and will ignore the ``order`` keyword argument.
+                The default order is 'C' contiguous.
         """
+        kwargs.pop("order", None)  # `order` is not respected, so we remove this kwarg
         # Scalars don't take `casting` or `copy` kwargs - as such we only pass
         # them to `map_blocks` if specified by user (different than defaults).
         extra = set(kwargs) - {"casting", "copy"}

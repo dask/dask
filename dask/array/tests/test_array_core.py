@@ -2286,6 +2286,34 @@ def test_astype():
     assert d.astype("f8") is d
 
 
+def test_astype_gh1151():
+    a = np.arange(5).astype(np.int32)
+    b = da.from_array(a, (1,))
+    assert_eq(a.astype(np.int16), b.astype(np.int16))
+
+
+def test_astype_gh9318():
+    # `order`` kwarg in `astype` should not cause an error
+    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], order="C")
+    b = da.from_array(a, chunks=(2, 2))
+    result_a = a.astype(float, order="F")
+    result_b = b.astype(float, order="F")  # if no error at this line, pytest passes
+    assert_eq(result_a, result_b)  # won't check the order matches, but checks results
+
+
+@pytest.mark.xfail(reason="Github issue https://github.com/dask/dask/issues/9316")
+def test_astype_gh9316():
+    # Issue https://github.com/dask/dask/issues/9316
+    # Can be combined with test_astype_gh9318 above when XFAIL marker is removed
+    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], order="C")
+    b = da.from_array(a, chunks=(2, 2))
+    result_a = a.astype(float, order="F")
+    result_b = b.astype(float, order="F")
+    result_b = result_b.compute()
+    assert result_a.flags.c_contiguous == result_b.flags.c_contiguous
+    assert result_a.flags.f_contiguous == result_b.flags.f_contiguous
+
+
 def test_arithmetic():
     x = np.arange(5).astype("f4") + 2
     y = np.arange(5).astype("i8") + 2
@@ -3567,12 +3595,6 @@ def test_copy_mutate():
 def test_npartitions():
     assert da.ones(5, chunks=(2,)).npartitions == 3
     assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6
-
-
-def test_astype_gh1151():
-    a = np.arange(5).astype(np.int32)
-    b = da.from_array(a, (1,))
-    assert_eq(a.astype(np.int16), b.astype(np.int16))
 
 
 def test_elemwise_name():
