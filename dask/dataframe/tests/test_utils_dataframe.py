@@ -48,17 +48,36 @@ def test_make_meta():
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    for col in "abc":
+        meta_pointer = meta[col].values.__array_interface__["data"][0]
+        df_pointer = df[col].values.__array_interface__["data"][0]
+        assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas series
     meta = make_meta(df.a)
     assert len(meta) == 0
     assert meta.dtype == df.a.dtype
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.a.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas index
     meta = make_meta(df.index)
     assert isinstance(meta, type(df.index))
     assert len(meta) == 0
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Dask object
     ddf = dd.from_pandas(df, npartitions=2)

@@ -65,12 +65,15 @@ def _(x):
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def _(x, index=None):
-    return x.iloc[:0]
+    out = x.iloc[:0].copy(deep=True)
+    # index isn't copied by default in pandas, even if deep=true
+    out.index = out.index.copy(deep=True)
+    return out
 
 
 @make_meta_dispatch.register(pd.Index)
 def _(x, index=None):
-    return x[0:0]
+    return x[0:0].copy(deep=True)
 
 
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
