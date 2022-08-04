@@ -1231,7 +1231,7 @@ def solve(a, b, assume_a="gen"):
     """
     if assume_a in ["sym", "her"]:
         raise NotImplementedError(
-            "``da.linalg.solve`` only supports ``assume_a =`` ``gen`` or ``pos``"
+            "``da.linalg.solve`` only supports ``assume_a =`` 'gen' or 'pos'"
         )
 
     if assume_a == "pos":
