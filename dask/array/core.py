@@ -2232,7 +2232,6 @@ class Array(DaskMethodsMixin):
             is set to False and the `dtype` requirement is satisfied, the input
             array is returned instead of a copy.
 
-
             .. note::
 
                 Dask does not respect the contiguous memory layout of the array,
