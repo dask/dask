@@ -61,10 +61,10 @@ def apply(func, args, kwargs=None):
     >>> def add(number, second_number=5):
     ...     return number + second_number
     ...
-    >>> apply(add, (10,), {"second_number": 2})  # equivalent to func(*args, **kwargs)
+    >>> apply(add, (10,), {"second_number": 2})  # equivalent to add(*args, **kwargs)
+    12
 
-    >>> from dask.utils import apply
-    >>> task = (apply, func, args, kwargs)  # equivalent to func(*args, **kwargs)
+    >>> task = apply(add, (10,), {"second_number": 2})
     >>> dsk = {'task-name': task}  # adds the task to a low level Dask task graph
     """
     if kwargs:
