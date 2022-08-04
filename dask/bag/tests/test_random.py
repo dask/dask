@@ -121,6 +121,13 @@ def test_sample_k_equal_bag_size_with_unbalanced_partitions():
     assert len(set(li)) == len(li)
 
 
+def test_sample_k_larger_than_partitions():
+    bag = db.from_sequence(range(10), partition_size=3)
+    bag2 = random.sample(bag, k=8, split_every=2)
+    seq = bag2.compute()
+    assert len(seq) == 8
+
+
 def test_weighted_sampling_without_replacement():
     population = range(4)
     p = [0.01, 0.33, 0.33, 0.33]
