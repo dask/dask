@@ -1200,11 +1200,11 @@ def solve_triangular(a, b, lower=False):
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
-def solve(a, b, sym_pos=False):
+def solve(a, b, assume_a="gen"):
     """
     Solve the equation ``a x = b`` for ``x``. By default, use LU
-    decomposition and forward / backward substitutions. When ``sym_pos`` is
-    ``True``, use Cholesky decomposition.
+    decomposition and forward / backward substitutions. When ``assume_a = "pos"``
+    use Cholesky decomposition.
 
     Parameters
     ----------
@@ -1212,21 +1212,36 @@ def solve(a, b, sym_pos=False):
         A square matrix.
     b : (M,) or (M, N) array_like
         Right-hand side matrix in ``a x = b``.
-    sym_pos : bool
-        Assume a is symmetric and positive definite. If ``True``, use Cholesky
-        decomposition.
+    assume_a : {"gen", "pos"}, optional
+        Type of data matrix. It is used to choose the dedicated solver.
+        Note that Dask does not support "her" and "sym" types.
+
+        .. versionchanged:: 2022.8.0
+            ``assume_a = "pos"`` was previously defined as ``sym_pos=True``.
 
     Returns
     -------
     x : (M,) or (M, N) Array
         Solution to the system ``a x = b``.  Shape of the return matches the
         shape of `b`.
+
+    See Also
+    --------
+    scipy.linalg.solve
     """
-    if sym_pos:
+    if assume_a in ["sym", "her"]:
+        raise NotImplementedError(
+            "``da.linalg.solve`` only supports ``assume_a =`` ``gen`` or ``pos``"
+        )
+
+    if assume_a == "pos":
         l, u = _cholesky(a)
-    else:
+    elif assume_a == "gen":
         p, l, u = lu(a)
         b = p.T.dot(b)
+    else:
+        raise ValueError(f"{assume_a} is not a recognized matrix structure")
+
     uy = solve_triangular(l, b, lower=True)
     return solve_triangular(u, uy)
 

@@ -343,6 +343,7 @@ intersphinx_mapping = {
         "https://filesystem-spec.readthedocs.io/en/latest/",
         "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
     ),
+    "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 
 # Redirects

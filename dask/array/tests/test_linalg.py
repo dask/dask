@@ -772,7 +772,7 @@ def _scipy_linalg_solve(a, b, assume_a):
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (30, 6)])
-def test_solve_sym_pos(shape, chunk):
+def test_solve_assume_a(shape, chunk):
     np.random.seed(1)
 
     A = _get_symmat(shape)
@@ -782,7 +782,7 @@ def test_solve_sym_pos(shape, chunk):
     b = np.random.randint(1, 10, shape)
     db = da.from_array(b, chunk)
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
+    res = da.linalg.solve(dA, db, assume_a="pos")
     assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
@@ -790,7 +790,7 @@ def test_solve_sym_pos(shape, chunk):
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
+    res = da.linalg.solve(dA, db, assume_a="pos")
     assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
@@ -798,7 +798,7 @@ def test_solve_sym_pos(shape, chunk):
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
+    res = da.linalg.solve(dA, db, assume_a="pos")
     assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
