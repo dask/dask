@@ -71,6 +71,7 @@ configuration values.
 
 .. currentmodule:: dask.utils
 
+.. autofunction:: apply
 .. autofunction:: format_bytes
 .. autofunction:: format_time
 .. autofunction:: parse_bytes

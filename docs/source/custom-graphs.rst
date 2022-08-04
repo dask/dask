@@ -56,6 +56,31 @@ analyze pipeline:
    get(dsk, 'store')  # executes in parallel
 
 
+
+Keyword arguments in custom Dask graphs
+---------------------------------------
+
+Sometimes, you may want to pass keyword arguments to a function 
+in a custom Dask graph.
+You can do that using the :func:`dask.utils.apply` function, like this:
+
+.. code-block:: python
+
+   from dask.utils import apply
+
+   task = (apply, func, args, kwargs)  # equivalent to func(*args, **kwargs)
+
+   dsk = {'task-name': task,
+           ...
+          }
+
+
+In the example above:
+
+- ``args`` should be a tuple (eg: ``(arg_1, arg_2, arg_3)``), and
+- ``kwargs`` should be a dictionary (eg: ``{"kwarg_1": value, "kwarg_2": value}``
+
+
 Related Projects
 ----------------
 
