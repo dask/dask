@@ -760,10 +760,17 @@ def _get_symmat(size):
     return lA.dot(lA.T)
 
 
-@pytest.mark.xfail(
-    parse_version(scipy.__version__) >= parse_version("1.9.0"),
-    reason="https://github.com/dask/dask/issues/9335",
-)
+# `sym_pos` kwarg was deprecated in scipy 1.9.0
+# ref: https://github.com/dask/dask/issues/9335
+def _scipy_linalg_solve(a, b, assume_a):
+    if parse_version(scipy.__version__) >= parse_version("1.9.0"):
+        return scipy.linalg.solve(a=a, b=b, assume_a=assume_a)
+    elif assume_a == "pos":
+        return scipy.linalg.solve(a=a, b=b, sym_pos=True)
+    else:
+        return scipy.linalg.solve(a=a, b=b)
+
+
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (30, 6)])
 def test_solve_sym_pos(shape, chunk):
     np.random.seed(1)
@@ -776,7 +783,7 @@ def test_solve_sym_pos(shape, chunk):
     db = da.from_array(b, chunk)
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
@@ -784,7 +791,7 @@ def test_solve_sym_pos(shape, chunk):
     db = da.from_array(b, (chunk, 5))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
@@ -792,7 +799,7 @@ def test_solve_sym_pos(shape, chunk):
     db = da.from_array(b, (chunk, chunk))
 
     res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
