@@ -1906,6 +1906,36 @@ class Array(DaskMethodsMixin):
         self._name = y.name
         self._chunks = y.chunks
 
+    def bool_to_int_index(self, a):
+        """Transforms a bool array index to int array index for 1D arrays where
+        all the False values are adjacent and are either at the beginning or end
+        of the array.
+        """
+        from dask.array.creation import arange
+
+        if self.ndim != 1 or math.isnan(a[0].size) or math.isnan(self.shape[0]):
+            return None
+
+        x = 0, a[0].argmax()
+        # Checks if all False values are in the beginning of the array.
+        for i in range(a[0].size - 1):
+            if a[0][i] > a[0][i + 1]:
+                x = 0, 0
+
+        if x == (0, 0) and a[0].min() == 0:
+            # Cheks if all False values are at the end of the array.
+            for j in range(a[0].size - 1):
+                if a[0][j] < a[0][j + 1]:
+                    return None
+                x = a[0].argmin(), a[0].size
+
+        if a[0].max() == 1:
+            i0 = arange(x[0], dtype=int)
+            i1 = arange(x[1], a[0].size, dtype=int)
+            a = (concatenate((i0, i1), axis=0),)
+            return a
+        return None
+
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
@@ -1950,7 +1980,11 @@ class Array(DaskMethodsMixin):
         if any(isinstance(i, Array) and i.dtype.kind in "iu" for i in index2):
             self, index2 = slice_with_int_dask_array(self, index2)
         if any(isinstance(i, Array) and i.dtype == bool for i in index2):
-            self, index2 = slice_with_bool_dask_array(self, index2)
+            intindex2 = self.bool_to_int_index(index2)
+            if intindex2:
+                self, index2 = slice_with_int_dask_array(self, intindex2)
+            else:
+                self, index2 = slice_with_bool_dask_array(self, index2)
 
         if all(isinstance(i, slice) and i == slice(None) for i in index2):
             return self
