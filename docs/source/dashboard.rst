@@ -1,31 +1,45 @@
 Dashboard Diagnostics
 =====================
 
-Profiling parallel code can be challenging, but the :doc:`Dask distributed scheduler <scheduling>` 
-provides live feedback via its interactive dashboard. A link that redirects to the dashboard will prompt 
-in the terminal where the scheduler is created, and it is also shown when you create a ``Client`` and connect 
-the scheduler.
+.. meta::
+   :description: The interactive Dask dashboard provides numerous diagnostic plots for live monitoring of your Dask computation. It includes information about task runtimes, communication, statistical profiling, load balancing, memory use, and much more.
+
+.. raw:: html
+
+    <iframe width="560"
+            height="315"
+            src="https://www.youtube.com/embed/N_GqzcuGLCY"
+            frameborder="0"
+            allow="autoplay; encrypted-media"
+            style="margin: 0 auto 20px auto; display: block;"
+            allowfullscreen>
+    </iframe>
+
+Profiling parallel code can be challenging, but the interactive dashboard provided with
+Dask's :doc:`distributed scheduler <scheduling>` makes this easier with live monitoring
+of your Dask computations. The dashboard is built with `Bokeh <https://docs.bokeh.org>`_
+and will start up automatically, returning a link to the dashboard whenever the scheduler is created.
+
+Locally, this is when you create a :meth:`Client <distributed.client.Client>` and connect the scheduler:
 
 .. code-block:: python
 
    from dask.distributed import Client
-   client = Client()  # start distributed scheduler locally. 
-   client            
+   client = Client()  # start distributed scheduler locally.
 
-In a Jupyter Notebook or JupyterLab session displaying the client object will show the dashboard address
-as following:
+In a Jupyter Notebook or JupyterLab session displaying the client object will show the dashboard address:
 
 .. figure:: images/dashboard_link.png
-    :alt: Client html repr displaying the dashboard link on a JupyterLab session. 
+    :alt: Client html repr displaying the dashboard link in a JupyterLab session.
 
-The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or, if you are in a terminal or IPython, it can be queried from ``client.dashboard_link``. By default, when starting a scheduler 
-on your local machine the dashboard will be served at ``http://localhost:8787/status``. You
-can type this address into your browser to access the dashboard, but may be directed 
-elsewhere if port 8787 is taken. You can also configure the address by passing options to the 
-scheduler, see ``dashboard_address`` in `LocalCluster <https://docs.dask.org/en/stable/deploying-python.html#reference>`__
+You can also query the address from ``client.dashboard_link`` (or for older versions of distributed, ``client.scheduler_info()['services']``).
 
-The dashboard link redirects you to the entry point of the dashboard with information on:
+By default, when starting a scheduler on your local machine the dashboard will be served at ``http://localhost:8787/status``. You can type this address into your browser to access the dashboard, but may be directed 
+elsewhere if port 8787 is taken. You can also configure the address using the ``dashboard_address``
+parameter (see :meth:`LocalCluster <distributed.deploy.local.LocalCluster>`).
+
+There are numerous diagnostic plots available. In this guide you'll learn about some
+of the most commonly used plots shown on the entry point for the dashboard:
 
 - :ref:`dashboard.memory`: Cluster memory and Memory per worker
 - :ref:`dashboard.proc-cpu-occ`:  Tasks being processed by each worker/ CPU Utilization per worker/ Expected runtime for all tasks currently on a worker.
@@ -34,7 +48,6 @@ The dashboard link redirects you to the entry point of the dashboard with inform
 
 .. figure:: images/dashboard_status.png
     :alt: Main dashboard with five panes arranged into two columns. In the left column there are three bar charts. The top two show total bytes stored and bytes per worker. The bottom has three tabs to toggle between task processing, CPU utilization, and occupancy. In the right column, there are two bar charts with corresponding colors showing task activity over time, referred to as task stream and progress.
-
 
 .. _dashboard.memory: 
 

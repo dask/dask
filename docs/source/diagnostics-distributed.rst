@@ -13,40 +13,7 @@ forms:
 Dashboard
 ---------
 
-.. raw:: html
-
-    <iframe width="560"
-            height="315"
-            src="https://www.youtube.com/embed/N_GqzcuGLCY"
-            frameborder="0"
-            allow="autoplay; encrypted-media"
-            allowfullscreen>
-    </iframe>
-
-If `Bokeh <https://docs.bokeh.org>`_ is installed
-then the dashboard will start up automatically whenever the scheduler is created.
-For local use this happens when you create a client with no arguments:
-
-.. code-block:: python
-
-   from dask.distributed import Client
-   client = Client()  # start distributed scheduler locally.  Launch dashboard
-
-It is typically served at ``http://localhost:8787/status`` ,
-but may be served elsewhere if this port is taken.
-The address of the dashboard will be displayed if you are in a Jupyter Notebook,
-or can be queried from ``client.dashboard_link``
-(or for older versions of distributed, ``client.scheduler_info()['services']``).
-
-There are numerous pages with information about task runtimes, communication,
-statistical profiling, load balancing, memory use, and much more.
-For more information we recommend the video guide above.
-
-.. currentmodule:: dask.distributed
-
-.. autosummary::
-   Client
-
+For information on the Dask dashboard see :doc:`dashboard`.
 
 Capture diagnostics
 -------------------
