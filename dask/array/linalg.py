@@ -1246,8 +1246,6 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         )
         if sym_pos:
             assume_a = "pos"
-        else:
-            assume_a = "gen"
 
     if assume_a == "pos":
         l, u = _cholesky(a)
