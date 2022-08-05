@@ -1240,7 +1240,7 @@ def solve(a, b, sym_pos=False, assume_a="gen"):
     if sym_pos:
         assume_a = "pos"
         raise DeprecationWarning(
-            "This keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
+            "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
             "``sym_pos`` will be removed in a future version."
         )
 
