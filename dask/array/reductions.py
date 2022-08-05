@@ -27,6 +27,7 @@ from dask.array.creation import arange, diagonal
 # Keep empty_lookup here for backwards compatibility
 from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
 from dask.array.utils import (
+    array_safe,
     asarray_safe,
     compute_meta,
     is_arraylike,
@@ -427,7 +428,7 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
 def chunk_min(x, axis=None, keepdims=None):
     """Version of np.min which ignores size 0 arrays"""
     if x.size == 0:
-        return np.array([], ndmin=x.ndim, dtype=x.dtype)
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
     else:
         return np.min(x, axis=axis, keepdims=keepdims)
 
@@ -451,7 +452,7 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
 def chunk_max(x, axis=None, keepdims=None):
     """Version of np.max which ignores size 0 arrays"""
     if x.size == 0:
-        return np.array([], ndmin=x.ndim, dtype=x.dtype)
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
     else:
         return np.max(x, axis=axis, keepdims=keepdims)
 
