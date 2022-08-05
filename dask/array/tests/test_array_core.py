@@ -5045,6 +5045,7 @@ def test_from_array_meta():
 def test_compute_chunk_sizes():
     x = da.from_array(np.linspace(-1, 1, num=50), chunks=10)
     y = x[x < 0]
+    y._chunks = ((np.nan,) * 5,)
     assert np.isnan(y.shape[0])
     assert y.chunks == ((np.nan,) * 5,)
 
@@ -5103,6 +5104,7 @@ def _known(num=50):
 def unknown():
     x = _known()
     y = x[x < 0]
+    y._chunks = ((np.nan,) * 5,)
     assert y.chunks == ((np.nan,) * 5,)
     return y
 

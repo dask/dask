@@ -283,7 +283,9 @@ def test_nanarg_reductions(dfunc, func):
 @pytest.mark.parametrize("func", ["argmax", "nanargmax"])
 def test_arg_reductions_unknown_chunksize(func):
     x = da.arange(10, chunks=5)
-    x = x[x > 1]
+    y = x[x > 1]
+    y._chunks = ((np.nan,),)
+    x = y
 
     with pytest.raises(ValueError) as info:
         getattr(da, func)(x)
