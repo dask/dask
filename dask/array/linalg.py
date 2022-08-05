@@ -1,4 +1,5 @@
 import operator
+import warnings
 from functools import partial
 from numbers import Number
 
@@ -1238,9 +1239,10 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
     scipy.linalg.solve
     """
     if sym_pos is not None:
-        raise DeprecationWarning(
+        warnings.warn(
             "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
-            "``sym_pos`` will be removed in a future version."
+            "``sym_pos`` will be removed in a future version.",
+            category=DeprecationWarning,
         )
         if sym_pos:
             assume_a = "pos"
