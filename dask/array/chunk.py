@@ -45,7 +45,6 @@ def keepdims_wrapper(a_callable):
 
 
 # Wrap NumPy functions to ensure they provide keepdims.
-
 sum = np.sum
 prod = np.prod
 min = np.min

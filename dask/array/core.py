@@ -2398,13 +2398,7 @@ class Array(DaskMethodsMixin):
     def max(self, axis=None, keepdims=False, split_every=None, out=None):
         from dask.array.reductions import max
 
-        return max(
-            self,
-            axis=axis,
-            keepdims=keepdims,
-            split_every=split_every,
-            out=out,
-        )
+        return max(self, axis=axis, keepdims=keepdims, split_every=split_every, out=out)
 
     @derived_from(np.ndarray)
     def argmin(self, axis=None, *, keepdims=False, split_every=None, out=None):

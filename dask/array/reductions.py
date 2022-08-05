@@ -2,7 +2,6 @@ import builtins
 import contextlib
 import math
 import operator
-import sys
 from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
@@ -364,11 +363,7 @@ def partial_reduce(
         if len(out_chunks) == 0:
             meta = meta.sum()
         else:
-            try:
-                if meta.size == 0:
-                    meta = meta.reshape((0,) * len(out_chunks))
-            except AttributeError:
-                meta = meta.reshape((0,) * len(out_chunks))
+            meta = meta.reshape((0,) * len(out_chunks))
 
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
@@ -420,6 +415,7 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
         a,
         chunk_min,
         chunk.min,
+        combine=chunk_min,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
@@ -428,12 +424,12 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
-def chunk_min(x, axis=None, keepdims=None, *args, **kwargs):
+def chunk_min(x, axis=None, keepdims=None):
+    """Version of np.min which ignores size 0 arrays"""
     if x.size == 0:
-        return np.array([sys.maxsize])
+        return np.array([], ndmin=x.ndim, dtype=x.dtype)
     else:
-        r = np.min(x, axis=axis, keepdims=keepdims, *args, **kwargs)
-        return r
+        return np.min(x, axis=axis, keepdims=keepdims)
 
 
 @implements(np.max, np.amax)
@@ -443,6 +439,7 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
         a,
         chunk_max,
         chunk.max,
+        combine=chunk_max,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
@@ -451,12 +448,12 @@ def max(a, axis=None, keepdims=False, split_every=None, out=None):
     )
 
 
-def chunk_max(x, axis=None, keepdims=None, *args, **kwargs):
+def chunk_max(x, axis=None, keepdims=None):
+    """Version of np.max which ignores size 0 arrays"""
     if x.size == 0:
-        return np.array([-sys.maxsize])
+        return np.array([], ndmin=x.ndim, dtype=x.dtype)
     else:
-        r = np.max(x, axis=axis, keepdims=keepdims, *args, **kwargs)
-        return r
+        return np.max(x, axis=axis, keepdims=keepdims)
 
 
 @derived_from(np)
