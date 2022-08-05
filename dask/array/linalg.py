@@ -1200,7 +1200,7 @@ def solve_triangular(a, b, lower=False):
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
 
 
-def solve(a, b, sym_pos=False, assume_a="gen"):
+def solve(a, b, sym_pos=None, assume_a="gen"):
     """
     Solve the equation ``a x = b`` for ``x``. By default, use LU
     decomposition and forward / backward substitutions. When ``assume_a = "pos"``
@@ -1237,17 +1237,15 @@ def solve(a, b, sym_pos=False, assume_a="gen"):
     --------
     scipy.linalg.solve
     """
-    if sym_pos:
-        assume_a = "pos"
+    if sym_pos is not None:
         raise DeprecationWarning(
             "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
             "``sym_pos`` will be removed in a future version."
         )
-
-    if assume_a in ["sym", "her"]:
-        raise NotImplementedError(
-            "``da.linalg.solve`` only supports ``assume_a =`` 'gen' or 'pos'"
-        )
+        if sym_pos:
+            assume_a = "pos"
+        else:
+            assume_a = "gen"
 
     if assume_a == "pos":
         l, u = _cholesky(a)
@@ -1256,7 +1254,7 @@ def solve(a, b, sym_pos=False, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a} is not a recognized matrix structure, valid structures are 'pos' or 'gen'."
+            f"{assume_a} is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
         )
 
     uy = solve_triangular(l, b, lower=True)
