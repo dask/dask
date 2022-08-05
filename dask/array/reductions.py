@@ -27,6 +27,7 @@ from dask.array.creation import arange, diagonal
 # Keep empty_lookup here for backwards compatibility
 from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
 from dask.array.utils import (
+    array_safe,
     asarray_safe,
     compute_meta,
     is_arraylike,
@@ -420,14 +421,23 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
+        chunk_min,
         chunk.min,
-        chunk.min,
+        combine=chunk_min,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def chunk_min(x, axis=None, keepdims=None):
+    """Version of np.min which ignores size 0 arrays"""
+    if x.size == 0:
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    else:
+        return np.min(x, axis=axis, keepdims=keepdims)
 
 
 @implements(np.max, np.amax)
@@ -435,14 +445,23 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
+        chunk_max,
         chunk.max,
-        chunk.max,
+        combine=chunk_max,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def chunk_max(x, axis=None, keepdims=None):
+    """Version of np.max which ignores size 0 arrays"""
+    if x.size == 0:
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    else:
+        return np.max(x, axis=axis, keepdims=keepdims)
 
 
 @derived_from(np)

@@ -280,6 +280,27 @@ def test_nanarg_reductions(dfunc, func):
             dfunc(a).compute()
 
 
+@pytest.mark.parametrize(["dfunc", "func"], [(da.min, np.min), (da.max, np.max)])
+def test_min_max_empty_chunks(dfunc, func):
+    x1 = np.arange(10)
+    a1 = da.from_array(x1, chunks=1)
+    assert_eq(dfunc(a1[a1 < 2]), func(x1[x1 < 2]))
+
+    x2 = np.arange(10)
+    a2 = da.from_array(x2, chunks=((5, 0, 5),))
+    assert_eq(dfunc(a2), func(x2))
+
+    x3 = np.array([[1, 1, 2, 3], [1, 1, 4, 0]])
+    a3 = da.from_array(x3, chunks=1)
+    assert_eq(dfunc(a3[a3 >= 2]), func(x3[x3 >= 2]))
+
+    a4 = da.arange(10)
+    with pytest.raises(
+        ValueError
+    ):  # Checking it mimics numpy behavior when all chunks are empty
+        dfunc(a4[a4 < 0]).compute()
+
+
 @pytest.mark.parametrize("func", ["argmax", "nanargmax"])
 def test_arg_reductions_unknown_chunksize(func):
     x = da.arange(10, chunks=5)
