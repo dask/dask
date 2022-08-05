@@ -1242,7 +1242,7 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         warnings.warn(
             "The sym_pos keyword is deprecated and should be replaced by using ``assume_a = 'pos'``."
             "``sym_pos`` will be removed in a future version.",
-            category=DeprecationWarning,
+            category=FutureWarning,
         )
         if sym_pos:
             assume_a = "pos"
@@ -1254,7 +1254,7 @@ def solve(a, b, sym_pos=None, assume_a="gen"):
         b = p.T.dot(b)
     else:
         raise ValueError(
-            f"{assume_a} is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
+            f"{assume_a = } is not a recognized matrix structure, valid structures in Dask are 'pos' and 'gen'."
         )
 
     uy = solve_triangular(l, b, lower=True)

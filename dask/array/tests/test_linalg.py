@@ -802,12 +802,12 @@ def test_solve_assume_a(shape, chunk):
     assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
-    with pytest.raises(DeprecationWarning, match="sym_pos keyword is deprecated"):
+    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=True)
         assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
         assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
-    with pytest.raises(DeprecationWarning, match="sym_pos keyword is deprecated"):
+    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
         res = da.linalg.solve(dA, db, sym_pos=False)
         assert_eq(res, _scipy_linalg_solve(A, b, assume_a="gen"), check_graph=False)
         assert_eq(dA.dot(res), b.astype(float), check_graph=False)
