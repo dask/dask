@@ -54,11 +54,11 @@ def test_to_task_dask():
     assert task == (dict, [["b", 2], ["a", 1]]) or task == (dict, [["a", 1], ["b", 2]])
     assert dict(dask) == merge(a.dask, b.dask)
 
-    f = namedtuple("f", ["x", "y"])
-    x = f(1, 2)
+    f = namedtuple("f", ["a", "b", "c"])
+    x = f(a, b, 3)
     task, dask = to_task_dask(x)
-    assert task == x
-    assert dict(dask) == {}
+    assert task == (f, "a", "b", 3)
+    assert dict(dask) == merge(a.dask, b.dask)
 
     task, dask = to_task_dask(slice(a, b, 3))
     assert task == (slice, "a", "b", 3)

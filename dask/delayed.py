@@ -4,6 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass, replace
+from typing import Any
 
 from tlz import concat, curry, merge, unique
 
@@ -46,7 +47,8 @@ def finalize(collection):
     return Delayed(name, graph)
 
 
-def is_namedtuple_instance(obj):
+def is_namedtuple_instance(obj: Any) -> bool:
+    "Returns True if obj is an instance of a namedtuple."
     return (
         isinstance(obj, tuple)
         and hasattr(obj, "_asdict")
@@ -117,7 +119,7 @@ def unpack_collections(expr):
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice,) + tuple(args), collections
+        return (slice, *args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -149,10 +151,8 @@ def unpack_collections(expr):
         return (apply, typ, (), (dict, args)), collections
 
     if is_namedtuple_instance(expr):
-        args, collections = unpack_collections(
-            [[k, v] for k, v in expr._asdict().items()]
-        )
-        return (apply, typ, (), (dict, args)), collections
+        args, collections = unpack_collections([v for v in expr])
+        return (typ, *args), collections
 
     return expr, ()
 
@@ -235,6 +235,10 @@ def to_task_dask(expr):
         )
 
         return (apply, typ, (), (dict, args)), dsk
+
+    if is_namedtuple_instance(expr):
+        args, dsk = to_task_dask([v for v in expr])
+        return (typ, *args), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
