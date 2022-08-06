@@ -46,6 +46,15 @@ def finalize(collection):
     return Delayed(name, graph)
 
 
+def is_namedtuple_instance(obj):
+    return (
+        isinstance(obj, tuple)
+        and hasattr(obj, "_asdict")
+        and hasattr(obj, "_fields")
+        and hasattr(obj, "_replace")
+    )
+
+
 def unpack_collections(expr):
     """Normalize a python object and merge all sub-graphs.
 
@@ -137,6 +146,12 @@ def unpack_collections(expr):
                 f"Failed to unpack {typ} instance. "
                 "Note that using fields with `init=False` are not supported."
             ) from e
+        return (apply, typ, (), (dict, args)), collections
+
+    if is_namedtuple_instance(expr):
+        args, collections = unpack_collections(
+            [[k, v] for k, v in expr._asdict().items()]
+        )
         return (apply, typ, (), (dict, args)), collections
 
     return expr, ()
