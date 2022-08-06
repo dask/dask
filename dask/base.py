@@ -596,7 +596,7 @@ def compute(
         postcomputes.append(x.__dask_postcompute__())
 
     results = schedule(dsk, keys, **kwargs)
-    return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
+    return repack([f(r, *a, **kwargs) for r, (f, a) in zip(results, postcomputes)])
 
 
 def visualize(

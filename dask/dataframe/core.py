@@ -135,8 +135,8 @@ def _concat(args, ignore_index=False):
     )
 
 
-def finalize(results):
-    return _concat(results)
+def finalize(results, **kwargs):
+    return _concat(results, **kwargs)
 
 
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
