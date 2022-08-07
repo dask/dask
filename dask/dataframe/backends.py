@@ -397,7 +397,7 @@ def concat_pandas(
     ignore_order = kwargs.pop("ignore_order", False)
 
     if axis == 1:
-        return pd.concat(dfs, axis=axis, join=join, ignore_index=ignore_index, **kwargs)
+        return pd.concat(dfs, axis=axis, join=join, **kwargs)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
@@ -469,7 +469,6 @@ def concat_pandas(
                     warnings.simplefilter("ignore", FutureWarning)
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
-                    ignore_index=ignore_index,
                     join=join,
                     **kwargs,
                 ).any()
@@ -480,7 +479,6 @@ def concat_pandas(
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                ignore_index=ignore_index,
                 **kwargs,
             )
             temp_ind = out.index
@@ -527,7 +525,7 @@ def concat_pandas(
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
 
-            out = pd.concat(dfs2, join=join, ignore_index=ignore_index, **kwargs)
+            out = pd.concat(dfs2, join=join, **kwargs)
     # Re-add the index if needed
     if ind is not None:
         out.index = ind
