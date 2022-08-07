@@ -76,6 +76,7 @@ from dask.utils import (
     is_arraylike,
     iter_chunks,
     key_split,
+    maybe_pluralize,
     memory_repr,
     parse_bytes,
     partial_by_order,
@@ -540,7 +541,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
         _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {task} tasks"""
+Dask Name: {name}, {layers}"""
         if len(self.columns) == 0:
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
@@ -548,7 +549,7 @@ Dask Name: {name}, {task} tasks"""
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @property
@@ -3505,12 +3506,12 @@ class Series(_Frame):
         return """Dask {klass} Structure:
 {data}
 {footer}
-Dask Name: {name}, {task} tasks""".format(
+Dask Name: {name}, {layers}""".format(
             klass=self.__class__.__name__,
             data=self.to_string(),
             footer=footer,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def rename(self, index=None, inplace=False, sorted_index=False):
@@ -4808,12 +4809,18 @@ class DataFrame(_Frame):
         if isinstance(other, Series):
             # If it's already the index, there's nothing to do
             if other._name == self.index._name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
         # If the name of a column/index
         else:
             # With the same name as the index, there's nothing to do either
             if other == self.index.name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
             # If a missing column, KeyError
@@ -5816,7 +5823,9 @@ class DataFrame(_Frame):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _repr_data(self):
@@ -5836,7 +5845,9 @@ class DataFrame(_Frame):
             max_rows=5, show_dimensions=False, notebook=True
         )
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _select_columns_or_index(self, columns_or_index):
@@ -7351,7 +7362,9 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        original_divisions = divisions = pd.Series(df.divisions)
+        # Drop duplcates in case last partition has same
+        # value for min and max division
+        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)

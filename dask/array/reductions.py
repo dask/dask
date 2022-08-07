@@ -27,6 +27,7 @@ from dask.array.creation import arange, diagonal
 # Keep empty_lookup here for backwards compatibility
 from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
 from dask.array.utils import (
+    array_safe,
     asarray_safe,
     compute_meta,
     is_arraylike,
@@ -37,7 +38,14 @@ from dask.array.wrap import ones, zeros
 from dask.base import tokenize
 from dask.blockwise import lol_tuples
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import deepmap, derived_from, funcname, getargspec, is_series_like
+from dask.utils import (
+    apply,
+    deepmap,
+    derived_from,
+    funcname,
+    getargspec,
+    is_series_like,
+)
 
 
 def divide(a, b, dtype=None):
@@ -413,14 +421,23 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
 def min(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
+        chunk_min,
         chunk.min,
-        chunk.min,
+        combine=chunk_min,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def chunk_min(x, axis=None, keepdims=None):
+    """Version of np.min which ignores size 0 arrays"""
+    if x.size == 0:
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    else:
+        return np.min(x, axis=axis, keepdims=keepdims)
 
 
 @implements(np.max, np.amax)
@@ -428,14 +445,23 @@ def min(a, axis=None, keepdims=False, split_every=None, out=None):
 def max(a, axis=None, keepdims=False, split_every=None, out=None):
     return reduction(
         a,
+        chunk_max,
         chunk.max,
-        chunk.max,
+        combine=chunk_max,
         axis=axis,
         keepdims=keepdims,
         dtype=a.dtype,
         split_every=split_every,
         out=out,
     )
+
+
+def chunk_max(x, axis=None, keepdims=None):
+    """Version of np.max which ignores size 0 arrays"""
+    if x.size == 0:
+        return array_safe([], x, ndmin=x.ndim, dtype=x.dtype)
+    else:
+        return np.max(x, axis=axis, keepdims=keepdims)
 
 
 @derived_from(np)
@@ -1512,7 +1538,12 @@ def cumreduction(
     dsk = dict()
     for ind in indices:
         shape = tuple(x.chunks[i][ii] if i != axis else 1 for i, ii in enumerate(ind))
-        dsk[(name, "extra") + ind] = (np.full, shape, ident, m.dtype)
+        dsk[(name, "extra") + ind] = (
+            apply,
+            np.full_like,
+            (x._meta, ident, m.dtype),
+            {"shape": shape},
+        )
         dsk[(name,) + ind] = (m.name,) + ind
 
     for i in range(1, n):
@@ -1532,7 +1563,7 @@ def cumreduction(
             dsk[(name,) + ind] = (binop, this_slice, (m.name,) + ind)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    result = Array(graph, name, x.chunks, m.dtype)
+    result = Array(graph, name, x.chunks, m.dtype, meta=x._meta)
     return handle_out(out, result)
 
 

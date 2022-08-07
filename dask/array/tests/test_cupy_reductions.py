@@ -70,3 +70,11 @@ def test_nanarg_reductions(dfunc, func):
         a = da.from_array(x, chunks=(3, 4, 5))
         with pytest.raises(ValueError):
             dfunc(a).compute()
+
+
+@pytest.mark.parametrize("func", [np.cumsum, np.cumprod])
+def test_cumreduction_with_cupy(func):
+    a = cupy.ones((10, 10))
+    b = da.from_array(a, chunks=(4, 4))
+    result = func(b, axis=0)
+    assert_eq(result, func(a, axis=0))

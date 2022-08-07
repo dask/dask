@@ -377,6 +377,40 @@ def test_from_pandas_with_wrong_args():
         dd.from_pandas(df, chunksize=18.27)
 
 
+def test_from_pandas_chunksize_one():
+    # See: https://github.com/dask/dask/issues/9218
+    df = pd.DataFrame(np.random.randint(0, 10, size=(10, 4)), columns=list("ABCD"))
+    ddf = dd.from_pandas(df, chunksize=1)
+    num_rows = list(ddf.map_partitions(len).compute())
+    # chunksize=1 with range index should
+    # always have unit-length partitions
+    assert num_rows == [1] * 10
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["A", "B", "C", "C", "C", "C", "C", "C"],
+        ["A", "B", "B", "B", "B", "B", "B", "C"],
+        ["A", "A", "A", "A", "A", "B", "B", "C"],
+    ],
+)
+def test_from_pandas_npartitions_duplicates(index):
+    df = pd.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
+@pytest.mark.gpu
+def test_gpu_from_pandas_npartitions_duplicates():
+    cudf = pytest.importorskip("cudf")
+
+    index = ["A", "A", "A", "A", "A", "B", "B", "C"]
+    df = cudf.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
