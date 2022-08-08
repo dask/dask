@@ -1572,8 +1572,8 @@ def test_compress():
     a = da.from_array(x, chunks=(2, 2))
 
     c1 = np.array([True, False, True, False, True])
-    c2 = np.array([True, False])
-    c3 = [True, False]
+    c2 = np.array([True, False, True])
+    c3 = [True, False, True]
     dc1 = da.from_array(c1, chunks=3)
     dc2 = da.from_array(c2, chunks=2)
 
@@ -1608,7 +1608,7 @@ def test_extract():
 
     c1 = np.array([True, False, True, False, True])
     c2 = np.array([[True, False], [True, False]])
-    c3 = np.array([True, False])
+    c3 = np.array([True, False, True])
     dc1 = da.from_array(c1, chunks=3)
     dc2 = da.from_array(c2, chunks=(2, 1))
     dc3 = da.from_array(c3, chunks=2)
