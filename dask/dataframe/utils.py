@@ -8,7 +8,6 @@ import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from numbers import Number
-from typing import Callable, TypeVar, overload
 
 import numpy as np
 import pandas as pd
@@ -140,18 +139,6 @@ infer the metadata. This may lead to unexpected results, so providing
 ``meta`` is recommended. For more information, see
 ``dask.dataframe.utils.make_meta``.
 """
-
-T = TypeVar("T", bound=Callable)
-
-
-@overload
-def insert_meta_param_description(func: T) -> T:
-    ...
-
-
-@overload
-def insert_meta_param_description(pad: int) -> Callable[[T], T]:
-    ...
 
 
 def insert_meta_param_description(*args, **kwargs):
