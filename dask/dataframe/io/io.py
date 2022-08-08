@@ -159,7 +159,7 @@ def from_pandas(
     chunksize: int | None = None,
     sort: bool = True,
     name: str | None = None,
-) -> DataFrame | Series:
+) -> DataFrame:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -671,7 +671,7 @@ def from_delayed(
     divisions: tuple | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
     verify_meta: bool = True,
-) -> DataFrame | Series:
+) -> DataFrame:
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
