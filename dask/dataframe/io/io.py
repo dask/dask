@@ -154,12 +154,24 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
 
 
 @overload
-def from_pandas(data: pd.DataFrame) -> DataFrame:
+def from_pandas(
+    data: pd.DataFrame,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
+) -> DataFrame:
     ...
 
 
 @overload
-def from_pandas(data: pd.Series) -> Series:
+def from_pandas(
+    data: pd.Series,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
+) -> Series:
     ...
 
 
