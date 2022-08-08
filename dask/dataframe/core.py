@@ -5054,8 +5054,17 @@ class DataFrame(_Frame):
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
+    if PANDAS_GT_150:
+        from pandas._libs.lib import no_default
+
+        how_default = no_default
+        thresh_default = no_default
+    else:
+        how_default = "any"
+        thresh_default = None
+
     @derived_from(pd.DataFrame)
-    def dropna(self, how="any", subset=None, thresh=None):
+    def dropna(self, how=how_default, subset=None, thresh=thresh_default):
         return self.map_partitions(
             M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
         )
