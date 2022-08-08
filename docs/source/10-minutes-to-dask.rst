@@ -541,4 +541,4 @@ see your tasks as they are processed.
    >>> client.dashboard_link
    'http://127.0.0.1:8787/status'
 
-To learn more about those graphs take a look at :doc:`diagnostics-distributed`.
+To learn more about those graphs take a look at :doc:`dashboard`.
