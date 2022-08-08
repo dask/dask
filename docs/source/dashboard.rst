@@ -20,7 +20,7 @@ Dask's :doc:`distributed scheduler <scheduling>` makes this easier with live mon
 of your Dask computations. The dashboard is built with `Bokeh <https://docs.bokeh.org>`_
 and will start up automatically, returning a link to the dashboard whenever the scheduler is created.
 
-Locally, this is when you create a :meth:`Client <distributed.client.Client>` and connect the scheduler:
+Locally, this is when you create a :class:`Client <distributed.client.Client>` and connect the scheduler:
 
 .. code-block:: python
 
@@ -36,7 +36,7 @@ You can also query the address from ``client.dashboard_link`` (or for older vers
 
 By default, when starting a scheduler on your local machine the dashboard will be served at ``http://localhost:8787/status``. You can type this address into your browser to access the dashboard, but may be directed 
 elsewhere if port 8787 is taken. You can also configure the address using the ``dashboard_address``
-parameter (see :meth:`LocalCluster <distributed.deploy.local.LocalCluster>`).
+parameter (see :class:`LocalCluster <distributed.deploy.local.LocalCluster>`).
 
 There are numerous diagnostic plots available. In this guide you'll learn about some
 of the most commonly used plots shown on the entry point for the dashboard:

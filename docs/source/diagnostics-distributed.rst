@@ -18,6 +18,8 @@ For information on the Dask dashboard see :doc:`dashboard`.
 Capture diagnostics
 -------------------
 
+.. currentmodule:: dask.distributed
+
 .. autosummary::
    get_task_stream
    Client.profile
