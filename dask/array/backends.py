@@ -176,7 +176,7 @@ def register_sparse():
 
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
-    # Enforce ndarray for the numel result, since the sparse
+    # Enforce dense ndarray for the numel result, since the sparse
     # array will wind up being dense with an unpredictable fill_value.
     # https://github.com/dask/dask/issues/7169
     numel_lookup.register(sparse.COO, _numel_ndarray)
@@ -257,7 +257,7 @@ def _numel(x, coerce_ndarray: bool, **kwargs):
             return prod
 
         if coerce_ndarray:
-            return np.broadcast_to(np.array(prod, dtype=dtype), shape=(1,) * len(shape))
+            return np.full(shape=(1,) * len(shape), fill_value=prod, dtype=dtype)
         else:
             return np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
 
