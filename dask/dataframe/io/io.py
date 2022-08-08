@@ -156,10 +156,10 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
 @overload
 def from_pandas(
     data: pd.DataFrame,
-    npartitions: int | None = ...,
-    chunksize: int | None = ...,
-    sort: bool = ...,
-    name: str | None = ...,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
 ) -> DataFrame:
     ...
 
@@ -169,10 +169,10 @@ def from_pandas(
 @overload
 def from_pandas(  # type: ignore
     data: pd.Series,
-    npartitions: int | None = ...,
-    chunksize: int | None = ...,
-    sort: bool = ...,
-    name: str | None = ...,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
 ) -> Series:
     ...
 
