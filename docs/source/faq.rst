@@ -336,7 +336,7 @@ can be surprising.
 
 Our main solution to build this intuition, other than
 accumulated experience, is Dask's :doc:`Diagnostic Dashboard
-<diagnostics-distributed>`.
+<dashboard>`.
 The dashboard delivers a ton of visual feedback to users as they are running
 their computation to help them understand what is going on.  This both helps
 them to identify and resolve immediate bottlenecks, and also builds up that
