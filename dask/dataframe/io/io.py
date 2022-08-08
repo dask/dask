@@ -6,7 +6,7 @@ from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal
+from typing import TYPE_CHECKING, Iterable, Literal, overload
 
 import numpy as np
 import pandas as pd
@@ -151,6 +151,30 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
         else:
             dsk[name, i] = (type(meta), data, None, meta.columns)
     return new_dd_object(dsk, name, meta, divisions)
+
+
+@overload
+def from_pandas(
+    data: pd.DataFrame,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
+) -> DataFrame:
+    ...
+
+
+# We ignore this overload for now until pandas-stubs can be added.
+# See https://github.com/dask/dask/issues/9220
+@overload
+def from_pandas(  # type: ignore
+    data: pd.Series,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
+    sort: bool = True,
+    name: str | None = None,
+) -> Series:
+    ...
 
 
 def from_pandas(
