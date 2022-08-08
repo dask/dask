@@ -156,21 +156,23 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
 @overload
 def from_pandas(
     data: pd.DataFrame,
-    npartitions: int | None = None,
-    chunksize: int | None = None,
-    sort: bool = True,
-    name: str | None = None,
+    npartitions: int | None = ...,
+    chunksize: int | None = ...,
+    sort: bool = ...,
+    name: str | None = ...,
 ) -> DataFrame:
     ...
 
 
+# We ignore this overload for now until pandas-stubs can be added.
+# See https://github.com/dask/dask/issues/9220
 @overload
-def from_pandas(
+def from_pandas(  # type: ignore
     data: pd.Series,
-    npartitions: int | None = None,
-    chunksize: int | None = None,
-    sort: bool = True,
-    name: str | None = None,
+    npartitions: int | None = ...,
+    chunksize: int | None = ...,
+    sort: bool = ...,
+    name: str | None = ...,
 ) -> Series:
     ...
 
