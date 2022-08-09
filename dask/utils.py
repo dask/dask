@@ -2064,3 +2064,20 @@ def maybe_pluralize(count, noun, plural_form=None):
         return f"{count} {noun}"
     else:
         return f"{count} {plural_form or noun + 's'}"
+
+
+def is_namedtuple_instance(obj: Any) -> bool:
+    """Returns True if obj is an instance of a namedtuple.
+
+    Note: This function checks for the existence of the methods and
+    attributes that make up the namedtuple API, so it will return True
+    IFF obj's type implements that API.
+    """
+    return (
+        isinstance(obj, tuple)
+        and hasattr(obj, "_make")
+        and hasattr(obj, "_asdict")
+        and hasattr(obj, "_replace")
+        and hasattr(obj, "_fields")
+        and hasattr(obj, "_field_defaults")
+    )

@@ -4,7 +4,6 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass, replace
-from typing import Any
 
 from tlz import concat, curry, merge, unique
 
@@ -20,7 +19,13 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
+from dask.utils import (
+    OperatorMethodMixin,
+    apply,
+    funcname,
+    is_namedtuple_instance,
+    methodcaller,
+)
 
 __all__ = ["Delayed", "delayed"]
 
@@ -45,16 +50,6 @@ def finalize(collection):
     layer = {name: (finalize, keys) + args}
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[collection])
     return Delayed(name, graph)
-
-
-def is_namedtuple_instance(obj: Any) -> bool:
-    "Returns True if obj is an instance of a namedtuple."
-    return (
-        isinstance(obj, tuple)
-        and hasattr(obj, "_asdict")
-        and hasattr(obj, "_fields")
-        and hasattr(obj, "_replace")
-    )
 
 
 def unpack_collections(expr):
