@@ -93,29 +93,20 @@ def test_delayed():
     assert a.key in b.dask
 
 
-def test_delayed_with_dataclass():
-    @dataclass()
-    class ADataClass:
-        a: int
+@dataclass
+class ANonFrozenDataClass:
+    a: int
 
+
+@dataclass(frozen=True)
+class AFrozenDataClass:
+    a: int
+
+
+@pytest.mark.parametrize("cls", (ANonFrozenDataClass, AFrozenDataClass))
+def test_delayed_with_dataclass(cls):
     literal = delayed(3)
-    with_class = delayed({"data": ADataClass(a=literal)})
-
-    def return_nested(obj):
-        return obj["data"].a
-
-    final = delayed(return_nested)(with_class)
-
-    assert final.compute() == 3
-
-
-def test_delayed_with_frozen_dataclass():
-    @dataclass(frozen=True)
-    class ADataClass:
-        a: int
-
-    literal = delayed(3)
-    with_class = delayed({"data": ADataClass(a=literal)})
+    with_class = delayed({"data": cls(a=literal)})
 
     def return_nested(obj):
         return obj["data"].a
@@ -140,6 +131,21 @@ def test_delayed_with_dataclass_with_custom_init():
 
     e.match(r"ADataClass")
     e.match(r"custom __init__ is not supported")
+
+
+def test_delayed_with_dataclass_with_eager_custom_init():
+    @dataclass()
+    class ADataClass:
+        a: int
+
+    with_class = delayed({"data": ADataClass(a=3)})
+
+    def return_nested(obj):
+        return obj["data"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
 
 
 def test_delayed_with_eager_dataclass_with_set_init_false_field():
@@ -198,26 +204,6 @@ def test_delayed_with_dataclass_with_unset_init_false_field():
     final = delayed(return_nested)(with_class)
 
     assert final.compute() == 3
-
-
-def test_delayed_with_dataclass_with_delayed_init_false_field():
-    @dataclass
-    class ADataClass:
-        a: int
-        b: int = field(init=False)
-
-    literal = dask.delayed(3)
-
-    def prep_dataclass(b):
-        data = ADataClass(a=4)
-        data.b = b
-        return data
-
-    with pytest.raises(ValueError) as e:
-        dask.delayed(prep_dataclass(literal))
-
-    e.match(r"ADataClass")
-    e.match(r"`init=False` are not supported")
 
 
 def test_operators():
