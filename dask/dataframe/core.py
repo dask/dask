@@ -11,6 +11,7 @@ from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
+from pandas.api.extensions import no_default as pd_no_default
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
@@ -4311,9 +4312,6 @@ class Index(Series):
         )
 
 
-from pandas.api.extensions import no_default as pd_no_default
-
-
 class DataFrame(_Frame):
     """
     Parallel Pandas DataFrame
@@ -5060,17 +5058,20 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def dropna(self, how=pd_no_default, subset=None, thresh=pd_no_default):
 
-        if (
-            not PANDAS_GT_150
-            and (how is not pd_no_default)
-            and (thresh is not pd_no_default)
-        ):
+        if how is not pd_no_default and thresh is not pd_no_default:
             raise ValueError(
                 "You cannot set both the how and thresh arguments at the same time."
             )
-
-        if how is pd_no_default:
-            how = "any"
+        # Previous versions of pandas can't handle `pd_no_default` as arguments here
+        # so we restore the ealier default values where necessary.
+        if not PANDAS_GT_150:
+            if how is not pd_no_default:
+                thresh = None
+            elif thresh is not pd_no_default:
+                how = "any"
+            else:
+                how = "any"
+                thresh = None
 
         return self.map_partitions(
             M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
