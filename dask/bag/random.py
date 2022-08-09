@@ -4,8 +4,6 @@ import random as rnd
 from functools import partial
 from itertools import islice
 
-from tlz import first
-
 from dask.bag.core import Bag
 
 
@@ -34,7 +32,7 @@ def sample(population, k, split_every=None):
     [1, 3, 5]
     """
     res = _sample(population=population, k=k, split_every=split_every)
-    return res.map_partitions(first)
+    return res.map_partitions(_finalize_sample, k)
 
 
 def choices(population, k=1, split_every=None):
@@ -60,7 +58,7 @@ def choices(population, k=1, split_every=None):
     [1, 1, 5]
     """
     res = _sample_with_replacement(population=population, k=k, split_every=split_every)
-    return res.map_partitions(first)
+    return res.map_partitions(_finalize_sample, k)
 
 
 def _sample_reduce(reduce_iter, k, replace):
@@ -87,8 +85,8 @@ def _sample_reduce(reduce_iter, k, replace):
         k_i = len(s_i)
         ns_ks.append((n_i, k_i))
 
-    if k < 0 or (k > n and not replace):
-        raise ValueError("Sample larger than population or is negative")
+    if k > n and not replace:
+        return s, n
 
     # creating the probability array
     p = []
@@ -111,12 +109,21 @@ def _weighted_sampling_without_replacement(population, weights, k):
 
 
 def _sample(population, k, split_every):
+    if k < 0:
+        raise ValueError("Cannot take a negative number of samples")
     return population.reduction(
         partial(_sample_map_partitions, k=k),
         partial(_sample_reduce, k=k, replace=False),
         out_type=Bag,
         split_every=split_every,
     )
+
+
+def _finalize_sample(reduce_iter, k):
+    sample = reduce_iter[0]
+    if len(sample) < k:
+        raise ValueError("Sample larger than population")
+    return sample
 
 
 def _sample_map_partitions(population, k):
