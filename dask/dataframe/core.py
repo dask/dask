@@ -5059,7 +5059,7 @@ class DataFrame(_Frame):
     def dropna(self, how=pd_no_default, subset=None, thresh=pd_no_default):
 
         if how is not pd_no_default and thresh is not pd_no_default:
-            raise ValueError(
+            raise TypeError(
                 "You cannot set both the how and thresh arguments at the same time."
             )
         # Previous versions of pandas can't handle `pd_no_default` as arguments here
