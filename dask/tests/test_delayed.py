@@ -138,7 +138,10 @@ def test_delayed_with_dataclass_with_eager_custom_init():
     class ADataClass:
         a: int
 
-    with_class = delayed({"data": ADataClass(a=3)})
+        def __init__(self, b: int):
+            self.a = b
+
+    with_class = delayed({"data": ADataClass(b=3)})
 
     def return_nested(obj):
         return obj["data"].a
