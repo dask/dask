@@ -762,8 +762,8 @@ def test_dropna():
     )
 
     # threshold
-    assert_eq(df.dropna(), df.loc[[20, 40]])
-    assert_eq(ddf.dropna(), df.dropna())
+    # assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
+    assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
 
     assert_eq(df.dropna(thresh=0), df.loc[:])
     assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0))
@@ -776,6 +776,11 @@ def test_dropna():
 
     assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+
+    # fail when how and thresh are both provided
+    with pytest.raises(ValueError) as e:
+        ddf.dropna(how="all", thresh=0)
+        assert "cannot set both the how and thresh" in str(e.value)
 
     # Regression test for https://github.com/dask/dask/issues/6540
     df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})

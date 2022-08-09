@@ -4311,6 +4311,9 @@ class Index(Series):
         )
 
 
+from pandas.api.extensions import no_default as pd_no_default
+
+
 class DataFrame(_Frame):
     """
     Parallel Pandas DataFrame
@@ -5054,17 +5057,21 @@ class DataFrame(_Frame):
         meta = self._meta.eval(expr, inplace=inplace, **kwargs)
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
-    if PANDAS_GT_150:
-        from pandas._libs.lib import no_default
-
-        how_default = no_default
-        thresh_default = no_default
-    else:
-        how_default = "any"
-        thresh_default = None
-
     @derived_from(pd.DataFrame)
-    def dropna(self, how=how_default, subset=None, thresh=thresh_default):
+    def dropna(self, how=pd_no_default, subset=None, thresh=pd_no_default):
+
+        if (
+            not PANDAS_GT_150
+            and (how is not pd_no_default)
+            and (thresh is not pd_no_default)
+        ):
+            raise ValueError(
+                "You cannot set both the how and thresh arguments at the same time."
+            )
+
+        if how is pd_no_default:
+            how = "any"
+
         return self.map_partitions(
             M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
         )
