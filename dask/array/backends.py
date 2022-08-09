@@ -230,20 +230,20 @@ def _numel_masked(x, **kwargs):
 @numel_lookup.register((object, np.ndarray))
 def _numel_ndarray(x, **kwargs):
     """Numel implementation for arrays that want to return numel of type ndarray."""
-    return _numel(x, coerce_ndarray=True, **kwargs)
+    return _numel(x, coerce_np_ndarray=True, **kwargs)
 
 
 def _numel_arraylike(x, **kwargs):
     """Numel implementation for arrays that want to return numel of the same type."""
-    return _numel(x, coerce_ndarray=False, **kwargs)
+    return _numel(x, coerce_np_ndarray=False, **kwargs)
 
 
-def _numel(x, coerce_ndarray: bool, **kwargs):
+def _numel(x, coerce_np_ndarray: bool, **kwargs):
     """
     A reduction to count the number of elements.
 
-    This has an additional kwarg in coerce_ndarray, which determines
-    whether to ensure that the resulting array is an ndarray, or whether
+    This has an additional kwarg in coerce_np_ndarray, which determines
+    whether to ensure that the resulting array is a numpy.ndarray, or whether
     we allow it to be other array types via `np.full_like`.
     """
     shape = x.shape
@@ -256,7 +256,7 @@ def _numel(x, coerce_ndarray: bool, **kwargs):
         if keepdims is False:
             return prod
 
-        if coerce_ndarray:
+        if coerce_np_ndarray:
             return np.full(shape=(1,) * len(shape), fill_value=prod, dtype=dtype)
         else:
             return np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
@@ -272,7 +272,7 @@ def _numel(x, coerce_ndarray: bool, **kwargs):
     else:
         new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
 
-    if coerce_ndarray:
+    if coerce_np_ndarray:
         return np.broadcast_to(np.array(prod, dtype=dtype), new_shape)
     else:
         return np.full_like(x, prod, shape=new_shape, dtype=dtype)
