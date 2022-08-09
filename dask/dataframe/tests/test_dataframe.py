@@ -762,7 +762,7 @@ def test_dropna():
     )
 
     # threshold
-    # assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
+    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
 
     assert_eq(df.dropna(thresh=0), df.loc[:])
