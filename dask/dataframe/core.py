@@ -11,7 +11,6 @@ from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
-from pandas.api.extensions import no_default as pd_no_default
 from pandas.api.types import (
     is_bool_dtype,
     is_datetime64_any_dtype,
@@ -5056,26 +5055,23 @@ class DataFrame(_Frame):
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def dropna(self, how=pd_no_default, subset=None, thresh=pd_no_default):
-
-        if how is not pd_no_default and thresh is not pd_no_default:
+    def dropna(self, how=no_default, subset=None, thresh=no_default):
+        # These keywords are incompatible with each other.
+        # Don't allow them both to be set.
+        if how is not no_default and thresh is not no_default:
             raise TypeError(
                 "You cannot set both the how and thresh arguments at the same time."
             )
-        # Previous versions of pandas can't handle `pd_no_default` as arguments here
-        # so we restore the ealier default values where necessary.
-        if not PANDAS_GT_150:
-            if how is not pd_no_default:
-                thresh = None
-            elif thresh is not pd_no_default:
-                how = "any"
-            else:
-                how = "any"
-                thresh = None
 
-        return self.map_partitions(
-            M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
-        )
+        # Only specify `how` or `thresh` keyword if specified by the user
+        # so we utilize other `dropna` keyword defaults appropriately
+        kwargs = {"subset": subset}
+        if how is not no_default:
+            kwargs["how"] = how
+        elif thresh is not no_default:
+            kwargs["thresh"] = thresh
+
+        return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
