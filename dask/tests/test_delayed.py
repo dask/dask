@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from functools import partial
 from operator import add, matmul, setitem
 from random import random
+from typing import NamedTuple
 
 import cloudpickle
 import pytest
@@ -53,11 +54,11 @@ def test_to_task_dask():
     assert task == (dict, [["b", 2], ["a", 1]]) or task == (dict, [["a", 1], ["b", 2]])
     assert dict(dask) == merge(a.dask, b.dask)
 
-    f = namedtuple("f", ["x", "y"])
-    x = f(1, 2)
+    f = namedtuple("f", ["a", "b", "c"])
+    x = f(a, b, 3)
     task, dask = to_task_dask(x)
-    assert task == x
-    assert dict(dask) == {}
+    assert task == (f, "a", "b", 3)
+    assert dict(dask) == merge(a.dask, b.dask)
 
     task, dask = to_task_dask(slice(a, b, 3))
     assert task == (slice, "a", "b", 3)
@@ -91,6 +92,21 @@ def test_delayed():
     assert 1 in a.dask.values()
     b = add2(add2(a, 2), 3)
     assert a.key in b.dask
+
+
+def test_delayed_with_namedtuple():
+    class ANamedTuple(NamedTuple):
+        a: int
+
+    literal = dask.delayed(3)
+    with_class = dask.delayed({"a": ANamedTuple(a=literal)})
+
+    def return_nested(obj):
+        return obj["a"].a
+
+    final = delayed(return_nested)(with_class)
+
+    assert final.compute() == 3
 
 
 @dataclass

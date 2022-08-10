@@ -10,7 +10,7 @@ from collections import OrderedDict
 from concurrent.futures import Executor
 from enum import Enum, Flag, IntEnum, IntFlag
 from operator import add, mul
-from typing import Union
+from typing import NamedTuple, Union
 
 import pytest
 from tlz import compose, curry, merge, partial
@@ -449,8 +449,14 @@ def test_tokenize_enum(enum_type):
     assert tokenize(Color.RED) != tokenize(Color.BLUE)
 
 
-ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])  # type: ignore
+@dataclasses.dataclass
+class ADataClass:
+    a: int
+
+
+@dataclasses.dataclass
+class BDataClass:
+    a: float
 
 
 def test_tokenize_dataclass():
@@ -584,6 +590,9 @@ def test_is_dask_collection():
 
 
 def test_unpack_collections():
+    class ANamedTuple(NamedTuple):
+        a: int
+
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
@@ -600,12 +609,12 @@ def test_unpack_collections():
                 "d": (c, 2),  # tuple
                 "e": {a, 2, 3},  # set
                 "f": OrderedDict([("a", a)]),
+                "g": ADataClass(a=a),  # dataclass instance
+                "h": (ADataClass, a),  # dataclass constructor
+                "i": ANamedTuple(a=a),  # namedtuple instance
             },  # OrderedDict
             iterator,
         )  # Iterator
-
-        t[2]["f"] = ADataClass(a=a)
-        t[2]["g"] = (ADataClass, a)
 
         return t
 
