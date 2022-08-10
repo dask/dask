@@ -19,7 +19,13 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
+from dask.utils import (
+    OperatorMethodMixin,
+    apply,
+    funcname,
+    is_namedtuple_instance,
+    methodcaller,
+)
 
 __all__ = ["Delayed", "delayed"]
 
@@ -108,7 +114,7 @@ def unpack_collections(expr):
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice,) + tuple(args), collections
+        return (slice, *args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -138,6 +144,10 @@ def unpack_collections(expr):
                 "Note that using fields with `init=False` are not supported."
             ) from e
         return (apply, typ, (), (dict, args)), collections
+
+    if is_namedtuple_instance(expr):
+        args, collections = unpack_collections([v for v in expr])
+        return (typ, *args), collections
 
     return expr, ()
 
@@ -220,6 +230,10 @@ def to_task_dask(expr):
         )
 
         return (apply, typ, (), (dict, args)), dsk
+
+    if is_namedtuple_instance(expr):
+        args, dsk = to_task_dask([v for v in expr])
+        return (typ, *args), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])

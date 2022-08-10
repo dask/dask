@@ -33,7 +33,7 @@ from dask.core import literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
 from dask.typing import SchedulerGetCallable
-from dask.utils import Dispatch, apply, ensure_dict, key_split
+from dask.utils import Dispatch, apply, ensure_dict, is_namedtuple_instance, key_split
 
 __all__ = (
     "DaskMethodsMixin",
@@ -463,6 +463,8 @@ def unpack_collections(*args, traverse=True):
                         ],
                     ),
                 )
+            elif is_namedtuple_instance(expr):
+                tsk = (typ, *[_unpack(i) for i in expr])
             else:
                 return expr
 
