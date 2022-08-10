@@ -292,4 +292,7 @@ def _nannumel_sparse(x, **kwargs):
 
     https://github.com/dask/dask/issues/7169
     """
-    return _nannumel(x, **kwargs).todense()
+    n = _nannumel(x, **kwargs)
+    # If all dimensions are contracted, this will just be a number, otherwise we
+    # want to densify it.
+    return n.todense() if hasattr(n, "todense") else n
