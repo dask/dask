@@ -61,7 +61,8 @@ def chunks(
     shape : tuple of ints
         Shape of the array for which you want to generate a chunking pattern.
     axes : None or int or tuple of ints, optional
-        ...
+        axes of the array along which to chunk. Must be compatible with shape.
+        Default is to chunk over all axes.
     min_chunk_length : int, default is 1
         Minimum chunk length to use along all axes.
     max_chunk_length: int, optional
@@ -78,7 +79,7 @@ def chunks(
 
     Chunking only along the second axis
 
-    >>> chunks(shape=(2,3), axis=1).example()
+    >>> chunks(shape=(2,3), axes=1).example()
     ((2,), (1, 1, 1))
 
     Minimum size chunks of length 2 along all axes
