@@ -5055,10 +5055,23 @@ class DataFrame(_Frame):
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def dropna(self, how="any", subset=None, thresh=None):
-        return self.map_partitions(
-            M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
-        )
+    def dropna(self, how=no_default, subset=None, thresh=no_default):
+        # These keywords are incompatible with each other.
+        # Don't allow them both to be set.
+        if how is not no_default and thresh is not no_default:
+            raise TypeError(
+                "You cannot set both the how and thresh arguments at the same time."
+            )
+
+        # Only specify `how` or `thresh` keyword if specified by the user
+        # so we utilize other `dropna` keyword defaults appropriately
+        kwargs = {"subset": subset}
+        if how is not no_default:
+            kwargs["how"] = how
+        elif thresh is not no_default:
+            kwargs["thresh"] = thresh
+
+        return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
