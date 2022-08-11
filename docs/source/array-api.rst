@@ -487,6 +487,15 @@ Generalized Ufuncs
    as_gufunc
    gufunc
 
+Hypothesis testing strategies
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+.. currentmodule:: dask.array.strategies
+
+.. autosummary::
+   :toctree: generated/
+
+   chunks
 
 Internal functions
 ~~~~~~~~~~~~~~~~~~
