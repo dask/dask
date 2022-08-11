@@ -137,7 +137,7 @@ def test_make_meta():
     meta = make_meta({"a": "category", "b": "int64"}, index=idx)
     assert len(meta.a.cat.categories) == 1
     assert meta.index.dtype == "int64"
-    assert len(meta.index) == 0
+    assert not meta.index.empty
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
