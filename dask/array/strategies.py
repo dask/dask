@@ -15,18 +15,20 @@ def block_lengths(
     chunks = []
     remaining_length = ax_length
     while remaining_length > 0:
-        _max_chunk_length = (
+        max_chunk_length_remaining = (
             min(remaining_length, max_chunk_length)
             if max_chunk_length
             else remaining_length
         )
 
-        if min_chunk_length > _max_chunk_length:
+        if min_chunk_length > max_chunk_length_remaining:
             # if we are at the end of the array we have no choice but to use a smaller chunk
             chunk = remaining_length
         else:
             chunk = draw(
-                st.integers(min_value=min_chunk_length, max_value=_max_chunk_length)
+                st.integers(
+                    min_value=min_chunk_length, max_value=max_chunk_length_remaining
+                )
             )
 
         chunks.append(chunk)
@@ -95,10 +97,13 @@ def chunks(
     ((2,), (3,))
     """
 
+    if not isinstance(shape, tuple):
+        raise ValueError("shape argument must be a tuple of ints")
+
     if min_chunk_length < 1 or not isinstance(min_chunk_length, int):
         raise ValueError("min_chunk_length must be an integer >= 1")
 
-    if max_chunk_length:
+    if max_chunk_length is not None:
         if max_chunk_length < 1 or not isinstance(min_chunk_length, int):
             raise ValueError("max_chunk_length must be an integer >= 1")
 
@@ -107,10 +112,14 @@ def chunks(
     elif isinstance(axes, int):
         axes = (axes,)
 
+    for ax in axes:
+        if not isinstance(ax, int) or not 0 <= ax < len(shape):
+            raise ValueError(f"Invalid axis {ax} for shape {shape}")
+
     chunks = []
     for axis, ax_length in enumerate(shape):
 
-        _max_chunk_length = (
+        max_chunk_length_along_ax = (
             min(max_chunk_length, ax_length) if max_chunk_length else ax_length
         )
 
@@ -119,7 +128,7 @@ def chunks(
                 block_lengths(
                     ax_length,
                     min_chunk_length=min_chunk_length,
-                    max_chunk_length=_max_chunk_length,
+                    max_chunk_length=max_chunk_length_along_ax,
                 )
             )
         else:
