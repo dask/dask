@@ -16,6 +16,7 @@ dependencies:
   - pytest-rerunfailures
   - pytest-timeout
   - pytest-xdist
+  - hypothesis
   - moto
   - flask
   - fastparquet>=0.8.0

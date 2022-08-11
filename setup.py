@@ -30,6 +30,7 @@ extras_require["test"] = [
     "pytest-rerunfailures",
     "pytest-xdist",
     "pre-commit",
+    "hypothesis",
 ]
 
 install_requires = [
