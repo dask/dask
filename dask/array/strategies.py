@@ -106,9 +106,6 @@ def chunks(
 
         _max_chunk_length = min(max_chunk_length, ax_length) if max_chunk_length else ax_length
 
-        print(min_chunk_length)
-        print(_max_chunk_length)
-
         if axes is not None and axis in axes:
             block_lengths_along_ax = draw(
                 block_lengths(
