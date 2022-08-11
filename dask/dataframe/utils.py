@@ -299,7 +299,8 @@ def clear_known_categories(x, cols=None, index=True):
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
         s = pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]), name=name).iloc[:0]
-        s.index = index
+        if index is not None:
+            s.index = make_meta(index)
         return s
     return pd.Series([], dtype=dtype, name=name, index=index)
 
