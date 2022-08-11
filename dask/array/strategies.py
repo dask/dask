@@ -1,4 +1,4 @@
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import hypothesis.strategies as st
 
@@ -8,20 +8,26 @@ def block_lengths(
     draw: st.DrawFn,
     ax_length: int,
     min_chunk_length: int = 1,
-    max_chunk_length: int = None,
+    max_chunk_length: Optional[int] = None,
 ) -> st.SearchStrategy[Tuple[int, ...]]:
     """Generate different chunking patterns along one dimension of an array."""
 
     chunks = []
     remaining_length = ax_length
     while remaining_length > 0:
-        _max_chunk_length = min(remaining_length, max_chunk_length) if max_chunk_length else remaining_length
+        _max_chunk_length = (
+            min(remaining_length, max_chunk_length)
+            if max_chunk_length
+            else remaining_length
+        )
 
         if min_chunk_length > _max_chunk_length:
             # if we are at the end of the array we have no choice but to use a smaller chunk
             chunk = remaining_length
         else:
-            chunk = draw(st.integers(min_value=min_chunk_length, max_value=_max_chunk_length))
+            chunk = draw(
+                st.integers(min_value=min_chunk_length, max_value=_max_chunk_length)
+            )
 
         chunks.append(chunk)
         remaining_length = remaining_length - chunk
@@ -33,9 +39,9 @@ def block_lengths(
 def chunks(
     draw: st.DrawFn,
     shape: Tuple[int, ...],
-    axes: Union[int, Tuple[int, ...]] = None,
+    axes: Optional[Union[int, Tuple[int, ...]]] = None,
     min_chunk_length: int = 1,
-    max_chunk_length: int = None,
+    max_chunk_length: Optional[int] = None,
 ) -> st.SearchStrategy[Tuple[Tuple[int, ...], ...]]:
     """
     Generates different chunking patterns for an N-D array with a given shape.
@@ -104,7 +110,9 @@ def chunks(
     chunks = []
     for axis, ax_length in enumerate(shape):
 
-        _max_chunk_length = min(max_chunk_length, ax_length) if max_chunk_length else ax_length
+        _max_chunk_length = (
+            min(max_chunk_length, ax_length) if max_chunk_length else ax_length
+        )
 
         if axes is not None and axis in axes:
             block_lengths_along_ax = draw(
