@@ -7702,8 +7702,6 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
     elif is_arraylike(meta) and meta.shape:
-        import dask.array as da
-
         chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
             (d,) for d in meta.shape[1:]
         )
@@ -7716,7 +7714,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                 suffix = (0,) * (len(chunks) - 1)
                 for i in range(len(chunks[0])):
                     layer[(name, i) + suffix] = layer.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+        return Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 

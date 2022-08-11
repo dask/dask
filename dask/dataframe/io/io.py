@@ -35,7 +35,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import M, _deprecated, funcname, is_arraylike
+from dask.utils import M, _deprecated, funcname, is_arraylike, is_dataframe_like
 
 if TYPE_CHECKING:
     import distributed
@@ -244,61 +244,84 @@ def from_pandas(
     Raises
     ------
     TypeError
-        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is
-        passed in.
+        If something other than a ``pandas.DataFrame`` or ``pandas.Series`` is passed in.
+    ValueError
+        If passed a DataFrame with duplicate column names.
+    NotImplementedError
+        If passed either multi-indexed or null-indexed numeric data.
 
     See Also
     --------
     from_array : Construct a dask.DataFrame from an array that has record dtype
     read_csv : Construct a dask.DataFrame from a CSV file
     """
-    if isinstance(getattr(data, "index", None), pd.MultiIndex):
-        raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
-
+    # Check data
     if not has_parallel_type(data):
         raise TypeError("Input must be a pandas DataFrame or Series.")
 
+    # Check index
+    if isinstance(getattr(data, "index", None), pd.MultiIndex):
+        raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
+
+    # Check data has no duplicate column names
+    # Even if this also checked during construction, it's faster to check it at this point
+    if is_dataframe_like(data):
+        data_cols = list(data.columns)
+        if (index_name := data.index.name) is not None:
+            # if index has a name, it's assumed to be a column originally
+            data_cols.append(index_name)
+        if len(set(data_cols)) < len(data_cols):
+            dupl_cols = {c for c in data_cols if data_cols.count(c) > 1}
+            raise ValueError(
+                f"The following columns have duplicate names in provided data: {sorted(dupl_cols)}\n"
+                "This is allowed in Pandas, but not in Dask, which requires each column to have a unique name."
+                "Please rename the above duplicate columns before calling this method."
+            )
+
+    # Check we have either chunksize or npartitions to know how to partition
     if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
-
-    nrows = len(data)
-
-    if chunksize is None:
-        if not isinstance(npartitions, int):
-            raise TypeError(
-                "Please provide npartitions as an int, or possibly as None if you specify chunksize."
-            )
-    elif not isinstance(chunksize, int):
+    if chunksize is None and not isinstance(npartitions, int):
         raise TypeError(
-            "Please provide chunksize as an int, or possibly as None if you specify npartitions."
+            "Please provide npartitions as an int, or set it to None if you specify chunksize."
         )
-
+    if npartitions is None and not isinstance(chunksize, int):
+        raise TypeError(
+            "Please provide chunksize as an int, or set it to None if you specify npartitions."
+        )
     name = name or ("from_pandas-" + tokenize(data, chunksize, npartitions))
 
-    if not nrows:
+    # If there are no rows, only 1 partition with unknown divisions
+    if (nrows := len(data)) == 0:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
 
-    if data.index.isna().any() and not data.index.is_numeric():
-        raise NotImplementedError(
-            "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
-            "Consider passing `data.loc[~data.isna()]` instead."
-        )
-
+    # If we sort the index
     if sort:
+        # A non-numeric index should not have nulls, because sortedness is ambiguous in that case
+        if not data.index.is_numeric() and data.index.isna().any():
+            raise NotImplementedError(
+                "Index in passed data is non-numeric and contains nulls, which Dask does not entirely support.\n"
+                "Consider passing `data.loc[~data.isna()]` instead."
+            )
+        # Sort only if not already sorted
         if not data.index.is_monotonic_increasing:
             data = data.sort_index(ascending=True)
+        # Cleanly partition along sorted index
         divisions, locations = sorted_division_locations(
             data.index,
             npartitions=npartitions,
             chunksize=chunksize,
         )
+    # If we do not sort it
     else:
+        # Partition, but keep divisions unknown
         if chunksize is None:
             assert isinstance(npartitions, int)
             chunksize = int(ceil(nrows / npartitions))
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
+    # Build series/frame with computed divisions and locations
     dsk = {
         (name, i): data.iloc[start:stop]
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
@@ -770,8 +793,10 @@ def from_delayed(
     return df
 
 
-def sorted_division_locations(seq, npartitions=None, chunksize=None):
-    """Find division locations and values in sorted list
+def sorted_division_locations(
+    seq, npartitions: int | None = None, chunksize: int | None = None
+) -> tuple[list, list[int]]:
+    """Find division values and locations in sorted list
 
     Examples
     --------
@@ -809,7 +834,11 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             if hasattr(seq, "searchsorted")
             else np.array(seq).searchsorted(seq_unique, side="left")
         )
-        enforce_exact = npartitions and len(offsets) >= npartitions
+        enforce_exact = (
+            isinstance(npartitions, int)
+            and npartitions > 0
+            and len(offsets) >= npartitions
+        )
     else:
         offsets = seq_unique = None
 
@@ -835,7 +864,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     i = chunksizes(0)
     ind = None  # ind cache (sometimes avoids nonzero call)
     drift = 0  # accumulated drift away from ideal chunksizes
-    divs_remain = npartitions - len(divisions) if enforce_exact else None
+    divs_remain = None
+    if enforce_exact:
+        assert isinstance(npartitions, int)
+        divs_remain = npartitions - len(divisions)
     while i < len(seq):
         # Map current position selection (i)
         # to the corresponding division value (div)
@@ -850,6 +882,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
                 # Avoid "over-stepping" too many unique
                 # values when npartitions is approximately
                 # equal to len(offsets)
+                assert isinstance(divs_remain, int)
                 offs_remain = len(offsets) - ind
                 if divs_remain > offs_remain:
                     ind -= divs_remain - offs_remain
@@ -862,6 +895,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
             # pos overlaps with divisions.
             # Try the next element on the following pass
             if duplicates:
+                assert isinstance(ind, int)
                 ind += 1
                 # Note: cupy requires cast to `int`
                 i = int(offsets[ind]) if ind < len(offsets) else len(seq)
@@ -875,6 +909,7 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
                 # Only subtract drift when user specified npartitions
                 drift = drift + ((pos - locations[-1]) - chunksizes(len(divisions) - 1))
             if enforce_exact:
+                assert isinstance(divs_remain, int)
                 divs_remain -= 1
             i = pos + max(1, chunksizes(len(divisions)) - drift)
             divisions.append(div)
