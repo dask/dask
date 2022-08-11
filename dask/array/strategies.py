@@ -1,6 +1,11 @@
 from typing import Optional, Tuple, Union
 
-import hypothesis.strategies as st
+try:
+    import hypothesis.strategies as st
+except ImportError as e:
+    raise ImportError(
+        "`dask.array.testing.strategies` requires `hypothesis` to be installed."
+    ) from e
 
 
 @st.composite
