@@ -126,7 +126,7 @@ def test_make_meta():
     assert len(meta.index) == 0
 
     # Categoricals
-    meta = make_meta({"a": "category"}, parent_meta=df)  # fails
+    meta = make_meta({"a": "category"}, parent_meta=df)
     assert len(meta.a.cat.categories) == 1
     assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
     meta = make_meta(("a", "category"), parent_meta=df)
