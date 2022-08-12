@@ -1494,6 +1494,10 @@ def test_cumulative(func, key, sel):
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
+    if func == "cumcount":
+        with pytest.raises(TypeError, match="unexpected keyword argument"):
+            dg.cumcount(axis=0)
+
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis1(func):
@@ -1509,6 +1513,12 @@ def test_cumulative_axis1(func):
     assert_eq(
         getattr(df.groupby("a"), func)(axis=1), getattr(ddf.groupby("a"), func)(axis=1)
     )
+
+    with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
+        getattr(ddf.groupby("a").b, func)(axis=1)
+
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        ddf.groupby("a").cumcount(axis=1)
 
 
 def test_groupby_unaligned_index():
