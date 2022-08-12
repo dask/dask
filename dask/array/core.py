@@ -4425,28 +4425,45 @@ def insert_to_ooc(
 
     if return_stored and load_stored:
         func = load_store_chunk
-        args = (load_stored,)
+        # TODO all this different functions to save serializing an arg is silly. Can't we just `partial` this?
+        args = (load_stored, None)
     else:
         func = store_chunk  # type: ignore
         args = ()  # type: ignore
 
     slices = ArraySliceDep(arr.chunks)
-    result = map_blocks(
+    inds = tuple(range(arr.ndim))
+    return core_blockwise(
         func,
-        arr,
-        slices,
-        region,
-        out,
-        lock,
-        return_stored,
+        # NOTE: tuples just for readability
+        *(name, inds),
+        *(arr.name, inds),
+        *(slices, inds),
+        *(region, None),
+        *(out, None),
+        *(lock, None),
+        *(return_stored, None),
         *args,
-        name=name,
-        meta=arr,
+        numblocks={arr.name: arr.numblocks},  # derp
     )
-    from dask.utils_test import hlg_layer_topological
+    # TODO would prefer `map_blocks` for readability, but can't because:
+    # 1. It adds its own token to the layer, so we can't easily select out the layer
+    # 2. Graph can't actually execute (I think it's forgetting to pass `numblocks` to core blockwise correctly?)
+    # result = map_blocks(
+    #     func,
+    #     arr,
+    #     slices,
+    #     region,
+    #     out,
+    #     lock,
+    #     return_stored,
+    #     *args,
+    #     name=name,
+    #     meta=arr,
+    # )
+    # from dask.utils_test import hlg_layer_topological
 
-    return hlg_layer_topological(result.dask, -1)
-    # return result.dask.layers[name]
+    # return hlg_layer_topological(result.dask, -1)
 
 
 def retrieve_from_ooc(
