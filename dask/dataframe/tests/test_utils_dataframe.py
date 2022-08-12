@@ -152,6 +152,12 @@ def test_make_meta():
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
 
+    # Categorials with Index
+    meta = make_meta({"a": "category", "b": "int64"}, index=idx)
+    assert len(meta.a.cat.categories) == 1
+    assert meta.index.dtype == "int64"
+    assert meta.index.empty
+
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
     assert isinstance(meta, np.float64)
