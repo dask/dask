@@ -1942,21 +1942,9 @@ def test_concat5():
     cases = [
         [ddf1, ddf2],
         [ddf1, ddf3],
-        [ddf1, ddf4],
-        [ddf1, ddf5],
-        [ddf3, ddf4],
-        [ddf3, ddf5],
-        [ddf5, ddf1, ddf4],
-        [ddf5, ddf3],
-        [ddf1.A, ddf4.A],
-        [ddf2.F, ddf3.F],
-        [ddf4.A, ddf5.A],
         [ddf1.A, ddf4.F],
         [ddf2.F, ddf3.H],
         [ddf4.A, ddf5.B],
-        [ddf1, ddf4.A],
-        [ddf3.F, ddf2],
-        [ddf5, ddf1.A, ddf2],
     ]
 
     for case in cases:
@@ -1980,16 +1968,7 @@ def test_concat5():
         )
 
     # Dask + pandas
-    cases = [
-        [ddf1, pdf2],
-        [ddf1, pdf3],
-        [pdf1, ddf4],
-        [pdf1.A, ddf4.A],
-        [ddf2.F, pdf3.F],
-        [ddf1, pdf4.A],
-        [ddf3.F, pdf2],
-        [ddf2, pdf1, ddf3.F],
-    ]
+    cases = [[ddf1, pdf2], [ddf1, pdf3]]
 
     for case in cases:
         pdcase = [c.compute() if isinstance(c, _Frame) else c for c in case]
@@ -2052,7 +2031,7 @@ def test_concat_categorical(known, cat_index, divisions):
         df.y = df.y.astype("category")
 
     if cat_index:
-        frames = [df.set_index(df.y) for df in frames]
+        frames = [df.set_index(df.y.rename("y2")) for df in frames]
 
     dframes = [dd.from_pandas(p, npartitions=2, sort=divisions) for p in frames]
 
@@ -2241,8 +2220,8 @@ def test_append_categorical():
         df.y = df.y.astype("category")
         df2 = df.copy()
         df2.y = df2.y.cat.set_categories(list("abc"))
-        df.index = df.y
-        frames2.append(df2.set_index(df2.y))
+        df.index = df.y.rename("y2")
+        frames2.append(df2.set_index(df2.y.rename("y2")))
 
     df1, df2 = frames2
 

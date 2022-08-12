@@ -264,19 +264,10 @@ def from_pandas(
         raise NotImplementedError("Dask does not support MultiIndex Dataframes.")
 
     # Check data has no duplicate column names
-    # Even if this also checked during construction, it's faster to check it at this point
+    # Even if this is eventually checked during construction, it's faster to check it at this point
     if is_dataframe_like(data):
-        data_cols = list(data.columns)
-        if (index_name := data.index.name) is not None:
-            # if index has a name, it's assumed to be a column originally
-            data_cols.append(index_name)
-        if len(set(data_cols)) < len(data_cols):
-            dupl_cols = {c for c in data_cols if data_cols.count(c) > 1}
-            raise ValueError(
-                f"The following columns have duplicate names in provided data: {sorted(dupl_cols)}\n"
-                "This is allowed in Pandas, but not in Dask, which requires each column to have a unique name."
-                "Please rename the above duplicate columns before calling this method."
-            )
+        # Here it's assumed that a named index was originally a column, so we prevent a name clash
+        DataFrame._prevent_dupl_col_names(data, allow_index_name_in_cols=False)
 
     # Check we have either chunksize or npartitions to know how to partition
     if (npartitions is None) == (chunksize is None):
