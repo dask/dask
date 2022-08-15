@@ -1408,7 +1408,13 @@ class _GroupBy:
             return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumcount(self):
+    def cumcount(self, axis=no_default):
+        if axis is not no_default:
+            warnings.warn(
+                "The `axis` keyword argument is deprecated and will removed in a future release. "
+                "Previously it was unused and had no effect.",
+                FutureWarning,
+            )
         return self._cum_agg(
             "cumcount", chunk=M.cumcount, aggregate=_cumcount_aggregate, initial=-1
         )
