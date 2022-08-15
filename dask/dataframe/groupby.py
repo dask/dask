@@ -1676,7 +1676,10 @@ class _GroupBy:
             chunk_args,
             chunk=_groupby_apply_funcs,
             chunk_kwargs=dict(
-                funcs=chunk_funcs, sort=False, **self.observed, **self.dropna
+                funcs=chunk_funcs,
+                sort=False,
+                **self.observed,
+                **self.dropna,
             ),
             combine=_groupby_apply_funcs,
             combine_kwargs=dict(
