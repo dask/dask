@@ -1097,7 +1097,7 @@ def test_aggregate_dask():
 
 
 @pytest.mark.parametrize("split_out", [2, 32])
-def test_shuffle_aggregate(split_out):
+def test_shuffle_aggregate(shuffle_method, split_out):
 
     pdf = pd.DataFrame(
         {
@@ -1111,7 +1111,9 @@ def test_shuffle_aggregate(split_out):
     ddf = dd.from_pandas(pdf, npartitions=100)
 
     spec = {"b": "mean", "c": ["min", "max"]}
-    result = ddf.groupby(["a", "b"]).agg(spec, split_out=split_out, shuffle=True)
+    result = ddf.groupby(["a", "b"]).agg(
+        spec, split_out=split_out, shuffle=shuffle_method
+    )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
     # Make sure "mean" dtype is consistent (depends on pandas version)

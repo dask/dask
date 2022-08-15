@@ -1699,7 +1699,7 @@ class _GroupBy:
                 token="aggregate",
                 split_every=split_every,
                 split_out=split_out,
-                shuffle=shuffle if isinstance(shuffle, str) else None,
+                shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                 sort=self.sort,
             )
 
@@ -2347,7 +2347,7 @@ def _shuffle_aggregate(
     split_every=None,
     split_out=1,
     sort=None,
-    shuffle=None,
+    shuffle="tasks",
     **kwargs,
 ):
     """Shuffle-based groupby aggregation
@@ -2378,7 +2378,7 @@ def _shuffle_aggregate(
         Number of output partitions.
     sort : bool, default None
         If allowed, sort the keys of the output aggregation.
-    shuffle : str or None, default None
+    shuffle : str, default "tasks"
         Shuffle option to be used by ``DataFrame.shuffle``.
     kwargs :
         All remaining keywords will be passed to ``chunk`` and ``aggregate``.
