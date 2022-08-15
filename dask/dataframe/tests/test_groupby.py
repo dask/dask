@@ -1113,6 +1113,9 @@ def test_shuffle_aggregate(split_out):
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby(["a", "b"]).agg(spec, split_out=split_out, shuffle=True)
     expect = pdf.groupby(["a", "b"]).agg(spec)
+
+    # Make sure "mean" dtype is consistent (depends on pandas version)
+    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
     assert_eq(expect, result)
 
 
