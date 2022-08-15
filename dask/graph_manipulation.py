@@ -271,10 +271,12 @@ def bind(
     -------
     Same as ``children``
         Dask collection or structure of dask collection equivalent to ``children``,
-        which compute to the same values. All keys of ``children`` will be regenerated,
-        up to and excluding the keys of ``omit``. Nodes immediately above ``omit``, or
+        which compute to the same values. All nodes of ``children`` will be regenerated,
+        up to and excluding the nodes of ``omit``. Nodes immediately above ``omit``, or
         the leaf nodes if the collections in ``omit`` are not found, are prevented from
         computing until all collections in ``parents`` have been fully computed.
+        The keys of the regenerated nodes will be different from the original ones, so
+        that they can be used within the same graph.
     """
     if seed is None:
         seed = uuid.uuid4().bytes
@@ -446,6 +448,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
         Dask collections of the same type as the inputs, which compute to the same
         value, or nested structures equivalent to the inputs, where the original
         collections have been replaced.
+        The keys of the regenerated nodes in the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     out = bind(
         collections, parents=None, omit=omit, seed=seed, assume_layers=assume_layers
@@ -489,6 +493,8 @@ def wait_on(
         Dask collection of the same type as the input, which computes to the same value,
         or a nested structure equivalent to the input where the original collections
         have been replaced.
+        The keys of the regenerated nodes of the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     blocker = checkpoint(*collections, split_every=split_every)
 
