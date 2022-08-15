@@ -6203,7 +6203,6 @@ def apply_concat_apply(
     split_out_setup_kwargs=None,
     sort=None,
     ignore_index=False,
-    shuffle=False,
     **kwargs,
 ):
     """Apply a function to blocks, then concat, then apply again
@@ -6247,11 +6246,6 @@ def apply_concat_apply(
         If allowed, sort the keys of the output aggregation.
     ignore_index : bool, default False
         If True, do not preserve index values throughout ACA operations.
-    shuffle : bool or str, default False
-        Whether a shuffle operation should be used in lieu of a tree
-        reduction in cases where ``split_out`` is large.  This option may
-        be most efficient for high-cardinality groupby indices, but it
-        requires the output of ``chunk`` to be a proper DataFrame object.
     kwargs :
         All remaining keywords will be passed to ``chunk``, ``aggregate``, and
         ``combine``.
@@ -6313,49 +6307,6 @@ def apply_concat_apply(
         split_out_setup_kwargs,
     )
 
-    # Handle sort behavior
-    if sort is not None:
-        if sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1`."
-                " Try using split_out=1, or grouping with sort=False."
-            )
-        aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = sort
-
-    if shuffle:
-        # Shuffle-based code path
-        #
-        # This algorithm is more scalable than a tree reduction
-        # for high-cardinality group indices. However, the shuffle
-        # step requires that the result of `chunk` produces a
-        # proper DataFrame type
-        chunk_name = f"{token or funcname(chunk)}-chunk"
-        shuffle_kwarg = {} if shuffle is True else {"shuffle": shuffle}
-        chunked = map_partitions(
-            chunk,
-            *args,
-            token=chunk_name,
-            **chunk_kwargs,
-        )
-        shuffle_npartitions = max(
-            chunked.npartitions // split_every,
-            split_out,
-        )
-        result = (
-            chunked.shuffle(
-                chunked.index,
-                ignore_index=False,
-                npartitions=shuffle_npartitions,
-                **shuffle_kwarg,
-            )
-            .map_partitions(combine, **combine_kwargs)
-            .map_partitions(aggregate, **aggregate_kwargs)
-        )
-        if split_out < shuffle_npartitions:
-            return result.repartition(npartitions=split_out)
-        return result
-
     # Blockwise Chunk Layer
     chunk_name = f"{token or funcname(chunk)}-chunk-{token_key}"
     chunked = map_bag_partitions(
@@ -6384,6 +6335,16 @@ def apply_concat_apply(
             ignore_index,
             token="split-%s" % token_key,
         )
+
+    # Handle sort behavior
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarantee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
 
     # Tree-Reduction Layer
     final_name = f"{token or funcname(aggregate)}-agg-{token_key}"

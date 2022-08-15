@@ -14,6 +14,7 @@ from dask.dataframe.core import (
     DataFrame,
     Series,
     _extract_meta,
+    _Frame,
     aca,
     map_partitions,
     new_dd_object,
@@ -1672,6 +1673,36 @@ class _GroupBy:
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
+        if shuffle:
+            # Shuffle-based aggregation
+            #
+            # This algorithm is more scalable than a tree reduction
+            # for larger values of split_out. However, the shuffle
+            # step requires that the result of `chunk` produces a
+            # proper DataFrame type
+            return _shuffle_aggregate(
+                chunk_args,
+                chunk=_groupby_apply_funcs,
+                chunk_kwargs=dict(
+                    funcs=chunk_funcs,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                aggregate=_agg_finalize,
+                aggregate_kwargs=dict(
+                    aggregate_funcs=aggregate_funcs,
+                    finalize_funcs=finalizers,
+                    level=levels,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                token="aggregate",
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle if isinstance(shuffle, str) else None,
+                sort=self.sort,
+            )
+
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
@@ -1693,8 +1724,6 @@ class _GroupBy:
             split_out=split_out,
             split_out_setup=split_out_on_index,
             sort=self.sort,
-            # User must "opt in" to shuffle-based algorithm
-            shuffle=shuffle or False,
         )
 
     @insert_meta_param_description(pad=12)
@@ -2306,3 +2335,108 @@ def _head_chunk(series_gb, **kwargs):
 def _head_aggregate(series_gb, **kwargs):
     levels = kwargs.pop("index_levels")
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
+
+
+def _shuffle_aggregate(
+    args,
+    chunk=None,
+    aggregate=None,
+    token=None,
+    chunk_kwargs=None,
+    aggregate_kwargs=None,
+    split_every=None,
+    split_out=1,
+    sort=None,
+    shuffle=None,
+    **kwargs,
+):
+    """Shuffle-based groupby aggregation
+
+    This algorithm may be more efficient than ACA for large ``split_out``
+    values (required for high-cardinality groupby indices), but it also
+    requires the output of ``chunk`` to be a proper DataFrame object.
+
+    Parameters
+    ----------
+    args :
+        Positional arguments for the `chunk` function. All `dask.dataframe`
+        objects should be partitioned and indexed equivalently.
+    chunk : function [block-per-arg] -> block
+        Function to operate on each block of data
+    aggregate : function concatenated-block -> block
+        Function to operate on the concatenated result of chunk
+    token : str, optional
+        The name to use for the output keys.
+    chunk_kwargs : dict, optional
+        Keywords for the chunk function only.
+    aggregate_kwargs : dict, optional
+        Keywords for the aggregate function only.
+    split_every : int, optional
+        Number of intermediate partitions that may be aggregated at once.
+        Default is 8.
+    split_out : int, optional
+        Number of output partitions.
+    sort : bool, default None
+        If allowed, sort the keys of the output aggregation.
+    shuffle : str or None, default None
+        Shuffle option to be used by ``DataFrame.shuffle``.
+    kwargs :
+        All remaining keywords will be passed to ``chunk`` and ``aggregate``.
+    """
+
+    if chunk_kwargs is None:
+        chunk_kwargs = dict()
+    if aggregate_kwargs is None:
+        aggregate_kwargs = dict()
+    chunk_kwargs.update(kwargs)
+    aggregate_kwargs.update(kwargs)
+
+    if not isinstance(args, (tuple, list)):
+        args = [args]
+
+    dfs = [arg for arg in args if isinstance(arg, _Frame)]
+
+    npartitions = {arg.npartitions for arg in dfs}
+    if len(npartitions) > 1:
+        raise ValueError("All arguments must have same number of partitions")
+    npartitions = npartitions.pop()
+
+    if split_every is None:
+        split_every = 8
+    elif split_every is False:
+        split_every = npartitions
+    elif split_every < 2 or not isinstance(split_every, Integral):
+        raise ValueError("split_every must be an integer >= 2")
+
+    # Handle sort behavior
+    if sort is not None:
+        if sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarantee sorted keys for `split_out>1`."
+                " Try using split_out=1, or grouping with sort=False."
+            )
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
+
+    # Shuffle-based groupby aggregation
+    chunk_name = f"{token or funcname(chunk)}-chunk"
+    chunked = map_partitions(
+        chunk,
+        *args,
+        token=chunk_name,
+        sort=False,
+        **chunk_kwargs,
+    )
+    shuffle_npartitions = max(
+        chunked.npartitions // split_every,
+        split_out,
+    )
+    result = chunked.shuffle(
+        chunked.index,
+        ignore_index=False,
+        npartitions=shuffle_npartitions,
+        shuffle=shuffle,
+    ).map_partitions(aggregate, sort=sort, **aggregate_kwargs)
+    if split_out < shuffle_npartitions:
+        return result.repartition(npartitions=split_out)
+    return result
