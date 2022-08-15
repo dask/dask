@@ -1,6 +1,5 @@
 import collections
 import itertools as it
-import math
 import operator
 import warnings
 from numbers import Integral
@@ -1673,21 +1672,6 @@ class _GroupBy:
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
-        # Rough heuristic to switch from tree reduction to shuffle
-        if shuffle is None and split_out > 1:
-            # Check if rough estimate of shuffle-task count is
-            # less than that of a tree-reduction
-            l = self.obj.npartitions
-            if split_every is None:
-                k = 8
-            elif split_every is False:
-                k = self.obj.npartitions
-            else:
-                k = l
-            N_tree = (k * l - 1) / (k - 1) * split_out
-            N_shuf = 2 * l * math.log(l, k)  # Over estimate
-            shuffle = N_shuf < N_tree
-
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
@@ -1709,7 +1693,8 @@ class _GroupBy:
             split_out=split_out,
             split_out_setup=split_out_on_index,
             sort=self.sort,
-            shuffle=shuffle,
+            # User must "opt in" to shuffle-based algorithm
+            shuffle=shuffle or False,
         )
 
     @insert_meta_param_description(pad=12)

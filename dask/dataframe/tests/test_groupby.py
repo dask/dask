@@ -1096,6 +1096,26 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+@pytest.mark.parametrize("split_out", [2, 32])
+def test_shuffle_aggregate(split_out):
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+    result = ddf.groupby(["a", "b"]).agg(spec, split_out=split_out, shuffle=True)
+    expect = pdf.groupby(["a", "b"]).agg(spec)
+    assert_eq(expect, result)
+
+
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
