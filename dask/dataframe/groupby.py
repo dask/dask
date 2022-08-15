@@ -2436,7 +2436,7 @@ def _shuffle_aggregate(
         ignore_index=False,
         npartitions=shuffle_npartitions,
         shuffle=shuffle,
-    ).map_partitions(aggregate, sort=sort, **aggregate_kwargs)
+    ).map_partitions(aggregate, **aggregate_kwargs)
     if split_out < shuffle_npartitions:
         return result.repartition(npartitions=split_out)
     return result
