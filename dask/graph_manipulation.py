@@ -431,6 +431,17 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-5', 0): (<function operator.add>, ('add-4', 0), 1),
      ('add-5', 1): (<function operator.add>, ('add-4', 1), 1)}
 
+    The typical usage pattern for clone() is the following:
+
+    >>> x = cheap_computation_with_large_output()  # doctest: +SKIP
+    >>> y = expensive_and_long_computation(x)  # doctest: +SKIP
+    >>> z = wrap_up(clone(x), y)  # doctest: +SKIP
+
+    In the above code, the chunks of x will be forgotten as soon as they are consumed by
+    the chunks of y, and then they'll be regenerated from scratch at the very end of the
+    computation. Without clone(), x would only be computed once and then kept in memory
+    throughout the whole computation of y, needlessly consuming memory.
+
     Parameters
     ----------
     collections
