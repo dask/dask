@@ -2379,7 +2379,6 @@ def _shuffle_aggregate(
     sort=None,
     ignore_index=False,
     shuffle="tasks",
-    **kwargs,
 ):
     """Shuffle-based groupby aggregation
 
@@ -2413,16 +2412,12 @@ def _shuffle_aggregate(
         If allowed, sort the keys of the output aggregation.
     shuffle : str, default "tasks"
         Shuffle option to be used by ``DataFrame.shuffle``.
-    kwargs :
-        All remaining keywords will be passed to ``chunk`` and ``aggregate``.
     """
 
     if chunk_kwargs is None:
         chunk_kwargs = dict()
     if aggregate_kwargs is None:
         aggregate_kwargs = dict()
-    chunk_kwargs.update(kwargs)
-    aggregate_kwargs.update(kwargs)
 
     if not isinstance(args, (tuple, list)):
         args = [args]
