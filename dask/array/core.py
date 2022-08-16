@@ -78,6 +78,7 @@ from dask.utils import (
     is_index_like,
     is_integer,
     is_series_like,
+    maybe_pluralize,
     ndeepmap,
     ndimlist,
     parse_bytes,
@@ -1379,7 +1380,7 @@ class Array(DaskMethodsMixin):
         return self
 
     def __reduce__(self):
-        return (Array, (self.dask, self.name, self.chunks, self.dtype))
+        return (Array, (self.dask, self.name, self.chunks, self.dtype, self._meta))
 
     def __dask_graph__(self):
         return self.dask
@@ -1637,6 +1638,7 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
+            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
         )
 
     @cached_property
@@ -2231,7 +2233,14 @@ class Array(DaskMethodsMixin):
             By default, astype always returns a newly allocated array. If this
             is set to False and the `dtype` requirement is satisfied, the input
             array is returned instead of a copy.
+
+            .. note::
+
+                Dask does not respect the contiguous memory layout of the array,
+                and will ignore the ``order`` keyword argument.
+                The default order is 'C' contiguous.
         """
+        kwargs.pop("order", None)  # `order` is not respected, so we remove this kwarg
         # Scalars don't take `casting` or `copy` kwargs - as such we only pass
         # them to `map_blocks` if specified by user (different than defaults).
         extra = set(kwargs) - {"casting", "copy"}
@@ -3327,6 +3336,12 @@ def from_array(
         If False then chunks are passed through unchanged.
         If None (default) then we use True if the ``__array_function__`` method
         is undefined.
+
+        .. note::
+
+            Dask does not preserve the memory layout of the original array when
+            the array is created using Fortran rather than C ordering.
+
     fancy : bool, optional
         If ``x`` doesn't support fancy indexing (e.g. indexing with lists or
         arrays) then set to False. Default is True.

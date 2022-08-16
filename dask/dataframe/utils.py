@@ -298,9 +298,10 @@ def clear_known_categories(x, cols=None, index=True):
 
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
-        return pd.Series(
-            pd.Categorical([UNKNOWN_CATEGORIES]), name=name, index=index
-        ).iloc[:0]
+        s = pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]), name=name).iloc[:0]
+        if index is not None:
+            s.index = make_meta(index)
+        return s
     return pd.Series([], dtype=dtype, name=name, index=index)
 
 

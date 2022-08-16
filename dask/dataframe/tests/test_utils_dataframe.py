@@ -48,17 +48,36 @@ def test_make_meta():
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    for col in "abc":
+        meta_pointer = meta[col].values.__array_interface__["data"][0]
+        df_pointer = df[col].values.__array_interface__["data"][0]
+        assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas series
     meta = make_meta(df.a)
     assert len(meta) == 0
     assert meta.dtype == df.a.dtype
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.a.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas index
     meta = make_meta(df.index)
     assert isinstance(meta, type(df.index))
     assert len(meta) == 0
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Dask object
     ddf = dd.from_pandas(df, npartitions=2)
@@ -132,6 +151,12 @@ def test_make_meta():
     meta = make_meta(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+
+    # Categorials with Index
+    meta = make_meta({"a": "category", "b": "int64"}, index=idx)
+    assert len(meta.a.cat.categories) == 1
+    assert meta.index.dtype == "int64"
+    assert meta.index.empty
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)

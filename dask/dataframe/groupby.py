@@ -1391,19 +1391,31 @@ class _GroupBy:
     @derived_from(pd.core.groupby.GroupBy)
     def cumsum(self, axis=0):
         if axis:
-            return self.obj.cumsum(axis=axis)
+            if isinstance(self, SeriesGroupBy):
+                raise ValueError("No axis named 1 for object type Series")
+            else:
+                return self.obj.cumsum(axis=axis)
         else:
             return self._cum_agg("cumsum", chunk=M.cumsum, aggregate=M.add, initial=0)
 
     @derived_from(pd.core.groupby.GroupBy)
     def cumprod(self, axis=0):
         if axis:
-            return self.obj.cumprod(axis=axis)
+            if isinstance(self, SeriesGroupBy):
+                raise ValueError("No axis named 1 for object type Series")
+            else:
+                return self.obj.cumprod(axis=axis)
         else:
             return self._cum_agg("cumprod", chunk=M.cumprod, aggregate=M.mul, initial=1)
 
     @derived_from(pd.core.groupby.GroupBy)
-    def cumcount(self, axis=None):
+    def cumcount(self, axis=no_default):
+        if axis is not no_default:
+            warnings.warn(
+                "The `axis` keyword argument is deprecated and will removed in a future release. "
+                "Previously it was unused and had no effect.",
+                FutureWarning,
+            )
         return self._cum_agg(
             "cumcount", chunk=M.cumcount, aggregate=_cumcount_aggregate, initial=-1
         )
