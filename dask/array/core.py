@@ -1844,7 +1844,7 @@ class Array(DaskMethodsMixin):
         if self.size > 1:
             raise TypeError("Only length-1 arrays can be converted to Python scalars")
         else:
-            return cast_type(self.compute())
+            raise RuntimeError("Implicit compute to scalar")
 
     def __int__(self):
         return self._scalarfunc(int)
