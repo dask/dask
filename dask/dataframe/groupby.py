@@ -1697,6 +1697,7 @@ class _GroupBy:
                 chunk=_groupby_apply_funcs,
                 chunk_kwargs=dict(
                     funcs=chunk_funcs,
+                    sort=self.sort,
                     **self.observed,
                     **self.dropna,
                 ),
@@ -1715,13 +1716,30 @@ class _GroupBy:
                 sort=self.sort,
             )
 
+        # Check sort behavior
+        if self.sort and split_out > 1:
+            raise NotImplementedError(
+                "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
+                " Try using `shuffle=True` if you are grouping on a single column."
+                " Otherwise, try using split_out=1, or grouping with sort=False."
+            )
+
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(funcs=chunk_funcs, **self.observed, **self.dropna),
+            chunk_kwargs=dict(
+                funcs=chunk_funcs,
+                sort=self.sort,
+                **self.observed,
+                **self.dropna,
+            ),
             combine=_groupby_apply_funcs,
             combine_kwargs=dict(
-                funcs=aggregate_funcs, level=levels, **self.observed, **self.dropna
+                funcs=aggregate_funcs,
+                level=levels,
+                sort=self.sort,
+                **self.observed,
+                **self.dropna,
             ),
             aggregate=_agg_finalize,
             aggregate_kwargs=dict(
@@ -2359,6 +2377,7 @@ def _shuffle_aggregate(
     split_every=None,
     split_out=1,
     sort=None,
+    ignore_index=False,
     shuffle="tasks",
     **kwargs,
 ):
@@ -2388,6 +2407,8 @@ def _shuffle_aggregate(
         Default is 8.
     split_out : int, optional
         Number of output partitions.
+    ignore_index : bool, default False
+        Whether the index can be ignored during the shuffle.
     sort : bool, default None
         If allowed, sort the keys of the output aggregation.
     shuffle : str, default "tasks"
@@ -2420,35 +2441,53 @@ def _shuffle_aggregate(
     elif split_every < 2 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 2")
 
-    # Handle sort behavior
-    if sort is not None:
-        if sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1`."
-                " Try using split_out=1, or grouping with sort=False."
-            )
-        aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = sort
-
     # Shuffle-based groupby aggregation
     chunk_name = f"{token or funcname(chunk)}-chunk"
     chunked = map_partitions(
         chunk,
         *args,
+        meta=chunk(
+            *[arg._meta if isinstance(arg, _Frame) else arg for arg in args],
+            **chunk_kwargs,
+        ),
         token=chunk_name,
-        sort=False,
         **chunk_kwargs,
     )
+
     shuffle_npartitions = max(
         chunked.npartitions // split_every,
         split_out,
     )
-    result = chunked.shuffle(
-        chunked.index,
-        ignore_index=False,
-        npartitions=shuffle_npartitions,
-        shuffle=shuffle,
-    ).map_partitions(aggregate, **aggregate_kwargs)
+
+    # Handle sort kwarg
+    if sort is not None:
+        aggregate_kwargs = aggregate_kwargs or {}
+        aggregate_kwargs["sort"] = sort
+
+    # Perform global sort or shuffle
+    if sort and split_out > 1:
+        cols = set(chunked.columns)
+        chunked = chunked.reset_index()
+        index_cols = set(chunked.columns) - cols
+        if len(index_cols) > 1:
+            raise NotImplementedError(
+                "Cannot guarantee sorted keys for `split_out>1` when "
+                "grouping on multiple columns. "
+                "Try using split_out=1, or grouping with sort=False."
+            )
+        result = chunked.set_index(
+            list(index_cols),
+            npartitions=shuffle_npartitions,
+            shuffle=shuffle,
+        ).map_partitions(aggregate, **aggregate_kwargs)
+    else:
+        result = chunked.shuffle(
+            chunked.index,
+            ignore_index=ignore_index,
+            npartitions=shuffle_npartitions,
+            shuffle=shuffle,
+        ).map_partitions(aggregate, **aggregate_kwargs)
+
     if split_out < shuffle_npartitions:
         return result.repartition(npartitions=split_out)
     return result
