@@ -1836,7 +1836,7 @@ class Array(DaskMethodsMixin):
                 "Use a.any() or a.all()."
             )
         else:
-            return bool(self.compute())
+            raise RuntimeError("asdfasdf")
 
     __nonzero__ = __bool__  # python 2
 
