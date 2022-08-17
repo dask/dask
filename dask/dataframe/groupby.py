@@ -1057,6 +1057,41 @@ def _fillna_group(group, by, value, method, limit, fillna_axis):
     )
 
 
+def _aggregate_docstring(based_on=None):
+    # Insert common groupby-aggregation docstring.
+    # Use `based_on` parameter to add note about the
+    # Pandas method the Dask version is based on.
+    based_on_str = "\n" if based_on is None else f"\nBased on {based_on}\n"
+
+    def wrapper(func):
+        func.__doc__ = f"""Aggregate using one or more specified operations
+        {based_on_str}
+        Parameters
+        ----------
+        arg : callable, str, list or dict
+            Aggregation spec. Accepted combinations are:
+
+            - callable function
+            - string function name
+            - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
+            - dict of column names -> function, function name or list of such.
+        split_every : int, optional
+            Number of intermediate partitions that may be aggregated at once.
+            Default is 8.
+        split_out : int, optional
+            Number of output partitions. Default is 1.
+        shuffle : bool or str, optional
+            Whether a shuffle-based algorithm should be used. A specific
+            algorithm name may also be specified (e.g. `"tasks"` or `"p2p"`).
+            The shuffle-based algorithm is likely to be more efficient than
+            ``shuffle=False`` when ``split_out>1`` and the number of unique
+            groups is large (high cardinality). Default is ``False``.
+        """
+        return func
+
+    return wrapper
+
+
 class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
@@ -1617,7 +1652,8 @@ class _GroupBy:
             token=token,
         )
 
-    def aggregate(self, arg, split_every, split_out=1, shuffle=None):
+    @_aggregate_docstring()
+    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -2177,7 +2213,7 @@ class DataFrameGroupBy(_GroupBy):
         except KeyError as e:
             raise AttributeError(e) from e
 
-    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if arg == "size":
             return self.size()
@@ -2186,7 +2222,7 @@ class DataFrameGroupBy(_GroupBy):
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
         )
 
-    @derived_from(pd.core.groupby.DataFrameGroupBy)
+    @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
     def agg(self, arg, split_every=None, split_out=1, shuffle=None):
         return self.aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
@@ -2256,7 +2292,7 @@ class SeriesGroupBy(_GroupBy):
             sort=self.sort,
         )
 
-    @derived_from(pd.core.groupby.SeriesGroupBy)
+    @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         result = super().aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle
@@ -2269,7 +2305,7 @@ class SeriesGroupBy(_GroupBy):
 
         return result
 
-    @derived_from(pd.core.groupby.SeriesGroupBy)
+    @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
     def agg(self, arg, split_every=None, split_out=1, shuffle=None):
         return self.aggregate(
             arg, split_every=split_every, split_out=split_out, shuffle=shuffle

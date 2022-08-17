@@ -1116,7 +1116,8 @@ def test_shuffle_aggregate(shuffle_method, split_out):
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
-    # Make sure "mean" dtype is consistent (depends on pandas version)
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
     expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
     assert_eq(expect, result)
 
@@ -1139,7 +1140,8 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
     result = ddf.groupby("a", sort=sort).agg(spec, split_out=2, shuffle=shuffle_method)
     expect = pdf.groupby("a", sort=sort).agg(spec)
 
-    # Make sure "mean" dtype is consistent (depends on pandas version)
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
     expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
     assert_eq(expect, result)
 
