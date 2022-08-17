@@ -22,7 +22,6 @@ from dask.utils import (
     ensure_dict,
     ensure_set,
     ensure_unicode,
-    entry_points,
     extra_titles,
     factors,
     format_bytes,
@@ -889,7 +888,3 @@ def test_factors():
     assert factors(2) == {1, 2}
     assert factors(12) == {1, 2, 3, 4, 6, 12}
     assert factors(15) == {1, 3, 5, 15}
-
-
-def test_entry_points():
-    assert "pytest" in [ep.name for ep in entry_points(group="console_scripts")]
