@@ -2831,3 +2831,44 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_scalar_column():
+    df = pd.DataFrame(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+        ],
+        columns=[2, 1, 0],
+        dtype="float64",
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.groupby(2).cov()
+    result = ddf.groupby(2).cov()
+    assert_eq(result, expected)
+
+
+@pytest.mark.parametrize(
+    ["op"],
+    [
+        [lambda s: s.agg("sum")],
+        [lambda s: s.var()],
+    ],
+)
+def test_groupby_falsy_slice(op):
+    df = pd.DataFrame(
+        [
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+            [0, 1, 2],
+        ],
+        columns=[2, 1, 0],
+        dtype="float64",
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = op(df.groupby([2])[0])
+    result = op(ddf.groupby([2])[0])
+    assert_eq(result, expected)

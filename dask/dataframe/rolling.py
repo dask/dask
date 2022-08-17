@@ -665,7 +665,7 @@ class RollingGroupby(Rolling):
         **kwargs,
     ):
         groupby = df.groupby(**groupby_kwargs)
-        if groupby_slice:
+        if groupby_slice is not None:
             groupby = groupby[groupby_slice]
         rolling = groupby.rolling(**rolling_kwargs)
         return getattr(rolling, name)(*args, **kwargs).sort_index(level=-1)
