@@ -15,10 +15,10 @@ def entry_points(group=None):
     In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
     This compatibility utility can be removed once Python 3.10 is the minimum.
     """
-    eps = importlib.metadata.entry_points()
-    if group:
-        try:
-            return eps.select(group=group)
-        except AttributeError:
+    if _PY_VERSION >= parse_version("3.10"):
+        return importlib.metadata.entry_points(group=group)
+    else:
+        eps = importlib.metadata.entry_points()
+        if group:
             return eps.get(group, [])
-    return eps
+        return eps
