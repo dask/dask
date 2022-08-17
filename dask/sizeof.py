@@ -216,8 +216,7 @@ def register_pyarrow():
 
 def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
-    sizeof_entry_points = entry_points(group="dask.sizeof")
-    for entry_point in sizeof_entry_points:
+    for entry_point in entry_points(group="dask.sizeof"):
         registrar = entry_point.load()
         try:
             registrar(sizeof)
