@@ -1,6 +1,5 @@
-from importlib.metadata import entry_points
-
 from dask import __version__
+from dask.compatibility import entry_points
 
 try:
     import click
