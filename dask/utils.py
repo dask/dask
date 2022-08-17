@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import codecs
 import functools
+import importlib.metadata
 import inspect
 import os
 import re
@@ -2081,3 +2082,19 @@ def is_namedtuple_instance(obj: Any) -> bool:
         and hasattr(obj, "_fields")
         and hasattr(obj, "_field_defaults")
     )
+
+
+def entry_points(group=None):
+    """Returns an iterable of entrypoints.
+
+    For compatibility with Python 3.8/3.9.
+    In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
+    This compatibility utility can be removed once Python 3.10 is the minimum.
+    """
+    eps = importlib.metadata.entry_points()
+    if group:
+        try:
+            return eps.select(group=group)
+        except AttributeError:
+            return eps.get(group, [])
+    return eps
