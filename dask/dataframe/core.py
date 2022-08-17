@@ -76,6 +76,7 @@ from dask.utils import (
     is_arraylike,
     iter_chunks,
     key_split,
+    maybe_pluralize,
     memory_repr,
     parse_bytes,
     partial_by_order,
@@ -540,7 +541,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
         _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {task} tasks"""
+Dask Name: {name}, {layers}"""
         if len(self.columns) == 0:
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
@@ -548,7 +549,7 @@ Dask Name: {name}, {task} tasks"""
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @property
@@ -3505,12 +3506,12 @@ class Series(_Frame):
         return """Dask {klass} Structure:
 {data}
 {footer}
-Dask Name: {name}, {task} tasks""".format(
+Dask Name: {name}, {layers}""".format(
             klass=self.__class__.__name__,
             data=self.to_string(),
             footer=footer,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def rename(self, index=None, inplace=False, sorted_index=False):
@@ -4037,10 +4038,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def memory_usage(self, index=True, deep=False):
-        result = self.map_partitions(
-            M.memory_usage, index=index, deep=deep, enforce_metadata=False
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"index": index, "deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
         )
-        return delayed(sum)(result.to_delayed())
 
     def __divmod__(self, other):
         res1 = self // other
@@ -4295,6 +4299,16 @@ class Index(Series):
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
+
+    @derived_from(pd.Index)
+    def memory_usage(self, deep=False):
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
+        )
 
 
 class DataFrame(_Frame):
@@ -4795,12 +4809,18 @@ class DataFrame(_Frame):
         if isinstance(other, Series):
             # If it's already the index, there's nothing to do
             if other._name == self.index._name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
         # If the name of a column/index
         else:
             # With the same name as the index, there's nothing to do either
             if other == self.index.name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
                 return self
 
             # If a missing column, KeyError
@@ -5035,10 +5055,23 @@ class DataFrame(_Frame):
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def dropna(self, how="any", subset=None, thresh=None):
-        return self.map_partitions(
-            M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
-        )
+    def dropna(self, how=no_default, subset=None, thresh=no_default):
+        # These keywords are incompatible with each other.
+        # Don't allow them both to be set.
+        if how is not no_default and thresh is not no_default:
+            raise TypeError(
+                "You cannot set both the how and thresh arguments at the same time."
+            )
+
+        # Only specify `how` or `thresh` keyword if specified by the user
+        # so we utilize other `dropna` keyword defaults appropriately
+        kwargs = {"subset": subset}
+        if how is not no_default:
+            kwargs["how"] = how
+        elif thresh is not no_default:
+            kwargs["thresh"] = thresh
+
+        return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
@@ -5803,7 +5836,9 @@ class DataFrame(_Frame):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _repr_data(self):
@@ -5823,7 +5858,9 @@ class DataFrame(_Frame):
             max_rows=5, show_dimensions=False, notebook=True
         )
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _select_columns_or_index(self, columns_or_index):
@@ -7338,7 +7375,9 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        original_divisions = divisions = pd.Series(df.divisions)
+        # Drop duplcates in case last partition has same
+        # value for min and max division
+        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)
