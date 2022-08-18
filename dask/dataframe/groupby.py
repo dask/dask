@@ -1765,7 +1765,6 @@ class _GroupBy:
             chunk=_groupby_apply_funcs,
             chunk_kwargs=dict(
                 funcs=chunk_funcs,
-                sort=self.sort,
                 **self.observed,
                 **self.dropna,
             ),
