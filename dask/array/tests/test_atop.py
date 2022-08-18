@@ -324,7 +324,42 @@ def test_optimize_blockwise():
     )
 
 
-def test_optimize_blockwise_annotations():
+def test_optimize_blockwise_control_annotations():
+    """
+    Can we fuse blockwise layers with different, but compatible
+    annotations for retries, priority, etc.
+    """
+
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+
+    with dask.annotate(retries=5):
+        c = b + 2
+
+    with dask.annotate(priority=2):
+        d = c + 3
+
+    with dask.annotate(retries=3):
+        e = d + 4
+
+    with dask.annotate(priority=4):
+        f = e + 5
+
+    g = f + 6
+
+    dsk = da.optimization.optimize_blockwise(g.dask)
+
+    # Layers and their annotations should be fusable
+    assert len(dsk.layers) == 1
+    layer = next(iter(dsk.layers.values()))
+    annotations = layer.annotations
+
+    assert len(annotations) == 2
+    assert annotations["priority"] == 4  # max
+    assert annotations["retries"] == 5  # max
+
+
+def test_optimize_blockwise_custom_annotations():
     a = da.ones(10, chunks=(5,))
     b = a + 1
 
