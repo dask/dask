@@ -1417,7 +1417,7 @@ def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
     rules to capture their intent in a fused layer.
     """
     # TODO: add rules for workers, allow_other_workers, resources
-    fusable = {"retries", "priority", "workers", "resources"}
+    fusable = {"retries", "priority"}
     if (not a or all(k in fusable for k in a)) and (
         not b or all(k in fusable for k in b)
     ):
@@ -1435,7 +1435,10 @@ def _fuse_annotations(*args: dict) -> dict:
     Currently only handles "retries" and "priority"
     """
     # TODO: add rules for workers, allow_other_workers, resources
-    anno = {}
+
+    # First, do a basic dict merge -- we are presuming that these have already
+    # been gated by `_can_fuse_annotations`.
+    anno = toolz.merge(*args)
     # Max of layer retries
     retries = [a["retries"] for a in args if "retries" in a]
     if retries:
