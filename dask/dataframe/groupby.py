@@ -2223,9 +2223,12 @@ class DataFrameGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg, split_every=None, split_out=1, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            **kwargs,
         )
 
 
@@ -2306,9 +2309,12 @@ class SeriesGroupBy(_GroupBy):
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg, split_every=None, split_out=1, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            split_every=split_every,
+            split_out=split_out,
+            **kwargs,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
