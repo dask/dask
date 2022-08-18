@@ -333,16 +333,16 @@ def test_optimize_blockwise_control_annotations():
     a = da.ones(10, chunks=(5,))
     b = a + 1
 
-    with dask.annotate(retries=5):
+    with dask.annotate(retries=5, workers=["a", "b", "c"], allow_other_workers=False):
         c = b + 2
 
-    with dask.annotate(priority=2):
+    with dask.annotate(priority=2, workers=["b", "c", "d"], allow_other_workers=True):
         d = c + 3
 
-    with dask.annotate(retries=3):
+    with dask.annotate(retries=3, resources={"GPU": 2, "Memory": 10}):
         e = d + 4
 
-    with dask.annotate(priority=4):
+    with dask.annotate(priority=4, resources={"GPU": 5, "Memory": 4}):
         f = e + 5
 
     g = f + 6
@@ -354,9 +354,12 @@ def test_optimize_blockwise_control_annotations():
     layer = next(iter(dsk.layers.values()))
     annotations = layer.annotations
 
-    assert len(annotations) == 2
+    assert len(annotations) == 5
     assert annotations["priority"] == 4  # max
     assert annotations["retries"] == 5  # max
+    assert annotations["allow_other_workers"] is False  # More restrictive
+    assert annotations["workers"] == ["b", "c"]  # intersection
+    assert annotations["resources"] == {"GPU": 5, "Memory": 10}  # Max of resources
 
 
 def test_optimize_blockwise_custom_annotations():
