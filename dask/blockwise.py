@@ -1351,10 +1351,9 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
-                if (
-                    blockwise_layers
-                    and layers[next(iter(blockwise_layers))].annotations
-                    != layers[dep].annotations
+                if blockwise_layers and not _can_fuse_annotations(
+                    layers[next(iter(blockwise_layers))].annotations,
+                    layers[dep].annotations,
                 ):
                     stack.append(dep)
                     continue
@@ -1412,6 +1411,43 @@ def _unique_dep(dep, ind):
     return dep + "_" + "_".join(str(i) for i in list(ind))
 
 
+def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
+    """
+    Treat the special annotation keys, as fusable since we can apply simple
+    rules to capture their intent in a fused layer.
+    """
+    # TODO: add rules for workers, allow_other_workers, resources
+    fusable = {"retries", "priority", "workers", "resources"}
+    if (not a or all(k in fusable for k in a)) and (
+        not b or all(k in fusable for k in b)
+    ):
+        return True
+    # If there are non-fusable keys, only allow fusion if the annotations
+    # are identical
+    return a == b
+
+
+def _fuse_annotations(*args: dict) -> dict:
+    """
+    Given an iterable of annotations dictionaries, fuse them according
+    to some simple rules.
+
+    Currently only handles "retries" and "priority"
+    """
+    # TODO: add rules for workers, allow_other_workers, resources
+    anno = {}
+    # Max of layer retries
+    retries = [a["retries"] for a in args if "retries" in a]
+    if retries:
+        anno["retries"] = max(retries)
+    # Max of layer priorities
+    priorities = [a["priority"] for a in args if "priority" in a]
+    if priorities:
+        anno["priority"] = max(priorities)
+
+    return anno
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1435,6 +1471,9 @@ def rewrite_blockwise(inputs):
         # Fast path: if there's only one input we can just use it as-is.
         return inputs[0]
 
+    fused_annotations = _fuse_annotations(
+        *[i.annotations for i in inputs if i.annotations]
+    )
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
@@ -1560,7 +1599,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
-        annotations=inputs[root].annotations,
+        annotations=fused_annotations,
         io_deps=io_deps,
     )
 
