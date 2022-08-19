@@ -16,7 +16,7 @@ from dask.blockwise import (
     rewrite_blockwise,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils_test import dec, inc
+from dask.utils_test import dec, hlg_layer_topological, inc
 
 a, b, c, d, e, f, g = "a", "b", "c", "d", "e", "f", "g"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
@@ -345,13 +345,17 @@ def test_optimize_blockwise_control_annotations():
     with dask.annotate(priority=4, resources={"GPU": 5, "Memory": 4}):
         f = e + 5
 
-    g = f + 6
+    # This one will not be fused due to the custom annotation, nor will the one below
+    with dask.annotate(foo="bar"):
+        g = f + 6
 
-    dsk = da.optimization.optimize_blockwise(g.dask)
+    h = g + 6
 
-    # Layers and their annotations should be fusable
-    assert len(dsk.layers) == 1
-    layer = next(iter(dsk.layers.values()))
+    dsk = da.optimization.optimize_blockwise(h.dask)
+
+    # The layers and their annotations should be fusable until the custom one
+    assert len(dsk.layers) == 3
+    layer = hlg_layer_topological(dsk, 0)  # First layer is the fused one
     annotations = layer.annotations
 
     assert len(annotations) == 5
@@ -363,8 +367,8 @@ def test_optimize_blockwise_control_annotations():
 
     # If we disable blockwise annotation fusion, we can only fuse the first two layers.
     with dask.config.set({"optimization.fuse.blockwise-annotations": False}):
-        dsk = da.optimization.optimize_blockwise(g.dask)
-        assert len(dsk.layers) == 6
+        dsk = da.optimization.optimize_blockwise(h.dask)
+        assert len(dsk.layers) == 7
 
 
 def test_optimize_blockwise_custom_annotations():
