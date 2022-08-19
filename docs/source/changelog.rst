@@ -1,6 +1,48 @@
 Changelog
 =========
 
+.. _v2022.8.1:
+
+2022.8.1
+--------
+
+Released on August 19, 2022
+
+New Features
+^^^^^^^^^^^^
+- Implement ``ma.*_like functions`` (:pr:`9378`) `Ruth Comer`_
+
+Enhancements
+^^^^^^^^^^^^
+- Fuse compatible annotations (:pr:`9402`) `Ian Rose`_
+- Shuffle-based groupby aggregation for high-cardinality groups (:pr:`9302`) `Richard (Rick) Zamora`_
+- Unpack ``namedtuple`` (:pr:`9361`) `Hendrik Makait`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``SeriesGroupBy`` cumulative functions with ``axis=1`` (:pr:`9377`) `Pavithra Eswaramoorthy`_
+- Sparse array reductions (:pr:`9342`) `Ian Rose`_
+- Fix ``make_meta`` while using categorical column with index (:pr:`9348`) `Pavithra Eswaramoorthy`_
+- Don't allow incompatible keywords in ``DataFrame.dropna`` (:pr:`9366`) `Naty Clementi`_
+- Make ``set_index`` handle entirely empty dataframes (:pr:`8896`) `Julia Signell`_
+- Improve ``dataclass`` handling in ``unpack_collections`` (:pr:`9345`) `Hendrik Makait`_
+- Fix bag sampling when there are some smaller partitions (:pr:`9349`) `Ian Rose`_
+- Add support for empty partitions to ``da.min``/``da.max`` functions (:pr:`9268`) `geraninam`_
+
+Documentation
+^^^^^^^^^^^^^
+- Clarify that ``bind()`` etc. regenerate the keys (:pr:`9385`) `crusaderky`_
+- Consolidate dashboard diagnostics documentation (:pr:`9357`) `Sarah Charlotte Johnson`_
+- Remove outdated ``meta`` information `Pavithra Eswaramoorthy`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``entry_points`` utility in ``sizeof`` (:pr:`9390`) `James Bourbeau`_
+- Add ``entry_points`` compatibility utility (:pr:`9388`) `Jacob Tomlinson`_
+- Upload environment file artifact for each CI build (:pr:`9372`) `James Bourbeau`_
+- Remove ``werkzeug`` pin in CI (:pr:`9371`) `James Bourbeau`_
+- Fix type annotations for ``dd.from_pandas`` and ``dd.from_delayed`` (:pr:`9362`) `Jordan Yap`_
+
 .. _v2022.8.0:
 
 2022.8.0
@@ -5835,3 +5877,4 @@ Other
 .. _`Logan Norman`: https://github.com/lognorman20
 .. _`ivojuroro`: https://github.com/ivojuroro
 .. _`Shaghayegh`: https://github.com/Shadimrad
+.. _`Hendrik Makait`: https://github.com/hendrikmakait
