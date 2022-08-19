@@ -9,6 +9,7 @@ from typing import Any
 
 import tlz as toolz
 
+import dask
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, keys_in_tasks, reverse_dict
 from dask.delayed import unpack_collections
@@ -1351,10 +1352,9 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
-                if (
-                    blockwise_layers
-                    and layers[next(iter(blockwise_layers))].annotations
-                    != layers[dep].annotations
+                if blockwise_layers and not _can_fuse_annotations(
+                    layers[next(iter(blockwise_layers))].annotations,
+                    layers[dep].annotations,
                 ):
                     stack.append(dep)
                     continue
@@ -1412,6 +1412,60 @@ def _unique_dep(dep, ind):
     return dep + "_" + "_".join(str(i) for i in list(ind))
 
 
+def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
+    """
+    Treat the special annotation keys, as fusable since we can apply simple
+    rules to capture their intent in a fused layer.
+    """
+    if a == b:
+        return True
+
+    if dask.config.get("optimization.annotations.fuse") is False:
+        return False
+
+    fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}
+    if (not a or all(k in fusable for k in a)) and (
+        not b or all(k in fusable for k in b)
+    ):
+        return True
+
+    return False
+
+
+def _fuse_annotations(*args: dict) -> dict:
+    """
+    Given an iterable of annotations dictionaries, fuse them according
+    to some simple rules.
+    """
+    # First, do a basic dict merge -- we are presuming that these have already
+    # been gated by `_can_fuse_annotations`.
+    annotations = toolz.merge(*args)
+    # Max of layer retries
+    retries = [a["retries"] for a in args if "retries" in a]
+    if retries:
+        annotations["retries"] = max(retries)
+    # Max of layer priorities
+    priorities = [a["priority"] for a in args if "priority" in a]
+    if priorities:
+        annotations["priority"] = max(priorities)
+    # Max of all the layer resources
+    resources = [a["resources"] for a in args if "resources" in a]
+    if resources:
+        annotations["resources"] = toolz.merge_with(max, *resources)
+    # Intersection of all the worker restrictions
+    workers = [a["workers"] for a in args if "workers" in a]
+    if workers:
+        annotations["workers"] = list(set.intersection(*[set(w) for w in workers]))
+    # More restrictive of allow_other_workers
+    allow_other_workers = [
+        a["allow_other_workers"] for a in args if "allow_other_workers" in a
+    ]
+    if allow_other_workers:
+        annotations["allow_other_workers"] = all(allow_other_workers)
+
+    return annotations
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1435,6 +1489,9 @@ def rewrite_blockwise(inputs):
         # Fast path: if there's only one input we can just use it as-is.
         return inputs[0]
 
+    fused_annotations = _fuse_annotations(
+        *[i.annotations for i in inputs if i.annotations]
+    )
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
@@ -1560,7 +1617,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
-        annotations=inputs[root].annotations,
+        annotations=fused_annotations,
         io_deps=io_deps,
     )
 
