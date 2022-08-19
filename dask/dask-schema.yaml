@@ -147,3 +147,15 @@ properties:
               comprehensible, but it comes at the cost of additional processing. If
               False, then the top-most key will be used. For advanced usage, a function
               to create the new name is also accepted.
+
+          blockwise-annotations:
+            type: boolean
+            description: |
+              If adjacent blockwise layers have different annotations (e.g., one has
+              retries=3 and another has retries=4), Dask can make an attempt to merge
+              those anotations according to some simple rules. ``retries`` is set to
+              the max of the layers, ``priority`` is set to the max of the layers,
+              ``resources`` are set to the max of all the resources, ``workers`` is
+              set to the intersection of the requested workers. If this setting is
+              disabled, then adjacent blockwise layers with different annotations
+              will *not* be fused.

@@ -358,8 +358,13 @@ def test_optimize_blockwise_control_annotations():
     assert annotations["priority"] == 4  # max
     assert annotations["retries"] == 5  # max
     assert annotations["allow_other_workers"] is False  # More restrictive
-    assert annotations["workers"] == ["b", "c"]  # intersection
+    assert set(annotations["workers"]) == {"b", "c"}  # intersection
     assert annotations["resources"] == {"GPU": 5, "Memory": 10}  # Max of resources
+
+    # If we disable blockwise annotation fusion, we can only fuse the first two layers.
+    with dask.config.set({"optimization.fuse.blockwise-annotations": False}):
+        dsk = da.optimization.optimize_blockwise(g.dask)
+        assert len(dsk.layers) == 6
 
 
 def test_optimize_blockwise_custom_annotations():

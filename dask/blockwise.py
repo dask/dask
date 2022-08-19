@@ -9,6 +9,7 @@ from typing import Any
 
 import tlz as toolz
 
+import dask
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, keys_in_tasks, reverse_dict
 from dask.delayed import unpack_collections
@@ -1416,15 +1417,19 @@ def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
     Treat the special annotation keys, as fusable since we can apply simple
     rules to capture their intent in a fused layer.
     """
-    # TODO: add rules for workers, allow_other_workers, resources
+    if a == b:
+        return True
+
+    if dask.config.get("optimization.fuse.blockwise-annotations") is False:
+        return False
+
     fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}
     if (not a or all(k in fusable for k in a)) and (
         not b or all(k in fusable for k in b)
     ):
         return True
-    # If there are non-fusable keys, only allow fusion if the annotations
-    # are identical
-    return a == b
+
+    return False
 
 
 def _fuse_annotations(*args: dict) -> dict:
