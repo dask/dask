@@ -1420,7 +1420,7 @@ def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
     if a == b:
         return True
 
-    if dask.config.get("optimization.fuse.blockwise-annotations") is False:
+    if dask.config.get("optimization.annotations.fuse") is False:
         return False
 
     fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}

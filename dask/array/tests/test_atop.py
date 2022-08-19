@@ -366,7 +366,7 @@ def test_optimize_blockwise_control_annotations():
     assert annotations["resources"] == {"GPU": 5, "Memory": 10}  # Max of resources
 
     # If we disable blockwise annotation fusion, we can only fuse the first two layers.
-    with dask.config.set({"optimization.fuse.blockwise-annotations": False}):
+    with dask.config.set({"optimization.annotations.fuse": False}):
         dsk = da.optimization.optimize_blockwise(h.dask)
         assert len(dsk.layers) == 7
 
