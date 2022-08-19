@@ -1436,11 +1436,7 @@ def _fuse_annotations(*args: dict) -> dict:
     """
     Given an iterable of annotations dictionaries, fuse them according
     to some simple rules.
-
-    Currently only handles "retries" and "priority"
     """
-    # TODO: add rules for workers, allow_other_workers, resources
-
     # First, do a basic dict merge -- we are presuming that these have already
     # been gated by `_can_fuse_annotations`.
     anno = toolz.merge(*args)
