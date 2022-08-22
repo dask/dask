@@ -3607,20 +3607,14 @@ def test_from_delayed_meta():
     assert isinstance(x._meta, np.ndarray)
 
 
-@pytest.mark.parametrize("like", [np.ones((5, 3)), da.ones((5, 3), chunks=-1)])
-def test_from_delayed_like(like):
+def test_from_delayed_like():
     v = delayed(np.ones)((5, 3))
+    like = da.ones((5, 3), chunks=-1)
     x = from_delayed(v, like=like)
     assert isinstance(x, Array)
     assert isinstance(x._meta, np.ndarray)
     assert x.shape == like.shape
     assert x.npartitions == 1
-
-
-def test_from_delayed_bad_like():
-    v = delayed(np.ones)((5, 3))
-    with pytest.raises(ValueError, match="must have only one chunk"):
-        from_delayed(v, like=da.ones((5, 3), chunks=1))
 
 
 def test_from_delayed_roundtrip():

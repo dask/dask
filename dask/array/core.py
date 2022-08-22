@@ -3840,9 +3840,6 @@ def from_delayed(
     like: dask Array, optional
         Dask array to use as reference. The ``chunks`` and ``meta`` parameters will be
         copied from this example if they are not given.
-
-        In the case of a single delayed value, ``like`` can also be a NumPy array,
-        in which case its ``shape`` is used, and it's used as ``meta``.
     allow_unknown_chunksizes: bool, default False
         If False, and ``shape``, ``chunks``, or ``like`` are not given, a `ValueError`
         is raised, since the size of each chunk would be unknown.
@@ -3890,102 +3887,20 @@ def from_delayed(
     blockwise
     """
 
-    if isinstance(value, np.ndarray):
-        return _from_delayed_arr(
-            value,
-            shape=shape,
-            chunks=chunks,
-            dtype=dtype,
-            meta=meta,
-            name=name,
-            like=like,
-            allow_unknown_chunksizes=allow_unknown_chunksizes,
-        )
-
-    return _from_delayed_value(
-        value,
-        shape=shape,
-        dtype=dtype,
-        meta=meta,
-        name=name,
-        like=like,
-    )
-
-
-def _from_delayed_value(
-    value,
-    shape,
-    *,
-    dtype=None,
-    meta=None,
-    name=None,
-    like=None,
-):
-    """Create a dask array from a dask delayed value
-
-    This routine is useful for constructing dask arrays in an ad-hoc fashion
-    using dask delayed, particularly when combined with stack and concatenate.
-
-    The dask array will consist of a single chunk.
-
-    Examples
-    --------
-    >>> import dask
-    >>> import dask.array as da
-    >>> import numpy as np
-    >>> value = dask.delayed(np.ones)(5)
-    >>> array = da.from_delayed(value, (5,), dtype=float)
-    >>> array
-    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
-    >>> array.compute()
-    array([1., 1., 1., 1., 1.])
-    """
-    from dask.delayed import Delayed, delayed
-
-    if not isinstance(value, Delayed) and hasattr(value, "key"):
-        value = delayed(value)
-
-    if like is not None:
-        if shape is None:
-            shape = like.shape
-        if isinstance(like, Array):
-            if like.npartitions > 1:
-                raise ValueError(
-                    "`like=` dask Array must have only one chunk, "
-                    f"since a delayed value represents exactly one chunk: {like=}"
-                )
-            if meta is None:
-                meta = like._meta
+    if not isinstance(value, np.ndarray):
+        if shape is not None:
+            ndim = len(shape)
+        elif chunks is not None:
+            ndim = len(chunks)
+        elif like is not None:
+            ndim = like.ndim
         else:
-            meta = like
+            raise ValueError(
+                "One of `chunks`, `shape`, or `like` must be specified when giving a single delayed value."
+            )
 
-    name = name or "from-value-" + tokenize(value, shape, dtype, meta)
-    dsk = {(name,) + (0,) * len(shape): value.key}
-    chunks = tuple((d,) for d in shape)
-    # TODO: value._key may not be the name of the layer in value.dask
-    # This should be fixed after we build full expression graphs
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[value])
-    return Array(graph, name, chunks, dtype=dtype, meta=meta)
+        value = np.array([value], dtype=object, ndmin=ndim)
 
-
-def _from_delayed_arr(
-    value,
-    *,
-    shape=None,
-    chunks=None,
-    dtype=None,
-    meta=None,
-    name=None,
-    like=None,
-    allow_unknown_chunksizes=False,
-):
-    """
-    allow_unknown_chunksizes: bool
-        Allow unknown chunksizes, such as come from converting from dask
-        dataframes.  Dask.array is unable to verify that chunks line up.  If
-        data comes from differently aligned sources then this can cause
-        unexpected results.
-    """
     if value.dtype.kind != "O":
         raise TypeError(
             "`from_delayed` expects a NumPy object array containing `dask.delayed` objects, "
@@ -4025,9 +3940,12 @@ def _from_delayed_arr(
         delayed_chunk = v.item()  # unwrap NumPy scalar
         idx = iterator.multi_index
         if not isinstance(delayed_chunk, Delayed):
-            raise TypeError(
-                f"Element {idx} is not a dask delayed object: {delayed_chunk}"
-            )
+            if hasattr(delayed_chunk, "key"):
+                delayed_chunk = delayed(delayed_chunk)
+            else:
+                raise TypeError(
+                    f"Element {idx} is not a dask delayed object: {delayed_chunk}"
+                )
 
         dependencies.append(delayed_chunk)
         rename_lyr[(name, *idx)] = delayed_chunk.key
