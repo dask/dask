@@ -250,3 +250,42 @@ def test_dataframe_cull_key_dependencies(op):
     culled_graph = graph.cull(result.__dask_keys__())
 
     assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
+
+
+@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
+def test_dataframe_cull_key_dependencies_materialized(op):
+    # Test that caching of MaterializedLayer
+    # dependencies during culling doesn't break
+    # the result of ``get_all_dependencies``
+    from dask.dataframe.core import new_dd_object
+    from dask.highlevelgraph import HighLevelGraph
+
+    datasets = pytest.importorskip("dask.datasets")
+
+    ddf = datasets.timeseries(end="2000-01-15")
+
+    # Build a custom layer to ensure
+    # MaterializedLayer is used
+    name = "custom_graph_test"
+    name_0 = "custom_graph_test_0"
+    dsk = {}
+    for i in range(ddf.npartitions):
+        dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
+        dsk[(name, i)] = (lambda x: x, (name_0, i))
+    dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    result = new_dd_object(dsk, name, ddf._meta, ddf.divisions)
+    graph = result.dask
+
+    # HLG cull
+    culled_keys = [k for k in result.__dask_keys__() if k != (name, 0)]
+    culled_graph = graph.cull(culled_keys)
+    deps = culled_graph.get_all_dependencies()
+
+    # Manual cull
+    deps0 = graph.get_all_dependencies()
+    deps0.pop((name, 0))
+    deps0.pop((name_0, 0))
+    deps0.pop((ddf._name, 0))
+
+    # Check that get_all_dependencies results match
+    assert deps0 == deps
