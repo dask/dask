@@ -3664,18 +3664,6 @@ def test_from_delayed_arr_bad_input():
     with pytest.raises(TypeError, match="must be a dask Array"):
         da.core.from_delayed_arr(delayed, like=np.arange(4))
 
-    with pytest.raises(TypeError, match="must be a number"):
-        da.core.from_delayed_arr(delayed, chunks="auto")
-
-    with pytest.raises(
-        ValueError,
-        match="indicate a dask array with numblocks=(1, 1), but the array of Delayed blocks has shape (3, 3)",
-    ):
-        da.core.from_delayed_arr(delayed, chunks=((1,), (2,)))
-
-    with pytest.raises(ValueError, match="must specify the meta or dtype of the array"):
-        da.core.from_delayed_arr(delayed, chunks=2)
-
 
 def test_from_delayed_arr_unknown_chunksizes():
     d = np.array([delayed(np.ones)(3), delayed(np.ones)(2), delayed(np.ones)(1)])
