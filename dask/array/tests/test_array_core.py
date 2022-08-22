@@ -3571,6 +3571,86 @@ def test_from_delayed_meta():
     assert isinstance(x._meta, np.ndarray)
 
 
+def test_from_delayed_roundtrip():
+    x = da.random.random((8, 10), chunks=2)
+    roundtrip = da.core.from_delayed_arr(x.to_delayed(), like=x)
+    assert_eq(x, roundtrip)
+
+    x = da.random.random((8, 10), chunks=2).rechunk(5)
+    roundtrip = da.core.from_delayed_arr(x.to_delayed(), like=x)
+    assert_eq(x, roundtrip)
+
+
+def test_from_delayed_arr_with_ops():
+    x = da.zeros((5, 6), chunks=2)
+
+    delayed = x.to_delayed()
+    delayed[0, 0] += 1
+    delayed[-1, -1] -= 1
+
+    x[:2, :2] = 1
+    x[-1:, -2:] = -1
+
+    roundtrip = da.core.from_delayed_arr(delayed, like=x)
+    assert_eq(x, roundtrip)
+
+
+def test_from_delayed_arr_cull():
+    "Test for a common use case of to/from delayed: dropping some blocks selectively"
+    skip_blocks = [0, 3, 4]
+    chunksize = 2
+
+    def open_block(block_info=None):
+        loc = block_info[None]["chunk-location"][0]
+        assert loc not in skip_blocks
+        return np.full(chunksize, loc)
+
+    input = da.map_blocks(open_block, chunks=((chunksize,) * 5,), dtype=int)
+    zeros = da.full_like(input, -1)
+    delayed_input = input.to_delayed()
+    delayed_zeros = zeros.to_delayed()
+
+    delayed_input[skip_blocks] = delayed_zeros[skip_blocks]
+
+    input_skipped = da.core.from_delayed_arr(delayed_input, like=input)
+    expected = np.array([-1, -1, 1, 1, 2, 2, -1, -1, -1, -1])
+    # Optimization should cull the `open_block` tasks that were overwritten
+    assert_eq(input_skipped, expected)
+
+
+def test_from_delayed_arr_bad_input():
+    x = da.zeros((5, 6), chunks=2)
+    delayed = x.to_delayed()
+
+    with pytest.raises(TypeError, match="expects a NumPy object array"):
+        da.core.from_delayed_arr(np.arange(4), like=x)
+
+    with pytest.raises(TypeError, match="must be a dask Array"):
+        da.core.from_delayed_arr(delayed, like=np.arange(4))
+
+    with pytest.raises(TypeError, match="must be a number"):
+        da.core.from_delayed_arr(delayed, chunks="auto")
+
+    with pytest.raises(
+        ValueError,
+        match="indicate a dask array with numblocks=(1, 1), but the array of Delayed blocks has shape (3, 3)",
+    ):
+        da.core.from_delayed_arr(delayed, chunks=((1,), (2,)))
+
+    with pytest.raises(ValueError, match="must specify the meta or dtype of the array"):
+        da.core.from_delayed_arr(delayed, chunks=2)
+
+
+def test_from_delayed_arr_unknown_chunksizes():
+    d = np.array([delayed(np.ones)(3), delayed(np.ones)(2), delayed(np.ones)(1)])
+    with pytest.raises(ValueError, match="Chunksizes must be specified"):
+        da.core.from_delayed_arr(d)
+
+    arr = da.core.from_delayed_arr(d, allow_unknown_chunksizes=True)
+    assert arr.numblocks == (3,)
+    assert np.isnan(arr.size)
+
+
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x

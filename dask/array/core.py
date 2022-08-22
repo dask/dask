@@ -3761,6 +3761,109 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
+def from_delayed_arr(
+    value,
+    *,
+    chunks=None,
+    dtype=None,
+    meta=None,
+    name=None,
+    like=None,
+    allow_unknown_chunksizes=False,
+):
+    """
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
+    """
+    if value.dtype.kind != "O":
+        raise TypeError(
+            "`from_delayed` expects a NumPy object array containing `dask.delayed` objects, "
+            f"not {value.dtype}"
+        )
+    if like is not None:
+        if not isinstance(like, Array):
+            raise TypeError(f"`like=` must be a dask Array, not {type(like)}")
+        if chunks is None:
+            chunks = like.chunks
+        if meta is None:
+            meta = like._meta
+
+    if chunks is None:
+        if not allow_unknown_chunksizes:
+            raise ValueError(
+                "Chunksizes must be specified, either via `chunks=` or `like=`. "
+                "If the sizes of individual chunks are actually unkown, you can pass "
+                "`allow_unknown_chunksizes=True`, but some downstream operations may not work."
+            )
+        chunks = tuple((float("nan"),) * s for s in value.shape)
+    else:
+        if isinstance(chunks, Number):
+            # NOTE: we can't use `normalize_chunks` here, since `normalize_chunks`
+            # only accepts `shape`, not `numblocks`.
+            chunks = tuple((chunks,) * s for s in value.shape)
+        if isinstance(chunks, np.ndarray):
+            chunks = chunks.tolist()
+        if isinstance(chunks, list):
+            chunks = tuple(chunks)
+        if not isinstance(chunks, tuple):
+            raise TypeError(
+                f"`chunks=` must be a number, tuple, or list, not {type(chunks)}"
+            )
+
+    numblocks = tuple(len(c) for c in chunks)
+    if value.shape != numblocks:
+        raise ValueError(
+            f"Provided chunks indicate a dask array with {numblocks=}, "
+            f"but the array of Delayed blocks has shape {value.shape}"
+        )
+
+    meta = meta_from_array(meta, ndim=value.ndim, dtype=dtype)
+
+    name = (
+        (name or "from-delayed")
+        + "-"
+        + tokenize(value, chunks, meta, allow_unknown_chunksizes)
+    )
+
+    # If all keys are already correctly-formatted array keys, _and_ they're in the same HLG layer,
+    # we can represent them as an array without adding anything to the graph.
+    # Being in the same HLG layer is rare, but being correctly-formatted is feasible.
+
+    iterator = np.nditer(value, flags=["refs_ok", "multi_index"])
+    dependencies: list[Delayed] = []
+    rename_lyr = {}
+    for v in iterator:
+        delayed_chunk = v.item()  # unwrap NumPy scalar
+        idx = iterator.multi_index
+        if not isinstance(delayed_chunk, Delayed):
+            raise TypeError(
+                f"Element {idx} is not a dask delayed object: {delayed_chunk}"
+            )
+
+        #     key = delayed_chunk.key
+        #     if not rename_lyr and isinstance(key, tuple) and len(key) == ndim + 1 and key == (name, *idx):
+        #         # Fastpath: looks like an array key matching the correct block index.
+        #         # No need for the ailiasing layer yet.
+        #         dependencies.append(delayed_chunk)
+        #         continue
+
+        #     # Delayed key names can't be used directly as array keys; need a layer renaming them to the right format.
+        #     if len(dependencies) > len(rename_lyr):
+        #         # We went down the fastpath a few times already. Rename all those keys now.
+        #         rename_lyr = {(name, *ix): dep.key for ix, dep in zip(np.ndindex(numblocks, dependencies))}
+
+        dependencies.append(delayed_chunk)
+        rename_lyr[(name, *idx)] = delayed_chunk.key
+
+    # TODO when every delayed object is a separate layer, this is probably quite inefficient.
+    dsk = HighLevelGraph.from_collections(name, rename_lyr, dependencies)
+
+    return Array(dsk, name, chunks, meta=meta)
+
+
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     """Create dask array in a single block by calling a function
 
