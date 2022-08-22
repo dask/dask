@@ -2936,7 +2936,9 @@ def ensure_int(f):
     return i
 
 
-def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
+def normalize_chunks(
+    chunks, shape=None, *, numblocks=None, limit=None, dtype=None, previous_chunks=None
+):
     """Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
@@ -2949,6 +2951,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
         The chunks to be normalized.  See examples below for more details
     shape: Tuple[int]
         The shape of the array
+    numblocks: Tuple[int]
+        The number of chunks in the array
     limit: int (optional)
         The maximum block size to target in bytes,
         if freedom is given to choose
@@ -3010,37 +3014,80 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
 
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
+
+    Use ``numblocks`` to replicate a chunk shape a given number of times.
+    Note that ``'auto'``, -1, and None cannot be used if only ``numblocks`` is given.
+
+    >>> normalize_chunks(4, numblocks=(2, 3))
+    ((4, 4), (4, 4, 4))
+
+    Use ``shape`` and ``numblocks`` without any chunksize
+
+    >>> normalize_chunks(None, shape=(10, 5), numblocks=(2, 2))
+    ((5, 5), (3, 2))
     """
+    ndim: int | None = None
+    if shape is not None:
+        ndim = len(shape)
+    if numblocks is not None:
+        if ndim is not None:
+            if len(numblocks) != ndim:
+                raise ValueError(
+                    f"`shape` indicates {ndim} dimension(s), but `numblocks` indicates {len(numblocks)}."
+                )
+        ndim = len(numblocks)
     if dtype and not isinstance(dtype, np.dtype):
         dtype = np.dtype(dtype)
     if chunks is None:
-        raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
+        if shape is not None and numblocks is not None:
+            chunks = tuple(math.ceil(s / n) for s, n, in zip(shape, numblocks))
+        else:
+            raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
     if isinstance(chunks, list):
         chunks = tuple(chunks)
     if isinstance(chunks, (Number, str)):
-        chunks = (chunks,) * len(shape)
+        if ndim is None:
+            raise ValueError(
+                "Must give `shape` or `numblocks` if chunks is not a tuple of tuples."
+            )
+        chunks = (chunks,) * ndim
     if isinstance(chunks, dict):
-        chunks = tuple(chunks.get(i, None) for i in range(len(shape)))
+        if ndim is None:
+            raise ValueError(
+                "Must give `shape` or `numblocks` if chunks is not a tuple of tuples."
+            )
+        chunks = tuple(chunks.get(i, None) for i in range(ndim))
     if isinstance(chunks, np.ndarray):
         chunks = chunks.tolist()
-    if not chunks and shape and all(s == 0 for s in shape):
-        chunks = ((0,),) * len(shape)
+    if not chunks and (
+        (shape and all(s == 0 for s in shape))
+        or (numblocks and all(n == 0 for n in numblocks))
+    ):
+        assert ndim is not None
+        chunks = ((0,),) * ndim
 
     if (
-        shape
-        and len(shape) == 1
+        ndim
+        and ndim == 1
         and len(chunks) > 1
         and all(isinstance(c, (Number, str)) for c in chunks)
     ):
         chunks = (chunks,)
 
-    if shape and len(chunks) != len(shape):
+    if ndim and len(chunks) != ndim:
+        param, val = ("shape", shape) if shape is not None else ("numblocks", numblocks)
         raise ValueError(
-            "Chunks and shape must be of the same length/dimension. "
-            "Got chunks=%s, shape=%s" % (chunks, shape)
+            f"Chunks and {param} must be of the same length/dimension. "
+            f"Got {chunks=}, {param}={val}"
         )
-    if -1 in chunks or None in chunks:
-        chunks = tuple(s if c == -1 or c is None else c for c, s in zip(chunks, shape))
+    try:
+        chunks = tuple(
+            shape[i] if c == -1 or c is None else c for i, c in enumerate(chunks)
+        )
+    except TypeError:
+        raise ValueError(
+            "`shape` must be given to use -1 or None as a chunk size."
+        ) from None
 
     # If specifying chunk size in bytes, use that value to set the limit.
     # Verify there is only one consistent value of limit or chunk-bytes used.
@@ -3058,10 +3105,9 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
 
     if any(c == "auto" for c in chunks):
+        if shape is None:
+            raise ValueError("`shape` must be given to use 'auto' as a chunk size.")
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
-
-    if shape is not None:
-        chunks = tuple(c if c not in {None, -1} else s for c, s in zip(chunks, shape))
 
     if chunks and shape is not None:
         chunks = sum(
@@ -3073,6 +3119,10 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             ),
             (),
         )
+    elif chunks and numblocks is not None:
+        chunks = tuple(
+            c if isinstance(c, tuple) else (c,) * nb for c, nb in zip(chunks, numblocks)
+        )
     for c in chunks:
         if not c:
             raise ValueError(
@@ -3081,18 +3131,15 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
             )
 
     if shape is not None:
-        if len(chunks) != len(shape):
-            raise ValueError(
-                "Input array has %d dimensions but the supplied "
-                "chunks has only %d dimensions" % (len(shape), len(chunks))
-            )
         if not all(
             c == s or (math.isnan(c) or math.isnan(s))
             for c, s in zip(map(sum, chunks), shape)
         ):
+            raise ValueError(f"Chunks do not add up to shape. Got {chunks=}, {shape=}")
+    if numblocks is not None:
+        if not all(len(c) == nb for c, nb in zip(chunks, numblocks)):
             raise ValueError(
-                "Chunks do not add up to shape. "
-                "Got chunks=%s, shape=%s" % (chunks, shape)
+                f"Chunks do not match numblocks. Got {chunks=}, {numblocks=}"
             )
 
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
