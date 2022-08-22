@@ -10,6 +10,7 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
+from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
@@ -257,10 +258,9 @@ def test_dataframe_cull_key_dependencies_materialized(op):
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break
     # the result of ``get_all_dependencies``
-    from dask.dataframe.core import new_dd_object
-    from dask.highlevelgraph import HighLevelGraph
 
     datasets = pytest.importorskip("dask.datasets")
+    dd = pytest.importorskip("dask.dataframe")
 
     ddf = datasets.timeseries(end="2000-01-15")
 
@@ -273,7 +273,7 @@ def test_dataframe_cull_key_dependencies_materialized(op):
         dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
         dsk[(name, i)] = (lambda x: x, (name_0, i))
     dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
-    result = new_dd_object(dsk, name, ddf._meta, ddf.divisions)
+    result = dd.core.new_dd_object(dsk, name, ddf._meta, ddf.divisions)
     graph = result.dask
 
     # HLG cull
