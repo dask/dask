@@ -1,6 +1,96 @@
 Changelog
 =========
 
+.. _v2022.8.1:
+
+2022.8.1
+--------
+
+Released on August 19, 2022
+
+New Features
+^^^^^^^^^^^^
+- Implement ``ma.*_like functions`` (:pr:`9378`) `Ruth Comer`_
+
+Enhancements
+^^^^^^^^^^^^
+- Fuse compatible annotations (:pr:`9402`) `Ian Rose`_
+- Shuffle-based groupby aggregation for high-cardinality groups (:pr:`9302`) `Richard (Rick) Zamora`_
+- Unpack ``namedtuple`` (:pr:`9361`) `Hendrik Makait`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``SeriesGroupBy`` cumulative functions with ``axis=1`` (:pr:`9377`) `Pavithra Eswaramoorthy`_
+- Sparse array reductions (:pr:`9342`) `Ian Rose`_
+- Fix ``make_meta`` while using categorical column with index (:pr:`9348`) `Pavithra Eswaramoorthy`_
+- Don't allow incompatible keywords in ``DataFrame.dropna`` (:pr:`9366`) `Naty Clementi`_
+- Make ``set_index`` handle entirely empty dataframes (:pr:`8896`) `Julia Signell`_
+- Improve ``dataclass`` handling in ``unpack_collections`` (:pr:`9345`) `Hendrik Makait`_
+- Fix bag sampling when there are some smaller partitions (:pr:`9349`) `Ian Rose`_
+- Add support for empty partitions to ``da.min``/``da.max`` functions (:pr:`9268`) `geraninam`_
+
+Documentation
+^^^^^^^^^^^^^
+- Clarify that ``bind()`` etc. regenerate the keys (:pr:`9385`) `crusaderky`_
+- Consolidate dashboard diagnostics documentation (:pr:`9357`) `Sarah Charlotte Johnson`_
+- Remove outdated ``meta`` information `Pavithra Eswaramoorthy`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``entry_points`` utility in ``sizeof`` (:pr:`9390`) `James Bourbeau`_
+- Add ``entry_points`` compatibility utility (:pr:`9388`) `Jacob Tomlinson`_
+- Upload environment file artifact for each CI build (:pr:`9372`) `James Bourbeau`_
+- Remove ``werkzeug`` pin in CI (:pr:`9371`) `James Bourbeau`_
+- Fix type annotations for ``dd.from_pandas`` and ``dd.from_delayed`` (:pr:`9362`) `Jordan Yap`_
+
+.. _v2022.8.0:
+
+2022.8.0
+--------
+
+Released on August 5, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Ensure ``make_meta`` doesn't hold ref to data (:pr:`9354`) `Jim Crist-Harif`_
+- Revise ``divisions`` logic in ``from_pandas`` (:pr:`9221`) `Richard (Rick) Zamora`_
+- Warn if user sets index with existing index (:pr:`9341`) `Julia Signell`_
+- Add ``keepdims`` keyword for ``da.average`` (:pr:`9332`) `Ruth Comer`_
+- Change ``repr`` methods to avoid ``Layer`` materialization (:pr:`9289`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Make sure ``order`` kwarg will not crash the ``astype`` method (:pr:`9317`) `Genevieve Buckley`_
+- Fix bug for ``cumsum`` on cupy chunked dask arrays (:pr:`9320`) `Genevieve Buckley`_
+- Match input and output structure in ``_sample_reduce`` (:pr:`9272`) `Pavithra Eswaramoorthy`_
+- Include ``meta`` in array serialization (:pr:`9240`) `Frédéric BRIOL`_
+- Fix ``Index.memory_usage`` (:pr:`9290`) `James Bourbeau`_
+- Fix division calculation in ``dask.dataframe.io.from_dask_array`` (:pr:`9282`) `Jordan Yap`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fow to use kwargs with custom task graphs (:pr:`9322`) `Genevieve Buckley`_
+- Add note to ``da.from_array`` about how the order is not preserved (:pr:`9346`) `Julia Signell`_
+- Add I/O info for async functions (:pr:`9326`) `Logan Norman`_
+- Tidy up docs snippet for futures IO functions (:pr:`9340`) `Julia Signell`_
+- Use consistent variable names for pandas ``df`` and Dask ``ddf`` in ``dataframe-groupby.rst`` (:pr:`9304`) `ivojuroro`_
+- Switch ``js-yaml`` for ``yaml.js`` in config converter (:pr:`9306`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``da.linalg.solve`` for SciPy 1.9.0 compatibility  (:pr:`9350`) `Pavithra Eswaramoorthy`_
+- Update ``test_getitem_avoids_large_chunks_missing`` (:pr:`9347`) `Pavithra Eswaramoorthy`_
+- Fix docs title formatting for "Extend ``sizeof``" `Doug Davis`_
+- Import ``loop_in_thread`` fixture in tests (:pr:`9337`) `James Bourbeau`_
+- Temporarily ``xfail`` ``test_solve_sym_pos`` (:pr:`9336`) `Pavithra Eswaramoorthy`_
+- Fix small typo in 10 minutes to Dask page (:pr:`9329`) `Shaghayegh`_
+- Temporarily pin ``werkzeug`` in CI to avoid test suite hanging  (:pr:`9325`) `James Bourbeau`_
+- Add tests for ``cupy.angle()`` (:pr:`9312`) `Peter Andreas Entschev`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.10`` (:pr:`9314`)
+- Add ``pandas[test]`` to ``test`` extra (:pr:`9110`) `Ben Beasley`_
+- Add ``bokeh`` and ``scipy`` to ``upstream`` CI build (:pr:`9265`) `James Bourbeau`_
+
+
 .. _v2022.7.1:
 
 2022.7.1
@@ -5781,3 +5871,10 @@ Other
 .. _`Dylan Stewart`: https://github.com/drstewart19
 .. _`geraninam`: https://github.com/geraninam
 .. _`Michael Milton`: https://github.com/multimeric
+.. _`Ruth Comer`: https://github.com/rcomer
+.. _`Frédéric BRIOL`: https://github.com/fbriol
+.. _`Jordan Yap`: https://github.com/jjyap
+.. _`Logan Norman`: https://github.com/lognorman20
+.. _`ivojuroro`: https://github.com/ivojuroro
+.. _`Shaghayegh`: https://github.com/Shadimrad
+.. _`Hendrik Makait`: https://github.com/hendrikmakait

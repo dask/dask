@@ -193,7 +193,6 @@ def test_set_index_general(npartitions, shuffle_method):
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
-    assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -203,7 +202,8 @@ def test_set_index_self_index(shuffle_method):
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    b = a.set_index(a.index, shuffle=shuffle_method)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        b = a.set_index(a.index, shuffle=shuffle_method)
     assert a is b
 
     assert_eq(b, df.set_index(df.index))
@@ -714,7 +714,7 @@ def test_set_index_interpolate_large_uint(engine):
 
     if engine == "cudf":
         gdf = cudf.from_pandas(df)
-        d = dask_cudf.from_cudf(gdf, npartitions=2)
+        d = dask_cudf.from_cudf(gdf, npartitions=1)
     else:
         d = dd.from_pandas(df, 1)
 
@@ -727,7 +727,7 @@ def test_set_index_timezone():
     s_naive = pd.Series(pd.date_range("20130101", periods=3))
     s_aware = pd.Series(pd.date_range("20130101", periods=3, tz="US/Eastern"))
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
-    d = dd.from_pandas(df, 2)
+    d = dd.from_pandas(df, npartitions=1)  # TODO: Use npartitions=2
 
     d1 = d.set_index("notz", npartitions=1)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
@@ -878,7 +878,6 @@ def test_set_index_sorted_min_max_same():
 
 def test_set_index_empty_partition():
     test_vals = [1, 2, 3]
-
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
     for conv in converters:
@@ -906,11 +905,17 @@ def test_set_index_on_empty():
 
         assert ddf.npartitions > 1
 
-        ddf = ddf[ddf.y > df.y.max()].set_index("x")
-        expected_df = df[df.y > df.y.max()].set_index("x")
+        actual = ddf[ddf.y > df.y.max()].set_index("x")
+        expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df, **CHECK_FREQ)
-        assert ddf.npartitions == 1
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
+
+        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():

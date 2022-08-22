@@ -1096,6 +1096,63 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+@pytest.mark.parametrize("split_out", [2, 32])
+def test_shuffle_aggregate(shuffle_method, split_out):
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+    result = ddf.groupby(["a", "b"]).agg(
+        spec, split_out=split_out, shuffle=shuffle_method
+    )
+    expect = pdf.groupby(["a", "b"]).agg(spec)
+
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
+    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
+    assert_eq(expect, result)
+
+
+@pytest.mark.parametrize("sort", [True, False])
+def test_shuffle_aggregate_sort(shuffle_method, sort):
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+    result = ddf.groupby("a", sort=sort).agg(spec, split_out=2, shuffle=shuffle_method)
+    expect = pdf.groupby("a", sort=sort).agg(spec)
+
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
+    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
+    assert_eq(expect, result)
+
+    if sort:
+        # Cannot use sort=True with multiple groupby keys
+        with pytest.raises(NotImplementedError):
+            ddf.groupby(["a", "b"], sort=sort).agg(
+                spec, split_out=2, shuffle=shuffle_method
+            )
+
+
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
@@ -1494,6 +1551,13 @@ def test_cumulative(func, key, sel):
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
 
+    if func == "cumcount":
+        with pytest.warns(
+            FutureWarning,
+            match="`axis` keyword argument is deprecated and will removed in a future release",
+        ):
+            dg.cumcount(axis=0)
+
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis1(func):
@@ -1509,6 +1573,15 @@ def test_cumulative_axis1(func):
     assert_eq(
         getattr(df.groupby("a"), func)(axis=1), getattr(ddf.groupby("a"), func)(axis=1)
     )
+
+    with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
+        getattr(ddf.groupby("a").b, func)(axis=1)
+
+    with pytest.warns(
+        FutureWarning,
+        match="`axis` keyword argument is deprecated and will removed in a future release",
+    ):
+        ddf.groupby("a").cumcount(axis=1)
 
 
 def test_groupby_unaligned_index():
@@ -2030,7 +2103,7 @@ def test_df_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group")
 
@@ -2051,7 +2124,7 @@ def test_df_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmin(skipna=skipna)
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
@@ -2085,7 +2158,7 @@ def test_df_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmax(skipna=skipna)
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
@@ -2098,7 +2171,7 @@ def test_series_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = (
         pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group").squeeze()
@@ -2121,7 +2194,7 @@ def test_series_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
@@ -2157,7 +2230,7 @@ def test_series_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
@@ -2642,6 +2715,9 @@ def test_groupby_sort_true_split_out():
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 (for now)
         M.sum(ddf.groupby("x", sort=True), split_out=2)
+
+    # Can use sort=True with split_out>1 with agg() if shuffle=True
+    ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
 
 
 @pytest.mark.skipif(

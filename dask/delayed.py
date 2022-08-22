@@ -3,7 +3,7 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 
 from tlz import concat, curry, merge, unique
 
@@ -19,7 +19,13 @@ from dask.base import tokenize as _tokenize
 from dask.context import globalmethod
 from dask.core import flatten, quote
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import OperatorMethodMixin, apply, funcname, methodcaller
+from dask.utils import (
+    OperatorMethodMixin,
+    apply,
+    funcname,
+    is_namedtuple_instance,
+    methodcaller,
+)
 
 __all__ = ["Delayed", "delayed"]
 
@@ -108,7 +114,7 @@ def unpack_collections(expr):
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice,) + tuple(args), collections
+        return (slice, *args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -118,8 +124,30 @@ def unpack_collections(expr):
                 if hasattr(expr, f.name)  # if init=False, field might not exist
             ]
         )
-
+        if not collections:
+            return expr, ()
+        try:
+            _fields = {
+                f.name: getattr(expr, f.name)
+                for f in fields(expr)
+                if hasattr(expr, f.name)
+            }
+            replace(expr, **_fields)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using a custom __init__ is not supported."
+            ) from e
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using fields with `init=False` are not supported."
+            ) from e
         return (apply, typ, (), (dict, args)), collections
+
+    if is_namedtuple_instance(expr):
+        args, collections = unpack_collections([v for v in expr])
+        return (typ, *args), collections
 
     return expr, ()
 
@@ -202,6 +230,10 @@ def to_task_dask(expr):
         )
 
         return (apply, typ, (), (dict, args)), dsk
+
+    if is_namedtuple_instance(expr):
+        args, dsk = to_task_dask([v for v in expr])
+        return (typ, *args), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
