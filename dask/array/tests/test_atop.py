@@ -16,7 +16,7 @@ from dask.blockwise import (
     rewrite_blockwise,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils_test import dec, inc
+from dask.utils_test import dec, hlg_layer_topological, inc
 
 a, b, c, d, e, f, g = "a", "b", "c", "d", "e", "f", "g"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
@@ -324,7 +324,54 @@ def test_optimize_blockwise():
     )
 
 
-def test_optimize_blockwise_annotations():
+def test_optimize_blockwise_control_annotations():
+    """
+    Can we fuse blockwise layers with different, but compatible
+    annotations for retries, priority, etc.
+    """
+
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+
+    with dask.annotate(retries=5, workers=["a", "b", "c"], allow_other_workers=False):
+        c = b + 2
+
+    with dask.annotate(priority=2, workers=["b", "c", "d"], allow_other_workers=True):
+        d = c + 3
+
+    with dask.annotate(retries=3, resources={"GPU": 2, "Memory": 10}):
+        e = d + 4
+
+    with dask.annotate(priority=4, resources={"GPU": 5, "Memory": 4}):
+        f = e + 5
+
+    # This one will not be fused due to the custom annotation, nor will the one below
+    with dask.annotate(foo="bar"):
+        g = f + 6
+
+    h = g + 6
+
+    dsk = da.optimization.optimize_blockwise(h.dask)
+
+    # The layers and their annotations should be fusable until the custom one
+    assert len(dsk.layers) == 3
+    layer = hlg_layer_topological(dsk, 0)  # First layer is the fused one
+    annotations = layer.annotations
+
+    assert len(annotations) == 5
+    assert annotations["priority"] == 4  # max
+    assert annotations["retries"] == 5  # max
+    assert annotations["allow_other_workers"] is False  # More restrictive
+    assert set(annotations["workers"]) == {"b", "c"}  # intersection
+    assert annotations["resources"] == {"GPU": 5, "Memory": 10}  # Max of resources
+
+    # If we disable blockwise annotation fusion, we can only fuse the first two layers.
+    with dask.config.set({"optimization.annotations.fuse": False}):
+        dsk = da.optimization.optimize_blockwise(h.dask)
+        assert len(dsk.layers) == 7
+
+
+def test_optimize_blockwise_custom_annotations():
     a = da.ones(10, chunks=(5,))
     b = a + 1
 
