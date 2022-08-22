@@ -20,12 +20,32 @@ Ideally, pull requests from maintainers should also be reviewed before
 merging. However, because reviewer bandwidth is limited, maintainers will
 sometimes self-merge their own pull requests if the content of the pull
 request is viewed as uncontroversial (e.g. typo fix). If a maintainer has
-a substantial pull request which hasn't received a review, and the maintainer
-is confident in the proposed changes, they should post a final comment along
-the lines of "Merging in 24 hours if no further response" and then self-merge
-if no further comments are left within the specified time period.
+a substantial pull request which hasn't received a review, they should ping at
+least one team or individual maintainer who might be interested in the proposed
+change. If after some time there is no response and the maintainer is confident
+in the proposed changes, they should post a final comment along the lines of
+"Merging in 48 hours if no further response" and then self-merge if no further
+comments are left within the specified time period. Please leave at least
+48 hours to allow maintainers in other timezones to respond.
 
-No maintainer should merge a pull request that they're not comfortable with.
+No maintainer should merge a pull request that they're not comfortable
+supporting in the future.
+
+CI should pass
+--------------
+
+Before merging a pull request, maintainers should make every effort to ensure
+that CI passes. Often this will require looking into the logs of a failed run
+to see what went wrong, and alerting the pull request author. Ideally, no
+pull request should be merged if there are CI failures, as broken CI in ``main``
+can easily mask problems with other PRs, and a consistently broken CI can be
+demoralizing for maintainers.
+
+However, in pracatice, there are occasionally flaky tests, broken upstream
+dependencies, and failures that are otherwise obviously not related to the PR
+at hand. If that is the case, a maintainer may merge a PR with failing tests,
+but they should be prepared to follow up with any failures that result from
+such an unsafe operation.
 
 Squash merge pull requests
 --------------------------
