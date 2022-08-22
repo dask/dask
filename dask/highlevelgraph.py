@@ -969,7 +969,9 @@ class HighLevelGraph(Mapping):
                     #
                     # Note that `MaterializedLayer` is "safe", because
                     # its `cull` method will return a complete dict of
-                    # direct dependencies for all keys in its subgraph
+                    # direct dependencies for all keys in its subgraph.
+                    # See: https://github.com/dask/dask/issues/9389
+                    # for performance motivation
                     ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set
