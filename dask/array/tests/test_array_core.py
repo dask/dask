@@ -2949,6 +2949,7 @@ def test_from_array_with_missing_chunks():
 def test_normalize_chunks():
     assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
     assert normalize_chunks(((3, 3), (8,)), (6, 8)) == ((3, 3), (8,))
+    assert normalize_chunks(((3, 3), (8,)), None) == ((3, 3), (8,))
     assert normalize_chunks((4, 5), (9,)) == ((4, 5),)
     assert normalize_chunks((4, 5), (9, 9)) == ((4, 4, 1), (5, 4))
     assert normalize_chunks(-1, (5, 5)) == ((5,), (5,))
@@ -2963,11 +2964,46 @@ def test_normalize_chunks():
         (5, 5, 5, 5),
     )
     assert normalize_chunks(("auto", None), (5, 5), dtype=int) == ((5,), (5,))
+    assert normalize_chunks(((3, 3), (8,)), (6, 8), numblocks=(2, 1)) == ((3, 3), (8,))
+    assert normalize_chunks(((3, 3), (8,)), numblocks=(2, 1)) == ((3, 3), (8,))
+    assert normalize_chunks(None, (5, 4), numblocks=(2, 2)) == ((3, 2), (2, 2))
+    assert normalize_chunks(3, numblocks=(1, 2)) == ((3,), (3, 3))
+    assert normalize_chunks((2, 3), numblocks=(1, 2)) == ((2,), (3, 3))
+    assert normalize_chunks((1, (1, 3)), numblocks=(2, 2)) == ((1, 1), (1, 3))
 
     with pytest.raises(ValueError):
         normalize_chunks(((10,),), (11,))
     with pytest.raises(ValueError):
         normalize_chunks(((5,), (5,)), (5,))
+    with pytest.raises(ValueError, match="do not match numblocks"):
+        normalize_chunks(((1,), (1, 1)), numblocks=(2, 2))
+    with pytest.raises(
+        ValueError,
+        match=r"`shape` indicates 3 dimension\(s\), but `numblocks` indicates 2",
+    ):
+        normalize_chunks(None, shape=(1, 2, 3), numblocks=(2, 2))
+    with pytest.raises(ValueError, match="Must give `shape` or `numblocks`"):
+        normalize_chunks(2)
+    with pytest.raises(ValueError, match="Must give `shape` or `numblocks`"):
+        normalize_chunks({1: (3, 2)})
+    with pytest.raises(ValueError, match="Chunks and shape must be of the same length"):
+        normalize_chunks((1,), (2, 3))
+    with pytest.raises(
+        ValueError, match="Chunks and numblocks must be of the same length"
+    ):
+        normalize_chunks((1,), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use -1 or None as a chunk size"
+    ):
+        normalize_chunks((-1, 2), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use -1 or None as a chunk size"
+    ):
+        normalize_chunks((None, 2), numblocks=(2, 3))
+    with pytest.raises(
+        ValueError, match="`shape` must be given to use 'auto' as a chunk size"
+    ):
+        normalize_chunks(("auto", 2), numblocks=(2, 3))
 
 
 def test_align_chunks_to_previous_chunks():
