@@ -3774,7 +3774,153 @@ def _check_regular_chunks(chunkset):
     return True
 
 
-def from_delayed(value, shape, dtype=None, meta=None, name=None):
+def from_delayed(
+    value,
+    *,
+    shape=None,
+    chunks=None,
+    dtype=None,
+    meta=None,
+    name=None,
+    like=None,
+    allow_unknown_chunksizes=False,
+):
+    """Create a dask array from a NumPy array of :class:`~.Delayed` objects, or from a single delayed value
+
+    This is useful for applying highly custom logic to the chunks of an Array which
+    cannot be expressed with more performant routines, such as `map_blocks` with the
+    ``block_info`` parameter. For example, swapping select blocks of one Array with
+    another, in a way that cannot be expressed with slicing.
+
+    It can also be useful for constructing dask arrays in an ad-hoc fashion using dask
+    delayed. When possible though, using `map_blocks` for this purpose will be more
+    performant.
+
+    If a single delayed object is given, the dask array will consist of a single chunk.
+
+    If a NumPy object array of delayed objects is given, each element will become a
+    chunk in the dask array. This is the inverse of `to_delayed`.
+
+    Notes
+    -----
+    If you're converting a dask Array to delayed with `to_delayed`, then later
+    converting it back with `from_delayed`, it's better to specify
+    ``.to_delayed(optimize_graph=False)``, so that array optimizations are applied just
+    once, at the end.
+
+    Parameters
+    ----------
+    value: ndarray or dask.delayed value
+        Single :class:`dask.delayed.Delayed` value, or a NumPy object array of them.
+        Each delayed value will become a chunk of the resulting dask array.
+    shape: tuple[int, ...], optional
+        The shape of the resulting dask array. One of ``shape``, ``chunks``, or ``like``
+        is required.
+    chunks: int, tuple; optional
+        The chunk shape of the resulting dask array. This should be the shape that each
+        delayed value will have, when computed. Can be given as:
+
+        * A blocksize like 1000.
+        * A blockshape like (1000, 1000).
+        * Explicit sizes of all blocks along all dimensions like ((1000, 1000, 500),
+          (400, 400)).
+
+        One of ``shape``, ``chunks``, or ``like`` is required.
+    dtype: NumPy dtype, optional
+        The dtype of the dask array. This should be the dtype that every delayed value
+        will have when computed. One of ``dtype``, ``meta``, or ``like`` is required.
+    meta: array-like, optional
+        The ``meta`` of the output array. If given, should be an array-like of the same
+        type and dtype that would result from calling ``.compute()`` on every delayed
+        value. One of ``dtype``, ``meta``, or ``like`` is required.
+    name: str, optional
+        The key name to use for the output array. Note that this fully specifies the
+        output key name, and must be unique. If not provided, will be determined by a
+        hash of the arguments.
+    like: dask Array, optional
+        Dask array to use as reference. The ``chunks`` and ``meta`` parameters will be
+        copied from this example if they are not given.
+
+        In the case of a single delayed value, ``like`` can also be a NumPy array,
+        in which case its ``shape`` is used, and it's used as ``meta``.
+    allow_unknown_chunksizes: bool, default False
+        If False, and ``shape``, ``chunks``, or ``like`` are not given, a `ValueError`
+        is raised, since the size of each chunk would be unknown.
+
+        If it's impossible to know the size that each delayed value will be when
+        computed (for example, if that depends on data that's loaded), you can set
+        ``allow_unknown_chunksizes=True`` to make the chunksize all NaNs. This is
+        generally not recommended, because some operations (like slicing) require known
+        chunksizes.
+
+        Note that even with unknown chunksizes, all chunks must have the same number of
+        dimensions. Furthermore, along every "row" or "column" of chunks, each chunk
+        must be the same length in that dimension---jagged arrays are not supported and
+        can cause unexpected results.
+
+    Examples
+    --------
+    >>> import dask
+    >>> import dask.array as da
+    >>> import numpy as np
+    >>> value = dask.delayed(np.ones)(5)
+    >>> array = da.from_delayed(value, (5,), dtype=float)
+    >>> array
+    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
+    >>> array.compute()
+    array([1., 1., 1., 1., 1.])
+
+    >>> orig = da.zeros((6, 4), chunks=2)
+    >>> delayeds = orig.to_delayed(optimize_graph=False)
+    >>> delayeds[0, 0] = dask.delayed(np.ones)((2, 2))
+    >>> delayeds[-1, 1] -= 1
+    >>> array = da.from_delayed(delayeds, like=orig)
+    >>> array.compute()
+    array([[ 1.,  1.,  0.,  0.],
+           [ 1.,  1.,  0.,  0.],
+           [ 0.,  0.,  0.,  0.],
+           [ 0.,  0.,  0.,  0.],
+           [ 0.,  0., -1., -1.],
+           [ 0.,  0., -1., -1.]])
+
+    See also
+    --------
+    Array.to_delayed
+    map_blocks
+    blockwise
+    """
+
+    if isinstance(value, np.ndarray):
+        return _from_delayed_arr(
+            value,
+            shape=shape,
+            chunks=chunks,
+            dtype=dtype,
+            meta=meta,
+            name=name,
+            like=like,
+            allow_unknown_chunksizes=allow_unknown_chunksizes,
+        )
+
+    return _from_delayed_value(
+        value,
+        shape=shape,
+        dtype=dtype,
+        meta=meta,
+        name=name,
+        like=like,
+    )
+
+
+def _from_delayed_value(
+    value,
+    shape,
+    *,
+    dtype=None,
+    meta=None,
+    name=None,
+    like=None,
+):
     """Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
@@ -3799,6 +3945,20 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     if not isinstance(value, Delayed) and hasattr(value, "key"):
         value = delayed(value)
 
+    if like is not None:
+        if shape is None:
+            shape = like.shape
+        if isinstance(like, Array):
+            if like.npartitions > 1:
+                raise ValueError(
+                    "`like=` dask Array must have only one chunk, "
+                    f"since a delayed value represents exactly one chunk: {like=}"
+                )
+            if meta is None:
+                meta = like._meta
+        else:
+            meta = like
+
     name = name or "from-value-" + tokenize(value, shape, dtype, meta)
     dsk = {(name,) + (0,) * len(shape): value.key}
     chunks = tuple((d,) for d in shape)
@@ -3808,7 +3968,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
-def from_delayed_arr(
+def _from_delayed_arr(
     value,
     *,
     shape=None,
@@ -3854,10 +4014,8 @@ def from_delayed_arr(
 
     meta = meta_from_array(meta, ndim=len(chunks), dtype=dtype)
 
-    name = (
-        (name or "from-delayed")
-        + "-"
-        + tokenize(value, chunks, meta, allow_unknown_chunksizes)
+    name = name or "from-delayed-" + tokenize(
+        value, chunks, meta, allow_unknown_chunksizes
     )
 
     iterator = np.nditer(value, flags=["refs_ok", "multi_index"])

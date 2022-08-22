@@ -3607,13 +3607,29 @@ def test_from_delayed_meta():
     assert isinstance(x._meta, np.ndarray)
 
 
+@pytest.mark.parametrize("like", [np.ones((5, 3)), da.ones((5, 3), chunks=-1)])
+def test_from_delayed_like(like):
+    v = delayed(np.ones)((5, 3))
+    x = from_delayed(v, like=like)
+    assert isinstance(x, Array)
+    assert isinstance(x._meta, np.ndarray)
+    assert x.shape == like.shape
+    assert x.npartitions == 1
+
+
+def test_from_delayed_bad_like():
+    v = delayed(np.ones)((5, 3))
+    with pytest.raises(ValueError, match="must have only one chunk"):
+        from_delayed(v, like=da.ones((5, 3), chunks=1))
+
+
 def test_from_delayed_roundtrip():
     x = da.random.random((8, 10), chunks=2)
-    roundtrip = da.core.from_delayed_arr(x.to_delayed(), like=x)
+    roundtrip = da.from_delayed(x.to_delayed(), like=x)
     assert_eq(x, roundtrip)
 
     x = da.random.random((8, 10), chunks=2).rechunk(5)
-    roundtrip = da.core.from_delayed_arr(x.to_delayed(), like=x)
+    roundtrip = da.from_delayed(x.to_delayed(), like=x)
     assert_eq(x, roundtrip)
 
 
@@ -3627,7 +3643,7 @@ def test_from_delayed_arr_with_ops():
     x[:2, :2] = 1
     x[-1:, -2:] = -1
 
-    roundtrip = da.core.from_delayed_arr(delayed, like=x)
+    roundtrip = da.from_delayed(delayed, like=x)
     assert_eq(x, roundtrip)
 
 
@@ -3648,7 +3664,7 @@ def test_from_delayed_arr_cull():
 
     delayed_input[skip_blocks] = delayed_zeros[skip_blocks]
 
-    input_skipped = da.core.from_delayed_arr(delayed_input, like=input)
+    input_skipped = da.from_delayed(delayed_input, like=input)
     expected = np.array([-1, -1, 1, 1, 2, 2, -1, -1, -1, -1])
     # Optimization should cull the `open_block` tasks that were overwritten
     assert_eq(input_skipped, expected)
@@ -3659,18 +3675,18 @@ def test_from_delayed_arr_bad_input():
     delayed = x.to_delayed()
 
     with pytest.raises(TypeError, match="expects a NumPy object array"):
-        da.core.from_delayed_arr(np.arange(4), like=x)
+        da.from_delayed(np.arange(4), like=x)
 
     with pytest.raises(TypeError, match="must be a dask Array"):
-        da.core.from_delayed_arr(delayed, like=np.arange(4))
+        da.from_delayed(delayed, like=np.arange(4))
 
 
 def test_from_delayed_arr_unknown_chunksizes():
     d = np.array([delayed(np.ones)(3), delayed(np.ones)(2), delayed(np.ones)(1)])
     with pytest.raises(ValueError, match="Chunksizes must be specified"):
-        da.core.from_delayed_arr(d)
+        da.from_delayed(d, dtype=float)
 
-    arr = da.core.from_delayed_arr(d, allow_unknown_chunksizes=True)
+    arr = da.from_delayed(d, dtype=float, allow_unknown_chunksizes=True)
     assert arr.numblocks == (3,)
     assert np.isnan(arr.size)
 
