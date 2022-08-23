@@ -3776,8 +3776,8 @@ def _check_regular_chunks(chunkset):
 
 def from_delayed(
     value,
-    *,
     shape=None,
+    *,
     chunks=None,
     dtype=None,
     meta=None,
