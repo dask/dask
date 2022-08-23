@@ -3104,8 +3104,6 @@ Dask Name: {name}, {layers}"""
             values = list(set(values))
             dtype = type(values[0])
             if all(isinstance(v, dtype) for v in values):
-                import numpy as np
-
                 values = np.array(values)
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
