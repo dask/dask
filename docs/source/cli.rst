@@ -2,8 +2,10 @@ Command Line Interface
 ======================
 
 Dask provides the ``dask`` executable to accomplish tasks directly
-from the command line. Projects in the Dask ecosystem (e.g.
+from the command line. Projects in the Dask ecosystem (such as
 ``distributed``) leverage the command line tool by adding subcommands.
+For example, additional commands implemented in ``distributed`` are
+:ref:`documented here <deploying-cli>`.
 
 Built in commands
 -----------------
@@ -125,3 +127,4 @@ Or the entry point can be registered directly in ``setup.py`` with:
 .. _Hatch: https://github.com/pypa/hatch
 .. _setuptools: https://setuptools.pypa.io/en/latest/index.html
 .. _PyPA: https://pypa.io/
+.. _Flit: https://flit.pypa.io/
