@@ -174,6 +174,7 @@ messy situations in everyday problems.
    changelog.rst
    configuration.rst
    how-to/index.rst
+   maintainers.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
