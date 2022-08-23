@@ -3097,14 +3097,15 @@ Dask Name: {name}, {layers}"""
         if isinstance(values, list):
             # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be a
             # result of serializing a Python list with pickle, while numpy arrays
-            # leverage Dask's custom serializer.  We can reduce serialization costs by 
+            # leverage Dask's custom serializer.  We can reduce serialization costs by
             # deduplicating the list and, if all dtypes in the list are the same,
-            # converting to an array.  If dtypes are not consistent, we must leave 
+            # converting to an array.  If dtypes are not consistent, we must leave
             # as a list
             values = list(set(values))
             dtype = type(values[0])
             if all(isinstance(v, dtype) for v in values):
                 import numpy as np
+
                 values = np.array(values)
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
