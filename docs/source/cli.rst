@@ -45,12 +45,13 @@ new project, the canonical way to add an entry point to your Python
 project is to use the ``[project.entry-points]`` table in the
 ``pyproject.toml`` file. This method should be picked up by any Python
 build system that is compatible with ``PEP-621``'s ``project``
-configuration. For example, Hatch_ and setuptools_ version 61.0.0 or
-later provide PEP-621 compatible build systems that works by using the
-``[project.entry-points]]``, but these are not the only ones!
+configuration. Hatch_, Flit_, and setuptools_ (version 61.0.0 or
+later) are three example build systems which are PEP-621 compatible
+and use ``[project.entry-points]``.
 
-If your project is called ``mypackage``, and it contains a ``cli.py``
-module under the ``mypackage`` namespace with the following contents:
+For example, if your project is called ``mypackage``, and it contains
+a ``cli.py`` module under the ``mypackage`` namespace with the
+following contents:
 
 .. code-block::
 
