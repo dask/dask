@@ -3951,12 +3951,13 @@ def from_delayed(
         rename_lyr[(name, *idx)] = delayed_chunk.key
 
     # NOTE: if every Delayed object's key is already formatted properly as an array key,
-    # _and_ they all have the same `_layer`, then a we could take a fastpath and skip
+    # _and_ they all have the same `_layer`, then we could take a fastpath and skip
     # generating `rename_lyr` all together, by just referencing that `_layer`. However,
     # this is only the case in the no-op `from_delayed(x.to_delayed(), like=x)`. If any
     # of the delayed objects have been changed, they'll at least have a different layer.
+    # So we don't currently optimize for this unlikely case.
 
-    # TODO when every delayed object is a separate layer, this is probably quite slow.
+    # NOTE: when every delayed object is a separate layer, may be quite slow.
     dsk = HighLevelGraph.from_collections(name, rename_lyr, dependencies)
 
     return Array(dsk, name, chunks, meta=meta)
