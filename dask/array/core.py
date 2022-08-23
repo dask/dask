@@ -3863,7 +3863,7 @@ def from_delayed(
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
-    dask.array<from-value, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
+    dask.array<from-delayed, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
 
