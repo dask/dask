@@ -56,6 +56,11 @@ def good_command():
     pass
 
 
+@click.command(name="good")
+def good_command_2():
+    pass
+
+
 def test_register_command_ep():
     from dask.cli import _register_command_ep
 
@@ -77,3 +82,28 @@ def test_register_command_ep():
     _register_command_ep(dummy_cli, good_ep)
     assert "good" in dummy_cli.commands
     assert dummy_cli.commands["good"] is good_command
+
+
+@click.group
+def dummy_cli_2():
+    pass
+
+
+def test_repeated_registration():
+    from dask.cli import _register_command_ep
+
+    one = importlib.metadata.EntryPoint(
+        name="one",
+        value="dask.tests.test_cli:good_command",
+        group="dask_cli",
+    )
+
+    two = importlib.metadata.EntryPoint(
+        name="two",
+        value="dask.tests.test_cli:good_command_2",
+        group="dask_cli",
+    )
+
+    _register_command_ep(dummy_cli_2, one)
+    with pytest.raises(ValueError, match="Command with name good already exists"):
+        _register_command_ep(dummy_cli_2, two)

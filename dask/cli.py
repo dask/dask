@@ -67,6 +67,13 @@ def _register_command_ep(interface, entry_point):
             "entry points in 'dask_cli' must be instances of "
             "click.Command or click.Group"
         )
+
+    if command.name in interface.commands:
+        raise ValueError(
+            f"Command with name {command.name} already "
+            "exists in the Dask CLI; choose another name!"
+        )
+
     interface.add_command(command)
 
 
