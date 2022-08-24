@@ -712,6 +712,18 @@ def test_merge_asof_on_left_right(left_col, right_col):
     assert_eq(result_df, result_dd, check_index=False)
 
 
+def test_merge_asof_with_various_npartitions():
+    # https://github.com/dask/dask/issues/8999
+    df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
+    expected = pd.merge_asof(left=df, right=df, on="ts")
+
+    for npartitions in range(1, 5):
+        ddf = dd.from_pandas(df, npartitions=npartitions)
+
+        result = dd.merge_asof(left=ddf, right=ddf, on="ts")
+        assert_eq(expected, result)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
