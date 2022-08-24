@@ -74,7 +74,7 @@ def _register_command_ep(interface, entry_point):
     if command.name in interface.commands:
         warnings.warn(
             f"While registering the command with name '{command.name}', an "
-            "existing command or group; the original is has been overwritten."
+            "existing command or group; the original has been overwritten."
         )
 
     interface.add_command(command)
