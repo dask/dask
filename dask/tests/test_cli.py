@@ -89,7 +89,7 @@ def dummy_cli_2():
     pass
 
 
-def test_repeated_registration():
+def test_repeated_name_registration_raise():
     from dask.cli import _register_command_ep
 
     one = importlib.metadata.EntryPoint(
