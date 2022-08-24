@@ -1,5 +1,6 @@
 import contextlib
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from threading import Lock
 
 import numpy as np
@@ -355,6 +356,61 @@ def test_from_pandas_with_datetime_index():
     assert_eq(df, ddf)
 
 
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
+def test_from_pandas_with_index_nulls(null_value):
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=["C", null_value, "A"])
+    with pytest.raises(NotImplementedError, match="is non-numeric and contains nulls"):
+        dd.from_pandas(df, npartitions=2, sort=False)
+
+
+def test_from_pandas_with_wrong_args():
+    df = pd.DataFrame({"x": [1, 2, 3]}, index=[3, 2, 1])
+    with pytest.raises(TypeError, match="must be a pandas DataFrame or Series"):
+        dd.from_pandas("foo")
+    with pytest.raises(
+        ValueError, match="one of npartitions and chunksize must be specified"
+    ):
+        dd.from_pandas(df)
+    with pytest.raises(TypeError, match="provide npartitions as an int"):
+        dd.from_pandas(df, npartitions=5.2, sort=False)
+    with pytest.raises(TypeError, match="provide chunksize as an int"):
+        dd.from_pandas(df, chunksize=18.27)
+
+
+def test_from_pandas_chunksize_one():
+    # See: https://github.com/dask/dask/issues/9218
+    df = pd.DataFrame(np.random.randint(0, 10, size=(10, 4)), columns=list("ABCD"))
+    ddf = dd.from_pandas(df, chunksize=1)
+    num_rows = list(ddf.map_partitions(len).compute())
+    # chunksize=1 with range index should
+    # always have unit-length partitions
+    assert num_rows == [1] * 10
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        ["A", "B", "C", "C", "C", "C", "C", "C"],
+        ["A", "B", "B", "B", "B", "B", "B", "C"],
+        ["A", "A", "A", "A", "A", "B", "B", "C"],
+    ],
+)
+def test_from_pandas_npartitions_duplicates(index):
+    df = pd.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
+@pytest.mark.gpu
+def test_gpu_from_pandas_npartitions_duplicates():
+    cudf = pytest.importorskip("cudf")
+
+    index = ["A", "A", "A", "A", "A", "B", "B", "C"]
+    df = cudf.DataFrame({"a": range(8), "index": index}).set_index("index")
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.divisions == ("A", "B", "C", "C")
+
+
 def test_DataFrame_from_dask_array():
     x = da.ones((10, 3), chunks=(4, 2))
     pdf = pd.DataFrame(np.ones((10, 3)), columns=["a", "b", "c"])
@@ -531,6 +587,20 @@ def test_from_dask_array_unknown_chunks():
     assert_eq(df, pd.DataFrame(dx.compute()), check_index=False)
 
 
+@pytest.mark.parametrize(
+    "chunksizes, expected_divisions",
+    [
+        pytest.param((1, 2, 3, 0), (0, 1, 3, 5, 5)),
+        pytest.param((0, 1, 2, 3), (0, 0, 1, 3, 5)),
+        pytest.param((1, 0, 2, 3), (0, 1, 1, 3, 5)),
+    ],
+)
+def test_from_dask_array_empty_chunks(chunksizes, expected_divisions):
+    monotonic_index = da.from_array(np.arange(6), chunks=chunksizes)
+    df = dd.from_dask_array(monotonic_index)
+    assert df.divisions == expected_divisions
+
+
 def test_from_dask_array_unknown_width_error():
     dsk = {("x", 0, 0): np.random.random((2, 3)), ("x", 1, 0): np.random.random((5, 3))}
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)
@@ -700,6 +770,30 @@ def test_from_delayed_optimize_fusion():
     assert len(optimize(ddf.dask, ddf.__dask_keys__()).layers) == 1
 
 
+def test_from_delayed_to_dask_array():
+    # Check that `from_delayed`` can be followed
+    # by `to_dask_array` without breaking
+    # optimization behavior
+    # See: https://github.com/dask-contrib/dask-sql/issues/497
+    from dask.blockwise import optimize_blockwise
+
+    dfs = [delayed(pd.DataFrame)(np.ones((3, 2))) for i in range(3)]
+    ddf = dd.from_delayed(dfs)
+    arr = ddf.to_dask_array()
+
+    # If we optimize this graph without calling
+    # `fuse_roots`, the underlying `BlockwiseDep`
+    # `mapping` keys will be 1-D (e.g. `(4,)`),
+    # while the collection keys will be 2-D
+    # (e.g. `(4, 0)`)
+    keys = [k[0] for k in arr.__dask_keys__()]
+    dsk = optimize_blockwise(arr.dask, keys=keys)
+    dsk.cull(keys)
+
+    result = arr.compute()
+    assert result.shape == (9, 2)
+
+
 def test_from_delayed_preserves_hlgs():
     df = pd.DataFrame(data=np.random.normal(size=(10, 4)), columns=list("abcd"))
     parts = [df.iloc[:1], df.iloc[1:3], df.iloc[3:6], df.iloc[6:10]]
@@ -809,3 +903,197 @@ def test_from_dask_array_index_dtype():
 
     assert ddf.index.dtype == ddf2.index.dtype
     assert ddf.index.name == ddf2.index.name
+
+
+@pytest.mark.parametrize(
+    "vals",
+    [
+        ("A", "B"),
+        (3, 4),
+        (datetime(2020, 10, 1), datetime(2022, 12, 31)),
+    ],
+)
+def test_from_map_simple(vals):
+    # Simple test to ensure required inputs (func & iterable)
+    # and basic kwargs work as expected for `from_map`
+
+    def func(input, size=0):
+        # Simple function to create Series with a
+        # repeated value and index
+        value, index = input
+        return pd.Series([value] * size, index=[index] * size)
+
+    iterable = [(vals[0], 1), (vals[1], 2)]
+    ser = dd.from_map(func, iterable, size=2)
+    expect = pd.Series(
+        [vals[0], vals[0], vals[1], vals[1]],
+        index=[1, 1, 2, 2],
+    )
+
+    # Make sure `from_map` produces single `Blockwise` layer
+    layers = ser.dask.layers
+    assert len(layers) == 1
+    assert isinstance(layers[ser._name], Blockwise)
+
+    # Check that result and partition count make sense
+    assert ser.npartitions == len(iterable)
+    assert_eq(ser, expect)
+
+
+def test_from_map_multi():
+    # Test that `iterables` can contain multiple Iterables
+
+    func = lambda x, y: pd.DataFrame({"add": x + y})
+    iterables = (
+        [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")],
+        [np.array([2, 2], dtype="int64"), np.array([2, 2], dtype="int64")],
+    )
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([2, 3, 2, 3], dtype="int64")}, index=index)
+
+    ddf = dd.from_map(func, *iterables)
+    assert_eq(ddf, expect)
+
+
+def test_from_map_args():
+    # Test that the optional `args` argument works as expected
+
+    func = lambda x, y, z: pd.DataFrame({"add": x + y + z})
+    iterable = [np.arange(2, dtype="int64"), np.arange(2, dtype="int64")]
+    index = np.array([0, 1, 0, 1], dtype="int64")
+    expect = pd.DataFrame({"add": np.array([5, 6, 5, 6], dtype="int64")}, index=index)
+
+    ddf = dd.from_map(func, iterable, args=[2, 3])
+    assert_eq(ddf, expect)
+
+
+def test_from_map_divisions():
+    # Test that `divisions` argument works as expected for `from_map`
+
+    func = lambda x: pd.Series([x[0]] * 2, index=range(x[1], x[1] + 2))
+    iterable = [("B", 0), ("C", 2)]
+    divisions = (0, 2, 4)
+    ser = dd.from_map(func, iterable, divisions=divisions)
+    expect = pd.Series(
+        ["B", "B", "C", "C"],
+        index=[0, 1, 2, 3],
+    )
+
+    assert ser.divisions == divisions
+    assert_eq(ser, expect)
+
+
+def test_from_map_meta():
+    # Test that `meta` can be specified to `from_map`,
+    # and that `enforce_metadata` works as expected
+
+    func = lambda x, s=0: pd.DataFrame({"x": [x] * s})
+    iterable = ["A", "B"]
+
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    # First Check - Pass in valid metadata
+    meta = pd.DataFrame({"x": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf, expect)
+
+    # Second Check - Pass in invalid metadata
+    meta = pd.DataFrame({"a": ["A"]}).iloc[:0]
+    ddf = dd.from_map(func, iterable, meta=meta, s=2)
+    assert_eq(ddf._meta, meta)
+    with pytest.raises(ValueError, match="The columns in the computed data"):
+        assert_eq(ddf.compute(), expect)
+
+    # Third Check - Pass in invalid metadata,
+    # but use `enforce_metadata=False`
+    ddf = dd.from_map(func, iterable, meta=meta, enforce_metadata=False, s=2)
+    assert_eq(ddf._meta, meta)
+    assert_eq(ddf.compute(), expect)
+
+
+def test_from_map_custom_name():
+    # Test that `label` and `token` arguments to
+    # `from_map` works as expected
+
+    func = lambda x: pd.DataFrame({"x": [x] * 2})
+    iterable = ["A", "B"]
+    label = "my-label"
+    token = "8675309"
+    expect = pd.DataFrame({"x": ["A", "A", "B", "B"]}, index=[0, 1, 0, 1])
+
+    ddf = dd.from_map(func, iterable, label=label, token=token)
+    assert ddf._name == label + "-" + token
+    assert_eq(ddf, expect)
+
+
+def _generator():
+    # Simple generator for test_from_map_other_iterables
+    yield from enumerate(["A", "B", "C"])
+
+
+@pytest.mark.parametrize(
+    "iterable",
+    [
+        enumerate(["A", "B", "C"]),
+        ((0, "A"), (1, "B"), (2, "C")),
+        _generator(),
+    ],
+)
+def test_from_map_other_iterables(iterable):
+    # Test that iterable arguments to `from_map`
+    # can be enumerate and generator
+    # See: https://github.com/dask/dask/issues/9064
+
+    def func(t):
+        size = t[0] + 1
+        x = t[1]
+        return pd.Series([x] * size)
+
+    ddf = dd.from_map(func, iterable)
+    expect = pd.Series(
+        ["A", "B", "B", "C", "C", "C"],
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    assert_eq(ddf.compute(), expect)
+
+
+def test_from_map_column_projection():
+    # Test that column projection works
+    # as expected with from_map when
+    # enforce_metadata=True
+
+    projected = []
+
+    class MyFunc:
+        def __init__(self, columns=None):
+            self.columns = columns
+
+        def project_columns(self, columns):
+            return MyFunc(columns)
+
+        def __call__(self, t):
+            size = t[0] + 1
+            x = t[1]
+            df = pd.DataFrame({"A": [x] * size, "B": [10] * size})
+            if self.columns is None:
+                return df
+            projected.extend(self.columns)
+            return df[self.columns]
+
+    ddf = dd.from_map(
+        MyFunc(),
+        enumerate([0, 1, 2]),
+        label="myfunc",
+        enforce_metadata=True,
+    )
+    expect = pd.DataFrame(
+        {
+            "A": [0, 1, 1, 2, 2, 2],
+            "B": [10] * 6,
+        },
+        index=[0, 0, 1, 0, 1, 2],
+    )
+    assert_eq(ddf["A"], expect["A"])
+    assert set(projected) == {"A"}
+    assert_eq(ddf, expect)

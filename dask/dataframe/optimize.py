@@ -203,7 +203,6 @@ def optimize_dataframe_getitem(dsk, keys):
         old = layers[io_layer_name]
         new = old.project_columns(columns)
         if new.name != old.name:
-            columns = list(columns)
             assert len(update_blocks)
             for block_key, block in update_blocks.items():
                 # (('read-parquet-old', (.,)), ( ... )) ->

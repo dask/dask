@@ -48,17 +48,36 @@ def test_make_meta():
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    for col in "abc":
+        meta_pointer = meta[col].values.__array_interface__["data"][0]
+        df_pointer = df[col].values.__array_interface__["data"][0]
+        assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas series
     meta = make_meta(df.a)
     assert len(meta) == 0
     assert meta.dtype == df.a.dtype
     assert isinstance(meta.index, type(df.index))
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.a.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
+    meta_pointer = meta.index.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Pandas index
     meta = make_meta(df.index)
     assert isinstance(meta, type(df.index))
     assert len(meta) == 0
+    # - ensure no references to original data arrays are kept
+    meta_pointer = meta.values.__array_interface__["data"][0]
+    df_pointer = df.index.values.__array_interface__["data"][0]
+    assert meta_pointer != df_pointer
 
     # Dask object
     ddf = dd.from_pandas(df, npartitions=2)
@@ -132,6 +151,12 @@ def test_make_meta():
     meta = make_meta(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
+
+    # Categorials with Index
+    meta = make_meta({"a": "category", "b": "int64"}, index=idx)
+    assert len(meta.a.cat.categories) == 1
+    assert meta.index.dtype == "int64"
+    assert meta.index.empty
 
     # Numpy scalar
     meta = make_meta(np.float64(1.0), parent_meta=df)
@@ -542,13 +567,29 @@ def test_nonempty_series_nullable_float():
 
 
 def test_assert_eq_sorts():
-    df1 = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
-    df2 = df1.sort_values("B")
-    df2_r = df2.reset_index(drop=True)
-    assert_eq(df1, df2)
-    assert_eq(df1, df2_r, check_index=False)
+    df = pd.DataFrame({"A": np.linspace(0, 1, 10), "B": np.random.random(10)})
+    df_s = df.sort_values("B")
+    assert_eq(df, df_s)
     with pytest.raises(AssertionError):
-        assert_eq(df1, df2_r)
+        assert_eq(df, df_s, sort_results=False)
+
+    df_sr = df_s.reset_index(drop=True)
+    assert_eq(df, df_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr)
+    with pytest.raises(AssertionError):
+        assert_eq(df, df_sr, check_index=False, sort_results=False)
+
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf_s = ddf.sort_values(["B"])
+    assert_eq(df, ddf_s)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_s, sort_results=False)
+
+    ddf_sr = ddf_s.reset_index(drop=True)
+    assert_eq(df, ddf_sr, check_index=False)
+    with pytest.raises(AssertionError):
+        assert_eq(df, ddf_sr, check_index=False, sort_results=False)
 
 
 def test_assert_eq_scheduler():

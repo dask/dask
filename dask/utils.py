@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import codecs
 import functools
 import inspect
 import os
@@ -36,6 +37,36 @@ if system_encoding == "ascii":
 
 
 def apply(func, args, kwargs=None):
+    """Apply a function given its positional and keyword arguments.
+
+    Equivalent to ``func(*args, **kwargs)``
+    Most Dask users will never need to use the ``apply`` function.
+    It is typically only used by people who need to inject
+    keyword argument values into a low level Dask task graph.
+
+    Parameters
+    ----------
+    func : callable
+        The function you want to apply.
+    args : tuple
+        A tuple containing all the positional arguments needed for ``func``
+        (eg: ``(arg_1, arg_2, arg_3)``)
+    kwargs : dict, optional
+        A dictionary mapping the keyword arguments
+        (eg: ``{"kwarg_1": value, "kwarg_2": value}``
+
+    Examples
+    --------
+    >>> from dask.utils import apply
+    >>> def add(number, second_number=5):
+    ...     return number + second_number
+    ...
+    >>> apply(add, (10,), {"second_number": 2})  # equivalent to add(*args, **kwargs)
+    12
+
+    >>> task = apply(add, (10,), {"second_number": 2})
+    >>> dsk = {'task-name': task}  # adds the task to a low level Dask task graph
+    """
     if kwargs:
         return func(*args, **kwargs)
     else:
@@ -665,7 +696,7 @@ def extra_titles(doc):
     return "\n".join(lines)
 
 
-def ignore_warning(doc, cls, name, extra="", skipblocks=0):
+def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None):
     """Expand docstring by adding disclaimer and extra text"""
     import inspect
 
@@ -696,7 +727,11 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
             more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
+        if inconsistencies is not None:
+            l3 = f"Known inconsistencies: \n {inconsistencies}"
+            bits = [head, indent, l1, l2, "\n\n", l3, "\n\n"] + more + [tail]
+        else:
+            bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
         doc = "".join(bits)
 
     return doc
@@ -717,7 +752,9 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
+def _derived_from(
+    cls, method, ua_args=None, extra="", skipblocks=0, inconsistencies=None
+):
     """Helper function for derived_from to ease testing"""
     ua_args = ua_args or []
 
@@ -747,7 +784,12 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(
-            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+            doc,
+            cls,
+            method.__name__,
+            extra=extra,
+            skipblocks=skipblocks,
+            inconsistencies=inconsistencies,
         )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
@@ -770,7 +812,9 @@ def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
+def derived_from(
+    original_klass, version=None, ua_args=None, skipblocks=0, inconsistencies=None
+):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -790,6 +834,9 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     skipblocks : int
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
+    inconsistencies: list
+        List of known inconsistencies with method whose docstrings are being
+        copied.
     """
     ua_args = ua_args or []
 
@@ -802,6 +849,7 @@ def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
                 ua_args=ua_args,
                 extra=extra,
                 skipblocks=skipblocks,
+                inconsistencies=inconsistencies,
             )
             return method
 
@@ -884,21 +932,45 @@ def typename(typ: Any, short: bool = False) -> str:
 
 
 def ensure_bytes(s) -> bytes:
-    """Turn string or bytes to bytes
+    """Attempt to turn `s` into bytes.
 
-    >>> ensure_bytes('123')
-    b'123'
+    Parameters
+    ----------
+    s : Any
+        The object to be converted. Will correctly handled
+        * str
+        * bytes
+        * objects implementing the buffer protocol (memoryview, ndarray, etc.)
+
+    Returns
+    -------
+    b : bytes
+
+    Raises
+    ------
+    TypeError
+        When `s` cannot be converted
+
+    Examples
+    --------
     >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
+    >>> ensure_bytes(bytearray(b'123'))
+    b'123'
     """
     if isinstance(s, bytes):
         return s
-    if hasattr(s, "encode"):
+    elif hasattr(s, "encode"):
         return s.encode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    else:
+        try:
+            return bytes(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a bytes object nor can be encoded to bytes"
+            ) from e
 
 
 def ensure_unicode(s) -> str:
@@ -911,9 +983,15 @@ def ensure_unicode(s) -> str:
     """
     if isinstance(s, str):
         return s
-    if hasattr(s, "decode"):
+    elif hasattr(s, "decode"):
         return s.decode()
-    raise TypeError(f"Object {s} is neither a str object nor has an decode method")
+    else:
+        try:
+            return codecs.decode(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a str object nor can be decoded to str"
+            ) from e
 
 
 def digit(n, k, base):
@@ -1280,7 +1358,7 @@ def is_arraylike(x) -> bool:
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
         # We special case scipy.sparse and cupyx.scipy.sparse arrays as having partial
-        # support for them is useful in scenerios where we mostly call `map_partitions`
+        # support for them is useful in scenarios where we mostly call `map_partitions`
         # or `map_blocks` with scikit-learn functions on dask arrays and dask dataframes.
         # https://github.com/dask/dask/pull/3738
         and (is_duck_array or "scipy.sparse" in typename(type(x)))
@@ -1453,7 +1531,27 @@ def format_time(n: float) -> str:
     '123.45 us'
     >>> format_time(123.456)
     '123.46 s'
+    >>> format_time(1234.567)
+    '20m 34s'
+    >>> format_time(12345.67)
+    '3hr 25m'
+    >>> format_time(123456.78)
+    '34hr 17m'
+    >>> format_time(1234567.89)
+    '14d 6hr'
     """
+    if n > 24 * 60 * 60 * 2:
+        d = int(n / 3600 / 24)
+        h = int((n - d * 3600 * 24) / 3600)
+        return f"{d}d {h}hr"
+    if n > 60 * 60 * 2:
+        h = int(n / 3600)
+        m = int((n - h * 3600) / 60)
+        return f"{h}hr {m}m"
+    if n > 60 * 10:
+        m = int(n / 60)
+        s = int(n - m * 60)
+        return f"{m}m {s}s"
     if n >= 1:
         return "%.2f s" % n
     if n >= 1e-3:
@@ -1570,6 +1668,7 @@ timedelta_sizes = {
     "m": 60,
     "h": 3600,
     "d": 3600 * 24,
+    "w": 7 * 3600 * 24,
 }
 
 tds2 = {
@@ -1577,6 +1676,7 @@ tds2 = {
     "minute": 60,
     "hour": 60 * 60,
     "day": 60 * 60 * 24,
+    "week": 7 * 60 * 60 * 24,
     "millisecond": 1e-3,
     "microsecond": 1e-6,
     "nanosecond": 1e-9,
@@ -1914,3 +2014,70 @@ def cached_cumsum(seq, initial_zero=False):
         # Construct a temporary tuple, and look up by value.
         result = _cumsum(tuple(seq), initial_zero)
     return result
+
+
+def show_versions() -> None:
+    """Provide version information for bug reports."""
+
+    from importlib.metadata import PackageNotFoundError, version
+    from json import dumps
+    from platform import uname
+    from sys import stdout, version_info
+
+    from distributed import __version__ as distributed_version
+
+    from dask import __version__ as dask_version
+
+    deps = [
+        "numpy",
+        "pandas",
+        "cloudpickle",
+        "fsspec",
+        "bokeh",
+        "fastparquet",
+        "pyarrow",
+        "zarr",
+    ]
+
+    result: dict[str, str | None] = {
+        # note: only major, minor, micro are extracted
+        "Python": ".".join([str(i) for i in version_info[:3]]),
+        "Platform": uname().system,
+        "dask": dask_version,
+        "distributed": distributed_version,
+    }
+
+    for modname in deps:
+        try:
+            result[modname] = version(modname)
+        except PackageNotFoundError:
+            result[modname] = None
+
+    stdout.writelines(dumps(result, indent=2))
+
+    return
+
+
+def maybe_pluralize(count, noun, plural_form=None):
+    """Pluralize a count-noun string pattern when necessary"""
+    if count == 1:
+        return f"{count} {noun}"
+    else:
+        return f"{count} {plural_form or noun + 's'}"
+
+
+def is_namedtuple_instance(obj: Any) -> bool:
+    """Returns True if obj is an instance of a namedtuple.
+
+    Note: This function checks for the existence of the methods and
+    attributes that make up the namedtuple API, so it will return True
+    IFF obj's type implements that API.
+    """
+    return (
+        isinstance(obj, tuple)
+        and hasattr(obj, "_make")
+        and hasattr(obj, "_asdict")
+        and hasattr(obj, "_replace")
+        and hasattr(obj, "_fields")
+        and hasattr(obj, "_field_defaults")
+    )

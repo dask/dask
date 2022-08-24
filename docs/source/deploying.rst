@@ -1,5 +1,5 @@
-Deploying Clusters
-==================
+Deploy Dask Clusters
+====================
 
 .. toctree::
    :maxdepth: 1
@@ -29,7 +29,7 @@ This page describes various ways to set up Dask clusters on different hardware, 
 locally on your own machine or on a distributed cluster.  If you are just
 getting started then you can save this page for later as Dask runs perfectly well on a single machine
 without a distributed scheduler. But once you start using Dask in anger you'll find a lot of benefit
-both in terms of scaling and debugging by using the distirbuted scheduler.
+both in terms of scaling and debugging by using the distributed scheduler.
 
 You can continue reading or watch the screencast below:
 

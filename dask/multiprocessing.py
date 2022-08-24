@@ -7,6 +7,7 @@ import os
 import pickle
 import sys
 import traceback
+from collections.abc import Hashable, Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
@@ -143,13 +144,14 @@ def get_context():
 
 
 def get(
-    dsk,
-    keys,
+    dsk: Mapping,
+    keys: Sequence[Hashable] | Hashable,
     num_workers=None,
     func_loads=None,
     func_dumps=None,
     optimize_graph=True,
     pool=None,
+    initializer=None,
     chunksize=None,
     **kwargs,
 ):
@@ -171,6 +173,9 @@ def get(
         If True [default], `fuse` is applied to the graph before computation.
     pool : Executor or Pool
         Some sort of `Executor` or `Pool` to use
+    initializer: function
+        Ignored if ``pool`` has been set.
+        Function to initialize a worker process before running any tasks in it.
     chunksize: int, optional
         Size of chunks to use when dispatching work.
         Defaults to 5 as some batching is helpful.
@@ -178,10 +183,11 @@ def get(
     """
     chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
+    initializer = initializer or config.get("multiprocessing.initializer", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
-        # consistent seed for the Python hash algorithm. Unfortunatley, there
+        # consistent seed for the Python hash algorithm. Unfortunately, there
         # is no way to specify environment variables only for the Pool
         # processes, so we have to rely on environment variables being
         # inherited.
@@ -190,11 +196,18 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
+        initializer = partial(initialize_worker_process, user_initializer=initializer)
         pool = ProcessPoolExecutor(
-            num_workers, mp_context=context, initializer=initialize_worker_process
+            num_workers, mp_context=context, initializer=initializer
         )
         cleanup = True
     else:
+        if initializer is not None:
+            warn(
+                "The ``initializer`` argument is ignored when ``pool`` is provided. "
+                "The user should configure ``pool`` with the needed ``initializer`` "
+                "on creation."
+            )
         if isinstance(pool, multiprocessing.pool.Pool):
             pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
@@ -236,12 +249,19 @@ def get(
     return result
 
 
-def initialize_worker_process():
-    """
-    Initialize a worker process before running any tasks in it.
-    """
+def default_initializer():
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
     np = sys.modules.get("numpy")
     if np is not None:
         np.random.seed()
+
+
+def initialize_worker_process(user_initializer=None):
+    """
+    Initialize a worker process before running any tasks in it.
+    """
+    default_initializer()
+
+    if user_initializer is not None:
+        user_initializer()

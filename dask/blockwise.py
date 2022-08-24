@@ -9,6 +9,7 @@ from typing import Any
 
 import tlz as toolz
 
+import dask
 from dask.base import clone_key, get_name_from_key, tokenize
 from dask.core import flatten, keys_in_tasks, reverse_dict
 from dask.delayed import unpack_collections
@@ -160,7 +161,22 @@ class BlockwiseDepDict(BlockwiseDep):
         return self._produces_keys
 
     def __getitem__(self, idx: tuple[int, ...]) -> Any:
-        return self.mapping[idx]
+        try:
+            return self.mapping[idx]
+        except KeyError as err:
+            # If a DataFrame collection was converted
+            # to an Array collection, the dimesion of
+            # `idx` may not agree with the keys in
+            # `self.mapping`. In this case, we can
+            # use `self.numblocks` to check for a key
+            # match in the leading elements of `idx`
+            flat_idx = idx[: len(self.numblocks)]
+            if flat_idx in self.mapping:
+                return self.mapping[flat_idx]
+            raise err
+
+    def __len__(self) -> int:
+        return len(self.mapping)
 
 
 class BlockIndex(BlockwiseDep):
@@ -232,7 +248,7 @@ def blockwise(
     ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
     allowing for collections it can accept BlockwiseDep instances, which allows for lazy
     evaluation of arguments to ``func`` which might be different for different
-    chunks/paritions.
+    chunks/partitions.
 
     See Also
     --------
@@ -569,10 +585,10 @@ class Blockwise(Layer):
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
 
-        output_blocks = set()
+        output_blocks: set[tuple[int, ...]] = set()
         for key in keys:
             if key[0] == self.output:
-                output_blocks.add(key[1:])
+                output_blocks.add(tuple(map(int, key[1:])))
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
@@ -602,7 +618,7 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if k in names:
+            if idxv is not None and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)
             indices.append((k, idxv))
@@ -895,9 +911,13 @@ def make_blockwise_graph(
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to construct the specified set of output blocks
-    output_blocks = output_blocks or itertools.product(
-        *[range(dims[i]) for i in out_indices]
+    # Only need to construct the specified set of output blocks.
+    # Note that we must convert itertools.product to list,
+    # because we may need to loop through output_blocks more than
+    # once below (itertools.product already uses an internal list,
+    # so this is not a memory regression)
+    output_blocks = output_blocks or list(
+        itertools.product(*[range(dims[i]) for i in out_indices])
     )
 
     dsk = {}
@@ -945,7 +965,7 @@ def make_blockwise_graph(
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
+            # of to_serialize if we know that are no embedded
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
@@ -1125,10 +1145,9 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
-                if (
-                    blockwise_layers
-                    and layers[next(iter(blockwise_layers))].annotations
-                    != layers[dep].annotations
+                if blockwise_layers and not _can_fuse_annotations(
+                    layers[next(iter(blockwise_layers))].annotations,
+                    layers[dep].annotations,
                 ):
                     stack.append(dep)
                     continue
@@ -1186,6 +1205,60 @@ def _unique_dep(dep, ind):
     return dep + "_" + "_".join(str(i) for i in list(ind))
 
 
+def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
+    """
+    Treat the special annotation keys, as fusable since we can apply simple
+    rules to capture their intent in a fused layer.
+    """
+    if a == b:
+        return True
+
+    if dask.config.get("optimization.annotations.fuse") is False:
+        return False
+
+    fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}
+    if (not a or all(k in fusable for k in a)) and (
+        not b or all(k in fusable for k in b)
+    ):
+        return True
+
+    return False
+
+
+def _fuse_annotations(*args: dict) -> dict:
+    """
+    Given an iterable of annotations dictionaries, fuse them according
+    to some simple rules.
+    """
+    # First, do a basic dict merge -- we are presuming that these have already
+    # been gated by `_can_fuse_annotations`.
+    annotations = toolz.merge(*args)
+    # Max of layer retries
+    retries = [a["retries"] for a in args if "retries" in a]
+    if retries:
+        annotations["retries"] = max(retries)
+    # Max of layer priorities
+    priorities = [a["priority"] for a in args if "priority" in a]
+    if priorities:
+        annotations["priority"] = max(priorities)
+    # Max of all the layer resources
+    resources = [a["resources"] for a in args if "resources" in a]
+    if resources:
+        annotations["resources"] = toolz.merge_with(max, *resources)
+    # Intersection of all the worker restrictions
+    workers = [a["workers"] for a in args if "workers" in a]
+    if workers:
+        annotations["workers"] = list(set.intersection(*[set(w) for w in workers]))
+    # More restrictive of allow_other_workers
+    allow_other_workers = [
+        a["allow_other_workers"] for a in args if "allow_other_workers" in a
+    ]
+    if allow_other_workers:
+        annotations["allow_other_workers"] = all(allow_other_workers)
+
+    return annotations
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1209,6 +1282,9 @@ def rewrite_blockwise(inputs):
         # Fast path: if there's only one input we can just use it as-is.
         return inputs[0]
 
+    fused_annotations = _fuse_annotations(
+        *[i.annotations for i in inputs if i.annotations]
+    )
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
@@ -1334,7 +1410,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
-        annotations=inputs[root].annotations,
+        annotations=fused_annotations,
         io_deps=io_deps,
     )
 

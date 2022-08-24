@@ -1870,8 +1870,8 @@ def roll(array, shift, axis=None):
         raise ValueError("Must have the same number of shifts as axes.")
 
     for i, s in zip(axis, shift):
-        s = -s
-        s %= result.shape[i]
+        shape = result.shape[i]
+        s = 0 if shape == 0 else -s % shape
 
         sl1 = result.ndim * [slice(None)]
         sl2 = result.ndim * [slice(None)]
@@ -1933,6 +1933,13 @@ def squeeze(a, axis=None):
     axis = validate_axis(axis, a.ndim)
 
     sl = tuple(0 if i in axis else slice(None) for i, s in enumerate(a.shape))
+
+    # Return 0d Dask Array if all axes are squeezed,
+    # to be consistent with NumPy. Ref: https://github.com/dask/dask/issues/9183#issuecomment-1155626619
+    if all(s == 0 for s in sl) and all(s == 1 for s in a.shape):
+        return a.map_blocks(
+            np.squeeze, meta=a._meta, drop_axis=tuple(range(len(a.shape)))
+        )
 
     a = a[sl]
 
@@ -2428,7 +2435,9 @@ def append(arr, values, axis=None):
     return concatenate((arr, values), axis=axis)
 
 
-def _average(a, axis=None, weights=None, returned=False, is_masked=False):
+def _average(
+    a, axis=None, weights=None, returned=False, is_masked=False, keepdims=False
+):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
     # or NUMPY_LICENSE.txt within this directory
@@ -2436,7 +2445,7 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     a = asanyarray(a)
 
     if weights is None:
-        avg = a.mean(axis)
+        avg = a.mean(axis, keepdims=keepdims)
         scl = avg.dtype.type(a.size / avg.size)
     else:
         wgt = asanyarray(weights)
@@ -2468,8 +2477,8 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
             from dask.array.ma import getmaskarray
 
             wgt = wgt * (~getmaskarray(a))
-        scl = wgt.sum(axis=axis, dtype=result_dtype)
-        avg = multiply(a, wgt, dtype=result_dtype).sum(axis) / scl
+        scl = wgt.sum(axis=axis, dtype=result_dtype, keepdims=keepdims)
+        avg = multiply(a, wgt, dtype=result_dtype).sum(axis, keepdims=keepdims) / scl
 
     if returned:
         if scl.shape != avg.shape:
@@ -2480,8 +2489,8 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 
 
 @derived_from(np)
-def average(a, axis=None, weights=None, returned=False):
-    return _average(a, axis, weights, returned, is_masked=False)
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    return _average(a, axis, weights, returned, is_masked=False, keepdims=keepdims)
 
 
 @derived_from(np)

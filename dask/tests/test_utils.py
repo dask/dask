@@ -2,6 +2,7 @@ import datetime
 import functools
 import operator
 import pickle
+from array import array
 
 import pytest
 from tlz import curry
@@ -17,11 +18,14 @@ from dask.utils import (
     asciitable,
     cached_cumsum,
     derived_from,
+    ensure_bytes,
     ensure_dict,
     ensure_set,
+    ensure_unicode,
     extra_titles,
     factors,
     format_bytes,
+    format_time,
     funcname,
     getargspec,
     has_keyword,
@@ -42,6 +46,51 @@ from dask.utils import (
     typename,
 )
 from dask.utils_test import inc
+
+
+def test_ensure_bytes():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_bytes(d)
+        assert isinstance(result, bytes)
+        assert result == b"1"
+
+
+def test_ensure_bytes_ndarray():
+    np = pytest.importorskip("numpy")
+    result = ensure_bytes(np.arange(12))
+    assert isinstance(result, bytes)
+
+
+def test_ensure_bytes_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_bytes(buf)
+    assert isinstance(result, bytes)
+
+
+def test_ensure_unicode():
+    data = [b"1", "1", memoryview(b"1"), bytearray(b"1"), array("B", b"1")]
+    for d in data:
+        result = ensure_unicode(d)
+        assert isinstance(result, str)
+        assert result == "1"
+
+
+def test_ensure_unicode_ndarray():
+    np = pytest.importorskip("numpy")
+    a = np.frombuffer(b"123", dtype="u1")
+    result = ensure_unicode(a)
+    assert isinstance(result, str)
+    assert result == "123"
+
+
+def test_ensure_unicode_pyarrow_buffer():
+    pa = pytest.importorskip("pyarrow")
+    buf = pa.py_buffer(b"123")
+    result = ensure_unicode(buf)
+    assert isinstance(result, str)
+    assert result == "123"
 
 
 def test_getargspec():
@@ -606,6 +655,8 @@ def test_parse_timedelta():
         ("3500 us", 0.0035),
         ("1 ns", 1e-9),
         ("2m", 120),
+        ("5 days", 5 * 24 * 60 * 60),
+        ("2 w", 2 * 7 * 24 * 60 * 60),
         ("2 minutes", 120),
         (None, None),
         (3, 3),
@@ -726,6 +777,18 @@ def test_stringify_collection_keys():
 )
 def test_format_bytes(n, expect):
     assert format_bytes(int(n)) == expect
+
+
+def test_format_time():
+    assert format_time(1.4) == "1.40 s"
+    assert format_time(10.4) == "10.40 s"
+    assert format_time(100.4) == "100.40 s"
+    assert format_time(1000.4) == "16m 40s"
+    assert format_time(10000.4) == "2hr 46m"
+    assert format_time(1234.567) == "20m 34s"
+    assert format_time(12345.67) == "3hr 25m"
+    assert format_time(123456.78) == "34hr 17m"
+    assert format_time(1234567.8) == "14d 6hr"
 
 
 def test_deprecated():

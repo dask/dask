@@ -9,6 +9,7 @@ _np_version = parse_version(np.__version__)
 _numpy_120 = _np_version >= parse_version("1.20.0")
 _numpy_121 = _np_version >= parse_version("1.21.0")
 _numpy_122 = _np_version >= parse_version("1.22.0")
+_numpy_123 = _np_version >= parse_version("1.23.0")
 
 
 # Taken from scikit-learn:
@@ -278,4 +279,4 @@ if _numpy_120:
 else:
     from typing import Any
 
-    ArrayLike = DTypeLike = Any  # type: ignore
+    ArrayLike = DTypeLike = Any

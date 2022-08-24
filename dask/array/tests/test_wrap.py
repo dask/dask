@@ -59,6 +59,11 @@ def test_full_detects_da_dtype():
     assert len(record) == 1
 
 
+def test_full_none_dtype():
+    a = da.full(shape=(3, 3), fill_value=100, dtype=None)
+    assert_eq(a, np.full(shape=(3, 3), fill_value=100, dtype=None))
+
+
 def test_full_like_error_nonscalar_fill_value():
     x = np.full((3, 3), 1, dtype="i8")
     with pytest.raises(ValueError, match="fill_value must be scalar"):

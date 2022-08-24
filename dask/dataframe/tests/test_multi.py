@@ -305,7 +305,8 @@ def test_merge_asof_on_basic():
 
     C = pd.merge_asof(A, B, on="a")
     c = dd.merge_asof(a, b, on="a")
-    assert_eq(c, C)
+    # merge_asof does not preserve index
+    assert_eq(c, C, check_index=False)
 
 
 def test_merge_asof_on_lefton_righton_error():
@@ -352,7 +353,8 @@ def test_merge_asof_on(allow_exact_matches, direction):
     c = dd.merge_asof(
         a, b, on="a", allow_exact_matches=allow_exact_matches, direction=direction
     )
-    assert_eq(c, C)
+    # merge_asof does not preserve index
+    assert_eq(c, C, check_index=False)
 
 
 @pytest.mark.parametrize("allow_exact_matches", [True, False])
@@ -477,7 +479,13 @@ def test_merge_asof_on_by():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(B, A, on="time", by="ticker")
     c = dd.merge_asof(b, a, on="time", by="ticker")
@@ -529,7 +537,13 @@ def test_merge_asof_on_by_tolerance():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(B, A, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
     c = dd.merge_asof(b, a, on="time", by="ticker", tolerance=pd.Timedelta("2ms"))
@@ -581,7 +595,13 @@ def test_merge_asof_on_by_tolerance_no_exact_matches():
         },
         columns=["time", "ticker", "price", "quantity"],
     )
-    b = dd.from_pandas(B, npartitions=3)
+    # TODO: Use from_pandas(B, npartitions=3)
+    # (see https://github.com/dask/dask/issues/9225)
+    b = dd.from_map(
+        lambda x: x,
+        [B.iloc[0:2], B.iloc[2:5]],
+        divisions=[0, 2, 4],
+    )
 
     C = pd.merge_asof(
         B,
@@ -794,6 +814,29 @@ def test_concat_with_operation_remains_hlg():
     # blockwise
     assert not hlg_layer_topological(result.dask, 2).is_materialized()
     assert_eq(result, expected)
+
+
+def test_concat_dataframe_empty():
+    df = pd.DataFrame({"a": [100, 200, 300]}, dtype="int64")
+    empty_df = pd.DataFrame([], dtype="int64")
+    df_concat = pd.concat([df, empty_df])
+
+    ddf = dd.from_pandas(df, npartitions=1)
+    empty_ddf = dd.from_pandas(empty_df, npartitions=1)
+    ddf_concat = dd.concat([ddf, empty_ddf])
+    assert_eq(df_concat, ddf_concat)
+
+    empty_df_with_col = pd.DataFrame([], columns=["x"], dtype="int64")
+    df_concat_with_col = pd.concat([df, empty_df_with_col])
+    empty_ddf_with_col = dd.from_pandas(empty_df_with_col, npartitions=1)
+    ddf_concat_with_col = dd.concat([ddf, empty_ddf_with_col])
+    # NOTE: empty_ddf_with_col.index.dtype == dtype('O') while ddf.index.dtype == dtype('int64')
+    # when we concatenate the resulting ddf_concat_with_col.index.dtype == dtype('O'). However,
+    # the pandas version is smart enough to identify the empty rows and assign dtype('int64'),
+    # which causes assert_eq to fail when checking dtype. Hence the follwoing line.
+    ddf_concat_with_col._meta.index = ddf_concat_with_col._meta.index.astype("int64")
+
+    assert_eq(df_concat_with_col, ddf_concat_with_col, check_dtype=False)
 
 
 @pytest.mark.parametrize(
@@ -1771,37 +1814,19 @@ def test_concat2():
     assert dd.concat([a]) is a
     for case in cases:
         pdcase = [_c.compute() for _c in case]
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case)
-
+        expected = pd.concat(pdcase, sort=False)
+        result = dd.concat(case)
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(expected, result)
+        assert set(result.dask) == set(dd.concat(case).dask)
 
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case).dask)
-
-        with warnings.catch_warnings(record=True) as w:
-            expected = pd.concat(pdcase, join="inner", sort=False)
-
-        ctx = FutureWarning if w else None
-
-        with pytest.warns(ctx):
-            result = dd.concat(case, join="inner")
+        expected = pd.concat(pdcase, join="inner", sort=False)
+        result = dd.concat(case, join="inner")
         assert result.npartitions == case[0].npartitions + case[1].npartitions
         assert result.divisions == (None,) * (result.npartitions + 1)
         assert_eq(result, result)
-
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore", FutureWarning)
-            assert set(result.dask) == set(dd.concat(case, join="inner").dask)
+        assert set(result.dask) == set(dd.concat(case, join="inner").dask)
 
 
 def test_concat3():
@@ -1818,31 +1843,18 @@ def test_concat3():
     ddf2 = dd.from_pandas(pdf2, 3)
     ddf3 = dd.from_pandas(pdf3, 2)
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2])
-
+    expected = pd.concat([pdf1, pdf2], sort=False)
+    result = dd.concat([ddf1, ddf2])
     assert result.divisions == ddf1.divisions[:-1] + ddf2.divisions
     assert result.npartitions == ddf1.npartitions + ddf2.npartitions
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2], interleave_partitions=True), pd.concat([pdf1, pdf2])
+    )
 
-    with warnings.catch_warnings(record=True) as w:
-        expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
-
-    ctx = FutureWarning if w else None
-
-    with pytest.warns(ctx):
-        result = dd.concat([ddf1, ddf2, ddf3])
+    expected = pd.concat([pdf1, pdf2, pdf3], sort=False)
+    result = dd.concat([ddf1, ddf2, ddf3])
     assert result.divisions == (
         ddf1.divisions[:-1] + ddf2.divisions[:-1] + ddf3.divisions
     )
@@ -1851,12 +1863,10 @@ def test_concat3():
     )
     assert_eq(result, expected)
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", FutureWarning)
-        assert_eq(
-            dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
-            pd.concat([pdf1, pdf2, pdf3]),
-        )
+    assert_eq(
+        dd.concat([ddf1, ddf2, ddf3], interleave_partitions=True),
+        pd.concat([pdf1, pdf2, pdf3]),
+    )
 
 
 def test_concat4_interleave_partitions():

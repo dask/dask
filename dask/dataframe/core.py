@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Iterator, Sequence
+from collections.abc import Hashable, Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import ClassVar
+from typing import Any, Callable, ClassVar, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -20,10 +20,16 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask import core, threaded
+from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
-from dask.base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    named_schedulers,
+    tokenize,
+)
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
@@ -40,6 +46,7 @@ from dask.dataframe.optimize import optimize
 from dask.dataframe.utils import (
     PANDAS_GT_110,
     PANDAS_GT_120,
+    AttributeNotImplementedError,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -69,6 +76,7 @@ from dask.utils import (
     is_arraylike,
     iter_chunks,
     key_split,
+    maybe_pluralize,
     memory_repr,
     parse_bytes,
     partial_by_order,
@@ -79,7 +87,11 @@ from dask.utils import (
 )
 from dask.widgets import get_template
 
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
+
 no_default = "__no_default__"
+
+GROUP_KEYS_DEFAULT = None if PANDAS_GT_150 else True
 
 pd.set_option("compute.use_numexpr", False)
 
@@ -161,7 +173,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return first, ()
@@ -331,7 +343,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_graph__(self):
         return self.dask
 
-    def __dask_keys__(self):
+    def __dask_keys__(self) -> list[Hashable]:
         return [(self._name, i) for i in range(self.npartitions)]
 
     def __dask_layers__(self):
@@ -343,7 +355,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
     )
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
 
     def __dask_postcompute__(self):
         return finalize, ()
@@ -415,7 +427,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._divisions = value
 
     @property
-    def npartitions(self):
+    def npartitions(self) -> int:
         """Return number of partitions"""
         return len(self.divisions) - 1
 
@@ -529,7 +541,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         data = self._repr_data().to_string(max_rows=5, show_dimensions=False)
         _str_fmt = """Dask {klass} Structure:
 {data}
-Dask Name: {name}, {task} tasks"""
+Dask Name: {name}, {layers}"""
         if len(self.columns) == 0:
             data = data.partition("\n")[-1].replace("Index", "Divisions")
             _str_fmt = f"Empty {_str_fmt}"
@@ -537,7 +549,7 @@ Dask Name: {name}, {task} tasks"""
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @property
@@ -734,14 +746,20 @@ Dask Name: {name}, {task} tasks"""
         Parameters
         ----------
         func : function
-            Function applied to each partition.
+            The function applied to each partition. If this function accepts
+            the special ``partition_info`` keyword argument, it will receive
+            information on the partition's relative location within the
+            dataframe.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
-            or regular python objects. DataFrame-like args (both dask and
-            pandas) will be repartitioned to align  (if necessary) before
-            applying the function (see ``align_dataframes`` to control).
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
         enforce_metadata : bool, default True
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
@@ -783,6 +801,12 @@ Dask Name: {name}, {task} tasks"""
         >>> res = ddf.map_partitions(myadd, 1, b=2)
         >>> res.dtype
         dtype('float64')
+
+        Here we apply a function to a Series resulting in a Series:
+
+        >>> res = ddf.x.map_partitions(lambda x: len(x)) # ddf.x is a Dask Series Structure
+        >>> res.dtype
+        dtype('int64')
 
         By default, dask tries to infer the output metadata by running your
         provided function on some fake data. This works well in many cases, but
@@ -853,15 +877,39 @@ Dask Name: {name}, {task} tasks"""
         ----------
         func : function
             Function applied to each partition.
-        before : int
-            The number of rows to prepend to partition ``i`` from the end of
+        before : int or timedelta
+            The rows to prepend to partition ``i`` from the end of
             partition ``i - 1``.
-        after : int
-            The number of rows to append to partition ``i`` from the beginning
+        after : int or timedelta
+            The rows to append to partition ``i`` from the beginning
             of partition ``i + 1``.
         args, kwargs :
-            Arguments and keywords to pass to the function. The partition will
-            be the first argument, and these will be passed *after*.
+            Positional and keyword arguments to pass to the function.
+            Positional arguments are computed on a per-partition basis, while
+            keyword arguments are shared across all partitions. The partition
+            itself will be the first positional argument, with all other
+            arguments passed *after*. Arguments can be ``Scalar``, ``Delayed``,
+            or regular Python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function; see ``align_dataframes`` to control this
+            behavior.
+        enforce_metadata : bool, default True
+            Whether to enforce at runtime that the structure of the DataFrame
+            produced by ``func`` actually matches the structure of ``meta``.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        transform_divisions : bool, default True
+            Whether to apply the function onto the divisions and apply those
+            transformed divisions to the output.
+        align_dataframes : bool, default True
+            Whether to repartition DataFrame- or Series-like args
+            (both dask and pandas) so their divisions align before applying
+            the function. This requires all inputs to have known divisions.
+            Single-partition inputs will be split into multiple partitions.
+
+            If False, all inputs must have either the same number of partitions
+            or a single partition. Single-partition inputs will be broadcast to
+            every partition of multi-partition inputs.
         $META
 
         Notes
@@ -882,8 +930,6 @@ Dask Name: {name}, {task} tasks"""
            partition.
 
         5. Trim ``after`` rows from the end of all but the last partition.
-
-        Note that the index and divisions are assumed to remain unchanged.
 
         Examples
         --------
@@ -1340,7 +1386,9 @@ Dask Name: {name}, {task} tasks"""
         partition_size: int or string, optional
             Max number of bytes of memory for each partition. Use numbers or
             strings like 5MB. If specified npartitions and divisions will be
-            ignored.
+            ignored. Note that the size reflects the number of bytes used as
+            computed by ``pandas.DataFrame.memory_usage``, which will not
+            necessarily match the size when storing to disk.
 
             .. warning::
 
@@ -1373,6 +1421,11 @@ Dask Name: {name}, {task} tasks"""
         >>> df = df.repartition(npartitions=10)  # doctest: +SKIP
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
+
+        See Also
+        --------
+        DataFrame.memory_usage_per_partition
+        pandas.DataFrame.memory_usage
         """
         if isinstance(divisions, int):
             npartitions = divisions
@@ -1465,9 +1518,7 @@ Dask Name: {name}, {task} tasks"""
         axis = self._validate_axis(axis)
         if method is None and limit is not None:
             raise NotImplementedError("fillna with set limit and method=None")
-        if isinstance(value, _Frame):
-            test_value = value._meta_nonempty.values[0]
-        elif isinstance(value, Scalar):
+        if isinstance(value, (_Frame, Scalar)):
             test_value = value._meta_nonempty
         else:
             test_value = value
@@ -3365,6 +3416,16 @@ class Series(_Frame):
                 index = None
             else:
                 index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.Series`."
+            )
 
         return pd.Series(array, index=index, name=self.name)
 
@@ -3445,12 +3506,12 @@ class Series(_Frame):
         return """Dask {klass} Structure:
 {data}
 {footer}
-Dask Name: {name}, {task} tasks""".format(
+Dask Name: {name}, {layers}""".format(
             klass=self.__class__.__name__,
             data=self.to_string(),
             footer=footer,
             name=key_split(self._name),
-            task=len(self.dask),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def rename(self, index=None, inplace=False, sorted_index=False):
@@ -3615,7 +3676,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import SeriesGroupBy
 
@@ -3971,10 +4038,13 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def memory_usage(self, index=True, deep=False):
-        result = self.map_partitions(
-            M.memory_usage, index=index, deep=deep, enforce_metadata=False
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"index": index, "deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
         )
-        return delayed(sum)(result.to_delayed())
 
     def __divmod__(self, other):
         res1 = self // other
@@ -4003,6 +4073,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_increasing_chunk,
+            combine=methods.monotonic_increasing_combine,
             aggregate=methods.monotonic_increasing_aggregate,
             meta=bool,
             token="monotonic_increasing",
@@ -4014,6 +4085,7 @@ Dask Name: {name}, {task} tasks""".format(
         return aca(
             self,
             chunk=methods.monotonic_decreasing_chunk,
+            combine=methods.monotonic_decreasing_combine,
             aggregate=methods.monotonic_decreasing_aggregate,
             meta=bool,
             token="monotonic_decreasing",
@@ -4228,6 +4300,16 @@ class Index(Series):
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
 
+    @derived_from(pd.Index)
+    def memory_usage(self, deep=False):
+        return self.reduction(
+            M.memory_usage,
+            M.sum,
+            chunk_kwargs={"deep": deep},
+            split_every=False,
+            token=self._token_prefix + "memory-usage",
+        )
+
 
 class DataFrame(_Frame):
     """
@@ -4292,6 +4374,17 @@ class DataFrame(_Frame):
                 index = None
             else:
                 index = context[1][0].index
+        else:
+            try:
+                import inspect
+
+                method_name = f"`{inspect.stack()[3][3]}`"
+            except IndexError:
+                method_name = "This method"
+
+            raise NotImplementedError(
+                f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
+            )
 
         return pd.DataFrame(array, index=index, columns=self.columns)
 
@@ -4341,7 +4434,8 @@ class DataFrame(_Frame):
 
     @property
     def empty(self):
-        raise NotImplementedError(
+        # __getattr__ will be called after we raise this, so we'll raise it again from there
+        raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
             "However, checking the number of columns is fast. "
             "Depending on which of these results you need, use either "
@@ -4452,6 +4546,13 @@ class DataFrame(_Frame):
     def __getattr__(self, key):
         if key in self.columns:
             return self[key]
+        elif key == "empty":
+            # self.empty raises AttributeNotImplementedError, which includes
+            # AttributeError, which means we end up here in self.__getattr__,
+            # because DataFrame.__getattribute__ doesn't think the attribute exists
+            # and uses __getattr__ as the fallback. So, get `self.empty` more
+            # forcefully via object.__getattribute__ to raise informative error.
+            object.__getattribute__(self, key)
         else:
             raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
@@ -4511,14 +4612,14 @@ class DataFrame(_Frame):
 
     def sort_values(
         self,
-        by,
-        npartitions=None,
-        ascending=True,
-        na_position="last",
-        sort_function=None,
-        sort_function_kwargs=None,
+        by: str,
+        npartitions: int | Literal["auto"] | None = None,
+        ascending: bool = True,
+        na_position: Literal["first"] | Literal["last"] = "last",
+        sort_function: Callable[[pd.DataFrame], pd.DataFrame] | None = None,
+        sort_function_kwargs: Mapping[str, Any] | None = None,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -4563,12 +4664,12 @@ class DataFrame(_Frame):
 
     def set_index(
         self,
-        other,
-        drop=True,
-        sorted=False,
-        npartitions=None,
-        divisions=None,
-        inplace=False,
+        other: str | Series,
+        drop: bool = True,
+        sorted: bool = False,
+        npartitions: int | Literal["auto"] | None = None,
+        divisions: Sequence | None = None,
+        inplace: bool = False,
         **kwargs,
     ):
         """Set the DataFrame index (row labels) using an existing column.
@@ -4598,6 +4699,7 @@ class DataFrame(_Frame):
         Parameters
         ----------
         other: string or Dask Series
+            Column to use as index.
         drop: boolean, default True
             Delete column to be used as the new index.
         sorted: bool, optional
@@ -4672,15 +4774,62 @@ class DataFrame(_Frame):
         >>> # ^ Now copy-paste this and edit the line above to:
         >>> # ddf2 = ddf.set_index("name", divisions=["Alice", "Laura", "Ursula", "Zelda"])
         """
+
         if inplace:
             raise NotImplementedError("The inplace= keyword is not supported")
         pre_sorted = sorted
         del sorted
 
-        if isinstance(other, Series) and other._name == self.index._name:
-            # Index is equal to current index, no-op
-            return self
+        # Check other can be translated to column name or column object, possibly flattening it
+        if not isinstance(other, str):
 
+            # It may refer to several columns
+            if isinstance(other, Sequence):  # type: ignore[unreachable]
+                # Accept ["a"], but not [["a"]]
+                if len(other) == 1 and (  # type: ignore[unreachable]
+                    isinstance(other[0], str) or not isinstance(other[0], Sequence)
+                ):
+                    other = other[0]
+                else:
+                    raise NotImplementedError(
+                        "Dask dataframe does not yet support multi-indexes.\n"
+                        f"You tried to index with this index: {other}\n"
+                        "Indexes must be single columns only."
+                    )
+
+            # Or be a frame directly
+            elif isinstance(other, DataFrame):  # type: ignore[unreachable]
+                raise NotImplementedError(
+                    "Dask dataframe does not yet support multi-indexes.\n"
+                    f"You tried to index with a frame with these columns: {list(other.columns)}\n"
+                    "Indexes must be single columns only."
+                )
+
+        # If already a series
+        if isinstance(other, Series):
+            # If it's already the index, there's nothing to do
+            if other._name == self.index._name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
+                return self
+
+        # If the name of a column/index
+        else:
+            # With the same name as the index, there's nothing to do either
+            if other == self.index.name:
+                warnings.warn(
+                    "New index has same name as existing, this is a no-op.", UserWarning
+                )
+                return self
+
+            # If a missing column, KeyError
+            if other not in self.columns:
+                raise KeyError(
+                    f"Data has no column '{other}': use any column of {list(self.columns)}"
+                )
+
+        # Check divisions
         if divisions is not None:
             check_divisions(divisions)
         elif (
@@ -4694,6 +4843,7 @@ class DataFrame(_Frame):
             pre_sorted = True
             divisions = other.divisions
 
+        # If index is already sorted, take advantage of that with set_sorted_index
         if pre_sorted:
             from dask.dataframe.shuffle import set_sorted_index
 
@@ -4748,7 +4898,13 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def groupby(
-        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+        self,
+        by=None,
+        group_keys=GROUP_KEYS_DEFAULT,
+        sort=None,
+        observed=None,
+        dropna=None,
+        **kwargs,
     ):
         from dask.dataframe.groupby import DataFrameGroupBy
 
@@ -4899,10 +5055,23 @@ class DataFrame(_Frame):
         return self.map_partitions(M.eval, expr, meta=meta, inplace=inplace, **kwargs)
 
     @derived_from(pd.DataFrame)
-    def dropna(self, how="any", subset=None, thresh=None):
-        return self.map_partitions(
-            M.dropna, how=how, subset=subset, thresh=thresh, enforce_metadata=False
-        )
+    def dropna(self, how=no_default, subset=None, thresh=no_default):
+        # These keywords are incompatible with each other.
+        # Don't allow them both to be set.
+        if how is not no_default and thresh is not no_default:
+            raise TypeError(
+                "You cannot set both the how and thresh arguments at the same time."
+            )
+
+        # Only specify `how` or `thresh` keyword if specified by the user
+        # so we utilize other `dropna` keyword defaults appropriately
+        kwargs = {"subset": subset}
+        if how is not no_default:
+            kwargs["how"] = how
+        elif thresh is not no_default:
+            kwargs["thresh"] = thresh
+
+        return self.map_partitions(M.dropna, **kwargs, enforce_metadata=False)
 
     @derived_from(pd.DataFrame)
     def clip(self, lower=None, upper=None, out=None):
@@ -5114,6 +5283,10 @@ class DataFrame(_Frame):
         3. Joining both on columns. In this case a hash join is performed using
            ``dask.dataframe.multi.hash_join``.
 
+        In some cases, you may see a ``MemoryError`` if the ``merge`` operation requires
+        an internal ``shuffle``, because shuffling places all rows that have the same
+        index in the same partition. To avoid this error, make sure all rows with the
+        same ``on``-column value can fit on a single partition.
         """
 
         if not is_dataframe_like(right):
@@ -5663,7 +5836,9 @@ class DataFrame(_Frame):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _repr_data(self):
@@ -5683,7 +5858,9 @@ class DataFrame(_Frame):
             max_rows=5, show_dimensions=False, notebook=True
         )
         return get_template("dataframe.html.j2").render(
-            data=data, name=self._name, task=self.dask
+            data=data,
+            name=self._name,
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     def _select_columns_or_index(self, columns_or_index):
@@ -5731,6 +5908,50 @@ class DataFrame(_Frame):
             and (np.isscalar(key) or isinstance(key, tuple))
             and key in self.columns
         )
+
+    @classmethod
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
+        """
+        Construct a Dask DataFrame from a Python Dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The number of partitions of the index to create. Note that depending on
+            the size and index of the dataframe, the output may have fewer
+            partitions than requested.
+        orient : {'columns', 'index', 'tight'}, default 'columns'
+            The "orientation" of the data. If the keys of the passed dict
+            should be the columns of the resulting DataFrame, pass 'columns'
+            (default). Otherwise if the keys should be rows, pass 'index'.
+            If 'tight', assume a dict with keys
+            ['index', 'columns', 'data', 'index_names', 'column_names'].
+        dtype: bool
+            Data type to force, otherwise infer.
+        columns: string, optional
+            Column labels to use when ``orient='index'``. Raises a ValueError
+            if used with ``orient='columns'`` or ``orient='tight'``.
+
+        Examples
+        --------
+        >>> import dask.dataframe as dd
+        >>> ddf = dd.DataFrame.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
+        """
+        from dask.dataframe.io import from_pandas
+
+        collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
+        if collection_types:
+            raise NotImplementedError(
+                "from_dict doesn't currently support Dask collections as inputs. "
+                f"Objects of type {collection_types} were given in the input dict."
+            )
+        pdf = pd.DataFrame.from_dict(data, orient, dtype, columns)
+        ddf = from_pandas(pdf, npartitions)
+        return ddf
 
 
 # bind operators
@@ -5951,7 +6172,10 @@ def handle_out(out, result):
         msg = (
             "The out parameter is not fully supported."
             " Received type %s, expected %s "
-            % (typename(type(out)), typename(type(result)))
+            % (
+                typename(type(out)),
+                typename(type(result)),
+            )
         )
         raise NotImplementedError(msg)
     else:
@@ -5979,10 +6203,7 @@ def hash_shard(
         h = df
 
     h = hash_object_dispatch(h, index=False)
-    if is_series_like(h):
-        h = h.values
-    np.mod(h, nparts, out=h)
-    return group_split_dispatch(df, h, nparts, ignore_index=ignore_index)
+    return group_split_dispatch(df, h % nparts, nparts, ignore_index=ignore_index)
 
 
 def split_evenly(df, k):
@@ -6285,21 +6506,17 @@ def map_partitions(
 
     if align_dataframes:
         args = _maybe_from_pandas(args)
-        args = _maybe_align_partitions(args)
+        try:
+            args = _maybe_align_partitions(args)
+        except ValueError as e:
+            raise ValueError(
+                f"{e}. If you don't want the partitions to be aligned, and are "
+                "calling `map_partitions` directly, pass `align_dataframes=False`."
+            ) from e
 
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
-    if parent_meta is None and dfs:
-        parent_meta = dfs[0]._meta
 
-    if meta is no_default:
-        # Use non-normalized kwargs here, as we want the real values (not
-        # delayed values)
-        meta = _emulate(func, *args, udf=True, **kwargs)
-        meta_is_emulated = True
-    else:
-        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
-        meta_is_emulated = False
+    meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -6312,20 +6529,6 @@ def map_partitions(
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=args)
         return Scalar(graph, name, meta)
-    elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
-        if not meta_is_emulated:
-            warnings.warn(
-                "Meta is not valid, `map_partitions` expects output to be a pandas object. "
-                "Try passing a pandas object as meta or a dict or tuple representing the "
-                "(name, dtype) of the columns. In the future the meta you passed will not work.",
-                FutureWarning,
-            )
-        # If `meta` is not a pandas object, the concatenated results will be a
-        # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
-
-    # Ensure meta is empty series
-    meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -6352,25 +6555,9 @@ def map_partitions(
         if collections:
             simple = False
 
-    if align_dataframes:
-        divisions = dfs[0].divisions
-    else:
-        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
-        # use longest divisions found
-        divisions = max((d.divisions for d in dfs), key=len)
-
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = func(
-                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+    divisions = _get_divisions_map_partitions(
+        align_dataframes, transform_divisions, dfs, func, args, kwargs
+    )
 
     if has_keyword(func, "partition_info"):
         partition_info = {
@@ -6380,9 +6567,9 @@ def map_partitions(
 
         args2.insert(0, BlockwiseDepDict(partition_info))
         orig_func = func
-        func = lambda partition_info, *args, **kwargs: orig_func(
-            *args, **kwargs, partition_info=partition_info
-        )
+
+        def func(partition_info, *args, **kwargs):
+            return orig_func(*args, **kwargs, partition_info=partition_info)
 
     if enforce_metadata:
         dsk = partitionwise_graph(
@@ -6402,6 +6589,69 @@ def map_partitions(
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _get_divisions_map_partitions(
+    align_dataframes, transform_divisions, dfs, func, args, kwargs
+):
+    """
+    Helper to get divisions for map_partitions and map_overlap output.
+    """
+    if align_dataframes:
+        divisions = dfs[0].divisions
+    else:
+        # Unaligned, dfs is a mix of 1 partition and 1+ partition dataframes,
+        # use longest divisions found
+        divisions = max((d.divisions for d in dfs), key=len)
+    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        try:
+            divisions = func(
+                *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
+            )
+            if isinstance(divisions, pd.Index):
+                divisions = methods.tolist(divisions)
+        except Exception:
+            pass
+        else:
+            if not valid_divisions(divisions):
+                divisions = [None] * (dfs[0].npartitions + 1)
+    return divisions
+
+
+def _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta):
+    """
+    Helper to generate metadata for map_partitions and map_overlap output.
+    """
+    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
+    if meta is no_default:
+        # Use non-normalized kwargs here, as we want the real values (not
+        # delayed values)
+        meta = _emulate(func, *args, udf=True, **kwargs)
+        meta_is_emulated = True
+    else:
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
+        meta_is_emulated = False
+
+    if not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape) and not all(
+        isinstance(arg, Scalar) for arg in args
+    ):
+        if not meta_is_emulated:
+            warnings.warn(
+                "Meta is not valid, `map_partitions` and `map_overlap` expects output to be a pandas object. "
+                "Try passing a pandas object as meta or a dict or tuple representing the "
+                "(name, dtype) of the columns. In the future the meta you passed will not work.",
+                FutureWarning,
+            )
+        # If `meta` is not a pandas object, the concatenated results will be a
+        # different type
+        meta = make_meta(_concat([meta]), index=meta_index)
+
+    # Ensure meta is empty series
+    meta = make_meta(meta, parent_meta=parent_meta)
+
+    return meta
 
 
 def apply_and_enforce(*args, **kwargs):
@@ -6875,12 +7125,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     ----------
     a : tuple
         old divisions
-    b : tuple, list
-        new divisions
-    name : str
-        name of old dataframe
-    out1 : str
-        name of temporary splits
+    b : tuple, listmypy
     out2 : str
         name of new dataframe
     force : bool, default False
@@ -7130,7 +7375,9 @@ def repartition_npartitions(df, npartitions):
         ]
         return _repartition_from_boundaries(df, new_partitions_boundaries, new_name)
     else:
-        original_divisions = divisions = pd.Series(df.divisions)
+        # Drop duplcates in case last partition has same
+        # value for min and max division
+        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)
@@ -7415,7 +7662,9 @@ def to_datetime(arg, meta=None, **kwargs):
 
 
 @wraps(pd.to_timedelta)
-def to_timedelta(arg, unit="ns", errors="raise"):
+def to_timedelta(arg, unit=None, errors="raise"):
+    if not PANDAS_GT_110 and unit is None:
+        unit = "ns"
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 

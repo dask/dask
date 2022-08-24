@@ -10,6 +10,18 @@ properties:
       When the value is "null" (default), dask will create a directory from
       where dask was launched: `cwd/dask-worker-space`
 
+  visualization:
+    type: object
+    properties:
+      engine:
+        type:
+          - string
+          - 'null'
+        description: |
+          Visualization engine to use when calling ``.visualize()`` on a Dask collection.
+          Currently supports ``'graphviz'``, ``'ipycytoscape'``, and ``'cytoscape'``
+          (alias for ``'ipycytoscape'``)
+
   tokenize:
     type: object
     properties:
@@ -79,6 +91,21 @@ properties:
   optimization:
     type: object
     properties:
+
+      annotations:
+        type: object
+        properties:
+          fuse:
+            type: boolean
+            description: |
+              If adjacent blockwise layers have different annotations (e.g., one has
+              retries=3 and another has retries=4), Dask can make an attempt to merge
+              those annotations according to some simple rules. ``retries`` is set to
+              the max of the layers, ``priority`` is set to the max of the layers,
+              ``resources`` are set to the max of all the resources, ``workers`` is
+              set to the intersection of the requested workers. If this setting is
+              disabled, then adjacent blockwise layers with different annotations
+              will *not* be fused.
 
       fuse:
         type: object

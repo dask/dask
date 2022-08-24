@@ -1,6 +1,7 @@
 import contextlib
 import copy
 import pathlib
+import re
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -8,6 +9,7 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
+import math
 import operator
 import os
 import time
@@ -17,7 +19,6 @@ from io import StringIO
 from operator import add, sub
 from threading import Lock
 
-from numpy import nancumprod, nancumsum
 from tlz import concat, countby, merge
 from tlz.curried import identity
 
@@ -47,6 +48,7 @@ from dask.array.core import (
     stack,
     store,
 )
+from dask.array.reshape import _not_implemented_message
 from dask.array.tests.test_dispatch import EncapsulateNDArray
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
@@ -1212,14 +1214,13 @@ def test_reshape_splat():
     assert_eq(x.reshape((25,)), x.reshape(25))
 
 
-def test_reshape_fails_for_dask_only():
-    cases = [((3, 4), (4, 3), 2)]
-    for original_shape, new_shape, chunks in cases:
-        x = np.random.randint(10, size=original_shape)
-        a = from_array(x, chunks=chunks)
-        assert x.reshape(new_shape).shape == new_shape
-        with pytest.raises(ValueError):
-            da.reshape(a, new_shape)
+def test_reshape_not_implemented_error():
+    a = da.ones((4, 5, 6), chunks=(2, 2, 3))
+    for new_shape in [(2, 10, 6), (5, 4, 6), (6, 5, 4)]:
+        with pytest.raises(
+            NotImplementedError, match=re.escape(_not_implemented_message)
+        ):
+            a.reshape(new_shape)
 
 
 def test_reshape_unknown_dimensions():
@@ -2102,7 +2103,7 @@ def test_store_locks():
             assert False
 
     # Verify number of lock calls
-    nchunks = np.sum([np.prod([len(c) for c in e.chunks]) for e in [a, b]])
+    nchunks = sum(math.prod(map(len, e.chunks)) for e in (a, b))
     for c in (False, True):
         at = np.zeros(shape=(10, 10))
         bt = np.zeros(shape=(10, 10))
@@ -2283,6 +2284,34 @@ def test_astype():
 
     # Check it's a noop
     assert d.astype("f8") is d
+
+
+def test_astype_gh1151():
+    a = np.arange(5).astype(np.int32)
+    b = da.from_array(a, (1,))
+    assert_eq(a.astype(np.int16), b.astype(np.int16))
+
+
+def test_astype_gh9318():
+    # `order`` kwarg in `astype` should not cause an error
+    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], order="C")
+    b = da.from_array(a, chunks=(2, 2))
+    result_a = a.astype(float, order="F")
+    result_b = b.astype(float, order="F")  # if no error at this line, pytest passes
+    assert_eq(result_a, result_b)  # won't check the order matches, but checks results
+
+
+@pytest.mark.xfail(reason="Github issue https://github.com/dask/dask/issues/9316")
+def test_astype_gh9316():
+    # Issue https://github.com/dask/dask/issues/9316
+    # Can be combined with test_astype_gh9318 above when XFAIL marker is removed
+    a = np.array([[1, 2, 3, 4], [5, 6, 7, 8], [9, 10, 11, 12]], order="C")
+    b = da.from_array(a, chunks=(2, 2))
+    result_a = a.astype(float, order="F")
+    result_b = b.astype(float, order="F")
+    result_b = result_b.compute()
+    assert result_a.flags.c_contiguous == result_b.flags.c_contiguous
+    assert result_a.flags.f_contiguous == result_b.flags.f_contiguous
 
 
 def test_arithmetic():
@@ -3473,15 +3502,15 @@ def test_cumulative():
     assert_eq(x.cumsum(axis=0), np.arange(20).cumsum())
     assert_eq(x.cumprod(axis=0), np.arange(20).cumprod())
 
-    assert_eq(da.nancumsum(x, axis=0), nancumsum(np.arange(20)))
-    assert_eq(da.nancumprod(x, axis=0), nancumprod(np.arange(20)))
+    assert_eq(da.nancumsum(x, axis=0), np.nancumsum(np.arange(20)))
+    assert_eq(da.nancumprod(x, axis=0), np.nancumprod(np.arange(20)))
 
     a = np.random.random(20)
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=5)
-    assert_eq(da.nancumsum(x, axis=0), nancumsum(a))
-    assert_eq(da.nancumprod(x, axis=0), nancumprod(a))
+    assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a))
+    assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a))
 
     a = np.random.random((20, 24))
     x = da.from_array(a, chunks=(6, 5))
@@ -3490,19 +3519,19 @@ def test_cumulative():
     assert_eq(x.cumprod(axis=0), a.cumprod(axis=0))
     assert_eq(x.cumprod(axis=1), a.cumprod(axis=1))
 
-    assert_eq(da.nancumsum(x, axis=0), nancumsum(a, axis=0))
-    assert_eq(da.nancumsum(x, axis=1), nancumsum(a, axis=1))
-    assert_eq(da.nancumprod(x, axis=0), nancumprod(a, axis=0))
-    assert_eq(da.nancumprod(x, axis=1), nancumprod(a, axis=1))
+    assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
+    assert_eq(da.nancumsum(x, axis=1), np.nancumsum(a, axis=1))
+    assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
+    assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
     a = np.random.random((20, 24))
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5))
-    assert_eq(da.nancumsum(x, axis=0), nancumsum(a, axis=0))
-    assert_eq(da.nancumsum(x, axis=1), nancumsum(a, axis=1))
-    assert_eq(da.nancumprod(x, axis=0), nancumprod(a, axis=0))
-    assert_eq(da.nancumprod(x, axis=1), nancumprod(a, axis=1))
+    assert_eq(da.nancumsum(x, axis=0), np.nancumsum(a, axis=0))
+    assert_eq(da.nancumsum(x, axis=1), np.nancumsum(a, axis=1))
+    assert_eq(da.nancumprod(x, axis=0), np.nancumprod(a, axis=0))
+    assert_eq(da.nancumprod(x, axis=1), np.nancumprod(a, axis=1))
 
     a = np.random.random((20, 24, 13))
     x = da.from_array(a, chunks=(6, 5, 4))
@@ -3510,16 +3539,16 @@ def test_cumulative():
         assert_eq(x.cumsum(axis=axis), a.cumsum(axis=axis))
         assert_eq(x.cumprod(axis=axis), a.cumprod(axis=axis))
 
-        assert_eq(da.nancumsum(x, axis=axis), nancumsum(a, axis=axis))
-        assert_eq(da.nancumprod(x, axis=axis), nancumprod(a, axis=axis))
+        assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
+        assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
     a = np.random.random((20, 24, 13))
     rs = np.random.RandomState(0)
     a[rs.rand(*a.shape) < 0.5] = np.nan
     x = da.from_array(a, chunks=(6, 5, 4))
     for axis in [0, 1, 2, -1, -2, -3]:
-        assert_eq(da.nancumsum(x, axis=axis), nancumsum(a, axis=axis))
-        assert_eq(da.nancumprod(x, axis=axis), nancumprod(a, axis=axis))
+        assert_eq(da.nancumsum(x, axis=axis), np.nancumsum(a, axis=axis))
+        assert_eq(da.nancumprod(x, axis=axis), np.nancumprod(a, axis=axis))
 
     with pytest.raises(ValueError):
         x.cumsum(axis=3)
@@ -3568,12 +3597,6 @@ def test_npartitions():
     assert da.ones((5, 5), chunks=(2, 3)).npartitions == 6
 
 
-def test_astype_gh1151():
-    a = np.arange(5).astype(np.int32)
-    b = da.from_array(a, (1,))
-    assert_eq(a.astype(np.int16), b.astype(np.int16))
-
-
 def test_elemwise_name():
     assert (da.ones(5, chunks=2) + 1).name.startswith("add-")
 
@@ -3606,6 +3629,12 @@ def test_array_picklable(array):
 
     a2 = loads(dumps(array))
     assert_eq(array, a2)
+
+    a3 = da.ma.masked_equal(array, 0)
+    assert isinstance(a3._meta, np.ma.MaskedArray)
+    a4 = loads(dumps(a3))
+    assert_eq(a3, a4)
+    assert isinstance(a4._meta, np.ma.MaskedArray)
 
 
 def test_from_array_raises_on_bad_chunks():
@@ -3878,6 +3907,27 @@ def test_setitem_1d():
 
     dx[dx > 6] = -1
     dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+    index = da.arange(3)
+    with pytest.raises(ValueError, match="Boolean index assignment in Dask"):
+        dx[index] = 1
+
+
+def test_setitem_hardmask():
+    x = np.ma.array([1, 2, 3, 4], dtype=int)
+    x.harden_mask()
+
+    y = x.copy()
+    assert y.hardmask
+
+    x[0] = np.ma.masked
+    x[0:2] = np.ma.masked
+
+    dx = da.from_array(y)
+    dx[0] = np.ma.masked
+    dx[0:2] = np.ma.masked
 
     assert_eq(x, dx)
 
@@ -4736,7 +4786,7 @@ def test_blockview():
     assert_eq(blockview[[0, 1, 2]], x[:6])
     assert_eq(blockview[[3, 0, 2]], np.array([6, 7, 0, 1, 4, 5]))
     assert_eq(blockview.shape, tuple(map(len, x.chunks)))
-    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(blockview.size, math.prod(blockview.shape))
     assert_eq(
         blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
     )
@@ -4747,7 +4797,7 @@ def test_blockview():
     assert_eq(blockview[0, :3], x[:4, :15])
     assert_eq(blockview[:, :3], x[:, :15])
     assert_eq(blockview.shape, tuple(map(len, x.chunks)))
-    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(blockview.size, math.prod(blockview.shape))
     assert_eq(
         blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
     )
@@ -4756,7 +4806,7 @@ def test_blockview():
     blockview = BlockView(x)
     assert_eq(blockview[0, :, 0], np.ones((10, 40, 10)))
     assert_eq(blockview.shape, tuple(map(len, x.chunks)))
-    assert_eq(blockview.size, np.prod(blockview.shape))
+    assert_eq(blockview.size, math.prod(blockview.shape))
     assert_eq(
         blockview.ravel(), [blockview[idx] for idx in np.ndindex(blockview.shape)]
     )
@@ -5214,3 +5264,61 @@ def test_len_object_with_unknown_size():
     b = a[a < 0.5]
     with pytest.raises(ValueError, match="on object with unknown chunk size"):
         assert len(b)
+
+
+@pytest.mark.parametrize("ndim", [0, 1, 3, 8])
+def test_chunk_shape_broadcast(ndim):
+    from functools import partial
+
+    def f(x, ndim=0):
+        # Ignore `x` and return arbitrary one-element array of dimensionality `ndim`
+        # For example,
+        # f(x, 0) = array(5)
+        # f(x, 1) = array([5])
+        # f(x, 2) = array([[5]])
+        # f(x, 3) = array([[[5]]])
+        return np.array(5)[(np.newaxis,) * ndim]
+
+    array = da.from_array([1] + [2, 2] + [3, 3, 3], chunks=((1, 2, 3),))
+    out_chunks = ((1, 1, 1),)
+
+    # check ``enforce_ndim`` keyword parameter of ``map_blocks()``
+    out = array.map_blocks(partial(f, ndim=ndim), chunks=out_chunks, enforce_ndim=True)
+
+    if ndim != 1:
+        with pytest.raises(ValueError, match="Dimension mismatch:"):
+            out.compute()
+    else:
+        out.compute()  # should not raise an exception
+
+    # check ``check_ndim`` keyword parameter of ``assert_eq()``
+    out = array.map_blocks(partial(f, ndim=ndim), chunks=out_chunks)
+    expected = np.array([5, 5, 5])
+    try:
+        assert_eq(out, expected)
+    except AssertionError:
+        assert_eq(out, expected, check_ndim=False)
+    else:
+        if ndim != 1:
+            raise AssertionError("Expected a ValueError: Dimension mismatch")
+
+
+def test_chunk_non_array_like():
+    array = da.from_array([1] + [2, 2] + [3, 3, 3], chunks=((1, 2, 3),))
+    out_chunks = ((1, 1, 1),)
+
+    # check ``enforce_ndim`` keyword parameter of ``map_blocks()``
+    out = array.map_blocks(lambda x: 5, chunks=out_chunks, enforce_ndim=True)
+
+    with pytest.raises(ValueError, match="Dimension mismatch:"):
+        out.compute()
+
+    expected = np.array([5, 5, 5])
+    # check ``check_ndim`` keyword parameter of ``assert_eq()``
+    out = array.map_blocks(lambda x: 5, chunks=out_chunks)
+    try:
+        assert_eq(out, expected)
+    except AssertionError:
+        assert_eq(out, expected, check_chunks=False)
+    else:
+        raise AssertionError("Expected a ValueError: Dimension mismatch")

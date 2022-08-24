@@ -52,11 +52,10 @@ def checkpoint(
     :doc:`delayed` yielding None
     """
     if split_every is None:
-        # FIXME https://github.com/python/typeshed/issues/5074
-        split_every = 8  # type: ignore
+        split_every = 8
     elif split_every is not False:
-        split_every = int(split_every)  # type: ignore
-        if split_every < 2:  # type: ignore
+        split_every = int(split_every)
+        if split_every < 2:
             raise ValueError("split_every must be False, None, or >= 2")
 
     collections, _ = unpack_collections(*collections)
@@ -206,7 +205,7 @@ def bind(
     parents,
     *,
     omit=None,
-    seed: Hashable = None,
+    seed: Hashable | None = None,
     assume_layers: bool = True,
     split_every: float | Literal[False] | None = None,
 ) -> T:
@@ -272,10 +271,12 @@ def bind(
     -------
     Same as ``children``
         Dask collection or structure of dask collection equivalent to ``children``,
-        which compute to the same values. All keys of ``children`` will be regenerated,
-        up to and excluding the keys of ``omit``. Nodes immediately above ``omit``, or
+        which compute to the same values. All nodes of ``children`` will be regenerated,
+        up to and excluding the nodes of ``omit``. Nodes immediately above ``omit``, or
         the leaf nodes if the collections in ``omit`` are not found, are prevented from
         computing until all collections in ``parents`` have been fully computed.
+        The keys of the regenerated nodes will be different from the original ones, so
+        that they can be used within the same graph.
     """
     if seed is None:
         seed = uuid.uuid4().bytes
@@ -430,6 +431,17 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-5', 0): (<function operator.add>, ('add-4', 0), 1),
      ('add-5', 1): (<function operator.add>, ('add-4', 1), 1)}
 
+    The typical usage pattern for clone() is the following:
+
+    >>> x = cheap_computation_with_large_output()  # doctest: +SKIP
+    >>> y = expensive_and_long_computation(x)  # doctest: +SKIP
+    >>> z = wrap_up(clone(x), y)  # doctest: +SKIP
+
+    In the above code, the chunks of x will be forgotten as soon as they are consumed by
+    the chunks of y, and then they'll be regenerated from scratch at the very end of the
+    computation. Without clone(), x would only be computed once and then kept in memory
+    throughout the whole computation of y, needlessly consuming memory.
+
     Parameters
     ----------
     collections
@@ -447,6 +459,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
         Dask collections of the same type as the inputs, which compute to the same
         value, or nested structures equivalent to the inputs, where the original
         collections have been replaced.
+        The keys of the regenerated nodes in the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     out = bind(
         collections, parents=None, omit=omit, seed=seed, assume_layers=assume_layers
@@ -490,6 +504,8 @@ def wait_on(
         Dask collection of the same type as the input, which computes to the same value,
         or a nested structure equivalent to the input where the original collections
         have been replaced.
+        The keys of the regenerated nodes of the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     blocker = checkpoint(*collections, split_every=split_every)
 

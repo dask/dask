@@ -10,37 +10,51 @@ import itertools
 
 import dask.array as da
 import dask.config as config
+from dask.array.numpy_compat import _numpy_122
 from dask.array.utils import assert_eq, same_keys
 from dask.core import get_deps
 
 
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
 @pytest.mark.parametrize("keepdims", [True, False])
-def test_numel(dtype, keepdims):
+@pytest.mark.parametrize("nan", [True, False])
+def test_numel(dtype, keepdims, nan):
     x = np.ones((2, 3, 4))
+    if nan:
+        y = np.random.uniform(-1, 1, size=(2, 3, 4))
+        x[y < 0] = np.nan
+        numel = da.reductions.nannumel
+
+        def _sum(arr, **kwargs):
+            n = np.sum(np.ma.masked_where(np.isnan(arr), arr), **kwargs)
+            return n.filled(0) if isinstance(n, np.ma.MaskedArray) else n
+
+    else:
+        numel = da.reductions.numel
+        _sum = np.sum
 
     assert_eq(
-        da.reductions.numel(x, axis=(), keepdims=keepdims, dtype=dtype),
-        np.sum(x, axis=(), keepdims=keepdims, dtype=dtype),
+        numel(x, axis=(), keepdims=keepdims, dtype=dtype),
+        _sum(x, axis=(), keepdims=keepdims, dtype=dtype),
     )
     assert_eq(
-        da.reductions.numel(x, axis=0, keepdims=keepdims, dtype=dtype),
-        np.sum(x, axis=0, keepdims=keepdims, dtype=dtype),
+        numel(x, axis=0, keepdims=keepdims, dtype=dtype),
+        _sum(x, axis=0, keepdims=keepdims, dtype=dtype),
     )
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
             assert_eq(
-                da.reductions.numel(x, axis=sub, keepdims=keepdims, dtype=dtype),
-                np.sum(x, axis=sub, keepdims=keepdims, dtype=dtype),
+                numel(x, axis=sub, keepdims=keepdims, dtype=dtype),
+                _sum(x, axis=sub, keepdims=keepdims, dtype=dtype),
             )
 
     for length in range(x.ndim):
         for sub in itertools.combinations([d for d in range(x.ndim)], length):
             ssub = np.random.shuffle(list(sub))
             assert_eq(
-                da.reductions.numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
-                np.sum(x, axis=ssub, keepdims=keepdims, dtype=dtype),
+                numel(x, axis=ssub, keepdims=keepdims, dtype=dtype),
+                _sum(x, axis=ssub, keepdims=keepdims, dtype=dtype),
             )
 
 
@@ -184,7 +198,6 @@ def test_reduction_errors():
 
 
 @pytest.mark.slow
-@pytest.mark.filterwarnings("ignore:overflow encountered in reduce:RuntimeWarning")
 @pytest.mark.parametrize("dtype", ["f4", "i4"])
 def test_reductions_2D(dtype):
     x = np.arange(1, 122).reshape((11, 11)).astype(dtype)
@@ -194,9 +207,6 @@ def test_reductions_2D(dtype):
     assert b.__dask_keys__() == [[(b.name, 0, 0)]]
 
     reduction_2d_test(da.sum, a, np.sum, x)
-    if x.dtype.kind != "i":
-        # prod overflows integers at this size
-        reduction_2d_test(da.prod, a, np.prod, x)
     reduction_2d_test(da.mean, a, np.mean, x)
     reduction_2d_test(da.var, a, np.var, x, False)  # Difference in dtype algo
     reduction_2d_test(da.std, a, np.std, x, False)  # Difference in dtype algo
@@ -206,14 +216,18 @@ def test_reductions_2D(dtype):
     reduction_2d_test(da.all, a, np.all, x, False)
 
     reduction_2d_test(da.nansum, a, np.nansum, x)
-    if x.dtype.kind != "i":
-        # prod overflows integers at this size
-        reduction_2d_test(da.nanprod, a, np.nanprod, x)
     reduction_2d_test(da.nanmean, a, np.mean, x)
     reduction_2d_test(da.nanvar, a, np.nanvar, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanstd, a, np.nanstd, x, False)  # Difference in dtype algo
     reduction_2d_test(da.nanmin, a, np.nanmin, x, False)
     reduction_2d_test(da.nanmax, a, np.nanmax, x, False)
+
+    # prod/nanprod overflow for data at this size, leading to warnings about
+    # overflow/invalid values.
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        reduction_2d_test(da.prod, a, np.prod, x)
+        reduction_2d_test(da.nanprod, a, np.nanprod, x)
 
 
 @pytest.mark.parametrize(
@@ -238,6 +252,8 @@ def test_arg_reductions(dfunc, func):
         assert_eq(dfunc(a, 0), func(x, 0))
         assert_eq(dfunc(a, 1), func(x, 1))
         assert_eq(dfunc(a, 2), func(x, 2))
+    if _numpy_122:
+        assert_eq(dfunc(a, keepdims=True), func(x, keepdims=True))
 
     pytest.raises(ValueError, lambda: dfunc(a, 3))
     pytest.raises(TypeError, lambda: dfunc(a, (0, 1)))
@@ -275,6 +291,27 @@ def test_nanarg_reductions(dfunc, func):
         a = da.from_array(x, chunks=(3, 4, 5))
         with pytest.raises(ValueError):
             dfunc(a).compute()
+
+
+@pytest.mark.parametrize(["dfunc", "func"], [(da.min, np.min), (da.max, np.max)])
+def test_min_max_empty_chunks(dfunc, func):
+    x1 = np.arange(10)
+    a1 = da.from_array(x1, chunks=1)
+    assert_eq(dfunc(a1[a1 < 2]), func(x1[x1 < 2]))
+
+    x2 = np.arange(10)
+    a2 = da.from_array(x2, chunks=((5, 0, 5),))
+    assert_eq(dfunc(a2), func(x2))
+
+    x3 = np.array([[1, 1, 2, 3], [1, 1, 4, 0]])
+    a3 = da.from_array(x3, chunks=1)
+    assert_eq(dfunc(a3[a3 >= 2]), func(x3[x3 >= 2]))
+
+    a4 = da.arange(10)
+    with pytest.raises(
+        ValueError
+    ):  # Checking it mimics numpy behavior when all chunks are empty
+        dfunc(a4[a4 < 0]).compute()
 
 
 @pytest.mark.parametrize("func", ["argmax", "nanargmax"])

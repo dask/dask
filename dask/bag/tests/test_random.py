@@ -51,6 +51,27 @@ def test_choices_k_equal_bag_size_with_unbalanced_partitions():
     assert all(i in seq for i in li)
 
 
+def test_choices_with_more_bag_partitons():
+    # test with npartitions > split_every
+    seq = range(100)
+    sut = db.from_sequence(seq, npartitions=10)
+    li = list(random.choices(sut, k=10, split_every=8).compute())
+    assert sut.map_partitions(len).compute() == (10, 10, 10, 10, 10, 10, 10, 10, 10, 10)
+    assert len(li) == 10
+    assert all(i in seq for i in li)
+
+
+def test_sample_with_more_bag_partitons():
+    # test with npartitions > split_every
+    seq = range(100)
+    sut = db.from_sequence(seq, npartitions=10)
+    li = list(random.sample(sut, k=10, split_every=8).compute())
+    assert sut.map_partitions(len).compute() == (10, 10, 10, 10, 10, 10, 10, 10, 10, 10)
+    assert len(li) == 10
+    assert all(i in seq for i in li)
+    assert len(set(li)) == len(li)
+
+
 def test_sample_size_exactly_k():
     seq = range(20)
     sut = db.from_sequence(seq, npartitions=3)
@@ -65,9 +86,7 @@ def test_sample_k_bigger_than_bag_size():
     seq = range(3)
     sut = db.from_sequence(seq, npartitions=3)
     # should raise: Sample larger than population or is negative
-    with pytest.raises(
-        ValueError, match="Sample larger than population or is negative"
-    ):
+    with pytest.raises(ValueError, match="Sample larger than population"):
         random.sample(sut, k=4).compute()
 
 
@@ -100,6 +119,13 @@ def test_sample_k_equal_bag_size_with_unbalanced_partitions():
     assert len(li) == 10
     assert all(i in seq for i in li)
     assert len(set(li)) == len(li)
+
+
+def test_sample_k_larger_than_partitions():
+    bag = db.from_sequence(range(10), partition_size=3)
+    bag2 = random.sample(bag, k=8, split_every=2)
+    seq = bag2.compute()
+    assert len(seq) == 8
 
 
 def test_weighted_sampling_without_replacement():

@@ -11,7 +11,7 @@ import tlz as toolz
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, key_split
+from dask.utils import ensure_dict, key_split, import_required
 from dask.widgets import get_template
 
 
@@ -53,8 +53,8 @@ class Layer(Mapping):
 
     def __init__(
         self,
-        annotations: Mapping[str, Any] = None,
-        collection_annotations: Mapping[str, Any] = None,
+        annotations: Mapping[str, Any] | None = None,
+        collection_annotations: Mapping[str, Any] | None = None,
     ):
         """Initialize Layer object.
 
@@ -245,7 +245,7 @@ class Layer(Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+    def _repr_html_(self, layer_index="", highlevelgraph_key="", dependencies=()):
         if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
@@ -270,6 +270,7 @@ class Layer(Mapping):
             layer_index=layer_index,
             highlevelgraph_key=highlevelgraph_key,
             info=self.layer_info_dict(),
+            dependencies=dependencies,
             svg_repr=svg_repr,
         )
 
@@ -697,6 +698,8 @@ class HighLevelGraph(Mapping):
         hlg: HighLevelGraph
             Culled high level graph
         """
+        from dask.layers import Blockwise
+
         keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
@@ -723,7 +726,20 @@ class HighLevelGraph(Mapping):
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
-                ret_key_deps.update(culled_deps)
+                if (
+                    isinstance(layer, Blockwise)
+                    or isinstance(layer, MaterializedLayer)
+                    or (layer.is_materialized() and (len(layer) == len(culled_deps)))
+                ):
+                    # Don't use culled_deps to update ret_key_deps
+                    # unless they are "direct" key dependencies.
+                    #
+                    # Note that `MaterializedLayer` is "safe", because
+                    # its `cull` method will return a complete dict of
+                    # direct dependencies for all keys in its subgraph.
+                    # See: https://github.com/dask/dask/issues/9389
+                    # for performance motivation
+                    ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set
         # intersection to iterate over the smaller of the two sets.
@@ -805,6 +821,7 @@ class HighLevelGraph(Mapping):
             type=type(self).__name__,
             layers=self.layers,
             toposort=self._toposort_layers(),
+            layer_dependencies=self.dependencies,
             n_outputs=len(self.get_all_external_keys()),
         )
 
@@ -819,7 +836,16 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from dask.dot import graphviz, label, name
+    from dask.dot import label, name
+
+    graphviz = import_required(
+        "graphviz",
+        "Drawing dask graphs with the graphviz visualization engine requires the `graphviz` "
+        "python library and the `graphviz` system library.\n\n"
+        "Please either conda or pip install as follows:\n\n"
+        "  conda install python-graphviz     # either conda install\n"
+        "  python -m pip install graphviz    # or pip install and follow installation instructions",
+    )
 
     data_attributes = data_attributes or {}
     function_attributes = function_attributes or {}
