@@ -3921,7 +3921,7 @@ def from_delayed(
                 "If the sizes of individual chunks are actually unkown, you can pass "
                 "`allow_unknown_chunksizes=True`, but some downstream operations may not work."
             )
-        chunks = tuple((float("nan"),) * s for s in value.shape)
+        chunks = tuple((np.nan,) * s for s in value.shape)
     else:
         chunks = normalize_chunks(
             chunks, shape=shape, numblocks=value.shape, dtype=dtype
