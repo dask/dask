@@ -1,3 +1,5 @@
+import warnings
+
 from dask import __version__
 from dask.compatibility import entry_points
 
@@ -63,15 +65,16 @@ def _register_command_ep(interface, entry_point):
     """
     command = entry_point.load()
     if not isinstance(command, (click.Command, click.Group)):
-        raise TypeError(
+        warnings.warn(
             "entry points in 'dask_cli' must be instances of "
-            "click.Command or click.Group"
+            f"click.Command or click.Group, not {type(command)}."
         )
+        return
 
     if command.name in interface.commands:
-        raise ValueError(
-            f"Command with name {command.name} already "
-            "exists in the Dask CLI; choose another name!"
+        warnings.warn(
+            f"While registering the command with name '{command.name}', "
+            "an existing command or group was found and overwritten!"
         )
 
     interface.add_command(command)

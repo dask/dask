@@ -76,7 +76,7 @@ def test_register_command_ep():
         group="dask_cli",
     )
 
-    with pytest.raises(TypeError, match="must be instances of"):
+    with pytest.warns(UserWarning, match="must be instances of"):
         _register_command_ep(dummy_cli, bad_ep)
 
     _register_command_ep(dummy_cli, good_ep)
@@ -89,7 +89,7 @@ def dummy_cli_2():
     pass
 
 
-def test_repeated_name_registration_raise():
+def test_repeated_name_registration_warn():
     from dask.cli import _register_command_ep
 
     one = importlib.metadata.EntryPoint(
@@ -105,5 +105,5 @@ def test_repeated_name_registration_raise():
     )
 
     _register_command_ep(dummy_cli_2, one)
-    with pytest.raises(ValueError, match="Command with name good already exists"):
+    with pytest.warns(UserWarning, match="While registering the command with name"):
         _register_command_ep(dummy_cli_2, two)
