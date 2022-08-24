@@ -2869,11 +2869,19 @@ def test_gh6305():
 def test_rename_dict():
     renamer = {"a": "A", "b": "B"}
     assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    with pytest.raises(
+        ValueError, match="columns in this dataframe have duplicate names"
+    ):
+        d.rename(columns={"a": "A", "b": "A"})
 
 
 def test_rename_function():
     renamer = lambda x: x.upper()
     assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    with pytest.raises(
+        ValueError, match="columns in this dataframe have duplicate names"
+    ):
+        d.rename(columns=lambda _: "A")
 
 
 def test_rename_index():
