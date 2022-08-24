@@ -253,8 +253,7 @@ def test_dataframe_cull_key_dependencies(op):
     assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
 
 
-@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
-def test_dataframe_cull_key_dependencies_materialized(op):
+def test_dataframe_cull_key_dependencies_materialized():
     # Test that caching of MaterializedLayer
     # dependencies during culling doesn't break
     # the result of ``get_all_dependencies``
@@ -279,7 +278,12 @@ def test_dataframe_cull_key_dependencies_materialized(op):
     # HLG cull
     culled_keys = [k for k in result.__dask_keys__() if k != (name, 0)]
     culled_graph = graph.cull(culled_keys)
+
+    # Check that culled_deps are cached
+    # See: https://github.com/dask/dask/issues/9389
+    cached_deps = culled_graph.key_dependencies.copy()
     deps = culled_graph.get_all_dependencies()
+    assert cached_deps == deps
 
     # Manual cull
     deps0 = graph.get_all_dependencies()
