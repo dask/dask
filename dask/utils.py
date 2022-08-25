@@ -203,7 +203,7 @@ def tmpfile(extension="", dir=None):
 
     Parameters
     ----------
-    extension : str | None
+    extension : str
         The extension of the temporary file to be created
     dir : str
         If ``dir`` is not None, the file will be created in that directory; otherwise,
