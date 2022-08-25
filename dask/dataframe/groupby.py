@@ -1289,10 +1289,13 @@ class _GroupBy:
         # rename "by" columns internally
         # to fix cumulative operations on the same "by" columns
         # ref: https://github.com/dask/dask/issues/9313
-        by = []
-        for col in by_cols:
-            self.obj[col + "-by"] = self.obj[col]
-            by.append(col + "-by")
+        if columns and set(columns).intersection(set(by_cols)):
+            by = []
+            for col in by_cols:
+                self.obj[col + "-by"] = self.obj[col]
+                by.append(col + "-by")
+        else:
+            by = by_cols
 
         name = self._token_prefix + token
         name_part = name + "-map"
