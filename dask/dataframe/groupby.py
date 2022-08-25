@@ -1289,7 +1289,7 @@ class _GroupBy:
         # rename "by" columns internally
         # to fix cumulative operations on the same "by" columns
         # ref: https://github.com/dask/dask/issues/9313
-        if columns and set(columns).intersection(set(by_cols)):
+        if columns is not None and set(columns).intersection(set(by_cols)):
             by = []
             for col in by_cols:
                 self.obj[col + "-by"] = self.obj[col]
