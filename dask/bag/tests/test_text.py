@@ -1,13 +1,13 @@
-import pytest
 from functools import partial
+
+import pytest
+from fsspec.compression import compr
 from tlz import concat
 
-import dask
-from dask import compute
-from dask.utils import filetexts
-from dask.bytes import utils
+from dask import compute, config
 from dask.bag.text import read_text
-from fsspec.compression import compr
+from dask.bytes import utils
+from dask.utils import filetexts
 
 compute = partial(compute, scheduler="sync")
 
@@ -30,7 +30,7 @@ files = {
 
 expected = "".join([files[v] for v in sorted(files)])
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
+fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]  # type: ignore
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc_path = [
@@ -46,7 +46,7 @@ def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
-    files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
+    files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
     with filetexts(files2, mode="b"):
         b = read_text(
             ".test.accounts.*.json", compression=fmt, blocksize=bs, encoding=encoding
@@ -84,12 +84,24 @@ def test_read_text(fmt, bs, encoding, include_path):
         assert "".join(line for block in L for line in block) == expected
 
 
+def test_read_text_unicode_no_collection(tmp_path):
+    data = b"abcd\xc3\xa9"
+    fn = tmp_path / "data.txt"
+    with open(fn, "wb") as f:
+        f.write(b"\n".join([data, data]))
+
+    f = read_text(fn, collection=False)
+
+    result = f[0].compute()
+    assert len(result) == 2
+
+
 def test_files_per_partition():
-    files3 = {"{:02}.txt".format(n): "line from {:02}" for n in range(20)}
+    files3 = {f"{n:02}.txt": "line from {:02}" for n in range(20)}
     with filetexts(files3):
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns
-        with dask.config.set({"scheduler": "single-threaded"}):
+        with config.set({"scheduler": "single-threaded"}):
             with pytest.warns(UserWarning):
                 b = read_text("*.txt", files_per_partition=10)
                 l = len(b.take(100, npartitions=1))
@@ -119,3 +131,21 @@ def test_errors():
         result = read_text(".test.foo", encoding="ascii", errors="ignore")
         result = result.compute(scheduler="sync")
         assert result == ["Jos\n", "Alice"]
+
+
+def test_complex_delimiter():
+    longstr = "abc\ndef\n123\n$$$$\ndog\ncat\nfish\n\n\r\n$$$$hello"
+    with filetexts({".test.delim.txt": longstr}):
+        assert read_text(".test.delim.txt", linedelimiter="$$$$").count().compute() == 3
+        assert (
+            read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
+            .count()
+            .compute()
+            == 3
+        )
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$").compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2).compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")

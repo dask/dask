@@ -1,16 +1,13 @@
 from itertools import combinations_with_replacement
 
 import numpy as np
-
 import pytest
 
 import dask.array as da
 import dask.array.fft
+from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap
 from dask.array.utils import assert_eq, same_keys
-
-from dask.array.core import normalize_chunks
-
 
 all_1d_funcnames = ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
 
@@ -124,7 +121,7 @@ def test_wrap_ffts(modname, funcname, dtype):
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
-        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+        pytest.skip(f"`{modname}` missing function `{funcname}`.")
 
     darrc = darr.astype(dtype)
     darr2c = darr2.astype(dtype)
@@ -159,7 +156,7 @@ def test_wrap_fftns(modname, funcname, dtype):
     try:
         func = getattr(fft_mod, funcname)
     except AttributeError:
-        pytest.skip("`%s` missing function `%s`." % (modname, funcname))
+        pytest.skip(f"`{modname}` missing function `{funcname}`.")
 
     darrc = darr.astype(dtype).rechunk(darr.shape)
     darr2c = darr2.astype(dtype).rechunk(darr2.shape)

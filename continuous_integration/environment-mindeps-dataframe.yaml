@@ -1,0 +1,21 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - packaging=20.0
+  - python=3.8
+  - pyyaml>=5.3.1
+  - cloudpickle=1.1.1
+  - partd=0.3.10
+  - fsspec=0.6.0
+  - toolz=0.8.2
+  # optional dependencies pulled in by pip install dask[dataframe]
+  - numpy=1.18
+  - pandas=1.0
+  # test dependencies
+  - pre-commit
+  - pytest
+  - pytest-cov
+  - pytest-rerunfailures
+  - pytest-xdist

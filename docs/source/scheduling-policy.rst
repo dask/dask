@@ -1,3 +1,5 @@
+.. _scheduling-policy:
+
 Scheduling in Depth
 ===================
 

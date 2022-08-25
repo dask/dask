@@ -1,19 +1,26 @@
+from __future__ import annotations
+
 import os
-import pytest
 import subprocess
 import sys
 import time
-import fsspec
-from distutils.version import LooseVersion
 
-from dask.bytes.core import open_files
-from dask.bytes._compatibility import FSSPEC_042
+import fsspec
+import pytest
+from fsspec.core import open_files
+from packaging.version import parse as parse_version
+
+import dask.bag as db
 from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
-errs = (requests.exceptions.RequestException,)
-if LooseVersion(fsspec.__version__) > "0.7.4":
+
+errs: tuple[type[Exception], ...] = (
+    requests.exceptions.RequestException,
+    FileNotFoundError,
+)
+if parse_version(fsspec.__version__) > parse_version("0.7.4"):
     aiohttp = pytest.importorskip("aiohttp")
     errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
 
@@ -47,23 +54,25 @@ def test_simple(dir_server):
     f = open_files(root + fn)[0]
     with f as f:
         data = f.read()
-    assert data == open(os.path.join(dir_server, fn), "rb").read()
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        assert data == expected.read()
 
 
 def test_loc(dir_server):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
-    expected = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        data = f.read(2)
-        assert data == expected[:2]
-        assert f.loc == 2
-        f.seek(0)
-        data = f.read(3)
-        assert data == expected[:3]
-        f.seek(1, 1)
-        assert f.loc == 4
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            data = f.read(2)
+            assert data == expected[:2]
+            assert f.loc == 2
+            f.seek(0)
+            data = f.read(3)
+            assert data == expected[:3]
+            f.seek(1, 1)
+            assert f.loc == 4
 
 
 def test_fetch_range_with_headers(dir_server):
@@ -74,7 +83,8 @@ def test_fetch_range_with_headers(dir_server):
     f = open_files(root + fn, headers=headers)[0]
     with f as f:
         data = f.read(length=1) + f.read(length=-1)
-    assert data == open(os.path.join(dir_server, fn), "rb").read()
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        assert data == expected.read()
 
 
 @pytest.mark.parametrize("block_size", [None, 99999])
@@ -82,36 +92,42 @@ def test_ops(dir_server, block_size):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
-    data = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        # these pass because the default
-        assert f.read(10) == data[:10]
-        f.seek(0)
-        assert f.read(10) == data[:10]
-        assert f.read(10) == data[10:20]
-        f.seek(-10, 2)
-        assert f.read() == data[-10:]
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            # these pass because the default
+            assert f.read(10) == expected[:10]
+            f.seek(0)
+            assert f.read(10) == expected[:10]
+            assert f.read(10) == expected[10:20]
+            f.seek(-10, 2)
+            assert f.read() == expected[-10:]
 
 
 def test_ops_blocksize(dir_server):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn, block_size=2)[0]
-    data = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        # it's OK to read the whole file
-        assert f.read() == data
-        # and now the file magically has a size
-        assert f.size == len(data)
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            # it's OK to read the whole file
+            assert f.read() == expected
+            # and now the file magically has a size
+            assert f.size == len(expected)
 
-    # note that if we reuse f from above, because it is tokenized, we get
-    # the same open file - where is this cached?
-    fn = files[1]
-    f = open_files(root + fn, block_size=2)[0]
-    with f as f:
-        # fails because we want only 12 bytes
-        with pytest.raises(ValueError):
-            assert f.read(10) == data[:10]
+        # note that if we reuse f from above, because it is tokenized, we get
+        # the same open file - where is this cached?
+        fn = files[1]
+        f = open_files(root + fn, block_size=2)[0]
+        with f as f:
+            if parse_version(fsspec.__version__) < parse_version("2021.11.1"):
+                # fails because we want only 12 bytes
+                with pytest.raises(ValueError):
+                    assert f.read(10) == expected[:10]
+            else:
+                # fixed in https://github.com/fsspec/filesystem_spec/pull/830
+                assert f.read(10) == expected[:10]
 
 
 def test_errors(dir_server):
@@ -121,10 +137,7 @@ def test_errors(dir_server):
             f.read()
     f = open_files("http://nohost/")[0]
 
-    if FSSPEC_042:
-        expected = FileNotFoundError
-    else:
-        expected = requests.exceptions.RequestException
+    expected = FileNotFoundError
 
     with pytest.raises(expected):
         with f as f:
@@ -146,7 +159,8 @@ def test_files(dir_server):
     fs = open_files([root + f for f in files])
     for f, f2 in zip(fs, files):
         with f as f:
-            assert f.read() == open(os.path.join(dir_server, f2), "rb").read()
+            with open(os.path.join(dir_server, f2), "rb") as expected:
+                assert f.read() == expected.read()
 
 
 def test_open_glob(dir_server):
@@ -157,27 +171,35 @@ def test_open_glob(dir_server):
 
 
 @pytest.mark.network
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5042", strict=False)
-def test_parquet():
+@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
-    pytest.importorskip("fastparquet")  # no pyarrow compatibility FS yet
+    pytest.importorskip(engine)
+    # TODO: remove this skip once fastparquet > 0.8.2 exists
+    if engine == "fastparquet":
+        import fastparquet
+
+        if parse_version(fastparquet.__version__) == parse_version("0.8.2"):
+            pytest.skip("https://github.com/dask/dask/issues/9424")
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"
             "master/parquet-testdata/impala/1.1.1-NONE/"
             "nation.impala.parquet"
-        ]
+        ],
+        engine=engine,
     ).compute()
     assert df.n_nationkey.tolist() == list(range(25))
     assert df.columns.tolist() == ["n_nationkey", "n_name", "n_regionkey", "n_comment"]
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/3696", strict=False)
+@pytest.mark.flaky(
+    reruns=10, reruns_delay=5, reason="https://github.com/dask/dask/issues/3696"
+)
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
-    db = pytest.importorskip("dask.bag")
     urls = [
         "https://raw.githubusercontent.com/weierophinney/pastebin/"
         "master/public/js-src/dojox/data/tests/stores/patterns.csv",
@@ -188,10 +210,6 @@ def test_bag():
     b.compute()
 
 
-@pytest.mark.xfail(
-    LooseVersion(fsspec.__version__) <= "0.4.1",
-    reason="https://github.com/dask/dask/pull/5231",
-)
 @pytest.mark.network
 def test_read_csv():
     dd = pytest.importorskip("dask.dataframe")

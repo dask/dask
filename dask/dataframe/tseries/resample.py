@@ -1,20 +1,13 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ..core import DataFrame, Series
-from ...base import tokenize
-from ...utils import derived_from
-from ...highlevelgraph import HighLevelGraph
-from .._compat import PANDAS_GT_0240
-from .. import methods
-
-
-def getnanos(rule):
-    try:
-        return getattr(rule, "nanos", None)
-    except ValueError:
-        return None
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_140
+from dask.dataframe.core import DataFrame, Series
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from
 
 
 def _resample_series(
@@ -32,19 +25,23 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    if PANDAS_GT_0240:
-        new_index = pd.date_range(
-            start.tz_localize(None),
-            end.tz_localize(None),
-            freq=rule,
-            closed=reindex_closed,
-            name=out.index.name,
-        ).tz_localize(start.tz, nonexistent="shift_forward")
 
+    if PANDAS_GT_140:
+        if reindex_closed is None:
+            inclusive = "both"
+        else:
+            inclusive = reindex_closed
+        closed_kwargs = {"inclusive": inclusive}
     else:
-        new_index = pd.date_range(
-            start, end, freq=rule, closed=reindex_closed, name=out.index.name
-        )
+        closed_kwargs = {"closed": reindex_closed}
+
+    new_index = pd.date_range(
+        start.tz_localize(None),
+        end.tz_localize(None),
+        freq=rule,
+        **closed_kwargs,
+        name=out.index.name,
+    ).tz_localize(start.tz, nonexistent="shift_forward")
 
     if not out.index.isin(new_index).all():
         raise ValueError(
@@ -96,7 +93,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
-class Resampler(object):
+class Resampler:
     """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which

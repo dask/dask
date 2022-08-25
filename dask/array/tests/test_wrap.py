@@ -2,9 +2,11 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from dask.array.wrap import ones
-import dask.array as da
 import numpy as np
+
+import dask.array as da
+from dask.array.utils import assert_eq
+from dask.array.wrap import ones
 
 
 def test_ones():
@@ -12,7 +14,7 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), "i4")).all()
 
-    assert a.name.startswith("ones-")
+    assert a.name.startswith("ones_like-")
 
 
 def test_size_as_list():
@@ -39,12 +41,27 @@ def test_full():
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
-    assert a.name.startswith("full-")
+    assert a.name.startswith("full_like-")
 
 
 def test_full_error_nonscalar_fill_value():
     with pytest.raises(ValueError, match="fill_value must be scalar"):
         da.full((3, 3), [100, 100], chunks=(2, 2), dtype="i8")
+
+
+def test_full_detects_da_dtype():
+    x = da.from_array(100)
+    with pytest.warns(FutureWarning, match="not implemented by Dask array") as record:
+        # This shall not raise an NotImplementedError due to dtype detected as object.
+        a = da.full(shape=(3, 3), fill_value=x)
+        assert a.dtype == x.dtype
+        assert_eq(a, np.full(shape=(3, 3), fill_value=100))
+    assert len(record) == 1
+
+
+def test_full_none_dtype():
+    a = da.full(shape=(3, 3), fill_value=100, dtype=None)
+    assert_eq(a, np.full(shape=(3, 3), fill_value=100, dtype=None))
 
 
 def test_full_like_error_nonscalar_fill_value():

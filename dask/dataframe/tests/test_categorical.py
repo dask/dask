@@ -1,4 +1,5 @@
 import operator
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -6,16 +7,15 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.dataframe import _compat
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
-    make_meta,
     assert_eq,
-    is_categorical_dtype,
     clear_known_categories,
+    is_categorical_dtype,
+    make_meta,
 )
-
 
 # Generate a list of categorical series and indices
 cat_series = []
@@ -117,12 +117,13 @@ def test_concat_unions_categoricals():
     tm.assert_frame_equal(_concat(frames5), pd.concat(frames6))
 
 
-def test_unknown_categoricals():
+def test_unknown_categoricals(shuffle_method):
     ddf = dd.DataFrame(
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
         make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
+            parent_meta=frames[0],
         ),
         [None] * 4,
     )
@@ -262,13 +263,12 @@ def test_categorize_index():
     assert ddf.categorize() is ddf
 
 
-@pytest.mark.parametrize("shuffle", ["disk", "tasks"])
-def test_categorical_set_index(shuffle):
+def test_categorical_set_index(shuffle_method):
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": ["a", "b", "b", "c"]})
     df["y"] = pd.Categorical(df["y"], categories=["a", "b", "c"], ordered=True)
     a = dd.from_pandas(df, npartitions=2)
 
-    with dask.config.set(scheduler="sync", shuffle=shuffle):
+    with dask.config.set(scheduler="sync"):
         b = a.set_index("y", npartitions=a.npartitions)
         d1, d2 = b.get_partition(0), b.get_partition(1)
         assert list(d1.index.compute()) == ["a"]
@@ -335,9 +335,9 @@ def test_categorize_nan():
     df = dd.from_pandas(
         pd.DataFrame({"A": ["a", "b", "a", float("nan")]}), npartitions=2
     )
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         df.categorize().compute()
-    assert len(record) == 0
+    assert not record
 
 
 def get_cat(x):
@@ -431,9 +431,14 @@ class TestCategoricalAccessor:
         da = da.cat.as_unknown()
         assert not da.cat.known
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
             da.cat.categories
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
+            da.cat.codes
+        # Also AttributeError so glob searching in IPython such as `da.cat.*?` works
+        with pytest.raises(AttributeError, match="with unknown categories"):
+            da.cat.categories
+        with pytest.raises(AttributeError, match="with unknown categories"):
             da.cat.codes
 
         db = da.cat.set_categories(["a", "b", "c"])

@@ -3,9 +3,8 @@ from itertools import product
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
-from dask.dataframe._compat import PANDAS_GT_0240
 import dask.dataframe as dd
+from dask.dataframe.utils import assert_eq
 
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
@@ -171,8 +170,9 @@ def test_unknown_divisions_error():
 
 
 def test_resample_index_name():
-    import numpy as np
     from datetime import datetime, timedelta
+
+    import numpy as np
 
     date_today = datetime.now()
     days = pd.date_range(date_today, date_today + timedelta(20), freq="D")
@@ -186,7 +186,6 @@ def test_resample_index_name():
     assert ddf.resample("D").mean().head().index.name == "date"
 
 
-@pytest.mark.skipif(not PANDAS_GT_0240, reason="nonexistent not in 0.23 or older")
 def test_series_resample_non_existent_datetime():
     index = [
         pd.Timestamp("2016-10-15 00:00:00"),
@@ -202,7 +201,6 @@ def test_series_resample_non_existent_datetime():
     assert_eq(result, expected, **CHECK_FREQ)
 
 
-@pytest.mark.skipif(PANDAS_VERSION <= "0.23.4", reason="quantile not in 0.23")
 @pytest.mark.parametrize("agg", ["nunique", "mean", "count", "size", "quantile"])
 def test_common_aggs(agg):
     index = pd.date_range("2000-01-01", "2000-02-15", freq="h")

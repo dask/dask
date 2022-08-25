@@ -1,0 +1,50 @@
+{% set major_minor_patch = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').split('.') %}
+{% set new_patch = major_minor_patch[2] | int + 1 %}
+{% set version = (major_minor_patch[:2] + [new_patch]) | join('.') + environ.get('VERSION_SUFFIX', '') %}
+
+
+package:
+  name: dask-core
+  version: {{ version }}
+
+source:
+  git_url: ../..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+  noarch: python
+  string: py_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  script: {{ PYTHON }} -m pip install . -vv
+
+requirements:
+  host:
+    - python >=3.8
+    - pip
+    - setuptools
+
+  run:
+    - python >=3.8
+    - cloudpickle >=1.1.1
+    - fsspec >=0.6.0
+    - packaging >=20.0
+    - partd >=0.3.10
+    - pyyaml >=5.3.1
+    - toolz >=0.8.2
+
+test:
+  imports:
+    - dask
+  commands:
+    - pip check
+  requires:
+    - pip
+
+about:
+  home: https://github.com/dask/dask/
+  license: BSD-3-Clause
+  license_file:
+    - LICENSE.txt
+    - dask/array/NUMPY_LICENSE.txt
+  summary: Parallel Python with task scheduling
+  doc_url: https://dask.org/
+  dev_url: https://github.com/dask/dask

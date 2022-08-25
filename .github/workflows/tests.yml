@@ -1,0 +1,74 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# When this workflow is queued, automatically cancel any previous running
+# or pending jobs from the same branch
+concurrency:
+  group: ${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        python-version: ["3.8", "3.9", "3.10"]
+        exclude:
+            - os: "macos-latest"
+              python-version: "3.8"
+            - os: "macos-latest"
+              python-version: "3.10"
+
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+      PARALLEL: "true"
+      COVERAGE: "true"
+      HDF5_USE_FILE_LOCKING: "FALSE"
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Needed by codecov.io
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        with:
+          distribution: "zulu"
+          java-version: "11"
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: strict
+          python-version: ${{ matrix.python-version }}
+          environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Install
+        shell: bash -l {0}
+        run: source continuous_integration/scripts/install.sh
+
+      # This environment file is created in continuous_integration/scripts/install.sh
+      # and can be useful when debugging locally
+      - name: Upload environment file
+        uses: actions/upload-artifact@v3
+        with:
+          name: env-${{ matrix.os }}-Python-${{ matrix.python-version }}
+          path: env.yaml
+
+      - name: Run tests
+        shell: bash -l {0}
+        run: source continuous_integration/scripts/run_tests.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1

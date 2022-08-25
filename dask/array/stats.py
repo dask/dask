@@ -28,30 +28,42 @@ Some differences
 # out of the use of this software, even if advised of the possibility of
 # such damage.
 import math
+from collections import namedtuple
 
 import numpy as np
+
 import dask.array as da
+from dask import delayed
 from dask.array.ufunc import wrap_elemwise
 from dask.utils import derived_from
-from dask import delayed
 
 try:
     import scipy.stats
 except ImportError as e:
     raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
-from scipy.stats import distributions
 from scipy import special
-from scipy.stats.stats import (
-    Ttest_indResult,
-    Ttest_1sampResult,
-    Ttest_relResult,
-    Power_divergenceResult,
-    NormaltestResult,
-    SkewtestResult,
-    KurtosistestResult,
-    F_onewayResult,
-)
+from scipy.stats import distributions
 
+# copied from https://github.com/scipy/scipy/blob/v1.8.0/scipy/stats/_stats_py.py since
+# these are all private after v1.8.0
+F_onewayResult = namedtuple("F_onewayResult", ("statistic", "pvalue"))
+KurtosistestResult = namedtuple("KurtosistestResult", ("statistic", "pvalue"))
+NormaltestResult = namedtuple("NormaltestResult", ("statistic", "pvalue"))
+Power_divergenceResult = namedtuple("Power_divergenceResult", ("statistic", "pvalue"))
+SkewtestResult = namedtuple("SkewtestResult", ("statistic", "pvalue"))
+Ttest_1sampResult = namedtuple("Ttest_1sampResult", ("statistic", "pvalue"))
+Ttest_indResult = namedtuple("Ttest_indResult", ("statistic", "pvalue"))
+Ttest_relResult = namedtuple("Ttest_relResult", ("statistic", "pvalue"))
+
+# Map from names to lambda_ values used in power_divergence().
+_power_div_lambda_names = {
+    "pearson": 1,
+    "log-likelihood": 0,
+    "freeman-tukey": -0.5,
+    "mod-log-likelihood": -1,
+    "neyman": -2,
+    "cressie-read": 2 / 3,
+}
 
 __all__ = [
     "ttest_ind",
@@ -140,14 +152,13 @@ def chisquare(f_obs, f_exp=None, ddof=0, axis=0):
 def power_divergence(f_obs, f_exp=None, ddof=0, axis=0, lambda_=None):
 
     if isinstance(lambda_, str):
-        # TODO: public api
-        if lambda_ not in scipy.stats.stats._power_div_lambda_names:
-            names = repr(list(scipy.stats.stats._power_div_lambda_names.keys()))[1:-1]
+        if lambda_ not in _power_div_lambda_names:
+            names = repr(list(_power_div_lambda_names.keys()))[1:-1]
             raise ValueError(
-                "invalid string for lambda_: {0!r}.  Valid strings "
-                "are {1}".format(lambda_, names)
+                f"invalid string for lambda_: {lambda_!r}. "
+                f"Valid strings are {names}"
             )
-        lambda_ = scipy.stats.stats._power_div_lambda_names[lambda_]
+        lambda_ = _power_div_lambda_names[lambda_]
     elif lambda_ is None:
         lambda_ = 1
 
@@ -194,7 +205,7 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
     m2 = moment(a, 2, axis)
     m3 = moment(a, 3, axis)
     zero = m2 == 0
-    vals = da.where(~zero, m3 / m2 ** 1.5, 0.0)
+    vals = da.where(~zero, m3 / m2**1.5, 0.0)
     # vals = da.where(~zero, (m2, m3),
     #                 lambda m2, m3: m3 / m2**1.5,
     #                 0.)
@@ -203,9 +214,8 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
         raise NotImplementedError("bias=False is not implemented.")
 
     if vals.ndim == 0:
-        return vals
-        # TODO: scalar
-        # return vals.item()
+        # TODO: scalar, min is a workaround
+        return vals.min()
 
     return vals
 
@@ -227,7 +237,7 @@ def skewtest(a, axis=0, nan_policy="propagate"):
     y = b2 * math.sqrt(((n + 1) * (n + 3)) / (6.0 * (n - 2)))
     beta2 = (
         3.0
-        * (n ** 2 + 27 * n - 70)
+        * (n**2 + 27 * n - 70)
         * (n + 1)
         * (n + 3)
         / ((n - 2.0) * (n + 5) * (n + 7) * (n + 9))
@@ -253,7 +263,7 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     zero = m2 == 0
     olderr = np.seterr(all="ignore")
     try:
-        vals = da.where(zero, 0, m4 / m2 ** 2.0)
+        vals = da.where(zero, 0, m4 / m2**2.0)
     finally:
         np.seterr(**olderr)
 
@@ -264,8 +274,11 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     if fisher:
         return vals - 3
     else:
+        if vals.ndim == 0:
+            # TODO: scalar, min is a workaround
+            return vals.min()
+
         return vals
-        # TODO: scalar; vals = vals.item()  # array scalar
 
 
 @derived_from(scipy.stats)
@@ -291,7 +304,7 @@ def kurtosistest(a, axis=0, nan_policy="propagate"):
         * np.sqrt((6.0 * (n + 3) * (n + 5)) / (n * (n - 2) * (n - 3)))
     )
     # [1]_ Eq. 3:
-    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1 ** 2)))
+    A = 6.0 + 8.0 / sqrtbeta1 * (2.0 / sqrtbeta1 + np.sqrt(1 + 4.0 / (sqrtbeta1**2)))
     term1 = 1 - 2 / (9.0 * A)
     denom = 1 + x * np.sqrt(2 / (A - 4.0))
     denom = np.where(denom < 0, 99, denom)
@@ -382,7 +395,7 @@ def _unequal_var_ttest_denom(v1, n1, v2, n2):
     vn1 = v1 / n1
     vn2 = v2 / n2
     with np.errstate(divide="ignore", invalid="ignore"):
-        df = (vn1 + vn2) ** 2 / (vn1 ** 2 / (n1 - 1) + vn2 ** 2 / (n2 - 1))
+        df = (vn1 + vn2) ** 2 / (vn1**2 / (n1 - 1) + vn2**2 / (n2 - 1))
 
     # If df is undefined, variances are zero (assumes n1 > 0 & n2 > 0).
     # Hence it doesn't matter what df is as long as it's not NaN.

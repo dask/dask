@@ -6,7 +6,6 @@ Bag
    :hidden:
 
    bag-creation.rst
-   bag-api.rst
 
 Dask Bag implements operations like ``map``, ``filter``, ``fold``, and
 ``groupby`` on collections of generic Python objects.  It does this in parallel with a
@@ -14,7 +13,7 @@ small memory footprint using Python iterators.  It is similar to a parallel
 version of PyToolz_ or a Pythonic version of the `PySpark RDD`_.
 
 .. _PyToolz: https://toolz.readthedocs.io/en/latest/
-.. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python/pyspark.html
+.. _`PySpark RDD`: https://spark.apache.org/docs/latest/api/python
 
 Examples
 --------
@@ -65,12 +64,7 @@ great deal of inter-worker communication.  For common operations this is rarely
 an issue as most Dask Bag workflows are embarrassingly parallel or result in
 reductions with little data moving between workers.
 
-Because the multiprocessing scheduler requires moving functions between multiple
-processes, we encourage that Dask Bag users also install the cloudpickle_ library to
-enable the transfer of more complex functions.
-
 .. _GIL: https://docs.python.org/3/glossary.html#term-gil
-.. _cloudpickle: https://github.com/cloudpipe/cloudpickle
 
 
 Shuffle

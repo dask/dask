@@ -1,13 +1,15 @@
 import random
+import sys
+from copy import deepcopy
 from itertools import product
 
 import numpy as np
 import pytest
 
 import dask.array as da
-from dask.base import tokenize
+from dask.array.numpy_compat import _numpy_123
 from dask.array.utils import assert_eq
-from copy import deepcopy
+from dask.base import tokenize
 
 pytest.importorskip("dask.array.ma")
 
@@ -51,7 +53,7 @@ functions = [
     lambda x: da.expm1(x),
     lambda x: 2 * x,
     lambda x: x / 2,
-    lambda x: x ** 2,
+    lambda x: x**2,
     lambda x: x + x,
     lambda x: x * x,
     lambda x: x[0],
@@ -131,7 +133,7 @@ def test_mixed_concatenate(func):
 
     dd = func(d)
     ss = func(s)
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 @pytest.mark.parametrize("func", functions)
@@ -146,7 +148,7 @@ def test_mixed_random(func):
     dd = func(d)
     ss = func(s)
 
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 def test_mixed_output_type():
@@ -368,7 +370,8 @@ def test_set_fill_value():
         da.ma.set_fill_value(dmx, dx)
 
 
-def test_average_weights_with_masked_array():
+@pytest.mark.parametrize("keepdims", [False, True])
+def test_average_weights_with_masked_array(keepdims):
     mask = np.array([[True, False], [True, True], [False, True]])
     data = np.arange(6).reshape((3, 2))
     a = np.ma.array(data, mask=mask)
@@ -377,10 +380,12 @@ def test_average_weights_with_masked_array():
     weights = np.array([0.25, 0.75])
     d_weights = da.from_array(weights, chunks=2)
 
-    np_avg = np.ma.average(a, weights=weights, axis=1)
-    da_avg = da.ma.average(d_a, weights=d_weights, axis=1)
+    da_avg = da.ma.average(d_a, weights=d_weights, axis=1, keepdims=keepdims)
 
-    assert_eq(np_avg, da_avg)
+    if _numpy_123:
+        assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1, keepdims=keepdims))
+    elif not keepdims:
+        assert_eq(da_avg, np.ma.average(a, weights=weights, axis=1))
 
 
 def test_arithmetic_results_in_masked():
@@ -393,3 +398,51 @@ def test_arithmetic_results_in_masked():
     sol = x + masked
     assert_eq(res, sol)
     assert isinstance(res.compute(), np.ma.masked_array)
+
+
+def test_count():
+    data = np.arange(120).reshape((12, 10))
+    mask = (data % 3 == 0) | (data % 4 == 0)
+    x = np.ma.masked_where(mask, data)
+    dx = da.from_array(x, chunks=(2, 3))
+
+    for axis in (None, 0, 1):
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol)
+
+    res = da.ma.count(dx, keepdims=True)
+    sol = np.ma.count(x, keepdims=True)
+    assert_eq(res, sol)
+
+    # Test all masked
+    x = np.ma.masked_all((12, 10))
+    dx = da.from_array(x, chunks=(2, 3))
+    assert_eq(da.ma.count(dx), np.ma.count(x))
+
+    # Test on non-masked array
+    x = np.arange(120).reshape((12, 10))
+    dx = da.from_array(data, chunks=(2, 3))
+    for axis in (None, 0, 1):
+        res = da.ma.count(dx, axis=axis)
+        sol = np.ma.count(x, axis=axis)
+        assert_eq(res, sol, check_dtype=sys.platform != "win32")
+
+
+@pytest.mark.parametrize("funcname", ["ones_like", "zeros_like", "empty_like"])
+def test_like_funcs(funcname):
+    mask = np.array([[True, False], [True, True], [False, True]])
+    data = np.arange(6).reshape((3, 2))
+    a = np.ma.array(data, mask=mask)
+    d_a = da.ma.masked_array(data=data, mask=mask, chunks=2)
+
+    da_func = getattr(da.ma, funcname)
+    np_func = getattr(np.ma.core, funcname)
+
+    res = da_func(d_a)
+    sol = np_func(a)
+
+    if "empty" in funcname:
+        assert_eq(da.ma.getmaskarray(res), np.ma.getmaskarray(sol))
+    else:
+        assert_eq(res, sol)

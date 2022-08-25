@@ -9,8 +9,7 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117, _numpy_118
+from dask.array.utils import assert_eq, same_keys
 
 
 @pytest.mark.parametrize(
@@ -73,9 +72,6 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name,
         assert not np.isfortran(da_r.compute())
 
 
-@pytest.mark.skipif(
-    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
-)
 @pytest.mark.parametrize(
     "funcname, kwargs",
     [
@@ -141,6 +137,35 @@ def test_linspace(endpoint):
     assert sorted(
         da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask
     ) == sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask)
+
+    x = da.array([0.2, 6.4, 3.0, 1.6])
+    nparr = np.linspace(0, 2, 8, endpoint=endpoint)
+    darr = da.linspace(da.argmin(x), da.argmax(x) + 1, 8, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(0, 0, 0, endpoint=endpoint)
+    darr = da.linspace(0, 0, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 0, endpoint=endpoint)
+    darr = da.linspace(1, 1, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 0, endpoint=endpoint)
+    darr = da.linspace(1, 5, 0, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(0, 0, 1, endpoint=endpoint)
+    darr = da.linspace(0, 0, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 1, 1, endpoint=endpoint)
+    darr = da.linspace(1, 1, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
+    nparr = np.linspace(1, 5, 1, endpoint=endpoint)
+    darr = da.linspace(1, 5, 1, endpoint=endpoint)
+    assert_eq(darr, nparr)
 
 
 def test_arange():
@@ -265,7 +290,7 @@ def test_indices_dimensions_chunks():
         assert expected == actual
 
 
-def test_empty_indicies():
+def test_empty_indices():
     darr = da.indices(tuple(), chunks=tuple())
     nparr = np.indices(tuple())
     assert darr.shape == nparr.shape
@@ -291,7 +316,7 @@ def test_empty_indicies():
     assert_eq(darr, nparr)
 
 
-def test_indicies():
+def test_indices():
     darr = da.indices((1,), chunks=(1,))
     nparr = np.indices((1,))
     assert_eq(darr, nparr)
@@ -365,53 +390,21 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
-def test_tril_triu():
-    A = np.random.randn(20, 20)
-    for chk in [5, 4]:
-        dA = da.from_array(A, (chk, chk))
-
-        assert np.allclose(da.triu(dA).compute(), np.triu(A))
-        assert np.allclose(da.tril(dA).compute(), np.tril(A))
-
-        for k in [
-            -25,
-            -20,
-            -19,
-            -15,
-            -14,
-            -9,
-            -8,
-            -6,
-            -5,
-            -1,
-            1,
-            4,
-            5,
-            6,
-            8,
-            10,
-            11,
-            15,
-            16,
-            19,
-            20,
-            21,
-        ]:
-            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
-            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
-
-
-def test_tril_triu_errors():
-    A = np.random.randint(0, 11, (10, 10, 10))
-    dA = da.from_array(A, chunks=(5, 5, 5))
-    pytest.raises(ValueError, lambda: da.triu(dA))
-
-
-def test_tril_triu_non_square_arrays():
-    A = np.random.randint(0, 11, (30, 35))
-    dA = da.from_array(A, chunks=(5, 5))
-    assert_eq(da.triu(dA), np.triu(A))
-    assert_eq(da.tril(dA), np.tril(A))
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ],
+)
+def test_tri(N, M, k, dtype, chunks):
+    assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
 
 
 def test_eye():
@@ -431,38 +424,78 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(10, chunks=-1, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(9, chunks=3, dtype=None), np.eye(9, dtype=None))
 
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.eye(10000, "auto")
         assert 4 < x.npartitions < 32
 
 
-def test_diag():
-    v = np.arange(11)
-    assert_eq(da.diag(v), np.diag(v))
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_bad_input(k):
+    # when input numpy array is neither 1d nor 2d:
+    v = np.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
 
+    # when input dask array is neither 1d nor 2d:
+    v = da.arange(2 * 3 * 4).reshape((2, 3, 4))
+    with pytest.raises(ValueError, match="Array must be 1d or 2d only"):
+        da.diag(v, k)
+
+    # when input is not an array:
+    v = 1
+    with pytest.raises(TypeError, match="v must be a dask array or numpy array"):
+        da.diag(v, k)
+
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_2d_array_creation(k):
+    # when input 1d-array is a numpy array:
+    v = np.arange(11)
+    assert_eq(da.diag(v, k), np.diag(v, k))
+
+    # when input 1d-array is a dask array:
     v = da.arange(11, chunks=3)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
     v = v + v + 3
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
 
     v = da.arange(11, chunks=11)
-    darr = da.diag(v)
-    nparr = np.diag(v)
+    darr = da.diag(v, k)
+    nparr = np.diag(v, k)
     assert_eq(darr, nparr)
-    assert sorted(da.diag(v).dask) == sorted(da.diag(v).dask)
+    assert sorted(da.diag(v, k).dask) == sorted(da.diag(v, k).dask)
 
+
+@pytest.mark.parametrize("k", [0, 3, -3, 8])
+def test_diag_extraction(k):
+    # when input 2d-array is a square numpy array:
     x = np.arange(64).reshape((8, 8))
-    assert_eq(da.diag(x), np.diag(x))
-
+    assert_eq(da.diag(x, k), np.diag(x, k))
+    # when input 2d-array is a square dask array:
     d = da.from_array(x, chunks=(4, 4))
-    assert_eq(da.diag(d), np.diag(x))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+    # heterogeneous chunks:
+    d = da.from_array(x, chunks=((3, 2, 3), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(x, k))
+
+    # when input 2d-array is a rectangular numpy array:
+    y = np.arange(5 * 8).reshape((5, 8))
+    assert_eq(da.diag(y, k), np.diag(y, k))
+    # when input 2d-array is a rectangular dask array:
+    d = da.from_array(y, chunks=(4, 4))
+    assert_eq(da.diag(d, k), np.diag(y, k))
+    # heterogeneous chunks:
+    d = da.from_array(y, chunks=((3, 2), (4, 1, 2, 1)))
+    assert_eq(da.diag(d, k), np.diag(y, k))
 
 
 def test_diagonal():
@@ -474,10 +507,10 @@ def test_diagonal():
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=0, axis2=0)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis1=-4)
 
-    with pytest.raises(AxisError):
+    with pytest.raises(np.AxisError):
         da.diagonal(v, axis2=-4)
 
     v = np.arange(4 * 5 * 6).reshape((4, 5, 6))
@@ -680,9 +713,6 @@ def test_tile_np_kroncompare_examples(shape, reps):
     assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
-skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
-
-
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -692,16 +722,7 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
-        pytest.param(
-            (10, 11),
-            (4, 5),
-            0,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -745,16 +766,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        pytest.param(
-            (10,),
-            (3,),
-            1,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10,), (3,), 1, "empty", {}),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -780,12 +792,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     [
         "constant",
         "edge",
-        pytest.param(
-            "linear_ramp",
-            marks=pytest.mark.skipif(
-                not _numpy_118, reason="numpy changed pad behaviour"
-            ),
-        ),
+        "linear_ramp",
         "maximum",
         "mean",
         "minimum",
@@ -855,3 +862,20 @@ def test_auto_chunks():
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.ones((10000, 10000))
         assert 4 < x.npartitions < 32
+
+
+def test_string_auto_chunk():
+    with pytest.raises(ValueError):
+        da.full((10000, 10000), "auto_chunk", chunks="auto")
+
+
+def test_diagonal_zero_chunks():
+    x = da.ones((8, 8), chunks=(4, 4))
+    dd = da.ones((8, 8), chunks=(4, 4))
+    d = da.diagonal(dd)
+
+    expected = np.ones((8,))
+    assert_eq(d, expected)
+    assert_eq(d + d, 2 * expected)
+    A = d + x
+    assert_eq(A, np.full((8, 8), 2.0))

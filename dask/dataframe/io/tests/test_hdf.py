@@ -1,17 +1,18 @@
-from distutils.version import LooseVersion
+import os
+import pathlib
+from time import sleep
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import os
-from time import sleep
-import pathlib
-
 import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
-from dask.utils import tmpfile, tmpdir, dependency_depth
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
+from dask.layers import DataFrameIOLayer
+from dask.utils import dependency_depth, tmpdir, tmpfile
 
 
 def test_to_hdf():
@@ -121,8 +122,18 @@ def test_to_hdf_multiple_nodes():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             b.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df16, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df16, out)
+
+    # Test getitem optimization
+    with tmpfile("h5") as fn:
+        a.to_hdf(fn, "/data*")
+        out = dd.read_hdf(fn, "/data*")[["x"]]
+        dsk = optimize_dataframe_getitem(out.dask, keys=out.__dask_keys__())
+        read = [key for key in dsk.layers if key.startswith("read-hdf")][0]
+        subgraph = dsk.layers[read]
+        assert isinstance(subgraph, DataFrameIOLayer)
+        assert subgraph.columns == ["x"]
 
 
 def test_to_hdf_multiple_files():
@@ -188,6 +199,16 @@ def test_to_hdf_multiple_files():
         out = dd.read_hdf(fn, "/data")
         assert_eq(df16, out)
 
+    # saving to multiple files where first file is longer
+    # https://github.com/dask/dask/issues/8023
+    with tmpdir() as dn:
+        fn1 = os.path.join(dn, "data_1.h5")
+        fn2 = os.path.join(dn, "data_2.h5")
+        b.to_hdf(fn1, "/data")
+        a.to_hdf(fn2, "/data")
+        out = dd.read_hdf([fn1, fn2], "/data")
+        assert_eq(pd.concat([df16, df]), out)
+
     # saving to multiple files with custom name_function
     with tmpdir() as dn:
         fn = os.path.join(dn, "data_*.h5")
@@ -204,8 +225,8 @@ def test_to_hdf_multiple_files():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             a.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes():
@@ -220,7 +241,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with a single partition
     a = dd.from_pandas(df, 1)
@@ -236,7 +257,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -253,7 +274,7 @@ def test_to_hdf_modes_multiple_nodes():
         a.to_hdf(fn, "/data2")
         a.to_hdf(fn, "/data*", mode="a", append=False)
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
 
 def test_to_hdf_modes_multiple_files():
@@ -269,7 +290,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data2"), "/data")
         a.to_hdf(fn, "/data", mode="a")
         out = dd.read_hdf(fn, "/data*")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # appending two partitions to existing data
     a = dd.from_pandas(df, 2)
@@ -278,7 +299,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data2"), "/data")
         a.to_hdf(fn, "/data", mode="a")
         out = dd.read_hdf(fn, "/data")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
@@ -296,7 +317,7 @@ def test_to_hdf_modes_multiple_files():
         a.to_hdf(os.path.join(dn, "data1"), "/data")
         a.to_hdf(fn, "/data", mode="a", append=False)
         out = dd.read_hdf(fn, "/data")
-        assert_eq(df.append(df), out)
+        assert_eq(dd.concat([df, df]), out)
 
 
 def test_to_hdf_link_optimizations():
@@ -587,14 +608,14 @@ def test_to_fmt_warns():
 
     # testing warning when breaking order
     with tmpfile("h5") as fn:
-        with pytest.warns(None):
+        with pytest.warns(
+            UserWarning, match="To preserve order between partitions name_function"
+        ):
             a.to_hdf(fn, "/data*", name_function=str)
 
-    # testing warning when breaking order
     with tmpdir() as dn:
-        with pytest.warns(None):
-            fn = os.path.join(dn, "data_*.csv")
-            a.to_csv(fn, name_function=str)
+        fn = os.path.join(dn, "data_*.csv")
+        a.to_csv(fn, name_function=str)
 
 
 @pytest.mark.parametrize(
@@ -847,9 +868,6 @@ def test_hdf_path_exceptions():
         dd.read_hdf([], "/tmp")
 
 
-@pytest.mark.skipif(
-    pd.__version__ < LooseVersion("0.24.2"), reason="HDF key behaviour changed"
-)
 def test_hdf_nonpandas_keys():
     # https://github.com/dask/dask/issues/5934
     # TODO: maybe remove this if/when pandas copes with all keys
@@ -890,3 +908,14 @@ def test_hdf_nonpandas_keys():
         dd.read_hdf(path, "/group/table2")
         dd.read_hdf(path, "/group/table3")
         dd.read_hdf(path, "/bar")
+
+
+def test_hdf_empty_dataframe():
+    pytest.importorskip("tables")
+    # https://github.com/dask/dask/issues/8707
+    from dask.dataframe.io.hdf import dont_use_fixed_error_message
+
+    df = pd.DataFrame({"A": [], "B": []}, index=[])
+    df.to_hdf("data.h5", format="fixed", key="df", mode="w")
+    with pytest.raises(TypeError, match=dont_use_fixed_error_message):
+        dd.read_hdf("data.h5", "df")

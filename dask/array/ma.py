@@ -2,16 +2,12 @@ from functools import wraps
 
 import numpy as np
 
-from ..base import normalize_token
-from .core import (
-    concatenate_lookup,
-    tensordot_lookup,
-    map_blocks,
-    asanyarray,
-    blockwise,
-)
-from .routines import _average
-from ..utils import derived_from
+from dask.array import chunk
+from dask.array.core import asanyarray, blockwise, map_blocks
+from dask.array.reductions import reduction
+from dask.array.routines import _average
+from dask.base import normalize_token
+from dask.utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)
@@ -20,90 +16,6 @@ def normalize_masked_array(x):
     mask = normalize_token(x.mask)
     fill_value = normalize_token(x.fill_value)
     return (data, mask, fill_value)
-
-
-@concatenate_lookup.register(np.ma.masked_array)
-def _concatenate(arrays, axis=0):
-    out = np.ma.concatenate(arrays, axis=axis)
-    fill_values = [i.fill_value for i in arrays if hasattr(i, "fill_value")]
-    if any(isinstance(f, np.ndarray) for f in fill_values):
-        raise ValueError(
-            "Dask doesn't support masked array's with non-scalar `fill_value`s"
-        )
-    if fill_values:
-        # If all the fill_values are the same copy over the fill value
-        fill_values = np.unique(fill_values)
-        if len(fill_values) == 1:
-            out.fill_value = fill_values[0]
-    return out
-
-
-@tensordot_lookup.register(np.ma.masked_array)
-def _tensordot(a, b, axes=2):
-    # Much of this is stolen from numpy/core/numeric.py::tensordot
-    # Please see license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
-    try:
-        iter(axes)
-    except TypeError:
-        axes_a = list(range(-axes, 0))
-        axes_b = list(range(0, axes))
-    else:
-        axes_a, axes_b = axes
-    try:
-        na = len(axes_a)
-        axes_a = list(axes_a)
-    except TypeError:
-        axes_a = [axes_a]
-        na = 1
-    try:
-        nb = len(axes_b)
-        axes_b = list(axes_b)
-    except TypeError:
-        axes_b = [axes_b]
-        nb = 1
-
-    # a, b = asarray(a), asarray(b)  # <--- modified
-    as_ = a.shape
-    nda = a.ndim
-    bs = b.shape
-    ndb = b.ndim
-    equal = True
-    if na != nb:
-        equal = False
-    else:
-        for k in range(na):
-            if as_[axes_a[k]] != bs[axes_b[k]]:
-                equal = False
-                break
-            if axes_a[k] < 0:
-                axes_a[k] += nda
-            if axes_b[k] < 0:
-                axes_b[k] += ndb
-    if not equal:
-        raise ValueError("shape-mismatch for sum")
-
-    # Move the axes to sum over to the end of "a"
-    # and to the front of "b"
-    notin = [k for k in range(nda) if k not in axes_a]
-    newaxes_a = notin + axes_a
-    N2 = 1
-    for axis in axes_a:
-        N2 *= as_[axis]
-    newshape_a = (-1, N2)
-    olda = [as_[axis] for axis in notin]
-
-    notin = [k for k in range(ndb) if k not in axes_b]
-    newaxes_b = axes_b + notin
-    N2 = 1
-    for axis in axes_b:
-        N2 *= bs[axis]
-    newshape_b = (N2, -1)
-    oldb = [bs[axis] for axis in notin]
-
-    at = a.transpose(newaxes_a).reshape(newshape_a)
-    bt = b.transpose(newaxes_b).reshape(newshape_b)
-    res = np.ma.dot(at, bt)
-    return res.reshape(olda + oldb)
 
 
 @derived_from(np.ma)
@@ -203,9 +115,10 @@ def getmaskarray(a):
     return a.map_blocks(np.ma.getmaskarray)
 
 
-def _masked_array(data, mask=np.ma.nomask, **kwargs):
-    dtype = kwargs.pop("masked_dtype", None)
-    return np.ma.masked_array(data, mask=mask, dtype=dtype, **kwargs)
+def _masked_array(data, mask=np.ma.nomask, masked_dtype=None, **kwargs):
+    if "chunks" in kwargs:
+        del kwargs["chunks"]  # A Dask kwarg, not NumPy.
+    return np.ma.masked_array(data, mask=mask, dtype=masked_dtype, **kwargs)
 
 
 @derived_from(np.ma)
@@ -253,9 +166,45 @@ def set_fill_value(a, fill_value):
     fill_value = np.ma.core._check_fill_value(fill_value, a.dtype)
     res = a.map_blocks(_set_fill_value, fill_value)
     a.dask = res.dask
-    a.name = res.name
+    a._name = res.name
 
 
 @derived_from(np.ma)
-def average(a, axis=None, weights=None, returned=False):
-    return _average(a, axis, weights, returned, is_masked=True)
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    return _average(a, axis, weights, returned, is_masked=True, keepdims=keepdims)
+
+
+def _chunk_count(x, axis=None, keepdims=None):
+    return np.ma.count(x, axis=axis, keepdims=keepdims)
+
+
+@derived_from(np.ma)
+def count(a, axis=None, keepdims=False, split_every=None):
+    return reduction(
+        a,
+        _chunk_count,
+        chunk.sum,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=np.intp,
+        split_every=split_every,
+        out=None,
+    )
+
+
+@derived_from(np.ma.core)
+def ones_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.ones_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def zeros_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.zeros_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def empty_like(a, **kwargs):
+    a = asanyarray(a)
+    return a.map_blocks(np.ma.core.empty_like, **kwargs)

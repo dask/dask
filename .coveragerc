@@ -1,7 +1,6 @@
 [run]
 omit =
     */test_*.py
-    dask/compatibility.py
     dask/_version.py
 source =
     dask

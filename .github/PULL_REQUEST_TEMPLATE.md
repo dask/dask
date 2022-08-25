@@ -1,2 +1,3 @@
+- [ ] Closes #xxxx
 - [ ] Tests added / passed
-- [ ] Passes `black dask` / `flake8 dask`
+- [ ] Passes `pre-commit run --all-files`

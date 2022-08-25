@@ -1,6 +1,6 @@
-import io
-import gzip
 import bz2
+import gzip
+import io
 import lzma
 import zipfile
 

@@ -1,18 +1,23 @@
 from collections import defaultdict
-import pandas as pd
-from tlz import partition_all
 from numbers import Integral
 
-from ..base import tokenize, compute_as_if_collection
-from .accessor import Accessor
-from .utils import (
-    has_known_categories,
-    clear_known_categories,
-    is_scalar,
+import pandas as pd
+from pandas.api.types import is_scalar
+from tlz import partition_all
+
+from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.accessor import Accessor
+from dask.dataframe.dispatch import (  # noqa: F401
+    categorical_dtype,
+    categorical_dtype_dispatch,
     is_categorical_dtype,
 )
-from . import methods
-from ..utils import Dispatch
+from dask.dataframe.utils import (
+    AttributeNotImplementedError,
+    clear_known_categories,
+    has_known_categories,
+)
 
 
 def _categorize_block(df, categories, index):
@@ -46,7 +51,7 @@ def _get_categories(df, columns, index):
     for col in columns:
         x = df[col]
         if is_categorical_dtype(x):
-            res[col] = pd.Series(x.cat.categories)
+            res[col] = x._constructor(x.cat.categories)
         else:
             res[col] = x.dropna().drop_duplicates()
     if index:
@@ -144,7 +149,12 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     dsk.update(df.dask)
 
     # Compute the categories
-    categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0), **kwargs)
+    categories, index = compute_as_if_collection(
+        df.__class__, dsk, (prefix, 0), **kwargs
+    )
+
+    # some operations like get_dummies() rely on the order of categories
+    categories = {k: v.sort_values() for k, v in categories.items()}
 
     # Categorize each partition
     return df.map_partitions(_categorize_block, categories, index)
@@ -175,6 +185,16 @@ class CategoricalAccessor(Accessor):
     """
 
     _accessor_name = "cat"
+    _accessor_methods = (
+        "add_categories",
+        "as_ordered",
+        "as_unordered",
+        "remove_categories",
+        "rename_categories",
+        "reorder_categories",
+        "set_categories",
+    )
+    _accessor_properties = ()
 
     @property
     def known(self):
@@ -208,6 +228,7 @@ class CategoricalAccessor(Accessor):
 
     @property
     def ordered(self):
+        """Whether the categories have an ordered relationship"""
         return self._delegate_property(self._series._meta, "cat", "ordered")
 
     @property
@@ -221,7 +242,7 @@ class CategoricalAccessor(Accessor):
                 "supported.  Please use `column.cat.as_known()` or "
                 "`df.categorize()` beforehand to ensure known categories"
             )
-            raise NotImplementedError(msg)
+            raise AttributeNotImplementedError(msg)
         return self._delegate_property(self._series._meta, "cat", "categories")
 
     @property
@@ -235,7 +256,7 @@ class CategoricalAccessor(Accessor):
                 "supported.  Please use `column.cat.as_known()` or "
                 "`df.categorize()` beforehand to ensure known categories"
             )
-            raise NotImplementedError(msg)
+            raise AttributeNotImplementedError(msg)
         return self._property_map("codes")
 
     def remove_unused_categories(self):
@@ -273,16 +294,3 @@ class CategoricalAccessor(Accessor):
             meta=meta,
             token="cat-set_categories",
         )
-
-
-categorical_dtype_dispatch = Dispatch("CategoricalDtype")
-
-
-def categorical_dtype(meta, categories=None, ordered=False):
-    func = categorical_dtype_dispatch.dispatch(type(meta))
-    return func(categories=categories, ordered=ordered)
-
-
-@categorical_dtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def categorical_dtype_pandas(categories=None, ordered=False):
-    return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)

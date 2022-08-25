@@ -5,7 +5,6 @@ Array
    :maxdepth: 1
    :hidden:
 
-   array-api.rst
    array-best-practices.rst
    array-chunks.rst
    array-creation.rst
@@ -13,8 +12,8 @@ Array
    array-design.rst
    array-sparse.rst
    array-stats.rst
-   array-linear-operator.rst
    array-slicing.rst
+   array-assignment.rst
    array-stack.rst
    array-gufunc.rst
 
@@ -42,16 +41,17 @@ Dask Array.
 Design
 ------
 
-.. image:: images/dask-array-black-text.svg
+.. image:: images/dask-array.svg
    :alt: Dask arrays coordinate many numpy arrays
    :align: right
+   :scale: 35%
 
 Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
-sufficiently NumPy-like in API such as CuPy or Spare arrays) arranged into a
+sufficiently NumPy-like in API such as CuPy or Sparse arrays) arranged into a
 grid. These arrays may live on disk or on other machines.
 
 New duck array chunk types (types below Dask on
-`NEP-13's type-casting heirarchy`_) can be registered via
+`NEP-13's type-casting hierarchy`_) can be registered via
 :func:`~dask.array.register_chunk_type`. Any other duck array types that are
 not registered will be deferred to in binary operations and NumPy
 ufuncs/functions (that is, Dask will return ``NotImplemented``). Note, however,

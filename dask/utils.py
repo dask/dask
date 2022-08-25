@@ -1,22 +1,34 @@
-from datetime import timedelta
+from __future__ import annotations
+
+import codecs
 import functools
 import inspect
 import os
+import re
 import shutil
 import sys
 import tempfile
-import re
+import uuid
+import warnings
+from collections.abc import Hashable, Iterable, Iterator, Mapping, Set
+from contextlib import contextmanager, nullcontext, suppress
+from datetime import datetime, timedelta
 from errno import ENOENT
-from collections.abc import Iterator
-from contextlib import contextmanager
+from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
+from operator import add
 from threading import Lock
-import uuid
+from typing import Any, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
-from functools import lru_cache
 
-from .core import get_deps
+import tlz as toolz
+
+from dask.core import get_deps
+
+K = TypeVar("K")
+V = TypeVar("V")
+T = TypeVar("T")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -25,10 +37,103 @@ if system_encoding == "ascii":
 
 
 def apply(func, args, kwargs=None):
+    """Apply a function given its positional and keyword arguments.
+
+    Equivalent to ``func(*args, **kwargs)``
+    Most Dask users will never need to use the ``apply`` function.
+    It is typically only used by people who need to inject
+    keyword argument values into a low level Dask task graph.
+
+    Parameters
+    ----------
+    func : callable
+        The function you want to apply.
+    args : tuple
+        A tuple containing all the positional arguments needed for ``func``
+        (eg: ``(arg_1, arg_2, arg_3)``)
+    kwargs : dict, optional
+        A dictionary mapping the keyword arguments
+        (eg: ``{"kwarg_1": value, "kwarg_2": value}``
+
+    Examples
+    --------
+    >>> from dask.utils import apply
+    >>> def add(number, second_number=5):
+    ...     return number + second_number
+    ...
+    >>> apply(add, (10,), {"second_number": 2})  # equivalent to add(*args, **kwargs)
+    12
+
+    >>> task = apply(add, (10,), {"second_number": 2})
+    >>> dsk = {'task-name': task}  # adds the task to a low level Dask task graph
+    """
     if kwargs:
         return func(*args, **kwargs)
     else:
         return func(*args)
+
+
+def _deprecated(
+    *,
+    version: str | None = None,
+    after_version: str | None = None,
+    message: str | None = None,
+    use_instead: str | None = None,
+    category: type[Warning] = FutureWarning,
+):
+    """Decorator to mark a function as deprecated
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of Dask in which the function was deprecated. If specified, the version
+        will be included in the default warning message. This should no longer be used
+        after the introduction of automated versioning system.
+    after_version : str, optional
+        Version of Dask after which the function was deprecated. If specified, the
+        version will be included in the default warning message.
+    message : str, optional
+        Custom warning message to raise.
+    use_instead : str, optional
+        Name of function to use in place of the deprecated function.
+        If specified, this will be included in the default warning
+        message.
+    category : type[Warning], optional
+        Type of warning to raise. Defaults to ``FutureWarning``.
+
+    Examples
+    --------
+
+    >>> from dask.utils import _deprecated
+    >>> @_deprecated(after_version="X.Y.Z", use_instead="bar")
+    ... def foo():
+    ...     return "baz"
+    """
+
+    def decorator(func):
+        if message is None:
+            msg = f"{func.__name__} "
+            if after_version is not None:
+                msg += f"was deprecated after version {after_version} "
+            elif version is not None:
+                msg += f"was deprecated in version {version} "
+            else:
+                msg += "is deprecated "
+            msg += "and will be removed in a future release."
+
+            if use_instead is not None:
+                msg += f" Please use {use_instead} instead."
+        else:
+            msg = message
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(msg, category=category, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def deepmap(func, *seqs):
@@ -48,6 +153,7 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+@_deprecated()
 def homogeneous_deepmap(func, seq):
     if not seq:
         return seq
@@ -79,14 +185,6 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
-@contextmanager
-def ignoring(*exceptions):
-    try:
-        yield
-    except exceptions:
-        pass
-
-
 def import_required(mod_name, error_msg):
     """Attempt to import a required dependency.
 
@@ -100,6 +198,31 @@ def import_required(mod_name, error_msg):
 
 @contextmanager
 def tmpfile(extension="", dir=None):
+    """
+    Function to create and return a unique temporary file with the given extension, if provided.
+
+    Parameters
+    ----------
+    extension : str
+        The extension of the temporary file to be created
+    dir : str
+        If ``dir`` is not None, the file will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary file
+
+    See Also
+    --------
+    NamedTemporaryFile : Built-in alternative for creating temporary files
+    tmp_path : pytest fixture for creating a temporary directory unique to the test invocation
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary files multiple times.
+    """
     extension = "." + extension.lstrip(".")
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
@@ -109,15 +232,33 @@ def tmpfile(extension="", dir=None):
         yield filename
     finally:
         if os.path.exists(filename):
-            if os.path.isdir(filename):
-                shutil.rmtree(filename)
-            else:
-                with ignoring(OSError):
+            with suppress(OSError):  # sometimes we can't remove a generated temp file
+                if os.path.isdir(filename):
+                    shutil.rmtree(filename)
+                else:
                     os.remove(filename)
 
 
 @contextmanager
 def tmpdir(dir=None):
+    """
+    Function to create and return a unique temporary directory.
+
+    Parameters
+    ----------
+    dir : str
+        If ``dir`` is not None, the directory will be created in that directory; otherwise,
+        Python's default temporary directory is used.
+
+    Returns
+    -------
+    out : str
+        Path to the temporary directory
+
+    Notes
+    -----
+    This context manager is particularly useful on Windows for opening temporary directories multiple times.
+    """
     dirname = tempfile.mkdtemp(dir=dir)
 
     try:
@@ -125,10 +266,10 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                with ignoring(OSError):
+                with suppress(OSError):
                     shutil.rmtree(dirname)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(dirname)
 
 
@@ -164,12 +305,7 @@ def tmp_cwd(dir=None):
             yield dirname
 
 
-@contextmanager
-def noop_context():
-    yield
-
-
-class IndexCallable(object):
+class IndexCallable:
     """Provide getitem syntax for functions
 
     >>> def inc(x):
@@ -193,14 +329,16 @@ class IndexCallable(object):
 def filetexts(d, open=open, mode="t", use_tmpdir=True):
     """Dumps a number of textfiles to disk
 
-    d - dict
+    Parameters
+    ----------
+    d : dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
 
     Since this is meant for use in tests, this context manager will
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else noop_context()):
+    with (tmp_cwd() if use_tmpdir else nullcontext()):
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -219,7 +357,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
         for filename in d:
             if os.path.exists(filename):
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 
@@ -238,7 +376,7 @@ def concrete(seq):
     return seq
 
 
-def pseudorandom(n, p, random_state=None):
+def pseudorandom(n: int, p, random_state=None):
     """Pseudorandom array of integer indexes
 
     >>> pseudorandom(5, [0.5, 0.5], random_state=123)
@@ -265,7 +403,7 @@ def pseudorandom(n, p, random_state=None):
     return out
 
 
-def random_state_data(n, random_state=None):
+def random_state_data(n: int, random_state=None) -> list:
     """Return a list of arrays that can initialize
     ``np.random.RandomState``.
 
@@ -289,7 +427,7 @@ def random_state_data(n, random_state=None):
     return l
 
 
-def is_integer(i):
+def is_integer(i) -> bool:
     """
     >>> is_integer(6)
     True
@@ -301,71 +439,67 @@ def is_integer(i):
     return isinstance(i, Integral) or (isinstance(i, float) and i.is_integer())
 
 
-ONE_ARITY_BUILTINS = set(
-    [
-        abs,
-        all,
-        any,
-        ascii,
-        bool,
-        bytearray,
-        bytes,
-        callable,
-        chr,
-        classmethod,
-        complex,
-        dict,
-        dir,
-        enumerate,
-        eval,
-        float,
-        format,
-        frozenset,
-        hash,
-        hex,
-        id,
-        int,
-        iter,
-        len,
-        list,
-        max,
-        min,
-        next,
-        oct,
-        open,
-        ord,
-        range,
-        repr,
-        reversed,
-        round,
-        set,
-        slice,
-        sorted,
-        staticmethod,
-        str,
-        sum,
-        tuple,
-        type,
-        vars,
-        zip,
-        memoryview,
-    ]
-)
-MULTI_ARITY_BUILTINS = set(
-    [
-        compile,
-        delattr,
-        divmod,
-        filter,
-        getattr,
-        hasattr,
-        isinstance,
-        issubclass,
-        map,
-        pow,
-        setattr,
-    ]
-)
+ONE_ARITY_BUILTINS = {
+    abs,
+    all,
+    any,
+    ascii,
+    bool,
+    bytearray,
+    bytes,
+    callable,
+    chr,
+    classmethod,
+    complex,
+    dict,
+    dir,
+    enumerate,
+    eval,
+    float,
+    format,
+    frozenset,
+    hash,
+    hex,
+    id,
+    int,
+    iter,
+    len,
+    list,
+    max,
+    min,
+    next,
+    oct,
+    open,
+    ord,
+    range,
+    repr,
+    reversed,
+    round,
+    set,
+    slice,
+    sorted,
+    staticmethod,
+    str,
+    sum,
+    tuple,
+    type,
+    vars,
+    zip,
+    memoryview,
+}
+MULTI_ARITY_BUILTINS = {
+    compile,
+    delattr,
+    divmod,
+    filter,
+    getattr,
+    hasattr,
+    isinstance,
+    issubclass,
+    map,
+    pow,
+    setattr,
+}
 
 
 def getargspec(func):
@@ -399,7 +533,7 @@ def takes_multiple_arguments(func, varargs=True):
     >>> takes_multiple_arguments(f)
     True
 
-    >>> class Thing(object):
+    >>> class Thing:
     ...     def __init__(self, a): pass
     >>> takes_multiple_arguments(Thing)
     False
@@ -427,7 +561,7 @@ def takes_multiple_arguments(func, varargs=True):
     return len(spec.args) - ndefaults - is_constructor > 1
 
 
-def get_named_args(func):
+def get_named_args(func) -> list[str]:
     """Get all non ``*args/**kwargs`` arguments for a function"""
     s = inspect.signature(func)
     return [
@@ -437,7 +571,7 @@ def get_named_args(func):
     ]
 
 
-class Dispatch(object):
+class Dispatch:
     """Simple single dispatch."""
 
     def __init__(self, name=None):
@@ -473,29 +607,27 @@ class Dispatch(object):
 
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
-        # Fast path with direct lookup on cls
         lk = self._lookup
-        try:
-            impl = lk[cls]
-        except KeyError:
-            pass
-        else:
-            return impl
-        # Is a lazy registration function present?
-        toplevel, _, _ = cls.__module__.partition(".")
-        try:
-            register = self._lazy.pop(toplevel)
-        except KeyError:
-            pass
-        else:
-            register()
-            return self.dispatch(cls)  # recurse
-        # Walk the MRO and cache the lookup result
-        for cls2 in inspect.getmro(cls)[1:]:
-            if cls2 in lk:
-                lk[cls] = lk[cls2]
-                return lk[cls2]
-        raise TypeError("No dispatch for {0}".format(cls))
+        for cls2 in cls.__mro__:
+            try:
+                impl = lk[cls2]
+            except KeyError:
+                pass
+            else:
+                if cls is not cls2:
+                    # Cache lookup
+                    lk[cls] = impl
+                return impl
+            # Is a lazy registration function present?
+            toplevel, _, _ = cls2.__module__.partition(".")
+            try:
+                register = self._lazy.pop(toplevel)
+            except KeyError:
+                pass
+            else:
+                register()
+                return self.dispatch(cls)  # recurse
+        raise TypeError(f"No dispatch for {cls}")
 
     def __call__(self, arg, *args, **kwargs):
         """
@@ -513,7 +645,7 @@ class Dispatch(object):
             return "Single Dispatch for %s" % self.__name__
 
 
-def ensure_not_exists(filename):
+def ensure_not_exists(filename) -> None:
     """
     Ensure that a file does not exist.
     """
@@ -564,18 +696,18 @@ def extra_titles(doc):
     return "\n".join(lines)
 
 
-def ignore_warning(doc, cls, name, extra="", skipblocks=0):
+def ignore_warning(doc, cls, name, extra="", skipblocks=0, inconsistencies=None):
     """Expand docstring by adding disclaimer and extra text"""
     import inspect
 
     if inspect.isclass(cls):
-        l1 = "This docstring was copied from %s.%s.%s.\n\n" % (
+        l1 = "This docstring was copied from {}.{}.{}.\n\n".format(
             cls.__module__,
             cls.__name__,
             name,
         )
     else:
-        l1 = "This docstring was copied from %s.%s.\n\n" % (cls.__name__, name)
+        l1 = f"This docstring was copied from {cls.__name__}.{name}.\n\n"
     l2 = "Some inconsistencies with the Dask version may exist."
 
     i = doc.find("\n\n")
@@ -595,14 +727,18 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
             more = [indent, extra.rstrip("\n") + "\n\n"]
         else:
             more = []
-        bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
+        if inconsistencies is not None:
+            l3 = f"Known inconsistencies: \n {inconsistencies}"
+            bits = [head, indent, l1, l2, "\n\n", l3, "\n\n"] + more + [tail]
+        else:
+            bits = [head, indent, l1, indent, l2, "\n\n"] + more + [tail]
         doc = "".join(bits)
 
     return doc
 
 
 def unsupported_arguments(doc, args):
-    """ Mark unsupported arguments with a disclaimer """
+    """Mark unsupported arguments with a disclaimer"""
     lines = doc.split("\n")
     for arg in args:
         subset = [
@@ -616,24 +752,44 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
-    """ Helper function for derived_from to ease testing """
+def _derived_from(
+    cls, method, ua_args=None, extra="", skipblocks=0, inconsistencies=None
+):
+    """Helper function for derived_from to ease testing"""
+    ua_args = ua_args or []
+
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
 
+    doc = getattr(original_method, "__doc__", None)
+
     if isinstance(original_method, property):
         # some things like SeriesGroupBy.unique are generated.
         original_method = original_method.fget
+        if not doc:
+            doc = getattr(original_method, "__doc__", None)
 
-    doc = original_method.__doc__
     if doc is None:
         doc = ""
+
+    # pandas DataFrame/Series sometimes override methods without setting __doc__
+    if not doc and cls.__name__ in {"DataFrame", "Series"}:
+        for obj in cls.mro():
+            obj_method = getattr(obj, method.__name__, None)
+            if obj_method is not None and obj_method.__doc__:
+                doc = obj_method.__doc__
+                break
 
     # Insert disclaimer that this is a copied docstring
     if doc:
         doc = ignore_warning(
-            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+            doc,
+            cls,
+            method.__name__,
+            extra=extra,
+            skipblocks=skipblocks,
+            inconsistencies=inconsistencies,
         )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
@@ -656,7 +812,9 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
+def derived_from(
+    original_klass, version=None, ua_args=None, skipblocks=0, inconsistencies=None
+):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -676,7 +834,11 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
     skipblocks : int
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
+    inconsistencies: list
+        List of known inconsistencies with method whose docstrings are being
+        copied.
     """
+    ua_args = ua_args or []
 
     def wrapper(method):
         try:
@@ -687,6 +849,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
                 ua_args=ua_args,
                 extra=extra,
                 skipblocks=skipblocks,
+                inconsistencies=inconsistencies,
             )
             return method
 
@@ -695,7 +858,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
 
             @functools.wraps(method)
             def wrapped(*args, **kwargs):
-                msg = "Base package doesn't support '{0}'.".format(method.__name__)
+                msg = f"Base package doesn't support '{method.__name__}'."
                 if version is not None:
                     msg2 = " Use {0} {1} or later to use this method."
                     msg += msg2.format(module_name, version)
@@ -706,7 +869,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
     return wrapper
 
 
-def funcname(func):
+def funcname(func) -> str:
     """Get the name of a function."""
     # functools.partial
     if isinstance(func, functools.partial):
@@ -738,7 +901,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ):
+def typename(typ: Any, short: bool = False) -> str:
     """
     Return the name of a type
 
@@ -750,36 +913,69 @@ def typename(typ):
     >>> from dask.core import literal
     >>> typename(literal)
     'dask.core.literal'
+    >>> typename(literal, short=True)
+    'dask.literal'
     """
-    if not typ.__module__ or typ.__module__ == "builtins":
-        return typ.__name__
-    else:
-        return typ.__module__ + "." + typ.__name__
+    if not isinstance(typ, type):
+        return typename(type(typ))
+    try:
+        if not typ.__module__ or typ.__module__ == "builtins":
+            return typ.__name__
+        else:
+            if short:
+                module, *_ = typ.__module__.split(".")
+            else:
+                module = typ.__module__
+            return module + "." + typ.__name__
+    except AttributeError:
+        return str(typ)
 
 
-def ensure_bytes(s):
-    """Turn string or bytes to bytes
+def ensure_bytes(s) -> bytes:
+    """Attempt to turn `s` into bytes.
 
-    >>> ensure_bytes('123')
-    b'123'
+    Parameters
+    ----------
+    s : Any
+        The object to be converted. Will correctly handled
+        * str
+        * bytes
+        * objects implementing the buffer protocol (memoryview, ndarray, etc.)
+
+    Returns
+    -------
+    b : bytes
+
+    Raises
+    ------
+    TypeError
+        When `s` cannot be converted
+
+    Examples
+    --------
     >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes(b'123')
     b'123'
+    >>> ensure_bytes(bytearray(b'123'))
+    b'123'
     """
     if isinstance(s, bytes):
         return s
-    if hasattr(s, "encode"):
+    elif hasattr(s, "encode"):
         return s.encode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    else:
+        try:
+            return bytes(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a bytes object nor can be encoded to bytes"
+            ) from e
 
 
-def ensure_unicode(s):
-    """Turn string or bytes to bytes
+def ensure_unicode(s) -> str:
+    """Turn string or bytes to string
 
-    >>> ensure_unicode('123')
-    '123'
     >>> ensure_unicode('123')
     '123'
     >>> ensure_unicode(b'123')
@@ -787,10 +983,15 @@ def ensure_unicode(s):
     """
     if isinstance(s, str):
         return s
-    if hasattr(s, "decode"):
+    elif hasattr(s, "decode"):
         return s.decode()
-    msg = "Object %s is neither a bytes object nor has an encode method"
-    raise TypeError(msg % s)
+    else:
+        try:
+            return codecs.decode(s)
+        except Exception as e:
+            raise TypeError(
+                f"Object {s} is neither a str object nor can be decoded to str"
+            ) from e
 
 
 def digit(n, k, base):
@@ -805,7 +1006,7 @@ def digit(n, k, base):
     >>> digit(1234, 3, 10)
     1
     """
-    return n // base ** k % base
+    return n // base**k % base
 
 
 def insert(tup, loc, val):
@@ -836,7 +1037,7 @@ def dependency_depth(dsk):
 def memory_repr(num):
     for x in ["bytes", "KB", "MB", "GB", "TB"]:
         if num < 1024.0:
-            return "%3.1f %s" % (num, x)
+            return f"{num:3.1f} {x}"
         num /= 1024.0
 
 
@@ -867,47 +1068,48 @@ def put_lines(buf, lines):
     buf.write("\n".join(lines))
 
 
-_method_cache = {}
+_method_cache: dict[str, methodcaller] = {}
 
 
-class methodcaller(object):
+class methodcaller:
     """
     Return a callable object that calls the given method on its operand.
 
     Unlike the builtin `operator.methodcaller`, instances of this class are
-    serializable
+    cached and arguments are passed at call time instead of build time.
     """
 
     __slots__ = ("method",)
-    func = property(lambda self: self.method)  # For `funcname` to work
+    method: str
 
-    def __new__(cls, method):
-        if method in _method_cache:
+    @property
+    def func(self) -> str:
+        # For `funcname` to work
+        return self.method
+
+    def __new__(cls, method: str):
+        try:
             return _method_cache[method]
-        self = object.__new__(cls)
-        self.method = method
-        _method_cache[method] = self
-        return self
+        except KeyError:
+            self = object.__new__(cls)
+            self.method = method
+            _method_cache[method] = self
+            return self
 
-    def __call__(self, obj, *args, **kwargs):
-        return getattr(obj, self.method)(*args, **kwargs)
+    def __call__(self, __obj, *args, **kwargs):
+        return getattr(__obj, self.method)(*args, **kwargs)
 
     def __reduce__(self):
         return (methodcaller, (self.method,))
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.method)
+        return f"<{self.__class__.__name__}: {self.method}>"
 
     __repr__ = __str__
 
 
-class itemgetter(object):
-    """
-    Return a callable object that gets an item from the operand
-
-    Unlike the builtin `operator.itemgetter`, instances of this class are
-    serializable
-    """
+class itemgetter:
+    """Variant of operator.itemgetter that supports equality tests"""
 
     __slots__ = ("index",)
 
@@ -924,7 +1126,7 @@ class itemgetter(object):
         return type(self) is type(other) and self.index == other.index
 
 
-class MethodCache(object):
+class MethodCache:
     """Attribute access on this object returns a methodcaller for that
     attribute.
 
@@ -935,16 +1137,18 @@ class MethodCache(object):
     True
     """
 
-    __getattr__ = staticmethod(methodcaller)
-    __dir__ = lambda self: list(_method_cache)
+    def __getattr__(self, item):
+        return methodcaller(item)
+
+    def __dir__(self):
+        return list(_method_cache)
 
 
 M = MethodCache()
 
 
-class SerializableLock(object):
-    _locks = WeakValueDictionary()
-    """ A Serializable per-process Lock
+class SerializableLock:
+    """A Serializable per-process Lock
 
     This wraps a normal ``threading.Lock`` object and satisfies the same
     interface.  However, this lock can also be serialized and sent to different
@@ -971,7 +1175,11 @@ class SerializableLock(object):
     The creation of locks is itself not threadsafe.
     """
 
-    def __init__(self, token=None):
+    _locks: ClassVar[WeakValueDictionary[Hashable, Lock]] = WeakValueDictionary()
+    token: Hashable
+    lock: Lock
+
+    def __init__(self, token: Hashable | None = None):
         self.token = token or str(uuid.uuid4())
         if self.token in SerializableLock._locks:
             self.lock = SerializableLock._locks[self.token]
@@ -1001,7 +1209,7 @@ class SerializableLock(object):
         self.__init__(token)
 
     def __str__(self):
-        return "<%s: %s>" % (self.__class__.__name__, self.token)
+        return f"<{self.__class__.__name__}: {self.token}>"
 
     __repr__ = __str__
 
@@ -1009,8 +1217,8 @@ class SerializableLock(object):
 def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
     scheduler used."""
-    from . import multiprocessing
-    from .base import get_scheduler
+    from dask import multiprocessing
+    from dask.base import get_scheduler
 
     actual_get = get_scheduler(collections=[collection], scheduler=scheduler)
 
@@ -1020,27 +1228,53 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d):
+def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> dict[K, V]:
+    """Convert a generic Mapping into a dict.
+    Optimize use case of :class:`~dask.highlevelgraph.HighLevelGraph`.
+
+    Parameters
+    ----------
+    d : Mapping
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of d;
+        otherwise it may be the input itself.
+    """
     if type(d) is dict:
-        return d
-    elif hasattr(d, "dicts"):
-        result = {}
-        seen = set()
-        for dd in d.dicts.values():
-            dd_id = id(dd)
-            if dd_id not in seen:
-                result.update(dd)
-                seen.add(dd_id)
-        return result
-    return dict(d)
+        return d.copy() if copy else d
+    try:
+        layers = d.layers  # type: ignore
+    except AttributeError:
+        return dict(d)
+
+    result = {}
+    for layer in toolz.unique(layers.values(), key=id):
+        result.update(layer)
+    return result
 
 
-class OperatorMethodMixin(object):
+def ensure_set(s: Set[T], *, copy: bool = False) -> set[T]:
+    """Convert a generic Set into a set.
+
+    Parameters
+    ----------
+    s : Set
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of s;
+        otherwise it may be the input itself.
+    """
+    if type(s) is set:
+        return s.copy() if copy else s
+    return set(s)
+
+
+class OperatorMethodMixin:
     """A mixin for dynamically implementing operators"""
+
+    __slots__ = ()
 
     @classmethod
     def _bind_operator(cls, op):
-        """ bind operator to this class """
+        """bind operator to this class"""
         name = op.__name__
 
         if name.endswith("_"):
@@ -1049,7 +1283,7 @@ class OperatorMethodMixin(object):
         elif name == "inv":
             name = "invert"
 
-        meth = "__{0}__".format(name)
+        meth = f"__{name}__"
 
         if name in ("abs", "invert", "neg", "pos"):
             setattr(cls, meth, cls._get_unary_operator(op))
@@ -1059,17 +1293,17 @@ class OperatorMethodMixin(object):
             if name in ("eq", "gt", "ge", "lt", "le", "ne", "getitem"):
                 return
 
-            rmeth = "__r{0}__".format(name)
+            rmeth = f"__r{name}__"
             setattr(cls, rmeth, cls._get_binary_operator(op, inv=True))
 
     @classmethod
     def _get_unary_operator(cls, op):
-        """ Must return a method used by unary operator """
+        """Must return a method used by unary operator"""
         raise NotImplementedError
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
-        """ Must return a method used by binary operator """
+        """Must return a method used by binary operator"""
         raise NotImplementedError
 
 
@@ -1088,8 +1322,19 @@ def partial_by_order(*args, **kwargs):
     return function(*args2, **kwargs)
 
 
-def is_arraylike(x):
+def is_arraylike(x) -> bool:
     """Is this object a numpy array or something similar?
+
+    This function tests specifically for an object that already has
+    array attributes (e.g. np.ndarray, dask.array.Array, cupy.ndarray,
+    sparse.COO), **NOT** for something that can be coerced into an
+    array object (e.g. Python lists and tuples). It is meant for dask
+    developers and developers of downstream libraries.
+
+    Note that this function does not correspond with NumPy's
+    definition of array_like, which includes any object that can be
+    coerced into an array (see definition in the NumPy glossary):
+    https://numpy.org/doc/stable/glossary.html
 
     Examples
     --------
@@ -1103,19 +1348,32 @@ def is_arraylike(x):
     >>> is_arraylike('cat')
     False
     """
-    from .base import is_dask_collection
+    from dask.base import is_dask_collection
+
+    is_duck_array = hasattr(x, "__array_function__") or hasattr(x, "__array_ufunc__")
 
     return bool(
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
+        # We special case scipy.sparse and cupyx.scipy.sparse arrays as having partial
+        # support for them is useful in scenarios where we mostly call `map_partitions`
+        # or `map_blocks` with scikit-learn functions on dask arrays and dask dataframes.
+        # https://github.com/dask/dask/pull/3738
+        and (is_duck_array or "scipy.sparse" in typename(type(x)))
     )
 
 
-def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
-    typ = type(df)
+def is_dataframe_like(df) -> bool:
+    """Looks like a Pandas DataFrame"""
+    if (df.__class__.__module__, df.__class__.__name__) == (
+        "pandas.core.frame",
+        "DataFrame",
+    ):
+        # fast exec for most likely input
+        return True
+    typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
         and all(hasattr(df, name) for name in ("dtypes", "columns"))
@@ -1123,9 +1381,9 @@ def is_dataframe_like(df):
     )
 
 
-def is_series_like(s):
-    """ Looks like a Pandas Series """
-    typ = type(s)
+def is_series_like(s) -> bool:
+    """Looks like a Pandas Series"""
+    typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
         and all(hasattr(s, name) for name in ("dtype", "name"))
@@ -1133,16 +1391,21 @@ def is_series_like(s):
     )
 
 
-def is_index_like(s):
-    """ Looks like a Pandas Index """
-    typ = type(s)
+def is_index_like(s) -> bool:
+    """Looks like a Pandas Index"""
+    typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
         and "index" in typ.__name__.lower()
     )
 
 
-def natural_sort_key(s):
+def is_cupy_type(x) -> bool:
+    # TODO: avoid explicit reference to CuPy
+    return "cupy" in str(type(x))
+
+
+def natural_sort_key(s: str) -> list[str | int]:
     """
     Sorting `key` function for performing a natural sort on a collection of
     strings
@@ -1171,18 +1434,19 @@ def natural_sort_key(s):
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
-def factors(n):
+def factors(n: int) -> set[int]:
     """Return the factors of an integer
 
     https://stackoverflow.com/a/6800214/616616
     """
     seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return set(functools.reduce(list.__add__, seq))
+    return {j for l in seq for j in l}
 
 
-def parse_bytes(s):
+def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 
+    >>> from dask.utils import parse_bytes
     >>> parse_bytes('100')
     100
     >>> parse_bytes('100 MB')
@@ -1203,7 +1467,9 @@ def parse_bytes(s):
     1000000
     >>> parse_bytes(123)
     123
-    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    >>> parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
     ValueError: Could not interpret 'foos' as a byte unit
     """
     if isinstance(s, (int, float)):
@@ -1235,16 +1501,16 @@ def parse_bytes(s):
 
 
 byte_sizes = {
-    "kB": 10 ** 3,
-    "MB": 10 ** 6,
-    "GB": 10 ** 9,
-    "TB": 10 ** 12,
-    "PB": 10 ** 15,
-    "KiB": 2 ** 10,
-    "MiB": 2 ** 20,
-    "GiB": 2 ** 30,
-    "TiB": 2 ** 40,
-    "PiB": 2 ** 50,
+    "kB": 10**3,
+    "MB": 10**6,
+    "GB": 10**9,
+    "TB": 10**12,
+    "PB": 10**15,
+    "KiB": 2**10,
+    "MiB": 2**20,
+    "GiB": 2**30,
+    "TiB": 2**40,
+    "PiB": 2**50,
     "B": 1,
     "": 1,
 }
@@ -1253,9 +1519,10 @@ byte_sizes.update({k[0]: v for k, v in byte_sizes.items() if k and "i" not in k}
 byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
-def format_time(n):
+def format_time(n: float) -> str:
     """format integers as time
 
+    >>> from dask.utils import format_time
     >>> format_time(1)
     '1.00 s'
     >>> format_time(0.001234)
@@ -1264,7 +1531,27 @@ def format_time(n):
     '123.45 us'
     >>> format_time(123.456)
     '123.46 s'
+    >>> format_time(1234.567)
+    '20m 34s'
+    >>> format_time(12345.67)
+    '3hr 25m'
+    >>> format_time(123456.78)
+    '34hr 17m'
+    >>> format_time(1234567.89)
+    '14d 6hr'
     """
+    if n > 24 * 60 * 60 * 2:
+        d = int(n / 3600 / 24)
+        h = int((n - d * 3600 * 24) / 3600)
+        return f"{d}d {h}hr"
+    if n > 60 * 60 * 2:
+        h = int(n / 3600)
+        m = int((n - h * 3600) / 60)
+        return f"{h}hr {m}m"
+    if n > 60 * 10:
+        m = int(n / 60)
+        s = int(n - m * 60)
+        return f"{m}m {s}s"
     if n >= 1:
         return "%.2f s" % n
     if n >= 1e-3:
@@ -1272,33 +1559,105 @@ def format_time(n):
     return "%.2f us" % (n * 1e6)
 
 
-def format_bytes(n):
+def format_time_ago(n: datetime) -> str:
+    """Calculate a '3 hours ago' type string from a Python datetime.
+
+    Examples
+    --------
+    >>> from datetime import datetime, timedelta
+
+    >>> now = datetime.now()
+    >>> format_time_ago(now)
+    'Just now'
+
+    >>> past = datetime.now() - timedelta(minutes=1)
+    >>> format_time_ago(past)
+    '1 minute ago'
+
+    >>> past = datetime.now() - timedelta(minutes=2)
+    >>> format_time_ago(past)
+    '2 minutes ago'
+
+    >>> past = datetime.now() - timedelta(hours=1)
+    >>> format_time_ago(past)
+    '1 hour ago'
+
+    >>> past = datetime.now() - timedelta(hours=6)
+    >>> format_time_ago(past)
+    '6 hours ago'
+
+    >>> past = datetime.now() - timedelta(days=1)
+    >>> format_time_ago(past)
+    '1 day ago'
+
+    >>> past = datetime.now() - timedelta(days=5)
+    >>> format_time_ago(past)
+    '5 days ago'
+
+    >>> past = datetime.now() - timedelta(days=8)
+    >>> format_time_ago(past)
+    '1 week ago'
+
+    >>> past = datetime.now() - timedelta(days=16)
+    >>> format_time_ago(past)
+    '2 weeks ago'
+
+    >>> past = datetime.now() - timedelta(days=190)
+    >>> format_time_ago(past)
+    '6 months ago'
+
+    >>> past = datetime.now() - timedelta(days=800)
+    >>> format_time_ago(past)
+    '2 years ago'
+
+    """
+    units = {
+        "years": lambda diff: diff.days / 365,
+        "months": lambda diff: diff.days / 30.436875,  # Average days per month
+        "weeks": lambda diff: diff.days / 7,
+        "days": lambda diff: diff.days,
+        "hours": lambda diff: diff.seconds / 3600,
+        "minutes": lambda diff: diff.seconds % 3600 / 60,
+    }
+    diff = datetime.now() - n
+    for unit in units:
+        dur = int(units[unit](diff))
+        if dur > 0:
+            if dur == 1:  # De-pluralize
+                unit = unit[:-1]
+            return f"{dur} {unit} ago"
+    return "Just now"
+
+
+def format_bytes(n: int) -> str:
     """Format bytes as text
 
+    >>> from dask.utils import format_bytes
     >>> format_bytes(1)
     '1 B'
     >>> format_bytes(1234)
-    '1.23 kB'
+    '1.21 kiB'
     >>> format_bytes(12345678)
-    '12.35 MB'
+    '11.77 MiB'
     >>> format_bytes(1234567890)
-    '1.23 GB'
+    '1.15 GiB'
     >>> format_bytes(1234567890000)
-    '1.23 TB'
+    '1.12 TiB'
     >>> format_bytes(1234567890000000)
-    '1.23 PB'
+    '1.10 PiB'
+
+    For all values < 2**60, the output is always <= 10 characters.
     """
-    if n > 1e15:
-        return "%0.2f PB" % (n / 1e15)
-    if n > 1e12:
-        return "%0.2f TB" % (n / 1e12)
-    if n > 1e9:
-        return "%0.2f GB" % (n / 1e9)
-    if n > 1e6:
-        return "%0.2f MB" % (n / 1e6)
-    if n > 1e3:
-        return "%0.2f kB" % (n / 1000)
-    return "%d B" % n
+    for prefix, k in (
+        ("Pi", 2**50),
+        ("Ti", 2**40),
+        ("Gi", 2**30),
+        ("Mi", 2**20),
+        ("ki", 2**10),
+    ):
+        if n >= k * 0.9:
+            return f"{n / k:.2f} {prefix}B"
+    return f"{n} B"
 
 
 timedelta_sizes = {
@@ -1309,6 +1668,7 @@ timedelta_sizes = {
     "m": 60,
     "h": 3600,
     "d": 3600 * 24,
+    "w": 7 * 3600 * 24,
 }
 
 tds2 = {
@@ -1316,6 +1676,7 @@ tds2 = {
     "minute": 60,
     "hour": 60 * 60,
     "day": 60 * 60 * 24,
+    "week": 7 * 60 * 60 * 24,
     "millisecond": 1e-3,
     "microsecond": 1e-6,
     "nanosecond": 1e-9,
@@ -1325,11 +1686,32 @@ timedelta_sizes.update(tds2)
 timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
+@overload
+def parse_timedelta(s: None, default: str | Literal[False] = "seconds") -> None:
+    ...
+
+
+@overload
+def parse_timedelta(
+    s: str | float | timedelta, default: str | Literal[False] = "seconds"
+) -> float:
+    ...
+
+
 def parse_timedelta(s, default="seconds"):
     """Parse timedelta string to number of seconds
 
+    Parameters
+    ----------
+    s : str, float, timedelta, or None
+    default: str or False, optional
+        Unit of measure if s  does not specify one. Defaults to seconds.
+        Set to False to require s to explicitly specify its own unit.
+
     Examples
     --------
+    >>> from datetime import timedelta
+    >>> from dask.utils import parse_timedelta
     >>> parse_timedelta('3s')
     3
     >>> parse_timedelta('3.5 seconds')
@@ -1357,6 +1739,10 @@ def parse_timedelta(s, default="seconds"):
 
     prefix = s[:index]
     suffix = s[index:] or default
+    if suffix is False:
+        raise ValueError(f"Missing time unit: {s}")
+    if not isinstance(suffix, str):
+        raise TypeError(f"default must be str or False, got {default!r}")
 
     n = float(prefix)
 
@@ -1467,3 +1853,231 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
+
+
+def stringify(obj, exclusive: Iterable | None = None):
+    """Convert an object to a string
+
+    If ``exclusive`` is specified, search through `obj` and convert
+    values that are in ``exclusive``.
+
+    Note that when searching through dictionaries, only values are
+    converted, not the keys.
+
+    Parameters
+    ----------
+    obj : Any
+        Object (or values within) to convert to string
+    exclusive: Iterable, optional
+        Set of values to search for when converting values to strings
+
+    Returns
+    -------
+    result : type(obj)
+        Stringified copy of ``obj`` or ``obj`` itself if it is already a
+        string or bytes.
+
+    Examples
+    --------
+    >>> stringify(b'x')
+    b'x'
+    >>> stringify('x')
+    'x'
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
+    "{('a', 0): ('a', 0), ('a', 1): ('a', 1)}"
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)}, exclusive={('a',0)})
+    {('a', 0): "('a', 0)", ('a', 1): ('a', 1)}
+    """
+
+    typ = type(obj)
+    if typ is str or typ is bytes:
+        return obj
+    elif exclusive is None:
+        return str(obj)
+
+    if typ is tuple and obj:
+        from dask.optimization import SubgraphCallable
+
+        obj0 = obj[0]
+        if type(obj0) is SubgraphCallable:
+            obj0 = obj0
+            return (
+                SubgraphCallable(
+                    stringify(obj0.dsk, exclusive),
+                    obj0.outkey,
+                    stringify(obj0.inkeys, exclusive),
+                    obj0.name,
+                ),
+            ) + tuple(stringify(x, exclusive) for x in obj[1:])
+        elif callable(obj0):
+            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
+
+    if typ is list:
+        return [stringify(v, exclusive) for v in obj]
+    if typ is dict:
+        return {k: stringify(v, exclusive) for k, v in obj.items()}
+    try:
+        if obj in exclusive:
+            return stringify(obj)
+    except TypeError:  # `obj` not hashable
+        pass
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify(v, exclusive) for v in obj)
+    return obj
+
+
+def stringify_collection_keys(obj):
+    """Convert all collection keys in ``obj`` to strings.
+
+    This is a specialized version of ``stringify()`` that only converts keys
+    of the form: ``("a string", ...)``
+    """
+
+    typ = type(obj)
+    if typ is tuple and obj:
+        obj0 = obj[0]
+        if type(obj0) is str or type(obj0) is bytes:
+            return stringify(obj)
+        if callable(obj0):
+            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
+    if typ is list:
+        return [stringify_collection_keys(v) for v in obj]
+    if typ is dict:
+        return {k: stringify_collection_keys(v) for k, v in obj.items()}
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify_collection_keys(v) for v in obj)
+    return obj
+
+
+class cached_property(functools.cached_property):
+    """Read only version of functools.cached_property."""
+
+    def __set__(self, instance, val):
+        """Raise an error when attempting to set a cached property."""
+        raise AttributeError("Can't set attribute")
+
+
+class _HashIdWrapper:
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+
+@functools.lru_cache
+def _cumsum(seq, initial_zero):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    if initial_zero:
+        return tuple(toolz.accumulate(add, seq, 0))
+    else:
+        return tuple(toolz.accumulate(add, seq))
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`toolz.accumulate` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+
+    Returns
+    -------
+    tuple
+    """
+    if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
+        result = _cumsum(_HashIdWrapper(seq), initial_zero)
+    else:
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq), initial_zero)
+    return result
+
+
+def show_versions() -> None:
+    """Provide version information for bug reports."""
+
+    from importlib.metadata import PackageNotFoundError, version
+    from json import dumps
+    from platform import uname
+    from sys import stdout, version_info
+
+    from distributed import __version__ as distributed_version
+
+    from dask import __version__ as dask_version
+
+    deps = [
+        "numpy",
+        "pandas",
+        "cloudpickle",
+        "fsspec",
+        "bokeh",
+        "fastparquet",
+        "pyarrow",
+        "zarr",
+    ]
+
+    result: dict[str, str | None] = {
+        # note: only major, minor, micro are extracted
+        "Python": ".".join([str(i) for i in version_info[:3]]),
+        "Platform": uname().system,
+        "dask": dask_version,
+        "distributed": distributed_version,
+    }
+
+    for modname in deps:
+        try:
+            result[modname] = version(modname)
+        except PackageNotFoundError:
+            result[modname] = None
+
+    stdout.writelines(dumps(result, indent=2))
+
+    return
+
+
+def maybe_pluralize(count, noun, plural_form=None):
+    """Pluralize a count-noun string pattern when necessary"""
+    if count == 1:
+        return f"{count} {noun}"
+    else:
+        return f"{count} {plural_form or noun + 's'}"
+
+
+def is_namedtuple_instance(obj: Any) -> bool:
+    """Returns True if obj is an instance of a namedtuple.
+
+    Note: This function checks for the existence of the methods and
+    attributes that make up the namedtuple API, so it will return True
+    IFF obj's type implements that API.
+    """
+    return (
+        isinstance(obj, tuple)
+        and hasattr(obj, "_make")
+        and hasattr(obj, "_asdict")
+        and hasattr(obj, "_replace")
+        and hasattr(obj, "_fields")
+        and hasattr(obj, "_field_defaults")
+    )

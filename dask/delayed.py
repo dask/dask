@@ -3,21 +3,34 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
+from dataclasses import fields, is_dataclass, replace
 
-from tlz import curry, concat, unique, merge
+from tlz import concat, curry, merge, unique
 
-from . import config, threaded
-from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
-from .base import tokenize as _tokenize
-from .compatibility import is_dataclass, dataclass_fields
-
-from .core import quote
-from .context import globalmethod
-from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
-from .highlevelgraph import HighLevelGraph
+from dask import config
+from dask.base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    named_schedulers,
+    replace_name_in_key,
+)
+from dask.base import tokenize as _tokenize
+from dask.context import globalmethod
+from dask.core import flatten, quote
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import (
+    OperatorMethodMixin,
+    apply,
+    funcname,
+    is_namedtuple_instance,
+    methodcaller,
+)
 
 __all__ = ["Delayed", "delayed"]
+
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 
 def unzip(ls, nout):
@@ -59,19 +72,20 @@ def unpack_collections(expr):
 
     Examples
     --------
+    >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
-    >>> task  # doctest: +SKIP
+    >>> task
     ['a', 'b', 3]
-    >>> collections  # doctest: +SKIP
-    (a, b)
+    >>> collections
+    (Delayed('a'), Delayed('b'))
 
     >>> task, collections = unpack_collections({a: 1, b: 2})
-    >>> task  # doctest: +SKIP
-    (dict, [['a', 1], ['b', 2]])
-    >>> collections  # doctest: +SKIP
-    {a, b}
+    >>> task
+    (<class 'dict'>, [['a', 1], ['b', 2]])
+    >>> collections
+    (Delayed('a'), Delayed('b'))
     """
     if isinstance(expr, Delayed):
         return expr._key, (expr,)
@@ -100,14 +114,40 @@ def unpack_collections(expr):
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice,) + tuple(args), collections
+        return (slice, *args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
-
+        if not collections:
+            return expr, ()
+        try:
+            _fields = {
+                f.name: getattr(expr, f.name)
+                for f in fields(expr)
+                if hasattr(expr, f.name)
+            }
+            replace(expr, **_fields)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using a custom __init__ is not supported."
+            ) from e
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using fields with `init=False` are not supported."
+            ) from e
         return (apply, typ, (), (dict, args)), collections
+
+    if is_namedtuple_instance(expr):
+        args, collections = unpack_collections([v for v in expr])
+        return (typ, *args), collections
 
     return expr, ()
 
@@ -132,6 +172,7 @@ def to_task_dask(expr):
 
     Examples
     --------
+    >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
     >>> task, dask = to_task_dask([a, b, 3])  # doctest: +SKIP
@@ -181,10 +222,18 @@ def to_task_dask(expr):
 
     if is_dataclass(expr):
         args, dsk = to_task_dask(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
 
         return (apply, typ, (), (dict, args)), dsk
+
+    if is_namedtuple_instance(expr):
+        args, dsk = to_task_dask([v for v in expr])
+        return (typ, *args), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
@@ -193,7 +242,7 @@ def to_task_dask(expr):
     return expr, {}
 
 
-def tokenize(*args, **kwargs):
+def tokenize(*args, pure=None, **kwargs):
     """Mapping function from task -> consistent name.
 
     Parameters
@@ -205,7 +254,6 @@ def tokenize(*args, **kwargs):
         fails, then a unique identifier is used. If False (default), then a
         unique identifier is always used.
     """
-    pure = kwargs.pop("pure", None)
     if pure is None:
         pure = config.get("delayed_pure", False)
 
@@ -262,6 +310,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     --------
     Apply to functions to delay execution:
 
+    >>> from dask import delayed
     >>> def inc(x):
     ...     return x + 1
 
@@ -309,10 +358,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     it contextually using the ``delayed_pure`` setting. Note that this
     influences the *call* and not the *creation* of the callable:
 
-    >>> import dask
     >>> @delayed
     ... def mul(a, b):
     ...     return a * b
+    >>> import dask
     >>> with dask.config.set(delayed_pure=True):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     True
@@ -324,7 +373,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     hashing the arguments by default. To explicitly set the name, you can use
     the ``dask_key_name`` keyword when calling the function:
 
-    >>> add(1, 2)    # doctest: +SKIP
+    >>> add(1, 2)   # doctest: +SKIP
     Delayed('add-3dce7c56edd1ac2614add714086e950f')
     >>> add(1, 2, dask_key_name='three')
     Delayed('three')
@@ -333,9 +382,12 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     result. If you set the names explicitly you should make sure your key names
     are different for different results.
 
-    >>> add(1, 2, dask_key_name='three')  # doctest: +SKIP
-    >>> add(2, 1, dask_key_name='three')  # doctest: +SKIP
-    >>> add(2, 2, dask_key_name='four')   # doctest: +SKIP
+    >>> add(1, 2, dask_key_name='three')
+    Delayed('three')
+    >>> add(2, 1, dask_key_name='three')
+    Delayed('three')
+    >>> add(2, 2, dask_key_name='four')
+    Delayed('four')
 
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
@@ -372,7 +424,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     Note that if a method doesn't exist, no error will be thrown until runtime:
 
-    >>> res = a.not_a_real_method()
+    >>> res = a.not_a_real_method() # doctest: +SKIP
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
 
@@ -384,7 +436,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     To invoke an impure attribute or operator, you'd need to use it in a
     delayed function with ``pure=False``:
 
-    >>> class Incrementer(object):
+    >>> class Incrementer:
     ...     def __init__(self):
     ...         self._n = 0
     ...     @property
@@ -401,7 +453,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     In contrast, methods are assumed to be impure by default, meaning that
     subsequent calls may return different results. To assume purity, set
-    `pure=True`. This allows sharing of any intermediate values.
+    ``pure=True``. This allows sharing of any intermediate values.
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True
@@ -411,6 +463,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed('count_2')
+    >>> import dask
     >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
@@ -424,25 +477,23 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         task = quote(obj)
         collections = set()
 
+    if not (nout is None or (type(nout) is int and nout >= 0)):
+        raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        if not (nout is None or (type(nout) is int and nout >= 0)):
-            raise ValueError(
-                "nout must be None or a non-negative integer, got %s" % nout
-            )
         if not name:
             try:
                 prefix = obj.__name__
             except AttributeError:
                 prefix = type(obj).__name__
             token = tokenize(obj, nout, pure=pure)
-            name = "%s-%s" % (prefix, token)
+            name = f"{prefix}-{token}"
         return DelayedLeaf(obj, name, pure=pure, nout=nout)
     else:
         if not name:
-            name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
+            name = f"{type(obj).__name__}-{tokenize(task, pure=pure)}"
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph)
+        return Delayed(name, graph, nout)
 
 
 def right(method):
@@ -455,13 +506,12 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
-    dsk = ensure_dict(dsk)
-    dsk2, _ = cull(dsk, keys)
-    return dsk2
-
-
-def rebuild(dsk, key, length):
-    return Delayed(key, dsk, length)
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    dsk = dsk.cull(set(flatten(keys)))
+    return dsk
 
 
 class Delayed(DaskMethodsMixin, OperatorMethodMixin):
@@ -470,19 +520,27 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length", "_dask_layers")
+    __slots__ = ("_key", "_dask", "_length", "_layer")
 
-    def __init__(self, key, dsk, length=None):
+    def __init__(self, key, dsk, length=None, layer=None):
         self._key = key
-        self.dask = dsk
+        self._dask = dsk
         self._length = length
 
-        # `__dask_layers__` of an one-layered HLG is the layer name
-        # TODO: what is the name of a multi-layered HLG?
-        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
-            self._dask_layers = set(iter(dsk.layers))
-        else:
-            self._dask_layers = (self.key,)
+        # NOTE: Layer is used by `to_delayed` in other collections, but not in normal Delayed use
+        self._layer = layer or key
+        if isinstance(dsk, HighLevelGraph) and self._layer not in dsk.layers:
+            raise ValueError(
+                f"Layer {self._layer} not in the HighLevelGraph's layers: {list(dsk.layers)}"
+            )
+
+    @property
+    def key(self):
+        return self._key
+
+    @property
+    def dask(self):
+        return self._dask
 
     def __dask_graph__(self):
         return self.dask
@@ -491,36 +549,34 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        if hasattr(self, "_dask_layers"):
-            return self._dask_layers
-        else:
-            return (self.key,)
+        return (self._layer,)
 
     def __dask_tokenize__(self):
         return self.key
 
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
     __dask_optimize__ = globalmethod(optimize, key="delayed_optimize")
 
     def __dask_postcompute__(self):
         return single_key, ()
 
     def __dask_postpersist__(self):
-        return rebuild, (self._key, getattr(self, "_length", None))
+        return self._rebuild, ()
 
-    def __getstate__(self):
-        return tuple(getattr(self, i) for i in self.__slots__)
-
-    def __setstate__(self, state):
-        for k, v in zip(self.__slots__, state):
-            setattr(self, k, v)
-
-    @property
-    def key(self):
-        return self._key
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            # FIXME Delayed is currently the only collection type that supports both high- and low-level graphs.
+            # The HLG output of `optimize` will have a layer name that doesn't match `key`.
+            # Remove this when Delayed is HLG-only (because `optimize` will only be passed HLGs, so it won't have
+            # to generate random layer names).
+            layer = next(iter(dsk.layers))
+        else:
+            layer = None
+        return Delayed(key, dsk, self._length, layer=layer)
 
     def __repr__(self):
-        return "Delayed({0})".format(repr(self.key))
+        return f"Delayed({repr(self.key)})"
 
     def __hash__(self):
         return hash(self.key)
@@ -530,43 +586,47 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __getattr__(self, attr):
         if attr.startswith("_"):
-            raise AttributeError("Attribute {0} not found".format(attr))
+            raise AttributeError(f"Attribute {attr} not found")
 
         if attr == "visualise":
             # added to warn users in case of spelling error
             # for more details: https://github.com/dask/dask/issues/5721
             warnings.warn(
-                "dask.delayed objects have no `visualise` method. Perhaps you meant `visualize`?"
+                "dask.delayed objects have no `visualise` method. "
+                "Perhaps you meant `visualize`?"
             )
 
         return DelayedAttr(self, attr)
 
     def __setattr__(self, attr, val):
-        if attr in self.__slots__:
+        try:
             object.__setattr__(self, attr, val)
-        else:
+        except AttributeError:
+            # attr is neither in type(self).__slots__ nor in the __slots__ of any of its
+            # parent classes, and all the parent classes define __slots__ too.
+            # This last bit needs to be unit tested: if any of the parent classes omit
+            # the __slots__ declaration, self will gain a __dict__ and this branch will
+            # become unreachable.
             raise TypeError("Delayed objects are immutable")
 
     def __setitem__(self, index, val):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        if getattr(self, "_length", None) is None:
+        if self._length is None:
             raise TypeError("Delayed objects of unspecified length are not iterable")
         for i in range(self._length):
             yield self[i]
 
     def __len__(self):
-        if getattr(self, "_length", None) is None:
+        if self._length is None:
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
-    def __call__(self, *args, **kwargs):
-        pure = kwargs.pop("pure", None)
-        name = kwargs.pop("dask_key_name", None)
+    def __call__(self, *args, pure=None, dask_key_name=None, **kwargs):
         func = delayed(apply, pure=pure)
-        if name is not None:
-            return func(self, args, kwargs, dask_key_name=name)
+        if dask_key_name is not None:
+            return func(self, args, kwargs, dask_key_name=dask_key_name)
         return func(self, args, kwargs)
 
     def __bool__(self):
@@ -592,7 +652,7 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
     pure = kwargs.pop("pure", pure)
 
     if dask_key_name is None:
-        name = "%s-%s" % (
+        name = "{}-{}".format(
             funcname(func),
             tokenize(func_token, *args, pure=pure, **kwargs),
         )
@@ -617,11 +677,11 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
 
 
 class DelayedLeaf(Delayed):
-    __slots__ = ("_obj", "_key", "_pure", "_nout")
+    __slots__ = ("_obj", "_pure", "_nout")
 
     def __init__(self, obj, key, pure=None, nout=None):
+        super().__init__(key, None)
         self._obj = obj
-        self._key = key
         self._pure = pure
         self._nout = nout
 
@@ -636,14 +696,23 @@ class DelayedLeaf(Delayed):
             self._obj, self._key, args, kwargs, pure=self._pure, nout=self._nout
         )
 
+    @property
+    def __name__(self):
+        return self._obj.__name__
+
+    @property
+    def __doc__(self):
+        return self._obj.__doc__
+
 
 class DelayedAttr(Delayed):
-    __slots__ = ("_obj", "_attr", "_key")
+    __slots__ = ("_obj", "_attr")
 
     def __init__(self, obj, attr):
+        key = "getattr-%s" % tokenize(obj, attr, pure=True)
+        super().__init__(key, None)
         self._obj = obj
         self._attr = attr
-        self._key = "getattr-%s" % tokenize(obj, attr, pure=True)
 
     def __getattr__(self, attr):
         # Calling np.dtype(dask.delayed(...)) used to result in a segfault, as
@@ -652,7 +721,7 @@ class DelayedAttr(Delayed):
         # `x.dtype().dtype()` is called (which shouldn't ever show up in real
         # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
         if attr == "dtype" and self._attr == "dtype":
-            raise AttributeError("Attribute %s not found" % attr)
+            raise AttributeError("Attribute dtype not found")
         return super().__getattr__(attr)
 
     @property
@@ -703,5 +772,5 @@ except AttributeError:
 
 
 def single_key(seq):
-    """ Pick out the only element of this list, a list of keys """
+    """Pick out the only element of this list, a list of keys"""
     return seq[0]

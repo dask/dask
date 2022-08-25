@@ -1,50 +1,57 @@
 try:
-    from .core import (
+    import dask.dataframe._pyarrow_compat
+    from dask.base import compute
+    from dask.dataframe import backends, dispatch, rolling
+    from dask.dataframe.core import (
         DataFrame,
-        Series,
         Index,
+        Series,
         _Frame,
         map_partitions,
         repartition,
         to_datetime,
         to_timedelta,
     )
-    from .groupby import Aggregation
-    from .io import (
+    from dask.dataframe.groupby import Aggregation
+    from dask.dataframe.io import (
+        demo,
         from_array,
-        from_pandas,
         from_bcolz,
         from_dask_array,
-        read_hdf,
-        read_sql_table,
         from_delayed,
+        from_map,
+        from_pandas,
         read_csv,
-        to_csv,
+        read_fwf,
+        read_hdf,
+        read_json,
+        read_sql,
+        read_sql_query,
+        read_sql_table,
         read_table,
-        demo,
+        to_bag,
+        to_csv,
         to_hdf,
+        to_json,
         to_records,
         to_sql,
-        to_bag,
-        read_json,
-        to_json,
-        read_fwf,
     )
-    from .numeric import to_numeric
-    from .optimize import optimize
-    from .multi import merge, concat, merge_asof
-    from . import rolling, backends
-    from ..base import compute
-    from .reshape import get_dummies, pivot_table, melt
-    from .utils import assert_eq
-    from .io.orc import read_orc
+    from dask.dataframe.multi import concat, merge, merge_asof
+    from dask.dataframe.numeric import to_numeric
+    from dask.dataframe.optimize import optimize
+    from dask.dataframe.reshape import get_dummies, melt, pivot_table
+    from dask.dataframe.utils import assert_eq
 
     try:
-        from .io import read_parquet, to_parquet
+        from dask.dataframe.io import read_parquet, to_parquet
     except ImportError:
         pass
     try:
-        from .core import isna
+        from dask.dataframe.io import read_orc, to_orc
+    except ImportError:
+        pass
+    try:
+        from dask.dataframe.core import isna
     except ImportError:
         pass
 except ImportError as e:

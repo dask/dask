@@ -2,8 +2,8 @@
 Asynchronous Shared-Memory Scheduler for Dask Graphs.
 
 This scheduler coordinates several workers to execute tasks in a dask graph in
-parallel.  It depends on an apply_async function as would be found in thread or
-process Pools and a corresponding Queue for worker-to-scheduler communication.
+parallel.  It depends on a ``concurrent.futures.Executor``
+and a corresponding Queue for worker-to-scheduler communication.
 
 It tries to execute tasks in an order which maintains a small memory footprint
 throughout execution.  It does this by running tasks that allow us to release
@@ -62,11 +62,13 @@ Examples
 --------
 
 >>> import pprint  # doctest: +SKIP
+>>> inc = lambda x: x + 1
+>>> add = lambda x, y: x + y
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
 >>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
  'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
- 'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+ 'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
  'finished': set(),
  'ready': ['z'],
  'released': set(),
@@ -104,15 +106,18 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+from __future__ import annotations
+
 import os
-from queue import Queue, Empty
+from collections.abc import Hashable, Mapping, Sequence
+from concurrent.futures import Executor, Future
+from functools import partial
+from queue import Empty, Queue
 
-from . import config
-from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
-from .order import order
-from .callbacks import unpack_callbacks, local_callbacks
-from .utils_test import add, inc  # noqa: F401
-
+from dask import config
+from dask.callbacks import local_callbacks, unpack_callbacks
+from dask.core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
+from dask.order import order
 
 if os.name == "nt":
     # Python 3 windows Queue.get doesn't handle interrupts properly. To
@@ -126,14 +131,10 @@ if os.name == "nt":
             except Empty:
                 pass
 
-
 else:
 
     def queue_get(q):
         return q.get()
-
-
-DEBUG = False
 
 
 def start_state_from_dask(dsk, cache=None, sortkey=None):
@@ -141,13 +142,14 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
 
     Examples
     --------
-
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
     >>> from pprint import pprint  # doctest: +SKIP
     >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
-     'dependents': {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}},
+     'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
      'finished': set(),
      'ready': ['z'],
      'released': set(),
@@ -177,11 +179,11 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     for a in cache:
         for b in dependents.get(a, ()):
             waiting[b].remove(a)
-    waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
+    waiting_data = {k: v.copy() for k, v in dependents.items() if v}
 
-    ready_set = set([k for k, v in waiting.items() if not v])
+    ready_set = {k for k, v in waiting.items() if not v}
     ready = sorted(ready_set, key=sortkey, reverse=True)
-    waiting = dict((k, v) for k, v in waiting.items() if v)
+    waiting = {k: v for k, v in waiting.items() if v}
 
     state = {
         "dependencies": dependencies,
@@ -229,11 +231,19 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
     return key, result, failed
 
 
+def batch_execute_tasks(it):
+    """
+    Batch computing of multiple tasks with `execute_task`
+    """
+    return [execute_task(*a) for a in it]
+
+
 def release_data(key, state, delete=True):
     """Remove data from temporary storage
 
     See Also
-        finish_task
+    --------
+    finish_task
     """
     if key in state["waiting_data"]:
         assert not state["waiting_data"][key]
@@ -265,13 +275,6 @@ def finish_task(
             s = state["waiting_data"][dep]
             s.remove(key)
             if not s and dep not in results:
-                if DEBUG:
-                    from chest.core import nbytes
-
-                    print(
-                        "Key: %s\tDep: %s\t NBytes: %.2f\t Release"
-                        % (key, dep, sum(map(nbytes, state["cache"].values()) / 1e6))
-                    )
                 release_data(dep, state, delete=delete)
         elif delete and dep not in results:
             release_data(dep, state, delete=delete)
@@ -296,7 +299,7 @@ def nested_get(ind, coll):
     (('b', 'a'), ('a', 'b'))
     """
     if isinstance(ind, list):
-        return tuple([nested_get(i, coll) for i in ind])
+        return tuple(nested_get(i, coll) for i in ind)
     else:
         return coll[ind]
 
@@ -345,7 +348,7 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(
-    apply_async,
+    submit,
     num_workers,
     dsk,
     result,
@@ -357,21 +360,22 @@ def get_async(
     callbacks=None,
     dumps=identity,
     loads=identity,
-    **kwargs
+    chunksize=None,
+    **kwargs,
 ):
     """Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
-    takes a an apply_async function as found on Pool objects to form a more
+    takes a ``concurrent.futures.Executor.submit`` function to form a more
     specific ``get`` method that walks through the dask array with parallel
     workers, avoiding repeat computation and minimizing memory use.
 
     Parameters
     ----------
-    apply_async : function
-        Asynchronous apply function as found on Pool or ThreadPool
+    submit : function
+        A ``concurrent.futures.Executor.submit`` function
     num_workers : int
-        The number of active tasks we should have at any one time
+        The number of workers that task submissions can be spread over
     dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
@@ -390,26 +394,31 @@ def get_async(
         scheduler. Default is to just raise the exception.
     raise_exception : callable, optional
         Function that takes an exception and a traceback, and raises an error.
+    callbacks : tuple or list of tuples, optional
+        Callbacks are passed in as tuples of length 5. Multiple sets of
+        callbacks may be passed in as a list of tuples. For more information,
+        see the dask.diagnostics documentation.
     dumps: callable, optional
         Function to serialize task data and results to communicate between
         worker and parent.  Defaults to identity.
     loads: callable, optional
         Inverse function of `dumps`.  Defaults to identity.
-    callbacks : tuple or list of tuples, optional
-        Callbacks are passed in as tuples of length 5. Multiple sets of
-        callbacks may be passed in as a list of tuples. For more information,
-        see the dask.diagnostics documentation.
+    chunksize: int, optional
+        Size of chunks to use when dispatching work. Defaults to 1.
+        If -1, will be computed to evenly divide ready work across workers.
 
     See Also
     --------
     threaded.get
     """
+    chunksize = chunksize or config.get("chunksize", 1)
+
     queue = Queue()
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
-        result_flat = set([result])
+        result_flat = {result}
     results = set(result_flat)
 
     dsk = dict(dsk)
@@ -440,58 +449,71 @@ def get_async(
             if state["waiting"] and not state["ready"]:
                 raise ValueError("Found no accessible jobs in dask")
 
-            def fire_task():
-                """ Fire off a task to the thread pool """
-                # Choose a good task to compute
-                key = state["ready"].pop()
-                state["running"].add(key)
-                for f in pretask_cbs:
-                    f(key, dsk, state)
+            def fire_tasks(chunksize):
+                """Fire off a task to the thread pool"""
+                # Determine chunksize and/or number of tasks to submit
+                nready = len(state["ready"])
+                if chunksize == -1:
+                    ntasks = nready
+                    chunksize = -(ntasks // -num_workers)
+                else:
+                    used_workers = -(len(state["running"]) // -chunksize)
+                    avail_workers = max(num_workers - used_workers, 0)
+                    ntasks = min(nready, chunksize * avail_workers)
 
-                # Prep data to send
-                data = dict(
-                    (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
-                )
-                # Submit
-                apply_async(
-                    execute_task,
-                    args=(
-                        key,
-                        dumps((dsk[key], data)),
-                        dumps,
-                        loads,
-                        get_id,
-                        pack_exception,
-                    ),
-                    callback=queue.put,
-                )
+                # Prep all ready tasks for submission
+                args = []
+                for _ in range(ntasks):
+                    # Get the next task to compute (most recently added)
+                    key = state["ready"].pop()
+                    # Notify task is running
+                    state["running"].add(key)
+                    for f in pretask_cbs:
+                        f(key, dsk, state)
 
-            # Seed initial tasks into the thread pool
-            while state["ready"] and len(state["running"]) < num_workers:
-                fire_task()
+                    # Prep args to send
+                    data = {
+                        dep: state["cache"][dep] for dep in get_dependencies(dsk, key)
+                    }
+                    args.append(
+                        (
+                            key,
+                            dumps((dsk[key], data)),
+                            dumps,
+                            loads,
+                            get_id,
+                            pack_exception,
+                        )
+                    )
+
+                # Batch submit
+                for i in range(-(len(args) // -chunksize)):
+                    each_args = args[i * chunksize : (i + 1) * chunksize]
+                    if not each_args:
+                        break
+                    fut = submit(batch_execute_tasks, each_args)
+                    fut.add_done_callback(queue.put)
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
-                key, res_info, failed = queue_get(queue)
-                if failed:
-                    exc, tb = loads(res_info)
-                    if rerun_exceptions_locally:
-                        data = dict(
-                            (dep, state["cache"][dep])
-                            for dep in get_dependencies(dsk, key)
-                        )
-                        task = dsk[key]
-                        _execute_task(task, data)  # Re-execute locally
-                    else:
-                        raise_exception(exc, tb)
-                res, worker_id = loads(res_info)
-                state["cache"][key] = res
-                finish_task(dsk, key, state, results, keyorder.get)
-                for f in posttask_cbs:
-                    f(key, res, dsk, state, worker_id)
-
-                while state["ready"] and len(state["running"]) < num_workers:
-                    fire_task()
+                fire_tasks(chunksize)
+                for key, res_info, failed in queue_get(queue).result():
+                    if failed:
+                        exc, tb = loads(res_info)
+                        if rerun_exceptions_locally:
+                            data = {
+                                dep: state["cache"][dep]
+                                for dep in get_dependencies(dsk, key)
+                            }
+                            task = dsk[key]
+                            _execute_task(task, data)  # Re-execute locally
+                        else:
+                            raise_exception(exc, tb)
+                    res, worker_id = loads(res_info)
+                    state["cache"][key] = res
+                    finish_task(dsk, key, state, results, keyorder.get)
+                    for f in posttask_cbs:
+                        f(key, res, dsk, state, worker_id)
 
             succeeded = True
 
@@ -505,26 +527,72 @@ def get_async(
 
 """ Synchronous concrete version of get_async
 
-Usually we supply a multi-core apply_async function.  Here we provide a
+Usually we supply a ``concurrent.futures.Executor``.  Here we provide a
 sequential one.  This is useful for debugging and for code dominated by the
 GIL
 """
 
 
-def apply_sync(func, args=(), kwds={}, callback=None):
-    """ A naive synchronous version of apply_async """
-    res = func(*args, **kwds)
-    if callback is not None:
-        callback(res)
+class SynchronousExecutor(Executor):
+    _max_workers = 1
+
+    def submit(self, fn, *args, **kwargs):
+        fut = Future()
+        try:
+            fut.set_result(fn(*args, **kwargs))
+        except BaseException as e:
+            fut.set_exception(e)
+        return fut
 
 
-def get_sync(dsk, keys, **kwargs):
+synchronous_executor = SynchronousExecutor()
+
+
+def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs):
     """A naive synchronous version of get_async
 
     Can be useful for debugging.
     """
     kwargs.pop("num_workers", None)  # if num_workers present, remove it
-    return get_async(apply_sync, 1, dsk, keys, **kwargs)
+    return get_async(
+        synchronous_executor.submit,
+        synchronous_executor._max_workers,
+        dsk,
+        keys,
+        **kwargs,
+    )
+
+
+""" Adaptor for ``multiprocessing.Pool`` instances
+
+Usually we supply a ``concurrent.futures.Executor``.  Here we provide a wrapper
+class for ``multiprocessing.Pool`` instances so we can treat them like
+``concurrent.futures.Executor`` instances instead.
+
+This is mainly useful for legacy use cases or users that prefer
+``multiprocessing.Pool``.
+"""
+
+
+class MultiprocessingPoolExecutor(Executor):
+    def __init__(self, pool):
+        self.pool = pool
+        self._max_workers = len(pool._pool)
+
+    def submit(self, fn, *args, **kwargs):
+        return submit_apply_async(self.pool.apply_async, fn, *args, **kwargs)
+
+
+def submit_apply_async(apply_async, fn, *args, **kwargs):
+    fut = Future()
+    apply_async(fn, args, kwargs, fut.set_result, fut.set_exception)
+    return fut
+
+
+def get_apply_async(apply_async, num_workers, *args, **kwargs):
+    return get_async(
+        partial(submit_apply_async, apply_async), num_workers, *args, **kwargs
+    )
 
 
 def sortkey(item):

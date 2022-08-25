@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -5,9 +7,11 @@ pytest.importorskip("scipy")
 
 import numpy as np
 import scipy.linalg
+from packaging.version import parse as parse_version
 
 import dask.array as da
-from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
+from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
+from dask.array.numpy_compat import _np_version
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -449,35 +453,56 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.slow
-def test_svd_compressed():
-    m, n = 2000, 250
-    r = 10
-    np.random.seed(4321)
-    mat1 = np.random.randn(m, r)
-    mat2 = np.random.randn(r, n)
-    mat = mat1.dot(mat2)
-    data = da.from_array(mat, chunks=(500, 50))
+@pytest.mark.parametrize("iterator", ["power", "QR"])
+def test_svd_compressed_compute(iterator):
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator, n_power_iter=1, compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator, n_power_iter=1, seed=123
+    )
 
-    u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
+    assert len(v.dask) < len(vv.dask)
+    assert_eq(v, vv)
 
-    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
-    tol = 0.2
-    assert_eq(
-        da.linalg.norm(usvt), np.linalg.norm(mat), rtol=tol, atol=tol
-    )  # average accuracy check
+@pytest.mark.parametrize("iterator", [("power", 2), ("QR", 2)])
+def test_svd_compressed(iterator):
+    m, n = 100, 50
+    r = 5
+    a = da.random.random((m, n), chunks=(m, n))
 
-    u = u[:, :r]
-    s = s[:r]
-    vt = vt[:r, :]
+    # calculate approximation and true singular values
+    u, s, vt = svd_compressed(
+        a, 2 * r, iterator=iterator[0], n_power_iter=iterator[1], seed=4321
+    )  # worst case
+    s_true = scipy.linalg.svd(a.compute(), compute_uv=False)
 
-    s_exact = np.linalg.svd(mat)[1]
-    s_exact = s_exact[:r]
+    # compute the difference with original matrix
+    norm = scipy.linalg.norm((a - (u[:, :r] * s[:r]) @ vt[:r, :]).compute(), 2)
 
-    assert_eq(np.eye(r, r), da.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(r, r), da.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
+    # ||a-a_hat||_2 <= (1+tol)s_{k+1}: based on eq. 1.10/1.11:
+    # Halko, Nathan, Per-Gunnar Martinsson, and Joel A. Tropp.
+    # "Finding structure with randomness: Probabilistic algorithms for constructing
+    # approximate matrix decompositions." SIAM review 53.2 (2011): 217-288.
+    frac = norm / s_true[r + 1] - 1
+    # Tolerance determined via simulation to be slightly above max norm of difference matrix in 10k samples.
+    # See https://github.com/dask/dask/pull/6799#issuecomment-726631175 for more details.
+    tol = 0.4
+    assert frac < tol
+
+    assert_eq(np.eye(r, r), da.dot(u[:, :r].T, u[:, :r]))  # u must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(vt[:r, :], vt[:r, :].T))  # v must be orthonormal
+
+
+@pytest.mark.parametrize(
+    "input_dtype, output_dtype", [(np.float32, np.float32), (np.float64, np.float64)]
+)
+def test_svd_compressed_dtype_preservation(input_dtype, output_dtype):
+    x = da.random.random((50, 50), chunks=(50, 50)).astype(input_dtype)
+    u, s, vt = svd_compressed(x, 1, seed=4321)
+    assert u.dtype == s.dtype == vt.dtype == output_dtype
 
 
 @pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
@@ -503,22 +528,12 @@ def test_svd_compressed_deterministic():
 @pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
 def test_svd_compressed_shapes(m, n, k, chunks):
     x = da.random.random(size=(m, n), chunks=chunks)
-    u, s, v = svd_compressed(x, k=k, n_power_iter=1, compute=True, seed=1)
+    u, s, v = svd_compressed(x, k, n_power_iter=1, compute=True, seed=1)
     u, s, v = da.compute(u, s, v)
     r = min(m, n, k)
     assert u.shape == (m, r)
     assert s.shape == (r,)
     assert v.shape == (r, n)
-
-
-def test_svd_compressed_compute():
-    x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
-
-    assert len(v.dask) < len(vv.dask)
-
-    assert_eq(v, vv)
 
 
 def _check_lu_result(p, l, u, A):
@@ -745,8 +760,19 @@ def _get_symmat(size):
     return lA.dot(lA.T)
 
 
+# `sym_pos` kwarg was deprecated in scipy 1.9.0
+# ref: https://github.com/dask/dask/issues/9335
+def _scipy_linalg_solve(a, b, assume_a):
+    if parse_version(scipy.__version__) >= parse_version("1.9.0"):
+        return scipy.linalg.solve(a=a, b=b, assume_a=assume_a)
+    elif assume_a == "pos":
+        return scipy.linalg.solve(a=a, b=b, sym_pos=True)
+    else:
+        return scipy.linalg.solve(a=a, b=b)
+
+
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (30, 6)])
-def test_solve_sym_pos(shape, chunk):
+def test_solve_assume_a(shape, chunk):
     np.random.seed(1)
 
     A = _get_symmat(shape)
@@ -756,25 +782,35 @@ def test_solve_sym_pos(shape, chunk):
     b = np.random.randint(1, 10, shape)
     db = da.from_array(b, chunk)
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    res = da.linalg.solve(dA, db, assume_a="pos")
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # tall-and-skinny matrix
     b = np.random.randint(1, 10, (shape, 5))
     db = da.from_array(b, (chunk, 5))
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    res = da.linalg.solve(dA, db, assume_a="pos")
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
     # matrix
     b = np.random.randint(1, 10, (shape, shape))
     db = da.from_array(b, (chunk, chunk))
 
-    res = da.linalg.solve(dA, db, sym_pos=True)
-    assert_eq(res, scipy.linalg.solve(A, b, sym_pos=True), check_graph=False)
+    res = da.linalg.solve(dA, db, assume_a="pos")
+    assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
     assert_eq(dA.dot(res), b.astype(float), check_graph=False)
+
+    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
+        res = da.linalg.solve(dA, db, sym_pos=True)
+        assert_eq(res, _scipy_linalg_solve(A, b, assume_a="pos"), check_graph=False)
+        assert_eq(dA.dot(res), b.astype(float), check_graph=False)
+
+    with pytest.raises(FutureWarning, match="sym_pos keyword is deprecated"):
+        res = da.linalg.solve(dA, db, sym_pos=False)
+        assert_eq(res, _scipy_linalg_solve(A, b, assume_a="gen"), check_graph=False)
+        assert_eq(dA.dot(res), b.astype(float), check_graph=False)
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
@@ -782,19 +818,29 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA).compute(),
+        scipy.linalg.cholesky(A),
+        check_graph=False,
+        check_chunks=False,
+    )
     assert_eq(
         da.linalg.cholesky(dA, lower=True),
         scipy.linalg.cholesky(A, lower=True),
         check_graph=False,
+        check_chunks=False,
     )
 
 
+@pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_lstsq(nrow, ncol, chunk):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     np.random.seed(1)
     A = np.random.randint(1, 20, (nrow, ncol))
     b = np.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b = b + 1.0j * np.random.randint(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -817,6 +863,22 @@ def test_lstsq(nrow, ncol, chunk):
     assert rank == ncol - 1
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
+
+    # 2D case
+    A = np.random.randint(1, 20, (nrow, ncol))
+    b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * np.random.randint(1, 20, b2D.shape)
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
 
 
 def test_no_chunks_svd():
@@ -925,6 +987,11 @@ def test_svd_incompatible_dimensions(ndim):
         da.linalg.svd(x)
 
 
+@pytest.mark.xfail(
+    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    reason="https://github.com/dask/dask/issues/7189",
+    strict=False,
+)
 @pytest.mark.parametrize(
     "shape, chunks, axis",
     [[(5,), (2,), None], [(5,), (2,), 0], [(5,), (2,), (0,)], [(5, 6), (2, 2), None]],
@@ -942,6 +1009,11 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
 
 
 @pytest.mark.slow
+@pytest.mark.xfail(
+    sys.platform == "darwin" and _np_version < parse_version("1.22"),
+    reason="https://github.com/dask/dask/issues/7189",
+    strict=False,
+)
 @pytest.mark.parametrize(
     "shape, chunks",
     [

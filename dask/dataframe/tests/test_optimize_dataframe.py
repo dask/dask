@@ -1,6 +1,7 @@
+import pandas as pd
+
 import dask
 import dask.dataframe as dd
-import pandas as pd
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),

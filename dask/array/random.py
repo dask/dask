@@ -1,41 +1,26 @@
+import contextlib
 import numbers
-import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
-from .core import (
-    normalize_chunks,
+from dask.array.core import (
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
-from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
+from dask.array.creation import arange
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from, random_state_data
 
 
-def doc_wraps(func):
-    """ Copy docstring from one function to another """
-    warnings.warn(
-        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
-        FutureWarning,
-    )
-
-    def _(func2):
-        if func.__doc__ is not None:
-            func2.__doc__ = skip_doctest(func.__doc__)
-        return func2
-
-    return _
-
-
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -85,14 +70,15 @@ class RandomState(object):
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes.extend([size])
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
@@ -111,7 +97,6 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -120,10 +105,9 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[i] = name
                     dsk[name] = res
                 small_args.append(ar[tuple(0 for _ in ar.shape)])
@@ -136,10 +120,9 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
+                    name = f"array-{tokenize(res)}"
                     lookup[key] = name
                     dsk[name] = res
                 small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
@@ -149,7 +132,7 @@ class RandomState(object):
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
-        name = "{0}-{1}".format(funcname, token)
+        name = f"{funcname}-{token}"
 
         keys = product(
             [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))
@@ -164,7 +147,6 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -174,7 +156,6 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
@@ -208,7 +189,7 @@ class RandomState(object):
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with ignoring(AttributeError):
+    with contextlib.suppress(AttributeError):
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
@@ -364,7 +345,7 @@ class RandomState(object):
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
-        from .slicing import shuffle_slice
+        from dask.array.slicing import shuffle_slice
 
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")

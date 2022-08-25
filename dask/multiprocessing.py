@@ -1,16 +1,24 @@
+from __future__ import annotations
+
 import copyreg
 import multiprocessing
+import multiprocessing.pool
 import os
 import pickle
 import sys
 import traceback
+from collections.abc import Hashable, Mapping, Sequence
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
 
-from . import config
-from .system import CPU_COUNT
-from .local import reraise, get_async  # TODO: get better get
-from .optimization import fuse, cull
+import cloudpickle
+
+from dask import config
+from dask.local import MultiprocessingPoolExecutor, get_async, reraise
+from dask.optimization import cull, fuse
+from dask.system import CPU_COUNT
+from dask.utils import ensure_dict
 
 
 def _reduce_method_descriptor(m):
@@ -20,23 +28,8 @@ def _reduce_method_descriptor(m):
 # type(set.union) is used as a proxy to <class 'method_descriptor'>
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
-
-try:
-    import cloudpickle
-
-    _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-    _loads = cloudpickle.loads
-except ImportError:
-
-    def _dumps(obj, **kwargs):
-        try:
-            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL, **kwargs)
-        except (pickle.PicklingError, AttributeError) as exc:
-            raise ModuleNotFoundError(
-                "Please install cloudpickle to use the multiprocessing scheduler"
-            ) from exc
-
-    _loads = pickle.loads
+_dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+_loads = cloudpickle.loads
 
 
 def _process_get_id():
@@ -79,11 +72,11 @@ class RemoteException(Exception):
             return getattr(self.exception, key)
 
 
-exceptions = dict()
+exceptions: dict[type[Exception], type[Exception]] = {}
 
 
-def remote_exception(exc, tb):
-    """ Metaclass that wraps exception type in RemoteException """
+def remote_exception(exc: Exception, tb) -> Exception:
+    """Metaclass that wraps exception type in RemoteException"""
     if type(exc) in exceptions:
         typ = exceptions[type(exc)]
         return typ(exc, tb)
@@ -108,13 +101,12 @@ try:
     def _pack_traceback(tb):
         return tb
 
-
 except ImportError:
 
     def _pack_traceback(tb):
         return "".join(traceback.format_tb(tb))
 
-    def reraise(exc, tb):
+    def reraise(exc, tb=None):
         exc = remote_exception(exc, tb)
         raise exc
 
@@ -138,7 +130,7 @@ and on Windows, because they each only support a single context.
 
 
 def get_context():
-    """ Return the current multiprocessing context."""
+    """Return the current multiprocessing context."""
     # fork context does fork()-without-exec(), which can lead to deadlocks,
     # so default to "spawn".
     context_name = config.get("multiprocessing.context", "spawn")
@@ -152,14 +144,16 @@ def get_context():
 
 
 def get(
-    dsk,
-    keys,
+    dsk: Mapping,
+    keys: Sequence[Hashable] | Hashable,
     num_workers=None,
     func_loads=None,
     func_dumps=None,
     optimize_graph=True,
     pool=None,
-    **kwargs
+    initializer=None,
+    chunksize=None,
+    **kwargs,
 ):
     """Multiprocessed get function appropriate for Bags
 
@@ -172,19 +166,28 @@ def get(
     num_workers : int
         Number of worker processes (defaults to number of cores)
     func_dumps : function
-        Function to use for function serialization
-        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
+        Function to use for function serialization (defaults to cloudpickle.dumps)
     func_loads : function
-        Function to use for function deserialization
-        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
+        Function to use for function deserialization (defaults to cloudpickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
+    pool : Executor or Pool
+        Some sort of `Executor` or `Pool` to use
+    initializer: function
+        Ignored if ``pool`` has been set.
+        Function to initialize a worker process before running any tasks in it.
+    chunksize: int, optional
+        Size of chunks to use when dispatching work.
+        Defaults to 5 as some batching is helpful.
+        If -1, will be computed to evenly divide ready work across workers.
     """
+    chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
+    initializer = initializer or config.get("multiprocessing.initializer", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
         # In order to get consistent hashing in subprocesses, we need to set a
-        # consistent seed for the Python hash algorithm. Unfortunatley, there
+        # consistent seed for the Python hash algorithm. Unfortunately, there
         # is no way to specify environment variables only for the Pool
         # processes, so we have to rely on environment variables being
         # inherited.
@@ -193,12 +196,24 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
-        pool = context.Pool(num_workers, initializer=initialize_worker_process)
+        initializer = partial(initialize_worker_process, user_initializer=initializer)
+        pool = ProcessPoolExecutor(
+            num_workers, mp_context=context, initializer=initializer
+        )
         cleanup = True
     else:
+        if initializer is not None:
+            warn(
+                "The ``initializer`` argument is ignored when ``pool`` is provided. "
+                "The user should configure ``pool`` with the needed ``initializer`` "
+                "on creation."
+            )
+        if isinstance(pool, multiprocessing.pool.Pool):
+            pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
     # Optimize Dask
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
         dsk3, dependencies = fuse(dsk2, keys, dependencies)
@@ -216,8 +231,8 @@ def get(
     try:
         # Run
         result = get_async(
-            pool.apply_async,
-            len(pool._pool),
+            pool.submit,
+            pool._max_workers,
             dsk3,
             keys,
             get_id=_process_get_id,
@@ -225,20 +240,28 @@ def get(
             loads=loads,
             pack_exception=pack_exception,
             raise_exception=reraise,
-            **kwargs
+            chunksize=chunksize,
+            **kwargs,
         )
     finally:
         if cleanup:
-            pool.close()
+            pool.shutdown()
     return result
 
 
-def initialize_worker_process():
-    """
-    Initialize a worker process before running any tasks in it.
-    """
+def default_initializer():
     # If Numpy is already imported, presumably its random state was
     # inherited from the parent => re-seed it.
     np = sys.modules.get("numpy")
     if np is not None:
         np.random.seed()
+
+
+def initialize_worker_process(user_initializer=None):
+    """
+    Initialize a worker process before running any tasks in it.
+    """
+    default_initializer()
+
+    if user_initializer is not None:
+        user_initializer()

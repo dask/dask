@@ -257,7 +257,7 @@ def grid_points(chunks, sizes):
 
 
 def draw_sizes(shape, size=200):
-    """ Get size in pixels for all dimensions """
+    """Get size in pixels for all dimensions"""
     mx = max(shape)
     ratios = [mx / max(0.1, d) for d in shape]
     ratios = [ratio_response(r) for r in ratios]

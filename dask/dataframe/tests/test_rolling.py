@@ -1,12 +1,12 @@
-from distutils.version import LooseVersion
+import datetime
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
+from packaging.version import parse as parse_version
 
-import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 
 N = 40
 df = pd.DataFrame(
@@ -21,20 +21,28 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, 3)
 
 idx = (
-    pd.date_range("2016-01-01", freq="3s", periods=100)
-    | pd.date_range("2016-01-01", freq="5s", periods=100)
+    pd.date_range("2016-01-01", freq="3s", periods=100).union(
+        pd.date_range("2016-01-01", freq="5s", periods=100)
+    )
 )[:N]
 
+idx_constant_freq = (pd.date_range("2016-01-01", freq="1s", periods=100))[:N]
+
+ts_data = {
+    "a": np.random.randn(N).cumsum(),
+    "b": np.random.randint(100, size=(N,)),
+    "c": np.random.randint(100, size=(N,)),
+    "d": np.random.randint(100, size=(N,)),
+    "e": np.random.randint(100, size=(N,)),
+}
+
 ts = pd.DataFrame(
-    {
-        "a": np.random.randn(N).cumsum(),
-        "b": np.random.randint(100, size=(N,)),
-        "c": np.random.randint(100, size=(N,)),
-        "d": np.random.randint(100, size=(N,)),
-        "e": np.random.randint(100, size=(N,)),
-    },
+    ts_data,
     index=idx,
 )
+
+ts_constant_freq = pd.DataFrame(ts_data, index=idx_constant_freq)
+
 dts = dd.from_pandas(ts, 3)
 
 
@@ -59,18 +67,122 @@ def test_map_overlap(npartitions):
         assert_eq(res, sol)
 
 
-def test_map_overlap_names():
-    npartitions = 3
+@pytest.mark.parametrize("npartitions", [1, 4])
+@pytest.mark.parametrize("enforce_metadata", [True, False])
+@pytest.mark.parametrize("transform_divisions", [True, False])
+@pytest.mark.parametrize("align_dataframes", [True, False])
+@pytest.mark.parametrize(
+    "overlap_setup",
+    [
+        (df, 0, 3),
+        (df, 3, 0),
+        (df, 3, 3),
+        (df, 0, 0),
+        (
+            ts_constant_freq,
+            datetime.timedelta(seconds=3),
+            datetime.timedelta(seconds=3),
+        ),
+        (ts_constant_freq, datetime.timedelta(seconds=3), 0),
+    ],
+)
+def test_map_overlap_multiple_dataframes(
+    npartitions, enforce_metadata, transform_divisions, align_dataframes, overlap_setup
+):
+    dataframe, before, after = overlap_setup
+
+    ddf = dd.from_pandas(dataframe, npartitions)
+    ddf2 = dd.from_pandas(dataframe * 2, npartitions)
+
+    def get_shifted_sum_arg(overlap):
+        return (
+            overlap.seconds - 1 if isinstance(overlap, datetime.timedelta) else overlap
+        )
+
+    before_shifted_sum, after_shifted_sum = get_shifted_sum_arg(
+        before
+    ), get_shifted_sum_arg(after)
+
+    # DataFrame
+    res = ddf.map_overlap(
+        shifted_sum,
+        before,
+        after,
+        before_shifted_sum,
+        after_shifted_sum,
+        ddf2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(dataframe, before_shifted_sum, after_shifted_sum, dataframe * 2)
+    assert_eq(res, sol)
+
+    # Series
+    res = ddf.b.map_overlap(
+        shifted_sum,
+        before,
+        after,
+        before_shifted_sum,
+        after_shifted_sum,
+        ddf2.b,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    sol = shifted_sum(
+        dataframe.b, before_shifted_sum, after_shifted_sum, dataframe.b * 2
+    )
+    assert_eq(res, sol)
+
+
+@pytest.mark.parametrize("npartitions", [1, 4])
+@pytest.mark.parametrize("enforce_metadata", [True, False])
+@pytest.mark.parametrize("transform_divisions", [True, False])
+@pytest.mark.parametrize("align_dataframes", [True, False])
+def test_map_overlap_names(
+    npartitions, enforce_metadata, transform_divisions, align_dataframes
+):
     ddf = dd.from_pandas(df, npartitions)
 
-    res = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=2)
-    res2 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=2)
+    res = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
+    res2 = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=2,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
     assert set(res.dask) == set(res2.dask)
 
-    res3 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=3)
+    res3 = ddf.map_overlap(
+        shifted_sum,
+        0,
+        3,
+        0,
+        3,
+        c=3,
+        align_dataframes=align_dataframes,
+        transform_divisions=transform_divisions,
+        enforce_metadata=enforce_metadata,
+    )
     assert res3._name != res._name
     # Difference is just the final map
-    diff = set(res3.dask).difference(res.dask)
+    diff = res3.dask.keys() - res.dask.keys()
     assert len(diff) == npartitions
 
     res4 = ddf.map_overlap(shifted_sum, 3, 0, 0, 3, c=2)
@@ -141,12 +253,19 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
     if dd._compat.PANDAS_GT_110:
-        check_less_precise = {}
+        if check_less_precise:
+            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
+        else:
+            check_less_precise = {}
     else:
         check_less_precise = {"check_less_precise": check_less_precise}
+    if dd._compat.PANDAS_GT_120 and method == "count":
+        min_periods = 0
+    else:
+        min_periods = None
     # DataFrame
-    prolling = df.rolling(window, center=center)
-    drolling = ddf.rolling(window, center=center)
+    prolling = df.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.rolling(window, center=center, min_periods=min_periods)
     if method == "apply":
         kwargs = {"raw": False}
     else:
@@ -159,8 +278,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
     # Series
-    prolling = df.a.rolling(window, center=center)
-    drolling = ddf.a.rolling(window, center=center)
+    prolling = df.a.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.a.rolling(window, center=center, min_periods=min_periods)
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
@@ -168,21 +287,12 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
 
-if PANDAS_VERSION <= "0.25.0":
-    filter_panel_warning = pytest.mark.filterwarnings(
-        "ignore::DeprecationWarning:pandas[.*]"
-    )
-else:
-    filter_panel_warning = lambda f: f
-
-
-@filter_panel_warning
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
     # DataFrame
-    prolling = df.drop("a", 1).rolling(window, center=center)
-    drolling = ddf.drop("a", 1).rolling(window, center=center)
+    prolling = df.drop("a", axis=1).rolling(window, center=center)
+    drolling = ddf.drop("a", axis=1).rolling(window, center=center)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -250,7 +360,7 @@ def test_rolling_repr():
 
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
-    assert res == "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
+    assert res == "Rolling [window=4s,center=False,win_type=freq,axis=0]"
 
 
 def test_time_rolling_constructor():
@@ -260,8 +370,6 @@ def test_time_rolling_constructor():
     assert result.win_type is None
 
     assert result._win_type == "freq"
-    assert result._window == 4000000000  # ns
-    assert result._min_periods == 1
 
 
 @pytest.mark.parametrize(
@@ -271,7 +379,7 @@ def test_time_rolling_constructor():
 def test_time_rolling_methods(method, args, window, check_less_precise):
     if dd._compat.PANDAS_GT_110:
         if check_less_precise:
-            check_less_precise = {"atol": 0.5e-3, "rtol": 0.5e-3}
+            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
         else:
             check_less_precise = {}
     else:
@@ -300,12 +408,11 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-@filter_panel_warning
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
-    prolling = ts.drop("a", 1).rolling(window)
-    drolling = dts.drop("a", 1).rolling(window)
+    prolling = ts.drop("a", axis=1).rolling(window)
+    drolling = dts.drop("a", axis=1).rolling(window)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -390,11 +497,10 @@ def test_rolling_agg_aggregate():
     )
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
-@pytest.mark.xfail(da.numpy_compat._numpy_120, reason="sparse-383")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
-    if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
+    numba_version = parse_version(numba.__version__)
+    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
         # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
         pytest.xfail("Known incompatibility between pandas and numba")
 
@@ -410,9 +516,33 @@ def test_rolling_numba_engine():
     )
 
 
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas<1.0.0")
-def test_rolling_apply_numba_raises():
-    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
-        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)
+def test_groupby_rolling():
+    df = pd.DataFrame(
+        {
+            "column1": range(600),
+            "group1": 5 * ["g" + str(i) for i in range(120)],
+        },
+        index=pd.date_range("20190101", periods=60).repeat(10),
+    )
+
+    ddf = dd.from_pandas(df, npartitions=8)
+
+    expected = df.groupby("group1").rolling("15D").sum()
+    actual = ddf.groupby("group1").rolling("15D").sum()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+    expected = df.groupby("group1").column1.rolling("15D").mean()
+    actual = ddf.groupby("group1").column1.rolling("15D").mean()
+
+    assert_eq(expected, actual, check_divisions=False)
+
+
+def test_groupby_rolling_with_integer_window_raises():
+    df = pd.DataFrame(
+        {"B": [0, 1, 2, np.nan, 4, 5, 6], "C": ["a", "a", "a", "b", "b", "a", "b"]}
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with pytest.raises(ValueError, match="``window`` must be a ``freq``"):
+        ddf.groupby("C").rolling(2).sum()
