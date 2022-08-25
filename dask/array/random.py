@@ -262,6 +262,9 @@ class Generator:
         elif not isinstance(size, (tuple, list)):
             size = (size,)
 
+        if axis != 0:
+            raise ValueError("axis must be 0 since a is one dimensinal")
+
         chunks = normalize_chunks(chunks, size, dtype=np.float64)
         if not replace and len(chunks[0]) > 1:
             err_msg = (

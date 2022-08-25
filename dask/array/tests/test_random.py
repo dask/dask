@@ -357,6 +357,10 @@ def test_choice(generator_class):
     with pytest.raises(NotImplementedError):
         generator_class().choice(da_a, size=size, chunks=chunks, replace=False)
 
+    # axis needs to be row based since a is 1D
+    with pytest.raises(ValueError):
+        da.random.default_rng().choice(da_a, size=size, chunks=chunks, axis=1)
+
     # Want to make sure replace=False works for a single-partition output array
     x = generator_class().choice(da_a, size=da_a.shape[0], chunks=-1, replace=False)
     res = x.compute()
