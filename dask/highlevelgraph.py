@@ -11,7 +11,7 @@ import tlz as toolz
 from dask import config
 from dask.base import clone_key, flatten, is_dask_collection
 from dask.core import keys_in_tasks, reverse_dict
-from dask.utils import ensure_dict, key_split, import_required
+from dask.utils import ensure_dict, import_required, key_split
 from dask.widgets import get_template
 
 
