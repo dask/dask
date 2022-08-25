@@ -1532,7 +1532,7 @@ def test_groupby_numeric_column():
     assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
-@pytest.mark.parametrize("sel", ["c", "d", ["c", "d"]])
+@pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):

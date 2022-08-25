@@ -1284,7 +1284,15 @@ class _GroupBy:
         """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
-        by = self.by if isinstance(self.by, list) else [self.by]
+        by_cols = self.by if isinstance(self.by, list) else [self.by]
+
+        # rename "by" columns internally
+        # to fix cumulative operations on the same "by" columns
+        # ref: https://github.com/dask/dask/issues/9313
+        by = []
+        for col in by_cols:
+            self.obj[col + "-by"] = self.obj[col]
+            by.append(col + "-by")
 
         name = self._token_prefix + token
         name_part = name + "-map"
