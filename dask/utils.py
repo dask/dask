@@ -223,7 +223,9 @@ def tmpfile(extension="", dir=None):
     -----
     This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
-    extension = "." + extension.lstrip(".")
+    extension = extension.lstrip(".")
+    if extension:
+        extension = "." + extension
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
