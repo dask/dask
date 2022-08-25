@@ -3108,7 +3108,7 @@ Dask Name: {name}, {layers}"""
                     _ = iter(values[0])
                 except TypeError:
                     values = np.array(values)
-                except Exception as e:
+                except Exception:
                     pass
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
