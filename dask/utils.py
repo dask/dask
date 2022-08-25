@@ -203,7 +203,7 @@ def tmpfile(extension="", dir=None):
 
     Parameters
     ----------
-    extension : str
+    extension : str | None
         The extension of the temporary file to be created
     dir : str
         If ``dir`` is not None, the file will be created in that directory; otherwise,
@@ -223,7 +223,9 @@ def tmpfile(extension="", dir=None):
     -----
     This context manager is particularly useful on Windows for opening temporary files multiple times.
     """
-    extension = "." + extension.lstrip(".")
+    extension = extension.lstrip(".")
+    if extension:
+        extension = "." + extension
     handle, filename = tempfile.mkstemp(extension, dir=dir)
     os.close(handle)
     os.remove(filename)
