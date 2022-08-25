@@ -58,6 +58,14 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
+      # This environment file is created in continuous_integration/scripts/install.sh
+      # and can be useful when debugging locally
+      - name: Upload environment file
+        uses: actions/upload-artifact@v3
+        with:
+          name: env-${{ matrix.os }}-Python-${{ matrix.python-version }}
+          path: env.yaml
+
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh

@@ -23,9 +23,7 @@ from dask.array.core import (
     unknown_chunk_message,
 )
 from dask.array.creation import arange, diagonal
-
-# Keep empty_lookup here for backwards compatibility
-from dask.array.dispatch import divide_lookup, empty_lookup  # noqa: F401
+from dask.array.dispatch import divide_lookup, nannumel_lookup, numel_lookup
 from dask.array.utils import (
     array_safe,
     asarray_safe,
@@ -52,6 +50,14 @@ def divide(a, b, dtype=None):
     key = lambda x: getattr(x, "__array_priority__", float("-inf"))
     f = divide_lookup.dispatch(type(builtins.max(a, b, key=key)))
     return f(a, b, dtype=dtype)
+
+
+def numel(x, **kwargs):
+    return numel_lookup(x, **kwargs)
+
+
+def nannumel(x, **kwargs):
+    return nannumel_lookup(x, **kwargs)
 
 
 def reduction(
@@ -636,43 +642,6 @@ def _nanmax_skip(x_chunk, axis, keepdims):
         return asarray_safe(
             np.array([], dtype=x_chunk.dtype), like=meta_from_array(x_chunk)
         )
-
-
-def numel(x, **kwargs):
-    """A reduction to count the number of elements"""
-
-    if hasattr(x, "mask"):
-        return chunk.sum(np.ones_like(x), **kwargs)
-
-    shape = x.shape
-    keepdims = kwargs.get("keepdims", False)
-    axis = kwargs.get("axis", None)
-    dtype = kwargs.get("dtype", np.float64)
-
-    if axis is None:
-        prod = np.prod(shape, dtype=dtype)
-        return (
-            np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
-            if keepdims is True
-            else prod
-        )
-
-    if not isinstance(axis, tuple or list):
-        axis = [axis]
-
-    prod = math.prod(shape[dim] for dim in axis)
-    if keepdims is True:
-        new_shape = tuple(
-            shape[dim] if dim not in axis else 1 for dim in range(len(shape))
-        )
-    else:
-        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return np.full_like(x, prod, shape=new_shape, dtype=dtype)
-
-
-def nannumel(x, **kwargs):
-    """A reduction to count the number of elements"""
-    return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
 def mean_chunk(
