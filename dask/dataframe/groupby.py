@@ -234,7 +234,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
 
-    if get_key in grouped.groups:
+    if df[by_key].isin([get_key]).any():
         if is_dataframe_like(df):
             grouped = grouped[columns]
         return grouped.get_group(get_key)
@@ -1113,7 +1113,7 @@ class _GroupBy:
         the output aggregation will have sorted keys.
     observed: bool, default False
         This only applies if any of the groupers are Categoricals.
-        If True: only show observed values for categorical groupers.
+        If True: only show observed values for p#cal groupers.
         If False: show all values for categorical groupers.
     """
 

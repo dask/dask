@@ -419,6 +419,18 @@ def test_groupby_get_group():
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
+def test_groupby_get_group_with_categories():
+    df = pd.DataFrame(
+        {"make": ["a", "b", "c", "d", "e", "f"], "model": [2, 5, 7, 9, 11, 13]}
+    )
+    df["make"] = df["make"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.groupby("make").get_group("a")
+    actual = ddf.groupby("make").get_group("a")
+
+    assert_eq(expected, actual)
+
+
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))
