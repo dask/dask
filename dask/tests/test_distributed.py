@@ -23,9 +23,9 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.blockwise import Blockwise
-from dask.highlevelgraph import HighLevelGraph
 from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import get_named_args, tmpdir, tmpfile
 from dask.utils_test import inc
 
