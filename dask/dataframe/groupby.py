@@ -1118,7 +1118,7 @@ class _GroupBy:
         the output aggregation will have sorted keys.
     observed: bool, default False
         This only applies if any of the groupers are Categoricals.
-        If True: only show observed values for p#cal groupers.
+        If True: only show observed values for categorical groupers.
         If False: show all values for categorical groupers.
     """
 
