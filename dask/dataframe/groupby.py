@@ -234,11 +234,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
 
-    if is_series_like(by_key):
-        check = by_key
-    else:
-        check = df[by_key]
-
+    check = by_key if is_series_like(by_key) else df[by_key]
     if check.isin([get_key]).any():
         if is_dataframe_like(df):
             grouped = grouped[columns]
