@@ -37,6 +37,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/zarr-developers/zarr-python
 fi
 
+# Install nuke-hlg distributed branch
+python -m pip install --no-deps git+https://github.com/mrocklin/distributed@nuke-hlg
+
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
 echo mamba list
