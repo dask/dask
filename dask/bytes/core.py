@@ -36,7 +36,7 @@ def read_bytes(
     compression: str | None = None,
     include_path: Literal[False] = False,
     **kwargs: Any,
-) -> tuple[bytes, list[list[Delayed]], list[str]]:
+) -> tuple[bytes, list[list[Delayed]]]:
     ...
 
 
