@@ -15,12 +15,12 @@ from dask.utils import is_integer, parse_bytes
 @overload
 def read_bytes(
     urlpath: str | list[str],
-    delimiter: bytes | None = None,
-    not_zero: bool = False,
-    blocksize: str | int | None = "128 MiB",
-    sample: int | str | bool = "10 kiB",
-    compression: str | None = None,
-    include_path: Literal[True] = True,
+    delimiter: bytes | None,
+    not_zero: bool,
+    blocksize: str | int | None,
+    sample: int | str | bool,
+    compression: str | None,
+    include_path: Literal[True],
     **kwargs: Any,
 ) -> tuple[bytes, list[list[Delayed]], list[str]]:
     ...
@@ -29,12 +29,12 @@ def read_bytes(
 @overload
 def read_bytes(
     urlpath: str | list[str],
-    delimiter: bytes | None = None,
-    not_zero: bool = False,
-    blocksize: str | int | None = "128 MiB",
-    sample: int | str | bool = "10 kiB",
-    compression: str | None = None,
-    include_path: Literal[False] = False,
+    delimiter: bytes | None,
+    not_zero: bool,
+    blocksize: str | int | None,
+    sample: int | str | bool,
+    compression: str | None,
+    include_path: Literal[False],
     **kwargs: Any,
 ) -> tuple[bytes, list[list[Delayed]]]:
     ...
