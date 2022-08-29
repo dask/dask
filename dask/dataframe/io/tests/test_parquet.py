@@ -4277,3 +4277,21 @@ def test_retries_on_remote_filesystem(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-parquet")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+
+def test_read_parquet_multiple_files_with_path_column(tmpdir):
+    file1 = str(tmpdir.join("file1.parquet"))
+    file2 = str(tmpdir.join("file2.parquet"))
+    df1 = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
+    df2 = df1.assign(x=df1.x + 0.5)
+    df1.to_parquet(file1, index=False)
+    df2.to_parquet(file2, index=False)
+
+    df1["path"] = pd.Series((file1,) * len(df1))
+    df2["path"] = pd.Series((file2,) * len(df2))
+    sol = pd.concat([df1, df2])
+
+    res = dd.read_parquet(tmpdir.join("file*.parquet"), include_path_column="path")
+    res = res.compute()
+
+    assert_eq(res, sol, check_index=False)
