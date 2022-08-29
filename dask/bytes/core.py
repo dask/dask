@@ -2,26 +2,54 @@ from __future__ import annotations
 
 import copy
 import os
-from typing import Any
+from typing import Any, Literal, overload
 
 from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.utils import infer_compression, read_block
 
 from dask.base import tokenize
-from dask.delayed import delayed
+from dask.delayed import Delayed, delayed
 from dask.utils import is_integer, parse_bytes
 
 
+@overload
 def read_bytes(
     urlpath: str | list[str],
-    delimiter: Any | None = None,
+    delimiter: bytes | None = None,
     not_zero: bool = False,
     blocksize: str | int | None = "128 MiB",
     sample: int | str | bool = "10 kiB",
     compression: str | None = None,
-    include_path: bool = False,
+    include_path: Literal[True] = True,
     **kwargs: Any,
-) -> tuple[Any, ...]:
+) -> tuple[bytes, list[list[Delayed]], list[str]]:
+    ...
+
+
+@overload
+def read_bytes(
+    urlpath: str | list[str],
+    delimiter: bytes | None = None,
+    not_zero: bool = False,
+    blocksize: str | int | None = "128 MiB",
+    sample: int | str | bool = "10 kiB",
+    compression: str | None = None,
+    include_path: Literal[False] = False,
+    **kwargs: Any,
+) -> tuple[bytes, list[list[Delayed]], list[str]]:
+    ...
+
+
+def read_bytes(
+    urlpath,
+    delimiter=None,
+    not_zero=False,
+    blocksize="128 MiB",
+    sample="10 kiB",
+    compression=None,
+    include_path=False,
+    **kwargs,
+):
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
