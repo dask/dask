@@ -1679,6 +1679,14 @@ class _GroupBy:
                     col for col in self.obj.columns if col not in group_columns
                 ]
 
+            if not non_group_columns:
+                return self._aca_agg(
+                    token="no_op",
+                    func=M.sum,
+                    split_every=split_every,
+                    split_out=split_out,
+                )
+
             spec = _normalize_spec(arg, non_group_columns)
 
         elif isinstance(self.obj, Series):
