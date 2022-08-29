@@ -186,6 +186,7 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    include_path_column=False,
     **kwargs,
 ):
     """
@@ -499,6 +500,9 @@ def read_parquet(
         common_kwargs = parts[0].pop("common_kwargs", {})
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
+    if include_path_column:
+        common_kwargs["colname"] = include_path_column
+
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
         parts,
@@ -510,6 +514,9 @@ def read_parquet(
         fs,
         aggregation_depth,
     )
+
+    if include_path_column:
+        meta = meta.assign(**{include_path_column: [include_path_column] * len(meta)})
 
     # Account for index and columns arguments.
     # Modify `meta` dataframe accordingly
@@ -580,14 +587,22 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
+    colname = kwargs.get("colname")
+    columns_ = columns.copy()
+
+    if colname:
+        columns_.remove(colname)
+
     if isinstance(part, list):
         if len(part) == 1 or part[0][1] or not check_multi_support(engine):
             # Part kwargs expected
             func = engine.read_partition
-            dfs = [
-                func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
-                for (rg, kw) in part
-            ]
+            dfs = []
+            for rg, kw in part:
+                df = func(fs, rg, columns_, index, **toolz.merge(kwargs, kw))
+                if colname:
+                    df[colname] = rg[0]
+                dfs.append(df)
             df = concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
         else:
             # No part specific kwargs, let engine read
