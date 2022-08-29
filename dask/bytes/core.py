@@ -1,5 +1,8 @@
+from __future__ import annotations
+
 import copy
 import os
+from typing import Any
 
 from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.utils import infer_compression, read_block
@@ -10,15 +13,15 @@ from dask.utils import is_integer, parse_bytes
 
 
 def read_bytes(
-    urlpath,
-    delimiter=None,
-    not_zero=False,
-    blocksize="128 MiB",
-    sample="10 kiB",
-    compression=None,
-    include_path=False,
-    **kwargs,
-):
+    urlpath: str | list[str],
+    delimiter: Any | None = None,
+    not_zero: bool = False,
+    blocksize: str | int | None = "128 MiB",
+    sample: int | str | bool = "10 kiB",
+    compression: str | None = None,
+    include_path: bool = False,
+    **kwargs: Any,
+) -> tuple[Any, ...]:
     """Given a path or paths, return delayed objects that read from those paths.
 
     The path may be a filename like ``'2015-01-01.csv'`` or a globstring
@@ -91,8 +94,8 @@ def read_bytes(
         blocksize = int(blocksize)
 
     if blocksize is None:
-        offsets = [[0]] * len(paths)
-        lengths = [[None]] * len(paths)
+        offsets: list[Any] = [[0]] * len(paths)
+        lengths: list[Any] = [[None]] * len(paths)
     else:
         offsets = []
         lengths = []
