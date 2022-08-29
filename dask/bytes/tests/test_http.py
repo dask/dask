@@ -176,12 +176,6 @@ def test_parquet(engine):
     pytest.importorskip("requests", minversion="2.21.0")
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip(engine)
-    # TODO: remove this skip once fastparquet > 0.8.2 exists
-    if engine == "fastparquet":
-        import fastparquet
-
-        if parse_version(fastparquet.__version__) == parse_version("0.8.2"):
-            pytest.skip("https://github.com/dask/dask/issues/9424")
     df = dd.read_parquet(
         [
             "https://github.com/Parquet/parquet-compatibility/raw/"
