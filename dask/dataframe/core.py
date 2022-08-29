@@ -3095,21 +3095,10 @@ Dask Name: {name}, {layers}"""
         # - avoid serializing data in every task
         # - avoid cost of traversal of large list in optimizations
         if isinstance(values, list):
-            # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be a
-            # result of serializing a Python list with pickle, while numpy arrays
-            # leverage Dask's custom serializer.  We can reduce serialization costs by
-            # deduplicating the list and, if all dtypes in the list are the same,
-            # converting to an array.  If dtypes in the list are not consistent, or if the
-            # dtype in the list is an iterable, we pass it as a list
+            # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be
+            # caused by https://github.com/dask/distributed/issues/6368, and further
+            # exacerbated by the fact that the list contains duplicates.
             values = list(set(values))
-            dtype = type(values[0])
-            if all(isinstance(v, dtype) for v in values):
-                try:
-                    _ = iter(values[0])
-                except TypeError:
-                    values = np.array(values)
-                except Exception:
-                    pass
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )
