@@ -3189,7 +3189,11 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
         result = {}
         for a in autos:
             prev_chunks = [x for x in previous_chunks[a] if x > 0]
-            result[a] = np.median(prev_chunks) if len(prev_chunks) else prev_chunks
+            result[a] = (
+                np.median(prev_chunks)
+                if len(prev_chunks)
+                else np.median(previous_chunks[a])
+            )
 
         ideal_shape = []
         for i, s in enumerate(shape):
