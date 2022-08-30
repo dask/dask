@@ -1,6 +1,7 @@
 import collections
 import itertools as it
 import operator
+import uuid
 import warnings
 from numbers import Integral
 
@@ -1292,8 +1293,9 @@ class _GroupBy:
         if columns is not None and set(columns).intersection(set(by_cols)):
             by = []
             for col in by_cols:
-                self.obj[col + "-by"] = self.obj[col]
-                by.append(col + "-by")
+                suffix = str(uuid.uuid4())
+                self.obj[col + suffix] = self.obj[col]
+                by.append(col + suffix)
         else:
             by = by_cols
 
