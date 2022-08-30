@@ -148,7 +148,9 @@ def read_bytes(
         keys = [f"read-block-{o}-{token}" for o in offset]
         values = [
             delayed_read(
-                OpenFile(fs, path, compression=compression),
+                fs,
+                path,
+                compression,
                 o,
                 l,
                 delimiter,
@@ -185,8 +187,8 @@ def read_bytes(
     return sample, out
 
 
-def read_block_from_file(lazy_file, off, bs, delimiter):
-    with copy.copy(lazy_file) as f:
+def read_block_from_file(fs, path, compression, off, bs, delimiter):
+    with OpenFile(fs, path, compression=compression) as f:
         if off == 0 and bs is None:
             return f.read()
         return read_block(f, off, bs, delimiter)
