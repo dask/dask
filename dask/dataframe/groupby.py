@@ -1075,6 +1075,12 @@ def _aggregate_docstring(based_on=None):
             - string function name
             - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
             - dict of column names -> function, function name or list of such.
+        cardinality : float or "infer", optional
+            Approximate ratio of aggregated data size with respect to the
+            initial data size. If specified, this ratio will be used to override
+            the defaults for ``split_every``, ``split_out``, and ``shuffle``.
+            If ``"infer"`` is specified, the first non-empty partition will be
+            used to estimate the global cardinality ratio.
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
             Default is 8.
@@ -1653,7 +1659,9 @@ class _GroupBy:
         )
 
     @_aggregate_docstring()
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
+    ):
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1720,6 +1728,45 @@ class _GroupBy:
                 "dropna is not a valid argument for dask.groupby.agg"
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
+
+        if cardinality and (split_out is None and split_every is None):
+            if cardinality == "infer":
+                # Infer from first non-empty partition
+                _cardinality = self.obj.map_partitions(
+                    _groupby_cardinality_factor,
+                    self.by,
+                    arg,
+                    meta=self.obj.groupby(self.by).aggregate(arg),
+                    enforce_metadata=False,
+                )
+                max_trials = 5
+                for p in range(max_trials):
+                    _val = _cardinality.partitions[p].compute()
+                    if len(_val):
+                        cardinality = _val.iloc[0]
+                        break
+                if cardinality == "infer":
+                    raise RuntimeError(
+                        f"Cardinality inference failed! First {max_trials} "
+                        f"partitions are empty."
+                    )
+            elif not isinstance(cardinality, (int, float)):
+                # Unsupported option
+                raise ValueError
+
+            # Use cardinality -> split_out/every heuristics
+            _split_out = min(
+                max(
+                    int(cardinality * self.obj.npartitions * 0.66),
+                    1,
+                ),
+                self.obj.npartitions,
+            )
+            split_every = split_every or min(max(int(1.0 / cardinality), 2), 32)
+            split_out = split_out or _split_out
+            if shuffle is None:
+                shuffle = _split_out > 1
+        split_out = split_out or 1
 
         if shuffle:
             # Shuffle-based aggregation
@@ -2214,18 +2261,30 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
+    ):
         if arg == "size":
             return self.size()
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            cardinality=cardinality,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(
+        self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
+    ):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            cardinality=cardinality,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
 
@@ -2293,9 +2352,15 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
+    ):
         result = super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            cardinality=cardinality,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
         if self._slice:
             result = result[self._slice]
@@ -2306,9 +2371,15 @@ class SeriesGroupBy(_GroupBy):
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(
+        self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
+    ):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg,
+            cardinality=cardinality,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
@@ -2522,3 +2593,16 @@ def _shuffle_aggregate(
     if split_out < shuffle_npartitions:
         return result.repartition(npartitions=split_out)
     return result
+
+
+def _groupby_cardinality_factor(part, by, agg_spec):
+    # Simple utility to find the fractional memory usage of
+    # a groupby aggregation (relative to the initial data)
+    if len(part) == 0:
+        return part._constructor_sliced([], dtype="float64")
+    size_i = part.memory_usage(index=True, deep=True).sum()
+    size_f = (
+        part.groupby(by).aggregate(agg_spec).memory_usage(index=True, deep=True).sum()
+    )
+    ratio = max(min(float(size_f) / float(size_i), 1.0), 0.0)
+    return part._constructor_sliced([ratio])
