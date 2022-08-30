@@ -4284,8 +4284,8 @@ def test_read_parquet_multiple_files_with_path_column(tmpdir, engine):
     file2 = os.path.join(tmpdir, "file2.parquet")
     df1 = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
     df2 = df1.assign(x=df1.x + 0.5)
-    df1.to_parquet(file1, index=False)
-    df2.to_parquet(file2, index=False)
+    df1.to_parquet(file1, index=False, engine=engine)
+    df2.to_parquet(file2, index=False, engine=engine)
 
     df1["path"] = pd.Series((file1,) * len(df1))
     df2["path"] = pd.Series((file2,) * len(df2))
