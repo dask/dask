@@ -43,6 +43,7 @@ from dask.utils import (
     stringify,
     stringify_collection_keys,
     takes_multiple_arguments,
+    tmpfile,
     typename,
 )
 from dask.utils_test import inc
@@ -888,3 +889,17 @@ def test_factors():
     assert factors(2) == {1, 2}
     assert factors(12) == {1, 2, 3, 4, 6, 12}
     assert factors(15) == {1, 3, 5, 15}
+
+
+def test_tmpfile_naming():
+    with tmpfile() as fn:
+        # Do not end file or directory name with a period.
+        #  This causes issues on Windows.
+        assert fn[-1] != "."
+
+    with tmpfile(extension="jpg") as fn:
+        assert fn[-4:] == ".jpg"
+
+    with tmpfile(extension=".jpg") as fn:
+        assert fn[-4:] == ".jpg"
+        assert fn[-5] != "."
