@@ -1,4 +1,3 @@
-import copy
 import os
 
 from fsspec.core import OpenFile, get_fs_token_paths
