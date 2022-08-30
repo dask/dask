@@ -14,6 +14,7 @@ from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
+from dask.utils_test import hlg_layer
 
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
@@ -1080,6 +1081,11 @@ def test_aggregate_dask():
         assert_max_deps(agg_dask1, 2)
         assert_max_deps(agg_dask2, 2)
 
+        # Make sure dict-based aggregation specs result in an
+        # explicit `getitem` layer to improve column projection
+        if isinstance(spec, dict):
+            assert hlg_layer(result1.dask, "getitem")
+
         # check for deterministic key names and values.
         # Require pickle since "partial" concat functions
         # used in tree-reduction cannot be compared
@@ -1090,7 +1096,11 @@ def test_aggregate_dask():
             # Note: List-based aggregation specs may result in
             # an extra delayed layer. This is because a "long" list
             # arg will be detected in `dask.array.core.normalize_arg`.
-            if isinstance(spec, list) == isinstance(other_spec, list):
+            # Also, dict-based aggregation specs will result in
+            # an extra `getitem` layer (to improve column projection)
+            if (isinstance(spec, list) == isinstance(other_spec, list)) and (
+                isinstance(spec, dict) == isinstance(other_spec, dict)
+            ):
                 other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
                 assert len(other.dask) == len(result1.dask)
                 assert len(other.dask) == len(result2.dask)
