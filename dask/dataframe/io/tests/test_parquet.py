@@ -4280,6 +4280,7 @@ def test_retries_on_remote_filesystem(tmpdir):
 
 
 def test_read_parquet_multiple_files_with_path_column(tmpdir, engine):
+    tmpdir = str(tmpdir)
     file1 = os.path.join(tmpdir, "file1.parquet")
     file2 = os.path.join(tmpdir, "file2.parquet")
     df1 = pd.DataFrame({"x": range(5), "y": ["a", "b", "c", "d", "e"]})
