@@ -1684,7 +1684,7 @@ class _GroupBy:
 
             # Check if the aggregation involves implicit column projection
             if isinstance(arg, dict):
-                column_projection = group_columns | set(arg.keys())
+                column_projection = group_columns | arg.keys()
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):
