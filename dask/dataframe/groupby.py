@@ -1294,7 +1294,7 @@ class _GroupBy:
             by = []
             for col in by_cols:
                 suffix = str(uuid.uuid4())
-                self.obj[col + suffix] = self.obj[col]
+                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
                 by.append(col + suffix)
         else:
             by = by_cols
