@@ -29,7 +29,6 @@ from dask.base import (
     is_dask_collection,
     named_schedulers,
     tokenize,
-    unpack_collections,
 )
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
@@ -3104,8 +3103,7 @@ Dask Name: {name}, {layers}"""
                 values = list(set(values))
             except TypeError:
                 pass
-            c, _ = unpack_collections(values)
-            if not c:
+            if not any(is_dask_collection(v) for v in values):
                 values = np.array(values, dtype="object")
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
