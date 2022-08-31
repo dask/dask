@@ -20,6 +20,7 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
+from dask.base import unpack_collections
 from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
@@ -3097,8 +3098,15 @@ Dask Name: {name}, {layers}"""
         if isinstance(values, list):
             # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be
             # caused by https://github.com/dask/distributed/issues/6368, and further
-            # exacerbated by the fact that the list contains duplicates.
-            values = list(set(values))
+            # exacerbated by the fact that the list contains duplicates.  This is a patch until
+            # we can create a better fix for Serialization.
+            try:
+                values = list(set(values))
+            except TypeError:
+                pass
+            c, _ = unpack_collections(values)
+            if not c:
+                values = np.array(values, dtype="object")
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )

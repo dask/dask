@@ -37,6 +37,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
+from dask import delayed
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
@@ -1271,25 +1272,34 @@ def test_isin():
     f_list = [1, 2, 3]
     f_series = pd.Series(f_list)
     f_dict = {"a": [0, 3], "b": [1, 2]}
+    f_list2 = [1, "2"]
+    f_list_delayed = [delayed(1), delayed(2), delayed(3)]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
     assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
+    assert_eq(d.a.isin(f_list_delayed), full.a.isin(f_list))
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # Index
     da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
     da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
+    da.utils.assert_eq(d.index.isin(f_list_delayed), full.index.isin(f_list))
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # DataFrame test
     assert_eq(d.isin(f_list), full.isin(f_list))
     assert_eq(d.isin(f_dict), full.isin(f_dict))
+    assert_eq(d.isin(f_list2), full.isin(f_list2))
+    assert_eq(d.isin(f_list_delayed), full.isin(f_list))
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
+
 
 
 def test_contains_frame():
