@@ -20,7 +20,6 @@ from pandas.api.types import (
 from tlz import first, merge, partition_all, remove, unique
 
 import dask.array as da
-from dask.base import unpack_collections
 from dask import core
 from dask.array.core import Array, normalize_arg
 from dask.bag import map_partitions as map_bag_partitions
@@ -30,6 +29,7 @@ from dask.base import (
     is_dask_collection,
     named_schedulers,
     tokenize,
+    unpack_collections,
 )
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
