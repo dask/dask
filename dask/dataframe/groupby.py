@@ -1662,6 +1662,7 @@ class _GroupBy:
     def aggregate(
         self, arg, cardinality=None, split_every=None, split_out=None, shuffle=None
     ):
+        column_projection = None
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1688,6 +1689,10 @@ class _GroupBy:
                 ]
 
             spec = _normalize_spec(arg, non_group_columns)
+
+            # Check if the aggregation involves implicit column projection
+            if isinstance(arg, dict):
+                column_projection = group_columns | arg.keys()
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):
@@ -1717,11 +1722,17 @@ class _GroupBy:
         else:
             levels = 0
 
+        # Add an explicit `getitem` operation if the groupby
+        # aggregation involves implicit column projection.
+        # This makes it possible for the column-projection
+        # to be pushed into the IO layer
+        _obj = self.obj[list(column_projection)] if column_projection else self.obj
+
         if not isinstance(self.by, list):
-            chunk_args = [self.obj, self.by]
+            chunk_args = [_obj, self.by]
 
         else:
-            chunk_args = [self.obj] + self.by
+            chunk_args = [_obj] + self.by
 
         if not PANDAS_GT_110 and self.dropna:
             raise NotImplementedError(
