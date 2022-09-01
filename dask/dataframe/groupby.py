@@ -7,6 +7,7 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
+from dask import config
 from dask.base import tokenize
 from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.core import (
@@ -1654,6 +1655,12 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+        if shuffle is None:
+            if split_out > 1:
+                shuffle = shuffle or config.get("shuffle", None) or "disk"
+            else:
+                shuffle = False
+
         column_projection = None
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
