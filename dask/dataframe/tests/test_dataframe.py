@@ -1279,7 +1279,7 @@ def test_isin():
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
     assert_eq(d.a.isin(f_series), full.a.isin(f_series))
     assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
-    assert_eq(d.a.isin(f_list_delayed), full.a.isin(f_list))
+    assert_eq(d.a.isin(f_list_delayed), full.a.isin(f_list_delayed))
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
