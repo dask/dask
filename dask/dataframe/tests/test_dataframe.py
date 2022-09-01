@@ -1287,7 +1287,7 @@ def test_isin():
     da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
     da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
     da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
-    da.utils.assert_eq(d.index.isin(f_list_delayed), full.index.isin(f_list))
+    da.utils.assert_eq(d.index.isin(f_list_delayed), full.index.isin(f_list_delayed))
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
@@ -1295,7 +1295,7 @@ def test_isin():
     assert_eq(d.isin(f_list), full.isin(f_list))
     assert_eq(d.isin(f_dict), full.isin(f_dict))
     assert_eq(d.isin(f_list2), full.isin(f_list2))
-    assert_eq(d.isin(f_list_delayed), full.isin(f_list))
+    assert_eq(d.isin(f_list_delayed), full.isin(f_list_delayed))
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
