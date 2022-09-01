@@ -1078,7 +1078,10 @@ def _aggregate_docstring(based_on=None):
             - dict of column names -> function, function name or list of such.
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
-            Default is 8.
+            For ``shuffle=False``, this defaults to 8. If shuffling is enabled,
+            it defaults to 1. If your intermediate partitions are likely to
+            be small (either due to a small number of groups or a small initial
+            partition size), consider increasing this number for better performance.
         split_out : int, optional
             Number of output partitions. Default is 1.
         shuffle : bool or str, optional
@@ -1086,7 +1089,9 @@ def _aggregate_docstring(based_on=None):
             algorithm name may also be specified (e.g. `"tasks"` or `"p2p"`).
             The shuffle-based algorithm is likely to be more efficient than
             ``shuffle=False`` when ``split_out>1`` and the number of unique
-            groups is large (high cardinality). Default is ``False``.
+            groups is large (high cardinality). Default is ``False`` when
+            ``split_out = 1``. When ``split_out > 1``, it chooses the default
+            shuffling algorithm (disk or tasks).
         """
         return func
 
@@ -2456,8 +2461,12 @@ def _shuffle_aggregate(
     aggregate_kwargs : dict, optional
         Keywords for the aggregate function only.
     split_every : int, optional
-        Number of intermediate partitions that may be aggregated at once.
-        Default is 8.
+        Number of partitions to aggregate into a shuffle partition.
+        Defaults to one, meaning that the initial partitioning is used in
+        the shuffle. Shuffling scales with the number of partitions, so it may
+        be helpful to repartition into fewer before shuffling as a performance
+        optimization, but only when the aggregated partition can comfortably
+        fit in worker memory.
     split_out : int, optional
         Number of output partitions.
     ignore_index : bool, default False
@@ -2484,11 +2493,11 @@ def _shuffle_aggregate(
     npartitions = npartitions.pop()
 
     if split_every is None:
-        split_every = 8
+        split_every = 1
     elif split_every is False:
         split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, Integral):
-        raise ValueError("split_every must be an integer >= 2")
+    elif split_every < 1 or not isinstance(split_every, Integral):
+        raise ValueError("split_every must be an integer >= 1")
 
     # Shuffle-based groupby aggregation
     chunk_name = f"{token or funcname(chunk)}-chunk"
