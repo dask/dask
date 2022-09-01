@@ -1118,6 +1118,7 @@ def set_sorted_index(
         meta=meta,
         align_dataframes=False,
         transform_divisions=False,
+        partition_stats=df.metadata.copy_partition_stats(),
     )
 
     if not divisions:

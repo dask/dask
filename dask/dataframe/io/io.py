@@ -303,7 +303,10 @@ def from_pandas(
         (name, i): data.iloc[start:stop]
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
-    return new_dd_object(dsk, name, data, divisions)
+    partition_stats = {
+        "num-rows": [stop - start for start, stop in zip(locations[:-1], locations[1:])]
+    }
+    return new_dd_object(dsk, name, data, divisions, partition_stats=partition_stats)
 
 
 @_deprecated(after_version="2022.02.1")
@@ -962,6 +965,7 @@ def from_map(
     label=None,
     token=None,
     enforce_metadata=True,
+    partition_stats=None,
     **kwargs,
 ):
     """Create a DataFrame collection from a custom function map
@@ -1183,7 +1187,7 @@ def from_map(
     # Return new DataFrame-collection object
     divisions = divisions or [None] * (len(inputs) + 1)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
-    return new_dd_object(graph, name, meta, divisions)
+    return new_dd_object(graph, name, meta, divisions, partition_stats=partition_stats)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

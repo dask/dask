@@ -3,7 +3,9 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
+from functools import partial
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
@@ -500,7 +502,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index, index_in_columns, processed_stats = process_statistics(
         parts,
         statistics,
         filters,
@@ -552,6 +554,19 @@ def read_parquet(
     else:
         ctx = contextlib.nullcontext()
 
+    # Define partition_stats callback
+    if processed_stats:
+        partition_stats = _pq_partition_stats(processed_stats)
+    elif hasattr(engine, "read_partition_stats"):
+        partition_stats = {
+            "__lazy_stats__": {
+                "func": partial(_lazy_pq_partition_stats, parts, columns, engine, fs),
+                "keys": {"num-rows"} | set(columns),
+            }
+        }
+    else:
+        partition_stats = None
+
     with ctx:
         # Construct the output collection with from_map
         return from_map(
@@ -567,6 +582,7 @@ def read_parquet(
                 "args": (path,),
                 "kwargs": input_kwargs,
             },
+            partition_stats=partition_stats,
         )
 
 
@@ -1395,7 +1411,7 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index, index_in_columns, statistics
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
@@ -1551,6 +1567,32 @@ def aggregate_row_groups(
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
+
+
+def _lazy_pq_partition_stats(
+    parts,
+    columns,
+    engine,
+    fs,
+    keys=None,
+):
+    if keys:
+        columns = [c for c in columns if c in keys]
+    processed_stats = [engine.read_partition_stats(part, columns, fs) for part in parts]
+    return _pq_partition_stats(processed_stats)
+
+
+def _pq_partition_stats(stats):
+    results = {}
+    for stat in stats:
+        for key in stat:
+            if key not in results:
+                results[key] = []
+            results[key].append(stat[key])
+    for k in set(results.keys()) - {"num-rows"}:
+        results[k] = pd.DataFrame(results[k])
+
+    return results
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

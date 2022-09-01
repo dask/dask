@@ -309,6 +309,86 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
+class FrameMetadata:
+    """
+    Metadata container for DataFrame-based collections
+    """
+
+    def __init__(
+        self,
+        meta,
+        divisions,
+        partition_stats=None,
+        **custom_metadata,
+    ):
+        self._meta = meta
+        self._divisions = divisions
+        if partition_stats is None:
+            self._partition_stats = {}
+        else:
+            self._partition_stats = partition_stats
+
+        self._lazy_partition_stats = self._partition_stats.pop(
+            "__lazy_stats__", {"func": None, "keys": set()}
+        )
+        self._custom_metadata = custom_metadata
+
+    def copy_partition_stats(self):
+        _stats = self._partition_stats.copy()
+        _stats.update({"__lazy_stats__": self._lazy_partition_stats.copy()})
+        return _stats
+
+    def known_partition_stat(self, key):
+        return key in self._partition_stats
+
+    def lazy_partition_stat(self, key):
+        return key in self._lazy_partition_stats["keys"]
+
+    def load_lazy_partition_stats(self, keys=None):
+        _func = self._lazy_partition_stats.get("func", None)
+        if _func is None:
+            return
+        _keys = set(keys or self._lazy_partition_stats.get("keys", set())) - set(
+            self._partition_stats.keys()
+        )
+        if _keys:
+            self._partition_stats.update(_func(keys=_keys))
+
+    def partition_stats_are_available(self, keys) -> bool:
+        lazy_keys = set(self._lazy_partition_stats.get("keys", set()))
+        known_keys = set(self._partition_stats.keys())
+        available_keys = lazy_keys | known_keys
+        return set(keys).issubset(available_keys)
+
+    def get_partition_stat(self, key):
+        if self.lazy_partition_stat(key) and not self.known_partition_stat(key):
+            self.load_lazy_partition_stats(keys=[key])
+        try:
+            return self._partition_stats[key]
+        except IndexError:
+            return None
+
+    def set_partition_stat(self, key, value):
+        self._partition_stats[key] = value
+
+    @property
+    def meta(self):
+        return self._meta
+
+    def set_meta(self, value):
+        self._meta = value
+
+    @property
+    def divisions(self):
+        return self._divisions
+
+    def set_divisions(self, value):
+        self._divisions = value
+
+    def get_custom_metadata(self, key):
+        return self._custom_metadata[key]
+
+
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
 
@@ -326,7 +406,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
+    def __init__(self, dsk, name, meta, divisions, **metadata_kwargs):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -337,8 +417,23 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(meta))}"
             )
-        self._meta = meta
-        self.divisions = tuple(divisions)
+        self._metadata = FrameMetadata(
+            meta=meta,
+            divisions=tuple(divisions),
+            **metadata_kwargs,
+        )
+
+    @property
+    def metadata(self):
+        return self._metadata
+
+    @property
+    def _meta(self):
+        return self.metadata.meta
+
+    @_meta.setter
+    def _meta(self, value):
+        return self.metadata.set_meta(value)
 
     def __dask_graph__(self):
         return self.dask
@@ -395,15 +490,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
-        return self._divisions
+        return self.metadata.divisions
 
     @divisions.setter
     def divisions(self, value):
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(self._divisions):
-            n = len(self._divisions)
+        if hasattr(self, "_divisions") and len(value) != len(self.metadata.divisions):
+            n = len(self.metadata.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
                 f"tuple of length={n}, got {len(value)}"
@@ -424,7 +519,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self._divisions = value
+        self.metadata.set_divisions(value)
 
     @property
     def npartitions(self) -> int:
@@ -466,7 +561,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return self._args
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self._divisions = state
+        self.dask, self._name, self._meta, self.divisions = state
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -3584,7 +3679,7 @@ Dask Name: {name}, {layers}""".format(
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self._divisions = res.divisions
+                self.divisions = res.divisions
                 self._meta = res._meta
                 res = self
         return res
@@ -4337,8 +4432,8 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors: ClassVar[set[str]] = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
+    def __init__(self, dsk, name, meta, divisions, **metadata_kwargs):
+        super().__init__(dsk, name, meta, divisions, **metadata_kwargs)
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
                 "npartitions": self.npartitions,
@@ -4422,6 +4517,13 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        try:
+            # Use partition statistics if they are available
+            part_sizes = self.metadata.get_partition_stat("num-rows")
+            if part_sizes:
+                return sum(part_sizes)
+        except KeyError:
+            pass
         try:
             s = self.iloc[:, 0]
         except IndexError:
@@ -4523,7 +4625,7 @@ class DataFrame(_Frame):
         self.dask = df.dask
         self._name = df._name
         self._meta = df._meta
-        self._divisions = df.divisions
+        self.divisions = df.divisions
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
@@ -4533,7 +4635,7 @@ class DataFrame(_Frame):
 
     def __setattr__(self, key, value):
         try:
-            columns = object.__getattribute__(self, "_meta").columns
+            columns = object.__getattribute__(self, "_metadata").meta.columns
         except AttributeError:
             columns = ()
 
@@ -4829,6 +4931,18 @@ class DataFrame(_Frame):
                     f"Data has no column '{other}': use any column of {list(self.columns)}"
                 )
 
+            # Use partition statistics to check if new index is already sorted
+            if not pre_sorted:
+                _stats = self.metadata.get_partition_stat(other)
+                if _stats is not None:
+                    pre_sorted = all(
+                        _stats["min"][1:].values >= _stats["max"][:-1].values
+                    )
+                    if pre_sorted:
+                        divisions = tuple(
+                            list(_stats["min"]) + [_stats["max"].iloc[-1]]
+                        )
+
         # Check divisions
         if divisions is not None:
             check_divisions(divisions)
@@ -4959,7 +5073,13 @@ class DataFrame(_Frame):
             df2 = data._meta_nonempty.assign(
                 **_extract_meta({k: kwargs[k]}, nonempty=True)
             )
-            data = elemwise(methods.assign, data, *pairs, meta=df2)
+            data = elemwise(
+                methods.assign,
+                data,
+                *pairs,
+                meta=df2,
+                partition_stats=self.metadata._partition_stats.copy(),
+            )
 
         return data
 
@@ -6029,7 +6149,15 @@ def is_broadcastable(dfs, s):
     )
 
 
-def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **kwargs):
+def elemwise(
+    op,
+    *args,
+    meta=no_default,
+    out=None,
+    transform_divisions=True,
+    partition_stats=None,
+    **kwargs,
+):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -6128,7 +6256,9 @@ def elemwise(op, *args, meta=no_default, out=None, transform_divisions=True, **k
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    result = new_dd_object(
+        graph, _name, meta, divisions, partition_stats=partition_stats
+    )
     return handle_out(out, result)
 
 
@@ -6458,6 +6588,7 @@ def map_partitions(
     enforce_metadata=True,
     transform_divisions=True,
     align_dataframes=True,
+    partition_stats=None,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -6588,7 +6719,7 @@ def map_partitions(
         )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, divisions)
+    return new_dd_object(graph, name, meta, divisions, partition_stats=partition_stats)
 
 
 def _get_divisions_map_partitions(
@@ -7694,13 +7825,13 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None, **metdata_kwargs):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, name, meta, divisions, **metdata_kwargs)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -7718,7 +7849,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, name, meta, divisions, **metdata_kwargs)
 
 
 def partitionwise_graph(func, layer_name, *args, **kwargs):
