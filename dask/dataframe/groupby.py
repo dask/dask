@@ -234,12 +234,11 @@ def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
 
-    if get_key in grouped.groups:
+    try:
         if is_dataframe_like(df):
             grouped = grouped[columns]
         return grouped.get_group(get_key)
-
-    else:
+    except KeyError:
         # to create empty DataFrame/Series, which has the same
         # dtype as the original
         if is_dataframe_like(df):
@@ -1633,7 +1632,10 @@ class _GroupBy:
             token="last", func=M.last, split_every=split_every, split_out=split_out
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="If the group is not present, Dask will return an empty Series/DataFrame.",
+    )
     def get_group(self, key):
         token = self._token_prefix + "get_group"
 
