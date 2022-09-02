@@ -399,6 +399,17 @@ class PartitionMetadata:
         new_kwargs.update(**kwargs)
         return PartitionMetadata(**new_kwargs)
 
+    def __getstate__(self):
+        return dict(
+            _meta=None if self.meta is None else self.meta.copy(),
+            _npartitions=self.npartitions,
+            _divisions=self.divisions,
+            _partitioned_by=self.partitioned_by.copy(),
+            _statistics=self._statistics.copy(),
+            _lazy_statistics=self._lazy_statistics,
+            _column_name_map=self._column_name_map.copy(),
+        )
+
     @property
     def meta(self) -> Any:
         """Return global DataFrame schema"""
@@ -423,8 +434,8 @@ class PartitionMetadata:
         """Get Min/max Index statistics, if known"""
         if not self.known_divisions:
             return self._unknown_divisions(self.npartitions)
-        if isinstance(self._divisions, tuple):
-            return self._divisions
+        if isinstance(self._divisions, (list, tuple)):
+            return tuple(self._divisions)
         else:
             raise ValueError
 
@@ -686,10 +697,16 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
-        return self._args
+        return dict(
+            dask=self.dask,
+            name=self._name,
+            partition_metadata=self._partition_metadata,
+        )
 
     def __setstate__(self, state):
-        self.dask, self._name, self._meta, self.divisions = state
+        self._partition_metadata = state["partition_metadata"]
+        self._name = state["name"]
+        self.dask = state["dask"]
 
     def copy(self, deep=False):
         """Make a copy of the dataframe
@@ -3801,7 +3818,7 @@ Dask Name: {name}, {layers}""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res._divisions = tuple(methods.tolist(new))
+                    res.divisions = tuple(methods.tolist(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
@@ -4763,12 +4780,19 @@ class DataFrame(_Frame):
 
     def __setattr__(self, key, value):
         try:
-            columns = object.__getattribute__(self, "_metadata").meta.columns
+            columns = object.__getattribute__(self, "_partition_metadata").meta.columns
         except AttributeError:
             columns = ()
 
         # exclude protected attributes from setitem
-        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
+        if key in columns and key not in [
+            "divisions",
+            "dask",
+            "_name",
+            "_meta",
+            "_partition_metadata",
+            "partition_metadata",
+        ]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
@@ -5060,16 +5084,19 @@ class DataFrame(_Frame):
                 )
 
             # Use partition statistics to check if new index is already sorted
-            if not pre_sorted:
-                _stats = self.partition_metadata.get_stats({other})[other]
-                if _stats is not None:
-                    pre_sorted = all(
-                        _stats["min"][1:].values >= _stats["max"][:-1].values
-                    )
-                    if pre_sorted:
-                        divisions = tuple(
-                            list(_stats["min"]) + [_stats["max"].iloc[-1]]
+            if not pre_sorted and divisions is None:
+                try:
+                    _stats = self.partition_metadata.get_stats({other})[other]
+                    if _stats is not None:
+                        pre_sorted = all(
+                            _stats["min"][1:].values > _stats["max"][:-1].values
                         )
+                        if pre_sorted:
+                            divisions = tuple(
+                                list(_stats["min"]) + [_stats["max"].iloc[-1]]
+                            )
+                except KeyError:
+                    pass
 
         # Check divisions
         if divisions is not None:
@@ -5206,7 +5233,6 @@ class DataFrame(_Frame):
                 data,
                 *pairs,
                 meta=df2,
-                partition_metadata=self.partition_metadata.copy(),
             )
 
         return data
@@ -6425,7 +6451,7 @@ def handle_out(out, result):
         out.dask = result.dask
 
         if not isinstance(out, Scalar):
-            out._divisions = result.divisions
+            out.divisions = result.divisions
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
