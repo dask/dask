@@ -1,6 +1,7 @@
 import collections
 import itertools as it
 import operator
+import uuid
 import warnings
 from numbers import Integral
 
@@ -1283,7 +1284,19 @@ class _GroupBy:
         """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
-        by = self.by if isinstance(self.by, list) else [self.by]
+        by_cols = self.by if isinstance(self.by, list) else [self.by]
+
+        # rename "by" columns internally
+        # to fix cumulative operations on the same "by" columns
+        # ref: https://github.com/dask/dask/issues/9313
+        if columns is not None and set(columns).intersection(set(by_cols)):
+            by = []
+            for col in by_cols:
+                suffix = str(uuid.uuid4())
+                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                by.append(col + suffix)
+        else:
+            by = by_cols
 
         name = self._token_prefix + token
         name_part = name + "-map"

@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_130, PANDAS_GT_150, tm
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
@@ -1551,10 +1551,19 @@ def test_groupby_numeric_column():
     assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
-@pytest.mark.parametrize("sel", ["c", "d", ["c", "d"]])
+@pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):
+    if (
+        not PANDAS_GT_130
+        and not func == "cumcount"
+        and sel == ["a", "b"]
+        and key == ["a", "b"]
+    ):
+        pytest.xfail(
+            reason="cumsum and cumprod will raise DataError: No numeric types to aggregate"
+        )
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
