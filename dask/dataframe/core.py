@@ -3,7 +3,7 @@ from __future__ import annotations
 import operator
 import warnings
 from collections.abc import Hashable, Iterator, Sequence
-from functools import partial, wraps
+from functools import lru_cache, partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
@@ -309,84 +309,204 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
-class FrameMetadata:
+class PartitionMetadata:
     """
-    Metadata container for DataFrame-based collections
+    Container for DataFrame-collection partition metadata
     """
+
+    _meta: Any
+    _npartitions: int
+    _divisions: tuple | None
+    _partitioned_by: list[tuple]
+    _statistics: dict
+    _lazy_statistics: tuple  # (keys, callback)
+    _column_name_map: dict
 
     def __init__(
         self,
-        meta,
-        divisions,
-        partition_stats=None,
-        **custom_metadata,
+        meta: Any = None,
+        npartitions: int | None = None,
+        divisions: tuple | None = None,
+        partitioned_by: list[tuple] | None = None,
+        statistics: dict | None = None,
+        lazy_statistics: tuple | None = None,
+        column_name_map: dict | None = None,
     ):
+        # Store meta (global schema)
         self._meta = meta
-        self._divisions = divisions
-        if partition_stats is None:
-            self._partition_stats = {}
+
+        # Set npartitions
+        if npartitions is None and divisions:
+            self._npartitions = len(divisions) - 1
+        elif isinstance(npartitions, int):
+            self._npartitions = npartitions
         else:
-            self._partition_stats = partition_stats
+            raise ValueError(
+                "Must specify `npartitions` and/or `divisions` "
+                "to PartitionMetadata initializer."
+            )
 
-        self._lazy_partition_stats = self._partition_stats.pop(
-            "__lazy_stats__", {"func": None, "keys": set()}
+        # Unknown divisions should just result in divisions == None
+        if isinstance(divisions, (list, tuple)) and all(
+            map(lambda x: x is None, divisions)
+        ):
+            divisions = None
+        self._divisions = divisions
+
+        # Track which columns the DataFrame is partitioned by.
+        # This is distinct from `divisions`, which requires
+        # sorted ordering to be useful.
+        # NOTE: "__index__" corresponds to an unnamed index.
+        if isinstance(partitioned_by, list):
+            self._partitioned_by = partitioned_by
+        else:
+            self._partitioned_by = [("__index__",)] if divisions else []
+
+        # Optional partition-wise statistics:
+        #   - "num-rows": Series of partition row counts
+        #   - <column-name>: DataFrame of partition stats for the column
+        #     - Required DataFrame columns: "min" and "max"
+        self._statistics = statistics or {}
+
+        # "Lazy" statistics correspond to partition statistics
+        # that can be loaded "just in time" using a callback
+        # function. The call-back function must accept an
+        # optional `keys: set` argument to specify which columns
+        # to load statistics for.
+        #
+        # For example, `read_parquet` will register a call-back
+        # function to collect the partition sizes and min/max
+        # column statistics
+        if isinstance(lazy_statistics, tuple):
+            self._lazy_statistics = lazy_statistics
+        else:
+            self._lazy_statistics = (set(), None)
+
+        # Track renamed columns
+        self._column_name_map = column_name_map or {}
+
+    def copy(self, **kwargs):
+        """Return copy of this PartitionMetadata object"""
+        new_kwargs = dict(
+            meta=None if self.meta is None else self.meta.copy(),
+            npartitions=self.npartitions,
+            divisions=self.divisions,
+            partitioned_by=self.partitioned_by.copy(),
+            statistics=self._statistics.copy(),
+            lazy_statistics=self._lazy_statistics,
+            column_name_map=self._column_name_map.copy(),
         )
-        self._custom_metadata = custom_metadata
-
-    def copy_partition_stats(self):
-        _stats = self._partition_stats.copy()
-        _stats.update({"__lazy_stats__": self._lazy_partition_stats.copy()})
-        return _stats
-
-    def known_partition_stat(self, key):
-        return key in self._partition_stats
-
-    def lazy_partition_stat(self, key):
-        return key in self._lazy_partition_stats["keys"]
-
-    def load_lazy_partition_stats(self, keys=None):
-        _func = self._lazy_partition_stats.get("func", None)
-        if _func is None:
-            return
-        _keys = set(keys or self._lazy_partition_stats.get("keys", set())) - set(
-            self._partition_stats.keys()
-        )
-        if _keys:
-            self._partition_stats.update(_func(keys=_keys))
-
-    def partition_stats_are_available(self, keys) -> bool:
-        lazy_keys = set(self._lazy_partition_stats.get("keys", set()))
-        known_keys = set(self._partition_stats.keys())
-        available_keys = lazy_keys | known_keys
-        return set(keys).issubset(available_keys)
-
-    def get_partition_stat(self, key):
-        if self.lazy_partition_stat(key) and not self.known_partition_stat(key):
-            self.load_lazy_partition_stats(keys=[key])
-        try:
-            return self._partition_stats[key]
-        except IndexError:
-            return None
-
-    def set_partition_stat(self, key, value):
-        self._partition_stats[key] = value
+        new_kwargs.update(**kwargs)
+        return PartitionMetadata(**new_kwargs)
 
     @property
-    def meta(self):
+    def meta(self) -> Any:
+        """Return global DataFrame schema"""
         return self._meta
 
-    def set_meta(self, value):
+    def set_meta(self, value) -> None:
+        """Set global DataFrame schema"""
         self._meta = value
 
     @property
-    def divisions(self):
-        return self._divisions
+    def npartitions(self) -> int:
+        """Total partition count"""
+        return self._npartitions
 
-    def set_divisions(self, value):
-        self._divisions = value
+    @lru_cache(maxsize=1)
+    def _unknown_divisions(self, npartitions) -> tuple:
+        """Return conventional 'unknown' divisions"""
+        return (None,) * (npartitions + 1)
 
-    def get_custom_metadata(self, key):
-        return self._custom_metadata[key]
+    @property
+    def divisions(self) -> tuple:
+        """Get Min/max Index statistics, if known"""
+        if not self.known_divisions:
+            return self._unknown_divisions(self.npartitions)
+        if isinstance(self._divisions, tuple):
+            return self._divisions
+        else:
+            raise ValueError
+
+    @property
+    def known_divisions(self):
+        """Return if divisions are known"""
+        return self._divisions is not None
+
+    def set_divisions(self, value: tuple):
+        """Set Min/max Index statistics"""
+        if isinstance(value, (list, tuple)) and all(map(lambda x: x is None, value)):
+            self._divisions = None
+        else:
+            self._divisions = value
+
+    @property
+    def partitioned_by(self) -> list[tuple]:
+        """List of partitioned-by columns/Indices"""
+        return self._partitioned_by
+
+    @property
+    def known_stats(self) -> set:
+        """Return known (in memory) partition-statistic keys"""
+        return set(self._statistics.keys())
+
+    @property
+    def lazy_stats(self) -> set:
+        """Return lazy partition-statistic keys"""
+        return self._lazy_statistics[0]
+
+    @property
+    def available_stats(self) -> set:
+        """Return all available partition-statistic keys"""
+        return self.known_stats | self.lazy_stats
+
+    def get_stats(self, keys: set) -> dict:
+        """Return requested partition statistics"""
+        success = self.load_lazy_stats(keys)
+        if not success:
+            missing = self.known_stats - keys
+            raise KeyError(f"{missing} stats could not be loaded")
+        return {
+            # Translate current column name to the
+            # column name used in the original statistics
+            # (e.g. if a column was renamed)
+            self._column_name_map.get(k, k): self._statistics[k]
+            for k in keys
+        }
+
+    def load_lazy_stats(self, keys: set | None = None) -> bool:
+        """Load lazy statistics
+
+        Returns value specifies if the desired ``keys``
+        were successfully added to the known statistics.
+        """
+
+        _available = self.available_stats
+        if keys:
+            if not keys.issubset(_available):
+                raise KeyError(
+                    f"{keys} stat keys were requested, "
+                    f"but only {_available} stats are available."
+                )
+        else:
+            keys = _available
+
+        _keys = keys - self.known_stats
+        if not _keys:
+            return True  # No lazy stats to load
+
+        _func = self._lazy_statistics[1]
+        if not callable(_func):
+            return False  # No callback function available
+
+        # Perform update
+        new_stats = _func(keys=_keys)
+        self._statistics.update(new_stats)
+
+        # Check if update was successful
+        if _keys - set(new_stats.keys()):
+            return False
+        return True
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
@@ -406,7 +526,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions, **metadata_kwargs):
+    def __init__(self, dsk, name, meta, divisions, partition_metadata=None):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -417,23 +537,29 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 f"Expected meta to specify type {type(self).__name__}, got type "
                 f"{typename(type(meta))}"
             )
-        self._metadata = FrameMetadata(
-            meta=meta,
-            divisions=tuple(divisions),
-            **metadata_kwargs,
-        )
+
+        # Set partition metadata
+        if partition_metadata is None:
+            partition_metadata = PartitionMetadata(
+                meta=meta,
+                divisions=tuple(divisions),
+            )
+        else:
+            partition_metadata.set_meta(meta)
+            partition_metadata.set_divisions(divisions)
+        self._partition_metadata = partition_metadata
 
     @property
-    def metadata(self):
-        return self._metadata
+    def partition_metadata(self):
+        return self._partition_metadata
 
     @property
     def _meta(self):
-        return self.metadata.meta
+        return self.partition_metadata.meta
 
     @_meta.setter
     def _meta(self, value):
-        return self.metadata.set_meta(value)
+        return self.partition_metadata.set_meta(value)
 
     def __dask_graph__(self):
         return self.dask
@@ -490,15 +616,17 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         which sorts and splits the data as needed.
         See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
         """
-        return self.metadata.divisions
+        return self.partition_metadata.divisions
 
     @divisions.setter
     def divisions(self, value):
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(self.metadata.divisions):
-            n = len(self.metadata.divisions)
+        if hasattr(self, "_divisions") and len(value) != len(
+            self.partition_metadata.divisions
+        ):
+            n = len(self.partition_metadata.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
                 f"tuple of length={n}, got {len(value)}"
@@ -519,7 +647,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if value != tuple(sorted(value)):
                     raise ValueError("divisions must be sorted")
 
-        self.metadata.set_divisions(value)
+        self.partition_metadata.set_divisions(value)
 
     @property
     def npartitions(self) -> int:
@@ -695,7 +823,7 @@ Dask Name: {name}, {layers}"""
     @property
     def known_divisions(self):
         """Whether divisions are already known"""
-        return len(self.divisions) > 0 and self.divisions[0] is not None
+        return self.partition_metadata.known_divisions
 
     def clear_divisions(self):
         """Forget division information"""
@@ -4519,7 +4647,7 @@ class DataFrame(_Frame):
     def __len__(self):
         try:
             # Use partition statistics if they are available
-            part_sizes = self.metadata.get_partition_stat("num-rows")
+            part_sizes = self.partition_metadata.get_stats({"num-rows"})["num-rows"]
             if part_sizes:
                 return sum(part_sizes)
         except KeyError:
@@ -4933,7 +5061,7 @@ class DataFrame(_Frame):
 
             # Use partition statistics to check if new index is already sorted
             if not pre_sorted:
-                _stats = self.metadata.get_partition_stat(other)
+                _stats = self.partition_metadata.get_stats({other})[other]
                 if _stats is not None:
                     pre_sorted = all(
                         _stats["min"][1:].values >= _stats["max"][:-1].values
@@ -5078,7 +5206,7 @@ class DataFrame(_Frame):
                 data,
                 *pairs,
                 meta=df2,
-                partition_stats=self.metadata._partition_stats.copy(),
+                partition_metadata=self.partition_metadata.copy(),
             )
 
         return data
@@ -6155,7 +6283,7 @@ def elemwise(
     meta=no_default,
     out=None,
     transform_divisions=True,
-    partition_stats=None,
+    partition_metadata=None,
     **kwargs,
 ):
     """Elementwise operation for Dask dataframes
@@ -6257,7 +6385,7 @@ def elemwise(
             meta = partial_by_order(*parts, function=op, other=other)
 
     result = new_dd_object(
-        graph, _name, meta, divisions, partition_stats=partition_stats
+        graph, _name, meta, divisions, partition_metadata=partition_metadata
     )
     return handle_out(out, result)
 
@@ -6588,7 +6716,7 @@ def map_partitions(
     enforce_metadata=True,
     transform_divisions=True,
     align_dataframes=True,
-    partition_stats=None,
+    partition_metadata=None,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -6719,7 +6847,9 @@ def map_partitions(
         )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, divisions, partition_stats=partition_stats)
+    return new_dd_object(
+        graph, name, meta, divisions, partition_metadata=partition_metadata
+    )
 
 
 def _get_divisions_map_partitions(

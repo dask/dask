@@ -14,7 +14,7 @@ from packaging.version import parse as parse_version
 import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
-from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.core import DataFrame, PartitionMetadata, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
@@ -554,18 +554,22 @@ def read_parquet(
     else:
         ctx = contextlib.nullcontext()
 
-    # Define partition_stats callback
+    # Define partition_metadata, using callback if necessary
+    _partition_stats = None
+    _lazy_partition_stats = None
     if processed_stats:
-        partition_stats = _pq_partition_stats(processed_stats)
+        _partition_stats = _pq_partition_stats(processed_stats)
     elif hasattr(engine, "read_partition_stats"):
-        partition_stats = {
-            "__lazy_stats__": {
-                "func": partial(_lazy_pq_partition_stats, parts, columns, engine, fs),
-                "keys": {"num-rows"} | set(columns),
-            }
-        }
-    else:
-        partition_stats = None
+        _lazy_partition_stats = (
+            {"num-rows"} | set(columns),
+            partial(_lazy_pq_partition_stats, parts, columns, engine, fs),
+        )
+    partition_metadata = PartitionMetadata(
+        meta=meta,
+        divisions=divisions,
+        statistics=_partition_stats,
+        lazy_statistics=_lazy_partition_stats,
+    )
 
     with ctx:
         # Construct the output collection with from_map
@@ -582,7 +586,7 @@ def read_parquet(
                 "args": (path,),
                 "kwargs": input_kwargs,
             },
-            partition_stats=partition_stats,
+            partition_metadata=partition_metadata,
         )
 
 
