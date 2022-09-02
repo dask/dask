@@ -1078,8 +1078,7 @@ def _aggregate_docstring(based_on=None):
             - dict of column names -> function, function name or list of such.
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
-            For ``shuffle=False``, this defaults to 8. If shuffling is enabled,
-            it defaults to 1. If your intermediate partitions are likely to
+            This defaults to 8. If your intermediate partitions are likely to
             be small (either due to a small number of groups or a small initial
             partition size), consider increasing this number for better performance.
         split_out : int, optional
@@ -2462,9 +2461,9 @@ def _shuffle_aggregate(
         Keywords for the aggregate function only.
     split_every : int, optional
         Number of partitions to aggregate into a shuffle partition.
-        Defaults to one, meaning that the initial partitioning is used in
-        the shuffle. Shuffling scales with the number of partitions, so it may
-        be helpful to repartition into fewer before shuffling as a performance
+        Defaults to eight, meaning that the initial partitions are repartitioned
+        into groups of eight before the shuffle. Shuffling scales with the number
+        of partitions, so it may be helpful to increase this number as a performance
         optimization, but only when the aggregated partition can comfortably
         fit in worker memory.
     split_out : int, optional
@@ -2493,7 +2492,7 @@ def _shuffle_aggregate(
     npartitions = npartitions.pop()
 
     if split_every is None:
-        split_every = 1
+        split_every = 8
     elif split_every is False:
         split_every = npartitions
     elif split_every < 1 or not isinstance(split_every, Integral):
