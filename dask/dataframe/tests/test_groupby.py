@@ -399,7 +399,8 @@ def test_groupby_multilevel_agg():
     assert_eq(res, sol)
 
 
-def test_groupby_get_group():
+@pytest.mark.parametrize("categoricals", [True, False])
+def test_groupby_get_group(categoricals):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
@@ -409,7 +410,15 @@ def test_groupby_get_group():
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     full = d.compute()
 
-    for ddkey, pdkey in [("b", "b"), (d.b, full.b), (d.b + 1, full.b + 1)]:
+    by_keys = [("b", "b"), (d.b, full.b)]
+
+    if categoricals:
+        d = d.categorize(columns=["b"])
+        full = d.compute()
+    else:
+        by_keys.append((d.b + 1, full.b + 1))
+
+    for ddkey, pdkey in by_keys:
         ddgrouped = d.groupby(ddkey)
         pdgrouped = full.groupby(pdkey)
         # DataFrame
