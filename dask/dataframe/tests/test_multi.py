@@ -2068,7 +2068,7 @@ def test_concat_categorical(known, cat_index, divisions):
                 dd.DataFrame, res.dask, res.__dask_keys__()
             )
             for p in [i.iloc[:0] for i in parts]:
-                res._meta == p  # will error if schemas don't align
+                assert res._meta == p  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
 
