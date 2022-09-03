@@ -148,7 +148,9 @@ def optimize_dataframe_getitem(dsk, keys):
                 return True
             deps = dependents[key]
             if deps:  # noqa: B023
-                return all(_walk_deps(dependents, dep, success) for dep in deps)  # noqa: B023
+                return all(
+                    _walk_deps(dependents, dep, success) for dep in deps
+                )  # noqa: B023
             else:
                 return False
 
