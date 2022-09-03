@@ -2720,7 +2720,10 @@ def test_reduction_method():
 
     # Test with keywords
     res2 = ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})
-    assert res2._name == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
+    assert (
+        res2._name
+        == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
+    )
     assert res2._name != res._name
     assert_eq(res2, (df >= 25).sum())
 
