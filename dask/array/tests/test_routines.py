@@ -245,8 +245,8 @@ def test_rot90(kwargs, shape):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=1)
 
-    np_func = getattr(np, "rot90")
-    da_func = getattr(da, "rot90")
+    np_func = np.rot90
+    da_func = da.rot90
 
     try:
         for axis in axes[:2]:

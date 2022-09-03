@@ -1188,7 +1188,7 @@ def register_numpy():
             if hasattr(
                 x, "offset"
             ):  # offset numpy used while opening, and not the offset to the beginning of the file
-                offset += getattr(x, "offset")
+                offset += x.offset
             return (
                 x.filename,
                 os.path.getmtime(x.filename),

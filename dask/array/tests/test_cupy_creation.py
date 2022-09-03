@@ -158,7 +158,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     ],
 )
 def test_tri_like(xp, N, M, k, dtype, chunks):
-    xp_tri = getattr(xp, "tri")
+    xp_tri = xp.tri
 
     args = [N, M, k, dtype]
 
