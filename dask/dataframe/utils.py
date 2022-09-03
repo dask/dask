@@ -657,7 +657,7 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
         ) or (a == b)
 
     if not is_dask_collection(res) and is_dataframe_like(res):
-        for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes], axis=1).itertuples():
+        for _, a, b in pd.concat([ddf._meta.dtypes, res.dtypes], axis=1).itertuples():
             assert eq_dtypes(a, b)
     elif not is_dask_collection(res) and (is_index_like(res) or is_series_like(res)):
         a = ddf._meta.dtype

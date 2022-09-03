@@ -1921,7 +1921,7 @@ def setitem_array(out_name, array, indices, value):
         # Note which dimension, if any, has 1-d integer array index
         dim_1d_int_index = None
 
-        for dim, (index, full_size, (loc0, loc1)) in enumerate(
+        for dim, (index, _, (loc0, loc1)) in enumerate(
             zip(indices, array_shape, locations)
         ):
 

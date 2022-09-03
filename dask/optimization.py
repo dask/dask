@@ -754,9 +754,9 @@ def fuse(
                     children_info = info_stack[-num_children:]
                     del info_stack[-num_children:]
                     for (
-                        cur_key,
-                        cur_task,
-                        cur_keys,
+                        _cur_key,
+                        _cur_task,
+                        _cur_keys,
                         cur_height,
                         cur_width,
                         cur_num_nodes,
