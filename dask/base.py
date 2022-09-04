@@ -1187,7 +1187,7 @@ def register_numpy():
                 offset = 0  # root memmap's have mmap object as base
             if hasattr(
                 x, "offset"
-            ):  # offset numpy used while opening, and not the offset to the beginning of the file
+            ):  # offset numpy used while opening, and not the offset to the beginning of file
                 offset += x.offset
             return (
                 x.filename,
