@@ -636,7 +636,7 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
-        pytest.raises(ValueError, lambda l, r: l.add(r, axis=1))
+        pytest.raises(ValueError, lambda l=l, r=r: l.add(r, axis=1))
 
     for l, r, el, er in [(ddf1, pdf2, pdf1, pdf2), (ddf1, ps3, pdf1, ps3)]:
         assert_eq(l, el)
@@ -967,17 +967,17 @@ def test_reduction_series_invalid_axis():
 
     for axis in [1, "columns"]:
         for s in [ddf1.a, pdf1.a]:  # both must behave the same
-            pytest.raises(ValueError, lambda s, axis: s.sum(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.prod(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.product(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.min(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.max(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.sum(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.prod(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.product(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.min(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.max(axis=axis))
             # only count doesn't have axis keyword
-            pytest.raises(TypeError, lambda s, axis: s.count(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.std(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.var(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.sem(axis=axis))
-            pytest.raises(ValueError, lambda s, axis: s.mean(axis=axis))
+            pytest.raises(TypeError, lambda s=s, axis=axis: s.count(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.std(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.var(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.sem(axis=axis))
+            pytest.raises(ValueError, lambda s=s, axis=axis: s.mean(axis=axis))
 
 
 def test_reductions_non_numeric_dtypes():

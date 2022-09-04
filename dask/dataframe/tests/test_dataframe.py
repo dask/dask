@@ -190,7 +190,7 @@ def test_Index():
     ]:
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
-        pytest.raises(AttributeError, lambda ddf: ddf.index.index)
+        pytest.raises(AttributeError, lambda ddf=ddf: ddf.index.index)
 
 
 def test_axes():
@@ -1952,7 +1952,7 @@ def test_repartition():
         [10, 10, 20, 60],
     ]:  # not unique (last element can be duplicated)
 
-        pytest.raises(ValueError, lambda div: a.repartition(divisions=div))
+        pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
     for p in range(1, 7):
@@ -3321,25 +3321,25 @@ def test_nlargest_nsmallest():
     ddf = dd.from_pandas(df, npartitions=3)
 
     for m in ["nlargest", "nsmallest"]:
-        f = lambda df, m, *args, **kwargs: getattr(df, m)(*args, **kwargs)
+        f = lambda df=df, m=m, *args, **kwargs: getattr(df, m)(*args, **kwargs)
 
-        res = f(ddf, 5, "a")
-        res2 = f(ddf, 5, "a", split_every=2)
-        sol = f(df, 5, "a")
+        res = f(ddf, m, 5, "a")
+        res2 = f(ddf, m, 5, "a", split_every=2)
+        sol = f(df, m, 5, "a")
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf, 5, ["a", "c"])
-        res2 = f(ddf, 5, ["a", "c"], split_every=2)
-        sol = f(df, 5, ["a", "c"])
+        res = f(ddf, m, 5, ["a", "c"])
+        res2 = f(ddf, m, 5, ["a", "c"], split_every=2)
+        sol = f(df, m, 5, ["a", "c"])
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf.a, 5)
-        res2 = f(ddf.a, 5, split_every=2)
-        sol = f(df.a, 5)
+        res = f(ddf.a, m, 5)
+        res2 = f(ddf.a, m, 5, split_every=2)
+        sol = f(df.a, m, 5)
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
@@ -4492,7 +4492,7 @@ def test_coerce():
     ddf = dd.from_pandas(df, npartitions=2)
     funcs = (int, float, complex)
     for d, t in product(funcs, (ddf, ddf[0])):
-        pytest.raises(TypeError, lambda t, d: t(d))
+        pytest.raises(TypeError, lambda t=t, d=d: t(d))
 
 
 def test_bool():
