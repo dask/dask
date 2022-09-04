@@ -1,4 +1,5 @@
 import random
+from types import MappingProxyType
 
 from dask.utils import import_required
 
@@ -8,7 +9,7 @@ def timeseries(
     end="2000-01-31",
     freq="1s",
     partition_freq="1d",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=MappingProxyType({"name": str, "id": int, "x": float, "y": float}),
     seed=None,
     **kwargs,
 ):

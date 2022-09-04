@@ -1,3 +1,5 @@
+from types import MappingProxyType
+
 import numpy as np
 import pandas as pd
 
@@ -122,7 +124,7 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
 def make_timeseries(
     start="2000-01-01",
     end="2000-12-31",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=MappingProxyType({"name": str, "id": int, "x": float, "y": float}),
     freq="10s",
     partition_freq="1M",
     seed=None,

@@ -4,6 +4,7 @@ import operator
 import uuid
 import warnings
 from numbers import Integral
+from types import MappingProxyType
 
 import numpy as np
 import pandas as pd
@@ -1238,8 +1239,8 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        chunk_kwargs={},
-        aggregate_kwargs={},
+        chunk_kwargs=MappingProxyType({}),
+        aggregate_kwargs=MappingProxyType({}),
     ):
         if aggfunc is None:
             aggfunc = func

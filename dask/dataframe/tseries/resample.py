@@ -1,3 +1,5 @@
+from types import MappingProxyType
+
 import numpy as np
 import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
@@ -125,7 +127,14 @@ class Resampler:
         self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
-    def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
+    def _agg(
+        self,
+        how,
+        meta=None,
+        fill_value=np.nan,
+        how_args=(),
+        how_kwargs=MappingProxyType({}),
+    ):
         """Aggregate using one or more operations
 
         Parameters

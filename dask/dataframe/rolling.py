@@ -1,6 +1,7 @@
 import datetime
 import inspect
 from numbers import Integral
+from types import MappingProxyType
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
@@ -591,7 +592,7 @@ class Rolling:
         )
 
     @derived_from(pd_Rolling)
-    def aggregate(self, func, args=(), kwargs={}, **kwds):
+    def aggregate(self, func, args=(), kwargs=MappingProxyType({}), **kwds):
         return self._call_method("agg", func, args=args, kwargs=kwargs, **kwds)
 
     agg = aggregate
