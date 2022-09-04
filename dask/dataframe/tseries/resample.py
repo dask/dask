@@ -1,5 +1,3 @@
-from types import MappingProxyType
-
 import numpy as np
 import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
@@ -133,7 +131,7 @@ class Resampler:
         meta=None,
         fill_value=np.nan,
         how_args=(),
-        how_kwargs=MappingProxyType({}),
+        how_kwargs=None,
     ):
         """Aggregate using one or more operations
 
@@ -153,6 +151,9 @@ class Resampler:
         -------
         Dask DataFrame or Series
         """
+        if how_kwargs is None:
+            how_kwargs = {}
+
         rule = self._rule
         kwargs = self._kwargs
         name = "resample-" + tokenize(

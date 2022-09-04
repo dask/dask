@@ -2,7 +2,6 @@ import os
 import uuid
 from fnmatch import fnmatch
 from glob import glob
-from types import MappingProxyType
 from warnings import warn
 
 import pandas as pd
@@ -49,7 +48,7 @@ def to_hdf(
     name_function=None,
     compute=True,
     lock=None,
-    dask_kwargs=MappingProxyType({}),
+    dask_kwargs=None,
     **kwargs,
 ):
     """Store Dask Dataframe to Hierarchical Data Format (HDF) files
@@ -138,6 +137,9 @@ def to_hdf(
     read_hdf:
     to_parquet:
     """
+    if dask_kwargs is None:
+        dask_kwargs = {}
+
     name = "to-hdf-" + uuid.uuid1().hex
 
     pd_to_hdf = getattr(df._partition_type, "to_hdf")
