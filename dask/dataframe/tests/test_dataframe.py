@@ -1286,7 +1286,7 @@ def test_isin():
     f_dict = {"a": [0, 3], "b": [1, 2]}
     f_list2 = [1, "2"]
     f_list_delayed = [delayed(1), delayed(2), delayed(3)]
-    f_nested_list = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
+    f_list_of_lists = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
@@ -1297,8 +1297,8 @@ def test_isin():
         full.a.isin(d.compute() for d in f_list_delayed),
     )
     assert_eq(
-        d.a.isin(f_nested_list),
-        full.a.isin(f_nested_list),
+        d.a.isin(f_list_of_lists),
+        full.a.isin(f_list_of_lists),
     )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
@@ -1323,8 +1323,8 @@ def test_isin():
         full.isin([d.compute() for d in f_list_delayed]),
     )
     assert_eq(
-        d.isin(f_nested_list),
-        full.isin(f_nested_list),
+        d.isin(f_list_of_lists),
+        full.isin(f_list_of_lists),
     )
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
