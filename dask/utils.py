@@ -1817,7 +1817,7 @@ def key_split(s):
     >>> key_split("('x-2', 1)")
     'x'
     >>> key_split("('x', 1)")
-     'x'
+    'x'
     >>> key_split('hello-world-1')
     'hello-world'
     >>> key_split(b'hello-world-1')

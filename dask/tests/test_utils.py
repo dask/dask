@@ -32,7 +32,6 @@ from dask.utils import (
     is_arraylike,
     itemgetter,
     iter_chunks,
-    key_split,
     memory_repr,
     methodcaller,
     ndeepmap,
@@ -709,22 +708,6 @@ def test_iter_chunks():
     ]
     assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
     assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
-
-
-def test_key_split():
-    assert key_split("x") == "x"
-    assert key_split("x-1") == "x"
-    assert key_split("x-1-2-3") == "x"
-    assert key_split(("x-2", 1)) == "x"
-    assert key_split("('x-2', 1)") == "x"
-    assert key_split("('x', 1)") == "x"
-    assert key_split("hello-world-1") == "hello-world"
-    assert key_split(b"hello-world-1") == "hello-world"
-    assert key_split("ae05086432ca935f6eba409a8ecd4896") == "data"
-    assert key_split("<module.submodule.myclass object at 0xdaf372") == "myclass"
-    assert key_split(None) == "Other"
-    assert key_split("x-abcdefab") == "x"
-    assert key_split("_(x)") == "x"
 
 
 def test_stringify():
