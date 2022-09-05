@@ -3101,9 +3101,9 @@ Dask Name: {name}, {layers}"""
             # we can create a better fix for Serialization.
             try:
                 values = list(set(values))
+                values = np.fromiter(values, dtype=object)
             except TypeError:
                 pass
-            values = np.array(values, dtype="object")
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )

@@ -51,6 +51,18 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+
+dsk2 = {
+    ("x", 0): pd.DataFrame({"a": [[1, 2, 3]], "b": [4, 5, 6]}, index=[0, 1, 3]),
+    ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [[3, 4, 5]]}, index=[5, 6, 8]),
+    ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
+}
+meta2 = make_meta(
+    {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
+)
+d2 = dd.DataFrame(dsk2, "x", meta2, [0, 5, 9, 9])
+full2 = d2.compute()
+
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
@@ -1274,6 +1286,7 @@ def test_isin():
     f_dict = {"a": [0, 3], "b": [1, 2]}
     f_list2 = [1, "2"]
     f_list_delayed = [delayed(1), delayed(2), delayed(3)]
+    f_nested_list = [[1,2,3], [2,3,4], [3,4,5]]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
@@ -1283,7 +1296,10 @@ def test_isin():
         d.a.isin([d.compute() for d in f_list_delayed]),
         full.a.isin(d.compute() for d in f_list_delayed),
     )
-    # print(d.a.isin(f_list_delayed).compute())
+    assert_eq(
+        d.a.isin(f_nested_list),
+        full.a.isin(f_nested_list),
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
@@ -1305,6 +1321,10 @@ def test_isin():
     assert_eq(
         d.isin([d.compute() for d in f_list_delayed]),
         full.isin([d.compute() for d in f_list_delayed]),
+    )
+    assert_eq(
+        d.isin(f_nested_list),
+        full.isin(f_nested_list),
     )
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
