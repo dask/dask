@@ -1286,7 +1286,7 @@ def test_isin():
     f_dict = {"a": [0, 3], "b": [1, 2]}
     f_list2 = [1, "2"]
     f_list_delayed = [delayed(1), delayed(2), delayed(3)]
-    f_nested_list = [[1,2,3], [2,3,4], [3,4,5]]
+    f_nested_list = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
