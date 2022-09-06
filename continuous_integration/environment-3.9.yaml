@@ -65,6 +65,9 @@ dependencies:
   - python-xxhash
   - mmh3
   - jinja2
+  # The nightly pyarrow / arrow-cpp packages currently don't install with latest
+  # protobuf / abseil, see https://github.com/dask/dask/issues/9449
+  - libprotobuf=3.19
   - pip
   - pip:
     - git+https://github.com/dask/distributed
