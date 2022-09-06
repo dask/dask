@@ -10,9 +10,6 @@ jobs:
       matrix:
         environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
-    env:
-      COVERAGE: "true"
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -24,7 +21,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.7"
+          python-version: "3.8"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
@@ -36,46 +33,6 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
-
-      - name: Coverage
-        uses: codecov/codecov-action@v1
-
-  check-hdfs:
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
-    outputs:
-      test-hdfs: ${{ steps.detect-trigger.outputs.trigger-found }}
-    steps:
-      - uses: actions/checkout@v2
-        with:
-          fetch-depth: 2
-      - uses: xarray-contrib/ci-trigger@v1
-        id: detect-trigger
-        with:
-          keyword: "test-hdfs"
-
-  hdfs:
-    needs: check-hdfs
-    runs-on: "ubuntu-latest"
-    if: |
-      needs.check-hdfs.outputs.test-hdfs == 'true'
-      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
-
-    steps:
-      - name: Checkout source
-        uses: actions/checkout@v2
-
-      - name: Start HDFS
-        shell: bash -l {0}
-        run: source continuous_integration/hdfs/startup_hdfs.sh
-
-      - name: Install
-        shell: bash -l {0}
-        run: source continuous_integration/hdfs/install.sh
-
-      - name: Run tests
-        shell: bash -l {0}
-        run: source continuous_integration/hdfs/run_tests.sh
 
   doctest:
     runs-on: "ubuntu-latest"
@@ -90,8 +47,8 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-latest.yaml
+          python-version: "3.9"
+          environment-file: continuous_integration/environment-3.9.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -108,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.7", "3.8", "3.9"]
+        python-version: ["3.8", "3.9", "3.10"]
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -120,7 +77,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.7"
+          python-version: "3.8"
           activate-environment: test-environment
           auto-activate-base: false
 

@@ -10,18 +10,19 @@ from dask.array.utils import assert_eq
 from dask.blockwise import (
     _BLOCKWISE_DEFAULT_PREFIX,
     Blockwise,
+    _unique_dep,
     index_subs,
     optimize_blockwise,
     rewrite_blockwise,
 )
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils_test import dec, inc
+from dask.utils_test import dec, hlg_layer_topological, inc
 
-a, b, c, d, e, f, g = "abcdefg"
-_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = [
-    _BLOCKWISE_DEFAULT_PREFIX + "%d" % i for i in range(10)
-]
-i, j, k = "ijk"
+a, b, c, d, e, f, g = "a", "b", "c", "d", "e", "f", "g"
+_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = (
+    f"{_BLOCKWISE_DEFAULT_PREFIX}{i}" for i in range(10)
+)
+i, j, k = "i", "j", "k"
 
 
 @pytest.mark.parametrize(
@@ -35,21 +36,40 @@ i, j, k = "ijk"
                 (c, "i", {c: (dec, _0)}, [(a, "i")]),
                 (d, "i", {d: (add, _0, _1, _2)}, [(a, "i"), (b, "i"), (c, "i")]),
             ],
-            (d, "i", {b: (inc, _0), c: (dec, _0), d: (add, _0, b, c)}, [(a, "i")]),
+            (
+                d,
+                "i",
+                {
+                    _unique_dep(b, "i"): (inc, _0),
+                    _unique_dep(c, "i"): (dec, _0),
+                    d: (add, _0, _unique_dep(b, "i"), _unique_dep(c, "i")),
+                },
+                [(a, "i")],
+            ),
         ],
         [
             [
                 (b, "i", {b: (inc, _0)}, [(a, "i")]),
                 (c, "j", {c: (inc, _0)}, [(b, "j")]),
             ],
-            (c, "j", {b: (inc, _0), c: (inc, b)}, [(a, "j")]),
+            (
+                c,
+                "j",
+                {_unique_dep(b, "j"): (inc, _0), c: (inc, _unique_dep(b, "j"))},
+                [(a, "j")],
+            ),
         ],
         [
             [
                 (b, "i", {b: (sum, _0)}, [(a, "ij")]),
                 (c, "k", {c: (inc, _0)}, [(b, "k")]),
             ],
-            (c, "k", {b: (sum, _0), c: (inc, b)}, [(a, "kA")]),
+            (
+                c,
+                "k",
+                {_unique_dep(b, "k"): (sum, _0), c: (inc, _unique_dep(b, "k"))},
+                [(a, "kA")],
+            ),
         ],
         [
             [
@@ -60,7 +80,11 @@ i, j, k = "ijk"
             (
                 g,
                 "ij",
-                {g: (add, c, d), c: (inc, _0), d: (inc, _1)},
+                {
+                    g: (add, _unique_dep(c, "i"), _unique_dep(d, "j")),
+                    _unique_dep(c, "i"): (inc, _0),
+                    _unique_dep(d, "j"): (inc, _1),
+                },
                 [(a, "i"), (b, "j")],
             ),
         ],
@@ -69,14 +93,27 @@ i, j, k = "ijk"
                 (b, "ji", {b: (np.transpose, _0)}, [(a, "ij")]),
                 (c, "ij", {c: (add, _0, _1)}, [(a, "ij"), (b, "ij")]),
             ],
-            (c, "ij", {c: (add, _0, b), b: (np.transpose, _1)}, [(a, "ij"), (a, "ji")]),
+            (
+                c,
+                "ij",
+                {
+                    c: (add, _0, _unique_dep(b, "ij")),
+                    _unique_dep(b, "ij"): (np.transpose, _1),
+                },
+                [(a, "ij"), (a, "ji")],
+            ),
         ],
         [
             [
                 (c, "i", {c: (add, _0, _1)}, [(a, "i"), (b, "i")]),
                 (d, "i", {d: (inc, _0)}, [(c, "i")]),
             ],
-            (d, "i", {d: (inc, c), c: (add, _0, _1)}, [(a, "i"), (b, "i")]),
+            (
+                d,
+                "i",
+                {d: (inc, _unique_dep(c, "i")), _unique_dep(c, "i"): (add, _0, _1)},
+                [(a, "i"), (b, "i")],
+            ),
         ],
         [
             [
@@ -86,7 +123,10 @@ i, j, k = "ijk"
             (
                 d,
                 "ij",
-                {d: (np.dot, b, _0), b: (np.transpose, _1)},
+                {
+                    d: (np.dot, _unique_dep(b, "ik"), _0),
+                    _unique_dep(b, "ik"): (np.transpose, _1),
+                },
                 [(c, "kj"), (a, "ki")],
             ),
         ],
@@ -99,7 +139,11 @@ i, j, k = "ijk"
             (
                 g,
                 "i",
-                {g: (add, c, f), f: (add, _2, _3), c: (add, _0, _1)},
+                {
+                    g: (add, _unique_dep(c, "i"), _unique_dep(f, "i")),
+                    _unique_dep(f, "i"): (add, _2, _3),
+                    _unique_dep(c, "i"): (add, _0, _1),
+                },
                 [(a, i), (b, i), (d, i), (e, i)],
             ),
         ],
@@ -112,7 +156,11 @@ i, j, k = "ijk"
             (
                 g,
                 "i",
-                {g: (add, c, f), f: (add, _0, _2), c: (add, _0, _1)},
+                {
+                    g: (add, _unique_dep(c, "i"), _unique_dep(f, "i")),
+                    _unique_dep(f, "i"): (add, _0, _2),
+                    _unique_dep(c, "i"): (add, _0, _1),
+                },
                 [(a, "i"), (b, "i"), (e, "i")],
             ),
         ],
@@ -121,14 +169,24 @@ i, j, k = "ijk"
                 (b, "i", {b: (sum, _0)}, [(a, "ij")]),
                 (c, "i", {c: (inc, _0)}, [(b, "i")]),
             ],
-            (c, "i", {c: (inc, b), b: (sum, _0)}, [(a, "iA")]),
+            (
+                c,
+                "i",
+                {c: (inc, _unique_dep(b, "i")), _unique_dep(b, "i"): (sum, _0)},
+                [(a, "iA")],
+            ),
         ],
         [
             [
                 (c, "i", {c: (inc, _0)}, [(b, "i")]),
                 (d, "i", {d: (add, _0, _1, _2)}, [(a, "i"), (b, "i"), (c, "i")]),
             ],
-            (d, "i", {d: (add, _0, _1, c), c: (inc, _1)}, [(a, "i"), (b, "i")]),
+            (
+                d,
+                "i",
+                {d: (add, _0, _1, _unique_dep(c, "i")), _unique_dep(c, "i"): (inc, _1)},
+                [(a, "i"), (b, "i")],
+            ),
         ],
         # Include literals
         [
@@ -143,7 +201,7 @@ i, j, k = "ijk"
             (
                 c,
                 "j",
-                {b: (add, _1, _2), c: (add, b, _0)},
+                {_unique_dep(b, "j"): (add, _1, _2), c: (add, _unique_dep(b, "j"), _0)},
                 [(456, None), (a, "j"), (123, None)],
             ),
         ],
@@ -156,7 +214,7 @@ i, j, k = "ijk"
             (
                 c,
                 "j",
-                {b: (add, _1, _2), c: (add, b, _0)},
+                {_unique_dep(b, "j"): (add, _1, _2), c: (add, _unique_dep(b, "j"), _0)},
                 [(False, None), (a, "j"), (0, None)],
             ),
         ],
@@ -166,7 +224,65 @@ i, j, k = "ijk"
                 (b, "i", {b: (add, _0, _1)}, [(a, "i"), (123, None)]),
                 (c, "j", {c: (add, _0, _1)}, [(b, "j"), (123, None)]),
             ],
-            (c, "j", {b: (add, _1, _0), c: (add, b, _0)}, [(123, None), (a, "j")]),
+            (
+                c,
+                "j",
+                {_unique_dep(b, "j"): (add, _1, _0), c: (add, _unique_dep(b, "j"), _0)},
+                [(123, None), (a, "j")],
+            ),
+        ],
+        # Check cases where two distinct indices are used
+        # for the same dependency name, and where the same
+        # dependency-index combination is repeated
+        # (See: https://github.com/dask/dask/issues/8535)
+        [
+            [
+                (b, "jk", {b: (add, _0, _1)}, [(a, "jk"), (2, None)]),
+                (c, "ijk", {c: (add, _0, _1)}, [(b, "ij"), (b, "jk")]),
+                (d, "ijk", {d: (inc, _0, _1)}, [(c, "ijk"), (123, None)]),
+            ],
+            (
+                "d",
+                "ijk",
+                {
+                    "d": (inc, _unique_dep(c, "ijk"), _0),
+                    _unique_dep(c, "ijk"): (
+                        add,
+                        _unique_dep(b, "ij"),
+                        _unique_dep(b, "jk"),
+                    ),
+                    _unique_dep(b, "ij"): (add, _1, _2),
+                    _unique_dep(b, "jk"): (add, _3, _2),
+                },
+                [(123, None), (a, "ij"), (2, None), (a, "jk")],
+            ),
+        ],
+        [
+            [
+                (b, "jk", {b: (add, _0, _1)}, [(a, "jk"), (2, None)]),
+                (c, "ijk", {c: (add, _0, _1)}, [(b, "ij"), (b, "jk")]),
+                (d, "ijk", {d: (add, _0, _1, _2)}, [(b, "ij"), (c, "ij"), (b, "ij")]),
+            ],
+            (
+                "d",
+                "ijk",
+                {
+                    "d": (
+                        add,
+                        _unique_dep(b, "ij"),
+                        _unique_dep(c, "ij"),
+                        _unique_dep(b, "ij"),
+                    ),
+                    _unique_dep(c, "ij"): (
+                        add,
+                        _unique_dep(b, "ij"),
+                        _unique_dep(b, "jk"),
+                    ),
+                    _unique_dep(b, "ij"): (add, _0, _1),
+                    _unique_dep(b, "jk"): (add, _2, _1),
+                },
+                [(a, "ij"), (2, None), (a, "jk")],
+            ),
         ],
     ],
 )
@@ -208,7 +324,54 @@ def test_optimize_blockwise():
     )
 
 
-def test_optimize_blockwise_annotations():
+def test_optimize_blockwise_control_annotations():
+    """
+    Can we fuse blockwise layers with different, but compatible
+    annotations for retries, priority, etc.
+    """
+
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+
+    with dask.annotate(retries=5, workers=["a", "b", "c"], allow_other_workers=False):
+        c = b + 2
+
+    with dask.annotate(priority=2, workers=["b", "c", "d"], allow_other_workers=True):
+        d = c + 3
+
+    with dask.annotate(retries=3, resources={"GPU": 2, "Memory": 10}):
+        e = d + 4
+
+    with dask.annotate(priority=4, resources={"GPU": 5, "Memory": 4}):
+        f = e + 5
+
+    # This one will not be fused due to the custom annotation, nor will the one below
+    with dask.annotate(foo="bar"):
+        g = f + 6
+
+    h = g + 6
+
+    dsk = da.optimization.optimize_blockwise(h.dask)
+
+    # The layers and their annotations should be fusable until the custom one
+    assert len(dsk.layers) == 3
+    layer = hlg_layer_topological(dsk, 0)  # First layer is the fused one
+    annotations = layer.annotations
+
+    assert len(annotations) == 5
+    assert annotations["priority"] == 4  # max
+    assert annotations["retries"] == 5  # max
+    assert annotations["allow_other_workers"] is False  # More restrictive
+    assert set(annotations["workers"]) == {"b", "c"}  # intersection
+    assert annotations["resources"] == {"GPU": 5, "Memory": 10}  # Max of resources
+
+    # If we disable blockwise annotation fusion, we can only fuse the first two layers.
+    with dask.config.set({"optimization.annotations.fuse": False}):
+        dsk = da.optimization.optimize_blockwise(h.dask)
+        assert len(dsk.layers) == 7
+
+
+def test_optimize_blockwise_custom_annotations():
     a = da.ones(10, chunks=(5,))
     b = a + 1
 
@@ -542,7 +705,7 @@ def test_bag_array_conversion():
 
     b = db.range(10, npartitions=1)
     (x,) = b.map_partitions(np.asarray).to_delayed()
-    (x,) = [da.from_delayed(a, shape=(10,), dtype=int) for a in [x]]
+    (x,) = (da.from_delayed(a, shape=(10,), dtype=int) for a in [x])
     z = da.concatenate([x])
     assert_eq(z, np.arange(10), check_graph=False)
 
@@ -567,7 +730,7 @@ def test_args_delayed():
 
 
 @pytest.mark.parametrize(
-    "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]
+    "tup", [(1, 2), collections.namedtuple("foo", ["a", "b"])(1, 2)]  # type: ignore
 )
 def test_namedtuple(tup):
     A = da.random.random((20, 20), chunks=(10, 10))
@@ -612,7 +775,9 @@ def test_dont_merge_before_reductions():
 
 def test_atop_legacy():
     x = da.ones(10, chunks=(5,))
-    with pytest.warns(None):
+    with pytest.warns(
+        UserWarning, match="The da.atop function has moved to da.blockwise"
+    ):
         y = da.atop(inc, "i", x, "i", dtype=x.dtype)
     z = da.blockwise(inc, "i", x, "i", dtype=x.dtype)
     assert_eq(y, z)

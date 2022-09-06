@@ -7,16 +7,22 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    mamba install -y -c arrow-nightlies "pyarrow>3.0"
+    # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
+    arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
+    export PYARROW_VERSION=${arr[1]}
+    mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force numpy pandas
-    conda uninstall --force numpy pandas fastparquet
+    # mamba uninstall --force ...
+    conda uninstall --force numpy pandas fastparquet bokeh scipy
 
-    python -m pip install --no-deps --pre \
+    mamba install -y -c bokeh/label/dev bokeh
+
+    python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
-        pandas
+        pandas \
+        scipy
 
     python -m pip install \
         --upgrade \
@@ -38,6 +44,7 @@ mamba list
 
 # For debugging
 echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
-mamba env export | grep -E -v '^prefix:.*$'
+mamba env export | grep -E -v '^prefix:.*$' > env.yaml
+cat env.yaml
 
 set +xe

@@ -25,26 +25,21 @@ description for mapping SQL onto Pandas syntax can be found in the
 
 .. _pandas docs: https://pandas.pydata.org/docs/getting_started/comparison/comparison_with_sql.html
 
-The following packages may be of interest
+The following packages may be of interest:
 
-- `blazingSQL`_, part of the Rapids project, implements SQL queries using ``cuDF``
-  and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
-  externally-stored data.
+- `dask-sql`_ adds a SQL query engine on top of Dask.
+  In addition to working on CPU, it offers experimental support for CUDA-enabled GPUs through RAPIDS libraries such as `cuDF`_.
 
-- `dask-sql`_ adds a SQL query layer on top of Dask.
-  The API matches blazingSQL but it uses CPU instead of GPU. It still under development
-  and not ready for a production use-case.
-
-- `fugue-sql`_ adds an abstract layer that makes code portable between across differing
-  computing frameworks such as Pandas, Spark and Dask.
+- `FugueSQL`_ provides a unified interface to run SQL code on a variety of different computing frameworks.
+  Specifying ``DaskExecutionEngine`` or ``DaskSQLExecutionEngine`` as the execution engine for queries allows them to be computed using Dask or dask-sql, respectively.
 
 - `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
   ``SQLite``, which may be useful for small toy examples (this package has not been
   maintained for some time).
 
-.. _blazingSQL: https://docs.blazingsql.com/
 .. _dask-sql: https://dask-sql.readthedocs.io/en/latest/
-.. _fugue-sql: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
+.. _cuDF: https://docs.rapids.ai/api/cudf/stable/
+.. _FugueSQL: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
 .. _pandasql: https://github.com/yhat/pandasql/
 
 Database or Dask?
@@ -75,14 +70,14 @@ You may find the dask API easier to use than writing SQL (if you
 are already used to Pandas), and the diagnostic feedback more useful.
 These points can debatably be in Dask's favour.
 
-Loading from SQL with read_sql_table
-------------------------------------
+Loading from SQL with read_sql_table or read_sql_query
+------------------------------------------------------
 
 Dask allows you to build dataframes from SQL tables and queries using the
-function :func:`dask.dataframe.read_sql_table`, based on the `Pandas version`_,
-sharing most arguments, and using SQLAlchemy for the actual handling of the
-queries. You may need to install additional driver packages for your chosen
-database server.
+function :func:`dask.dataframe.read_sql_table` and :func:`dask.dataframe.read_sql_query`,
+based on the `Pandas version`_, sharing most arguments, and using SQLAlchemy
+for the actual handling of the queries. You may need to install additional
+driver packages for your chosen database server.
 
 .. _Pandas version: https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_sql_table.html
 
@@ -92,7 +87,7 @@ on a cluster, the following are the main differences versus Pandas to watch out 
 - Dask does not support arbitrary text queries, only whole tables and SQLAlchemy
   `sql expressions`_
 
-- the engine argument must be a `URI string`_, not an SQLAlchemy engine/connection
+- the con argument must be a `URI string`_, not an SQLAlchemy engine/connection
 
 - partitioning information is *required*, which can be as simple as providing
   an index column argument, or can be more explicit (see below)
@@ -147,7 +142,7 @@ consider so that Dask doesn't need to query for these. Alternatively,
 you can have Dask fetch the first few row (5 by default) and use
 them to guess the typical bytes/row, and base the partitioning size on
 this. Needless to say, the results will vary a lot for tables that are
-not uncommonly homogenous.
+not uncommonly homogeneous.
 
 Specific partitioning
 ^^^^^^^^^^^^^^^^^^^^^
@@ -187,13 +182,13 @@ the point of execution.
             number, name, sql.func.length(name).label("lenname")
         ]
         ).select_from(sql.table("test"))
-    data = read_sql_table(
-        "test", db, npartitions=2, index_col=number
+    data = read_sql_query(
+        s1, db, npartitions=2, index_col=number
     )
 
 Here we have also demonstrated the use of the function ``length`` to
 perform an operation server-side. Note that it is necessary to *label* such
-operations, but you can use them for the index column (by name or expression),
+operations, but you can use them for the index column,
 so long as it is also
 in the set of selected columns. If using for the index/partitioning, the
 column should still be indexed in the database, for performance.

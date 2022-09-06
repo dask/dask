@@ -26,8 +26,11 @@ jobs:
     needs: check
     runs-on: ubuntu-latest
     if: |
-      needs.check.outputs.test-upstream == 'true'
-      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      always()
+      && (
+          needs.check.outputs.test-upstream == 'true'
+          || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
+      )
 
     env:
       COVERAGE: "true"
@@ -43,8 +46,8 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: strict
-          python-version: "3.8"
-          environment-file: continuous_integration/environment-3.8-dev.yaml
+          python-version: "3.9"
+          environment-file: continuous_integration/environment-3.9.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -67,9 +70,8 @@ jobs:
     needs: build
     if: |
       always()
-      && github.event_name == 'schedule'
+      && github.event_name != 'pull_request'
       && github.repository == 'dask/dask'
-      && needs.check.outputs.test-upstream == 'true'
       && needs.build.result == 'failure'
     runs-on: ubuntu-latest
     defaults:
@@ -114,7 +116,7 @@ jobs:
                     repo: variables.name,
                     body: issue_body,
                     title: title,
-                    label: [variables.label]
+                    labels: [variables.label]
                 })
             } else {
                 github.issues.update({

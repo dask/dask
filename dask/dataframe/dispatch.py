@@ -8,8 +8,7 @@ import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
-
-from ..utils import Dispatch
+from dask.utils import Dispatch
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
@@ -22,6 +21,8 @@ concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
+grouper_dispatch = Dispatch("grouper")
+pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
 
 
 def concat(
@@ -31,7 +32,7 @@ def concat(
     uniform=False,
     filter_warning=True,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     """Concatenate, handling some edge cases:
 
@@ -65,7 +66,7 @@ def concat(
             uniform=uniform,
             filter_warning=filter_warning,
             ignore_index=ignore_index,
-            **kwargs
+            **kwargs,
         )
 
 

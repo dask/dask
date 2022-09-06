@@ -1,25 +1,20 @@
 import itertools
+import logging
 import random
 import sys
 from array import array
 
-from .utils import Dispatch
-
-try:  # PyPy does not support sys.getsizeof
-    sys.getsizeof(1)
-    getsizeof = sys.getsizeof
-except (AttributeError, TypeError):  # Monkey patch
-
-    def getsizeof(x):
-        return 100
-
+from dask.compatibility import entry_points
+from dask.utils import Dispatch
 
 sizeof = Dispatch(name="sizeof")
+
+logger = logging.getLogger(__name__)
 
 
 @sizeof.register(object)
 def sizeof_default(o):
-    return getsizeof(o)
+    return sys.getsizeof(o)
 
 
 @sizeof.register(bytes)
@@ -53,9 +48,11 @@ def sizeof_python_collection(seq):
             samples = itertools.islice(seq, num_samples)
         else:
             samples = random.sample(seq, num_samples)
-        return getsizeof(seq) + int(num_items / num_samples * sum(map(sizeof, samples)))
+        return sys.getsizeof(seq) + int(
+            num_items / num_samples * sum(map(sizeof, samples))
+        )
     else:
-        return getsizeof(seq) + sum(map(sizeof, seq))
+        return sys.getsizeof(seq) + sum(map(sizeof, seq))
 
 
 class SimpleSizeof:
@@ -78,13 +75,13 @@ class SimpleSizeof:
 
 @sizeof.register(SimpleSizeof)
 def sizeof_blocked(d):
-    return getsizeof(d)
+    return sys.getsizeof(d)
 
 
 @sizeof.register(dict)
 def sizeof_python_dict(d):
     return (
-        getsizeof(d)
+        sys.getsizeof(d)
         + sizeof(list(d.keys()))
         + sizeof(list(d.values()))
         - 2 * sizeof(list())
@@ -148,7 +145,7 @@ def register_pandas():
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
         p = sizeof(df.index)
-        for name, col in df.iteritems():
+        for name, col in df.items():
             p += col.memory_usage(index=False)
             if col.dtype == object:
                 p += object_size(col._values)
@@ -215,3 +212,18 @@ def register_pyarrow():
     @sizeof.register(pa.ChunkedArray)
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
+
+
+def _register_entry_point_plugins():
+    """Register sizeof implementations exposed by the entry_point mechanism."""
+    for entry_point in entry_points(group="dask.sizeof"):
+        registrar = entry_point.load()
+        try:
+            registrar(sizeof)
+        except Exception:
+            logger.exception(
+                f"Failed to register sizeof entry point {entry_point.name}"
+            )
+
+
+_register_entry_point_plugins()

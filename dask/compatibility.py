@@ -1,30 +1,24 @@
+import importlib.metadata
 import sys
 
 from packaging.version import parse as parse_version
 
-try:
-    from math import prod
-except ImportError:
-    # Python < 3.8
-    def prod(iterable, *, start=1):
-        acc = start
-        for el in iterable:
-            acc *= el
-        return acc
-
-
 _PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
 
+_EMSCRIPTEN = sys.platform == "emscripten"
 
-def __getattr__(name):
-    if name == "PY_VERSION":
-        import warnings
 
-        warnings.warn(
-            "dask.compatibility.PY_VERSION is deprecated and will be removed "
-            "in a future release.",
-            category=FutureWarning,
-        )
-        return _PY_VERSION
+def entry_points(group=None):
+    """Returns an iterable of entrypoints.
+
+    For compatibility with Python 3.8/3.9.
+    In 3.10 the return type changed from a dict to an ``importlib.metadata.EntryPoints``.
+    This compatibility utility can be removed once Python 3.10 is the minimum.
+    """
+    if _PY_VERSION >= parse_version("3.10"):
+        return importlib.metadata.entry_points(group=group)
     else:
-        raise AttributeError(f"module {__name__} has no attribute {name}")
+        eps = importlib.metadata.entry_points()
+        if group:
+            return eps.get(group, [])
+        return eps

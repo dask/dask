@@ -6,6 +6,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
+from dask.array.lib.stride_tricks import sliding_window_view
 from dask.array.overlap import (
     boundaries,
     constant,
@@ -18,8 +19,6 @@ from dask.array.overlap import (
     trim_internal,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from ..lib.stride_tricks import sliding_window_view
 
 
 def test_overlap_internal():
@@ -119,7 +118,7 @@ def test_overlap_internal_asymmetric_small():
 
 def test_trim_internal():
     d = da.ones((40, 60), chunks=(10, 10))
-    e = trim_internal(d, axes={0: 1, 1: 2})
+    e = trim_internal(d, axes={0: 1, 1: 2}, boundary="reflect")
 
     assert e.chunks == ((8, 8, 8, 8), (6, 6, 6, 6, 6, 6))
 
@@ -265,6 +264,20 @@ def test_overlap():
     assert g.chunks == ((8, 8), (5, 5))
 
 
+def test_overlap_allow_rechunk_kwarg():
+    # The smallest array chunk is too small to fit overlap depth
+    arr = da.arange(6, chunks=5)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
+    arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
+    with pytest.raises(ValueError):
+        da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+    with pytest.raises(ValueError):
+        arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
+    # No rechunking required
+    arr = da.arange(6, chunks=4)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+
+
 def test_asymmetric_overlap_boundary_exception():
     x = da.arange(10, chunks=5)
     with pytest.raises(NotImplementedError):
@@ -275,21 +288,25 @@ def test_asymmetric_overlap_boundary_exception():
 
 def test_map_overlap():
     x = da.arange(10, chunks=5)
-    y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype)
+    y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype, boundary="reflect")
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = da.arange(10, chunks=5)
-    y = x.map_overlap(lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype)
+    y = x.map_overlap(
+        lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype, boundary="reflect"
+    )
     assert all([(type(s) is int) for s in y.shape])
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
     x = da.ones((10, 10), chunks=(3, 4))
-    z = x.map_overlap(lambda x: x, depth={1: 5})
+    z = x.map_overlap(lambda x: x, depth={1: 5}, boundary="reflect")
     assert z.chunks[0] == x.chunks[0]  # don't rechunk the first dimension
 
     x = np.arange(16).reshape((4, 4))
     d = da.from_array(x, chunks=(2, 2))
-    exp1 = d.map_overlap(lambda x: x + x.size, depth=1, dtype=d.dtype)
+    exp1 = d.map_overlap(
+        lambda x: x + x.size, depth=1, dtype=d.dtype, boundary="reflect"
+    )
     exp2 = d.map_overlap(
         lambda x: x + x.size,
         depth={0: 1, 1: 1},
@@ -318,7 +335,7 @@ def test_map_overlap():
 
 def test_map_overlap_escapes_to_map_blocks_when_depth_is_zero():
     x = da.arange(10, chunks=5)
-    y = x.map_overlap(lambda x: x + 1, depth=0)
+    y = x.map_overlap(lambda x: x + 1, depth=0, boundary="none")
     assert len(y.dask) == 2 * x.numblocks[0]  # depth=0 --> map_blocks
     assert_eq(y, np.arange(10) + 1)
 
@@ -336,27 +353,27 @@ def test_map_overlap_multiarray():
     # Same ndim, same numblocks, same chunks
     x = da.arange(10, chunks=5)
     y = da.arange(10, chunks=5)
-    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1, boundary="none")
     assert_eq(z, 2 * np.arange(10))
 
     # Same ndim, same numblocks, different chunks
     x = da.arange(10, chunks=(2, 3, 5))
     y = da.arange(10, chunks=(5, 3, 2))
-    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1, boundary="none")
     assert z.chunks == ((2, 3, 3, 2),)
     assert_eq(z, 2 * np.arange(10))
 
     # Same ndim, different numblocks, different chunks
     x = da.arange(10, chunks=(10,))
     y = da.arange(10, chunks=(4, 4, 2))
-    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1, boundary="none")
     assert z.chunks == ((4, 4, 2),)
     assert_eq(z, 2 * np.arange(10))
 
     # Different ndim, different numblocks, different chunks
     x = da.arange(10, chunks=(10,))
     y = da.arange(10).reshape(1, 10).rechunk((1, (4, 4, 2)))
-    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1)
+    z = da.map_overlap(lambda x, y: x + y, x, y, depth=1, boundary="none")
     assert z.chunks == ((1,), (4, 4, 2))
     assert z.shape == (1, 10)
     assert_eq(z, 2 * np.arange(10)[np.newaxis])
@@ -372,7 +389,7 @@ def test_map_overlap_multiarray_defaults():
     # (i.e. defaults are pass-through to map_blocks)
     x = da.ones((10,), chunks=10)
     y = da.ones((1, 10), chunks=5)
-    z = da.map_overlap(lambda x, y: x + y, x, y)
+    z = da.map_overlap(lambda x, y: x + y, x, y, boundary="none")
     # func should be called twice and get (5,) and (1, 5) arrays of ones each time
     assert_eq(z.shape, (1, 10))
     assert_eq(z.sum(), 20.0)
@@ -384,7 +401,13 @@ def test_map_overlap_multiarray_different_depths():
 
     def run(depth):
         return da.map_overlap(
-            lambda x, y: x.sum() + y.sum(), x, y, depth=depth, chunks=(0,), trim=False
+            lambda x, y: x.sum() + y.sum(),
+            x,
+            y,
+            depth=depth,
+            chunks=(0,),
+            trim=False,
+            boundary="reflect",
         ).compute()
 
     # Check that the number of elements added
@@ -407,7 +430,9 @@ def test_map_overlap_multiarray_uneven_numblocks_exception():
     y = da.arange(10, chunks=(5, 5))
     with pytest.raises(ValueError):
         # Fail with chunk alignment explicitly disabled
-        da.map_overlap(lambda x, y: x + y, x, y, align_arrays=False).compute()
+        da.map_overlap(
+            lambda x, y: x + y, x, y, align_arrays=False, boundary="none"
+        ).compute()
 
 
 def test_map_overlap_multiarray_block_broadcast():
@@ -420,7 +445,9 @@ def test_map_overlap_multiarray_block_broadcast():
     # and block broadcast will allow chunks from x to repeat
     x = da.ones((12,), chunks=12)  # numblocks = (1,) -> (2, 2) after broadcast
     y = da.ones((16, 12), chunks=(8, 6))  # numblocks = (2, 2)
-    z = da.map_overlap(func, x, y, chunks=(3, 3), depth=1, trim=True)
+    z = da.map_overlap(
+        func, x, y, chunks=(3, 3), depth=1, trim=True, boundary="reflect"
+    )
     assert_eq(z, z)
     assert z.shape == (2, 2)
     # func call will receive (8,) and (10, 8) arrays for each of 4 blocks
@@ -437,17 +464,43 @@ def test_map_overlap_multiarray_variadic():
     ]
 
     def func(*args):
-        return np.array([sum([x.size for x in args])])
+        return np.array([sum(x.size for x in args)])
 
-    x = da.map_overlap(func, *xs, chunks=(1,), depth=1, trim=False, drop_axis=[1, 2])
+    x = da.map_overlap(
+        func,
+        *xs,
+        chunks=(1,),
+        depth=1,
+        trim=False,
+        drop_axis=[1, 2],
+        boundary="reflect",
+    )
 
     # Each func call should get 4 rows from each array padded by 1 in each dimension
-    size_per_slice = sum([np.pad(x[:4], 1, mode="constant").size for x in xs])
+    size_per_slice = sum(np.pad(x[:4], 1, mode="constant").size for x in xs)
     assert x.shape == (3,)
     assert all(x.compute() == size_per_slice)
 
 
-@pytest.mark.parametrize("drop_axis", ((0,), (1,), (2,), (0, 1), (1, 2), (2, 0), 1))
+@pytest.mark.parametrize(
+    "drop_axis",
+    (
+        (0,),
+        (1,),
+        (2,),
+        (0, 1),
+        (1, 2),
+        (2, 0),
+        1,
+        (-3,),
+        (-2,),
+        (-1,),
+        (-3, -2),
+        (-2, -1),
+        (-1, -3),
+        -2,
+    ),
+)
 def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
     x = da.random.standard_normal((5, 10, 8), chunks=(2, 5, 4))
 
@@ -461,6 +514,7 @@ def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
     depth = (1, 3, 2)
     # to match expected result, dropped axes must have depth 0
     _drop_axis = (drop_axis,) if np.isscalar(drop_axis) else drop_axis
+    _drop_axis = [d % x.ndim for d in _drop_axis]
     depth = tuple(0 if i in _drop_axis else d for i, d in enumerate(depth))
 
     y = da.map_overlap(
@@ -477,10 +531,10 @@ def test_map_overlap_assumes_shape_matches_first_array_if_trim_is_false():
     def oversum(x):
         return x[2:-2]
 
-    z1 = da.map_overlap(oversum, x1, depth=2, trim=False)
+    z1 = da.map_overlap(oversum, x1, depth=2, trim=False, boundary="none")
     assert z1.shape == (10,)
 
-    z2 = da.map_overlap(oversum, x2, depth=2, trim=False)
+    z2 = da.map_overlap(oversum, x2, depth=2, trim=False, boundary="none")
     assert z2.shape == (10,)
 
 
@@ -512,55 +566,38 @@ def test_nearest_overlap():
 
     darr = da.from_array(a, chunks=(6, 6))
     garr = overlap(darr, depth={0: 5, 1: 5}, boundary={0: "nearest", 1: "nearest"})
-    tarr = trim_internal(garr, {0: 5, 1: 5})
+    tarr = trim_internal(garr, {0: 5, 1: 5}, boundary="nearest")
     assert_array_almost_equal(tarr, a)
 
 
-def test_0_depth():
+@pytest.mark.parametrize(
+    "depth",
+    [
+        {0: 0, 1: 0},  # depth all zeros
+        {0: 4, 1: 0},  # depth with some zeros
+        {0: 5, 1: 5},  # depth equal to boundary length
+        {0: 8, 1: 7},  # depth greater than boundary length
+    ],
+)
+def test_different_depths_and_boundary_combinations(depth):
     expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(expected, chunks=(5, 2))
 
-    depth = {0: 0, 1: 0}
-
     reflected = overlap(darr, depth=depth, boundary="reflect")
     nearest = overlap(darr, depth=depth, boundary="nearest")
     periodic = overlap(darr, depth=depth, boundary="periodic")
     constant = overlap(darr, depth=depth, boundary=42)
 
-    result = trim_internal(reflected, depth)
+    result = trim_internal(reflected, depth, boundary="reflect")
     assert_array_equal(result, expected)
 
-    result = trim_internal(nearest, depth)
+    result = trim_internal(nearest, depth, boundary="nearest")
     assert_array_equal(result, expected)
 
-    result = trim_internal(periodic, depth)
+    result = trim_internal(periodic, depth, boundary="periodic")
     assert_array_equal(result, expected)
 
-    result = trim_internal(constant, depth)
-    assert_array_equal(result, expected)
-
-
-def test_some_0_depth():
-    expected = np.arange(100).reshape(10, 10)
-    darr = da.from_array(expected, chunks=(5, 5))
-
-    depth = {0: 4, 1: 0}
-
-    reflected = overlap(darr, depth=depth, boundary="reflect")
-    nearest = overlap(darr, depth=depth, boundary="nearest")
-    periodic = overlap(darr, depth=depth, boundary="periodic")
-    constant = overlap(darr, depth=depth, boundary=42)
-
-    result = trim_internal(reflected, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(nearest, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(periodic, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(constant, depth)
+    result = trim_internal(constant, depth, boundary=42)
     assert_array_equal(result, expected)
 
 
@@ -576,54 +613,6 @@ def test_constant_boundaries():
     darr = da.from_array(a, chunks=((1,), (2, 2, 2, 3)))
     b = boundaries(darr, {0: 0, 1: 0}, {0: 0, 1: 0})
     assert b.chunks == darr.chunks
-
-
-def test_depth_equals_boundary_length():
-    expected = np.arange(100).reshape(10, 10)
-    darr = da.from_array(expected, chunks=(5, 5))
-
-    depth = {0: 5, 1: 5}
-
-    reflected = overlap(darr, depth=depth, boundary="reflect")
-    nearest = overlap(darr, depth=depth, boundary="nearest")
-    periodic = overlap(darr, depth=depth, boundary="periodic")
-    constant = overlap(darr, depth=depth, boundary=42)
-
-    result = trim_internal(reflected, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(nearest, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(periodic, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(constant, depth)
-    assert_array_equal(result, expected)
-
-
-def test_depth_greater_than_boundary_length():
-    expected = np.arange(100).reshape(10, 10)
-    darr = da.from_array(expected, chunks=(5, 5))
-
-    depth = {0: 8, 1: 7}
-
-    reflected = overlap(darr, depth=depth, boundary="reflect")
-    nearest = overlap(darr, depth=depth, boundary="nearest")
-    periodic = overlap(darr, depth=depth, boundary="periodic")
-    constant = overlap(darr, depth=depth, boundary=42)
-
-    result = trim_internal(reflected, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(nearest, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(periodic, depth)
-    assert_array_equal(result, expected)
-
-    result = trim_internal(constant, depth)
-    assert_array_equal(result, expected)
 
 
 @pytest.mark.parametrize(
@@ -670,7 +659,7 @@ def test_none_boundaries():
 def test_overlap_small():
     x = da.ones((10, 10), chunks=(5, 5))
 
-    y = x.map_overlap(lambda x: x, depth=1)
+    y = x.map_overlap(lambda x: x, depth=1, boundary="none")
     assert len(y.dask) < 200
 
     y = x.map_overlap(lambda x: x, depth=1, boundary="none")
@@ -702,17 +691,17 @@ def test_no_shared_keys_with_different_depths():
 def test_overlap_few_dimensions_small():
     x = da.ones((20, 20), chunks=(10, 10))
 
-    a = x.map_overlap(lambda x: x, depth={0: 1})
+    a = x.map_overlap(lambda x: x, depth={0: 1}, boundary="none")
     assert_eq(x, a)
     assert any(isinstance(k[1], float) for k in a.dask)
     assert all(isinstance(k[2], int) for k in a.dask)
 
-    b = x.map_overlap(lambda x: x, depth={1: 1})
+    b = x.map_overlap(lambda x: x, depth={1: 1}, boundary="none")
     assert_eq(x, b)
     assert all(isinstance(k[1], int) for k in b.dask)
     assert any(isinstance(k[2], float) for k in b.dask)
 
-    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1}, boundary="none")
     assert_eq(x, c)
     assert any(isinstance(k[1], float) for k in c.dask)
     assert any(isinstance(k[2], float) for k in c.dask)
@@ -721,9 +710,9 @@ def test_overlap_few_dimensions_small():
 def test_overlap_few_dimensions():
     x = da.ones((100, 100), chunks=(10, 10))
 
-    a = x.map_overlap(lambda x: x, depth={0: 1})
-    b = x.map_overlap(lambda x: x, depth={1: 1})
-    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1})
+    a = x.map_overlap(lambda x: x, depth={0: 1}, boundary="none")
+    b = x.map_overlap(lambda x: x, depth={1: 1}, boundary="none")
+    c = x.map_overlap(lambda x: x, depth={0: 1, 1: 1}, boundary="none")
 
     assert len(a.dask) == len(b.dask)
     assert len(a.dask) < len(c.dask)
@@ -732,7 +721,7 @@ def test_overlap_few_dimensions():
 
 
 @pytest.mark.parametrize("boundary", ["reflect", "periodic", "nearest", "none"])
-def test_trim_boundry(boundary):
+def test_trim_boundary(boundary):
     x = da.from_array(np.arange(24).reshape(4, 6), chunks=(2, 3))
     x_overlaped = da.overlap.overlap(x, 2, boundary={0: "reflect", 1: boundary})
     x_trimmed = da.overlap.trim_overlap(
@@ -812,7 +801,7 @@ def test_ensure_minimum_chunksize_raises_error():
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
-    from ..numpy_compat import sliding_window_view as np_sliding_window_view
+    from dask.array.numpy_compat import sliding_window_view as np_sliding_window_view
 
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)

@@ -1,28 +1,26 @@
+from __future__ import annotations
+
+import contextlib
 import math
 import warnings
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
-from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import compute_as_if_collection, tokenize
-from ....delayed import Delayed
-from ....highlevelgraph import HighLevelGraph
-from ....layers import DataFrameIOLayer
-from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...core import DataFrame, Scalar, new_dd_object
-from ...methods import concat
-from .utils import _sort_and_analyze_paths
-
-try:
-    import snappy
-
-    snappy.compress
-except (ImportError, AttributeError):
-    snappy = None
-
+import dask
+from dask.base import tokenize
+from dask.blockwise import BlockIndex
+from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.io.io import from_map
+from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
+from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
+from dask.dataframe.methods import concat
+from dask.delayed import Delayed
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import DataFrameIOLayer
+from dask.utils import apply, import_required, natural_sort_key, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -32,7 +30,7 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetFunctionWrapper:
+class ParquetFunctionWrapper(DataFrameIOFunction):
     """
     Parquet Function-Wrapper Class
     Reads parquet data from disk to produce a partition
@@ -52,7 +50,7 @@ class ParquetFunctionWrapper:
         self.engine = engine
         self.fs = fs
         self.meta = meta
-        self.columns = columns
+        self._columns = columns
         self.index = index
 
         # `kwargs` = user-defined kwargs to be passed
@@ -63,9 +61,13 @@ class ParquetFunctionWrapper:
         #                   partitions.
         self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
 
+    @property
+    def columns(self):
+        return self._columns
+
     def project_columns(self, columns):
-        """Return a new ParquetFunctionWrapper object with
-        a sub-column projection.
+        """Return a new ParquetFunctionWrapper object
+        with a sub-column projection.
         """
         if columns == self.columns:
             return self
@@ -88,10 +90,84 @@ class ParquetFunctionWrapper:
             self.fs,
             self.engine,
             self.meta,
-            [(p["piece"], p.get("kwargs", {})) for p in part],
+            [
+                # Temporary workaround for HLG serialization bug
+                # (see: https://github.com/dask/dask/issues/8581)
+                (p.data["piece"], p.data.get("kwargs", {}))
+                if hasattr(p, "data")
+                else (p["piece"], p.get("kwargs", {}))
+                for p in part
+            ],
             self.columns,
             self.index,
             self.common_kwargs,
+        )
+
+
+class ToParquetFunctionWrapper:
+    """
+    Parquet Function-Wrapper Class
+
+    Writes a DataFrame partition into a distinct parquet
+    file. When called, the function also requires the
+    current block index (via ``blockwise.BlockIndex``).
+    """
+
+    def __init__(
+        self,
+        engine,
+        path,
+        fs,
+        partition_on,
+        write_metadata_file,
+        i_offset,
+        name_function,
+        kwargs_pass,
+    ):
+        self.engine = engine
+        self.path = path
+        self.fs = fs
+        self.partition_on = partition_on
+        self.write_metadata_file = write_metadata_file
+        self.i_offset = i_offset
+        self.name_function = name_function
+        self.kwargs_pass = kwargs_pass
+
+        # NOTE: __name__ must be with "to-parquet"
+        # for the name of the resulting `Blockwise`
+        # layer to begin with "to-parquet"
+        self.__name__ = "to-parquet"
+
+    def __dask_tokenize__(self):
+        return (
+            self.engine,
+            self.path,
+            self.fs,
+            self.partition_on,
+            self.write_metadata_file,
+            self.i_offset,
+            self.name_function,
+            self.kwargs_pass,
+        )
+
+    def __call__(self, df, block_index: tuple[int]):
+        # Get partition index from block index tuple
+        part_i = block_index[0]
+        filename = (
+            f"part.{part_i + self.i_offset}.parquet"
+            if self.name_function is None
+            else self.name_function(part_i + self.i_offset)
+        )
+
+        # Write out data
+        return self.engine.write_partition(
+            df,
+            self.path,
+            self.fs,
+            filename,
+            self.partition_on,
+            self.write_metadata_file,
+            **(dict(self.kwargs_pass, head=True) if part_i == 0 else self.kwargs_pass),
         )
 
 
@@ -103,12 +179,13 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    gather_statistics=None,
+    calculate_divisions=None,
     ignore_metadata_file=False,
-    split_row_groups=None,
-    read_from_paths=None,
+    metadata_task_size=None,
+    split_row_groups=False,
     chunksize=None,
     aggregate_files=None,
+    parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
     """
@@ -133,25 +210,25 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will NOT result in row-wise filtering of the final
-        partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
-        other engines, filtering is only performed at the partition level, i.e.,
+        partitions unless ``engine="pyarrow"`` is also specified.  For
+        other engines, filtering is only performed at the partition level, that is,
         to prevent the loading of some row-groups and/or files.
 
-        For the "pyarrow" engines, predicates can be expressed in disjunctive
-        normal form (DNF). This means that the innermost tuple describes a single
+        For the "pyarrow" engine, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the inner-most tuple describes a single
         column predicate. These inner predicates are combined with an AND
         conjunction into a larger predicate. The outer-most list then combines all
         of the combined filters with an OR disjunction.
 
-        Predicates can also be expressed as a List[Tuple]. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
-        (preferred for "pyarrow") List[List[Tuple]] notation.
+        Predicates can also be expressed as a ``List[Tuple]``. These are evaluated
+        as an AND conjunction. To express OR in predicates, one must use the
+        (preferred for "pyarrow") ``List[List[Tuple]]`` notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
-        the filtering of partitioned columns (List[Tuple] is required).
+        the filtering of partitioned columns (``List[Tuple]`` is required).
     index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
-        inferred from the pandas parquet file metadata (if present). Use False
+        inferred from the pandas parquet file metadata, if present. Use ``False``
         to read all fields as columns.
     categories : list or dict, default None
         For any fields listed here, if the parquet encoding is Dictionary,
@@ -162,53 +239,67 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : str, default 'auto'
-        Parquet reader library to use. Options include: 'auto', 'fastparquet',
-        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
-        which selects the FastParquetEngine if fastparquet is installed (and
-        ArrowDatasetEngine otherwise).  If 'pyarrow' or 'pyarrow-dataset' is
-        specified, the ArrowDatasetEngine (which leverages the pyarrow.dataset
-        API) will be used. If 'pyarrow-legacy' is specified, ArrowLegacyEngine
-        will be used (which leverages the pyarrow.parquet.ParquetDataset API).
-        NOTE: The 'pyarrow-legacy' option (ArrowLegacyEngine) is deprecated
-        for pyarrow>=5.
-    gather_statistics : bool, default None
-        Gather the statistics for each dataset partition. By default,
-        this will only be done if the _metadata file is available. Otherwise,
-        statistics will only be gathered if True, because the footer of
-        every file will be parsed (which is very slow on some systems).
+    open_file_options : dict, default None
+        Key/value arguments to be passed along to ``AbstractFileSystem.open``
+        when each parquet data file is open for reading. Experimental
+        (optimized) "precaching" for remote file systems (e.g. S3, GCS) can
+        be enabled by adding ``{"method": "parquet"}`` under the
+        ``"precache_options"`` key. Also, a custom file-open function can be
+        used (instead of ``AbstractFileSystem.open``), by specifying the
+        desired function under the ``"open_file_func"`` key.
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
+    calculate_divisions : bool, default False
+        Whether to use min/max statistics from the footer metadata (or global
+        ``_metadata`` file) to calculate divisions for the output DataFrame
+        collection. Divisions will not be calculated if statistics are missing.
+        This option will be ignored if ``index`` is not specified and there is
+        no physical index column specified in the custom "pandas" Parquet
+        metadata. Note that ``calculate_divisions=True`` may be extremely slow
+        when no global ``_metadata`` file is present, especially when reading
+        from remote storage. Set this to ``True`` only when known divisions
+        are needed for your workload (see :ref:`dataframe-design-partitions).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
-    split_row_groups : bool or int, default None
-        Default is True if a _metadata file is available or if
-        the dataset is composed of a single file (otherwise defult is False).
+        If ``True``, or if the global ``_metadata`` file is missing, the parquet
+        metadata may be gathered and processed in parallel. Parallel metadata
+        processing is currently supported for ``ArrowDatasetEngine`` only.
+    metadata_task_size : int, default configurable
+        If parquet metadata is processed in parallel (see ``ignore_metadata_file``
+        description above), this argument can be used to specify the number of
+        dataset files to be processed by each task in the Dask graph.  If this
+        argument is set to ``0``, parallel metadata processing will be disabled.
+        The default values for local and remote filesystems can be specified
+        with the "metadata-task-size-local" and "metadata-task-size-remote"
+        config fields, respectively (see "dataframe.parquet").
+    split_row_groups : bool or int, default False
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
-        Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool, default None
-        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
-        Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph.  If this option
-        is True, ``read_partition`` will need to regenerate the appropriate
-        fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to ``read_partition``.
-        By default (None), ``ArrowDatasetEngine`` will set this option to
-        ``False`` when there are filters.
     chunksize : int or str, default None
+        WARNING: The ``chunksize`` argument will be deprecated in the future.
+        Please use ``split_row_groups`` to specify how many row-groups should be
+        mapped to each output partition. If you strongly oppose the deprecation of
+        ``chunksize``, please comment at https://github.com/dask/dask/issues/9043".
+
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
         and/or files will be aggregated into the same output partition until the
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
+        WARNING: The ``aggregate_files`` argument will be deprecated in the future.
+        Please consider using ``from_map`` to create a DataFrame collection with a
+        custom file-to-partition mapping. If you strongly oppose the deprecation of
+        ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
+
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter requires `gather_statistics=True`, and is
-        only used when `chunksize` is specified or when `split_row_groups` is
-        an integer >1. A setting of True means that any two file paths may be
-        aggregated into the same output partition, while False means that
-        inter-file aggregation is prohibited.
+        partition. This parameter is only used when `chunksize` is specified
+        or when `split_row_groups` is an integer >1. A setting of True means
+        that any two file paths may be aggregated into the same output partition,
+        while False means that inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
         specified. In this case, we allow the aggregation of any two files
@@ -231,16 +322,32 @@ def read_parquet(
                 │   ├── 03.parquet
                 └── └── 04.parquet
 
-        Note that the default behavior of ``aggregate_files`` is False.
+        Note that the default behavior of ``aggregate_files`` is ``False``.
+    parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
+        A file extension or an iterable of extensions to use when discovering
+        parquet files in a directory. Files that don't match these extensions
+        will be ignored. This argument only applies when ``paths`` corresponds
+        to a directory and no ``_metadata`` file is present (or
+        ``ignore_metadata_file=True``). Passing in ``parquet_file_extension=None``
+        will treat all files in the directory as parquet files.
+
+        The purpose of this argument is to ensure that the engine will ignore
+        unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
+        It may be necessary to change this argument if the data files in your
+        parquet dataset do not end in ".parq", ".parquet", or ".pq".
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
         the underlying ``pyarrow`` or ``fastparquet`` function.
         Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
-        backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a ``pyarrow.Table.to_pandas()``)
+        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
+        (for the backend read function), 'arrow_to_pandas' (for controlling the
+        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
+        Any element of kwargs that is not defined under these top-level keys
+        will be passed through to the `engine.read_partitions` classmethod as a
+        stand-alone argument (and will be ignored by the engine implementations
+        defined in ``dask.dataframe``).
 
     Examples
     --------
@@ -252,51 +359,106 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if isinstance(columns, str):
-        df = read_parquet(
-            path,
-            columns=[columns],
-            filters=filters,
-            categories=categories,
-            index=index,
-            storage_options=storage_options,
-            engine=engine,
-            gather_statistics=gather_statistics,
-            ignore_metadata_file=ignore_metadata_file,
-            split_row_groups=split_row_groups,
-            read_from_paths=read_from_paths,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
+    # "Pre-deprecation" warning for `chunksize`
+    if chunksize:
+        warnings.warn(
+            "The `chunksize` argument will be deprecated in the future. "
+            "Please use `split_row_groups` to specify how many row-groups "
+            "should be mapped to each output partition.\n\n"
+            "If you strongly oppose the deprecation of `chunksize`, please "
+            "comment at https://github.com/dask/dask/issues/9043",
+            FutureWarning,
         )
+
+    # "Pre-deprecation" warning for `aggregate_files`
+    if aggregate_files:
+        warnings.warn(
+            "The `aggregate_files` argument will be deprecated in the future. "
+            "Please consider using `from_map` to create a DataFrame collection "
+            "with a custom file-to-partition mapping.\n\n"
+            "If you strongly oppose the deprecation of `aggregate_files`, "
+            "please comment at https://github.com/dask/dask/issues/9051",
+            FutureWarning,
+        )
+
+    if "read_from_paths" in kwargs:
+        kwargs.pop("read_from_paths")
+        warnings.warn(
+            "`read_from_paths` is no longer supported and will be ignored.",
+            FutureWarning,
+        )
+
+    # Handle gather_statistics deprecation
+    if "gather_statistics" in kwargs:
+        if calculate_divisions is None:
+            calculate_divisions = kwargs.pop("gather_statistics")
+            warnings.warn(
+                "``gather_statistics`` is deprecated and will be removed in a "
+                "future release. Please use ``calculate_divisions`` instead.",
+                FutureWarning,
+            )
+        else:
+            warnings.warn(
+                f"``gather_statistics`` is deprecated. Ignoring this option "
+                f"in favor of ``calculate_divisions={calculate_divisions}``",
+                FutureWarning,
+            )
+    calculate_divisions = bool(calculate_divisions)
+
+    # We support a top-level `parquet_file_extension` kwarg, but
+    # must check if the deprecated `require_extension` option is
+    # being passed to the engine. If `parquet_file_extension` is
+    # set to the default value, and `require_extension` was also
+    # specified, we will use `require_extension` but warn the user.
+    if (
+        "dataset" in kwargs
+        and "require_extension" in kwargs["dataset"]
+        and parquet_file_extension == (".parq", ".parquet", ".pq")
+    ):
+        parquet_file_extension = kwargs["dataset"].pop("require_extension")
+        warnings.warn(
+            "require_extension is deprecated, and will be removed from "
+            "read_parquet in a future release. Please use the top-level "
+            "parquet_file_extension argument instead.",
+            FutureWarning,
+        )
+
+    # Store initial function arguments
+    input_kwargs = {
+        "columns": columns,
+        "filters": filters,
+        "categories": categories,
+        "index": index,
+        "storage_options": storage_options,
+        "engine": engine,
+        "calculate_divisions": calculate_divisions,
+        "ignore_metadata_file": ignore_metadata_file,
+        "metadata_task_size": metadata_task_size,
+        "split_row_groups": split_row_groups,
+        "chunksize": chunksize,
+        "aggregate_files": aggregate_files,
+        "parquet_file_extension": parquet_file_extension,
+        **kwargs,
+    }
+
+    if isinstance(columns, str):
+        input_kwargs["columns"] = [columns]
+        df = read_parquet(path, **input_kwargs)
         return df[columns]
 
     if columns is not None:
         columns = list(columns)
-
-    label = "read-parquet-"
-    output_name = label + tokenize(
-        path,
-        columns,
-        filters,
-        categories,
-        index,
-        storage_options,
-        engine,
-        gather_statistics,
-        ignore_metadata_file,
-        split_row_groups,
-        read_from_paths,
-        chunksize,
-        aggregate_files,
-    )
 
     if isinstance(engine, str):
         engine = get_engine(engine)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
 
+    # Update input_kwargs
+    input_kwargs.update({"columns": columns, "engine": engine})
+
+    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -306,27 +468,19 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    if chunksize or (
-        split_row_groups and int(split_row_groups) > 1 and aggregate_files
-    ):
-        # Require `gather_statistics=True` if `chunksize` is used,
-        # or if `split_row_groups>1` and we are aggregating files.
-        if gather_statistics is False:
-            raise ValueError("read_parquet options require gather_statistics=True")
-        gather_statistics = True
-
     read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
         index=index,
-        gather_statistics=gather_statistics,
+        gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
-        read_from_paths=read_from_paths,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
+        metadata_task_size=metadata_task_size,
+        parquet_file_extension=parquet_file_extension,
         **kwargs,
     )
 
@@ -373,28 +527,47 @@ def read_parquet(
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
-        graph = {(output_name, 0): meta}
         divisions = (None, None)
+        io_func = lambda x: x
+        parts = [meta]
     else:
-        # Create Blockwise layer
-        layer = DataFrameIOLayer(
-            output_name,
+        # Use IO function wrapper
+        io_func = ParquetFunctionWrapper(
+            engine,
+            fs,
+            meta,
             columns,
-            parts,
-            ParquetFunctionWrapper(
-                engine,
-                fs,
-                meta,
-                columns,
-                index,
-                kwargs,
-                common_kwargs,
-            ),
-            label=label,
+            index,
+            {},  # All kwargs should now be in `common_kwargs`
+            common_kwargs,
         )
-        graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions)
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        # Construct the output collection with from_map
+        return from_map(
+            io_func,
+            parts,
+            meta=meta,
+            divisions=divisions,
+            label="read-parquet",
+            token=tokenize(path, **input_kwargs),
+            enforce_metadata=False,
+            creation_info={
+                "func": read_parquet,
+                "args": (path,),
+                "kwargs": input_kwargs,
+            },
+        )
 
 
 def check_multi_support(engine):
@@ -444,7 +617,7 @@ def to_parquet(
     df,
     path,
     engine="auto",
-    compression="default",
+    compression="snappy",
     write_index=True,
     append=False,
     overwrite=False,
@@ -452,10 +625,11 @@ def to_parquet(
     partition_on=None,
     storage_options=None,
     custom_metadata=None,
-    write_metadata_file=True,
+    write_metadata_file=None,
     compute=True,
     compute_kwargs=None,
-    schema=None,
+    schema="infer",
+    name_function=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -470,14 +644,13 @@ def to_parquet(
     path : string or pathlib.Path
         Destination directory for data.  Prepend with protocol like ``s3://``
         or ``hdfs://`` for remote data.
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet library to use. If only one library is installed, it will use
-        that one; if both, it will use 'fastparquet'.
-    compression : string or dict, default 'default'
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
+    compression : string or dict, default 'snappy'
         Either a string like ``"snappy"`` or a dictionary mapping column names
-        to compressors like ``{"name": "gzip", "values": "snappy"}``. The
-        default is ``"default"``, which uses the default compression for
-        whichever engine is selected.
+        to compressors like ``{"name": "gzip", "values": "snappy"}``. Defaults
+        to ``"snappy"``.
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
     append : bool, default False
@@ -504,23 +677,39 @@ def to_parquet(
         Custom key/value metadata to include in all footer metadata (and
         in the global "_metadata" file, if applicable).  Note that the custom
         metadata may not contain the reserved b"pandas" key.
-    write_metadata_file : bool, default True
-        Whether to write the special "_metadata" file.
+    write_metadata_file : bool or None, default None
+        Whether to write the special ``_metadata`` file. If ``None`` (the
+        default), a ``_metadata`` file will only be written if ``append=True``
+        and the dataset already has a ``_metadata`` file.
     compute : bool, default True
-        If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
-        then a ``dask.dataframe.Scalar`` object is returned for future computation.
+        If ``True`` (default) then the result is computed immediately. If
+        ``False`` then a ``dask.dataframe.Scalar`` object is returned for
+        future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
-    schema : Schema object, dict, or {"infer", None}, default None
-        Global schema to use for the output dataset. Alternatively, a `dict`
-        of pyarrow types can be specified (e.g. `schema={"id": pa.string()}`).
-        For this case, fields excluded from the dictionary will be inferred
-        from `_meta_nonempty`.  If "infer", the first non-empty and non-null
-        partition will be used to infer the type for "object" columns. If
-        None (default), we let the backend infer the schema for each distinct
-        output partition. If the partitions produce inconsistent schemas,
-        pyarrow will throw an error when writing the shared _metadata file.
-        Note that this argument is ignored by the "fastparquet" engine.
+    schema : pyarrow.Schema, dict, "infer", or None, default "infer"
+        Global schema to use for the output dataset. Defaults to "infer", which
+        will infer the schema from the dask dataframe metadata. This is usually
+        sufficient for common schemas, but notably will fail for ``object``
+        dtype columns that contain things other than strings. These columns
+        will require an explicit schema be specified. The schema for a subset
+        of columns can be overridden by passing in a dict of column names to
+        pyarrow types (for example ``schema={"field": pa.string()}``); columns
+        not present in this dict will still be automatically inferred.
+        Alternatively, a full ``pyarrow.Schema`` may be passed, in which case
+        no schema inference will be done. Passing in ``schema=None`` will
+        disable the use of a global file schema - each written file may use a
+        different schema dependent on the dtypes of the corresponding
+        partition. Note that this argument is ignored by the "fastparquet"
+        engine.
+    name_function : callable, default None
+        Function to generate the filename for each output partition.
+        The function should accept an integer (partition index) as input and
+        return a string which will be used as the filename for the corresponding
+        partition. Should preserve the lexicographic order of partitions.
+        If not specified, files will created using the convention
+        ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ...
+        and so on for each partition in the DataFrame.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -529,17 +718,33 @@ def to_parquet(
     >>> df = dd.read_csv(...)  # doctest: +SKIP
     >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
 
+    By default, files will be created in the specified output directory using the
+    convention ``part.0.parquet``, ``part.1.parquet``, ``part.2.parquet``, ... and so on for
+    each partition in the DataFrame. To customize the names of each file, you can use the
+    ``name_function=`` keyword argument. The function passed to ``name_function`` will be
+    used to generate the filename for each partition and should expect a partition's index
+    integer as input and return a string which will be used as the filename for the corresponding
+    partition. Strings produced by ``name_function`` must preserve the order of their respective
+    partition indices.
+
+    For example:
+
+    >>> name_function = lambda x: f"data-{x}.parquet"
+    >>> df.to_parquet('/path/to/output/', name_function=name_function)  # doctest: +SKIP
+
+    will result in the following files being created::
+
+        /path/to/output/
+            ├── data-0.parquet
+            ├── data-1.parquet
+            ├── data-2.parquet
+            └── ...
+
     See Also
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
     compute_kwargs = compute_kwargs or {}
-
-    if compression == "default":
-        if snappy is not None:
-            compression = "snappy"
-        else:
-            compression = None
 
     partition_on = partition_on or []
     if isinstance(partition_on, str):
@@ -552,6 +757,9 @@ def to_parquet(
             "columns=%s" % (str(partition_on), str(list(df.columns)))
         )
 
+    if df.columns.inferred_type not in {"string", "empty"}:
+        raise ValueError("parquet doesn't support non-string column names")
+
     if isinstance(engine, str):
         engine = get_engine(engine)
 
@@ -562,20 +770,39 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        if isinstance(fs, LocalFileSystem):
-            working_dir = fs.expand_path(".")[0]
-            if path.rstrip("/") == working_dir.rstrip("/"):
-                raise ValueError(
-                    "Cannot clear the contents of the current working directory!"
-                )
         if append:
             raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
+
         if fs.exists(path) and fs.isdir(path):
-            # Only remove path contents if
-            # (1) The path exists
-            # (2) The path is a directory
-            # (3) The path is not the current working directory
+            # Check for any previous parquet layers reading from a file in the
+            # output directory, since deleting those files now would result in
+            # errors or incorrect results.
+            for layer_name, layer in df.dask.layers.items():
+                if layer_name.startswith("read-parquet-") and isinstance(
+                    layer, DataFrameIOLayer
+                ):
+                    path_with_slash = path.rstrip("/") + "/"  # ensure trailing slash
+                    for input in layer.inputs:
+                        if input["piece"][0].startswith(path_with_slash):
+                            raise ValueError(
+                                "Reading and writing to the same parquet file within the "
+                                "same task graph is not supported."
+                            )
+
+            # Don't remove the directory if it's the current working directory
+            if _is_local_fs(fs):
+                working_dir = fs.expand_path(".")[0]
+                if path.rstrip("/") == working_dir.rstrip("/"):
+                    raise ValueError(
+                        "Cannot clear the contents of the current working directory!"
+                    )
+
+            # It's safe to clear the output directory
             fs.rm(path, recursive=True)
+
+    # Always skip divisions checks if divisions are unknown
+    if not df.known_divisions:
+        ignore_divisions = True
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
@@ -626,22 +853,17 @@ def to_parquet(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    _to_parquet_kwargs = {
-        "engine",
-        "compression",
-        "write_index",
-        "append",
-        "ignore_divisions",
-        "partition_on",
-        "storage_options",
-        "write_metadata_file",
-        "compute",
-    }
-    kwargs_pass = {k: v for k, v in kwargs.items() if k not in _to_parquet_kwargs}
+    if custom_metadata and b"pandas" in custom_metadata.keys():
+        raise ValueError(
+            "User-defined key/value metadata (custom_metadata) can not "
+            "contain a b'pandas' key.  This key is reserved by Pandas, "
+            "and overwriting the corresponding value can render the "
+            "entire dataset unreadable."
+        )
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
-    meta, schema, i_offset = engine.initialize_write(
+    i_offset, fmd, metadata_file_exists, extra_write_kwargs = engine.initialize_write(
         df,
         fs,
         path,
@@ -651,86 +873,101 @@ def to_parquet(
         division_info=division_info,
         index_cols=index_cols,
         schema=schema,
-        **kwargs_pass,
+        custom_metadata=custom_metadata,
+        **kwargs,
     )
 
-    # Use i_offset and df.npartitions to define file-name list
-    filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
+    # By default we only write a metadata file when appending if one already
+    # exists
+    if append and write_metadata_file is None:
+        write_metadata_file = metadata_file_exists
 
-    # Construct IO graph
-    dsk = {}
-    name = "to-parquet-" + tokenize(
-        df,
-        fs,
-        path,
-        append,
-        ignore_divisions,
-        partition_on,
-        division_info,
-        index_cols,
-        schema,
-    )
-    part_tasks = []
-    kwargs_pass["fmd"] = meta
-    kwargs_pass["compression"] = compression
-    kwargs_pass["index_cols"] = index_cols
-    kwargs_pass["schema"] = schema
-    if custom_metadata:
-        if b"pandas" in custom_metadata.keys():
-            raise ValueError(
-                "User-defined key/value metadata (custom_metadata) can not "
-                "contain a b'pandas' key.  This key is reserved by Pandas, "
-                "and overwriting the corresponding value can render the "
-                "entire dataset unreadable."
-            )
-        kwargs_pass["custom_metadata"] = custom_metadata
-    for d, filename in enumerate(filenames):
-        dsk[(name, d)] = (
-            apply,
-            engine.write_partition,
-            [
-                (df._name, d),
+    # Check that custom name_function is valid,
+    # and that it will produce unique names
+    if name_function is not None:
+        if not callable(name_function):
+            raise ValueError("``name_function`` must be a callable with one argument.")
+        filenames = [name_function(i + i_offset) for i in range(df.npartitions)]
+        if len(set(filenames)) < len(filenames):
+            raise ValueError("``name_function`` must produce unique filenames.")
+
+    # If we are using a remote filesystem and retries is not set, bump it
+    # to be more fault tolerant, as transient transport errors can occur.
+    # The specific number 5 isn't hugely motivated: it's less than ten and more
+    # than two.
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    # Create Blockwise layer for parquet-data write
+    with ctx:
+        data_write = df.map_partitions(
+            ToParquetFunctionWrapper(
+                engine,
                 path,
                 fs,
-                filename,
                 partition_on,
                 write_metadata_file,
-            ],
-            toolz.merge(kwargs_pass, {"head": True}) if d == 0 else kwargs_pass,
+                i_offset,
+                name_function,
+                toolz.merge(
+                    kwargs,
+                    {"compression": compression, "custom_metadata": custom_metadata},
+                    extra_write_kwargs,
+                ),
+            ),
+            BlockIndex((df.npartitions,)),
+            # Pass in the original metadata to avoid
+            # metadata emulation in `map_partitions`.
+            # This is necessary, because we are not
+            # expecting a dataframe-like output.
+            meta=df._meta,
+            enforce_metadata=False,
+            transform_divisions=False,
+            align_dataframes=False,
         )
-        part_tasks.append((name, d))
 
-    final_name = "metadata-" + name
-    # Collect metadata and write _metadata
-
+    # Collect metadata and write _metadata.
+    # TODO: Use tree-reduction layer (when available)
     if write_metadata_file:
-        dsk[(final_name, 0)] = (
-            apply,
-            engine.write_metadata,
-            [
-                part_tasks,
-                meta,
-                fs,
-                path,
-            ],
-            {"append": append, "compression": compression},
-        )
+        final_name = "metadata-" + data_write._name
+        dsk = {
+            (final_name, 0): (
+                apply,
+                engine.write_metadata,
+                [
+                    data_write.__dask_keys__(),
+                    fmd,
+                    fs,
+                    path,
+                ],
+                {"append": append, "compression": compression},
+            )
+        }
     else:
-        dsk[(final_name, 0)] = (lambda x: None, part_tasks)
+        # NOTE: We still define a single task to tie everything together
+        # when we are not writing a _metadata file. We do not want to
+        # return `data_write` (or a `data_write.to_bag()`), because calling
+        # `compute()` on a multi-partition collection requires the overhead
+        # of trying to concatenate results on the client.
+        final_name = "store-" + data_write._name
+        dsk = {(final_name, 0): (lambda x: None, data_write.__dask_keys__())}
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    # Convert data_write + dsk to computable collection
+    graph = HighLevelGraph.from_collections(final_name, dsk, dependencies=(data_write,))
+    out = Scalar(graph, final_name, "")
 
     if compute:
-        if write_metadata_file:
-            return compute_as_if_collection(
-                DataFrame, graph, (final_name, 0), **compute_kwargs
-            )
-        else:
-            return compute_as_if_collection(
-                DataFrame, graph, part_tasks, **compute_kwargs
-            )
-    else:
-        return Scalar(graph, final_name, "")
+        out = out.compute(**compute_kwargs)
+
+    # Invalidate the filesystem listing cache for the output path after write.
+    # We do this before returning, even if `compute=False`. This helps ensure
+    # that reading files that were just written succeeds.
+    fs.invalidate_cache(path)
+
+    return out
 
 
 def create_metadata_file(
@@ -875,7 +1112,7 @@ def create_metadata_file(
     return out
 
 
-_ENGINES = {}
+_ENGINES: dict[str, Engine] = {}
 
 
 def get_engine(engine):
@@ -883,20 +1120,9 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : str, default 'auto'
-        Backend parquet library to use. Options include: 'auto', 'fastparquet',
-        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
-        which selects the FastParquetEngine if fastparquet is installed (and
-        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
-        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
-        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
-        specified, the ArrowLegacyEngine will be used (which leverages the
-        pyarrow.parquet.ParquetDataset API).
-        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
-        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
-        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
-        option will be deprecated once the ParquetDataset API is deprecated.
-    gather_statistics : bool or None (default).
+    engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
+        Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
+        it is installed, and falls back to ``fastparquet`` otherwise.
 
     Returns
     -------
@@ -906,50 +1132,46 @@ def get_engine(engine):
         return _ENGINES[engine]
 
     if engine == "auto":
-        for eng in ["fastparquet", "pyarrow"]:
-            try:
-                return get_engine(eng)
-            except RuntimeError:
-                pass
-        else:
-            raise RuntimeError("Please install either fastparquet or pyarrow")
+        try:
+            return get_engine("pyarrow")
+        except RuntimeError:
+            pass
+
+        try:
+            return get_engine("fastparquet")
+        except RuntimeError:
+            raise RuntimeError("Please install either pyarrow or fastparquet") from None
 
     elif engine == "fastparquet":
         import_required("fastparquet", "`fastparquet` not installed")
-        from .fastparquet import FastParquetEngine
+        from dask.dataframe.io.parquet.fastparquet import FastParquetEngine
 
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
-
+    elif engine in ("pyarrow", "arrow", "pyarrow-dataset"):
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
-        if engine in ("pyarrow", "arrow"):
-            engine = "pyarrow-dataset"
-        elif pa_version.major >= 5 and engine == "pyarrow-legacy":
-            warnings.warn(
-                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated for "
-                "pyarrow>=5 and will be removed in a future release. Please "
-                "use `engine='pyarrow'` or `engine='pyarrow-dataset'`.",
-                FutureWarning,
-            )
+        if engine in ("pyarrow-dataset", "arrow"):
+            engine = "pyarrow"
 
-        if engine == "pyarrow-dataset":
-            from .arrow import ArrowDatasetEngine
+        if engine == "pyarrow":
+            if pa_version.major < 1:
+                raise ImportError(
+                    f"pyarrow-{pa_version.major} does not support the "
+                    f"pyarrow.dataset API. Please install pyarrow>=1."
+                )
+
+            from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
-        else:
-            from .arrow import ArrowLegacyEngine
-
-            _ENGINES[engine] = eng = ArrowLegacyEngine
         return eng
 
     else:
         raise ValueError(
-            'Unsupported engine: "{0}".'.format(engine)
-            + '  Valid choices include "pyarrow" and "fastparquet".'
+            f'Unsupported engine: "{engine}".'
+            '  Valid choices include "pyarrow" and "fastparquet".'
         )
 
 
@@ -1021,7 +1243,7 @@ def apply_filters(parts, statistics, filters):
         filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
-        as an AND conjunction. To express OR in predictates, one must use the
+        as an AND conjunction. To express OR in predicates, one must use the
         (preferred) List[List[Tuple]] notation.
 
         Note that the "fastparquet" engine does not currently support DNF for
@@ -1033,6 +1255,8 @@ def apply_filters(parts, statistics, filters):
 
     def apply_conjunction(parts, statistics, conjunction):
         for column, operator, value in conjunction:
+            if operator == "in" and not isinstance(value, (list, set, tuple)):
+                raise TypeError("Value of 'in' filter must be a list, set, or tuple.")
             out_parts = []
             out_statistics = []
             for part, stats in zip(parts, statistics):
@@ -1047,8 +1271,10 @@ def apply_filters(parts, statistics, filters):
                     out_statistics.append(stats)
                 else:
                     if (
-                        operator == "=="
+                        operator in ("==", "=")
                         and min <= value <= max
+                        or operator == "!="
+                        and (min != value or max != value)
                         or operator == "<"
                         and min < value
                         or operator == "<="
@@ -1093,6 +1319,20 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
+    if statistics and len(parts) != len(statistics):
+        # It is up to the Engine to guarantee that these
+        # lists are the same length (if statistics are defined).
+        # This misalignment may be indicative of a bug or
+        # incorrect read_parquet usage, so throw a warning.
+        warnings.warn(
+            f"Length of partition statistics ({len(statistics)}) "
+            f"does not match the partition count ({len(parts)}). "
+            f"This may indicate a bug or incorrect read_parquet "
+            f"usage. We must ignore the statistics and disable: "
+            f"filtering, divisions, and/or file aggregation."
+        )
+        statistics = []
+
     if statistics:
         result = list(
             zip(
@@ -1127,7 +1367,7 @@ def process_statistics(
                 index_in_columns = True
                 index = [out[0]["name"]]
             elif index != [out[0]["name"]]:
-                raise ValueError("Specified index is invalid.\nindex: {}".format(index))
+                raise ValueError(f"Specified index is invalid.\nindex: {index}")
         elif index is not False and len(out) > 1:
             if any(o["name"] == NONE_LABEL for o in out):
                 # Use sorted column matching NONE_LABEL as the index
@@ -1137,9 +1377,7 @@ def process_statistics(
                     index = [o["name"]]
                     index_in_columns = True
                 elif index != [o["name"]]:
-                    raise ValueError(
-                        "Specified index is invalid.\nindex: {}".format(index)
-                    )
+                    raise ValueError(f"Specified index is invalid.\nindex: {index}")
             else:
                 # Multiple sorted columns found, cannot autodetect the index
                 warnings.warn(
@@ -1221,7 +1459,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 def aggregate_row_groups(
     parts, stats, chunksize, split_row_groups, fs, aggregation_depth
 ):
-    if not stats[0].get("file_path_0", None):
+    if not stats or not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
@@ -1286,10 +1524,8 @@ def aggregate_row_groups(
         next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
 
         if (same_path or multi_path_allowed) and (
-            (
-                _check_row_group_criteria(stat, next_stat)
-                or _check_chunksize_criteria(stat, next_stat)
-            )
+            _check_row_group_criteria(stat, next_stat)
+            or _check_chunksize_criteria(stat, next_stat)
         ):
 
             # Update part list

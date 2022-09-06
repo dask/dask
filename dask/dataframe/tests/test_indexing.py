@@ -4,6 +4,7 @@ import pytest
 
 import dask
 import dask.dataframe as dd
+from dask.base import tokenize
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
@@ -45,6 +46,8 @@ def test_loc():
 
     pytest.raises(KeyError, lambda: d.loc[1000])
     assert_eq(d.loc[1000:], full.loc[1000:])
+    assert_eq(d.loc[1000:2000], full.loc[1000:2000])
+    assert_eq(d.loc[:-1000], full.loc[:-1000])
     assert_eq(d.loc[-2000:-1000], full.loc[-2000:-1000])
 
     assert sorted(d.loc[5].dask) == sorted(d.loc[5].dask)
@@ -84,15 +87,19 @@ def test_loc_with_text_dates():
 def test_loc_with_series():
     assert_eq(d.loc[d.a % 2 == 0], full.loc[full.a % 2 == 0])
 
-    assert sorted(d.loc[d.a % 2].dask) == sorted(d.loc[d.a % 2].dask)
-    assert sorted(d.loc[d.a % 2].dask) != sorted(d.loc[d.a % 3].dask)
+    assert sorted(d.loc[d.a % 2 == 0].dask) == sorted(d.loc[d.a % 2 == 0].dask)
+    assert sorted(d.loc[d.a % 2 == 0].dask) != sorted(d.loc[d.a % 3 == 0].dask)
 
 
 def test_loc_with_array():
     assert_eq(d.loc[(d.a % 2 == 0).values], full.loc[(full.a % 2 == 0).values])
 
-    assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
-    assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+    assert sorted(d.loc[(d.a % 2 == 0).values].dask) == sorted(
+        d.loc[(d.a % 2 == 0).values].dask
+    )
+    assert sorted(d.loc[(d.a % 2 == 0).values].dask) != sorted(
+        d.loc[(d.a % 3 == 0).values].dask
+    )
 
 
 def test_loc_with_function():
@@ -129,6 +136,39 @@ def test_loc_with_series_different_partition():
     assert_eq(
         ddf.loc[(ddf.A > 0).repartition(["a", "g", "k", "o", "t"])], df.loc[df.A > 0]
     )
+
+
+def test_loc_with_non_boolean_series():
+    df = pd.Series(
+        np.random.randn(20),
+        index=list("abcdefghijklmnopqrst"),
+    )
+    ddf = dd.from_pandas(df, 3)
+
+    s = pd.Series(list("bdmnat"))
+    ds = dd.from_pandas(s, npartitions=3)
+
+    msg = (
+        "Cannot index with non-boolean dask Series. Try passing computed values instead"
+    )
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    assert_eq(ddf.loc[s], df.loc[s])
+
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds.values]
+
+    assert_eq(ddf.loc[s.values], df.loc[s])
+
+    ddf = ddf.clear_divisions()
+    with pytest.raises(KeyError, match=msg):
+        ddf.loc[ds]
+
+    with pytest.raises(
+        KeyError, match="Cannot index with list against unknown division"
+    ):
+        ddf.loc[s]
 
 
 def test_loc2d():
@@ -298,7 +338,7 @@ def test_loc_on_numpy_datetimes():
         {"x": [1, 2, 3]}, index=list(map(np.datetime64, ["2014", "2015", "2016"]))
     )
     a = dd.from_pandas(df, 2)
-    a.divisions = list(map(np.datetime64, a.divisions))
+    a.divisions = tuple(map(np.datetime64, a.divisions))
 
     assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"])
 
@@ -308,7 +348,7 @@ def test_loc_on_pandas_datetimes():
         {"x": [1, 2, 3]}, index=list(map(pd.Timestamp, ["2014", "2015", "2016"]))
     )
     a = dd.from_pandas(df, 2)
-    a.divisions = list(map(pd.Timestamp, a.divisions))
+    a.divisions = tuple(map(pd.Timestamp, a.divisions))
 
     assert_eq(a.loc["2014":"2015"], a.loc["2014":"2015"])
 
@@ -347,7 +387,7 @@ def test_loc_timestamp_str():
     assert_eq(
         df.loc["2011-01-02 10:00"].to_frame().T,
         ddf.loc["2011-01-02 10:00"],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     # series
@@ -355,24 +395,24 @@ def test_loc_timestamp_str():
     assert_eq(
         df.A.loc["2011-01-02":"2011-01-10"],
         ddf.A.loc["2011-01-02":"2011-01-10"],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
     df = pd.DataFrame(
@@ -634,3 +674,53 @@ def test_iloc_out_of_order_selection():
     assert a1.name == "C"
     assert b1.name == "A"
     assert c1.name == "B"
+
+
+def test_pandas_nullable_boolean_data_type():
+    s1 = pd.Series([0, 1, 2])
+    s2 = pd.Series([True, False, pd.NA], dtype="boolean")
+
+    ddf1 = dd.from_pandas(s1, npartitions=1)
+    ddf2 = dd.from_pandas(s2, npartitions=1)
+
+    assert_eq(ddf1[ddf2], s1[s2])
+    assert_eq(ddf1.loc[ddf2], s1.loc[s2])
+
+
+def test_deterministic_hashing_series():
+    obj = pd.Series([0, 1, 2])
+
+    dask_df = dd.from_pandas(obj, npartitions=1)
+
+    ddf1 = dask_df.loc[0:1]
+    ddf2 = dask_df.loc[0:1]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf2 = dask_df.loc[0:2]
+    assert tokenize(ddf1) != tokenize(ddf2)
+
+
+def test_deterministic_hashing_dataframe():
+    # Add duplicate column names in order to use _iLocIndexer._iloc path
+    obj = pd.DataFrame([[0, 1, 2, 3], [4, 5, 6, 7]], columns=["a", "b", "c", "c"])
+
+    dask_df = dd.from_pandas(obj, npartitions=1)
+
+    ddf1 = dask_df.loc[0:1, ["a", "c"]]
+    ddf2 = dask_df.loc[0:1, ["a", "c"]]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf1 = dask_df.loc[0:1, "c"]
+    ddf2 = dask_df.loc[0:1, "c"]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf1 = dask_df.iloc[:, [0, 1]]
+    ddf2 = dask_df.iloc[:, [0, 1]]
+
+    assert tokenize(ddf1) == tokenize(ddf2)
+
+    ddf2 = dask_df.iloc[:, [0, 2]]
+    assert tokenize(ddf1) != tokenize(ddf2)

@@ -15,10 +15,10 @@
         <div style="margin-left: 64px;">
             <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
             <p style="color: var(--jp-ui-font-color2, #5D5851); margin-bottom:0px;">
-                {{ type }} with {{ layers | length }} layers.
+                {{ type }} with {{ layers | length }} layers and {{ n_outputs }} keys from all layers.
             </p>
             {% for layer in toposort %}
-            {{ layers[layer]._repr_html_(layer_index=loop.index, highlevelgraph_key=layer)}}
+            {{ layers[layer]._repr_html_(layer_index=loop.index, highlevelgraph_key=layer, dependencies=layer_dependencies[layer])}}
             {% endfor %}
         </div>
     </div>

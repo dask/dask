@@ -10,7 +10,8 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask.layers import fractional_slice
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import ArrayChunkShapeDep, ArraySliceDep, fractional_slice
 
 
 class SchedulerImportCheck(SchedulerPlugin):
@@ -32,6 +33,43 @@ class SchedulerImportCheck(SchedulerPlugin):
                 sys.modules.pop(mod)
 
 
+def test_array_chunk_shape_dep():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = ArrayChunkShapeDep(chunks)
+
+    def check(i, j):
+        chunk_shape = array_deps[(i, j)]
+        assert chunk_shape == chunk
+
+    for i in range(d):
+        for j in range(d):
+            check(i, j)
+
+
+def test_array_slice_deps():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = ArraySliceDep(chunks)
+
+    def check(i, j):
+        slices = array_deps[(i, j)]
+        assert slices == (
+            slice(chunk[0] * i, chunk[0] * (i + 1), None),
+            slice(chunk[1] * j, chunk[1] * (j + 1), None),
+        )
+
+    for i in range(d):
+        for j in range(d):
+            check(i, j)
+
+
 def _dataframe_shuffle(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -39,6 +77,15 @@ def _dataframe_shuffle(tmpdir):
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
+
+
+def _dataframe_tree_reduction(tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Perform a computation using an HLG-based tree reduction
+    df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+    return dd.from_pandas(df, npartitions=2).mean()
 
 
 def _dataframe_broadcast_join(tmpdir):
@@ -62,7 +109,7 @@ def _array_creation(tmpdir):
 def _array_map_overlap(tmpdir):
     da = pytest.importorskip("dask.array")
     array = da.ones((100,))
-    return array.map_overlap(lambda x: x, depth=1)
+    return array.map_overlap(lambda x: x, depth=1, boundary="none")
 
 
 def test_fractional_slice():
@@ -104,21 +151,13 @@ def _pq_pyarrow(tmpdir):
     ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
     if pa_ds:
         # Need to test that layer serialization succeeds
-        # with "pyarrow-dataset" filtering (whether or not
-        # `large_graph_objects=True` is specified)
+        # with "pyarrow-dataset" filtering
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine="pyarrow-dataset",
             filters=filters,
-            large_graph_objects=True,
         )
-        ddf3 = dd.read_parquet(
-            str(tmpdir),
-            engine="pyarrow-dataset",
-            filters=filters,
-            large_graph_objects=False,
-        )
-        return (ddf1, ddf2, ddf3)
+        return (ddf1, ddf2)
     else:
         return ddf1
 
@@ -146,10 +185,12 @@ def _read_csv(tmpdir):
     return dd.read_csv(os.path.join(str(tmpdir), "*"))
 
 
+@pytest.mark.xfail(reason="#8480")
 @pytest.mark.parametrize(
     "op,lib",
     [
         (_dataframe_shuffle, "pandas."),
+        (_dataframe_tree_reduction, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
         (_pq_pyarrow, "pandas."),
         (_pq_fastparquet, "pandas."),
@@ -186,3 +227,69 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
             # Check whether we imported `lib` on the scheduler
             assert not any(module.startswith(lib) for module in new_modules)
+
+
+def _shuffle_op(ddf):
+    return ddf.shuffle("x", shuffle="tasks")
+
+
+def _groupby_op(ddf):
+    return ddf.groupby("name").agg({"x": "mean"})
+
+
+@pytest.mark.parametrize("op", [_shuffle_op, _groupby_op])
+def test_dataframe_cull_key_dependencies(op):
+    # Test that HighLevelGraph.cull does not populate the
+    # output graph with incorrect key_dependencies for
+    # "complex" DataFrame Layers
+    # See: https://github.com/dask/dask/pull/9267
+
+    datasets = pytest.importorskip("dask.datasets")
+
+    result = op(datasets.timeseries(end="2000-01-15")).count()
+    graph = result.dask
+    culled_graph = graph.cull(result.__dask_keys__())
+
+    assert graph.get_all_dependencies() == culled_graph.get_all_dependencies()
+
+
+def test_dataframe_cull_key_dependencies_materialized():
+    # Test that caching of MaterializedLayer
+    # dependencies during culling doesn't break
+    # the result of ``get_all_dependencies``
+
+    datasets = pytest.importorskip("dask.datasets")
+    dd = pytest.importorskip("dask.dataframe")
+
+    ddf = datasets.timeseries(end="2000-01-15")
+
+    # Build a custom layer to ensure
+    # MaterializedLayer is used
+    name = "custom_graph_test"
+    name_0 = "custom_graph_test_0"
+    dsk = {}
+    for i in range(ddf.npartitions):
+        dsk[(name_0, i)] = (lambda x: x, (ddf._name, i))
+        dsk[(name, i)] = (lambda x: x, (name_0, i))
+    dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
+    result = dd.core.new_dd_object(dsk, name, ddf._meta, ddf.divisions)
+    graph = result.dask
+
+    # HLG cull
+    culled_keys = [k for k in result.__dask_keys__() if k != (name, 0)]
+    culled_graph = graph.cull(culled_keys)
+
+    # Check that culled_deps are cached
+    # See: https://github.com/dask/dask/issues/9389
+    cached_deps = culled_graph.key_dependencies.copy()
+    deps = culled_graph.get_all_dependencies()
+    assert cached_deps == deps
+
+    # Manual cull
+    deps0 = graph.get_all_dependencies()
+    deps0.pop((name, 0))
+    deps0.pop((name_0, 0))
+    deps0.pop((ddf._name, 0))
+
+    # Check that get_all_dependencies results match
+    assert deps0 == deps

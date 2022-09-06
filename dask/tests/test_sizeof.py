@@ -1,14 +1,16 @@
+import os
 import sys
 from array import array
 
 import pytest
 
-from dask.sizeof import getsizeof, sizeof
+from dask.multiprocessing import get_context
+from dask.sizeof import sizeof
 from dask.utils import funcname
 
 
 def test_base():
-    assert sizeof(1) == getsizeof(1)
+    assert sizeof(1) == sys.getsizeof(1)
 
 
 def test_name():
@@ -16,7 +18,7 @@ def test_name():
 
 
 def test_containers():
-    assert sizeof([1, 2, [3]]) > (getsizeof(3) * 3 + getsizeof([]))
+    assert sizeof([1, 2, [3]]) > (sys.getsizeof(3) * 3 + sys.getsizeof([]))
 
 
 def test_bytes_like():
@@ -147,3 +149,47 @@ def test_dict():
     d = {i: x for i in range(100)}
     assert sizeof(d) > x.nbytes * 100
     assert isinstance(sizeof(d), int)
+
+
+def _get_sizeof_on_path(path, size):
+    sys.path.append(os.fsdecode(path))
+
+    # Dask will have already called _register_entry_point_plugins
+    # before we can modify sys.path, so we re-register here.
+    import dask.sizeof
+
+    dask.sizeof._register_entry_point_plugins()
+
+    import class_impl
+
+    cls = class_impl.Impl(size)
+    return sizeof(cls)
+
+
+def test_register_backend_entrypoint(tmp_path):
+    # Create special sizeof implementation for a dummy class
+    (tmp_path / "impl_sizeof.py").write_bytes(
+        b"def sizeof_plugin(sizeof):\n"
+        b'    print("REG")\n'
+        b'    @sizeof.register_lazy("class_impl")\n'
+        b"    def register_impl():\n"
+        b"        import class_impl\n"
+        b"        @sizeof.register(class_impl.Impl)\n"
+        b"        def sizeof_impl(obj):\n"
+        b"            return obj.size \n"
+    )
+    # Define dummy class that possesses a size attribute
+    (tmp_path / "class_impl.py").write_bytes(
+        b"class Impl:\n    def __init__(self, size):\n        self.size = size"
+    )
+    dist_info = tmp_path / "impl_sizeof-0.0.0.dist-info"
+    dist_info.mkdir()
+    (dist_info / "entry_points.txt").write_bytes(
+        b"[dask.sizeof]\nimpl = impl_sizeof:sizeof_plugin\n"
+    )
+
+    with get_context().Pool(1) as pool:
+        assert (
+            pool.apply(_get_sizeof_on_path, args=(tmp_path, 3_14159265)) == 3_14159265
+        )
+    pool.join()

@@ -1,17 +1,19 @@
-Delayed
-=======
+Dask Delayed
+============
+
+.. meta::
+   :description: The Dask delayed function decorates your functions so that they operate lazily. Rather than executing your function immediately, it will defer execution, placing the function and its arguments into a task graph.
 
 .. toctree::
    :maxdepth: 1
    :hidden:
 
-   delayed-api.rst
    delayed-collections.rst
    delayed-best-practices.rst
 
 Sometimes problems don't fit into one of the collections like ``dask.array`` or
 ``dask.dataframe``. In these cases, users can parallelize custom algorithms
-using the simpler ``dask.delayed`` interface. This allows one to create graphs
+using the simpler ``dask.delayed`` interface. This allows you to create graphs
 directly with a light annotation of normal python code:
 
 .. code-block:: python
@@ -24,7 +26,7 @@ directly with a light annotation of normal python code:
    >>> z.visualize()
 
 .. image:: images/inc-add.svg
-   :alt: simple task graph created with dask.delayed
+   :alt: A Dask Delayed task graph with two "inc" functions combined using an "add" function resulting in an output node.
 
 .. raw:: html
 
@@ -68,11 +70,10 @@ abstractions like Dask Array or Dask DataFrame.  Consider the following example:
     total = sum(output)
 
 There is clearly parallelism in this problem (many of the ``inc``,
-``double``, and ``add`` functions can evaluate independently), but it's not
-clear how to convert this to a big array or big DataFrame computation.
-
-As written, this code runs sequentially in a single thread.  However, we see that
-a lot of this could be executed in parallel.
+``double``, and ``add`` functions can be evaluated independently), but it's not
+clear how to convert this to an array or DataFrame computation. As written,
+this code runs sequentially in a single thread.  However, we see that a
+lot of this could be executed in parallel.
 
 The Dask ``delayed`` function decorates your functions so that they operate
 *lazily*.  Rather than executing your function immediately, it will defer
@@ -103,8 +104,8 @@ We used the ``dask.delayed`` function to wrap the function calls that we want
 to turn into tasks.  None of the ``inc``, ``double``, ``add``, or ``sum`` calls
 have happened yet. Instead, the object ``total`` is a ``Delayed`` result that
 contains a task graph of the entire computation.  Looking at the graph we see
-clear opportunities for parallel execution.  The Dask schedulers will exploit
-this parallelism, generally improving performance (although not in this
+clear opportunities for parallel execution.  The :doc:`Dask schedulers <scheduling>`
+will exploit this parallelism, generally improving performance (although not in this
 example, because these functions are already very small and fast.)
 
 .. code-block:: python
@@ -113,7 +114,7 @@ example, because these functions are already very small and fast.)
 
 .. image:: images/delayed-inc-double-add.svg
    :align: right
-   :alt: simple task graph created with dask.delayed
+   :alt: A task graph with many nodes for "inc" and "double" that combine with "add" nodes. The output of the "add" nodes finally aggregate with a "sum" node.
 
 We can now compute this lazy result to execute the graph in parallel:
 
@@ -166,8 +167,8 @@ from other tasks, etc.  For this, see the :doc:`Futures <futures>` interface.
 Best Practices
 --------------
 
-For a list of common problems and recommendations see :doc:`Delayed Best
-Practices <delayed-best-practices>`.
+For a list of common problems and recommendations see
+:doc:`Delayed Best Practices <delayed-best-practices>`.
 
 
 Indirect Dependencies

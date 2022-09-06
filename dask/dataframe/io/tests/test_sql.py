@@ -1,11 +1,12 @@
 import io
+import sys
 from contextlib import contextmanager
 
 import pytest
 
 # import dask
-from dask.dataframe.io.sql import read_sql_table
-from dask.dataframe.utils import assert_eq
+from dask.dataframe.io.sql import read_sql, read_sql_query, read_sql_table
+from dask.dataframe.utils import PANDAS_GT_120, assert_eq
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -13,6 +14,9 @@ dd = pytest.importorskip("dask.dataframe")
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("sqlite3")
 np = pytest.importorskip("numpy")
+
+if not PANDAS_GT_120:
+    pytestmark = pytest.mark.filterwarnings("ignore")
 
 
 data = """
@@ -54,7 +58,8 @@ def test_empty(db):
 
         dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=1)
         assert dask_df.index.name == "id"
-        assert dask_df.col2.dtype == np.dtype("int64")
+        # The dtype of the empty result might no longer be as expected
+        # assert dask_df.col2.dtype == np.dtype("int64")
         pd_dataframe = dask_df.compute()
         assert pd_dataframe.empty is True
 
@@ -122,7 +127,7 @@ def test_empty_other_schema():
     pg_user = "user"
     pg_pass = "pass"
     pg_db = "db"
-    db_url = "postgresql://%s:%s@%s:%s/%s" % (pg_user, pg_pass, pg_host, pg_port, pg_db)
+    db_url = f"postgresql://{pg_user}:{pg_pass}@{pg_host}:{pg_port}/{pg_db}"
 
     # Create an empty table in a different schema.
     table_name = "empty_table"
@@ -169,10 +174,15 @@ def test_needs_rational(db):
             "c": [True, True, False, True, True],
         }
     )
-    df = df.append(
+    df = pd.concat(
         [
-            {"a": "x", "b": now + d * 1000, "c": None},
-            {"a": None, "b": now + d * 1001, "c": None},
+            df,
+            pd.DataFrame(
+                [
+                    {"a": "x", "b": now + d * 1000, "c": None},
+                    {"a": None, "b": now + d * 1001, "c": None},
+                ]
+            ),
         ]
     )
     with tmpfile() as f:
@@ -237,7 +247,7 @@ def test_npartitions(db):
         "test",
         db,
         columns=list(df.columns),
-        bytes_per_chunk=2 ** 30,
+        bytes_per_chunk=2**30,
         index_col="number",
         head_rows=1,
     )
@@ -327,7 +337,7 @@ def test_no_meta_no_head_rows(db):
         read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
 
 
-def test_range(db):
+def test_limits(db):
     data = read_sql_table("test", db, npartitions=2, index_col="number", limits=[1, 4])
     assert data.index.min().compute() == 1
     assert data.index.max().compute() == 4
@@ -351,78 +361,86 @@ def test_datetimes():
         assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
 
 
-def test_with_func(db):
-    from sqlalchemy import sql
-
-    index = sql.func.abs(sql.column("negish")).label("abs")
-
-    # function for the index, get all columns
-    data = read_sql_table("test", db, npartitions=2, index_col=index)
-    assert data.divisions[0] == 0
-    part = data.get_partition(0).compute()
-    assert (part.index == 0).all()
-
-    # now an arith op for one column too; it's name will be 'age'
-    data = read_sql_table(
-        "test",
-        db,
-        npartitions=2,
-        index_col=index,
-        columns=[index, -(sql.column("age"))],
-    )
-    assert (data.age.compute() < 0).all()
-
-    # a column that would have no name, give it a label
-    index = (-(sql.column("negish"))).label("index")
-    data = read_sql_table(
-        "test", db, npartitions=2, index_col=index, columns=["negish", "age"]
-    )
-    d = data.compute()
-    assert (-d.index == d["negish"]).all()
-
-
-def test_no_nameless_index(db):
-    from sqlalchemy import sql
-
-    index = -(sql.column("negish"))
-    with pytest.raises(ValueError):
-        read_sql_table(
-            "test", db, npartitions=2, index_col=index, columns=["negish", "age", index]
-        )
-
-    index = sql.func.abs(sql.column("negish"))
-
-    # function for the index, get all columns
-    with pytest.raises(ValueError):
-        read_sql_table("test", db, npartitions=2, index_col=index)
-
-
-def test_select_from_select(db):
-    from sqlalchemy import sql
-
-    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
-        sql.table("test")
-    )
-    out = read_sql_table(s1, db, npartitions=2, index_col="number")
-    assert_eq(out, df[["name"]])
-
-
-def test_extra_connection_engine_keywords(capsys, db):
+def test_extra_connection_engine_keywords(caplog, db):
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": False}
     ).compute()
     # no captured message from the stdout with the echo=False parameter (this is the default)
-    out, err = capsys.readouterr()
-    assert "SELECT" not in out
+    out = "\n".join(r.message for r in caplog.records)
+    assert out == ""
     assert_eq(data, df)
     # with the echo=True sqlalchemy parameter, you should get all SQL queries in the stdout
     data = read_sql_table(
         "test", db, npartitions=2, index_col="number", engine_kwargs={"echo": True}
     ).compute()
-    out, err = capsys.readouterr()
-    assert "WHERE test.number >= ? AND test.number < ?" in out
-    assert "WHERE test.number >= ? AND test.number <= ?" in out
+    out = "\n".join(r.message for r in caplog.records)
+    assert "WHERE" in out
+    assert "FROM" in out
+    assert "SELECT" in out
+    assert "AND" in out
+    assert ">= ?" in out
+    assert "< ?" in out
+    assert "<= ?" in out
     assert_eq(data, df)
+
+
+def test_query(db):
+    import sqlalchemy as sa
+    from sqlalchemy import sql
+
+    s1 = sql.select([sql.column("number"), sql.column("name")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql_query(s1, db, npartitions=2, index_col="number")
+    assert_eq(out, df[["name"]])
+
+    s2 = (
+        sql.select(
+            [
+                sa.cast(sql.column("number"), sa.types.BigInteger).label("number"),
+                sql.column("name"),
+            ]
+        )
+        .where(sql.column("number") >= 5)
+        .select_from(sql.table("test"))
+    )
+
+    out = read_sql_query(s2, db, npartitions=2, index_col="number")
+    assert_eq(out, df.loc[5:, ["name"]])
+
+
+def test_query_index_from_query(db):
+    from sqlalchemy import sql
+
+    number = sql.column("number")
+    name = sql.column("name")
+    s1 = sql.select([number, name, sql.func.length(name).label("lenname")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql_query(s1, db, npartitions=2, index_col="lenname")
+
+    lenname_df = df.copy()
+    lenname_df["lenname"] = lenname_df["name"].str.len()
+    lenname_df = lenname_df.reset_index().set_index("lenname")
+    assert_eq(out, lenname_df.loc[:, ["number", "name"]])
+
+
+def test_query_with_meta(db):
+    from sqlalchemy import sql
+
+    data = {
+        "name": pd.Series([], name="name", dtype="str"),
+        "age": pd.Series([], name="age", dtype="int"),
+    }
+    index = pd.Index([], name="number", dtype="int")
+    meta = pd.DataFrame(data, index=index)
+
+    s1 = sql.select(
+        [sql.column("number"), sql.column("name"), sql.column("age")]
+    ).select_from(sql.table("test"))
+    out = read_sql_query(s1, db, npartitions=2, index_col="number", meta=meta)
+    # Don't check dtype for windows https://github.com/dask/dask/issues/8620
+    assert_eq(out, df[["name", "age"]], check_dtype=sys.platform != "win32")
 
 
 def test_no_character_index_without_divisions(db):
@@ -430,6 +448,21 @@ def test_no_character_index_without_divisions(db):
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
+
+
+def test_read_sql(db):
+    from sqlalchemy import sql
+
+    s = sql.select([sql.column("number"), sql.column("name")]).select_from(
+        sql.table("test")
+    )
+    out = read_sql(s, db, npartitions=2, index_col="number")
+    assert_eq(out, df[["name"]])
+
+    data = read_sql_table("test", db, npartitions=2, index_col="number").compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
 
 
 @contextmanager
@@ -519,3 +552,20 @@ def test_to_sql_kwargs():
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
         ):
             ddf.to_sql("test", uri, unknown=None)
+
+
+def test_to_sql_engine_kwargs(caplog):
+    ddf = dd.from_pandas(df, 2)
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": False})
+        logs = "\n".join(r.message for r in caplog.records)
+        assert logs == ""
+        assert_eq(df, read_sql_table("test", uri, "number"))
+
+    with tmp_db_uri() as uri:
+        ddf.to_sql("test", uri, engine_kwargs={"echo": True})
+        logs = "\n".join(r.message for r in caplog.records)
+        assert "CREATE" in logs
+        assert "INSERT" in logs
+
+        assert_eq(df, read_sql_table("test", uri, "number"))

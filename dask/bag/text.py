@@ -4,10 +4,10 @@ from functools import partial
 from fsspec.core import open_files
 from tlz import concat
 
-from ..bytes import read_bytes
-from ..delayed import delayed
-from ..utils import parse_bytes, system_encoding
-from .core import from_delayed
+from dask.bag.core import from_delayed
+from dask.bytes import read_bytes
+from dask.delayed import delayed
+from dask.utils import parse_bytes, system_encoding
 
 delayed = delayed(pure=True)
 
@@ -102,7 +102,7 @@ def read_text(
             errors=errors,
             compression=compression,
             newline=newline,
-            **(storage_options or {})
+            **(storage_options or {}),
         )
         if files_per_partition is None:
             blocks = [
@@ -135,7 +135,7 @@ def read_text(
             sample=False,
             compression=compression,
             include_path=include_path,
-            **(storage_options or {})
+            **(storage_options or {}),
         )
         raw_blocks = o[1]
         blocks = [

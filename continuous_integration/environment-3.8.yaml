@@ -2,6 +2,7 @@
 name: test-environment
 channels:
   - conda-forge
+  - nodefaults
 dependencies:
   # required dependencies
   - python=3.8
@@ -9,9 +10,11 @@ dependencies:
   - numpy=1.19
   - pandas=1.2
   # test dependencies
+  - pre-commit
   - pytest
   - pytest-cov
   - pytest-rerunfailures
+  - pytest-timeout
   - pytest-xdist
   - moto
   - flask
@@ -20,11 +23,11 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - pyspark
+  - tiledb>=2.5.0
   - xarray
   - fsspec
-  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
-  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
-  - sqlalchemy<1.4.0
+  - sqlalchemy>=1.4.0
   - pyarrow=4.0
   - coverage
   - jsonschema
@@ -36,14 +39,15 @@ dependencies:
   - bokeh
   - httpretty
   - aiohttp
-  - chest
-  - s3fs
+  # Need recent version of s3fs to support newer aiobotocore versions
+  # https://github.com/dask/s3fs/issues/514
+  - s3fs>=2021.8.0
   - cloudpickle
   - crick
   - cytoolz
   - distributed
-  - graphviz
   - ipython
+  - ipycytoscape
   - lz4
   - numba
   - partd
@@ -57,7 +61,6 @@ dependencies:
   - sparse
   - cachey
   - python-graphviz
-  - pandas-datareader
   - python-xxhash
   - mmh3
   - jinja2

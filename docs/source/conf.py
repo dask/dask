@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 #
 # dask documentation build configuration file, created by
 # sphinx-quickstart on Sun Jan  4 08:58:22 2015.
@@ -11,11 +10,15 @@
 # All configuration values have a default; values that are commented out
 # serve to show the default.
 
+from __future__ import annotations
+
 import os
 
 # Add any Sphinx extension module names here, as strings. They can be extensions
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
+
+import sphinx_autosummary_accessors
 
 # -- General configuration -----------------------------------------------------
 
@@ -28,26 +31,40 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 sys.path.insert(0, os.path.abspath("../../"))
 
-source_dir = os.path.dirname(__file__)
-sys.path.insert(0, os.path.join(source_dir, "ext"))
-
 extensions = [
     "sphinx.ext.autodoc",
     "sphinx.ext.doctest",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx_autosummary_accessors",
     "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "numpydoc",
     "sphinx_click.ext",
-    "dask_config_sphinx_ext",
+    "dask_sphinx_theme.ext.dask_config_sphinx_ext",
+    "sphinx_tabs.tabs",
+    "sphinx_remove_toctrees",
+    "IPython.sphinxext.ipython_console_highlighting",
+    "IPython.sphinxext.ipython_directive",
+    "jupyter_sphinx",
+    "sphinx_copybutton",
+    "sphinx_design",
 ]
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
 
 numpydoc_show_class_members = False
 
+sphinx_tabs_disable_tab_closing = True
+
+# Remove individual API pages from sphinx toctree to prevent long build times.
+# See https://github.com/dask/dask/issues/8227.
+remove_from_toctrees = ["generated/*"]
+
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -74,7 +91,7 @@ copyright = "2014-2018, Anaconda, Inc. and contributors"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
-exclude_patterns = []
+exclude_patterns: list[str] = []
 
 # The reST default role (used for this markup: `text`) to use for all documents.
 # default_role = None
@@ -91,7 +108,9 @@ exclude_patterns = []
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "default"
+# Commenting this out for now, if we register dask pygments,
+# then eventually this line can be:
+# pygments_style = "dask"
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -178,7 +197,7 @@ htmlhelp_basename = "daskdoc"
 
 # -- Options for LaTeX output --------------------------------------------------
 
-latex_elements = {
+latex_elements: dict[str, str] = {
     # The paper size ('letterpaper' or 'a4paper').
     #'papersize': 'letterpaper',
     # The font size ('10pt', '11pt' or '12pt').
@@ -320,6 +339,11 @@ intersphinx_mapping = {
         "https://zarr.readthedocs.io/en/latest/objects.inv",
     ),
     "skimage": ("https://scikit-image.org/docs/dev/", None),
+    "fsspec": (
+        "https://filesystem-spec.readthedocs.io/en/latest/",
+        "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
+    ),
+    "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 
 # Redirects
@@ -336,7 +360,6 @@ redirect_files = [
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
-    ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
     ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
@@ -353,6 +376,34 @@ redirect_files = [
     ("use-cases.html", "https://stories.dask.org"),
     ("bag-overview.html", "bag.html"),
     ("distributed.html", "https://distributed.dask.org"),
+    ("institutional-faq.html", "faq.html"),
+    ("cite.html", "faq.html#how-do-I-cite-dask"),
+    ("remote-data-services.html", "how-to/connect-to-remote-data.html"),
+    ("debugging.html", "how-to/debug.html"),
+    ("setup.html", "deploying.html"),
+    ("how-to/deploy-dask-clusters.html", "deploying.html"),
+    ("setup/cli.html", "deploying-cli.html"),
+    ("how-to/deploy-dask/cli.html", "deploying-cli.html"),
+    ("setup/cloud.html", "deploying-cloud.html"),
+    ("how-to/deploy-dask/cloud.html", "deploying-cloud.html"),
+    ("setup/docker.html", "hdeploying-docker.html"),
+    ("how-to/deploy-dask/docker.html", "deploying-docker.html"),
+    ("setup/hpc.html", "deploying-hpc.html"),
+    ("how-to/deploy-dask/hpc.html", "deploying-hpc.html"),
+    ("setup/kubernetes.html", "deploying-kubernetes.html"),
+    ("how-to/deploy-dask/kubernetes.html", "deploying-kubernetes.html"),
+    ("setup/python-advanced.html", "deploying-python-advanced.html"),
+    ("how-to/deploy-dask/python-advanced.html", "deploying-python-advanced.html"),
+    ("setup/single-distributed.html", "deploying-python.html"),
+    ("how-to/deploy-dask/single-distributed.html", "deploying-python.html"),
+    ("setup/single-machine.html", "scheduling.html"),
+    ("how-to/deploy-dask/single-machine.html", "scheduling.html"),
+    ("setup/ssh.html", "deploying-ssh.html"),
+    ("how-to/deploy-dask/ssh.html", "deploying-ssh.html"),
+    ("setup/adaptive.html", "how-to/adaptive.html"),
+    ("setup/custom-startup.html", "how-to/customize-initialization.html"),
+    ("setup/environment.html", "how-to/manage-environments.html"),
+    ("setup/prometheus.html", "how-to/setup-prometheus.html"),
 ]
 
 
@@ -366,8 +417,6 @@ redirect_template = """\
   </head>
 </html>
 """
-
-html_css_files = ["_static/theme_overrides.css"]  # override wide tables in RTD theme
 
 # Rate limiting issue for github: https://github.com/sphinx-doc/sphinx/issues/7388
 linkcheck_ignore = [
@@ -383,6 +432,8 @@ import numpy as np
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
         for html_src_path, new in redirect_files:
+            # add ../ to old nested paths
+            new = f"{'../' * html_src_path.count('/')}{new}"
             page = redirect_template.format(new=new)
             target_path = app.outdir + "/" + html_src_path
             os.makedirs(os.path.dirname(target_path), exist_ok=True)

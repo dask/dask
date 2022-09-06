@@ -1,3 +1,5 @@
+:orphan:
+
 Diagnostics (local)
 ====================
 
@@ -245,21 +247,21 @@ accept five callbacks, allowing for inspection of scheduler execution.
 
 The callbacks are:
 
-1. ``start(dsk)``: Run at the beginning of execution, right before the 
+1. ``start(dsk)``: Run at the beginning of execution, right before the
 state is initialized.  Receives the Dask graph
 
-2. ``start_state(dsk, state)``: Run at the beginning of execution, right 
+2. ``start_state(dsk, state)``: Run at the beginning of execution, right
 after the state is initialized.  Receives the Dask graph and scheduler state
 
-3. ``pretask(key, dsk, state)``: Run every time a new task is started. 
+3. ``pretask(key, dsk, state)``: Run every time a new task is started.
 Receives the key of the task to be run, the Dask graph, and the scheduler state
 
-4. ``posttask(key, result, dsk, state, id)``: Run every time a task is finished. 
-Receives the key of the task that just completed, the result, the Dask graph, 
+4. ``posttask(key, result, dsk, state, id)``: Run every time a task is finished.
+Receives the key of the task that just completed, the result, the Dask graph,
 the scheduler state, and the id of the worker that ran the task
 
-5. ``finish(dsk, state, errored)``: Run at the end of execution, right before the 
-result is returned. Receives the Dask graph, the scheduler state, and a boolean 
+5. ``finish(dsk, state, errored)``: Run at the end of execution, right before the
+result is returned. Receives the Dask graph, the scheduler state, and a boolean
 indicating whether or not the exit was due to an error
 
 Custom diagnostics can be created either by instantiating the ``Callback``

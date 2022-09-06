@@ -61,14 +61,11 @@ from functools import partial, wraps
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
-from tlz import first, merge_sorted, unique
+from tlz import merge_sorted, unique
 
-from ..base import is_dask_collection, tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..layers import BroadcastJoinLayer
-from ..utils import M, apply
-from . import methods
-from .core import (
+from dask.base import is_dask_collection, tokenize
+from dask.dataframe import methods
+from dask.dataframe.core import (
     DataFrame,
     Index,
     Series,
@@ -81,16 +78,24 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
-from .dispatch import group_split_dispatch, hash_object_dispatch
-from .io import from_pandas
-from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
-from .utils import (
+from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
+from dask.dataframe.io import from_pandas
+from dask.dataframe.shuffle import (
+    partitioning_index,
+    rearrange_by_divisions,
+    shuffle,
+    shuffle_group,
+)
+from dask.dataframe.utils import (
     asciitable,
     is_dataframe_like,
     is_series_like,
     make_meta,
     strip_unknown_categories,
 )
+from dask.highlevelgraph import HighLevelGraph
+from dask.layers import BroadcastJoinLayer
+from dask.utils import M, apply
 
 
 def align_partitions(*dfs):
@@ -232,9 +237,7 @@ allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
 
 
-def merge_chunk(lhs, *args, **kwargs):
-    empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    categorical_columns = kwargs.pop("categorical_columns", None)
+def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **kwargs):
 
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
@@ -372,20 +375,21 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
-    name = "hash-join-" + token
-
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    dsk = {
-        (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
-        for i in range(npartitions)
-    }
+    joined = map_partitions(
+        merge_chunk,
+        lhs2,
+        rhs2,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
 
-    divisions = [None] * (npartitions + 1)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
-    return new_dd_object(graph, name, meta, divisions)
+    return joined
 
 
 def single_partition_join(left, right, **kwargs):
@@ -393,42 +397,57 @@ def single_partition_join(left, right, **kwargs):
     # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
+
+    use_left = kwargs.get("right_index") or right._contains_index_name(
+        kwargs.get("right_on")
+    )
+    use_right = kwargs.get("left_index") or left._contains_index_name(
+        kwargs.get("left_on")
+    )
+
+    if len(meta) == 0:
+        if use_left:
+            meta.index = meta.index.astype(left.index.dtype)
+        elif use_right:
+            meta.index = meta.index.astype(right.index.dtype)
+        else:
+            meta.index = meta.index.astype("int64")
+
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    name = "merge-" + tokenize(left, right, **kwargs)
-    if left.npartitions == 1 and kwargs["how"] in allowed_right:
-        left_key = first(left.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, right_key in enumerate(right.__dask_keys__())
-        }
-
-        if kwargs.get("right_index") or right._contains_index_name(
-            kwargs.get("right_on")
-        ):
+    if right.npartitions == 1 and kwargs["how"] in allowed_left:
+        if use_left:
+            divisions = left.divisions
+        elif use_right and len(right.divisions) == len(left.divisions):
             divisions = right.divisions
         else:
-            divisions = [None for _ in right.divisions]
+            divisions = [None for _ in left.divisions]
 
-    elif right.npartitions == 1 and kwargs["how"] in allowed_left:
-        right_key = first(right.__dask_keys__())
-        dsk = {
-            (name, i): (apply, merge_chunk, [left_key, right_key], kwargs)
-            for i, left_key in enumerate(left.__dask_keys__())
-        }
-
-        if kwargs.get("left_index") or left._contains_index_name(kwargs.get("left_on")):
+    elif left.npartitions == 1 and kwargs["how"] in allowed_right:
+        if use_right:
+            divisions = right.divisions
+        elif use_left and len(left.divisions) == len(right.divisions):
             divisions = left.divisions
         else:
-            divisions = [None for _ in left.divisions]
+            divisions = [None for _ in right.divisions]
     else:
         raise NotImplementedError(
             "single_partition_join has no fallback for invalid calls"
         )
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[left, right])
-    return new_dd_object(graph, name, meta, divisions)
+    joined = map_partitions(
+        merge_chunk,
+        left,
+        right,
+        meta=meta,
+        enforce_metadata=False,
+        transform_divisions=False,
+        align_dataframes=False,
+        **kwargs,
+    )
+    joined.divisions = tuple(divisions)
+    return joined
 
 
 def warn_dtype_mismatch(left, right, left_on, right_on):
@@ -493,6 +512,13 @@ def merge(
         left_on = right_on = on
         on = None
 
+    supported_how = ("left", "right", "outer", "inner", "leftanti", "leftsemi")
+    if how not in supported_how:
+        raise ValueError(
+            f"dask.dataframe.merge does not support how='{how}'. Options are: {supported_how}."
+            f" Note that 'leftanti' and 'leftsemi' are only dask_cudf options."
+        )
+
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
     ):
@@ -513,14 +539,14 @@ def merge(
     if not is_dask_collection(left):
         if right_index and left_on:  # change to join on index
             left = left.set_index(left[left_on])
-            left_on = False
+            left_on = None
             left_index = True
         left = from_pandas(left, npartitions=1)  # turn into DataFrame
 
     if not is_dask_collection(right):
         if left_index and right_on:  # change to join on index
             right = right.set_index(right[right_on])
-            right_on = False
+            right_on = None
             right_index = True
         right = from_pandas(right, npartitions=1)  # turn into DataFrame
 
@@ -899,7 +925,13 @@ def merge_asof(
         return pd.merge_asof(left, right, **kwargs)
 
     if on is not None:
+        if left_on is not None or right_on is not None:
+            raise ValueError(
+                "Can only pass argument 'on' OR 'left_on' and 'right_on', not a "
+                "combination of both."
+            )
         left_on = right_on = on
+
     for o in [left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -920,10 +952,18 @@ def merge_asof(
     if not is_dask_collection(right):
         right = from_pandas(right, npartitions=1)
     if right_on is not None:
-        right = right.set_index(right_on, sorted=True)
+        right = right.set_index(right_on, drop=(left_on == right_on), sorted=True)
 
     if by is not None:
+        if left_by is not None or right_by is not None:
+            raise ValueError(
+                "Can only pass argument 'by' OR 'left_by' and 'right_by', not a combination of both."
+            )
         kwargs["left_by"] = kwargs["right_by"] = by
+    if left_by is None and right_by is not None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
+    if left_by is not None and right_by is None:
+        raise ValueError("Must specify both left_on and right_on if one is specified.")
 
     del kwargs["on"], kwargs["left_on"], kwargs["right_on"], kwargs["by"]
     kwargs["left_index"] = kwargs["right_index"] = True
@@ -994,13 +1034,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     filter_warning = True
     uniform = False
 
-    dsk = dict(
-        (
-            (name, i),
-            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
-        )
+    dsk = {
+        (name, i): (methods.concat, part, axis, join, uniform, filter_warning, kwargs)
         for i, part in enumerate(parts2)
-    )
+    }
     for df in dfs2:
         dsk.update(df.dask)
 
@@ -1024,9 +1061,10 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     )
     empty = strip_unknown_categories(meta)
 
-    name = "concat-{0}".format(tokenize(*dfs))
+    name = f"concat-{tokenize(*dfs)}"
     dsk = {}
     i = 0
+    astyped_dfs = []
     for df in dfs:
         # dtypes of all dfs need to be coherent
         # refer to https://github.com/dask/dask/issues/4685
@@ -1051,7 +1089,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 df = df.astype(meta.dtype)
         else:
             pass  # TODO: there are other non-covered cases here
-        dsk.update(df.dask)
+
+        astyped_dfs.append(df)
+
         # An error will be raised if the schemas or categories don't match. In
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
@@ -1076,7 +1116,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=astyped_dfs)
+
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def concat(
@@ -1195,6 +1237,12 @@ def concat(
         raise ValueError("'join' must be 'inner' or 'outer'")
 
     axis = DataFrame._validate_axis(axis)
+    try:
+        # remove any empty DataFrames
+        dfs = [df for df in dfs if bool(len(df.columns))]
+    except AttributeError:
+        # 'Series' object has no attribute 'columns'
+        pass
     dasks = [df for df in dfs if isinstance(df, _Frame)]
     dfs = _maybe_from_pandas(dfs)
 
@@ -1241,12 +1289,12 @@ def concat(
                     dfs, join=join, ignore_order=ignore_order, **kwargs
                 )
             else:
-                divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+                divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
                 return stack_partitions(
                     dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
                 )
         else:
-            divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
+            divisions = [None] * (sum(df.npartitions for df in dfs) + 1)
             return stack_partitions(
                 dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
             )
@@ -1321,7 +1369,7 @@ def _split_partition(df, on, nsplits):
         if nset.intersection(set(df.columns)) == nset:
             ind = hash_object_dispatch(df[on], index=False)
             ind = ind % nsplits
-            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+            return group_split_dispatch(df, ind, nsplits, ignore_index=False)
 
     # We are not joining (purely) on columns.  Need to
     # add a "_partitions" column to perform the split.

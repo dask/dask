@@ -1,14 +1,19 @@
 Create and Store Dask DataFrames
 ================================
 
-Dask can create DataFrames from various data storage formats like CSV, HDF,
-Apache Parquet, and others.  For most formats, this data can live on various
-storage systems including local disk, network file systems (NFS), the Hadoop
-File System (HDFS), and Amazon's S3 (excepting HDF, which is only available on
-POSIX like file systems).
+.. meta::
+    :description: Learn how to create DataFrames and store them. Create a Dask DataFrame from various data storage formats like CSV, HDF, Apache Parquet, and others.
 
-See the :doc:`DataFrame overview page <dataframe>` for an in depth
-discussion of ``dask.dataframe`` scope, use, and limitations.
+You can create a Dask DataFrame from various data storage formats
+like CSV, HDF, Apache Parquet, and others. For most formats, this data can live on various
+storage systems including local disk, network file systems (NFS), the Hadoop
+Distributed File System (HDFS), Google Cloud Storage, and Amazon S3
+(excepting HDF, which is only available on POSIX like file systems).
+
+See the :doc:`DataFrame overview page <dataframe>` for more on
+``dask.dataframe`` scope, use, and limitations and
+:doc:`DataFrame Best Practices <dataframe-best-practices>` for more tips
+and solutions to common problems.
 
 API
 ---
@@ -27,6 +32,8 @@ File Formats:
     read_orc
     read_json
     read_sql_table
+    read_sql_query
+    read_sql
     read_table
     read_fwf
     from_bcolz
@@ -41,6 +48,7 @@ Dask Collections:
 .. autosummary::
     from_delayed
     from_dask_array
+    from_map
     dask.bag.core.Bag.to_dataframe
     DataFrame.to_delayed
     to_records
@@ -50,27 +58,66 @@ Pandas:
 
 .. autosummary::
     from_pandas
+    DataFrame.from_dict
 
 Creating
 --------
 
-Reading from various locations
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Read from CSV
+~~~~~~~~~~~~~
 
-For text, CSV, and Apache Parquet formats, data can come from local disk,
-the Hadoop File System, S3FS, or other sources, by prepending the filenames with
-a protocol:
+You can use :func:`read_csv` to read one or more CSV files into a Dask DataFrame.
+It supports loading multiple files at once using globstrings:
+  
+.. code-block:: python
+
+   >>> df = dd.read_csv('myfiles.*.csv')
+
+You can break up a single large file with the ``blocksize`` parameter:
 
 .. code-block:: python
 
-   >>> df = dd.read_csv('my-data-*.csv')
-   >>> df = dd.read_csv('hdfs:///path/to/my-data-*.csv')
-   >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv')
+   >>> df = dd.read_csv('largefile.csv', blocksize=25e6)  # 25MB chunks  
 
-For remote systems like HDFS, S3 or GS credentials may be an issue.  Usually, these
-are handled by configuration files on disk (such as a ``.boto`` file for S3),
-but in some cases you may want to pass storage-specific options through to the
-storage backend.  You can do this with the ``storage_options=`` keyword:
+Changing the ``blocksize`` parameter will change the number of partitions (see the explanation on
+:ref:`partitions <dataframe-design-partitions>`). A good rule of thumb when working with
+Dask DataFrames is to keep your partitions under 100MB in size.
+
+Read from Parquet
+~~~~~~~~~~~~~~~~~
+
+Similarly, you can use :func:`read_parquet` for reading one or more Parquet files.
+You can read in a single Parquet file:
+
+.. code-block:: python
+
+   >>> df = dd.read_parquet("path/to/mydata.parquet")
+
+Or a directory of local Parquet files:
+
+.. code-block:: python
+
+   >>> df = dd.read_parquet("path/to/my/parquet/")
+
+For more details on working with Parquet files, including tips and best practices, see the documentation
+on :doc:`dataframe-parquet`.
+
+Read from cloud storage
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Dask can read data from a variety of data stores including cloud object stores.
+You can do this by prepending a protocol like ``s3://`` to paths
+used in common data access functions like ``dd.read_csv``:
+
+.. code-block:: python
+
+   >>> df = dd.read_csv('s3://bucket/path/to/data-*.csv')
+   >>> df = dd.read_parquet('gcs://bucket/path/to/data-*.parq')
+
+For remote systems like Amazon S3 or Google Cloud Storage, you may need to provide credentials.
+These are usually stored in a configuration file, but in some cases you may want to pass
+storage-specific options through to the storage backend.
+You can do this with the ``storage_options`` parameter:
 
 .. code-block:: python
 
@@ -79,67 +126,42 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    >>> df = dd.read_parquet('gs://dask-nyc-taxi/yellowtrip.parquet',
    ...                      storage_options={'token': 'anon'})
 
+See the documentation on connecting to :ref:`Amazon S3 <connect-to-remote-data-s3>` or
+:ref:`Google Cloud Storage <connect-to-remote-data-gc>`.
+
+Mapping from a function
+~~~~~~~~~~~~~~~~~~~~~~~
+
+For cases that are not covered by the functions above, but *can* be
+captured by a simple ``map`` operation, :func:`from_map` is likely to be
+the most convenient means for DataFrame creation. For example, this
+API can be used to convert an arbitrary PyArrow ``Dataset`` object into a
+DataFrame collection by mapping fragments to DataFrame partitions:
+
+.. code-block:: python
+
+   >>> import pyarrow.dataset as ds
+   >>> dataset = ds.dataset("hive_data_path", format="orc", partitioning="hive")
+   >>> fragments = dataset.get_fragments()
+   >>> func = lambda frag: frag.to_table().to_pandas()
+   >>> df = dd.from_map(func, fragments)
+
+
 Dask Delayed
 ~~~~~~~~~~~~
 
-For more complex situations not covered by the functions above, you may want to
-use :doc:`dask.delayed<delayed>`, which lets you construct Dask DataFrames out
-of arbitrary Python function calls that load DataFrames.  This can allow you to
-handle new formats easily or bake in particular logic around loading data if,
-for example, your data is stored with some special format.
-
-See :doc:`documentation on using dask.delayed with
-collections<delayed-collections>` or an `example notebook
-<https://gist.github.com/mrocklin/e7b7b3a65f2835cda813096332ec73ca>`_ showing
-how to create a Dask DataFrame from a nested directory structure of Feather
-files (as a stand in for any custom file format).
-
-Dask delayed is particularly useful when simple ``map`` operations aren't
-sufficient to capture the complexity of your data layout.
-
-From Raw Dask Graphs
-~~~~~~~~~~~~~~~~~~~~
-
-This section is mainly for developers wishing to extend ``dask.dataframe``.  It
-discusses internal API not normally needed by users.  Everything below can be
-done just as effectively with :doc:`dask.delayed<delayed>`  described
-just above.  You should never need to create a DataFrame object by hand.
-
-To construct a DataFrame manually from a dask graph you need the following
-information:
-
-1.  Dask: a Dask graph with keys like ``{(name, 0): ..., (name, 1): ...}`` as
-    well as any other tasks on which those tasks depend.  The tasks
-    corresponding to ``(name, i)`` should produce ``pandas.DataFrame`` objects
-    that correspond to the columns and divisions information discussed below
-2.  Name: the special name used above
-3.  Columns: a list of column names
-4.  Divisions: a list of index values that separate the different partitions.
-    Alternatively, if you don't know the divisions (this is common), you can
-    provide a list of ``[None, None, None, ...]`` with as many partitions as
-    you have plus one.  For more information, see the Partitions section in the
-    :doc:`DataFrame documentation <dataframe>`
-
-As an example, we build a DataFrame manually that reads several CSV files that
-have a datetime index separated by day.  Note that you should **never** do this.
-The ``dd.read_csv`` function does this for you:
-
-.. code-block:: Python
-
-   dsk = {('mydf', 0): (pd.read_csv, 'data/2000-01-01.csv'),
-          ('mydf', 1): (pd.read_csv, 'data/2000-01-02.csv'),
-          ('mydf', 2): (pd.read_csv, 'data/2000-01-03.csv')}
-   name = 'mydf'
-   columns = ['price', 'name', 'id']
-   divisions = [Timestamp('2000-01-01 00:00:00'),
-                Timestamp('2000-01-02 00:00:00'),
-                Timestamp('2000-01-03 00:00:00'),
-                Timestamp('2000-01-03 23:59:59')]
-
-   df = dd.DataFrame(dsk, name, columns, divisions)
+:doc:`Dask delayed<delayed>` is particularly useful when simple ``map`` operations aren’t sufficient to capture the complexity of your data layout. It lets you construct Dask DataFrames out of arbitrary Python function calls, which can be
+helpful to handle custom data formats or bake in particular logic around loading data.
+See the :doc:`documentation on using dask.delayed with collections<delayed-collections>`.
 
 Storing
 -------
+
+Writing files locally
+~~~~~~~~~~~~~~~~~~~~~
+
+You can save files locally, assuming each worker can access the same file system. The workers could be located on the same machine, or a network file system can be mounted and referenced at the same path location for every worker node.
+See the documentation on :ref:`accessing data locally <connect-to-remote-data-local>`.
 
 Writing to remote locations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -156,5 +178,4 @@ For example, you can write a ``dask.dataframe`` to an Azure storage blob as:
    ...               storage_options={'account_name': 'ACCOUNT_NAME',
    ...                                'account_key': 'ACCOUNT_KEY'}
 
-See the :doc:`remote data services documentation<remote-data-services>`
-for more information.
+See the :doc:`how-to guide on connecting to remote data <how-to/connect-to-remote-data>`.

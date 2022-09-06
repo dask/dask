@@ -1,28 +1,21 @@
+from __future__ import annotations
+
 import itertools
 import os
+from collections.abc import Hashable, Iterable, Mapping, Sequence
 from itertools import product
-from typing import (
-    Any,
-    Hashable,
-    Iterable,
-    List,
-    Mapping,
-    Optional,
-    Sequence,
-    Set,
-    Tuple,
-    Union,
-)
+from math import prod
+from typing import Any
 
 import tlz as toolz
 
-from .base import clone_key, get_name_from_key, tokenize
-from .compatibility import prod
-from .core import flatten, keys_in_tasks, reverse_dict
-from .delayed import unpack_collections
-from .highlevelgraph import HighLevelGraph, Layer
-from .optimization import SubgraphCallable, fuse
-from .utils import (
+import dask
+from dask.base import clone_key, get_name_from_key, tokenize
+from dask.core import flatten, keys_in_tasks, reverse_dict
+from dask.delayed import unpack_collections
+from dask.highlevelgraph import HighLevelGraph, Layer
+from dask.optimization import SubgraphCallable, fuse
+from dask.utils import (
     _deprecated,
     apply,
     ensure_dict,
@@ -42,11 +35,14 @@ class BlockwiseDep:
     This allows a new collection to be created (via IO) within a
     ``Blockwise`` layer.
 
-    All ``BlockwiseDep`` instances must define a ``numblocks``
-    attribute to speficy the number of blocks/partitions the
-    object can support along each dimension. The object should
-    also define a ``produces_tasks`` attribute to specify if
-    any nested tasks will be passed to the Blockwise function.
+    Parameters
+    ----------
+    numblocks: tuple[int, ...]
+        The number of blocks/partitions the object can support
+        along each dimension.
+    produces_tasks: bool
+        Whether any nested tasks will be passed to the Blockwise
+        function.
 
     See Also
     --------
@@ -54,24 +50,38 @@ class BlockwiseDep:
     dask.blockwise.BlockwiseDepDict
     """
 
-    numblocks: Tuple[int, ...]
+    numblocks: tuple[int, ...]
     produces_tasks: bool
 
-    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+    def __getitem__(self, idx: tuple[int, ...]) -> Any:
         """Return Blockwise-function arguments for a specific index"""
         raise NotImplementedError(
             "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
-    def get(self, idx: Tuple[int, ...], default) -> Any:
+    def get(self, idx: tuple[int, ...], default) -> Any:
         """BlockwiseDep ``__getitem__`` Wrapper"""
         try:
             return self.__getitem__(idx)
         except KeyError:
             return default
 
+    @property
+    def produces_keys(self) -> bool:
+        """Whether this object will produce external key dependencies.
+
+        An external key corresponds to a task key or ``Delayed``-object
+        key that does not originate from within the ``Blockwise`` layer
+        that is including this ``BlockwiseDep`` object in its ``indices``.
+        A ``BlockwiseDep`` object should only return external-key
+        dependencies when those dependencies do not correspond to a
+        blockwise-compatible Dask collection (otherwise the collection
+        name should just be included in ``indices`` list instead).
+        """
+        return False
+
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: list[tuple[int, ...]] | None = None
     ):
         """Client-side serialization for ``BlockwiseDep`` objects.
 
@@ -137,7 +147,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     }
     ... )
 
-    Construct a Blockwise Layer with ``dep`` speficied
+    Construct a Blockwise Layer with ``dep`` specified
     in the ``indices`` list:
 
     >>> layer = Blockwise(
@@ -157,8 +167,9 @@ class BlockwiseDepDict(BlockwiseDep):
     def __init__(
         self,
         mapping: dict,
-        numblocks: Optional[Tuple[int, ...]] = None,
+        numblocks: tuple[int, ...] | None = None,
         produces_tasks: bool = False,
+        produces_keys: bool = False,
     ):
         self.mapping = mapping
         self.produces_tasks = produces_tasks
@@ -166,22 +177,77 @@ class BlockwiseDepDict(BlockwiseDep):
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
-    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
-        return self.mapping[idx]
+        # Whether `mapping` values are real task keys
+        # (e.g. Delayed objects)
+        self._produces_keys = produces_keys
+
+    @property
+    def produces_keys(self) -> bool:
+        return self._produces_keys
+
+    def __getitem__(self, idx: tuple[int, ...]) -> Any:
+        try:
+            return self.mapping[idx]
+        except KeyError as err:
+            # If a DataFrame collection was converted
+            # to an Array collection, the dimesion of
+            # `idx` may not agree with the keys in
+            # `self.mapping`. In this case, we can
+            # use `self.numblocks` to check for a key
+            # match in the leading elements of `idx`
+            flat_idx = idx[: len(self.numblocks)]
+            if flat_idx in self.mapping:
+                return self.mapping[flat_idx]
+            raise err
+
+    def __len__(self) -> int:
+        return len(self.mapping)
 
     def __dask_distributed_pack__(
-        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+        self, required_indices: tuple | list[tuple[int, ...]] | None = None
     ):
         from distributed.protocol import to_serialize
 
         if required_indices is None:
-            required_indices = self.mapping.keys()
+            required_indices = tuple(self.mapping.keys())
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "mapping": {
+                k: stringify(self.mapping[k])
+                if self.produces_keys
+                else to_serialize(self.mapping[k])
+                for k in required_indices
+            },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
+            "produces_keys": self.produces_keys,
         }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
+
+
+class BlockIndex(BlockwiseDep):
+    """Index BlockwiseDep argument
+
+    The purpose of this class is to provide each
+    block of a ``Blockwise``-based operation with
+    the current block index.
+    """
+
+    produces_tasks: bool = False
+
+    def __init__(self, numblocks: tuple[int, ...]):
+        # NOTE: Unused - Just needs to be set to
+        # follow the `BlockwiseDep` interface
+        self.numblocks = numblocks
+
+    def __getitem__(self, idx: tuple[int, ...]) -> tuple[int, ...]:
+        return idx
+
+    def __dask_distributed_pack__(self, **kwargs):
+        return {"numblocks": self.numblocks}
 
     @classmethod
     def __dask_distributed_unpack__(cls, state):
@@ -209,7 +275,7 @@ def index_subs(ind, substitution):
     if ind is None:
         return ind
     else:
-        return tuple([substitution.get(c, c) for c in ind])
+        return tuple(substitution.get(c, c) for c in ind)
 
 
 _BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
@@ -234,6 +300,11 @@ def blockwise(
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a
     dict, it returns a symbolic Blockwise object.
+
+    ``*arrind_pairs`` is similar to those in `make_blockwise_graph`, but in addition to
+    allowing for collections it can accept BlockwiseDep instances, which allows for lazy
+    evaluation of arguments to ``func`` which might be different for different
+    chunks/partitions.
 
     See Also
     --------
@@ -327,7 +398,7 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value.
@@ -341,14 +412,14 @@ class Blockwise(Layer):
     new_axes: Mapping
         New index dimensions that may have been created and their size,
         e.g. ``{'j': 2, 'k': 3}``
-    output_blocks: Set[Tuple[int, ...]]
+    output_blocks: set[tuple[int, ...]]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: Dict[str, BlockwiseDep] (optional)
+    io_deps: dict[str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
         keys and ``BlockwiseDep``-based objects.
         **WARNING**: This argument should only be used internally (for culling,
@@ -362,26 +433,27 @@ class Blockwise(Layer):
     """
 
     output: str
-    output_indices: Tuple[str, ...]
+    output_indices: tuple[str, ...]
     dsk: Mapping[str, tuple]
-    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    indices: tuple[tuple[str, tuple[str, ...] | None], ...]
     numblocks: Mapping[str, Sequence[int]]
-    concatenate: Optional[bool]
+    concatenate: bool | None
     new_axes: Mapping[str, int]
-    output_blocks: Optional[Set[Tuple[int, ...]]]
+    output_blocks: set[tuple[int, ...]] | None
+    io_deps: Mapping[str, BlockwiseDep]
 
     def __init__(
         self,
         output: str,
         output_indices: Iterable[str],
         dsk: Mapping[str, tuple],
-        indices: Iterable[Tuple[Union[str, BlockwiseDep], Optional[Iterable[str]]]],
+        indices: Iterable[tuple[str | BlockwiseDep, Iterable[str] | None]],
         numblocks: Mapping[str, Sequence[int]],
-        concatenate: bool = None,
-        new_axes: Mapping[str, int] = None,
-        output_blocks: Set[Tuple[int, ...]] = None,
-        annotations: Mapping[str, Any] = None,
-        io_deps: Optional[Mapping[str, BlockwiseDep]] = None,
+        concatenate: bool | None = None,
+        new_axes: Mapping[str, int] | None = None,
+        output_blocks: set[tuple[int, ...]] | None = None,
+        annotations: Mapping[str, Any] | None = None,
+        io_deps: Mapping[str, BlockwiseDep] | None = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
@@ -393,17 +465,21 @@ class Blockwise(Layer):
         # and add them to `self.io_deps`.
         # TODO: Remove `io_deps` and handle indexable objects
         # in `self.indices` throughout `Blockwise`.
-        self.indices = []
+        _tmp_indices = []
+        if indices:
+            numblocks = ensure_dict(numblocks, copy=True)
+            io_deps = ensure_dict(io_deps or {}, copy=True)
+            for dep, ind in indices:
+                if isinstance(dep, BlockwiseDep):
+                    name = tokenize(dep)
+                    io_deps[name] = dep
+                    numblocks[name] = dep.numblocks
+                else:
+                    name = dep
+                _tmp_indices.append((name, tuple(ind) if ind is not None else ind))
         self.numblocks = numblocks
         self.io_deps = io_deps or {}
-        for dep, ind in indices:
-            name = dep
-            if isinstance(dep, BlockwiseDep):
-                name = tokenize(dep)
-                self.io_deps[name] = dep
-                self.numblocks[name] = dep.numblocks
-            self.indices.append((name, tuple(ind) if ind is not None else ind))
-        self.indices = tuple(self.indices)
+        self.indices = tuple(_tmp_indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
@@ -428,7 +504,7 @@ class Blockwise(Layer):
         return self._dims
 
     def __repr__(self):
-        return "Blockwise<{} -> {}>".format(self.indices, self.output)
+        return f"Blockwise<{self.indices} -> {self.output}>"
 
     @property
     def _dict(self):
@@ -685,6 +761,14 @@ class Blockwise(Layer):
                         deps.add(tups)
             key_deps[(self.output,) + out_coords] = deps | const_deps
 
+        # Add valid-key dependencies from io_deps
+        for key, io_dep in self.io_deps.items():
+            if io_dep.produces_keys:
+                for out_coords in output_blocks:
+                    key = (self.output,) + out_coords
+                    valid_key_dep = io_dep[out_coords]
+                    key_deps[key] |= {valid_key_dep}
+
         return key_deps
 
     def _cull(self, output_blocks):
@@ -703,15 +787,15 @@ class Blockwise(Layer):
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
-    ) -> Tuple[Layer, Mapping[Hashable, set]]:
+    ) -> tuple[Layer, Mapping[Hashable, set]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
 
-        output_blocks = set()
+        output_blocks: set[tuple[int, ...]] = set()
         for key in keys:
             if key[0] == self.output:
-                output_blocks.add(key[1:])
+                output_blocks.add(tuple(map(int, key[1:])))
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
         out_size_iter = (self.dims[i] for i in self.output_indices)
         if prod(out_size_iter) != len(culled_deps):
@@ -725,7 +809,7 @@ class Blockwise(Layer):
         keys: set,
         seed: Hashable,
         bind_to: Hashable = None,
-    ) -> Tuple[Layer, bool]:
+    ) -> tuple[Layer, bool]:
         names = {get_name_from_key(k) for k in keys}
         # We assume that 'keys' will contain either all or none of the output keys of
         # each of the layers, because clone/bind are always invoked at collection level.
@@ -741,7 +825,7 @@ class Blockwise(Layer):
 
         indices = []
         for k, idxv in self.indices:
-            if k in names:
+            if idxv is not None and k in names:
                 is_leaf = False
                 k = clone_key(k, seed)
             indices.append((k, idxv))
@@ -756,7 +840,7 @@ class Blockwise(Layer):
         dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}
 
         if bind_to is not None and is_leaf:
-            from .graph_manipulation import chunks
+            from dask.graph_manipulation import chunks
 
             # It's always a Delayed generated by dask.graph_manipulation.checkpoint;
             # the layer name always matches the key
@@ -1034,9 +1118,13 @@ def make_blockwise_graph(
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to construct the specified set of output blocks
-    output_blocks = output_blocks or itertools.product(
-        *[range(dims[i]) for i in out_indices]
+    # Only need to construct the specified set of output blocks.
+    # Note that we must convert itertools.product to list,
+    # because we may need to loop through output_blocks more than
+    # once below (itertools.product already uses an internal list,
+    # so this is not a memory regression)
+    output_blocks = output_blocks or list(
+        itertools.product(*[range(dims[i]) for i in out_indices])
     )
 
     dsk = {}
@@ -1084,7 +1172,7 @@ def make_blockwise_graph(
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
+            # of to_serialize if we know that are no embedded
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
@@ -1110,6 +1198,15 @@ def make_blockwise_graph(
         dsk.update(ensure_dict(dsk2))
 
     if return_key_deps:
+
+        # Add valid-key dependencies from io_deps
+        for key, io_dep in io_deps.items():
+            if io_dep.produces_keys:
+                for out_coords in output_blocks:
+                    key = (output,) + out_coords
+                    valid_key_dep = io_dep[out_coords]
+                    key_deps[key] |= {valid_key_dep}
+
         return dsk, key_deps
     else:
         return dsk
@@ -1255,10 +1352,9 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
-                if (
-                    blockwise_layers
-                    and layers[next(iter(blockwise_layers))].annotations
-                    != layers[dep].annotations
+                if blockwise_layers and not _can_fuse_annotations(
+                    layers[next(iter(blockwise_layers))].annotations,
+                    layers[dep].annotations,
                 ):
                     stack.append(dep)
                     continue
@@ -1285,7 +1381,18 @@ def _optimize_blockwise(full_graph, keys=()):
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
             out[layer] = new_layer
 
+            # Get the new (external) dependencies for this layer.
+            # This corresponds to the dependencies defined in
+            # full_graph.dependencies and are not in blockwise_layers
             new_deps = set()
+            for l in blockwise_layers:
+                new_deps |= set(
+                    {
+                        d
+                        for d in full_graph.dependencies[l]
+                        if d not in blockwise_layers and d in full_graph.dependencies
+                    }
+                )
             for k, v in new_layer.indices:
                 if v is None:
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
@@ -1300,6 +1407,65 @@ def _optimize_blockwise(full_graph, keys=()):
     return HighLevelGraph(out, dependencies)
 
 
+def _unique_dep(dep, ind):
+    # Append blockwise index information to dependency name
+    return dep + "_" + "_".join(str(i) for i in list(ind))
+
+
+def _can_fuse_annotations(a: dict | None, b: dict | None) -> bool:
+    """
+    Treat the special annotation keys, as fusable since we can apply simple
+    rules to capture their intent in a fused layer.
+    """
+    if a == b:
+        return True
+
+    if dask.config.get("optimization.annotations.fuse") is False:
+        return False
+
+    fusable = {"retries", "priority", "resources", "workers", "allow_other_workers"}
+    if (not a or all(k in fusable for k in a)) and (
+        not b or all(k in fusable for k in b)
+    ):
+        return True
+
+    return False
+
+
+def _fuse_annotations(*args: dict) -> dict:
+    """
+    Given an iterable of annotations dictionaries, fuse them according
+    to some simple rules.
+    """
+    # First, do a basic dict merge -- we are presuming that these have already
+    # been gated by `_can_fuse_annotations`.
+    annotations = toolz.merge(*args)
+    # Max of layer retries
+    retries = [a["retries"] for a in args if "retries" in a]
+    if retries:
+        annotations["retries"] = max(retries)
+    # Max of layer priorities
+    priorities = [a["priority"] for a in args if "priority" in a]
+    if priorities:
+        annotations["priority"] = max(priorities)
+    # Max of all the layer resources
+    resources = [a["resources"] for a in args if "resources" in a]
+    if resources:
+        annotations["resources"] = toolz.merge_with(max, *resources)
+    # Intersection of all the worker restrictions
+    workers = [a["workers"] for a in args if "workers" in a]
+    if workers:
+        annotations["workers"] = list(set.intersection(*[set(w) for w in workers]))
+    # More restrictive of allow_other_workers
+    allow_other_workers = [
+        a["allow_other_workers"] for a in args if "allow_other_workers" in a
+    ]
+    if allow_other_workers:
+        annotations["allow_other_workers"] = all(allow_other_workers)
+
+    return annotations
+
+
 def rewrite_blockwise(inputs):
     """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
@@ -1309,7 +1475,7 @@ def rewrite_blockwise(inputs):
 
     Parameters
     ----------
-    inputs : List[Blockwise]
+    inputs : list[Blockwise]
 
     Returns
     -------
@@ -1323,6 +1489,9 @@ def rewrite_blockwise(inputs):
         # Fast path: if there's only one input we can just use it as-is.
         return inputs[0]
 
+    fused_annotations = _fuse_annotations(
+        *[i.annotations for i in inputs if i.annotations]
+    )
     inputs = {inp.output: inp for inp in inputs}
     dependencies = {
         inp.output: {d for d, v in inp.indices if v is not None and d in inputs}
@@ -1355,9 +1524,15 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
+            # Change dep name to avoid fusing the same dep
+            # (in different iteration orders) into a single
+            # subgraph key/dependency
+            # (see: https://github.com/dask/dask/issues/8535)
+            local_dep = dep if dep == root else _unique_dep(dep, ind)
+
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
-            dsk = {k: subs(v, {blockwise_token(i): dep}) for k, v in dsk.items()}
+            dsk = {k: subs(v, {blockwise_token(i): local_dep}) for k, v in dsk.items()}
 
             # Remove current input from input indices
             # [('a', 'i'), ('b', 'i')] -> [('a', 'i')]
@@ -1401,6 +1576,10 @@ def rewrite_blockwise(inputs):
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
+            # Change new_dsk key to match local_dep
+            if dep != local_dep and dep in new_dsk:
+                new_dsk[local_dep] = new_dsk.pop(dep)
+
             # indices.extend(new_indices)
             dsk.update(new_dsk)
 
@@ -1438,7 +1617,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
-        annotations=inputs[root].annotations,
+        annotations=fused_annotations,
         io_deps=io_deps,
     )
 
@@ -1512,14 +1691,14 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
     )
 
     g = toolz.groupby(0, L)
-    g = dict((k, set([d for i, d in v])) for k, v in g.items())
+    g = {k: {d for i, d in v} for k, v in g.items()}
 
-    g2 = dict((k, v - set(sentinels) if len(v) > 1 else v) for k, v in g.items())
+    g2 = {k: v - set(sentinels) if len(v) > 1 else v for k, v in g.items()}
 
     if consolidate:
         return toolz.valmap(consolidate, g2)
 
-    if g2 and not set(map(len, g2.values())) == set([1]):
+    if g2 and not set(map(len, g2.values())) == {1}:
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)

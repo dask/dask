@@ -2,8 +2,9 @@ import re
 
 import pandas as pd
 
-from ....core import flatten
-from ....utils import natural_sort_key
+from dask import config
+from dask.dataframe.io.utils import _is_local_fs
+from dask.utils import natural_sort_key
 
 
 class Engine:
@@ -37,9 +38,8 @@ class Engine:
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
         gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
-            gather statistics data if there is a _metadata file available to
-            query (cheaply)
+            Whether or not to gather statistics to calculate divisions
+            for the output DataFrame collection.
         filters: list
             List of filters to apply, like ``[('x', '>', 0), ...]``.
         **kwargs: dict (of dicts)
@@ -487,15 +487,6 @@ def _analyze_paths(file_list, fs, root=False):
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
 
 
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
-
-
 def _aggregate_stats(
     file_path,
     file_row_group_stats,
@@ -672,3 +663,105 @@ def _get_aggregation_depth(aggregate_files, partition_names):
             )
 
     return aggregation_depth
+
+
+def _set_metadata_task_size(metadata_task_size, fs):
+    # Set metadata_task_size using the config file
+    # if the kwarg value was not specified
+    if metadata_task_size is None:
+        # If a default value is not specified in the config file,
+        # otherwise we use "0"
+        config_str = "dataframe.parquet.metadata-task-size-" + (
+            "local" if _is_local_fs(fs) else "remote"
+        )
+        return config.get(config_str, 0)
+
+    return metadata_task_size
+
+
+def _process_open_file_options(
+    open_file_options,
+    metadata=None,
+    columns=None,
+    row_groups=None,
+    default_engine=None,
+    default_cache="readahead",
+    allow_precache=True,
+):
+    # Process `open_file_options`.
+    # Set default values and extract `precache_options`
+    open_file_options = (open_file_options or {}).copy()
+    precache_options = open_file_options.pop("precache_options", {}).copy()
+    if not allow_precache:
+        # Precaching not allowed
+        # (probably because the file system is local)
+        precache_options = {}
+    if "open_file_func" not in open_file_options:
+        if precache_options.get("method", None) == "parquet":
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", "parts"
+            )
+            precache_options.update(
+                {
+                    "metadata": metadata,
+                    "columns": columns,
+                    "row_groups": row_groups,
+                    "engine": precache_options.get("engine", default_engine),
+                }
+            )
+        else:
+            open_file_options["cache_type"] = open_file_options.get(
+                "cache_type", default_cache
+            )
+            open_file_options["mode"] = open_file_options.get("mode", "rb")
+    return precache_options, open_file_options
+
+
+def _split_user_options(**kwargs):
+    # Check user-defined options.
+    # Split into "file" and "dataset"-specific kwargs
+    user_kwargs = kwargs.copy()
+    dataset_options = {
+        **user_kwargs.pop("file", {}).copy(),
+        **user_kwargs.pop("dataset", {}).copy(),
+    }
+    read_options = user_kwargs.pop("read", {}).copy()
+    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    return (
+        dataset_options,
+        read_options,
+        user_kwargs,
+    )
+
+
+def _set_gather_statistics(
+    gather_statistics,
+    chunksize,
+    split_row_groups,
+    aggregation_depth,
+    filter_columns,
+    stat_columns,
+):
+    # Use available information about the current read options
+    # and target dataset to decide if we need to gather metadata
+    # statistics to construct the graph for a `read_parquet` op.
+
+    # If the user has specified `calculate_divisions=True`, then
+    # we will be starting with `gather_statistics=True` here.
+    if (
+        chunksize
+        or (int(split_row_groups) > 1 and aggregation_depth)
+        or filter_columns.intersection(stat_columns)
+    ):
+        # Need to gather statistics if we are aggregating files
+        # or filtering
+        # NOTE: Should avoid gathering statistics when the agg
+        # does not depend on a row-group statistic
+        gather_statistics = True
+    elif not stat_columns:
+        # Not aggregating files/row-groups.
+        # We only need to gather statistics if `stat_columns`
+        # is populated
+        gather_statistics = False
+
+    return bool(gather_statistics)

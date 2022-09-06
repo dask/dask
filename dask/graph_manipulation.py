@@ -2,21 +2,13 @@
 output collections produced by this module are typically not functionally equivalent to
 their inputs.
 """
-import uuid
-from numbers import Number
-from typing import (
-    AbstractSet,
-    Callable,
-    Dict,
-    Hashable,
-    Optional,
-    Set,
-    Tuple,
-    TypeVar,
-    Union,
-)
+from __future__ import annotations
 
-from .base import (
+import uuid
+from collections.abc import Callable, Hashable, Set
+from typing import Any, Literal, TypeVar
+
+from dask.base import (
     clone_key,
     get_collection_names,
     get_name_from_key,
@@ -24,23 +16,20 @@ from .base import (
     tokenize,
     unpack_collections,
 )
-from .blockwise import blockwise
-from .core import flatten
-from .delayed import Delayed, delayed
-from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.blockwise import blockwise
+from dask.core import flatten
+from dask.delayed import Delayed, delayed
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
-try:
-    from typing import Literal  # Python >= 3.8
-
-    SplitEvery = Union[Number, Literal[False], None]
-except ImportError:
-    SplitEvery = Union[Number, bool, None]  # type: ignore
 
 
-def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:
+def checkpoint(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
@@ -63,11 +52,10 @@ def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:
     :doc:`delayed` yielding None
     """
     if split_every is None:
-        # FIXME https://github.com/python/typeshed/issues/5074
-        split_every = 8  # type: ignore
+        split_every = 8
     elif split_every is not False:
-        split_every = int(split_every)  # type: ignore
-        if split_every < 2:  # type: ignore
+        split_every = int(split_every)
+        if split_every < 2:
             raise ValueError("split_every must be False, None, or >= 2")
 
     collections, _ = unpack_collections(*collections)
@@ -125,7 +113,7 @@ def _checkpoint_one(collection, split_every) -> Delayed:
     return Delayed(name, dsk)
 
 
-def _can_apply_blockwise(collection):
+def _can_apply_blockwise(collection) -> bool:
     """Return True if _map_blocks can be sped up via blockwise operations; False
     otherwise.
 
@@ -133,21 +121,21 @@ def _can_apply_blockwise(collection):
           pint.Quantity, xarray DataArray, Dataset, and Variable.
     """
     try:
-        from .bag import Bag
+        from dask.bag import Bag
 
         if isinstance(collection, Bag):
             return True
     except ImportError:
         pass
     try:
-        from .array import Array
+        from dask.array import Array
 
         if isinstance(collection, Array):
             return True
     except ImportError:
         pass
     try:
-        from .dataframe import DataFrame, Series
+        from dask.dataframe import DataFrame, Series
 
         return isinstance(collection, (DataFrame, Series))
     except ImportError:
@@ -159,7 +147,7 @@ def _build_map_layer(
     prev_name: str,
     new_name: str,
     collection,
-    dependencies: Tuple[Delayed, ...] = (),
+    dependencies: tuple[Delayed, ...] = (),
 ) -> Layer:
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
     fall back to MaterializedLayer otherwise.
@@ -217,9 +205,9 @@ def bind(
     parents,
     *,
     omit=None,
-    seed: Hashable = None,
+    seed: Hashable | None = None,
     assume_layers: bool = True,
-    split_every: SplitEvery = None,
+    split_every: float | Literal[False] | None = None,
 ) -> T:
     """
     Make ``children`` collection(s), optionally omitting sub-collections, dependent on
@@ -283,10 +271,12 @@ def bind(
     -------
     Same as ``children``
         Dask collection or structure of dask collection equivalent to ``children``,
-        which compute to the same values. All keys of ``children`` will be regenerated,
-        up to and excluding the keys of ``omit``. Nodes immediately above ``omit``, or
+        which compute to the same values. All nodes of ``children`` will be regenerated,
+        up to and excluding the nodes of ``omit``. Nodes immediately above ``omit``, or
         the leaf nodes if the collections in ``omit`` are not found, are prevented from
         computing until all collections in ``parents`` have been fully computed.
+        The keys of the regenerated nodes will be different from the original ones, so
+        that they can be used within the same graph.
     """
     if seed is None:
         seed = uuid.uuid4().bytes
@@ -317,9 +307,9 @@ def bind(
 
 def _bind_one(
     child: T,
-    blocker: Optional[Delayed],
-    omit_layers: Set[str],
-    omit_keys: Set[Hashable],
+    blocker: Delayed | None,
+    omit_layers: set[str],
+    omit_keys: set[Hashable],
     seed: Hashable,
 ) -> T:
     prev_coll_names = get_collection_names(child)
@@ -329,8 +319,8 @@ def _bind_one(
         return child
 
     dsk = child.__dask_graph__()  # type: ignore
-    new_layers: Dict[str, Layer] = {}
-    new_deps: Dict[str, AbstractSet[str]] = {}
+    new_layers: dict[str, Layer] = {}
+    new_deps: dict[str, Set[Any]] = {}
 
     if isinstance(dsk, HighLevelGraph):
         try:
@@ -419,7 +409,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     --------
     (tokens have been simplified for the sake of brevity)
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
@@ -441,6 +431,17 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-5', 0): (<function operator.add>, ('add-4', 0), 1),
      ('add-5', 1): (<function operator.add>, ('add-4', 1), 1)}
 
+    The typical usage pattern for clone() is the following:
+
+    >>> x = cheap_computation_with_large_output()  # doctest: +SKIP
+    >>> y = expensive_and_long_computation(x)  # doctest: +SKIP
+    >>> z = wrap_up(clone(x), y)  # doctest: +SKIP
+
+    In the above code, the chunks of x will be forgotten as soon as they are consumed by
+    the chunks of y, and then they'll be regenerated from scratch at the very end of the
+    computation. Without clone(), x would only be computed once and then kept in memory
+    throughout the whole computation of y, needlessly consuming memory.
+
     Parameters
     ----------
     collections
@@ -458,6 +459,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
         Dask collections of the same type as the inputs, which compute to the same
         value, or nested structures equivalent to the inputs, where the original
         collections have been replaced.
+        The keys of the regenerated nodes in the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     out = bind(
         collections, parents=None, omit=omit, seed=seed, assume_layers=assume_layers
@@ -465,7 +468,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def wait_on(*collections, split_every: SplitEvery = None):
+def wait_on(
+    *collections,
+    split_every: float | Literal[False] | None = None,
+):
     """Ensure that all chunks of all input collections have been computed before
     computing the dependents of any of the chunks.
 
@@ -473,7 +479,7 @@ def wait_on(*collections, split_every: SplitEvery = None):
     will only proceed when all chunks of the array ``x`` have been computed, but
     otherwise matches ``x``:
 
-    >>> from dask import array as da
+    >>> import dask.array as da
     >>> x = da.ones(10, chunks=5)
     >>> u = wait_on(x)
 
@@ -498,6 +504,8 @@ def wait_on(*collections, split_every: SplitEvery = None):
         Dask collection of the same type as the input, which computes to the same value,
         or a nested structure equivalent to the input where the original collections
         have been replaced.
+        The keys of the regenerated nodes of the new collections will be different from
+        the original ones, so that they can be used within the same graph.
     """
     blocker = checkpoint(*collections, split_every=split_every)
 

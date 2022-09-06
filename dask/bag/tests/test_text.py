@@ -4,8 +4,7 @@ import pytest
 from fsspec.compression import compr
 from tlz import concat
 
-import dask
-from dask import compute
+from dask import compute, config
 from dask.bag.text import read_text
 from dask.bytes import utils
 from dask.utils import filetexts
@@ -31,7 +30,7 @@ files = {
 
 expected = "".join([files[v] for v in sorted(files)])
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
+fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]  # type: ignore
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc_path = [
@@ -47,7 +46,7 @@ def test_read_text(fmt, bs, encoding, include_path):
     if fmt not in utils.compress:
         pytest.skip("compress function not provided for %s" % fmt)
     compress = utils.compress[fmt]
-    files2 = dict((k, compress(v.encode(encoding))) for k, v in files.items())
+    files2 = {k: compress(v.encode(encoding)) for k, v in files.items()}
     with filetexts(files2, mode="b"):
         b = read_text(
             ".test.accounts.*.json", compression=fmt, blocksize=bs, encoding=encoding
@@ -98,11 +97,11 @@ def test_read_text_unicode_no_collection(tmp_path):
 
 
 def test_files_per_partition():
-    files3 = {"{:02}.txt".format(n): "line from {:02}" for n in range(20)}
+    files3 = {f"{n:02}.txt": "line from {:02}" for n in range(20)}
     with filetexts(files3):
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns
-        with dask.config.set({"scheduler": "single-threaded"}):
+        with config.set({"scheduler": "single-threaded"}):
             with pytest.warns(UserWarning):
                 b = read_text("*.txt", files_per_partition=10)
                 l = len(b.take(100, npartitions=1))

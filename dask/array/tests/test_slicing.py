@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import pytest
 from tlz import merge
@@ -8,10 +9,10 @@ np = pytest.importorskip("numpy")
 import dask
 import dask.array as da
 from dask import config
+from dask.array.chunk import getitem
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
-    cached_cumsum,
     make_block_sorted_slices,
     new_blockdim,
     normalize_index,
@@ -22,8 +23,6 @@ from dask.array.slicing import (
     take,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from ..chunk import getitem
 
 
 def test_slice_1d():
@@ -359,14 +358,14 @@ def test_take_sorted():
         "y", "x", [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], itemsize=8, axis=1
     )
     expected = merge(
-        dict(
-            (("y", i, 0), (getitem, ("x", i, 0), (slice(None, None, None), [1, 3, 5])))
+        {
+            ("y", i, 0): (getitem, ("x", i, 0), (slice(None, None, None), [1, 3, 5]))
             for i in range(4)
-        ),
-        dict(
-            (("y", i, 1), (getitem, ("x", i, 1), (slice(None, None, None), [17])))
+        },
+        {
+            ("y", i, 1): (getitem, ("x", i, 1), (slice(None, None, None), [17]))
             for i in range(4)
-        ),
+        },
     )
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((20, 20, 20, 20), (3, 1))
@@ -420,6 +419,13 @@ def test_slicing_and_chunks():
     o = da.ones((24, 16), chunks=((4, 8, 8, 4), (2, 6, 6, 2)))
     t = o[4:-4, 2:-2]
     assert t.chunks == ((8, 8), (6, 6))
+
+
+def test_slicing_and_unknown_chunks():
+    a = da.ones((10, 5), chunks=5)
+    a._chunks = ((np.nan, np.nan), (5,))
+    with pytest.raises(ValueError, match="Array chunk size or shape is unknown"):
+        a[[0, 5]].compute()
 
 
 def test_slicing_identities():
@@ -785,9 +791,9 @@ def test_slicing_integer_no_warnings():
     # https://github.com/dask/dask/pull/2457/
     X = da.random.random((100, 2), (2, 2))
     idx = np.array([0, 0, 1, 1])
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as record:
         X[idx].compute()
-    assert len(rec) == 0
+    assert not record
 
 
 @pytest.mark.slow
@@ -875,8 +881,15 @@ def test_slicing_plan(chunks, index, expected):
 def test_getitem_avoids_large_chunks():
     with dask.config.set({"array.chunk-size": "0.1Mb"}):
         a = np.arange(2 * 128 * 128, dtype="int64").reshape(2, 128, 128)
-        arr = da.from_array(a, chunks=(1, 128, 128))
         indexer = [0] + [1] * 11
+        arr = da.from_array(a, chunks=(1, 8, 8))
+        result = arr[
+            indexer
+        ]  # small chunks within the chunk-size limit should NOT raise PerformanceWarning
+        expected = a[indexer]
+        assert_eq(result, expected)
+
+        arr = da.from_array(a, chunks=(1, 128, 128))  # large chunks
         expected = a[indexer]
 
         # By default, we warn
@@ -888,38 +901,28 @@ def test_getitem_avoids_large_chunks():
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": False}):
-            with pytest.warns(None) as e:
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
-            assert len(e) == 0
             assert_eq(result, expected)
+            assert not record
 
         # Users can silence the warning
         with dask.config.set({"array.slicing.split-large-chunks": True}):
-            with pytest.warns(None) as e:
+            with warnings.catch_warnings(record=True) as record:
                 result = arr[indexer]
-            assert len(e) == 0  # no
             assert_eq(result, expected)
+            assert not record
 
             assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
-@pytest.mark.parametrize(
-    "chunks",
-    [
-        ((1, 1, 1, 1), (np.nan,), (np.nan,)),
-        pytest.param(
-            ((np.nan, np.nan, np.nan, np.nan), (500,), (500,)),
-            marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6586"),
-        ),
-    ],
-)
-def test_getitem_avoids_large_chunks_missing(chunks):
+def test_getitem_avoids_large_chunks_missing():
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    with dask.config.set({"array.slicing.split-large-chunks": True}):
+    with dask.config.set({"array.chunk-size": "0.1Mb"}):
         a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
         arr = da.from_array(a, chunks=(1, 500, 500))
-        arr._chunks = chunks
+        arr._chunks = ((1, 1, 1, 1), (np.nan,), (np.nan,))
         indexer = [0, 1] + [2] * 100 + [3]
         expected = a[indexer]
         result = arr[indexer]
@@ -975,29 +978,6 @@ def test_pathological_unsorted_slicing():
 
     assert "10" in str(info.list[0])
     assert "out-of-order" in str(info.list[0])
-
-
-def test_cached_cumsum():
-    a = (1, 2, 3, 4)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    assert x == (1, 3, 6, 10)
-    assert y == (0, 1, 3, 6, 10)
-
-
-def test_cached_cumsum_nan():
-    a = (1, np.nan, 3)
-    x = cached_cumsum(a)
-    y = cached_cumsum(a, initial_zero=True)
-    np.testing.assert_equal(x, (1, np.nan, np.nan))
-    np.testing.assert_equal(y, (0, 1, np.nan, np.nan))
-
-
-def test_cached_cumsum_non_tuple():
-    a = [1, 2, 3]
-    assert cached_cumsum(a) == (1, 3, 6)
-    a[1] = 4
-    assert cached_cumsum(a) == (1, 5, 8)
 
 
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])
@@ -1065,3 +1045,9 @@ def test_slice_array_3d_with_bool_numpy_array():
     actual = array[mask].compute()
     expected = np.arange(13, 24)
     assert_eq(actual, expected)
+
+
+def test_slice_array_null_dimension():
+    array = da.from_array(np.zeros((3, 0)))
+    expected = np.zeros((3, 0))[[0]]
+    assert_eq(array[[0]], expected)

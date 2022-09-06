@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import warnings
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -14,33 +17,33 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.sizeof import SimpleSizeof, sizeof
-
-from ..utils import is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
-from .dispatch import (
+from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
     get_parallel_type,
     group_split_dispatch,
+    grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
-from .extensions import make_array_nonempty, make_scalar
-from .utils import (
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
-    is_categorical_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+from dask.sizeof import SimpleSizeof, sizeof
+from dask.utils import is_arraylike, is_series_like, typename
 
 ##########
 # Pandas #
@@ -61,22 +64,32 @@ def _(x):
 
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x, index=None):
-    return x.iloc[:0]
+def _(x, index=None):
+    out = x.iloc[:0].copy(deep=True)
+    # index isn't copied by default in pandas, even if deep=true
+    out.index = out.index.copy(deep=True)
+    return out
 
 
 @make_meta_dispatch.register(pd.Index)
-def make_meta_index(x, index=None):
-    return x[0:0]
+def _(x, index=None):
+    return x[0:0].copy(deep=True)
 
 
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    import pyarrow as pa
+
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -126,11 +139,9 @@ def make_meta_object(x, index=None):
         )
     if isinstance(x, tuple) and len(x) == 2:
         return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
+    elif isinstance(x, Iterable) and not isinstance(x, str):
         if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
-            raise ValueError(
-                "Expected iterable of tuples of (name, dtype), got {0}".format(x)
-            )
+            raise ValueError(f"Expected iterable of tuples of (name, dtype), got {x}")
         return pd.DataFrame(
             {c: _empty_series(c, d, index=index) for (c, d) in x},
             columns=[c for c, d in x],
@@ -150,7 +161,7 @@ def make_meta_object(x, index=None):
     if is_scalar(x):
         return _nonempty_scalar(x)
 
-    raise TypeError("Don't know how to create metadata from {0}".format(x))
+    raise TypeError(f"Don't know how to create metadata from {x}")
 
 
 @meta_nonempty.register(object)
@@ -165,7 +176,7 @@ def meta_nonempty_object(x):
     else:
         raise TypeError(
             "Expected Pandas-like Index, Series, DataFrame, or scalar, "
-            "got {0}".format(typename(type(x)))
+            f"got {typename(type(x))}"
         )
 
 
@@ -194,7 +205,13 @@ def _nonempty_index(idx):
     elif idx.is_numeric():
         return typ([1, 2], name=idx.name)
     elif typ is pd.Index:
-        return pd.Index(["a", "b"], name=idx.name)
+        if idx.dtype == bool:
+            # pd 1.5 introduce bool dtypes and respect non-uniqueness
+            return pd.Index([True, False], name=idx.name)
+        else:
+            # for pd 1.5 in the case of bool index this would be cast as [True, True]
+            # breaking uniqueness
+            return pd.Index(["a", "b"], name=idx.name, dtype=idx.dtype)
     elif typ is pd.DatetimeIndex:
         start = "1970-01-01"
         # Need a non-monotonic decreasing index to avoid issues with
@@ -243,9 +260,7 @@ def _nonempty_index(idx):
         except TypeError:  # older pandas versions
             return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
 
-    raise TypeError(
-        "Don't know how to handle index of type {0}".format(typename(type(idx)))
-    )
+    raise TypeError(f"Don't know how to handle index of type {typename(type(idx))}")
 
 
 @meta_nonempty.register(pd.Series)
@@ -355,8 +370,10 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    if is_series_like(c):
+        c = c.values
     indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
+        c.astype(np.intp, copy=False), k
     )
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -375,7 +392,7 @@ def concat_pandas(
     uniform=False,
     filter_warning=True,
     ignore_index=False,
-    **kwargs
+    **kwargs,
 ):
     ignore_order = kwargs.pop("ignore_order", False)
 
@@ -453,7 +470,7 @@ def concat_pandas(
                 cat_mask = pd.concat(
                     [(df.dtypes == "category").to_frame().T for df in dfs3],
                     join=join,
-                    **kwargs
+                    **kwargs,
                 ).any()
 
         if cat_mask.any():
@@ -462,7 +479,7 @@ def concat_pandas(
             out = pd.concat(
                 [df[df.columns.intersection(not_cat)] for df in dfs3],
                 join=join,
-                **kwargs
+                **kwargs,
             )
             temp_ind = out.index
             for col in cat_mask.index.difference(not_cat):
@@ -530,6 +547,11 @@ def tolist_pandas(obj):
 )
 def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
+
+
+@grouper_dispatch.register((pd.DataFrame, pd.Series))
+def get_grouper_pandas(obj):
+    return pd.core.groupby.Grouper
 
 
 @percentile_lookup.register((pd.Series, pd.Index))

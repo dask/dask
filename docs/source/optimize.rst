@@ -59,9 +59,9 @@ Suppose you had a custom Dask graph for doing a word counting task:
     ...        'print2': (print_and_return, 'format2'),
     ...        'print3': (print_and_return, 'format3')}
 
-.. image:: images/optimize_dask1.png
+.. image:: images/optimize_dask1.svg
    :width: 65 %
-   :alt: The original dask graph
+   :alt: The original non-optimized Dask task graph.
 
 Here we are counting the occurrence of the words ``'orange``, ``'apple'``, and
 ``'pear'`` in the list of words, formatting an output string reporting the
@@ -98,9 +98,9 @@ later steps:
     >>> outputs = ['print1', 'print2']
     >>> dsk1, dependencies = cull(dsk, outputs)
 
-.. image:: images/optimize_dask2.png
+.. image:: images/optimize_dask2.svg
    :width: 50 %
-   :alt: After culling
+   :alt: The Dask task graph after culling tasks for optimization.
 
 Looking at the task graph above, there are multiple accesses to constants such
 as ``'val1'`` or ``'val2'`` in the Dask graph. These can be inlined into the
@@ -114,9 +114,9 @@ tasks to improve efficiency using the ``inline`` function. For example:
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask3.png
+.. image:: images/optimize_dask3.svg
    :width: 40 %
-   :alt: After inlining
+   :alt: The Dask task graph after inlining for optimization.
 
 Now we have two sets of *almost* linear task chains. The only link between them
 is the word counting function. For cheap operations like this, the
@@ -134,9 +134,9 @@ can be used:
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask4.png
+.. image:: images/optimize_dask4.svg
    :width: 30 %
-   :alt: After inlining functions
+   :alt: The Dask task graph after inlining functions for optimization.
 
 Now we have a set of purely linear tasks. We'd like to have the scheduler run
 all of these on the same worker to reduce data serialization between workers.
@@ -151,9 +151,9 @@ One option is just to merge these linear chains into one big task using the
     word list has 2 occurrences of apple, out of 7 words
     word list has 2 occurrences of orange, out of 7 words
 
-.. image:: images/optimize_dask5.png
+.. image:: images/optimize_dask5.svg
    :width: 30 %
-   :alt: After fusing
+   :alt: The Dask task graph after fusing tasks for optimization.
 
 
 Putting it all together:

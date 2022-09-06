@@ -1,7 +1,16 @@
 temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /local
 
+visualization:
+  engine: null  # Default visualization engine to use when calling `.visualize()` on a collection
+
+tokenize:
+  ensure-deterministic: false  # If true, tokenize will error instead of falling back to uuids
+
 dataframe:
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
+  parquet:
+    metadata-task-size-local: 512  # Number of files per local metadata-processing task
+    metadata-task-size-remote: 16  # Number of files per remote metadata-processing task
 
 array:
   svg:
@@ -10,6 +19,8 @@ array:
     split-large-chunks: null  # How to handle large output chunks in slicing. Warns by default.
 
 optimization:
+  annotations:
+    fuse: true  # Automatically fuse compatible annotations on layers
   fuse:
     active: null  # Treat as false for dask.dataframe, true for everything else
     ave-width: 1
