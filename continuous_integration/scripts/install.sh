@@ -7,6 +7,9 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
+    # The nightly pyarrow / arrow-cpp packages currently don't install with latest
+    # protobuf / abseil, see https://github.com/dask/dask/issues/9449
+    mamba install -y -c conda-forge libprotobuf=3.19
     # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
     arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
     export PYARROW_VERSION=${arr[1]}
