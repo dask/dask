@@ -48,7 +48,7 @@ def to_hdf(
     name_function=None,
     compute=True,
     lock=None,
-    dask_kwargs={},
+    dask_kwargs=None,
     **kwargs,
 ):
     """Store Dask Dataframe to Hierarchical Data Format (HDF) files
@@ -137,6 +137,9 @@ def to_hdf(
     read_hdf:
     to_parquet:
     """
+    if dask_kwargs is None:
+        dask_kwargs = {}
+
     name = "to-hdf-" + uuid.uuid1().hex
 
     pd_to_hdf = df._partition_type.to_hdf
