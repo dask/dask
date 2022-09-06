@@ -3104,7 +3104,12 @@ Dask Name: {name}, {layers}"""
             except TypeError:
                 pass
             if not any(is_dask_collection(v) for v in values):
-                values = np.fromiter(values, dtype=object)
+                try:
+                    values = np.fromiter(values, dtype=object)
+                except ValueError:
+                    # Numpy 1.23 supports creating arrays of iterables, while lower
+                    # version 1.21.x and 1.22.x do not
+                    pass
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )
