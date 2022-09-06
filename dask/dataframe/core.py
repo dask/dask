@@ -3103,7 +3103,8 @@ Dask Name: {name}, {layers}"""
                 values = list(set(values))
             except TypeError:
                 pass
-            values = np.fromiter(values, dtype=object)
+            if not any(is_dask_collection(v) for v in values):
+                values = np.fromiter(values, dtype=object)
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )
