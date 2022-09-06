@@ -1661,7 +1661,7 @@ class _GroupBy:
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
         if shuffle is None:
             if split_out > 1:
-                shuffle = shuffle or config.get("shuffle", None) or "disk"
+                shuffle = shuffle or config.get("shuffle", None) or "tasks"
             else:
                 shuffle = False
 
