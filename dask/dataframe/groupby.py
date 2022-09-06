@@ -1238,14 +1238,20 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        chunk_kwargs={},
-        aggregate_kwargs={},
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
     ):
         if aggfunc is None:
             aggfunc = func
 
         if meta is None:
             meta = func(self._meta_nonempty)
+
+        if chunk_kwargs is None:
+            chunk_kwargs = {}
+
+        if aggregate_kwargs is None:
+            aggregate_kwargs = {}
 
         columns = meta.name if is_series_like(meta) else meta.columns
 
