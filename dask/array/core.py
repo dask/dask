@@ -354,7 +354,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
-def _concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=None):
     """Recursively concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
@@ -389,6 +389,9 @@ def _concatenate2(arrays, axes=[]):
     array([[1, 2],
            [3, 4]])
     """
+    if axes is None:
+        axes = []
+
     if axes == ():
         if isinstance(arrays, list):
             return arrays[0]
@@ -529,7 +532,7 @@ def map_blocks(
     token=None,
     dtype=None,
     chunks=None,
-    drop_axis=[],
+    drop_axis=None,
     new_axis=None,
     enforce_ndim=False,
     meta=None,
@@ -770,6 +773,9 @@ def map_blocks(
     >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
     dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
+    if drop_axis is None:
+        drop_axis = []
+
     if not callable(func):
         msg = (
             "First argument must be callable function, not %s\n"
@@ -3768,7 +3774,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
-def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs=None):
     """Create dask array in a single block by calling a function
 
     Calling the provided function with func(*args, **kwargs) should return a
@@ -3788,6 +3794,9 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    if kwargs is None:
+        kwargs = {}
+
     name = name or "from_func-" + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
