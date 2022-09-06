@@ -1803,6 +1803,7 @@ def iter_chunks(sizes, max_size):
 hex_pattern = re.compile("[a-f]+")
 
 
+@functools.lru_cache(100000)
 def key_split(s):
     """
     >>> key_split('x')
@@ -1814,6 +1815,8 @@ def key_split(s):
     >>> key_split(('x-2', 1))
     'x'
     >>> key_split("('x-2', 1)")
+    'x'
+    >>> key_split("('x', 1)")
     'x'
     >>> key_split('hello-world-1')
     'hello-world'
@@ -1837,7 +1840,7 @@ def key_split(s):
     try:
         words = s.split("-")
         if not words[0][0].isalpha():
-            result = words[0].strip("_'()\"")
+            result = words[0].split(",")[0].strip("_'()\"")
         else:
             result = words[0]
         for word in words[1:]:
