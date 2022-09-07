@@ -1369,7 +1369,7 @@ def test_partition_on_duplicates(tmpdir, engine):
     out = dd.read_parquet(tmpdir, engine=engine).compute()
 
     assert len(df) == len(out)
-    for root, dirs, files in os.walk(tmpdir):
+    for _, _, files in os.walk(tmpdir):
         for file in files:
             assert file in (
                 "part.0.parquet",
@@ -3091,7 +3091,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             precision we need to clamp our datetimes to something reasonable"""
 
             new_columns = []
-            for i, col in enumerate(arrow_table.columns):
+            for col in arrow_table.columns:
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
@@ -3782,7 +3782,7 @@ def test_custom_metadata(tmpdir, engine):
         files += [os.path.join(path, "_metadata")]
         for fn in files:
             _md = pq.ParquetFile(fn).metadata.metadata
-            for k, v in custom_metadata.items():
+            for k in custom_metadata.keys():
                 assert _md[k] == custom_metadata[k]
 
     # Make sure we raise an error if the custom metadata

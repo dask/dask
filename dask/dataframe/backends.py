@@ -185,7 +185,7 @@ def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
     dt_s_dict = dict()
     data = dict()
-    for i, c in enumerate(x.columns):
+    for i in range(len(x.columns)):
         series = x.iloc[:, i]
         dt = series.dtype
         if dt not in dt_s_dict:
