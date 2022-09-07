@@ -2,10 +2,14 @@ name: Additional
 
 on: [push, pull_request]
 
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
   mindeps:
     runs-on: "ubuntu-latest"
-
     strategy:
       matrix:
         environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
@@ -27,11 +31,9 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
   doctest:
@@ -53,11 +55,9 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        shell: bash -l {0}
         run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
 
   imports:
@@ -82,7 +82,6 @@ jobs:
           auto-activate-base: false
 
       - name: Run import tests
-        shell: bash -l {0}
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: source continuous_integration/scripts/test_imports.sh
