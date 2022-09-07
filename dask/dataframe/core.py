@@ -363,7 +363,7 @@ class PartitionMetadata:
             self._partitioned_by = [("__index__",)] if divisions else []
 
         # Optional partition-wise statistics:
-        #   - "num-rows": Series of partition row counts
+        #   - "__num_rows__": Series of partition row counts
         #   - <column-name>: DataFrame of partition stats for the column
         #     - Required DataFrame columns: "min" and "max"
         self._statistics = statistics or {}
@@ -4664,7 +4664,9 @@ class DataFrame(_Frame):
     def __len__(self):
         try:
             # Use partition statistics if they are available
-            part_sizes = self.partition_metadata.get_stats({"num-rows"})["num-rows"]
+            part_sizes = self.partition_metadata.get_stats({"__num_rows__"})[
+                "__num_rows__"
+            ]
             if part_sizes:
                 return sum(part_sizes)
         except KeyError:

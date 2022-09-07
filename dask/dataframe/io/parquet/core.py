@@ -561,7 +561,7 @@ def read_parquet(
         _partition_stats = _pq_partition_stats(processed_stats)
     elif hasattr(engine, "read_partition_stats"):
         _lazy_partition_stats = (
-            {"num-rows"} | set(columns),
+            {"__num_rows__"} | set(columns),
             partial(_lazy_pq_partition_stats, parts, columns, engine, fs),
         )
     partition_metadata = PartitionMetadata(
@@ -1595,6 +1595,9 @@ def _pq_partition_stats(stats):
             results[key].append(stat[key])
     for k in set(results.keys()) - {"num-rows"}:
         results[k] = pd.DataFrame(results[k])
+    if "num-rows" in results:
+        # Convert "num-rows" key to "__num_rows__"
+        results["__num_rows__"] = results.pop("num-rows")
 
     return results
 
