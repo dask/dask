@@ -3685,8 +3685,10 @@ Dask Name: {name}, {layers}""".format(
         **kwargs,
     ):
         if (
-            self._partition_type is pd.Series
+            self.npartitions > 1
+            and self._partition_type is pd.DataFrame
             and not PANDAS_GT_150
+            and isinstance(by, list)
             and len(by) > 1
             and dropna is False
         ):
@@ -4918,8 +4920,10 @@ class DataFrame(_Frame):
         **kwargs,
     ):
         if (
-            self._partition_type is pd.DataFrame
+            self.npartitions > 1
+            and self._partition_type is pd.DataFrame
             and not PANDAS_GT_150
+            and isinstance(by, list)
             and len(by) > 1
             and dropna is False
         ):
