@@ -556,19 +556,16 @@ def read_parquet(
 
     # Define partition_metadata, using callback if necessary
     _partition_stats = None
-    _lazy_partition_stats = None
     if processed_stats:
         _partition_stats = _pq_partition_stats(processed_stats)
     elif hasattr(engine, "read_partition_stats"):
-        _lazy_partition_stats = (
-            {"__num_rows__"} | set(columns),
-            partial(_lazy_pq_partition_stats, parts, columns, engine, fs),
-        )
+        _func = partial(_lazy_pq_partition_stats, parts, columns, engine, fs)
+        _partition_stats = {k: _func for k in {"__num_rows__"} | set(columns)}
+
     partition_metadata = PartitionMetadata(
         meta=meta,
         divisions=divisions,
         statistics=_partition_stats,
-        lazy_statistics=_lazy_partition_stats,
     )
 
     with ctx:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import operator
 import warnings
+from collections import defaultdict
 from collections.abc import Hashable, Iterator, Sequence
 from functools import lru_cache, partial, wraps
 from numbers import Integral, Number
@@ -309,6 +310,101 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
+class PartitionStatistics:
+    """
+    Container for DataFrame partition statistics
+
+    This class should be initialized with a dictionary
+    containing partition-wise statistics. Optional keys
+    include:
+      - "__num_rows__": Series of partition row counts
+      - <column-name>: DataFrame of stats for the column
+        - Required DataFrame columns: "min" and "max"
+
+    If any values in the input dictionary contain callable
+    objects, these statistics will be treated as lazy.
+    "Lazy" statistics correspond to partition statistics
+    that can be loaded "just in time" using a callback
+    function. The call-back function must accept an
+    optional `keys: set` argument to specify which columns
+    to load statistics for.
+    """
+
+    _statistics: dict
+
+    def __init__(
+        self,
+        statistics: dict | None = None,
+    ):
+        self._statistics = statistics or {}
+
+    def copy(self, keys: set | None = None) -> PartitionStatistics:
+        """Return a copy of this PartitionStatistics object"""
+        if keys is not None:
+            return PartitionStatistics({k: self._statistics[k] for k in keys})
+        return PartitionStatistics(self._statistics.copy())
+
+    @property
+    def known_stats(self) -> set:
+        """Return known (in memory) partition-statistic keys"""
+        return {k for k, v in self._statistics.items() if not callable(v)}
+
+    @property
+    def lazy_stats(self) -> set:
+        """Return lazy partition-statistic keys"""
+        return {k for k, v in self._statistics.items() if callable(v)}
+
+    @property
+    def available_stats(self) -> set:
+        """Return all available partition-statistic keys"""
+        return self.known_stats | self.lazy_stats
+
+    def get(self, keys: set) -> dict:
+        """Return requested partition statistics"""
+        success = self.load_lazy_stats(keys)
+        if not success:
+            missing = self.known_stats - keys
+            raise KeyError(f"{missing} stats could not be loaded")
+        return {k: self._statistics[k] for k in keys}
+
+    def load_lazy_stats(self, keys: set | None = None) -> bool:
+        """Load lazy statistics
+
+        Returns value specifies if the desired ``keys``
+        were successfully added to the known statistics.
+        """
+        _available = self.available_stats
+        if keys:
+            if not keys.issubset(_available):
+                raise KeyError(
+                    f"{keys} stat keys were requested, "
+                    f"but only {_available} stats are available."
+                )
+        else:
+            keys = _available
+
+        _keys = keys - self.known_stats
+        if not _keys:
+            return True  # No lazy stats to load
+
+        # Aggregate lazy-function calls
+        _lazy_stats = defaultdict(set)
+        for k in _keys:
+            _func = self._statistics[k]
+            _lazy_stats[_func].add(k)
+
+        # Perform update
+        new_stats = {}
+        for _func, _keyset in _lazy_stats:
+            new_stats.update(_func(keys=_keyset))
+        self._statistics.update(new_stats)
+
+        # Check if update was successful
+        if _keys - set(new_stats.keys()):
+            return False
+        return True
+
+
 class PartitionMetadata:
     """
     Container for DataFrame-collection partition metadata
@@ -318,9 +414,7 @@ class PartitionMetadata:
     _npartitions: int
     _divisions: tuple | None
     _partitioning: dict
-    _statistics: dict
-    _lazy_statistics: tuple  # (keys, callback)
-    _column_name_map: dict
+    _statistics: PartitionStatistics
 
     def __init__(
         self,
@@ -328,9 +422,7 @@ class PartitionMetadata:
         npartitions: int | None = None,
         divisions: tuple | None = None,
         partitioning: dict | None = None,
-        statistics: dict | None = None,
-        lazy_statistics: tuple | None = None,
-        column_name_map: dict | None = None,
+        statistics: dict | PartitionStatistics | None = None,
     ):
         # Store meta (global schema)
         self._meta = meta
@@ -369,24 +461,10 @@ class PartitionMetadata:
         #   - "__num_rows__": Series of partition row counts
         #   - <column-name>: DataFrame of partition stats for the column
         #     - Required DataFrame columns: "min" and "max"
-        self._statistics = statistics or {}
-
-        # "Lazy" statistics correspond to partition statistics
-        # that can be loaded "just in time" using a callback
-        # function. The call-back function must accept an
-        # optional `keys: set` argument to specify which columns
-        # to load statistics for.
-        #
-        # For example, `read_parquet` will register a call-back
-        # function to collect the partition sizes and min/max
-        # column statistics
-        if isinstance(lazy_statistics, tuple):
-            self._lazy_statistics = lazy_statistics
+        if isinstance(statistics, PartitionStatistics):
+            self._statistics = statistics
         else:
-            self._lazy_statistics = (set(), None)
-
-        # Track renamed columns
-        self._column_name_map = column_name_map or {}
+            self._statistics = PartitionStatistics(statistics)
 
     def copy(self, **kwargs):
         """Return copy of this PartitionMetadata object"""
@@ -396,8 +474,6 @@ class PartitionMetadata:
             divisions=self.divisions,
             partitioning=self.partitioning.copy(),
             statistics=self._statistics.copy(),
-            lazy_statistics=self._lazy_statistics,
-            column_name_map=self._column_name_map.copy(),
         )
         new_kwargs.update(**kwargs)
         return PartitionMetadata(**new_kwargs)
@@ -409,8 +485,6 @@ class PartitionMetadata:
             _divisions=self.divisions,
             _partitioning=self.partitioning.copy(),
             _statistics=self._statistics.copy(),
-            _lazy_statistics=self._lazy_statistics,
-            _column_name_map=self._column_name_map.copy(),
         )
 
     @property
@@ -470,67 +544,25 @@ class PartitionMetadata:
         return self._partitioning
 
     @property
-    def known_stats(self) -> set:
-        """Return known (in memory) partition-statistic keys"""
-        return set(self._statistics.keys())
+    def statistics(self) -> PartitionStatistics:
+        """Return partition-statistics object"""
+        return self._statistics
 
-    @property
-    def lazy_stats(self) -> set:
-        """Return lazy partition-statistic keys"""
-        return self._lazy_statistics[0]
-
-    @property
-    def available_stats(self) -> set:
-        """Return all available partition-statistic keys"""
-        return self.known_stats | self.lazy_stats
+    def set_statistics(self, value: dict | PartitionStatistics):
+        """Set partition-statistics object"""
+        if isinstance(value, PartitionStatistics):
+            self._statistics = value
+        elif isinstance(value, dict):
+            self._statistics = PartitionStatistics(value)
+        else:
+            raise ValueError(
+                "Unsupported type for statistics. Expected "
+                "dict or PartitionStatistics."
+            )
 
     def get_stats(self, keys: set) -> dict:
         """Return requested partition statistics"""
-        success = self.load_lazy_stats(keys)
-        if not success:
-            missing = self.known_stats - keys
-            raise KeyError(f"{missing} stats could not be loaded")
-        return {
-            # Translate current column name to the
-            # column name used in the original statistics
-            # (e.g. if a column was renamed)
-            self._column_name_map.get(k, k): self._statistics[k]
-            for k in keys
-        }
-
-    def load_lazy_stats(self, keys: set | None = None) -> bool:
-        """Load lazy statistics
-
-        Returns value specifies if the desired ``keys``
-        were successfully added to the known statistics.
-        """
-
-        _available = self.available_stats
-        if keys:
-            if not keys.issubset(_available):
-                raise KeyError(
-                    f"{keys} stat keys were requested, "
-                    f"but only {_available} stats are available."
-                )
-        else:
-            keys = _available
-
-        _keys = keys - self.known_stats
-        if not _keys:
-            return True  # No lazy stats to load
-
-        _func = self._lazy_statistics[1]
-        if not callable(_func):
-            return False  # No callback function available
-
-        # Perform update
-        new_stats = _func(keys=_keys)
-        self._statistics.update(new_stats)
-
-        # Check if update was successful
-        if _keys - set(new_stats.keys()):
-            return False
-        return True
+        return self.statistics.get(keys)
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
@@ -4813,7 +4845,6 @@ class DataFrame(_Frame):
             meta=df._meta,
             divisions=df.divisions,
             statistics=None,
-            lazy_statistics=None,
         )
 
     def __delitem__(self, key):
