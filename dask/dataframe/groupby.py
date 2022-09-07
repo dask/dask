@@ -1884,7 +1884,9 @@ class _GroupBy:
             )
 
         df = self.obj
-        should_shuffle = not (df.known_divisions and df._contains_index_name(self.by))
+        should_shuffle = not (
+            df.known_divisions and df._contains_index_name(self.by)
+        ) and not df._partitioned_by(self.by)
 
         if should_shuffle:
             df2, by = self._shuffle(meta)

@@ -4643,6 +4643,18 @@ class DataFrame(_Frame):
         self._name = renamed._name
         self.dask = renamed.dask
 
+    def _partitioned_by(self, columns):
+        """Whether the DataFrame is partitioned by the specified columns"""
+        if isinstance(columns, (str, list, tuple)):
+            _by = (columns,) if isinstance(columns, str) else tuple(columns)
+            for group in self.partition_metadata.partitioned_by:
+                # Don't need all columns from _by to match group.
+                # If the DataFrame is partitioned by ("A",), then
+                # it is also partitioned by ("A", "B", ...)
+                if _by[: len(group)] == group:
+                    return True
+        return False
+
     @property
     def iloc(self):
         """Purely integer-location based indexing for selection by position.

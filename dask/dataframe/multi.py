@@ -68,6 +68,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import (
     DataFrame,
     Index,
+    PartitionMetadata,
     Series,
     _concat,
     _Frame,
@@ -370,6 +371,20 @@ def hash_join(
     _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
     meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
+    if (
+        isinstance(left_on, (str, list, tuple))
+        and left_on == right_on
+        and not (left_index or right_index)
+    ):
+        _left_on = [left_on] if isinstance(left_on, str) else left_on
+        partition_metadata = PartitionMetadata(
+            meta=meta,
+            npartitions=lhs2.npartitions,
+            partitioned_by=[tuple(col for col in _left_on)],
+        )
+    else:
+        partition_metadata = None
+
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
     if isinstance(right_on, list):
@@ -386,6 +401,7 @@ def hash_join(
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
+        partition_metadata=partition_metadata,
         **kwargs,
     )
 

@@ -16,7 +16,14 @@ from pandas.api.types import is_numeric_dtype
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from dask.dataframe.core import (
+    DataFrame,
+    PartitionMetadata,
+    Series,
+    _Frame,
+    map_partitions,
+    new_dd_object,
+)
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
@@ -693,6 +700,17 @@ def rearrange_by_column_tasks(
 
     max_branch = max_branch or 32
 
+    # Track output partitioning
+    if isinstance(column, list) and "_partitions" not in column:
+        _partitioned_by = [tuple(column)]
+    else:
+        _partitioned_by = None
+    partition_metadata = PartitionMetadata(
+        meta=df._meta,
+        npartitions=(npartitions or df.npartitions),
+        partitioned_by=_partitioned_by,
+    )
+
     if (npartitions or df.npartitions) <= max_branch:
         # We are creating a small number of output partitions.
         # No need for staged shuffling. Staged shuffling will
@@ -712,7 +730,13 @@ def rearrange_by_column_tasks(
         graph = HighLevelGraph.from_collections(
             shuffle_name, shuffle_layer, dependencies=[df]
         )
-        return new_dd_object(graph, shuffle_name, df._meta, [None] * (npartitions + 1))
+        return new_dd_object(
+            graph,
+            shuffle_name,
+            df._meta,
+            [None] * (npartitions + 1),
+            partition_metadata=partition_metadata,
+        )
 
     n = df.npartitions
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
@@ -742,7 +766,13 @@ def rearrange_by_column_tasks(
         graph = HighLevelGraph.from_collections(
             stage_name, stage_layer, dependencies=[df]
         )
-        df = new_dd_object(graph, stage_name, df._meta, df.divisions)
+        df = new_dd_object(
+            graph,
+            stage_name,
+            df._meta,
+            df.divisions,
+            partition_metadata=partition_metadata,
+        )
 
     if npartitions is not None and npartitions != npartitions_orig:
         token = tokenize(df, npartitions)
@@ -772,7 +802,11 @@ def rearrange_by_column_tasks(
             repartition_get_name, dsk, dependencies=[df]
         )
         df2 = new_dd_object(
-            graph2, repartition_get_name, df._meta, [None] * (npartitions + 1)
+            graph2,
+            repartition_get_name,
+            df._meta,
+            [None] * (npartitions + 1),
+            partition_metadata=partition_metadata,
         )
     else:
         df2 = df
