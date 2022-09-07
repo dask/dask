@@ -158,14 +158,12 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     ],
 )
 def test_tri_like(xp, N, M, k, dtype, chunks):
-    xp_tri = getattr(xp, "tri")
-
     args = [N, M, k, dtype]
 
     cp_a = cupy.tri(*args)
 
     if xp is da:
         args.append(chunks)
-    xp_a = xp_tri(*args, like=da.from_array(cupy.array(())))
+    xp_a = xp.tri(*args, like=da.from_array(cupy.array(())))
 
     assert_eq(xp_a, cp_a)
