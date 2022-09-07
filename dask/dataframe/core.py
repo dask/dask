@@ -3863,8 +3863,7 @@ Dask Name: {name}, {layers}""".format(
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self.divisions = res.divisions
-                self._meta = res._meta
+                self._partition_metadata = res.partition_metadata
                 res = self
         return res
 
@@ -4810,8 +4809,12 @@ class DataFrame(_Frame):
 
         self.dask = df.dask
         self._name = df._name
-        self._meta = df._meta
-        self.divisions = df.divisions
+        self._partition_metadata = df.partition_metadata.copy(
+            meta=df._meta,
+            divisions=df.divisions,
+            statistics=None,
+            lazy_statistics=None,
+        )
 
     def __delitem__(self, key):
         result = self.drop([key], axis=1)
