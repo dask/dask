@@ -5,6 +5,7 @@ from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe._compat import set_index_without_copy
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
@@ -48,7 +49,8 @@ class ORCFunctionWrapper(DataFrameIOFunction):
             self.columns,
         )
         if self.index:
-            _df.set_index(self.index, inplace=True)
+            _df = set_index_without_copy(_df, self.index)
+
         return _df
 
 

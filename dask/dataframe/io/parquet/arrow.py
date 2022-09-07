@@ -11,6 +11,7 @@ from packaging.version import parse as parse_version
 
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe._compat import set_index_without_copy
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -96,7 +97,7 @@ def _write_partitioned(
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
     if index_cols:
-        df.set_index(index_cols, inplace=True)
+        df = set_index_without_copy(df, index_cols)
         preserve_index = True
 
     partition_keys = [df[col] for col in partition_cols]
@@ -111,6 +112,7 @@ def _write_partitioned(
             subschema = subschema.remove(subschema.get_field_index(col))
 
     md_list = []
+    partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
     for keys, subgroup in data_df.groupby(partition_keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
@@ -678,7 +680,7 @@ class ArrowDatasetEngine(Engine):
         _meta = None
         preserve_index = False
         if _index_in_schema(index_cols, schema):
-            df.set_index(index_cols, inplace=True)
+            df = set_index_without_copy(df, index_cols)
             preserve_index = True
         else:
             index_cols = []

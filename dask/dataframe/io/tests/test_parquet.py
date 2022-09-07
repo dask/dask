@@ -196,7 +196,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})[:0]
     if index:
-        df.set_index("a", inplace=True, drop=True)
+        df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine, write_metadata_file=True)
@@ -208,7 +208,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(
@@ -221,7 +221,7 @@ def test_simple(tmpdir, write_engine, read_engine):
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(
         fn, engine=write_engine, compute=False, write_metadata_file=False
@@ -3333,7 +3333,7 @@ def test_divisions_with_null_partition(tmpdir, engine):
 def test_pyarrow_dataset_simple(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
     read_df = dd.read_parquet(fn, engine="pyarrow", calculate_divisions=True)
