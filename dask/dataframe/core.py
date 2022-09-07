@@ -609,6 +609,14 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def partition_metadata(self):
         return self._partition_metadata
 
+    def set_partition_metadata(self, value):
+        if isinstance(value, PartitionMetadata):
+            self._partition_metadata = value
+        else:
+            raise ValueError(
+                f"Expected PartitionMetadata object, " f" got {type(value)}"
+            )
+
     def partitioned_by(self, columns):
         """Whether the DataFrame is partitioned by the specified columns"""
         if isinstance(columns, (str, list, tuple)):
@@ -3895,7 +3903,10 @@ Dask Name: {name}, {layers}""".format(
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self._partition_metadata = res.partition_metadata
+                self._partition_metadata = PartitionMetadata(
+                    meta=res._meta,
+                    divisions=res.divisions,
+                )
                 res = self
         return res
 
@@ -4841,10 +4852,9 @@ class DataFrame(_Frame):
 
         self.dask = df.dask
         self._name = df._name
-        self._partition_metadata = df.partition_metadata.copy(
+        self._partition_metadata = PartitionMetadata(
             meta=df._meta,
             divisions=df.divisions,
-            statistics=None,
         )
 
     def __delitem__(self, key):
