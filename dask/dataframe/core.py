@@ -606,6 +606,22 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return new_dd_object
 
     @property
+    def _divisions(self):
+        # _divisions Compatability
+        raise FutureWarning(
+            "_Frame._divisions is depracated. " "Please use _Frame.divisions"
+        )
+        return self.divisions
+
+    @_divisions.setter
+    def _divisions(self, value):
+        # _divisions Compatability
+        raise FutureWarning(
+            "_Frame._divisions is depracated. " "Please use _Frame.divisions"
+        )
+        self.divisions = value
+
+    @property
     def divisions(self):
         """
         Tuple of ``npartitions + 1`` values, in ascending order, marking the
@@ -634,9 +650,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         if not isinstance(value, tuple):
             raise TypeError("divisions must be a tuple")
 
-        if hasattr(self, "_divisions") and len(value) != len(
-            self.partition_metadata.divisions
-        ):
+        if len(value) != len(self.partition_metadata.divisions):
             n = len(self.partition_metadata.divisions)
             raise ValueError(
                 f"This dataframe has npartitions={n - 1}, divisions should be a "
