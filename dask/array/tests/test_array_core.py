@@ -4928,7 +4928,7 @@ def test_scipy_sparse_concatenate(axis):
 
     xs = []
     ys = []
-    for i in range(2):
+    for _ in range(2):
         x = rs.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)

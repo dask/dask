@@ -350,7 +350,7 @@ def test_hard_fuse_slice_cases(getter):
 
 def test_dont_fuse_numpy_arrays():
     x = np.ones(10)
-    for chunks in [(5,), (10,)]:
+    for _ in [(5,), (10,)]:
         y = da.from_array(x, chunks=(10,))
 
         dsk = y.__dask_optimize__(y.dask, y.__dask_keys__())

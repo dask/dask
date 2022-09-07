@@ -308,7 +308,7 @@ class FastParquetEngine(Engine):
         """
 
         real_row_groups = []
-        for rg, rg_global in row_groups:
+        for _, rg_global in row_groups:
             row_group = pf.row_groups[rg_global]
             columns = row_group.columns
             for c, col in enumerate(columns):

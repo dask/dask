@@ -719,7 +719,7 @@ def compression_matrix(
     ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
     if iterator == "power":
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 mat_h = mat_h.persist()
                 wait(mat_h)
@@ -731,7 +731,7 @@ def compression_matrix(
         q, _ = tsqr(mat_h)
     else:
         q, _ = tsqr(mat_h)
-        for i in range(n_power_iter):
+        for _ in range(n_power_iter):
             if compute:
                 q = q.persist()
                 wait(q)

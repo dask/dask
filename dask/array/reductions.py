@@ -284,7 +284,7 @@ def _tree_reduce(
     func = partial(combine or aggregate, axis=axis, keepdims=True)
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=sorted(axis)))
-    for i in range(depth - 1):
+    for _ in range(depth - 1):
         x = partial_reduce(
             func,
             x,
