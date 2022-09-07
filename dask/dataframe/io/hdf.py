@@ -142,7 +142,7 @@ def to_hdf(
 
     name = "to-hdf-" + uuid.uuid1().hex
 
-    pd_to_hdf = getattr(df._partition_type, "to_hdf")
+    pd_to_hdf = df._partition_type.to_hdf
 
     single_file = True
     single_node = True
