@@ -317,7 +317,7 @@ class PartitionMetadata:
     _meta: Any
     _npartitions: int
     _divisions: tuple | None
-    _partitioned_by: list[tuple]
+    _partitioning: dict
     _statistics: dict
     _lazy_statistics: tuple  # (keys, callback)
     _column_name_map: dict
@@ -327,7 +327,7 @@ class PartitionMetadata:
         meta: Any = None,
         npartitions: int | None = None,
         divisions: tuple | None = None,
-        partitioned_by: list[tuple] | None = None,
+        partitioning: dict | None = None,
         statistics: dict | None = None,
         lazy_statistics: tuple | None = None,
         column_name_map: dict | None = None,
@@ -353,14 +353,17 @@ class PartitionMetadata:
             divisions = None
         self._divisions = divisions
 
-        # Track which columns the DataFrame is partitioned by.
+        # Track which columns the DataFrame is partitioned by,
+        # and "how" the columns are partitioned. "How" options
+        # include: "ascending", "descending" and "hash".
+        #   e.g. {<column-name-tuple>: <how-str>}
         # This is distinct from `divisions`, which requires
         # sorted ordering to be useful.
         # NOTE: "__index__" corresponds to an unnamed index.
-        if isinstance(partitioned_by, list):
-            self._partitioned_by = partitioned_by
+        if isinstance(partitioning, dict):
+            self._partitioning = partitioning
         else:
-            self._partitioned_by = [("__index__",)] if divisions else []
+            self._partitioning = {("__index__",): "order"} if divisions else {}
 
         # Optional partition-wise statistics:
         #   - "__num_rows__": Series of partition row counts
@@ -391,7 +394,7 @@ class PartitionMetadata:
             meta=None if self.meta is None else self.meta.copy(),
             npartitions=self.npartitions,
             divisions=self.divisions,
-            partitioned_by=self.partitioned_by.copy(),
+            partitioning=self.partitioning.copy(),
             statistics=self._statistics.copy(),
             lazy_statistics=self._lazy_statistics,
             column_name_map=self._column_name_map.copy(),
@@ -404,7 +407,7 @@ class PartitionMetadata:
             _meta=None if self.meta is None else self.meta.copy(),
             _npartitions=self.npartitions,
             _divisions=self.divisions,
-            _partitioned_by=self.partitioned_by.copy(),
+            _partitioning=self.partitioning.copy(),
             _statistics=self._statistics.copy(),
             _lazy_statistics=self._lazy_statistics,
             _column_name_map=self._column_name_map.copy(),
@@ -452,9 +455,19 @@ class PartitionMetadata:
             self._divisions = value
 
     @property
-    def partitioned_by(self) -> list[tuple]:
-        """List of partitioned-by columns/Indices"""
-        return self._partitioned_by
+    def partitioning(self) -> dict:
+        """Summary of DataFrame partitioning
+
+        This dictionary is used to track "which" columns in
+        the DataFrame collection are partitioned,
+        and "how" those columns are partitioned. Options
+        for "how" include: "ascending", "descending" and "hash".
+
+        Note that this metadata is distinct from `divisions`,
+        because divisions are only useful for a sorted index.
+        NOTE: "__index__" corresponds to an unnamed index.
+        """
+        return self._partitioning
 
     @property
     def known_stats(self) -> set:
@@ -563,6 +576,18 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def partition_metadata(self):
         return self._partition_metadata
+
+    def partitioned_by(self, columns):
+        """Whether the DataFrame is partitioned by the specified columns"""
+        if isinstance(columns, (str, list, tuple)):
+            _by = (columns,) if isinstance(columns, str) else tuple(columns)
+            for group in self.partition_metadata.partitioning:
+                # Don't need all columns from _by to match group.
+                # If the DataFrame is partitioned by ("A",), then
+                # it is also partitioned by ("A", "B", ...)
+                if _by[: len(group)] == group:
+                    return True
+        return False
 
     @property
     def _meta(self):
@@ -4656,18 +4681,6 @@ class DataFrame(_Frame):
         self._meta = renamed._meta
         self._name = renamed._name
         self.dask = renamed.dask
-
-    def _partitioned_by(self, columns):
-        """Whether the DataFrame is partitioned by the specified columns"""
-        if isinstance(columns, (str, list, tuple)):
-            _by = (columns,) if isinstance(columns, str) else tuple(columns)
-            for group in self.partition_metadata.partitioned_by:
-                # Don't need all columns from _by to match group.
-                # If the DataFrame is partitioned by ("A",), then
-                # it is also partitioned by ("A", "B", ...)
-                if _by[: len(group)] == group:
-                    return True
-        return False
 
     @property
     def iloc(self):

@@ -702,13 +702,13 @@ def rearrange_by_column_tasks(
 
     # Track output partitioning
     if isinstance(column, list) and "_partitions" not in column:
-        _partitioned_by = [tuple(column)]
+        _partitioning = {tuple(column): "hash"}
     else:
-        _partitioned_by = None
+        _partitioning = None
     partition_metadata = PartitionMetadata(
         meta=df._meta,
         npartitions=(npartitions or df.npartitions),
-        partitioned_by=_partitioned_by,
+        partitioning=_partitioning,
     )
 
     if (npartitions or df.npartitions) <= max_branch:

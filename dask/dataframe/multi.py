@@ -380,7 +380,7 @@ def hash_join(
         partition_metadata = PartitionMetadata(
             meta=meta,
             npartitions=lhs2.npartitions,
-            partitioned_by=[tuple(col for col in _left_on)],
+            partitioning={tuple(col for col in _left_on): "hash"},
         )
     else:
         partition_metadata = None
