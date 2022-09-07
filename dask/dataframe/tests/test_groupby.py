@@ -17,7 +17,7 @@ from dask.utils import M
 from dask.utils_test import hlg_layer
 
 CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
+if PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 AGG_FUNCS = [
@@ -2491,18 +2491,41 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
 
 @pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
+    not PANDAS_GT_110,
     reason="dropna kwarg not supported in pandas < 1.1.0.",
 )
-@pytest.mark.parametrize("dropna", [False, True])
-def test_groupby_dropna_pandas(dropna):
+@pytest.mark.parametrize(
+    "by,dropna",
+    [
+        ("a", False),
+        ("a", True),
+        pytest.param(
+            ["a", "b"],
+            False,
+            marks=pytest.mark.xfail(
+                not PANDAS_GT_150,
+                reason="dropna=False doesn't work for multiple columns for pandas<1.5.0",
+            ),
+        ),
+        (["a", "b"], True),
+    ],
+)
+def test_groupby_dropna_pandas(by, dropna):
     df = pd.DataFrame(
-        {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
+        {
+            "a": [1, 2, 3, 4, None, None, 7, 8],
+            "b": [1, None, 1, 3, None, 3, 1, 3],
+            "e": [4, 5, 6, 3, 2, 1, 0, 0],
+        }
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
-    dask_result = ddf.groupby("a", dropna=dropna).e.sum()
-    pd_result = df.groupby("a", dropna=dropna).e.sum()
+    dask_result = ddf.groupby(by, dropna=dropna).sum()
+    pd_result = df.groupby(by, dropna=dropna).sum()
+    assert_eq(dask_result, pd_result)
+
+    dask_result = ddf.groupby(by, dropna=dropna).e.sum()
+    pd_result = df.groupby(by, dropna=dropna).e.sum()
     assert_eq(dask_result, pd_result)
 
 
@@ -2583,8 +2606,8 @@ def test_groupby_grouper_dispatch(key):
 
 
 @pytest.mark.xfail(
-    not dask.dataframe.utils.PANDAS_GT_110,
-    reason="Should work starting from pandas 1.1.0",
+    not PANDAS_GT_110,
+    reason="dropna kwarg not supported in pandas < 1.1.0.",
 )
 def test_groupby_dropna_with_agg():
     # https://github.com/dask/dask/issues/6986
