@@ -51,13 +51,13 @@ properties:
               Available options include "pandas" and "cudf". Default is "pandas".
 
           allow-fallback:
-            type: bool
+            type: boolean
             description: |
               Allow Dask to fall-back from the specified backend library when
               the necessary IO function is not defined.
 
           warn-fallback:
-            type: bool
+            type: boolean
             description: |
               Warn the user when Dask falls-back from the specified backend
               library for unsupported IO functions.
@@ -105,13 +105,13 @@ properties:
               Available options include "numpy" and "cupy". Default is "numpy".
 
           allow-fallback:
-            type: bool
+            type: boolean
             description: |
               Allow Dask to fall-back from the specified backend library
               when the necessary IO function is not defined.
 
           warn-fallback:
-            type: bool
+            type: boolean
             description: |
               Warn the user when Dask falls-back from the specified backend
               library for unsupported IO functions.
