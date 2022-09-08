@@ -16,7 +16,6 @@ from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
 from importlib import import_module
-from importlib.metadata import entry_points
 from numbers import Integral, Number
 from operator import add
 from threading import Lock
@@ -25,6 +24,7 @@ from weakref import WeakValueDictionary
 
 import tlz as toolz
 
+from dask.compatibility import entry_points
 from dask.core import get_deps
 
 K = TypeVar("K")
@@ -679,7 +679,7 @@ class DaskBackendEntrypoint:
 
 @functools.lru_cache(maxsize=1)
 def detect_entrypoints():
-    entrypoints = entry_points().get("dask.backends", ())
+    entrypoints = entry_points("dask.backends")
     return {ep.name: ep for ep in entrypoints}
 
 
