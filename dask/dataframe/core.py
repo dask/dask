@@ -395,7 +395,7 @@ class PartitionStatistics:
 
         # Perform update
         new_stats = {}
-        for _func, _keyset in _lazy_stats:
+        for _func, _keyset in _lazy_stats.items():
             new_stats.update(_func(keys=_keyset))
         self._statistics.update(new_stats)
 
@@ -407,7 +407,7 @@ class PartitionStatistics:
 
 class PartitionMetadata:
     """
-    Container for DataFrame-collection partition metadata
+    Container for DataFrame partition metadata
     """
 
     _meta: Any
