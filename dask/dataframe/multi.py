@@ -336,19 +336,13 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    # Check if we can skip the shuffle stage
+    # Maybe shuffle left
     if (
-        (lhs.npartitions == rhs.npartitions == npartitions)
+        (lhs.npartitions == npartitions)
         and isinstance(left_on, (str, list, tuple))
-        and isinstance(right_on, (str, list, tuple))
         and lhs.partitioned_by(left_on) == "hash"
-        and rhs.partitioned_by(right_on) == "hash"
     ):
-        # TODO: Can also skip shuffle for "ascending" and
-        # "descending" partitioning, but would need to check
-        # min/max alignment in partition statistics
         lhs2 = lhs
-        rhs2 = rhs
     else:
         lhs2 = shuffle_func(
             lhs,
@@ -357,6 +351,15 @@ def hash_join(
             shuffle=shuffle,
             max_branch=max_branch,
         )
+
+    # Maybe shuffle right
+    if (
+        (rhs.npartitions == npartitions)
+        and isinstance(right_on, (str, list, tuple))
+        and rhs.partitioned_by(right_on) == "hash"
+    ):
+        rhs2 = rhs
+    else:
         rhs2 = shuffle_func(
             rhs,
             right_on,
@@ -364,6 +367,12 @@ def hash_join(
             shuffle=shuffle,
             max_branch=max_branch,
         )
+
+    # TODO: Can also skip shuffle for "ascending" and
+    # "descending" partitioning, but would need to check
+    # min/max alignment in partition statistics, and
+    # would need to use `sort_values` if one frame is
+    # not partitioned correctly
 
     if isinstance(left_on, Index):
         left_on = None
