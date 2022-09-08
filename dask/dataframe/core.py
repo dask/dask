@@ -6536,7 +6536,7 @@ def handle_out(out, result):
         out.dask = result.dask
 
         if not isinstance(out, Scalar):
-            out.divisions = result.divisions
+            out._partition_metadata = result.partition_metadata.copy()
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
