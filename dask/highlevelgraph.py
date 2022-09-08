@@ -959,11 +959,19 @@ class HighLevelGraph(Mapping):
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
-                if isinstance(layer, Blockwise) or (
-                    layer.is_materialized() and (len(layer) == len(culled_deps))
+                if (
+                    isinstance(layer, Blockwise)
+                    or isinstance(layer, MaterializedLayer)
+                    or (layer.is_materialized() and (len(layer) == len(culled_deps)))
                 ):
                     # Don't use culled_deps to update ret_key_deps
-                    # unless they are "direct" key dependencies
+                    # unless they are "direct" key dependencies.
+                    #
+                    # Note that `MaterializedLayer` is "safe", because
+                    # its `cull` method will return a complete dict of
+                    # direct dependencies for all keys in its subgraph.
+                    # See: https://github.com/dask/dask/issues/9389
+                    # for performance motivation
                     ret_key_deps.update(culled_deps)
 
         # Converting dict_keys to a real set lets Python optimise the set

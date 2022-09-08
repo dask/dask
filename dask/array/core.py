@@ -192,7 +192,7 @@ def implements(*numpy_functions):
     return decorator
 
 
-def _should_delegate(other) -> bool:
+def _should_delegate(self, other) -> bool:
     """Check whether Dask should delegate to the other.
     This implementation follows NEP-13:
     https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
@@ -202,7 +202,9 @@ def _should_delegate(other) -> bool:
     elif (
         hasattr(other, "__array_ufunc__")
         and not is_valid_array_chunk(other)
-        and type(other).__array_ufunc__ is not Array.__array_ufunc__
+        # don't delegate to our own parent classes
+        and not isinstance(self, type(other))
+        and type(self) is not type(other)
     ):
         return True
     return False
@@ -217,7 +219,7 @@ def check_if_handled_given_other(f):
 
     @wraps(f)
     def wrapper(self, other):
-        if _should_delegate(other):
+        if _should_delegate(self, other):
             return NotImplemented
         else:
             return f(self, other)
@@ -352,7 +354,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
-def _concatenate2(arrays, axes=[]):
+def _concatenate2(arrays, axes=None):
     """Recursively concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
@@ -387,6 +389,9 @@ def _concatenate2(arrays, axes=[]):
     array([[1, 2],
            [3, 4]])
     """
+    if axes is None:
+        axes = []
+
     if axes == ():
         if isinstance(arrays, list):
             return arrays[0]
@@ -527,7 +532,7 @@ def map_blocks(
     token=None,
     dtype=None,
     chunks=None,
-    drop_axis=[],
+    drop_axis=None,
     new_axis=None,
     enforce_ndim=False,
     meta=None,
@@ -768,6 +773,9 @@ def map_blocks(
     >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
     dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
+    if drop_axis is None:
+        drop_axis = []
+
     if not callable(func):
         msg = (
             "First argument must be callable function, not %s\n"
@@ -1561,7 +1569,7 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            if _should_delegate(x):
+            if _should_delegate(self, x):
                 return NotImplemented
 
         if method == "__call__":
@@ -1722,7 +1730,12 @@ class Array(DaskMethodsMixin):
             return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
         # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
-        if not all(type is Array or is_valid_chunk_type(type) for type in types):
+        if not all(
+            # Accept our own superclasses as recommended by NEP-13
+            # (https://numpy.org/neps/nep-0013-ufunc-overrides.html#subclass-hierarchies)
+            issubclass(type(self), type_) or is_valid_chunk_type(type_)
+            for type_ in types
+        ):
             return NotImplemented
 
         # Now try to find a matching function name.  If that doesn't work, we may
@@ -3761,7 +3774,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     return Array(graph, name, chunks, dtype=dtype, meta=meta)
 
 
-def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
+def from_func(func, shape, dtype=None, name=None, args=(), kwargs=None):
     """Create dask array in a single block by calling a function
 
     Calling the provided function with func(*args, **kwargs) should return a
@@ -3781,6 +3794,9 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
     >>> stack(arrays).compute()
     array([0, 1, 2, 3, 4])
     """
+    if kwargs is None:
+        kwargs = {}
+
     name = name or "from_func-" + tokenize(func, shape, dtype, args, kwargs)
     if args or kwargs:
         func = partial(func, *args, **kwargs)
@@ -5402,7 +5418,7 @@ def _vindex(x, *indexes):
 
     nonfancy_indexes = []
     reduced_indexes = []
-    for i, ind in enumerate(indexes):
+    for ind in indexes:
         if isinstance(ind, Number):
             nonfancy_indexes.append(ind)
         elif isinstance(ind, slice):

@@ -1,6 +1,7 @@
 import collections
 import itertools as it
 import operator
+import uuid
 import warnings
 from numbers import Integral
 
@@ -234,12 +235,11 @@ def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
 
-    if get_key in grouped.groups:
+    try:
         if is_dataframe_like(df):
             grouped = grouped[columns]
         return grouped.get_group(get_key)
-
-    else:
+    except KeyError:
         # to create empty DataFrame/Series, which has the same
         # dtype as the original
         if is_dataframe_like(df):
@@ -512,7 +512,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
         idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
-    for idx, val in enumerate(idx_vals):
+    for val in idx_vals:
         idx_name = inv_col_mapping.get(val, val)
         idx_mapping.append(idx_name)
 
@@ -1238,14 +1238,20 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        chunk_kwargs={},
-        aggregate_kwargs={},
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
     ):
         if aggfunc is None:
             aggfunc = func
 
         if meta is None:
             meta = func(self._meta_nonempty)
+
+        if chunk_kwargs is None:
+            chunk_kwargs = {}
+
+        if aggregate_kwargs is None:
+            aggregate_kwargs = {}
 
         columns = meta.name if is_series_like(meta) else meta.columns
 
@@ -1284,7 +1290,19 @@ class _GroupBy:
         """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
-        by = self.by if isinstance(self.by, list) else [self.by]
+        by_cols = self.by if isinstance(self.by, list) else [self.by]
+
+        # rename "by" columns internally
+        # to fix cumulative operations on the same "by" columns
+        # ref: https://github.com/dask/dask/issues/9313
+        if columns is not None and set(columns).intersection(set(by_cols)):
+            by = []
+            for col in by_cols:
+                suffix = str(uuid.uuid4())
+                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                by.append(col + suffix)
+        else:
+            by = by_cols
 
         name = self._token_prefix + token
         name_part = name + "-map"
@@ -1633,7 +1651,10 @@ class _GroupBy:
             token="last", func=M.last, split_every=split_every, split_out=split_out
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="If the group is not present, Dask will return an empty Series/DataFrame.",
+    )
     def get_group(self, key):
         token = self._token_prefix + "get_group"
 
@@ -1654,6 +1675,7 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+        column_projection = None
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1680,6 +1702,10 @@ class _GroupBy:
                 ]
 
             spec = _normalize_spec(arg, non_group_columns)
+
+            # Check if the aggregation involves implicit column projection
+            if isinstance(arg, dict):
+                column_projection = group_columns | arg.keys()
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):
@@ -1709,11 +1735,17 @@ class _GroupBy:
         else:
             levels = 0
 
+        # Add an explicit `getitem` operation if the groupby
+        # aggregation involves implicit column projection.
+        # This makes it possible for the column-projection
+        # to be pushed into the IO layer
+        _obj = self.obj[list(column_projection)] if column_projection else self.obj
+
         if not isinstance(self.by, list):
-            chunk_args = [self.obj, self.by]
+            chunk_args = [_obj, self.by]
 
         else:
-            chunk_args = [self.obj] + self.by
+            chunk_args = [_obj] + self.by
 
         if not PANDAS_GT_110 and self.dropna:
             raise NotImplementedError(

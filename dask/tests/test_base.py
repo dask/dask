@@ -1381,7 +1381,7 @@ def test_persist_item_change_name():
 
 
 def test_normalize_function_limited_size():
-    for i in range(1000):
+    for _ in range(1000):
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
