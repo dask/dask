@@ -999,7 +999,8 @@ def from_map(
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
-        and will raise an error if this doesn't work or types don't match.
+        and will raise an error if this doesn't work,
+        but it won't raise if dtypes don't match.
     **kwargs:
         Key-word arguments to broadcast to each output partition. These
         same arguments will be passed to ``func`` for every output partition.

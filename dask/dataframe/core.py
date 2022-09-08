@@ -764,7 +764,8 @@ Dask Name: {name}, {layers}"""
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
             This will rename and reorder columns for each partition,
-            and will raise an error if this doesn't work or types don't match.
+            and will raise an error if this doesn't work,
+            but it won't raise if dtypes don't match.
         transform_divisions : bool, default True
             Whether to apply the function onto the divisions and apply those
             transformed divisions to the output.
@@ -897,7 +898,8 @@ Dask Name: {name}, {layers}"""
             Whether to enforce at runtime that the structure of the DataFrame
             produced by ``func`` actually matches the structure of ``meta``.
             This will rename and reorder columns for each partition,
-            and will raise an error if this doesn't work or types don't match.
+            and will raise an error if this doesn't work,
+            but it won't raise if dtypes don't match.
         transform_divisions : bool, default True
             Whether to apply the function onto the divisions and apply those
             transformed divisions to the output.
@@ -6476,7 +6478,8 @@ def map_partitions(
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
-        and will raise an error if this doesn't work or types don't match.
+        and will raise an error if this doesn't work,
+        but it won't raise if dtypes don't match.
     transform_divisions : bool, default True
         Whether to apply the function onto the divisions and apply those
         transformed divisions to the output.
