@@ -7,9 +7,9 @@ tokenize:
   ensure-deterministic: false  # If true, tokenize will error instead of falling back to uuids
 
 dataframe:
-  backend: null  # Backend dataframe library for input IO and data creation
-  backend-options:
-    allow-fallback: True  # Allow Dask to fall-back from the specified backend
+  backend:
+    library: null  # Backend dataframe library for input IO and data creation
+    allow-fallback: True  # Allow Dask to fall-back from the specified backend library
     warn-fallback: True  # Raise a warning when Dask falls-back from the specified backend
   shuffle-compression: null  # compression for on disk-shuffling. Partd supports ZLib, BZ2, SNAPPY, BLOSC
   parquet:
@@ -17,9 +17,9 @@ dataframe:
     metadata-task-size-remote: 16  # Number of files per remote metadata-processing task
 
 array:
-  backend: null  # Backend array library for input IO and data creation
-  backend-options:
-    allow-fallback: True  # Allow Dask to fall-back from the specified backend
+  backend:
+    library: null  # Backend array library for input IO and data creation
+    allow-fallback: True  # Allow Dask to fall-back from the specified backend library
     warn-fallback: True  # Raise a warning when Dask falls-back from the specified backend
   svg:
     size: 120  # pixels

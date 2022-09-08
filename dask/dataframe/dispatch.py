@@ -145,15 +145,15 @@ def union_categoricals(to_union, sort_categories=False, ignore_order=False):
 
 class DataFrameBackendDispatch(BackendDispatch):
     def get_backend(self):
-        return config.get("dataframe.backend") or "pandas"
+        return config.get("dataframe.backend.library") or "pandas"
 
     @property
     def allow_fallback(self):
-        return config.get("dataframe.backend-options.allow-fallback", True)
+        return config.get("dataframe.backend.allow-fallback", True)
 
     @property
     def warn_fallback(self):
-        return config.get("dataframe.backend-options.warn-fallback", True)
+        return config.get("dataframe.backend.warn-fallback", True)
 
 
 dataframe_backend_dispatch = DataFrameBackendDispatch("dataframe_backend_dispatch")

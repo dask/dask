@@ -19,15 +19,15 @@ nannumel_lookup = Dispatch("nannumel")
 
 class ArrayBackendDispatch(BackendDispatch):
     def get_backend(self):
-        return config.get("array.backend") or "numpy"
+        return config.get("array.backend.library") or "numpy"
 
     @property
     def allow_fallback(self):
-        return config.get("array.backend-options.allow-fallback", True)
+        return config.get("array.backend.allow-fallback", True)
 
     @property
     def warn_fallback(self):
-        return config.get("array.backend-options.warn-fallback", True)
+        return config.get("array.backend.warn-fallback", True)
 
 
 array_backend_dispatch = ArrayBackendDispatch("array_backend_dispatch")
