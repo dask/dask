@@ -336,12 +336,32 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(
-        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
-    )
-    rhs2 = shuffle_func(
-        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
-    )
+    # Check if we can skip the shuffle stage
+    if (
+        (lhs.npartitions == npartitions)
+        and (rhs.npartitions == npartitions)
+        and isinstance(left_on, (str, list, tuple))
+        and isinstance(right_on, (str, list, tuple))
+        and bool(lhs.partitioned_by(left_on))
+        and (lhs.partitioned_by(left_on) == rhs.partitioned_by(right_on))
+    ):
+        lhs2 = lhs
+        rhs2 = rhs
+    else:
+        lhs2 = shuffle_func(
+            lhs,
+            left_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        rhs2 = shuffle_func(
+            rhs,
+            right_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
 
     if isinstance(left_on, Index):
         left_on = None

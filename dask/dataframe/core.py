@@ -626,7 +626,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 # If the DataFrame is partitioned by ("A",), then
                 # it is also partitioned by ("A", "B", ...)
                 if _by[: len(group)] == group:
-                    return True
+                    return self.partition_metadata.partitioning[group]
         return False
 
     @property
