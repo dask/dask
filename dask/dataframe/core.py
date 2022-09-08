@@ -603,7 +603,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         else:
             partition_metadata.set_meta(meta)
             partition_metadata.set_divisions(divisions)
-        self._partition_metadata = partition_metadata
+        self.set_partition_metadata(partition_metadata)
 
     @property
     def partition_metadata(self):
@@ -613,9 +613,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         if isinstance(value, PartitionMetadata):
             self._partition_metadata = value
         else:
-            raise ValueError(
-                f"Expected PartitionMetadata object, " f" got {type(value)}"
-            )
+            raise ValueError(f"Expected PartitionMetadata object, got {type(value)}")
 
     def partitioned_by(self, columns):
         """Whether the DataFrame is partitioned by the specified columns"""
@@ -783,7 +781,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         )
 
     def __setstate__(self, state):
-        self._partition_metadata = state["partition_metadata"]
+        self.set_partition_metadata(state["partition_metadata"])
         self._name = state["name"]
         self.dask = state["dask"]
 
@@ -3903,9 +3901,11 @@ Dask Name: {name}, {layers}""".format(
             if inplace:
                 self.dask = res.dask
                 self._name = res._name
-                self._partition_metadata = PartitionMetadata(
-                    meta=res._meta,
-                    divisions=res.divisions,
+                self.set_partition_metadata(
+                    PartitionMetadata(
+                        meta=res._meta,
+                        divisions=res.divisions,
+                    )
                 )
                 res = self
         return res
@@ -4852,9 +4852,11 @@ class DataFrame(_Frame):
 
         self.dask = df.dask
         self._name = df._name
-        self._partition_metadata = PartitionMetadata(
-            meta=df._meta,
-            divisions=df.divisions,
+        self.set_partition_metadata(
+            PartitionMetadata(
+                meta=df._meta,
+                divisions=df.divisions,
+            )
         )
 
     def __delitem__(self, key):
@@ -6536,7 +6538,7 @@ def handle_out(out, result):
         out.dask = result.dask
 
         if not isinstance(out, Scalar):
-            out._partition_metadata = result.partition_metadata.copy()
+            out.set_partition_metadata(result.partition_metadata.copy())
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."

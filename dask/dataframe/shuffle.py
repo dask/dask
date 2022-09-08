@@ -201,7 +201,15 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(sort_function, **sort_kwargs)
+    partition_metadata = df.partition_metadata.copy(
+        partitioning={tuple(by): "ascending" if ascending else "descending"},
+        statistics={by[0]: pd.DataFrame({"min": divisions[:-1], "max": divisions[1:]})},
+    )
+    df = df.map_partitions(
+        sort_function,
+        partition_metadata=partition_metadata,
+        **sort_kwargs,
+    )
     return df
 
 

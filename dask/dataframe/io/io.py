@@ -306,6 +306,7 @@ def from_pandas(
     }
 
     # Define partition metadata
+    # TODO: Include min/max column statistics
     _partition_stats = {
         "__num_rows__": [
             stop - start for start, stop in zip(locations[:-1], locations[1:])

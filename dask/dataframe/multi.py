@@ -338,13 +338,15 @@ def hash_join(
 
     # Check if we can skip the shuffle stage
     if (
-        (lhs.npartitions == npartitions)
-        and (rhs.npartitions == npartitions)
+        (lhs.npartitions == rhs.npartitions == npartitions)
         and isinstance(left_on, (str, list, tuple))
         and isinstance(right_on, (str, list, tuple))
-        and bool(lhs.partitioned_by(left_on))
-        and (lhs.partitioned_by(left_on) == rhs.partitioned_by(right_on))
+        and lhs.partitioned_by(left_on) == "hash"
+        and rhs.partitioned_by(right_on) == "hash"
     ):
+        # TODO: Can also skip shuffle for "ascending" and
+        # "descending" partitioning, but would need to check
+        # min/max alignment in partition statistics
         lhs2 = lhs
         rhs2 = rhs
     else:
