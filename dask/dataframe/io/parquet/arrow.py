@@ -1350,7 +1350,7 @@ class ArrowDatasetEngine(Engine):
                                 "total_byte_size": row_group.total_byte_size,
                             }
                         cstats = []
-                        for name, i in stat_col_indices.items():
+                        for name in stat_col_indices.keys():
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]

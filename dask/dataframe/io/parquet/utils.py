@@ -461,7 +461,7 @@ def _analyze_paths(file_list, fs, root=False):
     path_parts_list = [_join_path(fn).split("/") for fn in file_list]
     if root is False:
         basepath = path_parts_list[0][:-1]
-        for i, path_parts in enumerate(path_parts_list):
+        for path_parts in path_parts_list:
             j = len(path_parts) - 1
             for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
                 if base_part != path_part:

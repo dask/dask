@@ -923,7 +923,7 @@ def test_csv_with_integer_names():
 
 def test_late_dtypes():
     text = "numbers,names,more_numbers,integers,dates\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,,2,3,2017-10-31 00:00:00\n"
     text += "1.5,bar,2.5,3,4998-01-01 00:00:00\n"
 
@@ -1041,7 +1041,7 @@ def test_late_dtypes():
 
 def test_assume_missing():
     text = "numbers,names,more_numbers,integers\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,foo,2,3\n"
     text += "1.5,bar,2.5,3\n"
     with filetext(text) as fn:
@@ -1062,7 +1062,7 @@ def test_assume_missing():
         assert_eq(res, sol.astype({"integers": float}))
 
     text = "numbers,integers\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,2\n"
     text += "1.5,2\n"
 
