@@ -2,10 +2,9 @@ import re
 
 import pandas as pd
 
-from .... import config
-from ....core import flatten
-from ....utils import natural_sort_key
-from ..utils import _is_local_fs
+from dask import config
+from dask.dataframe.io.utils import _is_local_fs
+from dask.utils import natural_sort_key
 
 
 class Engine:
@@ -39,9 +38,8 @@ class Engine:
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
         gather_statistics: bool
-            Whether or not to gather statistics data.  If ``None``, we only
-            gather statistics data if there is a _metadata file available to
-            query (cheaply)
+            Whether or not to gather statistics to calculate divisions
+            for the output DataFrame collection.
         filters: list
             List of filters to apply, like ``[('x', '>', 0), ...]``.
         **kwargs: dict (of dicts)
@@ -463,7 +461,7 @@ def _analyze_paths(file_list, fs, root=False):
     path_parts_list = [_join_path(fn).split("/") for fn in file_list]
     if root is False:
         basepath = path_parts_list[0][:-1]
-        for i, path_parts in enumerate(path_parts_list):
+        for path_parts in path_parts_list:
             j = len(path_parts) - 1
             for k, (base_part, path_part) in enumerate(zip(basepath, path_parts)):
                 if base_part != path_part:
@@ -487,15 +485,6 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
-
-
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
 
 
 def _aggregate_stats(
@@ -743,3 +732,36 @@ def _split_user_options(**kwargs):
         read_options,
         user_kwargs,
     )
+
+
+def _set_gather_statistics(
+    gather_statistics,
+    chunksize,
+    split_row_groups,
+    aggregation_depth,
+    filter_columns,
+    stat_columns,
+):
+    # Use available information about the current read options
+    # and target dataset to decide if we need to gather metadata
+    # statistics to construct the graph for a `read_parquet` op.
+
+    # If the user has specified `calculate_divisions=True`, then
+    # we will be starting with `gather_statistics=True` here.
+    if (
+        chunksize
+        or (int(split_row_groups) > 1 and aggregation_depth)
+        or filter_columns.intersection(stat_columns)
+    ):
+        # Need to gather statistics if we are aggregating files
+        # or filtering
+        # NOTE: Should avoid gathering statistics when the agg
+        # does not depend on a row-group statistic
+        gather_statistics = True
+    elif not stat_columns:
+        # Not aggregating files/row-groups.
+        # We only need to gather statistics if `stat_columns`
+        # is populated
+        gather_statistics = False
+
+    return bool(gather_statistics)

@@ -4,8 +4,8 @@ from multiprocessing import Pipe, Process, current_process
 from time import sleep
 from timeit import default_timer
 
-from ..callbacks import Callback
-from ..utils import import_required
+from dask.callbacks import Callback
+from dask.utils import import_required
 
 # Stores execution data for each task
 TaskData = namedtuple(
@@ -81,7 +81,7 @@ class Profiler(Callback):
         self._results.clear()
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_tasks
+        from dask.diagnostics.profile_visualize import plot_tasks
 
         return plot_tasks(self.results, self._dsk, **kwargs)
 
@@ -92,7 +92,7 @@ class Profiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 
@@ -196,7 +196,7 @@ class ResourceProfiler(Callback):
         self.results = []
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_resources
+        from dask.diagnostics.profile_visualize import plot_resources
 
         return plot_resources(self.results, **kwargs)
 
@@ -207,7 +207,7 @@ class ResourceProfiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 
@@ -362,7 +362,7 @@ class CacheProfiler(Callback):
         self._cache.clear()
 
     def _plot(self, **kwargs):
-        from .profile_visualize import plot_cache
+        from dask.diagnostics.profile_visualize import plot_cache
 
         return plot_cache(
             self.results, self._dsk, self._start_time, self._metric_name, **kwargs
@@ -375,7 +375,7 @@ class CacheProfiler(Callback):
         --------
         dask.diagnostics.profile_visualize.visualize
         """
-        from .profile_visualize import visualize
+        from dask.diagnostics.profile_visualize import visualize
 
         return visualize(self, **kwargs)
 

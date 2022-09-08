@@ -1,4 +1,5 @@
 import operator
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -334,9 +335,9 @@ def test_categorize_nan():
     df = dd.from_pandas(
         pd.DataFrame({"A": ["a", "b", "a", float("nan")]}), npartitions=2
     )
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         df.categorize().compute()
-    assert len(record) == 0
+    assert not record
 
 
 def get_cat(x):
@@ -430,9 +431,14 @@ class TestCategoricalAccessor:
         da = da.cat.as_unknown()
         assert not da.cat.known
 
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
             da.cat.categories
-        with pytest.raises(NotImplementedError):
+        with pytest.raises(NotImplementedError, match="with unknown categories"):
+            da.cat.codes
+        # Also AttributeError so glob searching in IPython such as `da.cat.*?` works
+        with pytest.raises(AttributeError, match="with unknown categories"):
+            da.cat.categories
+        with pytest.raises(AttributeError, match="with unknown categories"):
             da.cat.codes
 
         db = da.cat.set_categories(["a", "b", "c"])

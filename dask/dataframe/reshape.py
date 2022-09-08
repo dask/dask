@@ -4,10 +4,10 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
-from ..utils import M
-from . import methods
-from .core import DataFrame, Series, apply_concat_apply, map_partitions
-from .utils import has_known_categories
+from dask.dataframe import methods
+from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
+from dask.dataframe.utils import has_known_categories
+from dask.utils import M
 
 ###############################################################
 # Dummies
@@ -92,7 +92,7 @@ def get_dummies(
     0              uint8  uint8  uint8
     2                ...    ...    ...
     3                ...    ...    ...
-    Dask Name: get_dummies, 4 tasks
+    Dask Name: get_dummies, 2 graph layers
     >>> dd.get_dummies(s).compute()  # doctest: +ELLIPSIS
        a  b  c
     0  1  0  0
@@ -147,21 +147,8 @@ def get_dummies(
         if not all(has_known_categories(data[c]) for c in columns):
             raise NotImplementedError(unknown_cat_msg)
 
-    # We explicitly create `meta` on `data._meta` (the empty version) to
-    # work around https://github.com/pandas-dev/pandas/issues/21993
     package_name = data._meta.__class__.__module__.split(".")[0]
     dummies = sys.modules[package_name].get_dummies
-    meta = dummies(
-        data._meta,
-        prefix=prefix,
-        prefix_sep=prefix_sep,
-        dummy_na=dummy_na,
-        columns=columns,
-        sparse=sparse,
-        drop_first=drop_first,
-        dtype=dtype,
-        **kwargs,
-    )
 
     return map_partitions(
         dummies,
@@ -172,7 +159,6 @@ def get_dummies(
         columns=columns,
         sparse=sparse,
         drop_first=drop_first,
-        meta=meta,
         dtype=dtype,
         **kwargs,
     )

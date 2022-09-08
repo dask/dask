@@ -16,7 +16,6 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
@@ -188,18 +187,12 @@ def test_set_index_general(npartitions, shuffle_method):
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
     assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
-
     assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
-
     assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
-
     assert_eq(
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
-
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
-
-    assert_eq(df.set_index(df.index), ddf.set_index(ddf.index, shuffle=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -209,7 +202,8 @@ def test_set_index_self_index(shuffle_method):
     )
 
     a = dd.from_pandas(df, npartitions=4)
-    b = a.set_index(a.index, shuffle=shuffle_method)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        b = a.set_index(a.index, shuffle=shuffle_method)
     assert a is b
 
     assert_eq(b, df.set_index(df.index))
@@ -376,7 +370,7 @@ def test_set_index_with_explicit_divisions():
     def throw(*args, **kwargs):
         raise Exception()
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         ddf2 = ddf.set_index("x", divisions=[1, 3, 5])
     assert ddf2.divisions == (1, 3, 5)
 
@@ -386,6 +380,16 @@ def test_set_index_with_explicit_divisions():
     # Divisions must be sorted
     with pytest.raises(ValueError):
         ddf.set_index("x", divisions=[3, 1, 5])
+
+
+def test_set_index_with_empty_divisions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4]})
+
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # Divisions must not be empty
+    with pytest.raises(ValueError):
+        ddf.set_index("x", divisions=[])
 
 
 def test_set_index_divisions_2():
@@ -430,11 +434,11 @@ def test_set_index_divisions_sorted():
     def throw(*args, **kwargs):
         raise Exception("Shouldn't have computed")
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         res = ddf.set_index("x", divisions=[10, 13, 16, 18], sorted=True)
     assert_eq(res, df.set_index("x"))
 
-    with dask.config.set(get=throw):
+    with dask.config.set(scheduler=throw):
         res = ddf.set_index("y", divisions=["a", "b", "d", "e"], sorted=True)
     assert_eq(res, df.set_index("y"))
 
@@ -659,7 +663,7 @@ def test_set_index_interpolate(engine):
         d = dd.from_pandas(df, 2)
 
     d1 = d.set_index("x", npartitions=3)
-    assert d1.npartitions == 3
+    assert d1.npartitions <= 3
     assert set(d1.divisions) == {1, 2, 4}
 
     d2 = d.set_index("y", npartitions=3)
@@ -710,7 +714,7 @@ def test_set_index_interpolate_large_uint(engine):
 
     if engine == "cudf":
         gdf = cudf.from_pandas(df)
-        d = dask_cudf.from_cudf(gdf, npartitions=2)
+        d = dask_cudf.from_cudf(gdf, npartitions=1)
     else:
         d = dd.from_pandas(df, 1)
 
@@ -723,7 +727,7 @@ def test_set_index_timezone():
     s_naive = pd.Series(pd.date_range("20130101", periods=3))
     s_aware = pd.Series(pd.date_range("20130101", periods=3, tz="US/Eastern"))
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
-    d = dd.from_pandas(df, 2)
+    d = dd.from_pandas(df, npartitions=1)  # TODO: Use npartitions=2
 
     d1 = d.set_index("notz", npartitions=1)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
@@ -862,8 +866,8 @@ def test_set_index_sorted_min_max_same():
     a = pd.DataFrame({"x": [1, 2, 3], "y": [0, 0, 0]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": [1, 1, 1]})
 
-    aa = delayed(a)
-    bb = delayed(b)
+    aa = dask.delayed(a)
+    bb = dask.delayed(b)
 
     df = dd.from_delayed([aa, bb], meta=a)
     assert not df.known_divisions
@@ -874,7 +878,6 @@ def test_set_index_sorted_min_max_same():
 
 def test_set_index_empty_partition():
     test_vals = [1, 2, 3]
-
     converters = [int, float, str, lambda x: pd.to_datetime(x, unit="ns")]
 
     for conv in converters:
@@ -902,11 +905,17 @@ def test_set_index_on_empty():
 
         assert ddf.npartitions > 1
 
-        ddf = ddf[ddf.y > df.y.max()].set_index("x")
-        expected_df = df[df.y > df.y.max()].set_index("x")
+        actual = ddf[ddf.y > df.y.max()].set_index("x")
+        expected = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df, **CHECK_FREQ)
-        assert ddf.npartitions == 1
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
+
+        actual = ddf[ddf.y > df.y.max()].set_index("x", sorted=True)
+        assert assert_eq(actual, expected, **CHECK_FREQ)
+        assert actual.npartitions == 1
+        assert all(pd.isnull(d) for d in actual.divisions)
 
 
 def test_set_index_categorical():
@@ -923,6 +932,23 @@ def test_set_index_categorical():
     # sorted with the metric defined by the Categorical
     divisions = pd.Categorical(result.divisions, dtype=dtype)
     assert_categorical_equal(divisions, divisions.sort_values())
+
+
+def test_set_index_with_empty_and_overlap():
+    # https://github.com/dask/dask/issues/8735
+    df = pd.DataFrame(
+        index=list(range(8)),
+        data={
+            "a": [1, 2, 2, 3, 3, 3, 4, 5],
+            "b": [1, 1, 0, 0, 0, 1, 0, 0],
+        },
+    )
+    ddf = dd.from_pandas(df, 4)
+    result = ddf[ddf.b == 1].set_index("a", sorted=True)
+    expected = df[df.b == 1].set_index("a")
+
+    assert result.divisions == (1.0, 3.0, 3.0)
+    assert_eq(result, expected)
 
 
 def test_compute_divisions():
@@ -1156,6 +1182,45 @@ def test_set_index_overlap_2():
     assert ddf2.npartitions == 8
 
 
+def test_compute_current_divisions_nan_partition():
+    # Compute divisions 1 null partition
+    a = d[d.a > 3].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (4, 5, 8, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+    # Compute divisions with 0 null partitions
+    a = d[d.a > 1].sort_values("a")
+    divisions = a.compute_current_divisions("a")
+    assert divisions == (2, 4, 7, 9)
+    a.divisions = divisions
+    assert_eq(a, a, check_divisions=False)
+
+
+def test_compute_current_divisions_overlap():
+    A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
+    a = dd.from_pandas(A, npartitions=2)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        divisions = a.compute_current_divisions("key")
+        b = a.set_index("key", divisions=divisions)
+        assert b.divisions == (1, 4, 7)
+        assert [len(p) for p in b.partitions] == [3, 5]
+
+
+def test_compute_current_divisions_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.clear_divisions().repartition(8)
+    with pytest.warns(UserWarning, match="Partitions have overlapping values"):
+        ddf2.compute_current_divisions()
+
+
 def test_shuffle_hlg_layer():
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
@@ -1230,6 +1295,63 @@ def test_set_index_nan_partition():
     assert_eq(a, a)
 
 
+def test_set_index_with_dask_dt_index():
+    values = {
+        "x": [1, 2, 3, 4] * 3,
+        "y": [10, 20, 30] * 4,
+        "name": ["Alice", "Bob"] * 6,
+    }
+    date_index = pd.date_range(
+        start="2022-02-22", freq="16h", periods=12
+    ) - pd.Timedelta(seconds=30)
+    df = pd.DataFrame(values, index=date_index)
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # specify a different date index entirely
+    day_index = ddf.index.dt.floor("D")
+    day_df = ddf.set_index(day_index)
+    expected = dd.from_pandas(
+        pd.DataFrame(values, index=date_index.floor("D")), npartitions=3
+    )
+    assert_eq(day_df, expected)
+
+    # specify an index with shifted dates
+    one_day = pd.Timedelta(days=1)
+    next_day_df = ddf.set_index(ddf.index + one_day)
+    expected = dd.from_pandas(
+        pd.DataFrame(values, index=date_index + one_day), npartitions=3
+    )
+    assert_eq(next_day_df, expected)
+
+    # try a different index type
+    no_dates = dd.from_pandas(pd.DataFrame(values), npartitions=3)
+    range_df = ddf.set_index(no_dates.index)
+    expected = dd.from_pandas(pd.DataFrame(values), npartitions=3)
+    assert_eq(range_df, expected)
+
+
+def test_set_index_with_series_uses_fastpath():
+    dates = pd.date_range(start="2022-02-22", freq="16h", periods=12) - pd.Timedelta(
+        seconds=30
+    )
+    one_day = pd.Timedelta(days=1)
+    df = pd.DataFrame(
+        {
+            "x": [1, 2, 3, 4] * 3,
+            "y": [10, 20, 30] * 4,
+            "name": ["Alice", "Bob"] * 6,
+            "d1": dates + one_day,
+            "d2": dates + one_day * 5,
+        },
+        index=dates,
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    res = ddf.set_index(ddf.d2 + one_day)
+    expected = df.set_index(df.d2 + one_day)
+    assert_eq(res, expected)
+
+
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b"])
 @pytest.mark.parametrize("nelem", [10, 500])
@@ -1244,7 +1366,7 @@ def test_sort_values(nelem, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False)
+    dd.assert_eq(got, expect, check_index=False, sort_results=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False, [False, True], [True, False]])

@@ -6,6 +6,7 @@ import numpy as np
 from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
+from dask.array.lib.stride_tricks import sliding_window_view
 from dask.array.overlap import (
     boundaries,
     constant,
@@ -18,8 +19,6 @@ from dask.array.overlap import (
     trim_internal,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from ..lib.stride_tricks import sliding_window_view
 
 
 def test_overlap_internal():
@@ -263,6 +262,20 @@ def test_overlap():
     g = overlap(d, depth=u_depth, boundary={0: 100, 1: "none"})
     assert_eq(g, expected)
     assert g.chunks == ((8, 8), (5, 5))
+
+
+def test_overlap_allow_rechunk_kwarg():
+    # The smallest array chunk is too small to fit overlap depth
+    arr = da.arange(6, chunks=5)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
+    arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
+    with pytest.raises(ValueError):
+        da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+    with pytest.raises(ValueError):
+        arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
+    # No rechunking required
+    arr = da.arange(6, chunks=4)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
 
 
 def test_asymmetric_overlap_boundary_exception():
@@ -788,7 +801,7 @@ def test_ensure_minimum_chunksize_raises_error():
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
-    from ..numpy_compat import sliding_window_view as np_sliding_window_view
+    from dask.array.numpy_compat import sliding_window_view as np_sliding_window_view
 
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)

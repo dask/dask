@@ -6,13 +6,13 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_bool_dtype
 
-from ..array.core import Array
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from . import methods
-from ._compat import PANDAS_GT_130
-from .core import Series, new_dd_object
-from .utils import is_index_like, is_series_like, meta_nonempty
+from dask.array.core import Array
+from dask.base import tokenize
+from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_130
+from dask.dataframe.core import Series, new_dd_object
+from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
+from dask.highlevelgraph import HighLevelGraph
 
 
 class _IndexerBase:
@@ -35,6 +35,9 @@ class _IndexerBase:
             return self.obj
         else:
             return self._meta_indexer[:, cindexer]
+
+    def __dask_tokenize__(self):
+        return type(self).__name__, tokenize(self.obj)
 
 
 class _iLocIndexer(_IndexerBase):
@@ -231,11 +234,19 @@ class _LocIndexer(_IndexerBase):
             stop = self.obj.npartitions - 1
 
         if iindexer.start is None and self.obj.known_divisions:
-            istart = self.obj.divisions[0]
+            istart = (
+                self.obj.divisions[0]
+                if iindexer.stop is None
+                else min(self.obj.divisions[0], iindexer.stop)
+            )
         else:
             istart = self._coerce_loc_index(iindexer.start)
         if iindexer.stop is None and self.obj.known_divisions:
-            istop = self.obj.divisions[-1]
+            istop = (
+                self.obj.divisions[-1]
+                if iindexer.start is None
+                else max(self.obj.divisions[-1], iindexer.start)
+            )
         else:
             istop = self._coerce_loc_index(iindexer.stop)
 

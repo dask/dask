@@ -1,3 +1,4 @@
+import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
@@ -7,6 +8,7 @@ from operator import add
 import numpy as np
 import pandas as pd
 import pytest
+from pandas.errors import PerformanceWarning
 from pandas.io.formats import format as pandas_format
 
 import dask
@@ -156,15 +158,15 @@ def test_head_npartitions_warn():
 
     # No warn if all partitions are inspected
     for n in [3, -1]:
-        with pytest.warns(None) as rec:
+        with warnings.catch_warnings(record=True) as record:
             d.head(10, npartitions=n)
-    assert not rec
+        assert not record
 
     # With default args, this means that a 1 partition dataframe won't warn
     d2 = dd.from_pandas(pd.DataFrame({"x": [1, 2, 3]}), npartitions=1)
-    with pytest.warns(None) as rec:
+    with warnings.catch_warnings(record=True) as record:
         d2.head()
-    assert not rec
+    assert not record
 
 
 def test_index_head():
@@ -576,7 +578,7 @@ def test_describe_empty():
         df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
     )
 
-    with pytest.raises((ValueError, RuntimeWarning)):
+    with pytest.warns(RuntimeWarning):
         ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
@@ -760,20 +762,16 @@ def test_dropna():
     )
 
     # threshold
-    assert_eq(df.dropna(thresh=None), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=None), df.dropna(thresh=None))
-
-    assert_eq(df.dropna(thresh=0), df.loc[:])
     assert_eq(ddf.dropna(thresh=0), df.dropna(thresh=0))
-
-    assert_eq(df.dropna(thresh=1), df.loc[[10, 20, 30, 40, 60]])
     assert_eq(ddf.dropna(thresh=1), df.dropna(thresh=1))
-
-    assert_eq(df.dropna(thresh=2), df.loc[[10, 20, 30, 40, 60]])
     assert_eq(ddf.dropna(thresh=2), df.dropna(thresh=2))
-
-    assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+
+    # fail when how and thresh are both provided
+    # see https://github.com/dask/dask/issues/9365
+    with pytest.raises(TypeError, match="cannot set both the how and thresh arguments"):
+        ddf.dropna(how="all", thresh=0)
 
     # Regression test for https://github.com/dask/dask/issues/6540
     df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
@@ -1077,15 +1075,19 @@ def test_align_dataframes():
     df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
 
-    def merge(a, b):
-        res = pd.merge(a, b, left_on="A", right_on="A", how="left")
-        return res
-
-    expected = merge(df1, df2)
-
     ddf1 = dd.from_pandas(df1, npartitions=2)
-    actual = ddf1.map_partitions(merge, df2, align_dataframes=False)
+    ddf2 = dd.from_pandas(df2, npartitions=1)
 
+    actual = ddf1.map_partitions(
+        pd.merge, df2, align_dataframes=False, left_on="A", right_on="A", how="left"
+    )
+    expected = pd.merge(df1, df2, left_on="A", right_on="A", how="left")
+    assert_eq(actual, expected, check_index=False, check_divisions=False)
+
+    actual = ddf2.map_partitions(
+        pd.merge, ddf1, align_dataframes=False, left_on="A", right_on="A", how="right"
+    )
+    expected = pd.merge(df2, df1, left_on="A", right_on="A", how="right")
     assert_eq(actual, expected, check_index=False, check_divisions=False)
 
 
@@ -1131,7 +1133,7 @@ def test_drop_duplicates_subset():
 
 def test_get_partition():
     pdf = pd.DataFrame(np.random.randn(10, 5), columns=list("abcde"))
-    ddf = dd.from_pandas(pdf, 3)
+    ddf = dd.from_pandas(pdf, chunksize=4)
     assert ddf.divisions == (0, 4, 8, 9)
 
     # DataFrame
@@ -1383,7 +1385,9 @@ def test_quantile_missing(method):
     if method == "tdigest":
         pytest.importorskip("crick")
     df = pd.DataFrame({"A": [0, np.nan, 2]})
-    ddf = dd.from_pandas(df, 2)
+    # TODO: Test npartitions=2
+    # (see https://github.com/dask/dask/issues/9227)
+    ddf = dd.from_pandas(df, npartitions=1)
     expected = df.quantile()
     result = ddf.quantile(method=method)
     assert_eq(result, expected)
@@ -1406,6 +1410,10 @@ def test_empty_quantile(method):
     assert_eq(result, exp)
 
 
+# TODO: un-filter once https://github.com/dask/dask/issues/8960 is resolved.
+@pytest.mark.filterwarnings(
+    "ignore:In future versions of pandas, numeric_only will be set to False:FutureWarning"
+)
 @pytest.mark.parametrize(
     "method,expected",
     [
@@ -2067,7 +2075,7 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([1, 2, 3, 4, 5, 6] * 10, dtype=dtype),
+        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
@@ -2329,7 +2337,7 @@ def test_fillna():
 
 
 @pytest.mark.parametrize("optimize", [True, False])
-def test_delayed_roundtrip(optimize: bool):
+def test_delayed_roundtrip(optimize):
     df1 = d + 1 + 1
     delayed = df1.to_delayed(optimize_graph=optimize)
 
@@ -2392,6 +2400,20 @@ def test_fillna_multi_dataframe():
 
     assert_eq(ddf.A.fillna(ddf.B), df.A.fillna(df.B))
     assert_eq(ddf.B.fillna(ddf.A), df.B.fillna(df.A))
+
+
+def test_fillna_dask_dataframe_input():
+    df = _compat.makeMissingDataframe()
+    df1 = _compat.makeMissingDataframe()
+    ddf = dd.from_pandas(df, npartitions=5)
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+
+    assert_eq(ddf.fillna(ddf1), df.fillna(df1))
+
+    ddf_unknown = dd.from_pandas(df, npartitions=5, sort=False)
+    with pytest.raises(ValueError, match="Not all divisions are known"):
+        # Fails when divisions are unknown
+        assert_eq(ddf_unknown.fillna(ddf1), df.fillna(df1))
 
 
 def test_ffill_bfill():
@@ -2901,7 +2923,7 @@ def test_to_dask_array_raises(as_frame):
 @pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
-    a = dd.from_pandas(s, chunksize=2)
+    a = dd.from_pandas(s, npartitions=2)
 
     if as_frame:
         a = a.to_frame()
@@ -2924,7 +2946,7 @@ def test_to_dask_array_unknown(as_frame):
 @pytest.mark.parametrize(
     "lengths,as_frame,meta",
     [
-        ([2, 3], False, None),
+        ([2, 2, 1], False, None),
         (True, False, None),
         (True, False, np.array([], dtype="f4")),
     ],
@@ -2939,7 +2961,7 @@ def test_to_dask_array(meta, as_frame, lengths):
     result = a.to_dask_array(lengths=lengths, meta=meta)
     assert isinstance(result, da.Array)
 
-    expected_chunks = ((2, 3),)
+    expected_chunks = ((2, 2, 1),)
 
     if as_frame:
         expected_chunks = expected_chunks + ((1,),)
@@ -2967,19 +2989,22 @@ def test_apply():
     )
 
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(
             ddf.apply(lambda xy: xy[0] + xy[1], axis=1),
             df.apply(lambda xy: xy[0] + xy[1], axis=1),
         )
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.apply(lambda xy: xy, axis=1), df.apply(lambda xy: xy, axis=1))
 
     # specify meta
     func = lambda x: pd.Series([x, x])
     assert_eq(ddf.x.apply(func, meta=[(0, int), (1, int)]), df.x.apply(func))
     # inference
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         assert_eq(ddf.x.apply(func), df.x.apply(func))
 
     # axis=0
@@ -3000,9 +3025,9 @@ def test_apply_warns():
         ddf.apply(func, axis=1)
     assert len(w) == 1
 
-    with pytest.warns(None) as w:
+    with warnings.catch_warnings(record=True) as record:
         ddf.apply(func, axis=1, meta=(None, int))
-    assert len(w) == 0
+    assert not record
 
     with pytest.warns(UserWarning) as w:
         ddf.apply(lambda x: x, axis=1)
@@ -3089,7 +3114,7 @@ def test_cov():
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.cov(db)
     res2 = da.cov(db, split_every=2)
@@ -3133,7 +3158,7 @@ def test_corr():
     a = df.A
     b = df.B
     da = dd.from_pandas(a, npartitions=6)
-    db = dd.from_pandas(b, npartitions=7)
+    db = dd.from_pandas(b, npartitions=6)
 
     res = da.corr(db)
     res2 = da.corr(db, split_every=2)
@@ -3172,11 +3197,11 @@ def test_corr_same_name():
 def test_cov_corr_meta():
     df = pd.DataFrame(
         {
-            "a": np.array([1, 2, 3]),
-            "b": np.array([1.0, 2.0, 3.0], dtype="f4"),
-            "c": np.array([1.0, 2.0, 3.0]),
+            "a": np.array([1, 2, 3, 4]),
+            "b": np.array([1.0, 2.0, 3.0, 4.0], dtype="f4"),
+            "c": np.array([1.0, 2.0, 3.0, 4.0]),
         },
-        index=pd.Index([1, 2, 3], name="myindex"),
+        index=pd.Index([1, 2, 3, 4], name="myindex"),
     )
     ddf = dd.from_pandas(df, npartitions=2)
     assert_eq(ddf.corr(), df.corr())
@@ -3238,14 +3263,16 @@ def test_apply_infer_columns():
         return pd.Series([x.sum(), x.mean()], index=["sum", "mean"])
 
     # DataFrame to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(return_df, axis=1)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["sum", "mean"]))
     assert_eq(result, df.apply(return_df, axis=1))
 
     # DataFrame to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.apply(lambda x: 1, axis=1)
     assert isinstance(result, dd.Series)
     assert result.name is None
@@ -3255,14 +3282,16 @@ def test_apply_infer_columns():
         return pd.Series([x * 2, x * 3], index=["x2", "x3"])
 
     # Series to completely different DataFrame
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(return_df2)
     assert isinstance(result, dd.DataFrame)
     tm.assert_index_equal(result.columns, pd.Index(["x2", "x3"]))
     assert_eq(result, df.x.apply(return_df2))
 
     # Series to Series
-    with pytest.warns(None):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", UserWarning)
         result = ddf.x.apply(lambda x: 1)
     assert isinstance(result, dd.Series)
     assert result.name == "x"
@@ -3617,11 +3646,27 @@ def test_categorize_info():
         {"x": [1, 2, 3, 4], "y": pd.Series(list("aabc")), "z": pd.Series(list("aabc"))},
         index=[0, 1, 2, 3],
     )
-    ddf = dd.from_pandas(df, npartitions=4).categorize(["y"])
+
+    # Use from_map to construct custom partitioning
+    def myfunc(bounds):
+        start, stop = bounds
+        return df.iloc[start:stop]
+
+    ddf = dd.from_map(
+        myfunc,
+        [(0, 1), (1, 2), (2, 4)],
+        divisions=[0, 1, 2, 3],
+    ).categorize(["y"])
 
     # Verbose=False
     buf = StringIO()
     ddf.info(buf=buf, verbose=True)
+
+    if platform.architecture()[0] == "32bit":
+        memory_usage = "312.0"
+    else:
+        memory_usage = "496.0"
+
     expected = (
         "<class 'dask.dataframe.core.DataFrame'>\n"
         "Int64Index: 4 entries, 0 to 3\n"
@@ -3632,7 +3677,7 @@ def test_categorize_info():
         " 1   y       4 non-null      category\n"
         " 2   z       4 non-null      object\n"
         "dtypes: category(1), object(1), int64(1)\n"
-        "memory usage: 496.0 bytes\n"
+        "memory usage: {} bytes\n".format(memory_usage)
     )
     assert buf.getvalue() == expected
 
@@ -3651,6 +3696,48 @@ def test_timeseries_sorted():
     ddf = dd.from_pandas(df.reset_index(), npartitions=2)
     df.index.name = "index"
     assert_eq(ddf.set_index("index", sorted=True, drop=True), df)
+
+
+def test_index_errors():
+    df = _compat.makeTimeDataFrame()
+    ddf = dd.from_pandas(df.reset_index(), npartitions=2)
+    with pytest.raises(NotImplementedError, match="You tried to index with this index"):
+        ddf.set_index([["A"]])  # should index with ["A"] instead of [["A"]]
+    with pytest.raises(NotImplementedError, match="You tried to index with a frame"):
+        ddf.set_index(ddf[["A"]])  # should index with ddf["A"] instead of ddf[["A"]]
+    with pytest.raises(KeyError, match="has no column"):
+        ddf.set_index("foo")  # a column that doesn't exist
+    with pytest.raises(KeyError, match="has no column"):
+        # column name doesn't need to be a string, but anyhow a KeyError should be raised if not found
+        ddf.set_index(0)
+
+
+@pytest.mark.parametrize("null_value", [None, pd.NaT, pd.NA])
+def test_index_nulls(null_value):
+    "Setting the index with some non-numeric null raises error"
+    df = pd.DataFrame(
+        {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
+    )
+    # an object column all set to nulls fails
+    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
+        ddf.set_index("non_numeric")
+    # an object column with only some nulls also fails
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.raises(NotImplementedError, match="presence of nulls"):
+        ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
+
+
+def test_set_index_with_index():
+    "Setting the index with the existing index is a no-op"
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]}).set_index("x")
+    ddf = dd.from_pandas(df, npartitions=2)
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf2 = ddf.set_index(ddf.index)
+    assert ddf2 is ddf
+    with pytest.warns(UserWarning, match="this is a no-op"):
+        ddf = ddf.set_index("x", drop=False)
+    assert ddf2 is ddf
 
 
 def test_column_assignment():
@@ -4114,18 +4201,36 @@ def test_del():
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("deep", [True, False])
-def test_memory_usage(index, deep):
-    df = pd.DataFrame({"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]})
+def test_memory_usage_dataframe(index, deep):
+    df = pd.DataFrame(
+        {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]},
+        # Dask will use more memory for a multi-partition
+        # RangeIndex, so we must set an index explicitly
+        index=[1, 2, 3],
+    )
     ddf = dd.from_pandas(df, npartitions=2)
+    expected = df.memory_usage(index=index, deep=deep)
+    result = ddf.memory_usage(index=index, deep=deep)
+    assert_eq(expected, result)
 
-    assert_eq(
-        df.memory_usage(index=index, deep=deep),
-        ddf.memory_usage(index=index, deep=deep),
-    )
-    assert (
-        df.x.memory_usage(index=index, deep=deep)
-        == ddf.x.memory_usage(index=index, deep=deep).compute()
-    )
+
+@pytest.mark.parametrize("index", [True, False])
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage_series(index, deep):
+    s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    ds = dd.from_pandas(s, npartitions=2)
+    expected = s.memory_usage(index=index, deep=deep)
+    result = ds.memory_usage(index=index, deep=deep)
+    assert_eq(expected, result)
+
+
+@pytest.mark.parametrize("deep", [True, False])
+def test_memory_usage_index(deep):
+    s = pd.Series([1, 2, 3, 4], index=["a", "b", "c", "d"])
+    ds = dd.from_pandas(s, npartitions=2)
+    expected = s.index.memory_usage(deep=deep)
+    result = ds.index.memory_usage(deep=deep)
+    assert_eq(expected, result)
 
 
 @pytest.mark.parametrize("index", [True, False])
@@ -4249,6 +4354,16 @@ def test_to_timedelta():
     s = pd.Series([1, 2, "this will error"])
     ds = dd.from_pandas(s, npartitions=2)
     assert_eq(pd.to_timedelta(s, errors="coerce"), dd.to_timedelta(ds, errors="coerce"))
+
+    s = pd.Series(["1", 2, "1 day 2 hours"])
+    ds = dd.from_pandas(s, npartitions=2)
+    assert_eq(pd.to_timedelta(s), dd.to_timedelta(ds))
+
+    if PANDAS_GT_110:
+        with pytest.raises(
+            ValueError, match="unit must not be specified if the input contains a str"
+        ):
+            dd.to_timedelta(ds, unit="s").compute()
 
 
 @pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
@@ -4521,7 +4636,9 @@ def test_meta_nonempty_uses_meta_value_if_provided():
     dask_offsets = dd.from_pandas(offsets, npartitions=1)
     dask_offsets._meta = offsets.head()
 
-    with pytest.warns(None):  # not vectorized performance warning
+    with warnings.catch_warnings():  # not vectorized performance warning
+        warnings.simplefilter("ignore", PerformanceWarning)
+        warnings.simplefilter("ignore", UserWarning)
         expected = base + offsets
         actual = dask_base + dask_offsets
         assert_eq(expected, actual)
@@ -5078,13 +5195,26 @@ def test_index_is_monotonic_numeric():
 
 
 def test_index_is_monotonic_dt64():
-    s = pd.Series(1, index=pd.date_range("20130101", periods=10))
-    ds = dd.from_pandas(s, npartitions=5, sort=False)
+    s = pd.Series(1, index=pd.date_range("20130101", periods=20))
+    ds = dd.from_pandas(s, npartitions=10, sort=False)
     assert_eq(s.index.is_monotonic_increasing, ds.index.is_monotonic_increasing)
 
     s_2 = pd.Series(1, index=list(reversed(s)))
-    ds_2 = dd.from_pandas(s_2, npartitions=5, sort=False)
+    ds_2 = dd.from_pandas(s_2, npartitions=10, sort=False)
     assert_eq(s_2.index.is_monotonic_decreasing, ds_2.index.is_monotonic_decreasing)
+
+
+def test_is_monotonic_empty_partitions():
+    df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [4, 3, 2, 1]})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # slice it to get empty partitions
+    df = df[df["a"] >= 3]
+    ddf = ddf[ddf["a"] >= 3]
+    assert_eq(df["a"].is_monotonic_increasing, ddf["a"].is_monotonic_increasing)
+    assert_eq(df.index.is_monotonic_increasing, ddf.index.is_monotonic_increasing)
+    assert_eq(df["a"].is_monotonic_decreasing, ddf["a"].is_monotonic_decreasing)
+    assert_eq(df.index.is_monotonic_decreasing, ddf.index.is_monotonic_decreasing)
 
 
 def test_custom_map_reduce():
@@ -5116,3 +5246,44 @@ def test_custom_map_reduce():
         .compute()[0]
     )
     assert result == {"x": 14, "y": 64}
+
+
+@pytest.mark.parametrize("dtype", [int, float])
+@pytest.mark.parametrize("orient", ["columns", "index"])
+@pytest.mark.parametrize("npartitions", [2, 5])
+def test_from_dict(dtype, orient, npartitions):
+    data = {"a": range(10), "b": range(10)}
+    expected = pd.DataFrame.from_dict(data, dtype=dtype, orient=orient)
+    result = dd.DataFrame.from_dict(
+        data, npartitions=npartitions, dtype=dtype, orient=orient
+    )
+    if orient == "index":
+        # DataFrame only has two rows with this orientation
+        assert result.npartitions == min(npartitions, 2)
+    else:
+        assert result.npartitions == npartitions
+    assert_eq(result, expected)
+
+
+def test_from_dict_raises():
+    s = pd.Series(range(10))
+    ds = dd.from_pandas(s, npartitions=2)
+    with pytest.raises(NotImplementedError, match="Dask collections as inputs"):
+        dd.DataFrame.from_dict({"a": ds}, npartitions=2)
+
+
+def test_empty():
+    with pytest.raises(NotImplementedError, match="may be expensive"):
+        d.empty
+    with pytest.raises(AttributeError, match="may be expensive"):
+        d.empty
+
+
+def test_repr_materialize():
+    # DataFrame/Series repr should not materialize
+    # any layers in timeseries->shuffle->getitem
+    s = timeseries(end="2000-01-03").shuffle("id", shuffle="tasks")["id"]
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])
+    s.__repr__()
+    s.to_frame().__repr__()
+    assert all([not l.is_materialized() for l in s.dask.layers.values()])

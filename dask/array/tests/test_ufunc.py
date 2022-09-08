@@ -1,4 +1,5 @@
 import pickle
+import warnings
 from functools import partial
 from operator import add
 
@@ -61,6 +62,7 @@ binary_ufuncs = [
     "greater_equal",
     "hypot",
     "ldexp",
+    "left_shift",
     "less",
     "less_equal",
     "logaddexp",
@@ -76,12 +78,14 @@ binary_ufuncs = [
     "not_equal",
     "power",
     "remainder",
+    "right_shift",
     "subtract",
     "true_divide",
     "float_power",
 ]
 
 unary_ufuncs = [
+    "abs",
     "absolute",
     "arccos",
     "arccosh",
@@ -113,6 +117,7 @@ unary_ufuncs = [
     "log2",
     "logical_not",
     "negative",
+    "positive",
     "rad2deg",
     "radians",
     "reciprocal",
@@ -140,12 +145,14 @@ def test_unary_ufunc(ufunc):
     arr = np.random.randint(1, 100, size=(20, 20))
     darr = da.from_array(arr, 3)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying Dask ufunc doesn't trigger computation
         assert isinstance(dafunc(darr), da.Array)
         assert_eq(dafunc(darr), npfunc(arr), equal_nan=True)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying NumPy ufunc is lazy
         if isinstance(npfunc, np.ufunc):
             assert isinstance(npfunc(darr), da.Array)
@@ -153,7 +160,8 @@ def test_unary_ufunc(ufunc):
             assert isinstance(npfunc(darr), np.ndarray)
         assert_eq(npfunc(darr), npfunc(arr), equal_nan=True)
 
-    with pytest.warns(None):  # some invalid values (arccos, arcsin, etc.)
+    with warnings.catch_warnings():  # some invalid values (arccos, arcsin, etc.)
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         # applying Dask ufunc to normal ndarray triggers computation
         assert isinstance(dafunc(arr), np.ndarray)
         assert_eq(dafunc(arr), npfunc(arr), equal_nan=True)
@@ -186,14 +194,16 @@ def test_binary_ufunc(ufunc):
     assert isinstance(dafunc(darr1, 10), da.Array)
     assert_eq(dafunc(darr1, 10), npfunc(arr1, 10))
 
-    with pytest.warns(None):  # overflow in ldexp
+    with warnings.catch_warnings():  # overflow in ldexp
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         assert isinstance(dafunc(10, darr1), da.Array)
         assert_eq(dafunc(10, darr1), npfunc(10, arr1))
 
     assert isinstance(dafunc(arr1, 10), np.ndarray)
     assert_eq(dafunc(arr1, 10), npfunc(arr1, 10))
 
-    with pytest.warns(None):  # overflow in ldexp
+    with warnings.catch_warnings():  # overflow in ldexp
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
         assert isinstance(dafunc(10, arr1), np.ndarray)
         assert_eq(dafunc(10, arr1), npfunc(10, arr1))
 

@@ -19,33 +19,34 @@ import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.sizeof import SimpleSizeof, sizeof
-
-from ..utils import DaskBackendEntrypoint, is_arraylike, typename
-from .core import DataFrame, Index, Scalar, Series, _Frame
-from .dispatch import (
+from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
+from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
     dataframe_backend_dispatch,
     get_parallel_type,
     group_split_dispatch,
+    grouper_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    pyarrow_schema_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
-from .extensions import make_array_nonempty, make_scalar
-from .utils import (
+from dask.dataframe.extensions import make_array_nonempty, make_scalar
+from dask.dataframe.utils import (
     _empty_series,
     _nonempty_scalar,
     _scalar_from_dtype,
     is_float_na_dtype,
     is_integer_na_dtype,
 )
+from dask.sizeof import SimpleSizeof, sizeof
+from dask.utils import DaskBackendEntrypoint, is_arraylike, is_series_like, typename
 
 
 def set_backend(df_backend):
@@ -73,12 +74,15 @@ def _(x):
 
 @make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def _(x, index=None):
-    return x.iloc[:0]
+    out = x.iloc[:0].copy(deep=True)
+    # index isn't copied by default in pandas, even if deep=true
+    out.index = out.index.copy(deep=True)
+    return out
 
 
 @make_meta_dispatch.register(pd.Index)
 def _(x, index=None):
-    return x[0:0]
+    return x[0:0].copy(deep=True)
 
 
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
@@ -88,6 +92,13 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@pyarrow_schema_dispatch.register((pd.DataFrame,))
+def get_pyarrow_schema_pandas(obj):
+    import pyarrow as pa
+
+    return pa.Schema.from_pandas(obj)
 
 
 @meta_nonempty.register(pd.DatetimeTZDtype)
@@ -183,7 +194,7 @@ def meta_nonempty_dataframe(x):
     idx = meta_nonempty(x.index)
     dt_s_dict = dict()
     data = dict()
-    for i, c in enumerate(x.columns):
+    for i in range(len(x.columns)):
         series = x.iloc[:, i]
         dt = series.dtype
         if dt not in dt_s_dict:
@@ -368,8 +379,10 @@ class ShuffleGroupResult(SimpleSizeof, dict):
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    if is_series_like(c):
+        c = c.values
     indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
+        c.astype(np.intp, copy=False), k
     )
     df2 = df.take(indexer)
     locations = locations.cumsum()
@@ -543,6 +556,11 @@ def tolist_pandas(obj):
 )
 def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
+
+
+@grouper_dispatch.register((pd.DataFrame, pd.Series))
+def get_grouper_pandas(obj):
+    return pd.core.groupby.Grouper
 
 
 @percentile_lookup.register((pd.Series, pd.Index))

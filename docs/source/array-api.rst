@@ -9,6 +9,8 @@ Top level functions
 .. autosummary::
    :toctree: generated/
 
+   abs
+   absolute
    add
    all
    allclose
@@ -120,6 +122,7 @@ Top level functions
    isposinf
    isreal
    ldexp
+   left_shift
    less
    linspace
    log
@@ -172,6 +175,7 @@ Top level functions
    percentile
    ~core.PerformanceWarning
    piecewise
+   positive
    power
    prod
    ptp
@@ -187,6 +191,7 @@ Top level functions
    repeat
    reshape
    result_type
+   right_shift
    rint
    roll
    rollaxis
@@ -351,6 +356,7 @@ Masked Arrays
    :toctree: generated/
 
    ma.average
+   ma.empty_like
    ma.filled
    ma.fix_invalid
    ma.getdata
@@ -367,7 +373,9 @@ Masked Arrays
    ma.masked_outside
    ma.masked_values
    ma.masked_where
+   ma.ones_like
    ma.set_fill_value
+   ma.zeros_like
 
 Random
 ~~~~~~

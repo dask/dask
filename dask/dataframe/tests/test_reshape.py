@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -25,6 +27,15 @@ def test_get_dummies(data):
     res = dd.get_dummies(ddata)
     assert_eq(res, exp)
     tm.assert_index_equal(res.columns, exp.columns)
+
+
+def test_get_dummies_categories_order():
+    df = pd.DataFrame({"a": [0.0, 0.0, 1.0, 1.0, 0.0], "b": [1.0, 0.0, 1.0, 0.0, 1.0]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf = ddf.categorize(columns=["a", "b"])
+    res_p = pd.get_dummies(df.astype("category"))
+    res_d = dd.get_dummies(ddf)
+    assert_eq(res_d, res_p)
 
 
 def test_get_dummies_object():
@@ -85,18 +96,15 @@ def check_pandas_issue_45618_warning(test_func):
     # See https://github.com/pandas-dev/pandas/issues/45618 for more details.
 
     def decorator():
-        with pytest.warns(None) as record:
+        with warnings.catch_warnings(record=True) as record:
             test_func()
-
         if PANDAS_VERSION == parse_version("1.4.0"):
-            assert len(record)
-            assert all(r.category is FutureWarning for r in record)
             assert all(
                 "In a future version, passing a SparseArray" in str(r.message)
                 for r in record
             )
         else:
-            assert len(record) == 0
+            assert not record
 
     return decorator
 

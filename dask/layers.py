@@ -4,17 +4,18 @@ import functools
 import math
 import operator
 from collections import defaultdict
+from collections.abc import Callable
 from itertools import product
 from typing import Any
 
 import tlz as toolz
 from tlz.curried import map
 
-from .base import tokenize
-from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
-from .core import flatten, keys_in_tasks
-from .highlevelgraph import Layer
-from .utils import (
+from dask.base import tokenize
+from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
+from dask.core import flatten, keys_in_tasks
+from dask.highlevelgraph import Layer
+from dask.utils import (
     apply,
     cached_cumsum,
     concrete,
@@ -401,9 +402,9 @@ class SimpleShuffleLayer(Layer):
         # depth-first delays the freeing of the result of `shuffle_group()`
         # until the end of the shuffling.
         #
-        # We address this by manually setting a high "prioroty" to the
+        # We address this by manually setting a high "priority" to the
         # `getitem()` ("split") tasks, using annotations. This forces a
-        # breadth-first scheduling of the tasks tath directly depend on
+        # breadth-first scheduling of the tasks that directly depend on
         # the `shuffle_group()` output, allowing that data to be freed
         # much earlier.
         #
@@ -496,7 +497,7 @@ class SimpleShuffleLayer(Layer):
         """Cull a SimpleShuffleLayer HighLevelGraph layer.
 
         The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
+        tasks to produce the keys (indices) included in `parts_out`.
         Therefore, "culling" the layer only requires us to reset this
         parameter.
         """
@@ -1005,7 +1006,7 @@ class BroadcastJoinLayer(Layer):
 
         For a broadcast join, output partitions always depend on
         all partitions of the broadcasted collection, but only one
-        partition of the "other" collecction.
+        partition of the "other" collection.
         """
         # Get broadcast info
         bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
@@ -1036,7 +1037,7 @@ class BroadcastJoinLayer(Layer):
         """Cull a BroadcastJoinLayer HighLevelGraph layer.
 
         The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
+        tasks to produce the keys (indices) included in `parts_out`.
         Therefore, "culling" the layer only requires us to reset this
         parameter.
         """
@@ -1138,7 +1139,7 @@ class DataFrameIOLayer(Blockwise):
         Name to use for the constructed layer.
     columns : str, list or None
         Field name(s) to read in as columns in the output.
-    inputs : list[tuple]
+    inputs : list or BlockwiseDep
         List of arguments to be passed to ``io_func`` so
         that the materialized task to produce partition ``i``
         will be: ``(<io_func>, inputs[i])``.  Note that each
@@ -1146,6 +1147,8 @@ class DataFrameIOLayer(Blockwise):
     io_func : callable
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
+        Column projection will be supported for functions
+        that satisfy the ``DataFrameIOFunction`` protocol.
     label : str (optional)
         String to use as a prefix in the place-holder collection
         name. If nothing is specified (default), "subset-" will
@@ -1176,7 +1179,7 @@ class DataFrameIOLayer(Blockwise):
         annotations=None,
     ):
         self.name = name
-        self.columns = columns
+        self._columns = columns
         self.inputs = inputs
         self.io_func = io_func
         self.label = label
@@ -1184,11 +1187,14 @@ class DataFrameIOLayer(Blockwise):
         self.annotations = annotations
         self.creation_info = creation_info
 
-        # Define mapping between key index and "part"
-        io_arg_map = BlockwiseDepDict(
-            {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
-        )
+        if not isinstance(inputs, BlockwiseDep):
+            # Define mapping between key index and "part"
+            io_arg_map = BlockwiseDepDict(
+                {(i,): inp for i, inp in enumerate(self.inputs)},
+                produces_tasks=self.produces_tasks,
+            )
+        else:
+            io_arg_map = inputs
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -1201,22 +1207,32 @@ class DataFrameIOLayer(Blockwise):
             annotations=annotations,
         )
 
+    @property
+    def columns(self):
+        """Current column projection for this layer"""
+        return self._columns
+
     def project_columns(self, columns):
         """Produce a column projection for this IO layer.
         Given a list of required output columns, this method
         returns the projected layer.
         """
-        if columns and (self.columns is None or columns < set(self.columns)):
+        from dask.dataframe.io.utils import DataFrameIOFunction
 
-            # Apply column projection in IO function
-            try:
-                io_func = self.io_func.project_columns(list(columns))
-            except AttributeError:
+        columns = list(columns)
+
+        if self.columns is None or set(self.columns).issuperset(columns):
+
+            # Apply column projection in IO function.
+            # Must satisfy `DataFrameIOFunction` protocol
+            if isinstance(self.io_func, DataFrameIOFunction):
+                io_func = self.io_func.project_columns(columns)
+            else:
                 io_func = self.io_func
 
             layer = DataFrameIOLayer(
-                (self.label or "subset-") + tokenize(self.name, columns),
-                list(columns),
+                (self.label or "subset") + "-" + tokenize(self.name, columns),
+                columns,
                 self.inputs,
                 io_func,
                 label=self.label,
@@ -1274,10 +1290,10 @@ class DataFrameTreeReduction(Layer):
 
     name: str
     name_input: str
-    npartitions_input: str
-    concat_func: callable
-    tree_node_func: callable
-    finalize_func: callable | None
+    npartitions_input: int
+    concat_func: Callable
+    tree_node_func: Callable
+    finalize_func: Callable | None
     split_every: int
     split_out: int
     output_partitions: list[int]
@@ -1289,10 +1305,10 @@ class DataFrameTreeReduction(Layer):
         self,
         name: str,
         name_input: str,
-        npartitions_input: str,
-        concat_func: callable,
-        tree_node_func: callable,
-        finalize_func: callable | None = None,
+        npartitions_input: int,
+        concat_func: Callable,
+        tree_node_func: Callable,
+        finalize_func: Callable | None = None,
         split_every: int = 32,
         split_out: int | None = None,
         output_partitions: list[int] | None = None,
@@ -1303,11 +1319,11 @@ class DataFrameTreeReduction(Layer):
         self.name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
-        self.concat_func = concat_func
-        self.tree_node_func = tree_node_func
+        self.concat_func = concat_func  # type: ignore
+        self.tree_node_func = tree_node_func  # type: ignore
         self.finalize_func = finalize_func
         self.split_every = split_every
-        self.split_out = split_out
+        self.split_out = split_out  # type: ignore
         self.output_partitions = (
             list(range(self.split_out or 1))
             if output_partitions is None
@@ -1321,7 +1337,7 @@ class DataFrameTreeReduction(Layer):
         self.widths = [parts]
         while parts > 1:
             parts = math.ceil(parts / self.split_every)
-            self.widths.append(parts)
+            self.widths.append(int(parts))
         self.height = len(self.widths)
 
     def _make_key(self, *name_parts, split=0):

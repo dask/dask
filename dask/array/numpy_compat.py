@@ -3,12 +3,13 @@ import warnings
 import numpy as np
 from packaging.version import parse as parse_version
 
-from ..utils import derived_from
+from dask.utils import derived_from
 
 _np_version = parse_version(np.__version__)
 _numpy_120 = _np_version >= parse_version("1.20.0")
 _numpy_121 = _np_version >= parse_version("1.21.0")
 _numpy_122 = _np_version >= parse_version("1.22.0")
+_numpy_123 = _np_version >= parse_version("1.23.0")
 
 
 # Taken from scikit-learn:
@@ -32,7 +33,7 @@ try:
 
 except TypeError:
     # Divide with dtype doesn't work on Python 3
-    def divide(x1, x2, out=None, dtype=None):
+    def divide(x1, x2, out=None, dtype=None):  # type: ignore
         """Implementation of numpy.divide that works with dtype kwarg.
 
         Temporary compatibility fix for a bug in numpy's version. See
@@ -42,8 +43,8 @@ except TypeError:
             x = x.astype(dtype)
         return x
 
-    ma_divide = np.ma.core._DomainedBinaryOperation(
-        divide, np.ma.core._DomainSafeDivide(), 0, 1
+    ma_divide = np.ma.core._DomainedBinaryOperation(  # type: ignore
+        divide, np.ma.core._DomainSafeDivide(), 0, 1  # type: ignore
     )
 
 
@@ -271,3 +272,11 @@ def percentile(a, q, method="linear"):
         return np.percentile(a, q, method=method)
     else:
         return np.percentile(a, q, interpolation=method)
+
+
+if _numpy_120:
+    from numpy.typing import ArrayLike, DTypeLike
+else:
+    from typing import Any
+
+    ArrayLike = DTypeLike = Any

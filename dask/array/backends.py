@@ -1,22 +1,25 @@
+import math
 from functools import cached_property
 
 import numpy as np
 
 import dask.array as da
-
-from ..utils import DaskBackendEntrypoint
-from .dispatch import (
+from dask.array import chunk
+from dask.array.dispatch import (
     array_backend_dispatch,
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
     empty_lookup,
+    nannumel_lookup,
+    numel_lookup,
     percentile_lookup,
     tensordot_lookup,
 )
-from .numpy_compat import divide as np_divide
-from .numpy_compat import ma_divide
-from .percentile import _percentile
+from dask.array.numpy_compat import divide as np_divide
+from dask.array.numpy_compat import ma_divide
+from dask.array.percentile import _percentile
+from dask.utils import DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -118,6 +121,8 @@ def _tensordot(a, b, axes=2):
 
 @tensordot_lookup.register_lazy("cupy")
 @concatenate_lookup.register_lazy("cupy")
+@nannumel_lookup.register_lazy("cupy")
+@numel_lookup.register_lazy("cupy")
 def register_cupy():
     import cupy
 
@@ -126,6 +131,8 @@ def register_cupy():
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
     percentile_lookup.register(cupy.ndarray, percentile)
+    numel_lookup.register(cupy.ndarray, _numel_arraylike)
+    nannumel_lookup.register(cupy.ndarray, _nannumel)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
@@ -166,11 +173,18 @@ def register_cupyx():
 
 @tensordot_lookup.register_lazy("sparse")
 @concatenate_lookup.register_lazy("sparse")
+@nannumel_lookup.register_lazy("sparse")
+@numel_lookup.register_lazy("sparse")
 def register_sparse():
     import sparse
 
     concatenate_lookup.register(sparse.COO, sparse.concatenate)
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
+    # Enforce dense ndarray for the numel result, since the sparse
+    # array will wind up being dense with an unpredictable fill_value.
+    # https://github.com/dask/dask/issues/7169
+    numel_lookup.register(sparse.COO, _numel_ndarray)
+    nannumel_lookup.register(sparse.COO, _nannumel_sparse)
 
 
 @tensordot_lookup.register_lazy("scipy")
@@ -209,6 +223,83 @@ def _tensordot_scipy_sparse(a, b, axes):
         return a * b
     elif a_axis == 1 and b_axis == 1:
         return a * b.T
+
+
+@numel_lookup.register(np.ma.masked_array)
+def _numel_masked(x, **kwargs):
+    """Numel implementation for masked arrays."""
+    return chunk.sum(np.ones_like(x), **kwargs)
+
+
+@numel_lookup.register((object, np.ndarray))
+def _numel_ndarray(x, **kwargs):
+    """Numel implementation for arrays that want to return numel of type ndarray."""
+    return _numel(x, coerce_np_ndarray=True, **kwargs)
+
+
+def _numel_arraylike(x, **kwargs):
+    """Numel implementation for arrays that want to return numel of the same type."""
+    return _numel(x, coerce_np_ndarray=False, **kwargs)
+
+
+def _numel(x, coerce_np_ndarray: bool, **kwargs):
+    """
+    A reduction to count the number of elements.
+
+    This has an additional kwarg in coerce_np_ndarray, which determines
+    whether to ensure that the resulting array is a numpy.ndarray, or whether
+    we allow it to be other array types via `np.full_like`.
+    """
+    shape = x.shape
+    keepdims = kwargs.get("keepdims", False)
+    axis = kwargs.get("axis", None)
+    dtype = kwargs.get("dtype", np.float64)
+
+    if axis is None:
+        prod = np.prod(shape, dtype=dtype)
+        if keepdims is False:
+            return prod
+
+        if coerce_np_ndarray:
+            return np.full(shape=(1,) * len(shape), fill_value=prod, dtype=dtype)
+        else:
+            return np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
+
+    if not isinstance(axis, (tuple, list)):
+        axis = [axis]
+
+    prod = math.prod(shape[dim] for dim in axis)
+    if keepdims is True:
+        new_shape = tuple(
+            shape[dim] if dim not in axis else 1 for dim in range(len(shape))
+        )
+    else:
+        new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
+
+    if coerce_np_ndarray:
+        return np.broadcast_to(np.array(prod, dtype=dtype), new_shape)
+    else:
+        return np.full_like(x, prod, shape=new_shape, dtype=dtype)
+
+
+@nannumel_lookup.register((object, np.ndarray))
+def _nannumel(x, **kwargs):
+    """A reduction to count the number of elements, excluding nans"""
+    return chunk.sum(~(np.isnan(x)), **kwargs)
+
+
+def _nannumel_sparse(x, **kwargs):
+    """
+    A reduction to count the number of elements in a sparse array, excluding nans.
+    This will in general result in a dense matrix with an unpredictable fill value.
+    So make it official and convert it to dense.
+
+    https://github.com/dask/dask/issues/7169
+    """
+    n = _nannumel(x, **kwargs)
+    # If all dimensions are contracted, this will just be a number, otherwise we
+    # want to densify it.
+    return n.todense() if hasattr(n, "todense") else n
 
 
 class NumpyBackendEntrypoint(DaskBackendEntrypoint):

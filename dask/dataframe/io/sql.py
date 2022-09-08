@@ -3,13 +3,12 @@ import warnings
 import numpy as np
 import pandas as pd
 
-import dask
-from dask.delayed import tokenize
-
-from ... import delayed
-from .. import methods
-from ..dispatch import dataframe_backend_dispatch
-from .io import from_delayed, from_pandas
+from dask.base import compute as dask_compute
+from dask.dataframe import methods
+from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.io.io import from_delayed, from_pandas
+from dask.delayed import delayed, tokenize
+from dask.utils import parse_bytes
 
 
 def read_sql_query_pandas(
@@ -145,12 +144,7 @@ def read_sql_query_pandas(
             q = sa.sql.select([sa.sql.func.count(index)]).select_from(sql.subquery())
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
-                int(
-                    round(
-                        count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
-                    )
-                )
-                or 1
+                int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
             )
         if dtype.kind == "M":
             divisions = methods.tolist(
@@ -163,7 +157,7 @@ def read_sql_query_pandas(
             divisions[0] = mini
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
-            divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+            divisions = np.linspace(mini, maxi, npartitions + 1, dtype=dtype).tolist()
         else:
             raise TypeError(
                 'Provided index column is of type "{}".  If divisions is not provided the '
@@ -658,12 +652,7 @@ def _old_read_sql_table(
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
-                int(
-                    round(
-                        count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
-                    )
-                )
-                or 1
+                int(round(count * bytes_per_row / parse_bytes(bytes_per_chunk))) or 1
             )
         if dtype.kind == "M":
             divisions = methods.tolist(
@@ -801,9 +790,9 @@ def to_sql(
     Create a table from scratch with 4 rows.
 
     >>> import pandas as pd
+    >>> import dask.dataframe as dd
     >>> df = pd.DataFrame([ {'i':i, 's':str(i)*2 } for i in range(4) ])
-    >>> from dask.dataframe import from_pandas
-    >>> ddf = from_pandas(df, npartitions=2)
+    >>> ddf = dd.from_pandas(df, npartitions=2)
     >>> ddf  # doctest: +SKIP
     Dask DataFrame Structure:
                        i       s
@@ -872,10 +861,10 @@ def to_sql(
                 )
             )
             last = result[-1]
-    result = dask.delayed(result)
+    result = delayed(result)
 
     if compute:
-        dask.compute(result)
+        dask_compute(result)
     else:
         return result
 

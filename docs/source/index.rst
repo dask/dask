@@ -134,11 +134,10 @@ messy situations in everyday problems.
    :hidden:
    :caption: Getting Started
 
-   install.rst
+   Install Dask <install.rst>
    10-minutes-to-dask.rst
    presentations.rst
-   best-practices.rst
-   how-to/index.rst
+   Best Practices <best-practices.rst>
    faq.rst
 
 .. toctree::
@@ -148,12 +147,20 @@ messy situations in everyday problems.
 
    array.rst
    bag.rst
-   dataframe.rst
-   delayed.rst
+   DataFrame <dataframe.rst>
+   Delayed <delayed.rst>
    futures.rst
+   deploying.rst
+
+.. toctree::
+   :maxdepth: 1
+   :hidden:
+   :caption: Internals
+
+   understanding-performance.rst
    scheduling.rst
    graphs.rst
-   deploying.rst
+   debugging-performance.rst
    internals.rst
 
 .. toctree::
@@ -165,6 +172,8 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
+   how-to/index.rst
+   maintainers.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt

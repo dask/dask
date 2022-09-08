@@ -8,8 +8,7 @@ import pandas as pd
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
-
-from ..utils import BackendDispatch, Dispatch
+from dask.utils import BackendDispatch, Dispatch
 
 # Compute Dispatch Funcitons
 make_meta_dispatch = Dispatch("make_meta_dispatch")
@@ -23,6 +22,8 @@ concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
+grouper_dispatch = Dispatch("grouper")
+pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
 
 
 def concat(

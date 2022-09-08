@@ -5,13 +5,13 @@ from itertools import zip_longest
 import pandas as pd
 from fsspec.core import open_files
 
-from ...base import compute as dask_compute
-from ...bytes import read_bytes
-from ...core import flatten
-from ...delayed import delayed
-from ..dispatch import dataframe_backend_dispatch
-from ..utils import insert_meta_param_description, make_meta
-from .io import from_delayed
+from dask.base import compute as dask_compute
+from dask.bytes import read_bytes
+from dask.core import flatten
+from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.io.io import from_delayed
+from dask.dataframe.utils import insert_meta_param_description, make_meta
+from dask.delayed import delayed
 
 
 def to_json(

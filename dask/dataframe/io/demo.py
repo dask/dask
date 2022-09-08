@@ -3,11 +3,11 @@ import importlib
 import numpy as np
 import pandas as pd
 
-from ...highlevelgraph import HighLevelGraph
-from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
-from ..core import new_dd_object, tokenize
-from ..dispatch import dataframe_backend_dispatch
+from dask.dataframe.core import tokenize
+from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.io.io import from_map
+from dask.dataframe.io.utils import DataFrameIOFunction
+from dask.utils import random_state_data
 
 __all__ = ["make_timeseries"]
 
@@ -67,18 +67,22 @@ make = {
 }
 
 
-class MakeTimeseriesPart:
+class MakeTimeseriesPart(DataFrameIOFunction):
     """
     Wrapper Class for ``make_timeseries_part``
     Makes a timeseries partition.
     """
 
     def __init__(self, dtypes, freq, df_backend, kwargs, columns=None):
-        self.columns = columns or list(dtypes.keys())
+        self._columns = columns or list(dtypes.keys())
         self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
         self.df_backend = df_backend
         self.kwargs = kwargs
+
+    @property
+    def columns(self):
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new MakeTimeseriesPart object with
@@ -130,7 +134,7 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwarg
 def make_timeseries_pandas(
     start="2000-01-01",
     end="2000-12-31",
-    dtypes={"name": str, "id": int, "x": float, "y": float},
+    dtypes=None,
     freq="10s",
     partition_freq="1M",
     seed=None,
@@ -145,7 +149,7 @@ def make_timeseries_pandas(
         Start of time series
     end: datetime (or datetime-like string)
         End of time series
-    dtypes: dict
+    dtypes: dict (optional)
         Mapping of column names to types.
         Valid types include {float, int, str, 'category'}
     freq: string
@@ -172,6 +176,9 @@ def make_timeseries_pandas(
     2000-01-01 06:00:00   960   Charlie  0.788245
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
+    if dtypes is None:
+        dtypes = {"name": str, "id": int, "x": float, "y": float}
+
     divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
     npartitions = len(divisions) - 1
     if seed is None:
@@ -180,27 +187,24 @@ def make_timeseries_pandas(
         state_data = np.random.randint(2e9, size=npartitions)
     else:
         state_data = random_state_data(npartitions, seed)
-    label = "make-timeseries-"
-    name = label + tokenize(start, end, dtypes, freq, partition_freq, state_data)
 
     # Build parts
     parts = []
     for i in range(len(divisions) - 1):
         parts.append((divisions[i : i + 2], state_data[i]))
 
-    # Construct Layer and Collection
-    layer = DataFrameIOLayer(
-        name=name,
-        columns=None,
-        inputs=parts,
-        io_func=MakeTimeseriesPart(dtypes, freq, df_backend, kwargs),
-        label=label,
+    # Construct the output collection with from_map
+    return from_map(
+        MakeTimeseriesPart(dtypes, freq, df_backend, kwargs),
+        parts,
+        meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
+        divisions=divisions,
+        label="make-timeseries",
+        token=tokenize(
+            start, end, dtypes, freq, df_backend, partition_freq, state_data
+        ),
+        enforce_metadata=False,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    head = make_timeseries_part(
-        "2000", "2000", dtypes, "1H", state_data[0], df_backend, kwargs
-    )
-    return new_dd_object(graph, name, head, divisions)
 
 
 def make_timeseries(*args, **kwargs):

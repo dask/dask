@@ -10,9 +10,15 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_130, PANDAS_GT_150, tm
+from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
+from dask.utils_test import hlg_layer
+
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 AGG_FUNCS = [
     "sum",
@@ -290,7 +296,8 @@ def test_groupby_on_index(scheduler):
         return df.mean()
 
     with dask.config.set(scheduler=scheduler):
-        with pytest.warns(None):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
             assert_eq(ddf.groupby("a").apply(func), pdf.groupby("a").apply(func))
 
             assert_eq(
@@ -392,7 +399,8 @@ def test_groupby_multilevel_agg():
     assert_eq(res, sol)
 
 
-def test_groupby_get_group():
+@pytest.mark.parametrize("categoricals", [True, False])
+def test_groupby_get_group(categoricals):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
@@ -402,7 +410,15 @@ def test_groupby_get_group():
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     full = d.compute()
 
-    for ddkey, pdkey in [("b", "b"), (d.b, full.b), (d.b + 1, full.b + 1)]:
+    by_keys = [("b", "b"), (d.b, full.b)]
+
+    if categoricals:
+        d = d.categorize(columns=["b"])
+        full = d.compute()
+    else:
+        by_keys.append((d.b + 1, full.b + 1))
+
+    for ddkey, pdkey in by_keys:
         ddgrouped = d.groupby(ddkey)
         pdgrouped = full.groupby(pdkey)
         # DataFrame
@@ -1074,6 +1090,11 @@ def test_aggregate_dask():
         assert_max_deps(agg_dask1, 2)
         assert_max_deps(agg_dask2, 2)
 
+        # Make sure dict-based aggregation specs result in an
+        # explicit `getitem` layer to improve column projection
+        if isinstance(spec, dict):
+            assert hlg_layer(result1.dask, "getitem")
+
         # check for deterministic key names and values.
         # Require pickle since "partial" concat functions
         # used in tree-reduction cannot be compared
@@ -1084,10 +1105,175 @@ def test_aggregate_dask():
             # Note: List-based aggregation specs may result in
             # an extra delayed layer. This is because a "long" list
             # arg will be detected in `dask.array.core.normalize_arg`.
-            if isinstance(spec, list) == isinstance(other_spec, list):
+            # Also, dict-based aggregation specs will result in
+            # an extra `getitem` layer (to improve column projection)
+            if (isinstance(spec, list) == isinstance(other_spec, list)) and (
+                isinstance(spec, dict) == isinstance(other_spec, dict)
+            ):
                 other = ddf.groupby(["a", "b"]).agg(other_spec, split_every=2)
                 assert len(other.dask) == len(result1.dask)
                 assert len(other.dask) == len(result2.dask)
+
+
+@pytest.mark.parametrize("split_out", [2, 32])
+def test_shuffle_aggregate(shuffle_method, split_out):
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+    result = ddf.groupby(["a", "b"]).agg(
+        spec, split_out=split_out, shuffle=shuffle_method
+    )
+    expect = pdf.groupby(["a", "b"]).agg(spec)
+
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
+    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
+    assert_eq(expect, result)
+
+
+@pytest.mark.parametrize("sort", [True, False])
+def test_shuffle_aggregate_sort(shuffle_method, sort):
+
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+    result = ddf.groupby("a", sort=sort).agg(spec, split_out=2, shuffle=shuffle_method)
+    expect = pdf.groupby("a", sort=sort).agg(spec)
+
+    # Make sure "mean" dtype is consistent.
+    # Pandas<1.3 will return int instead of float
+    expect[("b", "mean")] = expect[("b", "mean")].astype(result[("b", "mean")].dtype)
+    assert_eq(expect, result)
+
+    if sort:
+        # Cannot use sort=True with multiple groupby keys
+        with pytest.raises(NotImplementedError):
+            ddf.groupby(["a", "b"], sort=sort).agg(
+                spec, split_out=2, shuffle=shuffle_method
+            )
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+@pytest.mark.parametrize("group_keys", [True, False, None])
+@pytest.mark.parametrize("method", ["ffill", "bfill"])
+@pytest.mark.parametrize("limit", [None, 1, 4])
+def test_fillna(axis, group_keys, method, limit):
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+        ddf.groupby("A", group_keys=group_keys).fillna(0, axis=axis),
+    )
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).B.fillna(0),
+        ddf.groupby("A", group_keys=group_keys).B.fillna(0),
+    )
+    assert_eq(
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(0),
+    )
+    assert_eq(
+        df.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby("A", group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+    )
+    assert_eq(
+        df.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+        ddf.groupby(["A", "B"], group_keys=group_keys).fillna(
+            method=method, limit=limit, axis=axis
+        ),
+    )
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna({"A": 0})
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna(pd.Series(dtype=int))
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby("A").fillna(pd.DataFrame)
+
+
+def test_ffill():
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [4, np.nan, 5, np.nan],
+            "E": [6, np.nan, 7, np.nan],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A").ffill(),
+        ddf.groupby("A").ffill(),
+    )
+    assert_eq(
+        df.groupby("A").B.ffill(),
+        ddf.groupby("A").B.ffill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).ffill(),
+        ddf.groupby(["A", "B"]).ffill(),
+    )
+
+
+def test_bfill():
+    df = pd.DataFrame(
+        {
+            "A": [1, 1, 2, 2],
+            "B": [3, 4, 3, 4],
+            "C": [np.nan, 3, np.nan, np.nan],
+            "D": [np.nan, 4, np.nan, 5],
+            "E": [np.nan, 6, np.nan, 7],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(
+        df.groupby("A").bfill(),
+        ddf.groupby("A").bfill(),
+    )
+    assert_eq(
+        df.groupby("A").B.bfill(),
+        ddf.groupby("A").B.bfill(),
+    )
+    assert_eq(
+        df.groupby(["A", "B"]).bfill(),
+        ddf.groupby(["A", "B"]).bfill(),
+    )
 
 
 @pytest.mark.parametrize(
@@ -1365,10 +1551,19 @@ def test_groupby_numeric_column():
     assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
-@pytest.mark.parametrize("sel", ["c", "d", ["c", "d"]])
+@pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):
+    if (
+        not PANDAS_GT_130
+        and not func == "cumcount"
+        and sel == ["a", "b"]
+        and key == ["a", "b"]
+    ):
+        pytest.xfail(
+            reason="cumsum and cumprod will raise DataError: No numeric types to aggregate"
+        )
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
@@ -1383,6 +1578,13 @@ def test_cumulative(func, key, sel):
 
     g, dg = (d.groupby(key)[sel] for d in (df, ddf))
     assert_eq(getattr(g, func)(), getattr(dg, func)())
+
+    if func == "cumcount":
+        with pytest.warns(
+            FutureWarning,
+            match="`axis` keyword argument is deprecated and will removed in a future release",
+        ):
+            dg.cumcount(axis=0)
 
 
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
@@ -1399,6 +1601,15 @@ def test_cumulative_axis1(func):
     assert_eq(
         getattr(df.groupby("a"), func)(axis=1), getattr(ddf.groupby("a"), func)(axis=1)
     )
+
+    with pytest.raises(ValueError, match="No axis named 1 for object type Series"):
+        getattr(ddf.groupby("a").b, func)(axis=1)
+
+    with pytest.warns(
+        FutureWarning,
+        match="`axis` keyword argument is deprecated and will removed in a future release",
+    ):
+        ddf.groupby("a").cumcount(axis=1)
 
 
 def test_groupby_unaligned_index():
@@ -1872,7 +2083,8 @@ def test_with_min_count(min_count):
         )
 
 
-def test_groupby_group_keys():
+@pytest.mark.parametrize("group_keys", [True, False, None])
+def test_groupby_group_keys(group_keys):
     df = pd.DataFrame({"a": [1, 2, 2, 3], "b": [2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2).set_index("a")
     pdf = df.set_index("a")
@@ -1881,8 +2093,10 @@ def test_groupby_group_keys():
     expected = pdf.groupby("a").apply(func)
     assert_eq(expected, ddf.groupby("a").apply(func, meta=expected))
 
-    expected = pdf.groupby("a", group_keys=False).apply(func)
-    assert_eq(expected, ddf.groupby("a", group_keys=False).apply(func, meta=expected))
+    expected = pdf.groupby("a", group_keys=group_keys).apply(func)
+    assert_eq(
+        expected, ddf.groupby("a", group_keys=group_keys).apply(func, meta=expected)
+    )
 
 
 @pytest.mark.parametrize(
@@ -1917,7 +2131,7 @@ def test_df_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group")
 
@@ -1938,7 +2152,7 @@ def test_df_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmin(skipna=skipna)
     result_dd = ddf.groupby("group").idxmin(skipna=skipna)
@@ -1972,7 +2186,7 @@ def test_df_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group").idxmax(skipna=skipna)
     result_dd = ddf.groupby("group").idxmax(skipna=skipna)
@@ -1985,7 +2199,7 @@ def test_series_groupby_idxmin():
         {"idx": list(range(4)), "group": [1, 1, 2, 2], "value": [10, 20, 20, 10]}
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     expected = (
         pd.DataFrame({"group": [1, 2], "value": [0, 3]}).set_index("group").squeeze()
@@ -2008,7 +2222,7 @@ def test_series_groupby_idxmin_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmin(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmin(skipna=skipna)
@@ -2044,7 +2258,7 @@ def test_series_groupby_idxmax_skipna(skipna):
         }
     ).set_index("idx")
 
-    ddf = dd.from_pandas(pdf, npartitions=3)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     result_pd = pdf.groupby("group")["value"].idxmax(skipna=skipna)
     result_dd = ddf.groupby("group")["value"].idxmax(skipna=skipna)
@@ -2143,6 +2357,27 @@ def test_groupby_shift_lazy_input():
         )
 
 
+@pytest.mark.filterwarnings("ignore:`meta` is not specified")
+def test_groupby_shift_within_partition_sorting():
+    # Result is non-deterministic. We run the assertion a few times to keep
+    # the probability of false pass low.
+    for _ in range(10):
+        df = pd.DataFrame(
+            {
+                "a": range(60),
+                "b": [2, 4, 3, 1] * 15,
+                "c": [None, 10, 20, None, 30, 40] * 10,
+            }
+        )
+        df = df.set_index("a").sort_index()
+        ddf = dd.from_pandas(df, npartitions=6)
+        assert_eq(
+            df.groupby("b")["c"].shift(1),
+            ddf.groupby("b")["c"].shift(1),
+            scheduler="threads",
+        )
+
+
 def test_groupby_shift_with_freq():
     pdf = pd.DataFrame(
         dict(a=[1, 2, 3, 4, 5, 6], b=[0, 0, 0, 1, 1, 1]),
@@ -2152,8 +2387,13 @@ def test_groupby_shift_with_freq():
 
     # just pass the pandas result as meta for convenience
     df_result = pdf.groupby(pdf.index).shift(periods=-2, freq="D")
+    # Groupby/shift on the index should avoid shuffle and let the `freq` pass
+    # unmodified, but that is currently broken: https://github.com/dask/dask/issues/8959
+    # TODO: remove check_freq condition once fixed.
     assert_eq(
-        df_result, ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result)
+        df_result,
+        ddf.groupby(ddf.index).shift(periods=-2, freq="D", meta=df_result),
+        **CHECK_FREQ,
     )
     df_result = pdf.groupby("b").shift(periods=-2, freq="D")
     assert_eq(df_result, ddf.groupby("b").shift(periods=-2, freq="D", meta=df_result))
@@ -2269,7 +2509,21 @@ def test_groupby_dropna_pandas(dropna):
 @pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
-def test_groupby_dropna_cudf(dropna, by):
+@pytest.mark.parametrize(
+    "group_keys",
+    [
+        True,
+        pytest.param(
+            False,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+        pytest.param(
+            None,
+            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
+        ),
+    ],
+)
+def test_groupby_dropna_cudf(dropna, by, group_keys):
 
     # NOTE: This test requires cudf/dask_cudf, and will
     # be skipped by non-GPU CI
@@ -2289,17 +2543,43 @@ def test_groupby_dropna_cudf(dropna, by):
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 
     if dropna is None:
-        dask_result = ddf.groupby(by).e.sum()
-        cudf_result = df.groupby(by).e.sum()
+        dask_result = ddf.groupby(by, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, group_keys=group_keys).e.sum()
     else:
-        dask_result = ddf.groupby(by, dropna=dropna).e.sum()
-        cudf_result = df.groupby(by, dropna=dropna).e.sum()
+        dask_result = ddf.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
+        cudf_result = df.groupby(by, dropna=dropna, group_keys=group_keys).e.sum()
     if by in ["c", "d"]:
         # Lose string/category index name in cudf...
         dask_result = dask_result.compute()
         dask_result.index.name = cudf_result.index.name
 
     assert_eq(dask_result, cudf_result)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("key", ["a", "b"])
+def test_groupby_grouper_dispatch(key):
+    cudf = pytest.importorskip("cudf")
+
+    # not directly used but must be imported
+    dask_cudf = pytest.importorskip("dask_cudf")  # noqa: F841
+
+    pdf = pd.DataFrame(
+        {
+            "a": ["a", "b", "c", "d", "e", "f", "g", "h"],
+            "b": [1, 2, 3, 4, 5, 6, 7, 8],
+            "c": [1.0, 2.0, 3.5, 4.1, 5.5, 6.6, 7.9, 8.8],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    pd_grouper = grouper_dispatch(pdf)(key=key)
+    gd_grouper = grouper_dispatch(gdf)(key=key)
+
+    expect = pdf.groupby(pd_grouper).sum()
+    got = gdf.groupby(gd_grouper).sum()
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.xfail(
@@ -2464,6 +2744,9 @@ def test_groupby_sort_true_split_out():
         # Cannot use sort=True with split_out>1 (for now)
         M.sum(ddf.groupby("x", sort=True), split_out=2)
 
+    # Can use sort=True with split_out>1 with agg() if shuffle=True
+    ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
+
 
 @pytest.mark.skipif(
     not PANDAS_GT_110, reason="observed only supported for newer pandas"
@@ -2548,6 +2831,8 @@ def test_groupby_with_pd_grouper():
         ddf.groupby(["key1", pd.Grouper(key="key2")])
 
 
+# TODO: Remove filter once https://github.com/pandas-dev/pandas/issues/46814 is resolved
+@pytest.mark.filterwarnings("ignore:Invalid value encountered:RuntimeWarning")
 @pytest.mark.parametrize("operation", ["head", "tail"])
 def test_groupby_empty_partitions_with_rows_operation(operation):
 

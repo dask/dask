@@ -15,9 +15,9 @@ extras_require: dict[str, list[str]] = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2022.02.1"],
+    "distributed": ["distributed == 2022.9.0"],
     "diagnostics": [
-        "bokeh >= 2.1.1",
+        "bokeh >= 2.4.2",
         "jinja2",
     ],
     "delayed": [],  # keeping for backwards compatibility
@@ -25,6 +25,7 @@ extras_require: dict[str, list[str]] = {
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 # after complete is set, add in test
 extras_require["test"] = [
+    "pandas[test]",
     "pytest",
     "pytest-rerunfailures",
     "pytest-xdist",
@@ -70,10 +71,19 @@ setup(
     license="BSD",
     keywords="task-scheduling parallel numpy pandas pydata",
     classifiers=[
+        "Development Status :: 5 - Production/Stable",
+        "Intended Audience :: Developers",
+        "Intended Audience :: Science/Research",
+        "License :: OSI Approved :: BSD License",
+        "Operating System :: OS Independent",
+        "Programming Language :: Python",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3 :: Only",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
-        "License :: OSI Approved :: BSD License",
+        "Programming Language :: Python :: 3.10",
+        "Topic :: Scientific/Engineering",
+        "Topic :: System :: Distributed Computing",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
@@ -83,5 +93,5 @@ setup(
     tests_require=["pytest"],
     extras_require=extras_require,
     include_package_data=True,
-    zip_safe=False,
+    zip_safe=False,  # https://mypy.readthedocs.io/en/latest/installed_packages.html
 )

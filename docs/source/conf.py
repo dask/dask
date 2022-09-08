@@ -18,6 +18,8 @@ import os
 # coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
 import sys
 
+import sphinx_autosummary_accessors
+
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
@@ -35,6 +37,7 @@ extensions = [
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
+    "sphinx_autosummary_accessors",
     "sphinx.ext.extlinks",
     "sphinx.ext.viewcode",
     "numpydoc",
@@ -44,7 +47,13 @@ extensions = [
     "sphinx_remove_toctrees",
     "IPython.sphinxext.ipython_console_highlighting",
     "IPython.sphinxext.ipython_directive",
+    "jupyter_sphinx",
+    "sphinx_copybutton",
+    "sphinx_design",
 ]
+
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
 
 numpydoc_show_class_members = False
 
@@ -55,7 +64,7 @@ sphinx_tabs_disable_tab_closing = True
 remove_from_toctrees = ["generated/*"]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+templates_path = ["_templates", sphinx_autosummary_accessors.templates_path]
 
 # The suffix of source filenames.
 source_suffix = ".rst"
@@ -99,7 +108,9 @@ exclude_patterns: list[str] = []
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = "default"
+# Commenting this out for now, if we register dask pygments,
+# then eventually this line can be:
+# pygments_style = "dask"
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -328,6 +339,11 @@ intersphinx_mapping = {
         "https://zarr.readthedocs.io/en/latest/objects.inv",
     ),
     "skimage": ("https://scikit-image.org/docs/dev/", None),
+    "fsspec": (
+        "https://filesystem-spec.readthedocs.io/en/latest/",
+        "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
+    ),
+    "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 
 # Redirects

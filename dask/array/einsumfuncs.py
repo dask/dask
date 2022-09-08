@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.compat import basestring
 
-from ..utils import derived_from
-from .core import asarray, blockwise, einsum_lookup
+from dask.array.core import asarray, blockwise, einsum_lookup
+from dask.utils import derived_from
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)
@@ -66,7 +66,7 @@ def parse_einsum_input(operands):
         tmp_operands = list(operands)
         operand_list = []
         subscript_list = []
-        for p in range(len(operands) // 2):
+        for _ in range(len(operands) // 2):
             operand_list.append(tmp_operands.pop(0))
             subscript_list.append(tmp_operands.pop(0))
 

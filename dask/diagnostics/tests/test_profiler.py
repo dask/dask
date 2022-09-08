@@ -1,5 +1,6 @@
 import contextlib
 import os
+import warnings
 from operator import add, mul
 
 import pytest
@@ -237,10 +238,9 @@ def test_profiler_plot():
     assert p.title.text == "Not the default"
     # Test empty, checking for errors
     prof.clear()
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         prof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    assert not record
 
 
 @pytest.mark.skipif("not bokeh")
@@ -270,9 +270,9 @@ def test_resource_profiler_plot():
     rprof.clear()
     for results in [[], [(1.0, 0, 0)]]:
         rprof.results = results
-        with pytest.warns(None) as record:
+        with warnings.catch_warnings(record=True) as record:
             p = rprof.visualize(show=False, save=False)
-        assert len(record) == 0
+        assert not record
         # Check bounds are valid
         assert p.x_range.start == 0
         assert p.x_range.end == 1
@@ -306,10 +306,9 @@ def test_cache_profiler_plot():
     assert p.axis[1].axis_label == "Cache Size (non-standard)"
     # Test empty, checking for errors
     cprof.clear()
-    with pytest.warns(None) as record:
+    with warnings.catch_warnings(record=True) as record:
         cprof.visualize(show=False, save=False)
-
-    assert len(record) == 0
+    assert not record
 
 
 @pytest.mark.skipif("not bokeh")
@@ -331,7 +330,12 @@ def test_plot_multiple():
     p = visualize(
         [prof, rprof], label_size=50, title="Not the default", show=False, save=False
     )
-    figures = [r[0] for r in p.children[1].children]
+    # Grid plot layouts changed in Bokeh 3.
+    # See https://github.com/dask/dask/issues/9257 for more details
+    if BOKEH_VERSION().major < 3:
+        figures = [r[0] for r in p.children[1].children]
+    else:
+        figures = [r[0] for r in p.children]
     assert len(figures) == 2
     assert figures[0].title.text == "Not the default"
     assert figures[0].xaxis[0].axis_label is None

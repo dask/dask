@@ -6,10 +6,7 @@ from operator import getitem
 
 import numpy as np
 
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, random_state_data
-from .core import (
+from dask.array.core import (
     Array,
     asarray,
     broadcast_shapes,
@@ -17,8 +14,11 @@ from .core import (
     normalize_chunks,
     slices_from_chunks,
 )
-from .creation import arange
-from .dispatch import array_backend_dispatch
+from dask.array.creation import arange
+from dask.array.dispatch import array_backend_dispatch
+from dask.base import tokenize
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import derived_from, random_state_data
 
 
 class RandomState:
@@ -346,7 +346,7 @@ class RandomState:
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
-        from .slicing import shuffle_slice
+        from dask.array.slicing import shuffle_slice
 
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")

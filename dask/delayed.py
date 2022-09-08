@@ -3,24 +3,34 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 
 from tlz import concat, curry, merge, unique
 
-from . import config, threaded
-from .base import (
+from dask import config
+from dask.base import (
     DaskMethodsMixin,
     dont_optimize,
     is_dask_collection,
+    named_schedulers,
     replace_name_in_key,
 )
-from .base import tokenize as _tokenize
-from .context import globalmethod
-from .core import flatten, quote
-from .highlevelgraph import HighLevelGraph
-from .utils import OperatorMethodMixin, apply, funcname, methodcaller
+from dask.base import tokenize as _tokenize
+from dask.context import globalmethod
+from dask.core import flatten, quote
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils import (
+    OperatorMethodMixin,
+    apply,
+    funcname,
+    is_namedtuple_instance,
+    methodcaller,
+)
 
 __all__ = ["Delayed", "delayed"]
+
+
+DEFAULT_GET = named_schedulers.get("threads", named_schedulers["sync"])
 
 
 def unzip(ls, nout):
@@ -104,7 +114,7 @@ def unpack_collections(expr):
 
     if typ is slice:
         args, collections = unpack_collections([expr.start, expr.stop, expr.step])
-        return (slice,) + tuple(args), collections
+        return (slice, *args), collections
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
@@ -114,8 +124,30 @@ def unpack_collections(expr):
                 if hasattr(expr, f.name)  # if init=False, field might not exist
             ]
         )
-
+        if not collections:
+            return expr, ()
+        try:
+            _fields = {
+                f.name: getattr(expr, f.name)
+                for f in fields(expr)
+                if hasattr(expr, f.name)
+            }
+            replace(expr, **_fields)
+        except TypeError as e:
+            raise TypeError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using a custom __init__ is not supported."
+            ) from e
+        except ValueError as e:
+            raise ValueError(
+                f"Failed to unpack {typ} instance. "
+                "Note that using fields with `init=False` are not supported."
+            ) from e
         return (apply, typ, (), (dict, args)), collections
+
+    if is_namedtuple_instance(expr):
+        args, collections = unpack_collections([v for v in expr])
+        return (typ, *args), collections
 
     return expr, ()
 
@@ -198,6 +230,10 @@ def to_task_dask(expr):
         )
 
         return (apply, typ, (), (dict, args)), dsk
+
+    if is_namedtuple_instance(expr):
+        args, dsk = to_task_dask([v for v in expr])
+        return (typ, *args), dsk
 
     if typ is slice:
         args, dsk = to_task_dask([expr.start, expr.stop, expr.step])
@@ -518,7 +554,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_tokenize__(self):
         return self.key
 
-    __dask_scheduler__ = staticmethod(threaded.get)
+    __dask_scheduler__ = staticmethod(DEFAULT_GET)
     __dask_optimize__ = globalmethod(optimize, key="delayed_optimize")
 
     def __dask_postcompute__(self):
@@ -659,6 +695,14 @@ class DelayedLeaf(Delayed):
         return call_function(
             self._obj, self._key, args, kwargs, pure=self._pure, nout=self._nout
         )
+
+    @property
+    def __name__(self):
+        return self._obj.__name__
+
+    @property
+    def __doc__(self):
+        return self._obj.__doc__
 
 
 class DelayedAttr(Delayed):

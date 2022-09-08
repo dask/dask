@@ -1,5 +1,8 @@
 temporary-directory: null  # Directory for local disk like /tmp, /scratch, or /local
 
+visualization:
+  engine: null  # Default visualization engine to use when calling `.visualize()` on a collection
+
 tokenize:
   ensure-deterministic: false  # If true, tokenize will error instead of falling back to uuids
 
@@ -24,6 +27,8 @@ array:
     split-large-chunks: null  # How to handle large output chunks in slicing. Warns by default.
 
 optimization:
+  annotations:
+    fuse: true  # Automatically fuse compatible annotations on layers
   fuse:
     active: null  # Treat as false for dask.dataframe, true for everything else
     ave-width: 1

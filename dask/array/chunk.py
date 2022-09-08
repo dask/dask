@@ -7,7 +7,7 @@ from numbers import Integral
 import numpy as np
 from tlz import concat
 
-from ..core import flatten
+from dask.core import flatten
 
 
 def keepdims_wrapper(a_callable):
@@ -254,14 +254,14 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
 
 
 def arange(start, stop, step, length, dtype, like=None):
-    from .utils import arange_safe
+    from dask.array.utils import arange_safe
 
     res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
 
 
 def linspace(start, stop, num, endpoint=True, dtype=None):
-    from .core import Array
+    from dask.array.core import Array
 
     if isinstance(start, Array):
         start = start.compute()
@@ -313,7 +313,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     x sliced along axis, using only the elements of idx that fall inside the
     current chunk.
     """
-    from .utils import asarray_safe, meta_from_array
+    from dask.array.utils import asarray_safe, meta_from_array
 
     idx = asarray_safe(idx, like=meta_from_array(x))
 
@@ -414,10 +414,18 @@ def getitem(obj, index):
     Selection obj[index]
 
     """
-    result = obj[index]
+    try:
+        result = obj[index]
+    except IndexError as e:
+        raise ValueError(
+            "Array chunk size or shape is unknown. "
+            "Possible solution with x.compute_chunk_sizes()"
+        ) from e
+
     try:
         if not result.flags.owndata and obj.size >= 2 * result.size:
             result = result.copy()
     except AttributeError:
         pass
+
     return result

@@ -5,7 +5,6 @@ dependencies:
   # required dependencies
   - packaging=20.0
   - python=3.8
-  - setuptools<60.0
   - pyyaml>=5.3.1
   - cloudpickle=1.5.0 # this is in the min from distributed
   - partd=0.3.10
@@ -21,4 +20,5 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-rerunfailures
+  - pytest-timeout
   - pytest-xdist

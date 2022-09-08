@@ -1,5 +1,6 @@
 import gzip
 import os
+import warnings
 from io import BytesIO
 from unittest import mock
 
@@ -24,8 +25,11 @@ from dask.dataframe.io.csv import (
     pandas_read_text,
     text_blocks_to_pandas,
 )
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, has_known_categories
+from dask.layers import DataFrameIOLayer
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
+from dask.utils_test import hlg_layer
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
@@ -774,9 +778,9 @@ def test_warn_non_seekable_files():
         assert "gzip" in msg
         assert "blocksize=None" in msg
 
-        with pytest.warns(None) as w:
+        with warnings.catch_warnings(record=True) as record:
             df = dd.read_csv("2014-01-*.csv", compression="gzip", blocksize=None)
-        assert len(w) == 0
+        assert not record
 
         with pytest.raises(NotImplementedError):
             with pytest.warns(UserWarning):  # needed for pytest
@@ -919,7 +923,7 @@ def test_csv_with_integer_names():
 
 def test_late_dtypes():
     text = "numbers,names,more_numbers,integers,dates\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,,2,3,2017-10-31 00:00:00\n"
     text += "1.5,bar,2.5,3,4998-01-01 00:00:00\n"
 
@@ -1037,7 +1041,7 @@ def test_late_dtypes():
 
 def test_assume_missing():
     text = "numbers,names,more_numbers,integers\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,foo,2,3\n"
     text += "1.5,bar,2.5,3\n"
     with filetext(text) as fn:
@@ -1058,7 +1062,7 @@ def test_assume_missing():
         assert_eq(res, sol.astype({"integers": float}))
 
     text = "numbers,integers\n"
-    for i in range(1000):
+    for _ in range(1000):
         text += "1,2\n"
     text += "1.5,2\n"
 
@@ -1705,6 +1709,20 @@ def test_csv_getitem_column_order(tmpdir):
     columns = list("hczzkylaape")
     df2 = dd.read_csv(path)[columns].head(1)
     assert_eq(df1[columns], df2)
+
+
+def test_getitem_optimization_after_filter():
+    with filetext(timeseries) as fn:
+        expect = pd.read_csv(fn)
+        expect = expect[expect["High"] > 205.0][["Low"]]
+        ddf = dd.read_csv(fn)
+        ddf = ddf[ddf["High"] > 205.0][["Low"]]
+
+        dsk = optimize_dataframe_getitem(ddf.dask, keys=[ddf._name])
+        subgraph_rd = hlg_layer(dsk, "read-csv")
+        assert isinstance(subgraph_rd, DataFrameIOLayer)
+        assert set(subgraph_rd.columns) == {"High", "Low"}
+        assert_eq(expect, ddf)
 
 
 def test_csv_parse_fail(tmpdir):

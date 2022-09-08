@@ -1,20 +1,22 @@
 import dataclasses
 import datetime
+import inspect
 import os
+import pathlib
 import subprocess
 import sys
 import time
 from collections import OrderedDict
 from concurrent.futures import Executor
+from enum import Enum, Flag, IntEnum, IntFlag
 from operator import add, mul
-from typing import Union
+from typing import NamedTuple, Union
 
 import pytest
 from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
-from dask import delayed
 from dask.base import (
     DaskMethodsMixin,
     clone_key,
@@ -37,7 +39,7 @@ from dask.base import (
     visualize,
 )
 from dask.core import literal
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
@@ -242,7 +244,14 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25)]:
+    for i in [
+        1,
+        1.1,
+        "1",
+        slice(1, 2, 3),
+        datetime.date(2021, 6, 25),
+        pathlib.PurePath("/this/that"),
+    ]:
         assert normalize_token(i) is i
 
 
@@ -254,6 +263,16 @@ def test_tokenize_object():
     with dask.config.set({"tokenize.ensure-deterministic": True}):
         with pytest.raises(RuntimeError, match="cannot be deterministically hashed"):
             normalize_token(o)
+
+
+def test_tokenize_function_cloudpickle():
+    a, b = (lambda x: x, lambda x: x)
+    # No error by default
+    tokenize(a)
+
+    with dask.config.set({"tokenize.ensure-deterministic": True}):
+        with pytest.raises(RuntimeError, match="may not be deterministically hashed"):
+            tokenize(b)
 
 
 def test_tokenize_callable():
@@ -415,8 +434,29 @@ def test_tokenize_ordered_dict():
     assert tokenize(a) != tokenize(c)
 
 
-ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
-BDataClass = dataclasses.make_dataclass("BDataClass", [("a", Union[int, float])])
+def test_tokenize_timedelta():
+    assert tokenize(datetime.timedelta(days=1)) == tokenize(datetime.timedelta(days=1))
+    assert tokenize(datetime.timedelta(days=1)) != tokenize(datetime.timedelta(days=2))
+
+
+@pytest.mark.parametrize("enum_type", [Enum, IntEnum, IntFlag, Flag])
+def test_tokenize_enum(enum_type):
+    class Color(enum_type):
+        RED = 1
+        BLUE = 2
+
+    assert tokenize(Color.RED) == tokenize(Color.RED)
+    assert tokenize(Color.RED) != tokenize(Color.BLUE)
+
+
+@dataclasses.dataclass
+class ADataClass:
+    a: int
+
+
+@dataclasses.dataclass
+class BDataClass:
+    a: float
 
 
 def test_tokenize_dataclass():
@@ -486,9 +526,7 @@ def test_tokenize_numpy_matrix():
 def test_tokenize_dense_sparse_array(cls_name):
     rng = np.random.RandomState(1234)
 
-    with pytest.warns(None):
-        # ignore scipy.sparse.SparseEfficiencyWarning
-        a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
+    a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
     assert tokenize(a) == tokenize(b)
@@ -504,13 +542,16 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
-    with pytest.warns(None):
-        b = a.copy().asformat("coo")
-        b.row[:10] = np.arange(10)
-        b = b.asformat(cls_name)
+    b = a.copy().asformat("coo")
+    b.row[:10] = np.arange(10)
+    b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
 
+@pytest.mark.skipif(
+    sys.platform == "win32" and sys.version_info[:2] == (3, 9),
+    reason="https://github.com/ipython/ipython/issues/12197",
+)
 def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
@@ -545,11 +586,13 @@ def test_is_dask_collection():
     assert is_dask_collection(x)
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
-    assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
 
 
 def test_unpack_collections():
+    class ANamedTuple(NamedTuple):
+        a: int
+
     a = delayed(1) + 5
     b = a + 1
     c = a + 2
@@ -566,12 +609,12 @@ def test_unpack_collections():
                 "d": (c, 2),  # tuple
                 "e": {a, 2, 3},  # set
                 "f": OrderedDict([("a", a)]),
+                "g": ADataClass(a=a),  # dataclass instance
+                "h": (ADataClass, a),  # dataclass constructor
+                "i": ANamedTuple(a=a),  # namedtuple instance
             },  # OrderedDict
             iterator,
         )  # Iterator
-
-        t[2]["f"] = ADataClass(a=a)
-        t[2]["g"] = (ADataClass, a)
 
         return t
 
@@ -620,8 +663,6 @@ def test_get_collection_names():
 
     with pytest.raises(TypeError):
         get_collection_names(object())
-    with pytest.raises(TypeError):
-        get_collection_names(DummyCollection(None, []))
     # Keys must either be a string or a tuple where the first element is a string
     with pytest.raises(TypeError):
         get_collection_names(DummyCollection({1: 2}, [1]))
@@ -1009,8 +1050,14 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
+@pytest.mark.xfail(
+    sys.platform == "win32",
+    reason="graphviz/pango on conda-forge currently broken for windows",
+    strict=False,
+)
 def test_visualize():
     pytest.importorskip("graphviz")
+    pytest.importorskip("ipycytoscape")
     with tmpdir() as d:
         x = da.arange(5, chunks=2)
         x.visualize(filename=os.path.join(d, "mydask"))
@@ -1029,6 +1076,20 @@ def test_visualize():
         x = Tuple(dsk, ["a", "b", "c"])
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
+
+        x = Tuple(dsk, ["a", "b", "c"])
+        visualize(x, filename=os.path.join(d, "cyt"), engine="cytoscape")
+        assert os.path.exists(os.path.join(d, "cyt.html"))
+
+        visualize(x, filename=os.path.join(d, "cyt2.html"), engine="ipycytoscape")
+        assert os.path.exists(os.path.join(d, "cyt2.html"))
+
+        with dask.config.set(visualization__engine="cytoscape"):
+            visualize(x, filename=os.path.join(d, "cyt3.html"))
+            assert os.path.exists(os.path.join(d, "cyt3.html"))
+
+        with pytest.raises(ValueError, match="not-real"):
+            visualize(x, engine="not-real")
 
         # To see if visualize() works when the filename parameter is set to None
         # If the function raises an error, the test will fail
@@ -1320,7 +1381,7 @@ def test_persist_item_change_name():
 
 
 def test_normalize_function_limited_size():
-    for i in range(1000):
+    for _ in range(1000):
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
@@ -1479,11 +1540,12 @@ def test_optimizations_ctd():
 
 def test_clone_key():
     h = object()  # arbitrary hashable
-    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
-    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
-    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key("inc-1-2-3", 123) == "inc-4dfeea2f9300e67a75f30bf7d6182ea4"
+    assert clone_key("x", 123) == "x-dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "x-b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("x", 1), 456) == ("x-b76f061b547b00d18b9c7a18ccc47e2d", 1)
     assert clone_key(("sum-1-2-3", h, 1), 123) == (
-        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        "sum-1efd41f02035dc802f4ebb9995d07e9d",
         h,
         1,
     )
@@ -1491,7 +1553,7 @@ def test_clone_key():
         clone_key(1, 2)
 
 
-def test_compte_as_if_collection_low_level_task_graph():
+def test_compute_as_if_collection_low_level_task_graph():
     # See https://github.com/dask/dask/pull/7969
     da = pytest.importorskip("dask.array")
     x = da.arange(10)
@@ -1515,3 +1577,59 @@ def test_compte_as_if_collection_low_level_task_graph():
     )[0]
     assert optimized
     da.utils.assert_eq(x, result)
+
+
+# A function designed to be run in a subprocess with dask.compatibility._EMSCRIPTEN
+# patched. This allows for checking for different default schedulers depending on the
+# platform. One might prefer patching `sys.platform` for a more direct test, but that
+# causes problems in other libraries.
+def check_default_scheduler(module, collection, expected, emscripten):
+    from contextlib import nullcontext
+    from unittest import mock
+
+    from dask.local import get_sync
+
+    if emscripten:
+        ctx = mock.patch("dask.base.named_schedulers", {"sync": get_sync})
+    else:
+        ctx = nullcontext()
+    with ctx:
+        import importlib
+
+        if expected == "sync":
+            from dask.local import get_sync as get
+        elif expected == "threads":
+            from dask.threaded import get
+        elif expected == "processes":
+            from dask.multiprocessing import get
+
+        mod = importlib.import_module(module)
+
+        assert getattr(mod, collection).__dask_scheduler__ == get
+
+
+@pytest.mark.parametrize(
+    "params",
+    (
+        "'dask.dataframe', '_Frame', 'sync', True",
+        "'dask.dataframe', '_Frame', 'threads', False",
+        "'dask.array', 'Array', 'sync', True",
+        "'dask.array', 'Array', 'threads', False",
+        "'dask.bag', 'Bag', 'sync', True",
+        "'dask.bag', 'Bag', 'processes', False",
+    ),
+)
+def test_emscripten_default_scheduler(params):
+    pytest.importorskip("dask.array")
+    pytest.importorskip("dask.dataframe")
+    proc = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                inspect.getsource(check_default_scheduler)
+                + f"check_default_scheduler({params})\n"
+            ),
+        ]
+    )
+    proc.check_returncode()

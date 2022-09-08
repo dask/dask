@@ -62,6 +62,8 @@ Examples
 --------
 
 >>> import pprint  # doctest: +SKIP
+>>> inc = lambda x: x + 1
+>>> add = lambda x, y: x + y
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
 >>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
@@ -104,16 +106,18 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+from __future__ import annotations
+
 import os
+from collections.abc import Hashable, Mapping, Sequence
 from concurrent.futures import Executor, Future
 from functools import partial
 from queue import Empty, Queue
 
-from . import config
-from .callbacks import local_callbacks, unpack_callbacks
-from .core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
-from .order import order
-from .utils_test import add, inc  # noqa: F401
+from dask import config
+from dask.callbacks import local_callbacks, unpack_callbacks
+from dask.core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
+from dask.order import order
 
 if os.name == "nt":
     # Python 3 windows Queue.get doesn't handle interrupts properly. To
@@ -138,7 +142,8 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
 
     Examples
     --------
-
+    >>> inc = lambda x: x + 1
+    >>> add = lambda x, y: x + y
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
     >>> from pprint import pprint  # doctest: +SKIP
     >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
@@ -543,7 +548,7 @@ class SynchronousExecutor(Executor):
 synchronous_executor = SynchronousExecutor()
 
 
-def get_sync(dsk, keys, **kwargs):
+def get_sync(dsk: Mapping, keys: Sequence[Hashable] | Hashable, **kwargs):
     """A naive synchronous version of get_async
 
     Can be useful for debugging.

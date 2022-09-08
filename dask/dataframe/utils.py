@@ -8,26 +8,32 @@ import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from numbers import Number
+from typing import Callable, TypeVar, overload
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
-from ..base import get_scheduler, is_dask_collection
-from ..core import get_deps
-from ..utils import is_arraylike  # noqa: F401
-from ..utils import asciitable
-from ..utils import is_dataframe_like as dask_is_dataframe_like
-from ..utils import is_index_like as dask_is_index_like
-from ..utils import is_series_like as dask_is_series_like
-from ..utils import typename
-from . import _dtypes  # noqa: F401 register pandas extension types
-from . import methods
-from ._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
-from .dispatch import make_meta  # noqa : F401
-from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
-from .extensions import make_scalar
+from dask.base import get_scheduler, is_dask_collection
+from dask.core import get_deps
+from dask.dataframe import (  # noqa: F401 register pandas extension types
+    _dtypes,
+    methods,
+)
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from dask.dataframe.dispatch import (  # noqa : F401
+    make_meta,
+    make_meta_obj,
+    meta_nonempty,
+)
+from dask.dataframe.extensions import make_scalar
+from dask.utils import (
+    asciitable,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+    typename,
+)
 
 meta_object_types: tuple[type, ...] = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
@@ -134,6 +140,18 @@ infer the metadata. This may lead to unexpected results, so providing
 ``meta`` is recommended. For more information, see
 ``dask.dataframe.utils.make_meta``.
 """
+
+T = TypeVar("T", bound=Callable)
+
+
+@overload
+def insert_meta_param_description(func: T) -> T:
+    ...
+
+
+@overload
+def insert_meta_param_description(pad: int) -> Callable[[T], T]:
+    ...
 
 
 def insert_meta_param_description(*args, **kwargs):
@@ -280,9 +298,10 @@ def clear_known_categories(x, cols=None, index=True):
 
 def _empty_series(name, dtype, index=None):
     if isinstance(dtype, str) and dtype == "category":
-        return pd.Series(
-            pd.Categorical([UNKNOWN_CATEGORIES]), name=name, index=index
-        ).iloc[:0]
+        s = pd.Series(pd.Categorical([UNKNOWN_CATEGORIES]), name=name).iloc[:0]
+        if index is not None:
+            s.index = make_meta(index)
+        return s
     return pd.Series([], dtype=dtype, name=name, index=index)
 
 
@@ -319,18 +338,6 @@ def _nonempty_scalar(x):
         return make_scalar(dtype)
 
     raise TypeError(f"Can't handle meta of type '{typename(type(x))}'")
-
-
-def is_dataframe_like(df):
-    return dask_is_dataframe_like(df)
-
-
-def is_series_like(s):
-    return dask_is_series_like(s)
-
-
-def is_index_like(s):
-    return dask_is_index_like(s)
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):
@@ -530,6 +537,7 @@ def assert_eq(
     check_dtype=True,
     check_divisions=True,
     check_index=True,
+    sort_results=True,
     scheduler="sync",
     **kwargs,
 ):
@@ -552,7 +560,7 @@ def assert_eq(
         a = a.to_pandas()
     if hasattr(b, "to_pandas"):
         b = b.to_pandas()
-    if isinstance(a, (pd.DataFrame, pd.Series)):
+    if isinstance(a, (pd.DataFrame, pd.Series)) and sort_results:
         a = _maybe_sort(a, check_index)
         b = _maybe_sort(b, check_index)
     if not check_index:
@@ -649,7 +657,9 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
         ) or (a == b)
 
     if not is_dask_collection(res) and is_dataframe_like(res):
-        for col, a, b in pd.concat([ddf._meta.dtypes, res.dtypes], axis=1).itertuples():
+        for a, b in pd.concat([ddf._meta.dtypes, res.dtypes], axis=1).itertuples(
+            index=False
+        ):
             assert eq_dtypes(a, b)
     elif not is_dask_collection(res) and (is_index_like(res) or is_series_like(res)):
         a = ddf._meta.dtype
@@ -720,3 +730,7 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
         columns = [columns]
     df2.drop(columns=columns, inplace=True, errors=errors)
     return df2
+
+
+class AttributeNotImplementedError(NotImplementedError, AttributeError):
+    """NotImplementedError and AttributeError"""
