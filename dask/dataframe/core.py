@@ -3694,7 +3694,7 @@ Dask Name: {name}, {layers}""".format(
         ):
             warnings.warn(
                 "Grouping by multiple columns with dropna=False is not supported with pandas<1.5.0 and may give "
-                "unexpected results"
+                "unexpected results; see https://github.com/dask/dask/issues/8817"
             )
 
         from dask.dataframe.groupby import SeriesGroupBy
@@ -4929,7 +4929,7 @@ class DataFrame(_Frame):
         ):
             warnings.warn(
                 "Grouping by multiple columns with dropna=False is not supported with pandas<1.5.0 and may give "
-                "unexpected results"
+                "unexpected results; see https://github.com/dask/dask/issues/8817"
             )
 
         from dask.dataframe.groupby import DataFrameGroupBy
