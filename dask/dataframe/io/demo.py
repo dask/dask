@@ -197,7 +197,9 @@ def make_timeseries_pandas(
     return from_map(
         MakeTimeseriesPart(dtypes, freq, df_backend, kwargs),
         parts,
-        meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
+        meta=make_timeseries_part(
+            "2000", "2000", dtypes, "1H", state_data[0], df_backend, kwargs
+        ),
         divisions=divisions,
         label="make-timeseries",
         token=tokenize(
