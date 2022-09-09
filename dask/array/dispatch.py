@@ -5,7 +5,8 @@ Also see backends.py
 """
 
 from dask import config
-from dask.utils import BackendDispatch, Dispatch
+from dask.backends import BackendDispatch
+from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")
 tensordot_lookup = Dispatch("tensordot")
@@ -23,11 +24,11 @@ class ArrayBackendDispatch(BackendDispatch):
 
     @property
     def allow_fallback(self):
-        return config.get("array.backend.allow-fallback", True)
+        return config.get("array.backend.allow-fallback")
 
     @property
     def warn_fallback(self):
-        return config.get("array.backend.warn-fallback", True)
+        return config.get("array.backend.warn-fallback")
 
 
 array_backend_dispatch = ArrayBackendDispatch("array_backend_dispatch")

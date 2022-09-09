@@ -19,6 +19,7 @@ import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
+from dask.backends import DaskBackendEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -46,7 +47,7 @@ from dask.dataframe.utils import (
     is_integer_na_dtype,
 )
 from dask.sizeof import SimpleSizeof, sizeof
-from dask.utils import DaskBackendEntrypoint, is_arraylike, is_series_like, typename
+from dask.utils import is_arraylike, is_series_like, typename
 
 
 def set_backend(df_backend):

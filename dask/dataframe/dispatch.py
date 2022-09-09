@@ -8,7 +8,8 @@ import pandas as pd
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
-from dask.utils import BackendDispatch, Dispatch
+from dask.backends import BackendDispatch
+from dask.utils import Dispatch
 
 # Compute Dispatch Funcitons
 make_meta_dispatch = Dispatch("make_meta_dispatch")
@@ -149,11 +150,11 @@ class DataFrameBackendDispatch(BackendDispatch):
 
     @property
     def allow_fallback(self):
-        return config.get("dataframe.backend.allow-fallback", True)
+        return config.get("dataframe.backend.allow-fallback")
 
     @property
     def warn_fallback(self):
-        return config.get("dataframe.backend.warn-fallback", True)
+        return config.get("dataframe.backend.warn-fallback")
 
 
 dataframe_backend_dispatch = DataFrameBackendDispatch("dataframe_backend_dispatch")
