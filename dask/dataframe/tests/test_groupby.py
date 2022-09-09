@@ -2513,14 +2513,8 @@ def test_groupby_dropna_pandas(dropna):
     "group_keys",
     [
         True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
-        pytest.param(
-            None,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
+        False,
+        None,
     ],
 )
 def test_groupby_dropna_cudf(dropna, by, group_keys):
