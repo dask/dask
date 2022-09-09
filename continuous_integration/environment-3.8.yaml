@@ -32,7 +32,6 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - bcolz
   - blosc
   - boto3
   - botocore
