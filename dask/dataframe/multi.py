@@ -1096,7 +1096,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
         try:
-            df._meta == meta
+            assert df._meta == meta
             match = True
         except (ValueError, TypeError):
             match = False

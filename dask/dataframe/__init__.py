@@ -17,7 +17,6 @@ try:
     from dask.dataframe.io import (
         demo,
         from_array,
-        from_bcolz,
         from_dask_array,
         from_delayed,
         from_map,

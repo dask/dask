@@ -608,9 +608,6 @@ class PandasBackendEntrypoint(DaskBackendEntrypoint):
     def from_array(self, *args, **kwargs):
         return dd.io.io.from_array_pandas(*args, **kwargs)
 
-    def from_bcolz(self, *args, **kwargs):
-        return dd.io.io.from_bcolz_pandas(*args, **kwargs)
-
 
 dataframe_backend_dispatch.register("pandas", PandasBackendEntrypoint())
 

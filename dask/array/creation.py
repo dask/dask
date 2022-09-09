@@ -1243,4 +1243,4 @@ def pad(array, pad_width, mode="constant", **kwargs):
     elif mode in ["reflect", "symmetric", "wrap"]:
         return pad_reuse(array, pad_width, mode, **kwargs)
 
-    assert False, "unreachable"
+    raise RuntimeError("unreachable")
