@@ -330,7 +330,7 @@ class NumpyBackendEntrypoint(DaskBackendEntrypoint):
         return da.core.from_array_default(*args, **kwargs)
 
 
-array_backend_dispatch.register("numpy", NumpyBackendEntrypoint())
+array_backend_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
 
 
 try:
@@ -379,7 +379,7 @@ try:
             # TODO: Only call cupy.asarray if _meta is numpy
             return x.map_blocks(cupy.asarray)
 
-    array_backend_dispatch.register("cupy", CupyBackendEntrypoint())
+    array_backend_dispatch.register_backend("cupy", CupyBackendEntrypoint())
 
 except ImportError:
     pass

@@ -180,11 +180,10 @@ def read_sql_query_pandas(
     return from_delayed(parts, meta, divisions=divisions)
 
 
-def read_sql_query(*args, **kwargs):
-    return dataframe_backend_dispatch.read_sql_query(*args, **kwargs)
-
-
-read_sql_query.__doc__ = read_sql_query_pandas.__doc__
+read_sql_query = dataframe_backend_dispatch.register_function(
+    "read_sql_query",
+    docstring=read_sql_query_pandas.__doc__,
+)
 
 
 def read_sql_table_pandas(
@@ -384,11 +383,10 @@ def read_sql_table_pandas(
     )
 
 
-def read_sql_table(*args, **kwargs):
-    return dataframe_backend_dispatch.read_sql_table(*args, **kwargs)
-
-
-read_sql_table.__doc__ = read_sql_table_pandas.__doc__
+read_sql_table = dataframe_backend_dispatch.register_function(
+    "read_sql_table",
+    docstring=read_sql_table_pandas.__doc__,
+)
 
 
 def read_sql_pandas(sql, con, index_col, **kwargs):
@@ -430,11 +428,10 @@ def read_sql_pandas(sql, con, index_col, **kwargs):
         return read_sql_query(sql, con, index_col, **kwargs)
 
 
-def read_sql(*args, **kwargs):
-    return dataframe_backend_dispatch.read_sql(*args, **kwargs)
-
-
-read_sql.__doc__ = read_sql_pandas.__doc__
+read_sql = dataframe_backend_dispatch.register_function(
+    "read_sql",
+    docstring=read_sql_pandas.__doc__,
+)
 
 
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):

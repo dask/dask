@@ -610,7 +610,7 @@ class PandasBackendEntrypoint(DaskBackendEntrypoint):
         return dd.io.io.from_array_pandas(*args, **kwargs)
 
 
-dataframe_backend_dispatch.register("pandas", PandasBackendEntrypoint())
+dataframe_backend_dispatch.register_backend("pandas", PandasBackendEntrypoint())
 
 
 ######################################

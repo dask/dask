@@ -49,13 +49,13 @@ class BackendDispatch:
         if name:
             self.__name__ = name
 
-    def register(self, backend: str, cls_target: DaskBackendEntrypoint):
+    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
         """Register a target class for a specific backend label"""
 
         def wrapper(cls_target):
             if isinstance(backend, tuple):
                 for b in backend:
-                    self.register(b, cls_target)
+                    self.register_backend(b, cls_target)
             elif isinstance(cls_target, DaskBackendEntrypoint):
                 self._lookup[backend] = cls_target
             else:
@@ -75,7 +75,7 @@ class BackendDispatch:
             # Check entrypoints for the specified backend
             entrypoints = detect_entrypoints()
             if backend in entrypoints:
-                self.register(backend, entrypoints[backend].load()())
+                self.register_backend(backend, entrypoints[backend].load()())
                 return self._lookup[backend]
         else:
             return impl
@@ -94,6 +94,16 @@ class BackendDispatch:
     def warn_fallback(self):
         """Check if backend-fallback usage should raise a warning"""
         raise NotImplementedError
+
+    def register_function(self, func_name, docstring=None):
+        """Register dispatchable function name"""
+
+        def _func(*args, **kwargs):
+            return getattr(self, func_name)(*args, **kwargs)
+
+        if docstring:
+            _func.__doc__ = docstring
+        return _func
 
     def __getattr__(self, item):
         """

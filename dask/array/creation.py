@@ -416,11 +416,10 @@ def arange_numpy(*args, chunks="auto", like=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
 
 
-def arange(*args, **kwargs):
-    return array_backend_dispatch.arange(*args, **kwargs)
-
-
-arange.__doc__ = arange_numpy.__doc__
+arange = array_backend_dispatch.register_function(
+    "arange",
+    docstring=arange_numpy.__doc__,
+)
 
 
 @derived_from(np)

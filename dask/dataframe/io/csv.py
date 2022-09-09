@@ -765,31 +765,28 @@ def make_reader(reader, reader_name, file_type):
 read_csv_pandas = make_reader(pd.read_csv, "read_csv", "CSV")
 
 
-def read_csv(*args, **kwargs):
-    return dataframe_backend_dispatch.read_csv(*args, **kwargs)
-
-
-read_csv.__doc__ = read_csv_pandas.__doc__
+read_csv = dataframe_backend_dispatch.register_function(
+    "read_csv",
+    docstring=read_csv_pandas.__doc__,
+)
 
 
 read_table_pandas = make_reader(pd.read_table, "read_table", "delimited")
 
 
-def read_table(*args, **kwargs):
-    return dataframe_backend_dispatch.read_table(*args, **kwargs)
-
-
-read_table.__doc__ = read_table_pandas.__doc__
+read_table = dataframe_backend_dispatch.register_function(
+    "read_table",
+    docstring=read_table_pandas.__doc__,
+)
 
 
 read_fwf_pandas = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
 
-def read_fwf(*args, **kwargs):
-    return dataframe_backend_dispatch.read_fwf(*args, **kwargs)
-
-
-read_fwf.__doc__ = read_fwf_pandas.__doc__
+read_fwf = dataframe_backend_dispatch.register_function(
+    "read_fwf",
+    docstring=read_fwf_pandas.__doc__,
+)
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):

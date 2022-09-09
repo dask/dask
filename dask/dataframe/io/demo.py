@@ -209,8 +209,7 @@ def make_timeseries_pandas(
     )
 
 
-def make_timeseries(*args, **kwargs):
-    return dataframe_backend_dispatch.make_timeseries(*args, **kwargs)
-
-
-make_timeseries.__doc__ = make_timeseries_pandas.__doc__
+make_timeseries = dataframe_backend_dispatch.register_function(
+    "make_timeseries",
+    docstring=make_timeseries_pandas.__doc__,
+)

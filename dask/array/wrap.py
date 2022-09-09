@@ -166,31 +166,28 @@ def broadcast_trick(func):
 ones_numpy = w(broadcast_trick(np.ones_like), dtype="f8")
 
 
-def ones(*args, **kwargs):
-    return array_backend_dispatch.ones(*args, **kwargs)
-
-
-ones.__doc__ = ones_numpy.__doc__
+ones = array_backend_dispatch.register_function(
+    "ones",
+    docstring=ones_numpy.__doc__,
+)
 
 
 zeros_numpy = w(broadcast_trick(np.zeros_like), dtype="f8")
 
 
-def zeros(*args, **kwargs):
-    return array_backend_dispatch.zeros(*args, **kwargs)
-
-
-zeros.__doc__ = zeros_numpy.__doc__
+zeros = array_backend_dispatch.register_function(
+    "zeros",
+    docstring=zeros_numpy.__doc__,
+)
 
 
 empty_numpy = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
-def empty(*args, **kwargs):
-    return array_backend_dispatch.empty(*args, **kwargs)
-
-
-empty.__doc__ = empty_numpy.__doc__
+empty = array_backend_dispatch.register_function(
+    "empty",
+    docstring=empty_numpy.__doc__,
+)
 
 
 w_like = wrap(wrap_func_like)
@@ -205,11 +202,10 @@ _full_numpy = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
-def _full(*args, **kwargs):
-    return array_backend_dispatch.full(*args, **kwargs)
-
-
-_full.__doc__ = _full_numpy.__doc__
+_full = array_backend_dispatch.register_function(
+    "full",
+    docstring=_full_numpy.__doc__,
+)
 
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
 if _full.__doc__ is not None:

@@ -152,11 +152,10 @@ def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def from_array(*args, **kwargs):
-    return dataframe_backend_dispatch.from_array(*args, **kwargs)
-
-
-from_array.__doc__ = from_array_pandas.__doc__
+from_array = dataframe_backend_dispatch.register_function(
+    "from_array",
+    docstring=from_array_pandas.__doc__,
+)
 
 
 @overload
@@ -312,11 +311,10 @@ def from_pandas_pandas(
     return new_dd_object(dsk, name, data, divisions)
 
 
-def from_pandas(*args, **kwargs):
-    return dataframe_backend_dispatch.from_pandas(*args, **kwargs)
-
-
-from_pandas.__doc__ = from_pandas_pandas.__doc__
+from_pandas = dataframe_backend_dispatch.register_function(
+    "from_pandas",
+    docstring=from_pandas_pandas.__doc__,
+)
 
 
 def _partition_from_array(data, index=None, initializer=None, **kwargs):

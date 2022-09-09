@@ -146,11 +146,10 @@ def read_orc_pandas(
     )
 
 
-def read_orc(*args, **kwargs):
-    return dataframe_backend_dispatch.read_orc(*args, **kwargs)
-
-
-read_orc.__doc__ = read_orc_pandas.__doc__
+read_orc = dataframe_backend_dispatch.register_function(
+    "read_orc",
+    docstring=read_orc_pandas.__doc__,
+)
 
 
 def to_orc(

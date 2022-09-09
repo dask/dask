@@ -3520,11 +3520,10 @@ def from_array_default(
     return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
 
 
-def from_array(*args, **kwargs):
-    return array_backend_dispatch.from_array(*args, **kwargs)
-
-
-from_array.__doc__ = from_array_default.__doc__
+from_array = array_backend_dispatch.register_function(
+    "from_array",
+    docstring=from_array_default.__doc__,
+)
 
 
 def from_zarr(

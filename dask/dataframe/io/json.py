@@ -288,11 +288,10 @@ def read_json_pandas(
     return from_delayed(parts, meta=meta)
 
 
-def read_json(*args, **kwargs):
-    return dataframe_backend_dispatch.read_json(*args, **kwargs)
-
-
-read_json.__doc__ = read_json_pandas.__doc__
+read_json = dataframe_backend_dispatch.register_function(
+    "read_json",
+    docstring=read_json_pandas.__doc__,
+)
 
 
 def read_json_chunk(

@@ -571,11 +571,10 @@ def read_parquet_pandas(
         )
 
 
-def read_parquet(*args, **kwargs):
-    return dataframe_backend_dispatch.read_parquet(*args, **kwargs)
-
-
-read_parquet.__doc__ = read_parquet_pandas.__doc__
+read_parquet = dataframe_backend_dispatch.register_function(
+    "read_parquet",
+    docstring=read_parquet_pandas.__doc__,
+)
 
 
 def check_multi_support(engine):
