@@ -36,7 +36,6 @@ File Formats:
     read_sql
     read_table
     read_fwf
-    from_bcolz
     from_array
     to_csv
     to_parquet

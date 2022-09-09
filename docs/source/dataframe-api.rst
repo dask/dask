@@ -523,7 +523,6 @@ Create DataFrames
    read_sql_query
    read_sql
    from_array
-   from_bcolz
    from_dask_array
    from_delayed
    from_map
