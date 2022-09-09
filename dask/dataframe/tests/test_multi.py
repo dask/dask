@@ -19,6 +19,7 @@ from dask.dataframe.multi import (
 from dask.dataframe.utils import (
     assert_divisions,
     assert_eq,
+    check_meta,
     clear_known_categories,
     has_known_categories,
     make_meta,
@@ -2068,10 +2069,7 @@ def test_concat_categorical(known, cat_index, divisions):
                 dd.DataFrame, res.dask, res.__dask_keys__()
             )
             for p in [i.iloc[:0] for i in parts]:
-                if isinstance(p, pd.DataFrame):
-                    pd.testing.assert_frame_equal(res._meta, p)
-                elif isinstance(p, pd.Series):
-                    pd.testing.assert_series_equal(res._meta, p)
+                check_meta(res._meta, p)  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
 
