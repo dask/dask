@@ -38,7 +38,7 @@ from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from dask.array.dispatch import (  # noqa: F401
-    array_backend_dispatch,
+    array_io_dispatch,
     concatenate_lookup,
     einsum_lookup,
     tensordot_lookup,
@@ -3520,7 +3520,7 @@ def from_array_default(
     return Array(dsk, name, chunks, meta=meta, dtype=getattr(x, "dtype", None))
 
 
-from_array = array_backend_dispatch.register_function(
+from_array = array_io_dispatch.register_function(
     "from_array",
     docstring=from_array_default.__doc__,
 )

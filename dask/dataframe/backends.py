@@ -19,13 +19,13 @@ import dask.dataframe as dd
 from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.backends import DaskBackendEntrypoint
+from dask.backends import DaskBackendIOEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
-    dataframe_backend_dispatch,
+    dataframe_io_dispatch,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -569,7 +569,7 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
-class PandasBackendEntrypoint(DaskBackendEntrypoint):
+class PandasIOEntrypoint(DaskBackendIOEntrypoint):
     def make_timeseries(self, *args, **kwargs):
         return dd.io.demo.make_timeseries_pandas(*args, **kwargs)
 
@@ -610,7 +610,7 @@ class PandasBackendEntrypoint(DaskBackendEntrypoint):
         return dd.io.io.from_array_pandas(*args, **kwargs)
 
 
-dataframe_backend_dispatch.register_backend("pandas", PandasBackendEntrypoint())
+dataframe_io_dispatch.register_backend("pandas", PandasIOEntrypoint())
 
 
 ######################################

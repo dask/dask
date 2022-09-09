@@ -8,7 +8,7 @@ from fsspec.core import open_files
 from dask.base import compute as dask_compute
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.dispatch import dataframe_io_dispatch
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
 from dask.delayed import delayed
@@ -288,7 +288,7 @@ def read_json_pandas(
     return from_delayed(parts, meta=meta)
 
 
-read_json = dataframe_backend_dispatch.register_function(
+read_json = dataframe_io_dispatch.register_function(
     "read_json",
     docstring=read_json_pandas.__doc__,
 )

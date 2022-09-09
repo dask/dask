@@ -16,7 +16,7 @@ from dask.base import (
     tokenize,
 )
 from dask.dataframe.core import DataFrame
-from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.dispatch import dataframe_io_dispatch
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.delayed import Delayed, delayed
@@ -453,7 +453,7 @@ def read_hdf_pandas(
     )
 
 
-read_hdf = dataframe_backend_dispatch.register_function(
+read_hdf = dataframe_io_dispatch.register_function(
     "read_hdf",
     docstring=read_hdf_pandas.__doc__,
 )

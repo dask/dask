@@ -19,7 +19,7 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.dispatch import array_backend_dispatch
+from dask.array.dispatch import array_io_dispatch
 from dask.array.numpy_compat import _numpy_120
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
@@ -416,7 +416,7 @@ def arange_numpy(*args, chunks="auto", like=None, dtype=None, **kwargs):
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
 
 
-arange = array_backend_dispatch.register_function(
+arange = array_io_dispatch.register_function(
     "arange",
     docstring=arange_numpy.__doc__,
 )

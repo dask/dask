@@ -13,7 +13,7 @@ import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.core import DataFrame, Scalar
-from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.dispatch import dataframe_io_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
@@ -571,7 +571,7 @@ def read_parquet_pandas(
         )
 
 
-read_parquet = dataframe_backend_dispatch.register_function(
+read_parquet = dataframe_io_dispatch.register_function(
     "read_parquet",
     docstring=read_parquet_pandas.__doc__,
 )

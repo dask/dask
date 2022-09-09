@@ -23,7 +23,7 @@ from dask.dataframe.core import (
     has_parallel_type,
     new_dd_object,
 )
-from dask.dataframe.dispatch import dataframe_backend_dispatch
+from dask.dataframe.dispatch import dataframe_io_dispatch
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
@@ -152,7 +152,7 @@ def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-from_array = dataframe_backend_dispatch.register_function(
+from_array = dataframe_io_dispatch.register_function(
     "from_array",
     docstring=from_array_pandas.__doc__,
 )
@@ -311,7 +311,7 @@ def from_pandas_pandas(
     return new_dd_object(dsk, name, data, divisions)
 
 
-from_pandas = dataframe_backend_dispatch.register_function(
+from_pandas = dataframe_io_dispatch.register_function(
     "from_pandas",
     docstring=from_pandas_pandas.__doc__,
 )

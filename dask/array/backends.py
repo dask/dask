@@ -6,7 +6,7 @@ import numpy as np
 import dask.array as da
 from dask.array import chunk
 from dask.array.dispatch import (
-    array_backend_dispatch,
+    array_io_dispatch,
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
@@ -19,7 +19,7 @@ from dask.array.dispatch import (
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
 from dask.array.percentile import _percentile
-from dask.backends import DaskBackendEntrypoint
+from dask.backends import DaskBackendIOEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -302,7 +302,7 @@ def _nannumel_sparse(x, **kwargs):
     return n.todense() if hasattr(n, "todense") else n
 
 
-class NumpyBackendEntrypoint(DaskBackendEntrypoint):
+class NumpyIOEntrypoint(DaskBackendIOEntrypoint):
     def ones(self, *args, **kwargs):
         return da.wrap.ones_numpy(*args, **kwargs)
 
@@ -330,16 +330,16 @@ class NumpyBackendEntrypoint(DaskBackendEntrypoint):
         return da.core.from_array_default(*args, **kwargs)
 
 
-array_backend_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
+array_io_dispatch.register_backend("numpy", NumpyIOEntrypoint())
 
 
 try:
     import cupy
 
-    class CupyBackendEntrypoint(DaskBackendEntrypoint):
+    class CupyIOEntrypoint(DaskBackendIOEntrypoint):
         @cached_property
         def fallback(self):
-            return NumpyBackendEntrypoint()
+            return NumpyIOEntrypoint()
 
         def move_from_fallback(self, x):
             return x.map_blocks(cupy.asarray)
@@ -379,7 +379,7 @@ try:
             # TODO: Only call cupy.asarray if _meta is numpy
             return x.map_blocks(cupy.asarray)
 
-    array_backend_dispatch.register_backend("cupy", CupyBackendEntrypoint())
+    array_io_dispatch.register_backend("cupy", CupyIOEntrypoint())
 
 except ImportError:
     pass

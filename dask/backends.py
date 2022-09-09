@@ -6,11 +6,11 @@ from functools import lru_cache
 from dask.compatibility import entry_points
 
 
-class DaskBackendEntrypoint:
-    """Base Collection-Backend Entrypoint Class"""
+class DaskBackendIOEntrypoint:
+    """Base Collection-IO Backend Entrypoint Class"""
 
     @property
-    def fallback(self) -> DaskBackendEntrypoint | None:
+    def fallback(self) -> DaskBackendIOEntrypoint | None:
         """Fallback entrypoint object.
 
         Returning anything other than ``None`` requires that
@@ -41,26 +41,26 @@ def detect_entrypoints():
     return {ep.name: ep for ep in entrypoints}
 
 
-class BackendDispatch:
-    """Simple backend dispatch for collection functions"""
+class BackendIODispatch:
+    """Simple backend dispatch for collection-IO functions"""
 
     def __init__(self, name=None):
         self._lookup = {}
         if name:
             self.__name__ = name
 
-    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+    def register_backend(self, backend: str, cls_target: DaskBackendIOEntrypoint):
         """Register a target class for a specific backend label"""
 
         def wrapper(cls_target):
             if isinstance(backend, tuple):
                 for b in backend:
                     self.register_backend(b, cls_target)
-            elif isinstance(cls_target, DaskBackendEntrypoint):
+            elif isinstance(cls_target, DaskBackendIOEntrypoint):
                 self._lookup[backend] = cls_target
             else:
                 raise ValueError(
-                    f"BackendDispatch only supports DaskBackendEntrypoint "
+                    f"BackendIODispatch only supports DaskBackendIOEntrypoint "
                     f"registration. Got {cls_target}"
                 )
             return cls_target

@@ -8,7 +8,7 @@ import pandas as pd
 import dask.array as da
 import dask.dataframe as dd
 from dask import config
-from dask.backends import BackendDispatch
+from dask.backends import BackendIODispatch
 from dask.utils import Dispatch
 
 # Compute Dispatch Funcitons
@@ -144,7 +144,7 @@ def union_categoricals(to_union, sort_categories=False, ignore_order=False):
     return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
 
 
-class DataFrameBackendDispatch(BackendDispatch):
+class DataFrameBackendIODispatch(BackendIODispatch):
     def get_backend(self):
         return config.get("dataframe.backend.library") or "pandas"
 
@@ -157,4 +157,4 @@ class DataFrameBackendDispatch(BackendDispatch):
         return config.get("dataframe.backend.warn-fallback")
 
 
-dataframe_backend_dispatch = DataFrameBackendDispatch("dataframe_backend_dispatch")
+dataframe_io_dispatch = DataFrameBackendIODispatch("dataframe_io_dispatch")
