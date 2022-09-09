@@ -88,6 +88,7 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import (
     asciitable,
+    check_meta,
     is_dataframe_like,
     is_series_like,
     make_meta,
@@ -1096,7 +1097,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
         try:
-            df._meta == meta  # noqa: B015
+            check_meta(df._meta, meta)
             match = True
         except (ValueError, TypeError):
             match = False
