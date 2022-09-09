@@ -311,20 +311,24 @@ def test_rename_columns():
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
     assert_eq(ddf, df)
 
-    msg = r"Length mismatch: Expected axis has 2 elements, new values have 4 elements"
-    with pytest.raises(ValueError) as err:
+    msg = "Length mismatch: Expected axis has 2 elements, new values have 4 elements"
+    with pytest.raises(ValueError, match=msg):
         ddf.columns = [1, 2, 3, 4]
-    assert msg in str(err.value)
+    msg = "columns in this dataframe have duplicate names"
+    with pytest.raises(ValueError, match=msg):
+        ddf.columns = ["x", "x"]
 
     # Multi-index columns
     df = pd.DataFrame({("A", "0"): [1, 2, 2, 3], ("B", 1): [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    df.columns = ["x", "y"]
     ddf.columns = ["x", "y"]
+    df.columns = ["x", "y"]
     tm.assert_index_equal(ddf.columns, pd.Index(["x", "y"]))
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
     assert_eq(ddf, df)
+    with pytest.raises(ValueError, match=msg):
+        ddf.columns = ["x", "x"]
 
 
 def test_rename_series():
@@ -1305,8 +1309,6 @@ def test_len():
     assert len(d.a) == len(full.a)
     assert len(dd.from_pandas(pd.DataFrame(), npartitions=1)) == 0
     assert len(dd.from_pandas(pd.DataFrame(columns=[1, 2]), npartitions=1)) == 0
-    # Regression test for https://github.com/dask/dask/issues/6110
-    assert len(dd.from_pandas(pd.DataFrame(columns=["foo", "foo"]), npartitions=1)) == 0
 
 
 def test_size():
@@ -2870,11 +2872,19 @@ def test_gh6305():
 def test_rename_dict():
     renamer = {"a": "A", "b": "B"}
     assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    with pytest.raises(
+        ValueError, match="columns in this dataframe have duplicate names"
+    ):
+        d.rename(columns={"a": "A", "b": "A"})
 
 
 def test_rename_function():
     renamer = lambda x: x.upper()
     assert_eq(d.rename(columns=renamer), full.rename(columns=renamer))
+    with pytest.raises(
+        ValueError, match="columns in this dataframe have duplicate names"
+    ):
+        d.rename(columns=lambda _: "A")
 
 
 def test_rename_index():
@@ -3182,6 +3192,7 @@ def test_corr():
     pytest.raises(TypeError, lambda: da.corr(ddf))
 
 
+@pytest.mark.xfail(reason="Dataframe does no longer support duplicate column names")
 def test_corr_same_name():
     # Series with same names (see https://github.com/dask/dask/issues/4906)
 
@@ -3440,7 +3451,6 @@ def test_dataframe_itertuples():
     "columns",
     [
         ("x", "y"),
-        ("x", "x"),
         pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
     ],
 )
@@ -4293,7 +4303,7 @@ def test_dataframe_reductions_arithmetic(reduction):
 def test_dataframe_mode():
     data = [["Tom", 10, 7], ["Farahn", 14, 7], ["Julie", 14, 5], ["Nick", 10, 10]]
 
-    df = pd.DataFrame(data, columns=["Name", "Num", "Num"])
+    df = pd.DataFrame(data, columns=["Name", "Num", "Num2"])
     ddf = dd.from_pandas(df, npartitions=3)
 
     assert_eq(ddf.mode(), df.mode())

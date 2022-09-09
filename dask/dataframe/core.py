@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import operator
 import warnings
-from collections.abc import Hashable, Iterator, Sequence
+from collections.abc import Iterator, Sequence
 from functools import partial, wraps
 from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
-from typing import Any, Callable, ClassVar, Literal, Mapping
+from typing import Any, Callable, ClassVar, Iterable, Literal, Mapping
 
 import numpy as np
 import pandas as pd
@@ -340,16 +340,16 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self._meta = meta
         self.divisions = tuple(divisions)
 
-    def __dask_graph__(self):
+    def __dask_graph__(self) -> HighLevelGraph:
         return self.dask
 
-    def __dask_keys__(self) -> list[Hashable]:
+    def __dask_keys__(self) -> list[tuple[str, int]]:
         return [(self._name, i) for i in range(self.npartitions)]
 
-    def __dask_layers__(self):
+    def __dask_layers__(self) -> tuple[str]:
         return (self._name,)
 
-    def __dask_tokenize__(self):
+    def __dask_tokenize__(self) -> str:
         return self._name
 
     __dask_optimize__ = globalmethod(
@@ -573,7 +573,7 @@ Dask Name: {name}, {layers}"""
         self._name = result._name
         self._meta = result._meta
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False) -> _Frame:
         """Reset the index to the default index.
 
         Note that unlike in ``pandas``, the reset ``dask.dataframe`` index will
@@ -598,11 +598,11 @@ Dask Name: {name}, {layers}"""
         ).clear_divisions()
 
     @property
-    def known_divisions(self):
+    def known_divisions(self) -> bool:
         """Whether divisions are already known"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
-    def clear_divisions(self):
+    def clear_divisions(self) -> _Frame:
         """Forget division information"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
@@ -707,12 +707,12 @@ Dask Name: {name}, {layers}"""
             **kwargs,
         )
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.reduction(
             len, np.sum, token="len", meta=int, split_every=False
         ).compute()
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         raise ValueError(
             f"The truth value of a {self.__class__.__name__} is ambiguous. "
             "Use a.any() or a.all()."
@@ -726,15 +726,15 @@ Dask Name: {name}, {layers}"""
 
         return wrapper
 
-    def __float__(self):
+    def __float__(self) -> float:
         return self._scalarfunc(float)
 
-    def __int__(self):
+    def __int__(self) -> int:
         return self._scalarfunc(int)
 
     __long__ = __int__  # python 2
 
-    def __complex__(self):
+    def __complex__(self) -> complex:
         return self._scalarfunc(complex)
 
     @insert_meta_param_description(pad=12)
@@ -3434,11 +3434,11 @@ class Series(_Frame):
         return [self.index]
 
     @property
-    def name(self):
+    def name(self) -> str | None:
         return self._meta.name
 
     @name.setter
-    def name(self, name):
+    def name(self, name: str):
         self._meta.name = name
         renamed = _rename_dask(self, name)
         # update myself
@@ -3446,7 +3446,7 @@ class Series(_Frame):
         self._name = renamed._name
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """Return dimensionality"""
         return 1
 
@@ -3487,13 +3487,13 @@ class Series(_Frame):
         return list(o)
 
     @property
-    def nbytes(self):
+    def nbytes(self) -> Scalar:
         """Number of bytes"""
         return self.reduction(
             methods.nbytes, np.sum, token="nbytes", meta=int, split_every=False
         )
 
-    def _repr_data(self):
+    def _repr_data(self) -> Series:
         return _repr_data_series(self._meta, self._repr_divisions)
 
     def __repr__(self):
@@ -3514,7 +3514,7 @@ Dask Name: {name}, {layers}""".format(
             layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
-    def rename(self, index=None, inplace=False, sorted_index=False):
+    def rename(self, index=None, inplace=False, sorted_index=False) -> Series:
         """Alter Series index labels or name
 
         Function / dict values must be unique (1-to-1). Labels not contained in
@@ -4337,36 +4337,53 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors: ClassVar[set[str]] = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
-        if self.dask.layers[name].collection_annotations is None:
-            self.dask.layers[name].collection_annotations = {
-                "npartitions": self.npartitions,
-                "columns": [col for col in self.columns],
-                "type": typename(type(self)),
-                "dataframe_type": typename(type(self._meta)),
-                "series_dtypes": {
-                    col: self._meta[col].dtype
-                    if hasattr(self._meta[col], "dtype")
-                    else None
-                    for col in self._meta.columns
-                },
-            }
-        else:
-            self.dask.layers[name].collection_annotations.update(
-                {
-                    "npartitions": self.npartitions,
-                    "columns": [col for col in self.columns],
-                    "type": typename(type(self)),
-                    "dataframe_type": typename(type(self._meta)),
-                    "series_dtypes": {
-                        col: self._meta[col].dtype
-                        if hasattr(self._meta[col], "dtype")
-                        else None
-                        for col in self._meta.columns
-                    },
-                }
+    @staticmethod
+    def _prevent_dupl_col_names(
+        meta: pd.DataFrame, allow_index_name_in_cols: bool = True
+    ):
+        """Makes sure not to build a frame with duplicated column names.
+        The index is allowed by default to have the same name as a column, but this can also be prevented.
+        """
+        cols = list(meta.columns)
+        if (
+            not allow_index_name_in_cols
+            and (index_name := meta.index.name) is not None
+            and index_name in cols
+        ):
+            raise ValueError(
+                f"The index in this dataframe has the same name '{index_name}' as one of its columns.\n"
+                "Please rename it by calling `df.index.rename()`, or unname it with `df.index.name = None`."
             )
+        if len(set(cols)) < len(cols):
+            dupl_cols = {c for c in cols if cols.count(c) > 1}
+            raise ValueError(
+                f"The following columns in this dataframe have duplicate names: {sorted(dupl_cols)}.\n"
+                "This is allowed in Pandas, but not in Dask, which requires each column to have a unique name.\n"
+                "Please rename the dataframe columns by setting `df.columns = new_unique_columns`."
+            )
+
+    def __init__(self, dsk, name: str, meta: pd.DataFrame, divisions: Iterable):
+        # Call super
+        super().__init__(dsk, name, meta, divisions)
+
+        # Prevent column name duplicity
+        self._prevent_dupl_col_names(meta)
+
+        # If OK, set or update annotations in graph
+        annotations = {
+            "npartitions": self.npartitions,
+            "columns": list(meta.columns),
+            "type": typename(type(self)),
+            "dataframe_type": typename(type(meta)),
+            "series_dtypes": {
+                col_name: col_series.dtype if hasattr(col_series, "dtype") else None
+                for col_name, col_series in meta.items()
+            },
+        }
+        if (cur_annotations := self.dask.layers[name].collection_annotations) is None:
+            self.dask.layers[name].collection_annotations = annotations
+        else:
+            cur_annotations.update(annotations)
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -4393,11 +4410,12 @@ class DataFrame(_Frame):
         return [self.index, self.columns]
 
     @property
-    def columns(self):
+    def columns(self) -> pd.Index:
         return self._meta.columns
 
     @columns.setter
-    def columns(self, columns):
+    def columns(self, columns: Iterable):
+        # _rename_dask calls new_dd_object, which will fail if there are duplicate column names
         renamed = _rename_dask(self, columns)
         self._meta = renamed._meta
         self._name = renamed._name
@@ -4421,7 +4439,7 @@ class DataFrame(_Frame):
         # For dataframes with unique column names, this will be transformed into a __getitem__ call
         return _iLocIndexer(self)
 
-    def __len__(self):
+    def __len__(self) -> int:
         try:
             s = self.iloc[:, 0]
         except IndexError:
@@ -4429,11 +4447,11 @@ class DataFrame(_Frame):
         else:
             return len(s)
 
-    def __contains__(self, key):
+    def __contains__(self, key) -> bool:
         return key in self._meta
 
     @property
-    def empty(self):
+    def empty(self) -> bool:
         # __getattr__ will be called after we raise this, so we'll raise it again from there
         raise AttributeNotImplementedError(
             "Checking whether a Dask DataFrame has any rows may be expensive. "
@@ -4543,7 +4561,7 @@ class DataFrame(_Frame):
         else:
             object.__setattr__(self, key, value)
 
-    def __getattr__(self, key):
+    def __getattr__(self, key) -> Any:
         if key in self.columns:
             return self[key]
         elif key == "empty":
@@ -4556,20 +4574,20 @@ class DataFrame(_Frame):
         else:
             raise AttributeError("'DataFrame' object has no attribute %r" % key)
 
-    def __dir__(self):
+    def __dir__(self) -> list[str]:
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(c for c in self.columns if (isinstance(c, str) and c.isidentifier()))
         return list(o)
 
-    def __iter__(self):
+    def __iter__(self) -> Iterator:
         return iter(self._meta)
 
-    def _ipython_key_completions_(self):
+    def _ipython_key_completions_(self) -> list:
         return methods.tolist(self.columns)
 
     @property
-    def ndim(self):
+    def ndim(self) -> int:
         """Return dimensionality"""
         return 2
 
@@ -4671,7 +4689,7 @@ class DataFrame(_Frame):
         divisions: Sequence | None = None,
         inplace: bool = False,
         **kwargs,
-    ):
+    ) -> DataFrame:
         """Set the DataFrame index (row labels) using an existing column.
 
         This realigns the dataset to be sorted by a new column. This can have a
@@ -4969,6 +4987,7 @@ class DataFrame(_Frame):
             raise ValueError("Cannot rename index.")
 
         # *args here is index, columns but columns arg is already used
+        # map_partitions calls new_dd_object, so duplicate column names are also checked
         return self.map_partitions(M.rename, None, columns=columns)
 
     def query(self, expr, **kwargs):
@@ -7702,8 +7721,6 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     if has_parallel_type(meta):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
     elif is_arraylike(meta) and meta.shape:
-        import dask.array as da
-
         chunks = ((np.nan,) * (len(divisions) - 1),) + tuple(
             (d,) for d in meta.shape[1:]
         )
@@ -7716,7 +7733,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                 suffix = (0,) * (len(chunks) - 1)
                 for i in range(len(chunks[0])):
                     layer[(name, i) + suffix] = layer.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+        return Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 

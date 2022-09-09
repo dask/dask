@@ -325,7 +325,7 @@ def test_categorical_accessor_presence():
     assert hasattr(ddf.x, "cat")
     assert not hasattr(ddf.y, "cat")
 
-    df2 = df.set_index(df.x)
+    df2 = df.set_index(df.x.rename("z"))
     ddf2 = dd.from_pandas(df2, npartitions=2, sort=False)
     assert hasattr(ddf2.index, "categories")
     assert not hasattr(ddf.index, "categories")

@@ -240,6 +240,7 @@ def test_loc2d_with_unknown_divisions():
     assert_eq(ddf.loc["a":"o", ["A"]], df.loc["a":"o", ["A"]])
 
 
+@pytest.mark.xfail(reason="Dataframe does no longer support duplicate column names")
 def test_loc2d_duplicated_columns():
     df = pd.DataFrame(
         np.random.randn(20, 5),
@@ -612,6 +613,7 @@ def test_iloc_raises():
         ddf.iloc[:, [5, 6]]
 
 
+@pytest.mark.xfail(reason="Dataframe does no longer support duplicate column names")
 def test_iloc_duplicate_columns():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
@@ -703,7 +705,7 @@ def test_deterministic_hashing_series():
 
 def test_deterministic_hashing_dataframe():
     # Add duplicate column names in order to use _iLocIndexer._iloc path
-    obj = pd.DataFrame([[0, 1, 2, 3], [4, 5, 6, 7]], columns=["a", "b", "c", "c"])
+    obj = pd.DataFrame([[0, 1, 2, 3], [4, 5, 6, 7]], columns=["a", "b", "c", "d"])
 
     dask_df = dd.from_pandas(obj, npartitions=1)
 

@@ -360,7 +360,7 @@ def test_from_pandas_with_datetime_index():
 def test_from_pandas_with_index_nulls(null_value):
     df = pd.DataFrame({"x": [1, 2, 3]}, index=["C", null_value, "A"])
     with pytest.raises(NotImplementedError, match="is non-numeric and contains nulls"):
-        dd.from_pandas(df, npartitions=2, sort=False)
+        dd.from_pandas(df, npartitions=2)
 
 
 def test_from_pandas_with_wrong_args():
@@ -375,6 +375,10 @@ def test_from_pandas_with_wrong_args():
         dd.from_pandas(df, npartitions=5.2, sort=False)
     with pytest.raises(TypeError, match="provide chunksize as an int"):
         dd.from_pandas(df, chunksize=18.27)
+    with pytest.raises(ValueError, match="duplicate names"):
+        dd.from_pandas(
+            pd.concat([df, df], axis="columns"), npartitions=1
+        )  # concat yields 2 columns named 'x'
 
 
 def test_from_pandas_chunksize_one():

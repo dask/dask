@@ -1705,8 +1705,8 @@ def test_csv_getitem_column_order(tmpdir):
     df1 = pd.DataFrame([{c: v for c, v in zip(columns, values)}])
     df1.to_csv(path)
 
-    # Use disordered and duplicated column selection
-    columns = list("hczzkylaape")
+    # Use disordered column selection
+    columns = list("hczkylape")
     df2 = dd.read_csv(path)[columns].head(1)
     assert_eq(df1[columns], df2)
 

@@ -528,6 +528,7 @@ def test_categorical_format():
     assert repr(unknown) == exp
 
 
+@pytest.mark.xfail(reason="Dataframe does no longer support duplicate column names")
 def test_duplicate_columns_repr():
     arr = da.from_array(np.arange(10).reshape(5, 2), chunks=(5, 2))
     frame = dd.from_dask_array(arr, columns=["a", "a"])
