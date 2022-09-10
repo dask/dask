@@ -610,7 +610,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     sl_2 = tuple(sl_2)
 
     r = a
-    for i in range(n):
+    for _ in range(n):
         r = r[sl_1] - r[sl_2]
 
     return r
