@@ -1,38 +1,32 @@
 from __future__ import annotations
 
-import warnings
+from abc import ABC, abstractmethod
 from functools import lru_cache
 
+from dask import config
 from dask.compatibility import entry_points
 
 
-class DaskBackendIOEntrypoint:
-    """Base Collection-IO Backend Entrypoint Class"""
+class DaskBackendEntrypoint(ABC):
+    """Base Collection-Backend Entrypoint Class
 
-    @property
-    def fallback(self) -> DaskBackendIOEntrypoint | None:
-        """Fallback entrypoint object.
+    Most methods in this class correspond to collection-creation
+    for a specific library backend. Once a collection is created,
+    the existing data will be used to dispatch compute operations
+    within individual tasks. The backend is responsible for
+    ensuring that these data-directed dispatch functions are
+    registered when ``__init__`` is called.
+    """
 
-        Returning anything other than ``None`` requires that
-        ``move_from_fallback`` be properly defined.
+    @abstractmethod
+    def __init__(self):
+        """Register data-directed dispatch functions
+
+        This may be a ``pass`` operation if the data dispatch functions
+        are already registered within the same module that the
+        ``DaskBackendEntrypoint`` subclass is defined.
         """
-        return None
-
-    def move_from_fallback(self, x):
-        """Move a Dask collection from the fallback backend"""
         raise NotImplementedError
-
-    def _get_fallback_attr(self, attr):
-        """Return the fallback version of the specified attribute"""
-        if self.fallback is None:
-            raise ValueError(f"Fallback is not supported for {self}")
-
-        def wrapper(*args, **kwargs):
-            return self.move_from_fallback(
-                getattr(self.fallback, attr)(*args, **kwargs)
-            )
-
-        return wrapper
 
 
 @lru_cache(maxsize=1)
@@ -41,26 +35,25 @@ def detect_entrypoints():
     return {ep.name: ep for ep in entrypoints}
 
 
-class BackendIODispatch:
-    """Simple backend dispatch for collection-IO functions"""
+class CreationDispatch:
+    """Simple backend dispatch for collection-creation functions"""
 
-    def __init__(self, name=None):
+    def __init__(self, config_field, default, name=None):
         self._lookup = {}
+        self.config_field = config_field
+        self.default = default
         if name:
             self.__name__ = name
 
-    def register_backend(self, backend: str, cls_target: DaskBackendIOEntrypoint):
+    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
         """Register a target class for a specific backend label"""
 
         def wrapper(cls_target):
-            if isinstance(backend, tuple):
-                for b in backend:
-                    self.register_backend(b, cls_target)
-            elif isinstance(cls_target, DaskBackendIOEntrypoint):
+            if isinstance(cls_target, DaskBackendEntrypoint):
                 self._lookup[backend] = cls_target
             else:
                 raise ValueError(
-                    f"BackendIODispatch only supports DaskBackendIOEntrypoint "
+                    f"CreationDispatch only supports DaskBackendEntrypoint "
                     f"registration. Got {cls_target}"
                 )
             return cls_target
@@ -83,17 +76,9 @@ class BackendIODispatch:
 
     def get_backend(self):
         """Return the desired collection backend"""
-        raise NotImplementedError
-
-    @property
-    def allow_fallback(self):
-        """Check if using the backend fallback is allowed"""
-        raise NotImplementedError
-
-    @property
-    def warn_fallback(self):
-        """Check if backend-fallback usage should raise a warning"""
-        raise NotImplementedError
+        if self.config_field:
+            return config.get(self.config_field) or self.default
+        return self.default
 
     def register_function(self, func_name, docstring=None):
         """Register dispatchable function name"""
@@ -110,17 +95,4 @@ class BackendIODispatch:
         Return the appropriate attribute for the current backend
         """
         backend = self.dispatch(self.get_backend())
-        try:
-            return getattr(backend, item)
-        except AttributeError as err:
-
-            if not backend.fallback or not self.allow_fallback:
-                raise err
-
-            if self.warn_fallback:
-                warnings.warn(
-                    f"Falling back to {backend.fallback} for {item}. "
-                    f"Expect data-movement overhead!"
-                )
-
-            return backend._get_fallback_attr(item)
+        return getattr(backend, item)

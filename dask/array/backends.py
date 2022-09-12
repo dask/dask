@@ -6,7 +6,7 @@ import numpy as np
 import dask.array as da
 from dask.array import chunk
 from dask.array.dispatch import (
-    array_io_dispatch,
+    array_creation_dispatch,
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
@@ -19,7 +19,7 @@ from dask.array.dispatch import (
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
 from dask.array.percentile import _percentile
-from dask.backends import DaskBackendIOEntrypoint
+from dask.backends import DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -302,7 +302,12 @@ def _nannumel_sparse(x, **kwargs):
     return n.todense() if hasattr(n, "todense") else n
 
 
-class NumpyIOEntrypoint(DaskBackendIOEntrypoint):
+class NumpyBackendEntrypoint(DaskBackendEntrypoint):
+    def __init__(self):
+        # Importing this class will already guarentee
+        # that data-dispatch functions are registered
+        pass
+
     def ones(self, *args, **kwargs):
         return da.wrap.ones_numpy(*args, **kwargs)
 
@@ -330,39 +335,41 @@ class NumpyIOEntrypoint(DaskBackendIOEntrypoint):
         return da.core.from_array_default(*args, **kwargs)
 
 
-array_io_dispatch.register_backend("numpy", NumpyIOEntrypoint())
+array_creation_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
 
 
 try:
     import cupy
 
-    class CupyIOEntrypoint(DaskBackendIOEntrypoint):
-        @cached_property
-        def fallback(self):
-            return NumpyIOEntrypoint()
+    class CupyBackendEntrypoint(DaskBackendEntrypoint):
+        def __init__(self):
+            # Importing this class will already guarentee
+            # that data-dispatch functions are registered
+            pass
 
-        def move_from_fallback(self, x):
-            return x.map_blocks(cupy.asarray)
+        @cached_property
+        def base(self):
+            return NumpyBackendEntrypoint()
 
         def ones(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.fallback.ones(*args, meta=meta, **kwargs)
+            return self.base.ones(*args, meta=meta, **kwargs)
 
         def zeros(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.fallback.zeros(*args, meta=meta, **kwargs)
+            return self.base.zeros(*args, meta=meta, **kwargs)
 
         def empty(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.fallback.empty(*args, meta=meta, **kwargs)
+            return self.base.empty(*args, meta=meta, **kwargs)
 
         def full(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.fallback.full(*args, meta=meta, **kwargs)
+            return self.base.full(*args, meta=meta, **kwargs)
 
         def arange(self, *args, like=None, **kwargs):
             like = cupy.empty(()) if like is None else like
-            return self.fallback.arange(*args, like=like, **kwargs)
+            return self.base.arange(*args, like=like, **kwargs)
 
         def default_random_state(self):
             if not hasattr(self, "_cupy_random_states"):
@@ -375,11 +382,11 @@ try:
             return state
 
         def from_array(self, *args, **kwargs):
-            x = self.fallback.from_array(*args, **kwargs)
+            x = self.base.from_array(*args, **kwargs)
             # TODO: Only call cupy.asarray if _meta is numpy
             return x.map_blocks(cupy.asarray)
 
-    array_io_dispatch.register_backend("cupy", CupyIOEntrypoint())
+    array_creation_dispatch.register_backend("cupy", CupyBackendEntrypoint())
 
 except ImportError:
     pass

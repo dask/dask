@@ -26,7 +26,7 @@ from pandas.api.types import (
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe.dispatch import dataframe_io_dispatch
+from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
@@ -765,7 +765,7 @@ def make_reader(reader, reader_name, file_type):
 read_csv_pandas = make_reader(pd.read_csv, "read_csv", "CSV")
 
 
-read_csv = dataframe_io_dispatch.register_function(
+read_csv = dataframe_creation_dispatch.register_function(
     "read_csv",
     docstring=read_csv_pandas.__doc__,
 )
@@ -774,7 +774,7 @@ read_csv = dataframe_io_dispatch.register_function(
 read_table_pandas = make_reader(pd.read_table, "read_table", "delimited")
 
 
-read_table = dataframe_io_dispatch.register_function(
+read_table = dataframe_creation_dispatch.register_function(
     "read_table",
     docstring=read_table_pandas.__doc__,
 )
@@ -783,7 +783,7 @@ read_table = dataframe_io_dispatch.register_function(
 read_fwf_pandas = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
 
-read_fwf = dataframe_io_dispatch.register_function(
+read_fwf = dataframe_creation_dispatch.register_function(
     "read_fwf",
     docstring=read_fwf_pandas.__doc__,
 )

@@ -16,16 +16,15 @@ from pandas.api.types import (
 )
 
 import dask.dataframe as dd
-from dask import config
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.backends import DaskBackendIOEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
+    DataFrameBackendEntrypoint,
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
-    dataframe_io_dispatch,
+    dataframe_creation_dispatch,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -48,12 +47,6 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
-
-
-def set_backend(df_backend):
-    """Set the default DataFrame backend to use for input IO"""
-    return config.set({"dataframe.backend": df_backend})
-
 
 ##########
 # Pandas #
@@ -569,7 +562,12 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
-class PandasIOEntrypoint(DaskBackendIOEntrypoint):
+class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
+    def __init__(self):
+        # Importing this class will already guarentee
+        # that data-dispatch functions are registered
+        pass
+
     def make_timeseries(self, *args, **kwargs):
         return dd.io.demo.make_timeseries_pandas(*args, **kwargs)
 
@@ -610,7 +608,7 @@ class PandasIOEntrypoint(DaskBackendIOEntrypoint):
         return dd.io.io.from_array_pandas(*args, **kwargs)
 
 
-dataframe_io_dispatch.register_backend("pandas", PandasIOEntrypoint())
+dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
 
 
 ######################################

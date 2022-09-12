@@ -15,7 +15,7 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.creation import arange
-from dask.array.dispatch import array_io_dispatch
+from dask.array.dispatch import array_creation_dispatch
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, random_state_data
@@ -56,7 +56,7 @@ class RandomState:
 
     def __init__(self, seed=None, RandomState=None):
         self._numpy_state = np.random.RandomState(seed)
-        self._RandomState = array_io_dispatch.new_random_state(RandomState)
+        self._RandomState = array_creation_dispatch.new_random_state(RandomState)
 
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
@@ -453,7 +453,7 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
 def _make_api(attr):
     def wrapper(*args, **kwargs):
         return getattr(
-            array_io_dispatch.default_random_state(),
+            array_creation_dispatch.default_random_state(),
             attr,
         )(*args, **kwargs)
 

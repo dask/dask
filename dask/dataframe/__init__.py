@@ -2,7 +2,6 @@ try:
     import dask.dataframe._pyarrow_compat
     from dask.base import compute
     from dask.dataframe import backends, dispatch, rolling
-    from dask.dataframe.backends import set_backend
     from dask.dataframe.core import (
         DataFrame,
         Index,

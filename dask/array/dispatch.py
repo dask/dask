@@ -4,8 +4,7 @@ Dispatch in dask.array.
 Also see backends.py
 """
 
-from dask import config
-from dask.backends import BackendIODispatch
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.utils import Dispatch
 
 concatenate_lookup = Dispatch("concatenate")
@@ -18,17 +17,38 @@ numel_lookup = Dispatch("numel")
 nannumel_lookup = Dispatch("nannumel")
 
 
-class ArrayBackendIODispatch(BackendIODispatch):
-    def get_backend(self):
-        return config.get("array.backend.library") or "numpy"
-
-    @property
-    def allow_fallback(self):
-        return config.get("array.backend.allow-fallback")
-
-    @property
-    def warn_fallback(self):
-        return config.get("array.backend.warn-fallback")
+array_creation_dispatch = CreationDispatch(
+    config_field="array.backend.library",
+    default="numpy",
+    name="array_creation_dispatch",
+)
 
 
-array_io_dispatch = ArrayBackendIODispatch("array_io_dispatch")
+class ArrayBackendEntrypoint(DaskBackendEntrypoint):
+    def __init__(self):
+        """Register data-directed dispatch functions"""
+        raise NotImplementedError
+
+    def ones(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def zeros(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def empty(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def full(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def arange(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def default_random_state(self):
+        raise NotImplementedError
+
+    def new_random_state(self, state):
+        raise NotImplementedError
+
+    def from_array(self, *args, **kwargs):
+        raise NotImplementedError

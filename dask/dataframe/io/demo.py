@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 from dask.dataframe.core import tokenize
-from dask.dataframe.dispatch import dataframe_io_dispatch
+from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
@@ -209,7 +209,7 @@ def make_timeseries_pandas(
     )
 
 
-make_timeseries = dataframe_io_dispatch.register_function(
+make_timeseries = dataframe_creation_dispatch.register_function(
     "make_timeseries",
     docstring=make_timeseries_pandas.__doc__,
 )
