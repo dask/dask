@@ -40,6 +40,11 @@ from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
+try:
+    import crick
+except ImportError:
+    crick = None
+
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
@@ -391,11 +396,18 @@ def test_rename_series_method_2():
 
 
 @pytest.mark.parametrize(
-    "method,test_values", [("tdigest", (6, 10)), ("dask", (4, 20))]
+    "method,test_values",
+    [
+        (
+            pytest.param(
+                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            ),
+            (6, 10),
+        ),
+        ("dask", (4, 20)),
+    ],
 )
 def test_describe_numeric(method, test_values):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # prepare test case which approx quantiles will be the same as actuals
     s = pd.Series(list(range(test_values[1])) * test_values[0])
     df = pd.DataFrame(
@@ -1337,11 +1349,17 @@ def test_nbytes():
 
 @pytest.mark.parametrize(
     "method,expected",
-    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 4.0, 1.2, 6.2, 2.0))],
+    [
+        (
+            pytest.param(
+                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            ),
+            (0.35, 3.80, 2.5, 6.5, 2.0),
+        ),
+        ("dask", (0.0, 4.0, 1.2, 6.2, 2.0)),
+    ],
 )
 def test_quantile(method, expected):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # series / multiple
     result = d.b.quantile([0.3, 0.7], method=method)
 
@@ -1380,10 +1398,16 @@ def test_quantile(method, expected):
     assert result == expected[4]
 
 
-@pytest.mark.parametrize("method", ["tdigest", "dask"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+        ),
+        "dask",
+    ],
+)
 def test_quantile_missing(method):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     # TODO: Test npartitions=2
     # (see https://github.com/dask/dask/issues/9227)
@@ -1397,10 +1421,16 @@ def test_quantile_missing(method):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("method", ["tdigest", "dask"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+        ),
+        "dask",
+    ],
+)
 def test_empty_quantile(method):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     result = d.b.quantile([], method=method)
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
@@ -1418,7 +1448,9 @@ def test_empty_quantile(method):
     "method,expected",
     [
         (
-            "tdigest",
+            pytest.param(
+                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+            ),
             (
                 pd.Series([9.5, 29.5, 19.5], index=["A", "X", "B"]),
                 pd.DataFrame(
@@ -1442,8 +1474,6 @@ def test_empty_quantile(method):
     ],
 )
 def test_dataframe_quantile(method, expected):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # column X is for test column order and result division
     df = pd.DataFrame(
         {
@@ -4331,7 +4361,15 @@ def test_median():
         ddf.x.median()
 
 
-@pytest.mark.parametrize("method", ["default", "tdigest"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        "default",
+        pytest.param(
+            "tdigest", marks=pytest.importorskip("crick", reason="Requires crick")
+        ),
+    ],
+)
 def test_median_approximate(method):
     df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
     ddf = dd.from_pandas(df, npartitions=10)
