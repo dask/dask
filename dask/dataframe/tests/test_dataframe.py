@@ -398,11 +398,10 @@ def test_rename_series_method_2():
 @pytest.mark.parametrize(
     "method,test_values",
     [
-        (
-            pytest.param(
-                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
-            ),
+        pytest.param(
+            "tdigest",
             (6, 10),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
         ),
         ("dask", (4, 20)),
     ],
@@ -1350,11 +1349,10 @@ def test_nbytes():
 @pytest.mark.parametrize(
     "method,expected",
     [
-        (
-            pytest.param(
-                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
-            ),
+        pytest.param(
+            "tdigest",
             (0.35, 3.80, 2.5, 6.5, 2.0),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
         ),
         ("dask", (0.0, 4.0, 1.2, 6.2, 2.0)),
     ],
@@ -1447,10 +1445,8 @@ def test_empty_quantile(method):
 @pytest.mark.parametrize(
     "method,expected",
     [
-        (
-            pytest.param(
-                "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
-            ),
+        pytest.param(
+            "tdigest",
             (
                 pd.Series([9.5, 29.5, 19.5], index=["A", "X", "B"]),
                 pd.DataFrame(
@@ -1459,6 +1455,7 @@ def test_empty_quantile(method):
                     columns=["A", "X", "B"],
                 ),
             ),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
         ),
         (
             "dask",
