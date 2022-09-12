@@ -328,14 +328,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
-array_creation_dispatch = CreationDispatch(
-    config_field="array.backend.library",
-    default="numpy",
-    name="array_creation_dispatch",
-)
-
-
-class NumpyBackendEntrypoint(DaskBackendEntrypoint):
+class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
     def __init__(self):
         # Importing this class will already guarentee
         # that data-dispatch functions are registered
@@ -350,13 +343,20 @@ class NumpyBackendEntrypoint(DaskBackendEntrypoint):
         return state
 
 
+array_creation_dispatch = CreationDispatch(
+    config_field="array.backend.library",
+    default="numpy",
+    name="array_creation_dispatch",
+)
+
+
 array_creation_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
 
 
 try:
     import cupy
 
-    class CupyBackendEntrypoint(DaskBackendEntrypoint):
+    class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         def __init__(self):
             # Importing this class will already guarentee
             # that data-dispatch functions are registered
