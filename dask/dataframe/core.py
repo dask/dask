@@ -2165,11 +2165,22 @@ Dask Name: {name}, {layers}"""
         axis=None,
         method="default",
     ):
+        """Return the approximate median of the values over the requested axis.
+
+        Parameters
+        ----------
+        axis : {0, 1, "index", "columns"} (default 0)
+            0 or ``"index"`` for row-wise, 1 or ``"columns"`` for column-wise
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use Dask's internal custom
+            algorithm (``"dask"``).  If set to ``"tdigest"`` will use tdigest
+            for floats and ints and fallback to the ``"dask"`` otherwise.
+        """
         return self.quantile(q=0.5, axis=axis, method=method)
 
     @derived_from(pd.DataFrame)
     def median(self, axis=None, method="default"):
-        if axis == 1 or self.npartitions == 1:
+        if axis in (1, "columns") or self.npartitions == 1:
             # Can provide an exact median in these cases
             return self.quantile(q=0.5, axis=axis, method=method)
         raise NotImplementedError(
@@ -3631,6 +3642,15 @@ Dask Name: {name}, {layers}""".format(
         return quantile(self, q, method=method)
 
     def median_approximate(self, method="default"):
+        """Return the approximate median of the values over the requested axis.
+
+        Parameters
+        ----------
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use Dask's internal custom
+            algorithm (``"dask"``).  If set to ``"tdigest"`` will use tdigest
+            for floats and ints and fallback to the ``"dask"`` otherwise.
+        """
         return self.quantile(q=0.5, method=method)
 
     @derived_from(pd.Series)

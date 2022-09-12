@@ -4349,7 +4349,7 @@ def test_median():
     assert_eq(ddf_single.x.median(), df.x.median(), check_names=False)
 
     # Ensure `median` redirects to `median_approximate` appropriately
-    for axis in [None, 0]:
+    for axis in [None, 0, "rows"]:
         with pytest.raises(
             NotImplementedError, match="See the `median_approximate` method instead"
         ):
