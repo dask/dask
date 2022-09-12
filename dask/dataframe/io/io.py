@@ -13,7 +13,6 @@ import pandas as pd
 import dask.array as da
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
-from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -176,7 +175,6 @@ def from_pandas(  # type: ignore
     ...
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def from_pandas(
     data: pd.DataFrame | pd.Series,
     npartitions: int | None = None,

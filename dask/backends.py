@@ -81,16 +81,6 @@ class CreationDispatch:
             return config.get(self.config_field) or self.default
         return self.default
 
-    def register_function(self, func_name, docstring=None):
-        """Register dispatchable function name"""
-
-        def _func(*args, **kwargs):
-            return getattr(self, func_name)(*args, **kwargs)
-
-        if docstring:
-            _func.__doc__ = docstring
-        return _func
-
     def register_inplace(self, backend=None, func_name=None, function=None) -> Callable:
         """Register dispatchable function"""
         if function is not None:

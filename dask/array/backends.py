@@ -397,12 +397,6 @@ try:
                 state = cupy.random.RandomState
             return state
 
-        def from_array(self, *args, **kwargs):
-            with config.set({"array.backend.library": "numpy"}):
-                x = da.from_array(*args, **kwargs)
-            # TODO: Only call cupy.asarray if _meta is numpy
-            return x.map_blocks(cupy.asarray)
-
     array_creation_dispatch.register_backend("cupy", CupyBackendEntrypoint())
 
 except ImportError:

@@ -3,13 +3,13 @@ Dispatch in dask.dataframe.
 
 Also see extension.py
 """
+
 import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
 from dask.utils import Dispatch
 
-# Compute Dispatch Funcitons
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")

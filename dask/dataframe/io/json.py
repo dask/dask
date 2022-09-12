@@ -193,7 +193,6 @@ def read_json(
 
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
-
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
