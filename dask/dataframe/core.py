@@ -33,7 +33,11 @@ from dask.base import (
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise
 from dask.context import globalmethod
 from dask.dataframe import methods
-from dask.dataframe._compat import PANDAS_GT_140, PANDAS_GT_150
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    check_numeric_only_deprecation,
+)
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from dask.dataframe.categorical import CategoricalAccessor, categorize
 from dask.dataframe.dispatch import (
@@ -106,8 +110,8 @@ def _numeric_only(func):
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
-        elif kwargs.get("numeric_only") is True:
-            self = self._get_numeric_data()
+        # elif kwargs.get("numeric_only") is True:
+        #     self = self._get_numeric_data()
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -1884,27 +1888,58 @@ Dask Name: {name}, {layers}"""
         )
         return maybe_shift_divisions(out, periods, freq=freq)
 
-    def _reduction_agg(self, name, axis=None, skipna=True, split_every=False, out=None):
+    def _reduction_agg(
+        self,
+        name,
+        axis=None,
+        skipna=True,
+        split_every=False,
+        out=None,
+        numeric_only=None,
+    ):
         axis = self._validate_axis(axis)
 
-        meta = getattr(self._meta_nonempty, name)(axis=axis, skipna=skipna)
+        if has_keyword(getattr(self._meta_nonempty, name), "numeric_only"):
+            numeric_only_kwargs = {"numeric_only": numeric_only}
+        else:
+            numeric_only_kwargs = {}
+
+        # TODO: maybe we should warn here?
+        with check_numeric_only_deprecation():
+            meta = getattr(self._meta_nonempty, name)(
+                axis=axis, skipna=skipna, **numeric_only_kwargs
+            )
+
         token = self._token_prefix + name
 
-        method = getattr(M, name)
+        # method = getattr(M, name)
+        # def method(*args, **kwargs):
+        #     with check_numeric_only_deprecation():
+        #         return getattr(M, name)(*args, **kwargs)
+
         if axis == 1:
             result = self.map_partitions(
-                method, meta=meta, token=token, skipna=skipna, axis=axis
+                _getattr_numeric_only,
+                meta=meta,
+                token=token,
+                skipna=skipna,
+                axis=axis,
+                **numeric_only_kwargs,
             )
             return handle_out(out, result)
         else:
+            # breakpoint()
             result = self.reduction(
-                method,
+                _getattr_numeric_only,
                 meta=meta,
                 token=token,
                 skipna=skipna,
                 axis=axis,
                 split_every=split_every,
+                # numeric_only=Fase,
+                **numeric_only_kwargs,
             )
+            # breakpoint()
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
@@ -1980,7 +2015,12 @@ Dask Name: {name}, {layers}"""
         numeric_only=None,
     ):
         result = self._reduction_agg(
-            "prod", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "prod",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -2001,7 +2041,12 @@ Dask Name: {name}, {layers}"""
         self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
     ):
         return self._reduction_agg(
-            "max", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "max",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
 
     @_numeric_only
@@ -2010,7 +2055,12 @@ Dask Name: {name}, {layers}"""
         self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
     ):
         return self._reduction_agg(
-            "min", axis=axis, skipna=skipna, split_every=split_every, out=out
+            "min",
+            axis=axis,
+            skipna=skipna,
+            split_every=split_every,
+            out=out,
+            numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
@@ -2130,7 +2180,11 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
-        meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
+        # NOTE: Do we want to warn here?
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.mean(
+                axis=axis, skipna=skipna, numeric_only=numeric_only
+            )
         if axis == 1:
             result = map_partitions(
                 M.mean,
@@ -2140,6 +2194,7 @@ Dask Name: {name}, {layers}"""
                 axis=axis,
                 skipna=skipna,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         else:
@@ -2174,7 +2229,11 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
+        # TODO: warn here
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.var(
+                axis=axis, skipna=skipna, numeric_only=numeric_only
+            )
         if axis == 1:
             result = map_partitions(
                 M.var,
@@ -2185,6 +2244,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
             )
             return handle_out(out, result)
         else:
@@ -2321,7 +2381,10 @@ Dask Name: {name}, {layers}"""
         _raise_if_object_series(self, "std")
         _raise_if_not_series_or_dataframe(self, "std")
 
-        meta = self._meta_nonempty.std(axis=axis, skipna=skipna)
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.std(
+                axis=axis, skipna=skipna, numeric_only=numeric_only
+            )
         is_df_like = is_dataframe_like(self._meta)
         needs_time_conversion = False
         numeric_dd = self
@@ -2348,6 +2411,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
                 parent_meta=self._meta,
             )
             return handle_out(out, result)
@@ -2641,7 +2705,11 @@ Dask Name: {name}, {layers}"""
     def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
-        meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
+        # TODO: maybe we should raise here
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.sem(
+                axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
+            )
         if axis == 1:
             return map_partitions(
                 M.sem,
@@ -2652,6 +2720,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 ddof=ddof,
                 parent_meta=self._meta,
+                numeric_only=numeric_only,
             )
         else:
             num = self._get_numeric_data()
@@ -2671,7 +2740,7 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
-    def quantile(self, q=0.5, axis=0, method="default"):
+    def quantile(self, q=0.5, axis=0, numeric_only=True, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
@@ -2687,11 +2756,13 @@ Dask Name: {name}, {layers}"""
         """
         axis = self._validate_axis(axis)
         keyname = "quantiles-concat--" + tokenize(self, q, axis)
+        meta = self._meta.quantile(q, axis=axis, numeric_only=numeric_only)
 
         if axis == 1:
             if isinstance(q, list):
                 # Not supported, the result will have current index as columns
                 raise ValueError("'q' must be scalar when axis=1 is specified")
+
             return map_partitions(
                 M.quantile,
                 self,
@@ -2699,12 +2770,12 @@ Dask Name: {name}, {layers}"""
                 axis,
                 token=keyname,
                 enforce_metadata=False,
+                numeric_only=numeric_only,
                 meta=(q, "f8"),
                 parent_meta=self._meta,
             )
         else:
             _raise_if_object_series(self, "quantile")
-            meta = self._meta.quantile(q, axis=axis)
             num = self._get_numeric_data()
             quantiles = tuple(quantile(self[c], q, method) for c in num.columns)
 
@@ -8050,3 +8121,8 @@ def _raise_if_not_series_or_dataframe(x, funcname):
             "`%s` is only supported with objects that are Dataframes or Series"
             % funcname
         )
+
+
+def _getattr_numeric_only(*args, **kwargs):
+    with check_numeric_only_deprecation():
+        return getattr(M, name)(*args, **kwargs)
