@@ -66,28 +66,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     def read_csv(self, *args, **kwargs):
         raise NotImplementedError
 
-    def read_table(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_fwf(self, *args, **kwargs):
-        raise NotImplementedError
-
     def read_hdf(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql_query(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql_table(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def from_pandas(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def from_array(self, *args, **kwargs):
         raise NotImplementedError
 
 

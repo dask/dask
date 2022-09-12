@@ -50,18 +50,6 @@ properties:
               Backend dataframe library to use for data creation and input IO.
               Available options include "pandas" and "cudf". Default is "pandas".
 
-          allow-fallback:
-            type: boolean
-            description: |
-              Allow Dask to fall-back from the specified backend library when
-              the necessary IO function is not defined.
-
-          warn-fallback:
-            type: boolean
-            description: |
-              Warn the user when Dask falls-back from the specified backend
-              library for unsupported IO functions.
-
       shuffle-compression:
         type:
         - string
@@ -103,18 +91,6 @@ properties:
             description: |
               Backend array library to use for data creation and input IO.
               Available options include "numpy" and "cupy". Default is "numpy".
-
-          allow-fallback:
-            type: boolean
-            description: |
-              Allow Dask to fall-back from the specified backend library
-              when the necessary IO function is not defined.
-
-          warn-fallback:
-            type: boolean
-            description: |
-              Warn the user when Dask falls-back from the specified backend
-              library for unsupported IO functions.
 
       svg:
         type: object

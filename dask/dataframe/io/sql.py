@@ -5,13 +5,11 @@ import pandas as pd
 
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
-from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def read_sql_query(
     sql,
     con,
@@ -181,7 +179,6 @@ def read_sql_query(
     return from_delayed(parts, meta, divisions=divisions)
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def read_sql_table(
     table_name,
     con,
@@ -379,7 +376,6 @@ def read_sql_table(
     )
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def read_sql(sql, con, index_col, **kwargs):
     """
     Read SQL query or database table into a DataFrame.

@@ -99,7 +99,6 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def from_array(x, chunksize=50000, columns=None, meta=None):
     """Read any sliceable array into a Dask Dataframe
 

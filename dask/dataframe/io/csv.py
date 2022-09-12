@@ -769,18 +769,10 @@ read_csv = dataframe_creation_dispatch.register_inplace(
 )
 
 
-read_table = dataframe_creation_dispatch.register_inplace(
-    backend="pandas",
-    func_name="read_table",
-    function=make_reader(pd.read_table, "read_table", "delimited"),
-)
+read_table = make_reader(pd.read_table, "read_table", "delimited")
 
 
-read_fwf = dataframe_creation_dispatch.register_inplace(
-    backend="pandas",
-    func_name="read_fwf",
-    function=make_reader(pd.read_fwf, "read_fwf", "delimited"),
-)
+read_fwf = make_reader(pd.read_fwf, "read_fwf", "delimited")
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
