@@ -4307,6 +4307,37 @@ def test_dataframe_mode():
     assert_eq(ddf.mode(), df.mode(), check_index=False)
 
 
+def test_median():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.1, 2.2, 3.3, 4.4, 5.5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # Exact medians work when `axis=1` or when DataFrames only have a single partition
+    # TODO: shouldn't need to specify `check_names=False` below, but names currently don't match
+    assert_eq(ddf.median(axis=1), df.median(axis=1), check_names=False)
+    ddf_single = dd.from_pandas(df, npartitions=1)
+    assert_eq(ddf_single.median(axis=1), df.median(axis=1), check_names=False)
+
+    # `median` redirects to `median_approximate` if `axis != 1`
+    for axis in [None, 0]:
+        with pytest.raises(
+            NotImplementedError, match="See the `median_approximate` method instead"
+        ):
+            ddf.median(axis=axis)
+
+
+@pytest.mark.parametrize("method", ["default", "tdigest"])
+def test_median_approximate(method):
+    df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    # TODO: shouldn't need to specify `check_names=False` below, but names currently don't match
+    assert_eq(
+        ddf.median_approximate(method=method),
+        df.median(),
+        check_names=False,
+        rtol=1,
+    )
+
+
 def test_datetime_loc_open_slicing():
     dtRange = pd.date_range("01.01.2015", "05.05.2015")
     df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)

@@ -2160,6 +2160,23 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
+    def median_approximate(
+        self,
+        axis=None,
+        method="default",
+    ):
+        return self.quantile(q=0.5, axis=axis, method=method)
+
+    @derived_from(pd.DataFrame)
+    def median(self, axis=None, method="default"):
+        if axis == 1 or self.npartitions == 1:
+            # Can provide an exact median in these cases
+            return self.quantile(q=0.5, axis=axis, method=method)
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
+
     @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
