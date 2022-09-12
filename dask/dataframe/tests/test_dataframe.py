@@ -4311,18 +4311,24 @@ def test_median():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.1, 2.2, 3.3, 4.4, 5.5]})
     ddf = dd.from_pandas(df, npartitions=3)
 
-    # Exact medians work when `axis=1` or when DataFrames only have a single partition
+    # Exact medians work when `axis=1` or when there's only have a single partition
     # TODO: shouldn't need to specify `check_names=False` below, but names currently don't match
     assert_eq(ddf.median(axis=1), df.median(axis=1), check_names=False)
     ddf_single = dd.from_pandas(df, npartitions=1)
     assert_eq(ddf_single.median(axis=1), df.median(axis=1), check_names=False)
+    assert_eq(ddf_single.x.median(), df.x.median(), check_names=False)
 
-    # `median` redirects to `median_approximate` if `axis != 1`
+    # Ensure `median` redirects to `median_approximate` appropriately
     for axis in [None, 0]:
         with pytest.raises(
             NotImplementedError, match="See the `median_approximate` method instead"
         ):
             ddf.median(axis=axis)
+
+    with pytest.raises(
+        NotImplementedError, match="See the `median_approximate` method instead"
+    ):
+        ddf.x.median()
 
 
 @pytest.mark.parametrize("method", ["default", "tdigest"])

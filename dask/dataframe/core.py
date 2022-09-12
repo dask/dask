@@ -3630,6 +3630,19 @@ Dask Name: {name}, {layers}""".format(
         """
         return quantile(self, q, method=method)
 
+    def median_approximate(self, method="default"):
+        return self.quantile(q=0.5, method=method)
+
+    @derived_from(pd.Series)
+    def median(self, method="default"):
+        if self.npartitions == 1:
+            # Can provide an exact median in these cases
+            return self.quantile(q=0.5, method=method)
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
+
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """Approximate quantiles of Series used for repartitioning"""
         from dask.dataframe.partitionquantiles import partition_quantiles
