@@ -4364,9 +4364,9 @@ def test_median():
 @pytest.mark.parametrize(
     "method",
     [
-        "default",
+        "dask",
         pytest.param(
-            "tdigest", marks=pytest.importorskip("crick", reason="Requires crick")
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
         ),
     ],
 )
