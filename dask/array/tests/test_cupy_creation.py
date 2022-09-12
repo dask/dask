@@ -173,13 +173,9 @@ def test_tri_like(xp, N, M, k, dtype, chunks):
 @pytest.mark.parametrize(
     "funcname",
     [
-        "empty_like",
         "empty",
-        "ones_like",
         "ones",
-        "zeros_like",
         "zeros",
-        "full_like",
         "full",
     ],
 )

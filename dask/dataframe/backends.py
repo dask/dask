@@ -15,16 +15,14 @@ from pandas.api.types import (
     union_categoricals,
 )
 
-import dask.dataframe as dd
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
-    DataFrameBackendEntrypoint,
     categorical_dtype_dispatch,
     concat,
     concat_dispatch,
-    dataframe_creation_dispatch,
     get_parallel_type,
     group_split_dispatch,
     grouper_dispatch,
@@ -47,6 +45,58 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
+
+
+class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
+    def __init__(self):
+        raise NotImplementedError
+
+    def make_timeseries(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_parquet(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_json(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_orc(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_csv(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_table(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_fwf(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_hdf(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_sql(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_sql_query(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def read_sql_table(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def from_pandas(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def from_array(self, *args, **kwargs):
+        raise NotImplementedError
+
+
+dataframe_creation_dispatch = CreationDispatch(
+    config_field="dataframe.backend.library",
+    default="pandas",
+    name="dataframe_creation_dispatch",
+)
+
 
 ##########
 # Pandas #
@@ -563,49 +613,17 @@ def percentile(a, q, interpolation="linear"):
 
 
 class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Pandas-Backend Entrypoint Class for Dask-DataFrame
+
+    Note that all DataFrame-creation functions are defined
+    and registered 'in-place' within the ``dask.dataframe``
+    ``io`` module.
+    """
+
     def __init__(self):
         # Importing this class will already guarentee
         # that data-dispatch functions are registered
         pass
-
-    def make_timeseries(self, *args, **kwargs):
-        return dd.io.demo.make_timeseries_pandas(*args, **kwargs)
-
-    def read_parquet(self, *args, **kwargs):
-        return dd.io.parquet.core.read_parquet_pandas(*args, **kwargs)
-
-    def read_json(self, *args, **kwargs):
-        return dd.io.json.read_json_pandas(*args, **kwargs)
-
-    def read_orc(self, *args, **kwargs):
-        return dd.io.orc.core.read_orc_pandas(*args, **kwargs)
-
-    def read_csv(self, *args, **kwargs):
-        return dd.io.csv.read_csv_pandas(*args, **kwargs)
-
-    def read_table(self, *args, **kwargs):
-        return dd.io.csv.read_table_pandas(*args, **kwargs)
-
-    def read_fwf(self, *args, **kwargs):
-        return dd.io.csv.read_fwf_pandas(*args, **kwargs)
-
-    def read_hdf(self, *args, **kwargs):
-        return dd.io.hdf.read_hdf_pandas(*args, **kwargs)
-
-    def read_sql(self, *args, **kwargs):
-        return dd.io.sql.read_sql_pandas(*args, **kwargs)
-
-    def read_sql_query(self, *args, **kwargs):
-        return dd.io.sql.read_sql_query_pandas(*args, **kwargs)
-
-    def read_sql_table(self, *args, **kwargs):
-        return dd.io.sql.read_sql_table_pandas(*args, **kwargs)
-
-    def from_pandas(self, *args, **kwargs):
-        return dd.io.io.from_pandas_pandas(*args, **kwargs)
-
-    def from_array(self, *args, **kwargs):
-        return dd.io.io.from_array_pandas(*args, **kwargs)
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())

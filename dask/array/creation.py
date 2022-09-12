@@ -8,6 +8,7 @@ import numpy as np
 from tlz import sliding_window
 
 from dask.array import chunk
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
     asarray,
@@ -19,7 +20,6 @@ from dask.array.core import (
     normalize_chunks,
     stack,
 )
-from dask.array.dispatch import array_creation_dispatch
 from dask.array.numpy_compat import _numpy_120
 from dask.array.ufunc import greater_equal, rint
 from dask.array.utils import meta_from_array
@@ -328,7 +328,8 @@ def linspace(
         return Array(dsk, name, chunks, dtype=dtype)
 
 
-def arange_numpy(*args, chunks="auto", like=None, dtype=None, **kwargs):
+@array_creation_dispatch.register_inplace("numpy")
+def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
 
@@ -414,12 +415,6 @@ def arange_numpy(*args, chunks="auto", like=None, dtype=None, **kwargs):
         elem_count += bs
 
     return Array(dsk, name, chunks, dtype=dtype, meta=meta)
-
-
-arange = array_creation_dispatch.register_function(
-    "arange",
-    docstring=arange_numpy.__doc__,
-)
 
 
 @derived_from(np)

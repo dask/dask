@@ -8,7 +8,7 @@ from fsspec.core import open_files
 from dask.base import compute as dask_compute
 from dask.bytes import read_bytes
 from dask.core import flatten
-from dask.dataframe.dispatch import dataframe_creation_dispatch
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_delayed
 from dask.dataframe.utils import insert_meta_param_description, make_meta
 from dask.delayed import delayed
@@ -104,8 +104,9 @@ def write_json_partition(df, openfile, kwargs):
     return os.path.normpath(openfile.path)
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 @insert_meta_param_description
-def read_json_pandas(
+def read_json(
     url_path,
     orient="records",
     lines=None,
@@ -286,12 +287,6 @@ def read_json_pandas(
         ]
 
     return from_delayed(parts, meta=meta)
-
-
-read_json = dataframe_creation_dispatch.register_function(
-    "read_json",
-    docstring=read_json_pandas.__doc__,
-)
 
 
 def read_json_chunk(

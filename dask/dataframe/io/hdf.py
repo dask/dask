@@ -15,8 +15,8 @@ from dask.base import (
     named_schedulers,
     tokenize,
 )
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame
-from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.delayed import Delayed, delayed
@@ -321,7 +321,8 @@ class HDFFunctionWrapper(DataFrameIOFunction):
         return result
 
 
-def read_hdf_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def read_hdf(
     pattern,
     key,
     start=0,
@@ -451,12 +452,6 @@ def read_hdf_pandas(
         token=tokenize(paths, key, start, stop, sorted_index, chunksize, mode),
         enforce_metadata=False,
     )
-
-
-read_hdf = dataframe_creation_dispatch.register_function(
-    "read_hdf",
-    docstring=read_hdf_pandas.__doc__,
-)
 
 
 def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):

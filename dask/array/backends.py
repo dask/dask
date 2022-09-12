@@ -1,12 +1,11 @@
 import math
-from functools import cached_property
 
 import numpy as np
 
 import dask.array as da
+from dask import config
 from dask.array import chunk
 from dask.array.dispatch import (
-    array_creation_dispatch,
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
@@ -19,7 +18,7 @@ from dask.array.dispatch import (
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
 from dask.array.percentile import _percentile
-from dask.backends import DaskBackendEntrypoint
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -302,26 +301,45 @@ def _nannumel_sparse(x, **kwargs):
     return n.todense() if hasattr(n, "todense") else n
 
 
+class ArrayBackendEntrypoint(DaskBackendEntrypoint):
+    def __init__(self):
+        """Register data-directed dispatch functions"""
+        raise NotImplementedError
+
+    def default_random_state(self):
+        raise NotImplementedError
+
+    def new_random_state(self, state):
+        raise NotImplementedError
+
+    def ones(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def zeros(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def empty(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def full(self, *args, **kwargs):
+        raise NotImplementedError
+
+    def arange(self, *args, **kwargs):
+        raise NotImplementedError
+
+
+array_creation_dispatch = CreationDispatch(
+    config_field="array.backend.library",
+    default="numpy",
+    name="array_creation_dispatch",
+)
+
+
 class NumpyBackendEntrypoint(DaskBackendEntrypoint):
     def __init__(self):
         # Importing this class will already guarentee
         # that data-dispatch functions are registered
         pass
-
-    def ones(self, *args, **kwargs):
-        return da.wrap.ones_numpy(*args, **kwargs)
-
-    def zeros(self, *args, **kwargs):
-        return da.wrap.zeros_numpy(*args, **kwargs)
-
-    def empty(self, *args, **kwargs):
-        return da.wrap.empty_numpy(*args, **kwargs)
-
-    def full(self, *args, **kwargs):
-        return da.wrap._full_numpy(*args, **kwargs)
-
-    def arange(self, *args, **kwargs):
-        return da.creation.arange_numpy(*args, **kwargs)
 
     def default_random_state(self):
         if not hasattr(self, "_np_random_states"):
@@ -330,9 +348,6 @@ class NumpyBackendEntrypoint(DaskBackendEntrypoint):
 
     def new_random_state(self, state):
         return state
-
-    def from_array(self, *args, **kwargs):
-        return da.core.from_array_default(*args, **kwargs)
 
 
 array_creation_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
@@ -347,29 +362,30 @@ try:
             # that data-dispatch functions are registered
             pass
 
-        @cached_property
-        def base(self):
-            return NumpyBackendEntrypoint()
-
         def ones(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.base.ones(*args, meta=meta, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                return da.ones(*args, meta=meta, **kwargs)
 
         def zeros(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.base.zeros(*args, meta=meta, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                return da.zeros(*args, meta=meta, **kwargs)
 
         def empty(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.base.empty(*args, meta=meta, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                return da.empty(*args, meta=meta, **kwargs)
 
         def full(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            return self.base.full(*args, meta=meta, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                return da.full(*args, meta=meta, **kwargs)
 
         def arange(self, *args, like=None, **kwargs):
             like = cupy.empty(()) if like is None else like
-            return self.base.arange(*args, like=like, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                return da.arange(*args, like=like, **kwargs)
 
         def default_random_state(self):
             if not hasattr(self, "_cupy_random_states"):
@@ -382,7 +398,8 @@ try:
             return state
 
         def from_array(self, *args, **kwargs):
-            x = self.base.from_array(*args, **kwargs)
+            with config.set({"array.backend.library": "numpy"}):
+                x = da.from_array(*args, **kwargs)
             # TODO: Only call cupy.asarray if _meta is numpy
             return x.map_blocks(cupy.asarray)
 

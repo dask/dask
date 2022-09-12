@@ -4,8 +4,8 @@ from itertools import product
 import numpy as np
 from tlz import curry
 
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import Array, normalize_chunks
-from dask.array.dispatch import array_creation_dispatch
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
 from dask.blockwise import blockwise as core_blockwise
@@ -163,30 +163,24 @@ def broadcast_trick(func):
     return inner
 
 
-ones_numpy = w(broadcast_trick(np.ones_like), dtype="f8")
-
-
-ones = array_creation_dispatch.register_function(
-    "ones",
-    docstring=ones_numpy.__doc__,
+ones = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    func_name="ones",
+    function=w(broadcast_trick(np.ones_like), dtype="f8"),
 )
 
 
-zeros_numpy = w(broadcast_trick(np.zeros_like), dtype="f8")
-
-
-zeros = array_creation_dispatch.register_function(
-    "zeros",
-    docstring=zeros_numpy.__doc__,
+zeros = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    func_name="zeros",
+    function=w(broadcast_trick(np.zeros_like), dtype="f8"),
 )
 
 
-empty_numpy = w(broadcast_trick(np.empty_like), dtype="f8")
-
-
-empty = array_creation_dispatch.register_function(
-    "empty",
-    docstring=empty_numpy.__doc__,
+empty = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    func_name="empty",
+    function=w(broadcast_trick(np.empty_like), dtype="f8"),
 )
 
 
@@ -198,14 +192,13 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full_numpy = w(broadcast_trick(np.full_like))
+_full = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    func_name="full",
+    function=w(broadcast_trick(np.full_like)),
+)
 _full_like = w_like(np.full, func_like=np.full_like)
 
-
-_full = array_creation_dispatch.register_function(
-    "full",
-    docstring=_full_numpy.__doc__,
-)
 
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
 if _full.__doc__ is not None:

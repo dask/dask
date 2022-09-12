@@ -5,8 +5,8 @@ from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
-from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
 from dask.dataframe.io.utils import DataFrameIOFunction
@@ -69,7 +69,8 @@ def _get_engine(engine, write=False):
     return engine
 
 
-def read_orc_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def read_orc(
     path,
     engine="pyarrow",
     columns=None,
@@ -144,12 +145,6 @@ def read_orc_pandas(
         token=tokenize(fs_token, path, columns),
         enforce_metadata=False,
     )
-
-
-read_orc = dataframe_creation_dispatch.register_function(
-    "read_orc",
-    docstring=read_orc_pandas.__doc__,
-)
 
 
 def to_orc(

@@ -3,8 +3,8 @@ import importlib
 import numpy as np
 import pandas as pd
 
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import tokenize
-from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.utils import random_state_data
@@ -131,7 +131,8 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwarg
     return df
 
 
-def make_timeseries_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def make_timeseries(
     start="2000-01-01",
     end="2000-12-31",
     dtypes=None,
@@ -207,9 +208,3 @@ def make_timeseries_pandas(
         ),
         enforce_metadata=False,
     )
-
-
-make_timeseries = dataframe_creation_dispatch.register_function(
-    "make_timeseries",
-    docstring=make_timeseries_pandas.__doc__,
-)

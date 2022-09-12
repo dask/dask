@@ -6,6 +6,7 @@ from operator import getitem
 
 import numpy as np
 
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
     asarray,
@@ -15,7 +16,6 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.creation import arange
-from dask.array.dispatch import array_creation_dispatch
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, random_state_data

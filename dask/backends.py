@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
+from typing import Callable
 
 from dask import config
 from dask.compatibility import entry_points
@@ -89,6 +90,24 @@ class CreationDispatch:
         if docstring:
             _func.__doc__ = docstring
         return _func
+
+    def register_inplace(self, backend=None, func_name=None, function=None) -> Callable:
+        """Register dispatchable function"""
+        if function is not None:
+            function.__name__ = func_name or function.__name__
+
+        def inner(function):
+            func_name = function.__name__
+            if backend:
+                self.dispatch(backend).__setattr__(func_name, function)
+
+            def _func(*args, **kwargs):
+                return getattr(self, func_name)(*args, **kwargs)
+
+            _func.__doc__ = function.__doc__
+            return _func
+
+        return inner(function) if function is not None else inner
 
     def __getattr__(self, item):
         """

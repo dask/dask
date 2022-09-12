@@ -5,13 +5,14 @@ import pandas as pd
 
 from dask.base import compute as dask_compute
 from dask.dataframe import methods
-from dask.dataframe.dispatch import dataframe_creation_dispatch
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_delayed, from_pandas
 from dask.delayed import delayed, tokenize
 from dask.utils import parse_bytes
 
 
-def read_sql_query_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def read_sql_query(
     sql,
     con,
     index_col,
@@ -180,13 +181,8 @@ def read_sql_query_pandas(
     return from_delayed(parts, meta, divisions=divisions)
 
 
-read_sql_query = dataframe_creation_dispatch.register_function(
-    "read_sql_query",
-    docstring=read_sql_query_pandas.__doc__,
-)
-
-
-def read_sql_table_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def read_sql_table(
     table_name,
     con,
     index_col,
@@ -383,13 +379,8 @@ def read_sql_table_pandas(
     )
 
 
-read_sql_table = dataframe_creation_dispatch.register_function(
-    "read_sql_table",
-    docstring=read_sql_table_pandas.__doc__,
-)
-
-
-def read_sql_pandas(sql, con, index_col, **kwargs):
+@dataframe_creation_dispatch.register_inplace("pandas")
+def read_sql(sql, con, index_col, **kwargs):
     """
     Read SQL query or database table into a DataFrame.
 
@@ -426,12 +417,6 @@ def read_sql_pandas(sql, con, index_col, **kwargs):
         return read_sql_table(sql, con, index_col, **kwargs)
     else:
         return read_sql_query(sql, con, index_col, **kwargs)
-
-
-read_sql = dataframe_creation_dispatch.register_function(
-    "read_sql",
-    docstring=read_sql_pandas.__doc__,
-)
 
 
 def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):

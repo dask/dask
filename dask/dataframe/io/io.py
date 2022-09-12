@@ -13,6 +13,7 @@ import pandas as pd
 import dask.array as da
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -23,7 +24,6 @@ from dask.dataframe.core import (
     has_parallel_type,
     new_dd_object,
 )
-from dask.dataframe.dispatch import dataframe_creation_dispatch
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
@@ -99,7 +99,8 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
+@dataframe_creation_dispatch.register_inplace("pandas")
+def from_array(x, chunksize=50000, columns=None, meta=None):
     """Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
@@ -152,14 +153,8 @@ def from_array_pandas(x, chunksize=50000, columns=None, meta=None):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-from_array = dataframe_creation_dispatch.register_function(
-    "from_array",
-    docstring=from_array_pandas.__doc__,
-)
-
-
 @overload
-def from_pandas_pandas(
+def from_pandas(
     data: pd.DataFrame,
     npartitions: int | None = None,
     chunksize: int | None = None,
@@ -172,7 +167,7 @@ def from_pandas_pandas(
 # We ignore this overload for now until pandas-stubs can be added.
 # See https://github.com/dask/dask/issues/9220
 @overload
-def from_pandas_pandas(  # type: ignore
+def from_pandas(  # type: ignore
     data: pd.Series,
     npartitions: int | None = None,
     chunksize: int | None = None,
@@ -182,7 +177,8 @@ def from_pandas_pandas(  # type: ignore
     ...
 
 
-def from_pandas_pandas(
+@dataframe_creation_dispatch.register_inplace("pandas")
+def from_pandas(
     data: pd.DataFrame | pd.Series,
     npartitions: int | None = None,
     chunksize: int | None = None,
@@ -309,12 +305,6 @@ def from_pandas_pandas(
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
     return new_dd_object(dsk, name, data, divisions)
-
-
-from_pandas = dataframe_creation_dispatch.register_function(
-    "from_pandas",
-    docstring=from_pandas_pandas.__doc__,
-)
 
 
 def _partition_from_array(data, index=None, initializer=None, **kwargs):

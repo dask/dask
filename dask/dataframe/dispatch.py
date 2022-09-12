@@ -7,7 +7,6 @@ import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.utils import Dispatch
 
 # Compute Dispatch Funcitons
@@ -141,54 +140,3 @@ def make_meta(x, index=None, parent_meta=None):
 def union_categoricals(to_union, sort_categories=False, ignore_order=False):
     func = union_categoricals_dispatch.dispatch(type(to_union[0]))
     return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
-
-
-dataframe_creation_dispatch = CreationDispatch(
-    config_field="dataframe.backend.library",
-    default="pandas",
-    name="dataframe_creation_dispatch",
-)
-
-
-class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
-    def __init__(self):
-        raise NotImplementedError
-
-    def make_timeseries(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_parquet(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_json(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_orc(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_csv(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_table(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_fwf(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_hdf(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql_query(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def read_sql_table(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def from_pandas(self, *args, **kwargs):
-        raise NotImplementedError
-
-    def from_array(self, *args, **kwargs):
-        raise NotImplementedError
