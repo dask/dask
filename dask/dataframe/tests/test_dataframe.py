@@ -4339,11 +4339,10 @@ def test_median():
     ddf = dd.from_pandas(df, npartitions=3)
 
     # Exact medians work when `axis=1` or when there's only have a single partition
-    # TODO: shouldn't need to specify `check_names=False` below, but names currently don't match
-    assert_eq(ddf.median(axis=1), df.median(axis=1), check_names=False)
+    assert_eq(ddf.median(axis=1), df.median(axis=1))
     ddf_single = dd.from_pandas(df, npartitions=1)
-    assert_eq(ddf_single.median(axis=1), df.median(axis=1), check_names=False)
-    assert_eq(ddf_single.x.median(), df.x.median(), check_names=False)
+    assert_eq(ddf_single.median(axis=1), df.median(axis=1))
+    assert_eq(ddf_single.x.median(), df.x.median())
 
     # Ensure `median` redirects to `median_approximate` appropriately
     for axis in [None, 0, "rows"]:
@@ -4370,13 +4369,16 @@ def test_median():
 def test_median_approximate(method):
     df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
     ddf = dd.from_pandas(df, npartitions=10)
-    # TODO: shouldn't need to specify `check_names=False` below, but names currently don't match
-    assert_eq(
-        ddf.median_approximate(method=method),
-        df.median(),
-        check_names=False,
-        rtol=1,
-    )
+    if PANDAS_GT_110:
+        assert_eq(
+            ddf.median_approximate(method=method),
+            df.median(),
+            atol=1,
+        )
+    else:
+        result = ddf.median_approximate(method=method)
+        expected = df.median()
+        assert ((result - expected).abs() < 1).all().compute()
 
 
 def test_datetime_loc_open_slicing():

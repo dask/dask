@@ -2176,13 +2176,13 @@ Dask Name: {name}, {layers}"""
             algorithm (``"dask"``).  If set to ``"tdigest"`` will use tdigest
             for floats and ints and fallback to the ``"dask"`` otherwise.
         """
-        return self.quantile(q=0.5, axis=axis, method=method)
+        return self.quantile(q=0.5, axis=axis, method=method).rename(None)
 
     @derived_from(pd.DataFrame)
     def median(self, axis=None, method="default"):
         if axis in (1, "columns") or self.npartitions == 1:
             # Can provide an exact median in these cases
-            return self.quantile(q=0.5, axis=axis, method=method)
+            return self.median_approximate(axis=axis, method=method)
         raise NotImplementedError(
             "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
             "See the `median_approximate` method instead, which uses an approximate algorithm."
@@ -3657,7 +3657,7 @@ Dask Name: {name}, {layers}""".format(
     def median(self, method="default"):
         if self.npartitions == 1:
             # Can provide an exact median in these cases
-            return self.quantile(q=0.5, method=method)
+            return self.median_approximate(method=method)
         raise NotImplementedError(
             "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
             "See the `median_approximate` method instead, which uses an approximate algorithm."
