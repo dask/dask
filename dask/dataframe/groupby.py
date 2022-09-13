@@ -1085,12 +1085,13 @@ def _aggregate_docstring(based_on=None):
             Number of output partitions. Default is 1.
         shuffle : bool or str, optional
             Whether a shuffle-based algorithm should be used. A specific
-            algorithm name may also be specified (e.g. `"tasks"` or `"p2p"`).
+            algorithm name may also be specified (e.g. ``"tasks"`` or ``"p2p"``).
             The shuffle-based algorithm is likely to be more efficient than
             ``shuffle=False`` when ``split_out>1`` and the number of unique
             groups is large (high cardinality). Default is ``False`` when
-            ``split_out = 1``. When ``split_out > 1``, it chooses the default
-            shuffling algorithm (disk or tasks).
+            ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
+            set by the ``shuffle`` option in the dask config system, or ``"tasks"``
+            if nothing is set.
         """
         return func
 
