@@ -3094,6 +3094,22 @@ Dask Name: {name}, {layers}"""
         # We wrap values in a delayed for two reasons:
         # - avoid serializing data in every task
         # - avoid cost of traversal of large list in optimizations
+        if isinstance(values, list):
+            # Motivated by https://github.com/dask/dask/issues/9411.  This appears to be
+            # caused by https://github.com/dask/distributed/issues/6368, and further
+            # exacerbated by the fact that the list contains duplicates.  This is a patch until
+            # we can create a better fix for Serialization.
+            try:
+                values = list(set(values))
+            except TypeError:
+                pass
+            if not any(is_dask_collection(v) for v in values):
+                try:
+                    values = np.fromiter(values, dtype=object)
+                except ValueError:
+                    # Numpy 1.23 supports creating arrays of iterables, while lower
+                    # version 1.21.x and 1.22.x do not
+                    pass
         return self.map_partitions(
             M.isin, delayed(values), meta=meta, enforce_metadata=False
         )
@@ -6517,7 +6533,6 @@ def map_partitions(
     dfs = [df for df in args if isinstance(df, _Frame)]
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
-
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
             (name, 0): (

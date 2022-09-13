@@ -15,6 +15,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
+from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -50,6 +51,7 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
@@ -1271,22 +1273,48 @@ def test_isin():
     f_list = [1, 2, 3]
     f_series = pd.Series(f_list)
     f_dict = {"a": [0, 3], "b": [1, 2]}
+    f_list2 = [1, "2"]
+    f_list_delayed = [delayed(1), delayed(2), delayed(3)]
+    f_list_of_lists = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
     assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
+    assert_eq(
+        d.a.isin(f_list_delayed),
+        full.a.isin(f_list),
+    )
+    assert_eq(
+        d.a.isin(f_list_of_lists),
+        full.a.isin(f_list_of_lists),
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # Index
     da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
     da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
+    da.utils.assert_eq(
+        d.index.isin(f_list_delayed),
+        full.index.isin(f_list),
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # DataFrame test
     assert_eq(d.isin(f_list), full.isin(f_list))
     assert_eq(d.isin(f_dict), full.isin(f_dict))
+    assert_eq(d.isin(f_list2), full.isin(f_list2))
+    assert_eq(
+        d.isin(f_list_delayed),
+        full.isin(f_list),
+    )
+    assert_eq(
+        d.isin(f_list_of_lists),
+        full.isin(f_list_of_lists),
+    )
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
