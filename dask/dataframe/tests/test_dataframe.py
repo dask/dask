@@ -4342,6 +4342,7 @@ def test_median():
     assert_eq(ddf.median(axis=1), df.median(axis=1))
     ddf_single = dd.from_pandas(df, npartitions=1)
     assert_eq(ddf_single.median(axis=1), df.median(axis=1))
+    assert_eq(ddf_single.median(axis=0), df.median(axis=0))
     assert_eq(ddf_single.x.median(), df.x.median())
 
     # Ensure `median` redirects to `median_approximate` appropriately
