@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 import dask.array as da
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
@@ -306,7 +306,43 @@ def from_pandas(
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
-def from_dict(data, *, npartitions, orient="columns", dtype=None, columns=None):
+def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
+    """
+    Construct a Dask DataFrame from a Python Dictionary
+
+    Parameters
+    ----------
+    data : dict
+        Of the form {field : array-like} or {field : dict}.
+    npartitions : int
+        The number of partitions of the index to create. Note that depending on
+        the size and index of the dataframe, the output may have fewer
+        partitions than requested.
+    orient : {'columns', 'index', 'tight'}, default 'columns'
+        The "orientation" of the data. If the keys of the passed dict
+        should be the columns of the resulting DataFrame, pass 'columns'
+        (default). Otherwise if the keys should be rows, pass 'index'.
+        If 'tight', assume a dict with keys
+        ['index', 'columns', 'data', 'index_names', 'column_names'].
+    dtype: bool
+        Data type to force, otherwise infer.
+    columns: string, optional
+        Column labels to use when ``orient='index'``. Raises a ValueError
+        if used with ``orient='columns'`` or ``orient='tight'``.
+
+    Examples
+    --------
+    >>> import dask.dataframe as dd
+    >>> ddf = dd.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
+    """
+
+    collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
+    if collection_types:
+        raise NotImplementedError(
+            "from_dict doesn't currently support Dask collections as inputs. "
+            f"Objects of type {collection_types} were given in the input dict."
+        )
+
     return from_pandas(
         pd.DataFrame.from_dict(data, orient, dtype, columns),
         npartitions,
