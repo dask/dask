@@ -8,6 +8,7 @@ from numbers import Integral
 import numpy as np
 import pandas as pd
 
+from dask import config
 from dask.base import tokenize
 from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.core import (
@@ -1077,15 +1078,20 @@ def _aggregate_docstring(based_on=None):
             - dict of column names -> function, function name or list of such.
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
-            Default is 8.
+            This defaults to 8. If your intermediate partitions are likely to
+            be small (either due to a small number of groups or a small initial
+            partition size), consider increasing this number for better performance.
         split_out : int, optional
             Number of output partitions. Default is 1.
         shuffle : bool or str, optional
             Whether a shuffle-based algorithm should be used. A specific
-            algorithm name may also be specified (e.g. `"tasks"` or `"p2p"`).
+            algorithm name may also be specified (e.g. ``"tasks"`` or ``"p2p"``).
             The shuffle-based algorithm is likely to be more efficient than
             ``shuffle=False`` when ``split_out>1`` and the number of unique
-            groups is large (high cardinality). Default is ``False``.
+            groups is large (high cardinality). Default is ``False`` when
+            ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
+            set by the ``shuffle`` option in the dask config system, or ``"tasks"``
+            if nothing is set.
         """
         return func
 
@@ -1675,6 +1681,12 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+        if shuffle is None:
+            if split_out > 1:
+                shuffle = shuffle or config.get("shuffle", None) or "tasks"
+            else:
+                shuffle = False
+
         column_projection = None
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
@@ -2470,8 +2482,12 @@ def _shuffle_aggregate(
     aggregate_kwargs : dict, optional
         Keywords for the aggregate function only.
     split_every : int, optional
-        Number of intermediate partitions that may be aggregated at once.
-        Default is 8.
+        Number of partitions to aggregate into a shuffle partition.
+        Defaults to eight, meaning that the initial partitions are repartitioned
+        into groups of eight before the shuffle. Shuffling scales with the number
+        of partitions, so it may be helpful to increase this number as a performance
+        optimization, but only when the aggregated partition can comfortably
+        fit in worker memory.
     split_out : int, optional
         Number of output partitions.
     ignore_index : bool, default False
@@ -2501,8 +2517,8 @@ def _shuffle_aggregate(
         split_every = 8
     elif split_every is False:
         split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, Integral):
-        raise ValueError("split_every must be an integer >= 2")
+    elif split_every < 1 or not isinstance(split_every, Integral):
+        raise ValueError("split_every must be an integer >= 1")
 
     # Shuffle-based groupby aggregation
     chunk_name = f"{token or funcname(chunk)}-chunk"
