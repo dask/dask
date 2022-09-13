@@ -302,29 +302,63 @@ def _nannumel_sparse(x, **kwargs):
 
 
 class ArrayBackendEntrypoint(DaskBackendEntrypoint):
+    """Dask-Array version of ``DaskBackendEntrypoint``"""
+
     def __init__(self):
         """Register data-directed dispatch functions"""
         raise NotImplementedError
 
-    def default_random_state(self):
+    @property
+    def RandomState(self):
+        """Return the backend-specific RandomState class
+
+        For example, the 'numpy' backend simply returns
+        ``numpy.random.RandomState``.
+        """
         raise NotImplementedError
 
-    def new_random_state(self, state):
+    @staticmethod
+    def ones(shape, *, dtype=None, meta=None):
+        """Create an array of ones
+
+        Returns a new array having a specified shape and filled
+        with ones.
+        """
         raise NotImplementedError
 
-    def ones(self, *args, **kwargs):
+    @staticmethod
+    def zeros(shape, *, dtype=None, meta=None):
+        """Create an array of zeros
+
+        Returns a new array having a specified shape and filled
+        with zeros.
+        """
         raise NotImplementedError
 
-    def zeros(self, *args, **kwargs):
+    @staticmethod
+    def empty(shape, *, dtype=None, meta=None):
+        """Create an empty array
+
+        Returns an uninitialized array having a specified shape.
+        """
         raise NotImplementedError
 
-    def empty(self, *args, **kwargs):
+    @staticmethod
+    def full(shape, fill_value, *, dtype=None, meta=None):
+        """Create a uniformly filled array
+
+        Returns a new array having a specified shape and filled
+        with fill_value.
+        """
         raise NotImplementedError
 
-    def full(self, *args, **kwargs):
-        raise NotImplementedError
+    @staticmethod
+    def arange(start, /, stop=None, step=1, *, dtype=None, meta=None):
+        """Create an ascending or desciending array
 
-    def arange(self, *args, **kwargs):
+        Returns evenly spaced values within the half-open interval
+        ``[start, stop)`` as a one-dimensional array.
+        """
         raise NotImplementedError
 
 
@@ -334,13 +368,9 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
         # that data-dispatch functions are registered
         pass
 
-    def default_random_state(self):
-        if not hasattr(self, "_np_random_states"):
-            self._np_random_states = da.random.RandomState()
-        return self._np_random_states
-
-    def new_random_state(self, state):
-        return state
+    @property
+    def RandomState(self):
+        return np.random.RandomState
 
 
 array_creation_dispatch = CreationDispatch(
@@ -361,6 +391,10 @@ try:
             # Importing this class will already guarentee
             # that data-dispatch functions are registered
             pass
+
+        @property
+        def RandomState(self):
+            return cupy.random.RandomState
 
         def ones(self, *args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
@@ -386,16 +420,6 @@ try:
             like = cupy.empty(()) if like is None else like
             with config.set({"array.backend.library": "numpy"}):
                 return da.arange(*args, like=like, **kwargs)
-
-        def default_random_state(self):
-            if not hasattr(self, "_cupy_random_states"):
-                self._cupy_random_states = da.random.RandomState()
-            return self._cupy_random_states
-
-        def new_random_state(self, state):
-            if state is None:
-                state = cupy.random.RandomState
-            return state
 
     array_creation_dispatch.register_backend("cupy", CupyBackendEntrypoint())
 

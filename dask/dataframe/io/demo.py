@@ -1,9 +1,6 @@
-import importlib
-
 import numpy as np
 import pandas as pd
 
-from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import tokenize
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
@@ -73,11 +70,10 @@ class MakeTimeseriesPart(DataFrameIOFunction):
     Makes a timeseries partition.
     """
 
-    def __init__(self, dtypes, freq, df_backend, kwargs, columns=None):
+    def __init__(self, dtypes, freq, kwargs, columns=None):
         self._columns = columns or list(dtypes.keys())
         self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
-        self.df_backend = df_backend
         self.kwargs = kwargs
 
     @property
@@ -93,7 +89,6 @@ class MakeTimeseriesPart(DataFrameIOFunction):
         return MakeTimeseriesPart(
             self.dtypes,
             self.freq,
-            self.df_backend,
             self.kwargs,
             columns=columns,
         )
@@ -103,18 +98,11 @@ class MakeTimeseriesPart(DataFrameIOFunction):
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
         return make_timeseries_part(
-            divisions[0],
-            divisions[1],
-            self.dtypes,
-            self.freq,
-            state_data,
-            self.df_backend,
-            self.kwargs,
+            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
         )
 
 
-def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwargs):
-    dflib = importlib.import_module(df_backend)
+def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     state = np.random.RandomState(state_data)
     columns = {}
@@ -125,13 +113,12 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, df_backend, kwarg
             if kk.rsplit("_", 1)[0] == k
         }
         columns[k] = make[dt](len(index), state, **kws)
-    df = dflib.DataFrame(columns, index=index, columns=sorted(columns))
+    df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return df
 
 
-@dataframe_creation_dispatch.register_inplace("pandas")
 def make_timeseries(
     start="2000-01-01",
     end="2000-12-31",
@@ -139,7 +126,6 @@ def make_timeseries(
     freq="10s",
     partition_freq="1M",
     seed=None,
-    df_backend="pandas",
     **kwargs,
 ):
     """Create timeseries dataframe with random data
@@ -196,15 +182,11 @@ def make_timeseries(
 
     # Construct the output collection with from_map
     return from_map(
-        MakeTimeseriesPart(dtypes, freq, df_backend, kwargs),
+        MakeTimeseriesPart(dtypes, freq, kwargs),
         parts,
-        meta=make_timeseries_part(
-            "2000", "2000", dtypes, "1H", state_data[0], df_backend, kwargs
-        ),
+        meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
         divisions=divisions,
         label="make-timeseries",
-        token=tokenize(
-            start, end, dtypes, freq, df_backend, partition_freq, state_data
-        ),
+        token=tokenize(start, end, dtypes, freq, partition_freq, state_data),
         enforce_metadata=False,
     )

@@ -48,25 +48,38 @@ from dask.utils import is_arraylike, is_series_like, typename
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
+    """Dask-DataFrame version of ``DaskBackendEntrypoint``"""
+
     def __init__(self):
+        """Register data-directed dispatch functions"""
         raise NotImplementedError
 
-    def make_timeseries(self, *args, **kwargs):
+    @staticmethod
+    def from_dict(*args, **kwargs):
+        """Create a DataFrame collection from a dictionary"""
         raise NotImplementedError
 
-    def read_parquet(self, *args, **kwargs):
+    @staticmethod
+    def read_parquet(*args, **kwargs):
+        """Read Parquet files into a DataFrame collection"""
         raise NotImplementedError
 
-    def read_json(self, *args, **kwargs):
+    def read_json(*args, **kwargs):
+        """Read json files into a DataFrame collection"""
         raise NotImplementedError
 
-    def read_orc(self, *args, **kwargs):
+    def read_orc(*args, **kwargs):
+        """Read ORC files into a DataFrame collection"""
         raise NotImplementedError
 
-    def read_csv(self, *args, **kwargs):
+    @staticmethod
+    def read_csv(*args, **kwargs):
+        """Read CSV files into a DataFrame collection"""
         raise NotImplementedError
 
-    def read_hdf(self, *args, **kwargs):
+    @staticmethod
+    def read_hdf(*args, **kwargs):
+        """Read HDF5 files into a DataFrame collection"""
         raise NotImplementedError
 
 

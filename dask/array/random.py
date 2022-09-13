@@ -56,7 +56,10 @@ class RandomState:
 
     def __init__(self, seed=None, RandomState=None):
         self._numpy_state = np.random.RandomState(seed)
-        self._RandomState = array_creation_dispatch.new_random_state(RandomState)
+        if RandomState is None:
+            self._RandomState = array_creation_dispatch.RandomState
+        else:
+            self._RandomState = RandomState
 
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
@@ -450,10 +453,17 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     return func(*args, size=size, **kwargs)
 
 
+_cached_random_states = {}
+
+
 def _make_api(attr):
     def wrapper(*args, **kwargs):
+        backend = array_creation_dispatch.get_backend()
+        if backend not in _cached_random_states:
+            # Cache the default RandomState object for this backend
+            _cached_random_states[backend] = RandomState()
         return getattr(
-            array_creation_dispatch.default_random_state(),
+            _cached_random_states[backend],
             attr,
         )(*args, **kwargs)
 
