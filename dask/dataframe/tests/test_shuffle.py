@@ -1182,7 +1182,7 @@ def test_set_index_overlap_2():
     assert ddf2.npartitions == 8
 
 
-def test_set_index_overlap_3():
+def test_set_index_overlap_does_not_drop_rows_when_divisions_overlap():
     # https://github.com/dask/dask/issues/9339
     df = pd.DataFrame({"ts": [1, 1, 2, 2, 3, 3, 3, 3], "value": "abc"})
     ddf = dd.from_pandas(df, npartitions=3)
