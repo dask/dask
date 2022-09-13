@@ -6017,15 +6017,18 @@ def is_broadcastable(dfs, s):
     """
     This Series is broadcastable against another dataframe in the sequence
     """
+
+    def compare(s, df):
+        try:
+            return s.divisions == (df.columns.min(), df.columns.max())
+        except TypeError:
+            return False
+
     return (
         isinstance(s, Series)
         and s.npartitions == 1
         and s.known_divisions
-        and any(
-            s.divisions == (df.columns.min(), df.columns.max())
-            for df in dfs
-            if isinstance(df, DataFrame)
-        )
+        and any(compare(s, df) for df in dfs if isinstance(df, DataFrame))
     )
 
 

@@ -1623,6 +1623,14 @@ def test_assign_dtypes():
     )
 
 
+def test_assign_pandas_series():
+    # Make sure we handle when `df.columns.min()` raises TypeError
+    df = pd.DataFrame({"a": [1, 2], 1: [5, 6]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.assign(c=df["a"])
+    assert_eq(ddf, df.assign(c=df["a"]))
+
+
 def test_map():
     df = pd.DataFrame(
         {"a": range(9), "b": [4, 5, 6, 1, 2, 3, 0, 0, 0]},
