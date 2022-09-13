@@ -1116,7 +1116,7 @@ class _GroupBy:
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
-    sort: bool, defult None
+    sort: bool
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
     observed: bool, default False
@@ -1132,8 +1132,8 @@ class _GroupBy:
         slice=None,
         group_keys=GROUP_KEYS_DEFAULT,
         dropna=None,
-        sort=None,
-        observed=None,
+        sort=True,
+        observed=False,
     ):
 
         by_ = by if isinstance(by, (tuple, list)) else [by]
@@ -2466,7 +2466,7 @@ def _shuffle_aggregate(
     aggregate_kwargs=None,
     split_every=None,
     split_out=1,
-    sort=None,
+    sort=True,
     ignore_index=False,
     shuffle="tasks",
 ):
@@ -2502,7 +2502,7 @@ def _shuffle_aggregate(
         Number of output partitions.
     ignore_index : bool, default False
         Whether the index can be ignored during the shuffle.
-    sort : bool, default None
+    sort : bool
         If allowed, sort the keys of the output aggregation.
     shuffle : str, default "tasks"
         Shuffle option to be used by ``DataFrame.shuffle``.
