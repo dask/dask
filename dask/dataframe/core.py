@@ -5939,7 +5939,7 @@ class DataFrame(_Frame):
         >>> import dask.dataframe as dd
         >>> ddf = dd.DataFrame.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
         """
-        from dask.dataframe.io import from_pandas
+        from dask.dataframe.io import from_dict
 
         collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
         if collection_types:
@@ -5947,9 +5947,14 @@ class DataFrame(_Frame):
                 "from_dict doesn't currently support Dask collections as inputs. "
                 f"Objects of type {collection_types} were given in the input dict."
             )
-        pdf = pd.DataFrame.from_dict(data, orient, dtype, columns)
-        ddf = from_pandas(pdf, npartitions)
-        return ddf
+
+        return from_dict(
+            data,
+            npartitions,
+            orient=orient,
+            dtype=dtype,
+            columns=columns,
+        )
 
 
 # bind operators

@@ -13,6 +13,7 @@ import pandas as pd
 import dask.array as da
 from dask.base import tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -302,6 +303,14 @@ def from_pandas(
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
     }
     return new_dd_object(dsk, name, data, divisions)
+
+
+@dataframe_creation_dispatch.register_inplace("pandas")
+def from_dict(data, *, npartitions, orient="columns", dtype=None, columns=None):
+    return from_pandas(
+        pd.DataFrame.from_dict(data, orient, dtype, columns),
+        npartitions,
+    )
 
 
 def _partition_from_array(data, index=None, initializer=None, **kwargs):
