@@ -5,7 +5,6 @@ from dask.dataframe.io.io import (
     from_array,
     from_dask_array,
     from_delayed,
-    from_dict,
     from_map,
     from_pandas,
     to_bag,
