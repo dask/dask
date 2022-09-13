@@ -2162,6 +2162,34 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
+    def median_approximate(
+        self,
+        axis=None,
+        method="default",
+    ):
+        """Return the approximate median of the values over the requested axis.
+
+        Parameters
+        ----------
+        axis : {0, 1, "index", "columns"} (default 0)
+            0 or ``"index"`` for row-wise, 1 or ``"columns"`` for column-wise
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use Dask's internal custom
+            algorithm (``"dask"``).  If set to ``"tdigest"`` will use tdigest
+            for floats and ints and fallback to the ``"dask"`` otherwise.
+        """
+        return self.quantile(q=0.5, axis=axis, method=method).rename(None)
+
+    @derived_from(pd.DataFrame)
+    def median(self, axis=None, method="default"):
+        if axis in (1, "columns") or self.npartitions == 1:
+            # Can provide an exact median in these cases
+            return self.median_approximate(axis=axis, method=method)
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
+
     @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
@@ -3630,6 +3658,28 @@ Dask Name: {name}, {layers}""".format(
             for floats and ints and fallback to the ``'dask'`` otherwise.
         """
         return quantile(self, q, method=method)
+
+    def median_approximate(self, method="default"):
+        """Return the approximate median of the values over the requested axis.
+
+        Parameters
+        ----------
+        method : {'default', 'tdigest', 'dask'}, optional
+            What method to use. By default will use Dask's internal custom
+            algorithm (``"dask"``).  If set to ``"tdigest"`` will use tdigest
+            for floats and ints and fallback to the ``"dask"`` otherwise.
+        """
+        return self.quantile(q=0.5, method=method)
+
+    @derived_from(pd.Series)
+    def median(self, method="default"):
+        if self.npartitions == 1:
+            # Can provide an exact median in these cases
+            return self.median_approximate(method=method)
+        raise NotImplementedError(
+            "Dask doesn't implement an exact median in all cases as this is hard to do in parallel. "
+            "See the `median_approximate` method instead, which uses an approximate algorithm."
+        )
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
         """Approximate quantiles of Series used for repartitioning"""
