@@ -119,7 +119,8 @@ def map_overlap(
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
-        and will raise an error if this doesn't work or types don't match.
+        and will raise an error if this doesn't work,
+        but it won't raise if dtypes don't match.
     before : int or timedelta
         The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
