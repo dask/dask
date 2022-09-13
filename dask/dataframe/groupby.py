@@ -1787,7 +1787,7 @@ class _GroupBy:
                 chunk=_groupby_apply_funcs,
                 chunk_kwargs=dict(
                     funcs=chunk_funcs,
-                    sort=self.sort,
+                    sort=False,
                     **self.observed,
                     **self.dropna,
                 ),
@@ -1819,7 +1819,7 @@ class _GroupBy:
             chunk=_groupby_apply_funcs,
             chunk_kwargs=dict(
                 funcs=chunk_funcs,
-                sort=self.sort,
+                sort=False,
                 **self.observed,
                 **self.dropna,
             ),
@@ -1827,7 +1827,7 @@ class _GroupBy:
             combine_kwargs=dict(
                 funcs=aggregate_funcs,
                 level=levels,
-                sort=self.sort,
+                sort=False,
                 **self.observed,
                 **self.dropna,
             ),
