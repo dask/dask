@@ -324,6 +324,23 @@ def _groupby_aggregate(
     return aggfunc(grouped, **kwargs)
 
 
+def _set_index_chunk(df, *by, columns=None):
+    """
+    Some shuffle-based aggregations might not want to perform an initial aggregation
+    as _apply_chunk does. One example of this is ``median``, where we cannot throw
+    away information pre-shuffle.
+
+    This sets an index on the frame in the same way that a groupby/agg would, but
+    does not reduce the data.
+    """
+    if is_series_like(df) or columns is None:
+        return df.set_index(by)
+    else:
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
+        return df[columns].set_index(list(by))
+
+
 def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
@@ -1508,10 +1525,75 @@ class _GroupBy:
             token="min", func=M.min, split_every=split_every, split_out=split_out
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
-    def max(self, split_every=None, split_out=1):
+    def _simple_agg(self, func, token, split_every, split_out, shuffle):
+        if shuffle is None:
+            if split_out > 1:
+                shuffle = shuffle or config.get("shuffle", None) or "tasks"
+            else:
+                shuffle = False
+
+        if shuffle:
+            # Shuffle-based aggregation
+            meta = self.obj._meta
+            columns = meta.name if is_series_like(meta) else meta.columns
+            chunk_args = (
+                [self.obj, self.by]
+                if not isinstance(self.by, list)
+                else [self.obj] + self.by
+            )
+            return _shuffle_aggregate(
+                chunk_args,
+                chunk=_apply_chunk,
+                chunk_kwargs={"chunk": func, "columns": columns},
+                aggregate=_groupby_aggregate,
+                aggregate_kwargs={
+                    "aggfunc": func,
+                    "levels": _determine_levels(self.by),
+                },
+                token=token,
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                sort=self.sort,
+            )
+
         return self._aca_agg(
-            token="max", func=M.max, split_every=split_every, split_out=split_out
+            token=token, func=func, split_every=split_every, split_out=split_out
+        )
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def max(self, split_every=None, split_out=1, shuffle=None):
+        return self._simple_agg(
+            func=M.max,
+            token="max",
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+        )
+
+    @derived_from(pd.core.groupby.GroupBy)
+    def median(self, split_every=None, split_out=1):
+        meta = self.obj._meta
+        columns = meta.name if is_series_like(meta) else meta.columns
+        chunk_args = (
+            [self.obj, self.by]
+            if not isinstance(self.by, list)
+            else [self.obj] + self.by
+        )
+        return _shuffle_aggregate(
+            chunk_args,
+            chunk=_set_index_chunk,
+            chunk_kwargs={"columns": columns},
+            token="set-index",
+            aggregate=_groupby_aggregate,
+            aggregate_kwargs={
+                "aggfunc": M.median,
+                "levels": _determine_levels(self.by),
+            },
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=config.get("shuffle", None) or "tasks",
+            sort=self.sort,
         )
 
     @derived_from(pd.DataFrame)
