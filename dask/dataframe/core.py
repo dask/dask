@@ -6519,7 +6519,7 @@ def _emulate(func, *args, udf=False, **kwargs):
     Apply a function using args / kwargs. If arguments contain dd.DataFrame /
     dd.Series, using internal cache (``_meta``) for calculation
     """
-    with raise_on_meta_error(funcname(func), udf=udf):
+    with raise_on_meta_error(funcname(func), udf=udf), check_numeric_only_deprecation():
         return func(*_extract_meta(args, True), **_extract_meta(kwargs, True))
 
 
