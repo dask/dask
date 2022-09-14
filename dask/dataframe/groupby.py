@@ -1255,6 +1255,48 @@ class _GroupBy:
         )
         return _maybe_slice(grouped, self._slice)
 
+    def _single_agg(self, func, token, split_every, split_out, shuffle):
+        """
+        Aggregation with a single function, rather than a compound spec like in
+        GroupBy.aggregate.
+        """
+
+        if shuffle is None:
+            if split_out > 1:
+                shuffle = shuffle or config.get("shuffle", None) or "tasks"
+            else:
+                shuffle = False
+
+        if shuffle:
+            # Shuffle-based aggregation
+            meta = self.obj._meta
+            by = self.by if isinstance(self.by, list) else [self.by]
+            if is_series_like(meta):
+                columns = meta.name
+            else:
+                # Avoid selecting the grouped-by columns in chunk so as to
+                # avoid duplicates in the index and columns.
+                columns = [c for c in meta.columns if c not in by]
+            return _shuffle_aggregate(
+                [self.obj] + by,
+                chunk=_apply_chunk,
+                chunk_kwargs={"chunk": func, "columns": columns},
+                aggregate=_groupby_aggregate,
+                aggregate_kwargs={
+                    "aggfunc": func,
+                    "levels": _determine_levels(self.by),
+                },
+                token=token,
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle,
+                sort=self.sort,
+            )
+
+        return self._aca_agg(
+            token=token, func=func, split_every=split_every, split_out=split_out
+        )
+
     def _aca_agg(
         self,
         token,
@@ -1266,6 +1308,9 @@ class _GroupBy:
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
+        """
+        ACA-based aggregation with a single function.
+        """
         if aggfunc is None:
             aggfunc = func
 
@@ -1525,44 +1570,9 @@ class _GroupBy:
             token="min", func=M.min, split_every=split_every, split_out=split_out
         )
 
-    def _simple_agg(self, func, token, split_every, split_out, shuffle):
-        if shuffle is None:
-            if split_out > 1:
-                shuffle = shuffle or config.get("shuffle", None) or "tasks"
-            else:
-                shuffle = False
-
-        if shuffle:
-            # Shuffle-based aggregation
-            meta = self.obj._meta
-            by = self.by if isinstance(self.by, list) else [self.by]
-            if is_series_like(meta):
-                columns = meta.name
-            else:
-                columns = [c for c in meta.columns if c not in by]
-            return _shuffle_aggregate(
-                [self.obj] + by,
-                chunk=_apply_chunk,
-                chunk_kwargs={"chunk": func, "columns": columns},
-                aggregate=_groupby_aggregate,
-                aggregate_kwargs={
-                    "aggfunc": func,
-                    "levels": _determine_levels(self.by),
-                },
-                token=token,
-                split_every=split_every,
-                split_out=split_out,
-                shuffle=shuffle if isinstance(shuffle, str) else "tasks",
-                sort=self.sort,
-            )
-
-        return self._aca_agg(
-            token=token, func=func, split_every=split_every, split_out=split_out
-        )
-
     @derived_from(pd.core.groupby.GroupBy)
     def max(self, split_every=None, split_out=1, shuffle=None):
-        return self._simple_agg(
+        return self._single_agg(
             func=M.max,
             token="max",
             split_every=split_every,
