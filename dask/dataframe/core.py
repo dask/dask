@@ -1933,7 +1933,6 @@ Dask Name: {name}, {layers}"""
                 _name=name,
                 **numeric_only_kwargs,
             )
-            # breakpoint()
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
