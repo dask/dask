@@ -1,12 +1,14 @@
 import collections
 import itertools as it
 import operator
+import uuid
 import warnings
 from numbers import Integral
 
 import numpy as np
 import pandas as pd
 
+from dask import config
 from dask.base import tokenize
 from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.core import (
@@ -234,12 +236,11 @@ def _groupby_get_group(df, by_key, get_key, columns):
     # SeriesGroupBy may pass df which includes group key
     grouped = _groupby_raise_unaligned(df, by=by_key)
 
-    if get_key in grouped.groups:
+    try:
         if is_dataframe_like(df):
             grouped = grouped[columns]
         return grouped.get_group(get_key)
-
-    else:
+    except KeyError:
         # to create empty DataFrame/Series, which has the same
         # dtype as the original
         if is_dataframe_like(df):
@@ -512,7 +513,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
         idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
-    for idx, val in enumerate(idx_vals):
+    for val in idx_vals:
         idx_name = inv_col_mapping.get(val, val)
         idx_mapping.append(idx_name)
 
@@ -1077,15 +1078,20 @@ def _aggregate_docstring(based_on=None):
             - dict of column names -> function, function name or list of such.
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
-            Default is 8.
+            This defaults to 8. If your intermediate partitions are likely to
+            be small (either due to a small number of groups or a small initial
+            partition size), consider increasing this number for better performance.
         split_out : int, optional
             Number of output partitions. Default is 1.
         shuffle : bool or str, optional
             Whether a shuffle-based algorithm should be used. A specific
-            algorithm name may also be specified (e.g. `"tasks"` or `"p2p"`).
+            algorithm name may also be specified (e.g. ``"tasks"`` or ``"p2p"``).
             The shuffle-based algorithm is likely to be more efficient than
             ``shuffle=False`` when ``split_out>1`` and the number of unique
-            groups is large (high cardinality). Default is ``False``.
+            groups is large (high cardinality). Default is ``False`` when
+            ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
+            set by the ``shuffle`` option in the dask config system, or ``"tasks"``
+            if nothing is set.
         """
         return func
 
@@ -1238,14 +1244,20 @@ class _GroupBy:
         meta=None,
         split_every=None,
         split_out=1,
-        chunk_kwargs={},
-        aggregate_kwargs={},
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
     ):
         if aggfunc is None:
             aggfunc = func
 
         if meta is None:
             meta = func(self._meta_nonempty)
+
+        if chunk_kwargs is None:
+            chunk_kwargs = {}
+
+        if aggregate_kwargs is None:
+            aggregate_kwargs = {}
 
         columns = meta.name if is_series_like(meta) else meta.columns
 
@@ -1284,7 +1296,19 @@ class _GroupBy:
         """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
-        by = self.by if isinstance(self.by, list) else [self.by]
+        by_cols = self.by if isinstance(self.by, list) else [self.by]
+
+        # rename "by" columns internally
+        # to fix cumulative operations on the same "by" columns
+        # ref: https://github.com/dask/dask/issues/9313
+        if columns is not None and set(columns).intersection(set(by_cols)):
+            by = []
+            for col in by_cols:
+                suffix = str(uuid.uuid4())
+                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                by.append(col + suffix)
+        else:
+            by = by_cols
 
         name = self._token_prefix + token
         name_part = name + "-map"
@@ -1633,7 +1657,10 @@ class _GroupBy:
             token="last", func=M.last, split_every=split_every, split_out=split_out
         )
 
-    @derived_from(pd.core.groupby.GroupBy)
+    @derived_from(
+        pd.core.groupby.GroupBy,
+        inconsistencies="If the group is not present, Dask will return an empty Series/DataFrame.",
+    )
     def get_group(self, key):
         token = self._token_prefix + "get_group"
 
@@ -1654,6 +1681,12 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+        if shuffle is None:
+            if split_out > 1:
+                shuffle = shuffle or config.get("shuffle", None) or "tasks"
+            else:
+                shuffle = False
+
         column_projection = None
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
@@ -2449,8 +2482,12 @@ def _shuffle_aggregate(
     aggregate_kwargs : dict, optional
         Keywords for the aggregate function only.
     split_every : int, optional
-        Number of intermediate partitions that may be aggregated at once.
-        Default is 8.
+        Number of partitions to aggregate into a shuffle partition.
+        Defaults to eight, meaning that the initial partitions are repartitioned
+        into groups of eight before the shuffle. Shuffling scales with the number
+        of partitions, so it may be helpful to increase this number as a performance
+        optimization, but only when the aggregated partition can comfortably
+        fit in worker memory.
     split_out : int, optional
         Number of output partitions.
     ignore_index : bool, default False
@@ -2480,8 +2517,8 @@ def _shuffle_aggregate(
         split_every = 8
     elif split_every is False:
         split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, Integral):
-        raise ValueError("split_every must be an integer >= 2")
+    elif split_every < 1 or not isinstance(split_every, Integral):
+        raise ValueError("split_every must be an integer >= 1")
 
     # Shuffle-based groupby aggregation
     chunk_name = f"{token or funcname(chunk)}-chunk"

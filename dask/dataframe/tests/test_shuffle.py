@@ -749,7 +749,7 @@ def test_set_index_timezone():
         assert not d2.divisions[0] == s2badtype[0]
     else:
         with pytest.raises(TypeError):
-            d2.divisions[0] == s2badtype[0]
+            assert d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():

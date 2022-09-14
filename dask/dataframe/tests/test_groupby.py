@@ -10,7 +10,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_150, tm
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_130, PANDAS_GT_150, tm
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
@@ -399,7 +399,8 @@ def test_groupby_multilevel_agg():
     assert_eq(res, sol)
 
 
-def test_groupby_get_group():
+@pytest.mark.parametrize("categoricals", [True, False])
+def test_groupby_get_group(categoricals):
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 6], "b": [4, 2, 7]}, index=[0, 1, 3]),
         ("x", 1): pd.DataFrame({"a": [4, 2, 6], "b": [3, 3, 1]}, index=[5, 6, 8]),
@@ -409,7 +410,15 @@ def test_groupby_get_group():
     d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
     full = d.compute()
 
-    for ddkey, pdkey in [("b", "b"), (d.b, full.b), (d.b + 1, full.b + 1)]:
+    by_keys = [("b", "b"), (d.b, full.b)]
+
+    if categoricals:
+        d = d.categorize(columns=["b"])
+        full = d.compute()
+    else:
+        by_keys.append((d.b + 1, full.b + 1))
+
+    for ddkey, pdkey in by_keys:
         ddgrouped = d.groupby(ddkey)
         pdgrouped = full.groupby(pdkey)
         # DataFrame
@@ -1106,8 +1115,9 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+@pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
-def test_shuffle_aggregate(shuffle_method, split_out):
+def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
     pdf = pd.DataFrame(
         {
@@ -1122,7 +1132,7 @@ def test_shuffle_aggregate(shuffle_method, split_out):
 
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby(["a", "b"]).agg(
-        spec, split_out=split_out, shuffle=shuffle_method
+        spec, split_out=split_out, split_every=split_every, shuffle=shuffle_method
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
@@ -1161,6 +1171,33 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
             ddf.groupby(["a", "b"], sort=sort).agg(
                 spec, split_out=2, shuffle=shuffle_method
             )
+
+
+def test_shuffle_aggregate_defaults(shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+
+    # No shuffle layer when  split_out = 1
+    dsk = ddf.groupby("a").agg(spec, split_out=1).dask
+    assert not any("shuffle" in l for l in dsk.layers)
+
+    # split_every=1 is invalid for tree reduction
+    with pytest.raises(ValueError):
+        ddf.groupby("a").agg(spec, split_out=1, split_every=1)
+
+    # If split_out > 1, default to shuffling.
+    dsk = ddf.groupby("a").agg(spec, split_out=2, split_every=1).dask
+    assert any("shuffle" in l for l in dsk.layers)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -1542,10 +1579,19 @@ def test_groupby_numeric_column():
     assert_eq(ddf.groupby(ddf.A)[0].sum(), df.groupby(df.A)[0].sum())
 
 
-@pytest.mark.parametrize("sel", ["c", "d", ["c", "d"]])
+@pytest.mark.parametrize("sel", ["a", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("key", ["a", ["a", "b"]])
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "cumcount"])
 def test_cumulative(func, key, sel):
+    if (
+        not PANDAS_GT_130
+        and not func == "cumcount"
+        and sel == ["a", "b"]
+        and key == ["a", "b"]
+    ):
+        pytest.xfail(
+            reason="cumsum and cumprod will raise DataError: No numeric types to aggregate"
+        )
     df = pd.DataFrame(
         {
             "a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 6,
@@ -2495,14 +2541,8 @@ def test_groupby_dropna_pandas(dropna):
     "group_keys",
     [
         True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
-        pytest.param(
-            None,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
+        False,
+        None,
     ],
 )
 def test_groupby_dropna_cudf(dropna, by, group_keys):

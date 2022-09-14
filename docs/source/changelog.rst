@@ -1,6 +1,35 @@
 Changelog
 =========
 
+.. _v2022.9.0:
+
+2022.9.0
+--------
+
+Released on September 2, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Enable automatic column projection for ``groupby`` aggregations (:pr:`9442`) `Richard (Rick) Zamora`_
+- Accept superclasses in NEP-13/17 dispatching (:pr:`6710`) `Gabe Joseph`_
+
+Bug Fixes
+^^^^^^^^^
+- Rename ``by`` columns internally for cumulative operations on the same ``by`` columns (:pr:`9430`) `Pavithra Eswaramoorthy`_
+- Fix ``get_group`` with categoricals (:pr:`9436`) `Pavithra Eswaramoorthy`_
+- Fix caching-related ``MaterializedLayer.cull`` performance regression (:pr:`9413`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add maintainer documentation page (:pr:`9309`) `James Bourbeau`_
+
+Maintenance
+^^^^^^^^^^^
+- Revert skipped fastparquet test (:pr:`9439`) `Pavithra Eswaramoorthy`_
+- ``tmpfile`` does not end files with period on empty extension (:pr:`9429`) `Hendrik Makait`_
+- Skip failing fastparquet test with latest release (:pr:`9432`) `James Bourbeau`_
+
+
 .. _v2022.8.1:
 
 2022.8.1
