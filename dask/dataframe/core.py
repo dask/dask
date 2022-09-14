@@ -6368,6 +6368,8 @@ def apply_concat_apply(
 
     >>> apply_concat_apply([a, b], chunk=chunk, aggregate=agg)  # doctest: +SKIP
     """
+    if split_out is None:
+        split_out = 1
     if chunk_kwargs is None:
         chunk_kwargs = dict()
     if aggregate_kwargs is None:
