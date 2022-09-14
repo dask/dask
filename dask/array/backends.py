@@ -396,27 +396,32 @@ try:
         def RandomState(self):
             return cupy.random.RandomState
 
-        def ones(self, *args, meta=None, **kwargs):
+        @staticmethod
+        def ones(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
             with config.set({"array.backend.library": "numpy"}):
                 return da.ones(*args, meta=meta, **kwargs)
 
-        def zeros(self, *args, meta=None, **kwargs):
+        @staticmethod
+        def zeros(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
             with config.set({"array.backend.library": "numpy"}):
                 return da.zeros(*args, meta=meta, **kwargs)
 
-        def empty(self, *args, meta=None, **kwargs):
+        @staticmethod
+        def empty(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
             with config.set({"array.backend.library": "numpy"}):
                 return da.empty(*args, meta=meta, **kwargs)
 
-        def full(self, *args, meta=None, **kwargs):
+        @staticmethod
+        def full(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
             with config.set({"array.backend.library": "numpy"}):
                 return da.full(*args, meta=meta, **kwargs)
 
-        def arange(self, *args, like=None, **kwargs):
+        @staticmethod
+        def arange(*args, like=None, **kwargs):
             like = cupy.empty(()) if like is None else like
             with config.set({"array.backend.library": "numpy"}):
                 return da.arange(*args, like=like, **kwargs)
