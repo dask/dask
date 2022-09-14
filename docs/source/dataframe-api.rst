@@ -73,6 +73,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.median
+    DataFrame.median_approximate
     DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
@@ -203,6 +205,8 @@ Series
    Series.mask
    Series.max
    Series.mean
+   Series.median
+   Series.median_approximate
    Series.memory_usage
    Series.memory_usage_per_partition
    Series.min
@@ -523,7 +527,6 @@ Create DataFrames
    read_sql_query
    read_sql
    from_array
-   from_bcolz
    from_dask_array
    from_delayed
    from_map
