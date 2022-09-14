@@ -1236,7 +1236,7 @@ def test_reductions_frame_dtypes():
     assert_eq(df_numerics.var(), ddf_numerics.var())
 
 
-def _test_reductions_frame_dtypes_numeric_only():
+def test_reductions_frame_dtypes_numeric_only():
     df = pd.DataFrame(
         {
             "int": [1, 2, 3, 4, 5, 6, 7, 8],
@@ -1251,16 +1251,16 @@ def _test_reductions_frame_dtypes_numeric_only():
     ddf = dd.from_pandas(df, 1)
     kwargs = {"numeric_only": True}
     funcs = [
-        # "sum",
-        # "prod",
-        # "product",
+        "sum",
+        "prod",
+        "product",
         "min",
-        # "max",
-        # "mean",
-        # "var",
-        # "std",
-        # "count",
-        # "sem",
+        "max",
+        "mean",
+        "var",
+        "std",
+        "count",
+        "sem",
     ]
 
     for func in funcs:

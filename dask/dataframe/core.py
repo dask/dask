@@ -110,8 +110,8 @@ def _numeric_only(func):
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
-        # elif kwargs.get("numeric_only") is True:
-        #     self = self._get_numeric_data()
+        elif kwargs.get("numeric_only") is True:
+            self = self._get_numeric_data()
         return func(self, *args, **kwargs)
 
     return wrapper
@@ -1911,12 +1911,6 @@ Dask Name: {name}, {layers}"""
             )
 
         token = self._token_prefix + name
-
-        # method = getattr(M, name)
-        # def method(*args, **kwargs):
-        #     with check_numeric_only_deprecation():
-        #         return getattr(M, name)(*args, **kwargs)
-
         if axis == 1:
             result = self.map_partitions(
                 _getattr_numeric_only,
@@ -1929,7 +1923,6 @@ Dask Name: {name}, {layers}"""
             )
             return handle_out(out, result)
         else:
-            # breakpoint()
             result = self.reduction(
                 _getattr_numeric_only,
                 meta=meta,
@@ -1938,7 +1931,6 @@ Dask Name: {name}, {layers}"""
                 axis=axis,
                 split_every=split_every,
                 _name=name,
-                # numeric_only=Fase,
                 **numeric_only_kwargs,
             )
             # breakpoint()
@@ -2048,7 +2040,6 @@ Dask Name: {name}, {layers}"""
             skipna=skipna,
             split_every=split_every,
             out=out,
-            numeric_only=numeric_only,
         )
 
     @_numeric_only
@@ -2062,7 +2053,6 @@ Dask Name: {name}, {layers}"""
             skipna=skipna,
             split_every=split_every,
             out=out,
-            numeric_only=numeric_only,
         )
 
     @derived_from(pd.DataFrame)
