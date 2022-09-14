@@ -1535,14 +1535,13 @@ class _GroupBy:
         if shuffle:
             # Shuffle-based aggregation
             meta = self.obj._meta
-            columns = meta.name if is_series_like(meta) else meta.columns
-            chunk_args = (
-                [self.obj, self.by]
-                if not isinstance(self.by, list)
-                else [self.obj] + self.by
-            )
+            by = self.by if isinstance(self.by, list) else [self.by]
+            if is_series_like(meta):
+                columns = meta.name
+            else:
+                columns = [c for c in meta.columns if c not in by]
             return _shuffle_aggregate(
-                chunk_args,
+                [self.obj] + by,
                 chunk=_apply_chunk,
                 chunk_kwargs={"chunk": func, "columns": columns},
                 aggregate=_groupby_aggregate,
