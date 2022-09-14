@@ -82,13 +82,3 @@ def makeMixedDataFrame():
         }
     )
     return df
-
-
-def set_index_without_copy(df, index):
-    # `inplace=True` was deprecated in `pandas=1.5.0` in favor of `copy=False`
-    if PANDAS_GT_150:
-        df = df.set_index(index, copy=False)
-    else:
-        df.set_index(index, inplace=True)
-
-    return df
