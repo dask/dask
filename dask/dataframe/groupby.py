@@ -1681,6 +1681,7 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+        split_out = 1 if split_out is None else split_out
         if shuffle is None:
             if split_out > 1:
                 shuffle = shuffle or config.get("shuffle", None) or "tasks"
