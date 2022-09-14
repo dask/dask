@@ -91,9 +91,11 @@ def check_numeric_only_deprecation():
 
     if PANDAS_GT_150:
         with warnings.catch_warnings():
-            # warnings.filterwarnings("ignore", message="The default value of numeric_only in", category=FutureWarning)
-            warnings.filterwarnings("ignore", category=FutureWarning)
-
+            warnings.filterwarnings(
+                "ignore",
+                message="The default value of numeric_only in",
+                category=FutureWarning,
+            )
             yield
     else:
         yield
