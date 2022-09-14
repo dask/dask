@@ -1681,12 +1681,11 @@ class _GroupBy:
 
     @_aggregate_docstring()
     def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
-        split_out = 1 if split_out is None else split_out
         if split_out is None:
             warnings.warn(
                 "split_out=None is deprecated, please use a positive integer, "
                 "or allow the default of 1",
-                category=DeprecationWarning,
+                category=FutureWarning,
             )
             split_out = 1
         if shuffle is None:
