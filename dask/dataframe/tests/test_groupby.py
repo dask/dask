@@ -2941,3 +2941,10 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_None_split_out_warns():
+    df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.warns(FutureWarning, match="split_out=None"):
+        ddf.groupby("a").agg({"b": "max"}, split_out=None)
