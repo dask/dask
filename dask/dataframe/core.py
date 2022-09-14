@@ -1924,6 +1924,7 @@ Dask Name: {name}, {layers}"""
                 token=token,
                 skipna=skipna,
                 axis=axis,
+                _name=name,
                 **numeric_only_kwargs,
             )
             return handle_out(out, result)
@@ -1936,6 +1937,7 @@ Dask Name: {name}, {layers}"""
                 skipna=skipna,
                 axis=axis,
                 split_every=split_every,
+                _name=name,
                 # numeric_only=Fase,
                 **numeric_only_kwargs,
             )
@@ -8124,5 +8126,6 @@ def _raise_if_not_series_or_dataframe(x, funcname):
 
 
 def _getattr_numeric_only(*args, **kwargs):
+    name = kwargs.pop("_name")
     with check_numeric_only_deprecation():
         return getattr(M, name)(*args, **kwargs)
