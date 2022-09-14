@@ -111,6 +111,7 @@ def _write_partitioned(
             subschema = subschema.remove(subschema.get_field_index(col))
 
     md_list = []
+    partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
     for keys, subgroup in data_df.groupby(partition_keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
