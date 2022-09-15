@@ -1248,7 +1248,7 @@ def test_reductions_frame_dtypes_numeric_only():
         }
     )
 
-    ddf = dd.from_pandas(df, 1)
+    ddf = dd.from_pandas(df, 3)
     kwargs = {"numeric_only": True}
     funcs = [
         "sum",
