@@ -10,7 +10,7 @@ import pandas as pd
 
 from dask import config
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_150
+from dask.dataframe._compat import PANDAS_GT_150, check_numeric_only_deprecation
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
@@ -346,7 +346,8 @@ def _var_chunk(df, *by):
     df = df.copy()
 
     g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+    with check_numeric_only_deprecation():
+        x = g.sum()
 
     n = g[x.columns].count().rename(columns=lambda c: (c, "-count"))
 
@@ -354,7 +355,8 @@ def _var_chunk(df, *by):
     df[cols] = df[cols] ** 2
 
     g2 = _groupby_raise_unaligned(df, by=by)
-    x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
+    with check_numeric_only_deprecation():
+        x2 = g2.sum().rename(columns=lambda c: (c, "-x2"))
 
     return concat([x, x2, n], axis=1)
 
@@ -1251,7 +1253,8 @@ class _GroupBy:
             aggfunc = func
 
         if meta is None:
-            meta = func(self._meta_nonempty)
+            with check_numeric_only_deprecation():
+                meta = func(self._meta_nonempty)
 
         if chunk_kwargs is None:
             chunk_kwargs = {}
