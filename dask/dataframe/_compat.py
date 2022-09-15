@@ -1,4 +1,6 @@
+import contextlib
 import string
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -82,3 +84,18 @@ def makeMixedDataFrame():
         }
     )
     return df
+
+
+@contextlib.contextmanager
+def check_numeric_only_deprecation():
+
+    if PANDAS_GT_150:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The default value of numeric_only in",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield

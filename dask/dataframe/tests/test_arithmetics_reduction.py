@@ -7,7 +7,11 @@ import pytest
 from pandas.api.types import is_scalar
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_120, PANDAS_VERSION
+from dask.dataframe._compat import (
+    PANDAS_GT_120,
+    PANDAS_VERSION,
+    check_numeric_only_deprecation,
+)
 from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
@@ -1161,27 +1165,51 @@ def test_reductions_frame_dtypes():
     ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
 
     assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.drop(columns="dt").mean()
     assert_eq(
-        df_no_timedelta.drop(columns="dt").mean(),
+        expected,
         ddf_no_timedelta.drop(columns="dt").mean(),
     )
 
-    assert_eq(df.prod(), ddf.prod())
-    assert_eq(df.product(), ddf.product())
+    with check_numeric_only_deprecation():
+        expected = df.prod()
+    assert_eq(expected, ddf.prod())
+    with check_numeric_only_deprecation():
+        expected = df.product()
+    assert_eq(expected, ddf.product())
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
-    assert_eq(df.sem(), ddf.sem())
-    assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
+    with check_numeric_only_deprecation():
+        expected = df.sem()
+    assert_eq(expected, ddf.sem())
+    with check_numeric_only_deprecation():
+        expected = df.sem(ddof=0)
+    assert_eq(expected, ddf.sem(ddof=0))
 
-    assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
-    assert_eq(df_no_timedelta.std(skipna=False), ddf_no_timedelta.std(skipna=False))
-    assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-    assert_eq(df_no_timedelta.var(skipna=False), ddf_no_timedelta.var(skipna=False))
-    assert_eq(df_no_timedelta.var(ddof=0), ddf_no_timedelta.var(ddof=0))
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.std()
+    assert_eq(expected, ddf_no_timedelta.std())
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.std(skipna=False)
+    assert_eq(expected, ddf_no_timedelta.std(skipna=False))
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.std(ddof=0)
+    assert_eq(expected, ddf_no_timedelta.std(ddof=0))
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.var()
+    assert_eq(expected, ddf_no_timedelta.var())
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.var(skipna=False)
+    assert_eq(expected, ddf_no_timedelta.var(skipna=False))
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.var(ddof=0)
+    assert_eq(expected, ddf_no_timedelta.var(ddof=0))
+    with check_numeric_only_deprecation():
+        expected = df_no_timedelta.var(ddof=0, skipna=False)
     assert_eq(
-        df_no_timedelta.var(ddof=0, skipna=False),
+        expected,
         ddf_no_timedelta.var(ddof=0, skipna=False),
     )
 
@@ -1195,8 +1223,12 @@ def test_reductions_frame_dtypes():
     # only timedelta
     df_td = df[["timedelta"]]
     ddf_td = dd.from_pandas(df_td, 3)
-    assert_eq(df_td.var(ddof=0), ddf_td.var(ddof=0))
-    assert_eq(df_td.var(), ddf_td.var())
+    with check_numeric_only_deprecation():
+        expected = df_td.var(ddof=0)
+    assert_eq(expected, ddf_td.var(ddof=0))
+    with check_numeric_only_deprecation():
+        expected = df_td.var()
+    assert_eq(expected, ddf_td.var())
 
     # only numercis
     df_numerics = df[["int", "float", "bool"]]

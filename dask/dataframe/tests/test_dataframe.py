@@ -24,6 +24,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
     PANDAS_GT_150,
+    check_numeric_only_deprecation,
     tm,
 )
 from dask.dataframe.core import (
@@ -1511,7 +1512,8 @@ def test_dataframe_quantile(method, expected):
     )
     ddf = dd.from_pandas(df, 3)
 
-    result = ddf.quantile(method=method)
+    with check_numeric_only_deprecation():
+        result = ddf.quantile(method=method)
     assert result.npartitions == 1
     assert result.divisions == ("A", "X")
 
@@ -1532,7 +1534,9 @@ def test_dataframe_quantile(method, expected):
 
     assert (result == expected[1]).all().all()
 
-    assert_eq(ddf.quantile(axis=1, method=method), df.quantile(axis=1))
+    with check_numeric_only_deprecation():
+        expected = df.quantile(axis=1)
+    assert_eq(ddf.quantile(axis=1, method=method), expected)
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
 
@@ -3306,8 +3310,12 @@ def test_cov_corr_mixed():
     df["unique_id"] = df["unique_id"].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=20)
-    assert_eq(ddf.corr(split_every=4), df.corr(), check_divisions=False)
-    assert_eq(ddf.cov(split_every=4), df.cov(), check_divisions=False)
+    with check_numeric_only_deprecation():
+        expected = df.corr()
+    assert_eq(ddf.corr(split_every=4), expected, check_divisions=False)
+    with check_numeric_only_deprecation():
+        expected = df.cov()
+    assert_eq(ddf.cov(split_every=4), expected, check_divisions=False)
 
 
 def test_autocorr():
