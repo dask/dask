@@ -2013,7 +2013,6 @@ Dask Name: {name}, {layers}"""
             skipna=skipna,
             split_every=split_every,
             out=out,
-            numeric_only=numeric_only,
         )
         if min_count:
             cond = self.notnull().sum(axis=axis) >= min_count
@@ -2731,6 +2730,7 @@ Dask Name: {name}, {layers}"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return result
 
+    @_numeric_only
     def quantile(self, q=0.5, axis=0, numeric_only=True, method="default"):
         """Approximate row-wise and precise column-wise quantiles of DataFrame
 
