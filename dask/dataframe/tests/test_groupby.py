@@ -1115,8 +1115,9 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+@pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
-def test_shuffle_aggregate(shuffle_method, split_out):
+def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
     pdf = pd.DataFrame(
         {
@@ -1131,7 +1132,7 @@ def test_shuffle_aggregate(shuffle_method, split_out):
 
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby(["a", "b"]).agg(
-        spec, split_out=split_out, shuffle=shuffle_method
+        spec, split_out=split_out, split_every=split_every, shuffle=shuffle_method
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
@@ -1170,6 +1171,33 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
             ddf.groupby(["a", "b"], sort=sort).agg(
                 spec, split_out=2, shuffle=shuffle_method
             )
+
+
+def test_shuffle_aggregate_defaults(shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+
+    # No shuffle layer when  split_out = 1
+    dsk = ddf.groupby("a").agg(spec, split_out=1).dask
+    assert not any("shuffle" in l for l in dsk.layers)
+
+    # split_every=1 is invalid for tree reduction
+    with pytest.raises(ValueError):
+        ddf.groupby("a").agg(spec, split_out=1, split_every=1)
+
+    # If split_out > 1, default to shuffling.
+    dsk = ddf.groupby("a").agg(spec, split_out=2, split_every=1).dask
+    assert any("shuffle" in l for l in dsk.layers)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -2913,3 +2941,10 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_None_split_out_warns():
+    df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.warns(FutureWarning, match="split_out=None"):
+        ddf.groupby("a").agg({"b": "max"}, split_out=None)

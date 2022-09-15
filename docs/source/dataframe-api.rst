@@ -73,6 +73,8 @@ Dataframe
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.median
+    DataFrame.median_approximate
     DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
@@ -203,6 +205,8 @@ Series
    Series.mask
    Series.max
    Series.mean
+   Series.median
+   Series.median_approximate
    Series.memory_usage
    Series.memory_usage_per_partition
    Series.min
