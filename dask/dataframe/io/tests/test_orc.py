@@ -97,7 +97,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
         }
     )
     if index:
-        data.set_index(index, inplace=True)
+        data = data.set_index(index)
     df = dd.from_pandas(data, chunksize=500)
     if columns:
         data = data[[c for c in columns if c != index]]
