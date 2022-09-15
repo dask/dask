@@ -1904,7 +1904,6 @@ Dask Name: {name}, {layers}"""
         else:
             numeric_only_kwargs = {}
 
-        # TODO: maybe we should warn here?
         with check_numeric_only_deprecation():
             meta = getattr(self._meta_nonempty, name)(
                 axis=axis, skipna=skipna, **numeric_only_kwargs
@@ -2219,7 +2218,6 @@ Dask Name: {name}, {layers}"""
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
-        # TODO: warn here
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.var(
                 axis=axis, skipna=skipna, numeric_only=numeric_only
@@ -2695,7 +2693,6 @@ Dask Name: {name}, {layers}"""
     def sem(self, axis=None, skipna=True, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
-        # TODO: maybe we should raise here
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.sem(
                 axis=axis, skipna=skipna, ddof=ddof, numeric_only=numeric_only
