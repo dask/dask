@@ -69,6 +69,13 @@ from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 #
 # #############################################
 
+SORT_SPLIT_OUT_WARNING = (
+    "In the future, `sort` for groupby operations will default to `True`"
+    " to match the behavior of pandas. However, `sort=True` does not work"
+    " with `split_out>1`. To retain the current behavior for multiple"
+    " output partitions, set `sort=False`."
+)
+
 
 def _determine_levels(by):
     """Determine the correct levels argument to groupby."""
@@ -1249,6 +1256,9 @@ class _GroupBy:
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         if aggfunc is None:
             aggfunc = func
 
@@ -1566,6 +1576,9 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None, split_out=1):
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         levels = _determine_levels(self.by)
         result = aca(
             [self.obj, self.by]
@@ -1615,6 +1628,8 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         levels = _determine_levels(self.by)
 
@@ -1774,6 +1789,9 @@ class _GroupBy:
                 "dropna is not a valid argument for dask.groupby.agg"
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
+
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         if shuffle:
             # Shuffle-based aggregation
@@ -2328,6 +2346,9 @@ class SeriesGroupBy(_GroupBy):
 
         else:
             chunk = _nunique_series_chunk
+
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         return aca(
             [self.obj, self.by]
