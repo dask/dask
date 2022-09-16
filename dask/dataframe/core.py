@@ -3807,8 +3807,8 @@ Dask Name: {name}, {layers}""".format(
         by=None,
         group_keys=GROUP_KEYS_DEFAULT,
         sort=None,
-        observed=False,
-        dropna=True,
+        observed=None,
+        dropna=None,
         **kwargs,
     ):
         from dask.dataframe.groupby import SeriesGroupBy
@@ -5029,8 +5029,8 @@ class DataFrame(_Frame):
         by=None,
         group_keys=GROUP_KEYS_DEFAULT,
         sort=None,
-        observed=False,
-        dropna=True,
+        observed=None,
+        dropna=None,
         **kwargs,
     ):
         from dask.dataframe.groupby import DataFrameGroupBy
