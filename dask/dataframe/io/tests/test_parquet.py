@@ -196,7 +196,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})[:0]
     if index:
-        df.set_index("a", inplace=True, drop=True)
+        df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine, write_metadata_file=True)
@@ -208,7 +208,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(
@@ -221,7 +221,7 @@ def test_simple(tmpdir, write_engine, read_engine):
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(
         fn, engine=write_engine, compute=False, write_metadata_file=False
@@ -845,9 +845,9 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     ("index", "offset"),
     [
         (
-            pd.date_range("2022-01-01", "2022-01-02", periods=500)
-            .to_series()
-            .astype("datetime64[ms]"),
+            # There is some odd behavior with date ranges and pyarrow in some cirucmstances!
+            # https://github.com/pandas-dev/pandas/issues/48573
+            pd.date_range("2022-01-01", "2022-01-31", freq="D"),
             pd.Timedelta(days=1),
         ),
         (pd.RangeIndex(0, 500, 1), 499),
@@ -1369,7 +1369,7 @@ def test_partition_on_duplicates(tmpdir, engine):
     out = dd.read_parquet(tmpdir, engine=engine).compute()
 
     assert len(df) == len(out)
-    for root, dirs, files in os.walk(tmpdir):
+    for _, _, files in os.walk(tmpdir):
         for file in files:
             assert file in (
                 "part.0.parquet",
@@ -3091,7 +3091,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             precision we need to clamp our datetimes to something reasonable"""
 
             new_columns = []
-            for i, col in enumerate(arrow_table.columns):
+            for col in arrow_table.columns:
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
@@ -3333,7 +3333,7 @@ def test_divisions_with_null_partition(tmpdir, engine):
 def test_pyarrow_dataset_simple(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
     read_df = dd.read_parquet(fn, engine="pyarrow", calculate_divisions=True)
@@ -3782,7 +3782,7 @@ def test_custom_metadata(tmpdir, engine):
         files += [os.path.join(path, "_metadata")]
         for fn in files:
             _md = pq.ParquetFile(fn).metadata.metadata
-            for k, v in custom_metadata.items():
+            for k in custom_metadata.keys():
                 assert _md[k] == custom_metadata[k]
 
     # Make sure we raise an error if the custom metadata

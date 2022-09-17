@@ -49,6 +49,7 @@ class ORCFunctionWrapper(DataFrameIOFunction):
         )
         if self.index:
             _df.set_index(self.index, inplace=True)
+
         return _df
 
 

@@ -8,7 +8,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import check_numeric_only_deprecation, tm
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
     assert_eq,
@@ -133,7 +133,9 @@ def test_unknown_categoricals(shuffle_method):
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
+    with check_numeric_only_deprecation():
+        expected = df.groupby(df.w).sum()
+    assert_eq(ddf.groupby(ddf.w).sum(), expected)
     assert_eq(ddf.groupby(ddf.w).y.nunique(), df.groupby(df.w).y.nunique())
     assert_eq(ddf.y.groupby(ddf.w).count(), df.y.groupby(df.w).count())
 

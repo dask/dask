@@ -6,6 +6,11 @@ on:
   push:
   pull_request:
 
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
 
   check:
@@ -52,14 +57,12 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         env:
           UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
         id: run_tests
-        shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
