@@ -1269,14 +1269,12 @@ class _GroupBy:
 
         if shuffle:
             # Shuffle-based aggregation
-            meta = self.obj._meta
+            with check_numeric_only_deprecation():
+                meta = func(self._meta_nonempty)
+
             by = self.by if isinstance(self.by, list) else [self.by]
-            if is_series_like(meta):
-                columns = meta.name
-            else:
-                # Avoid selecting the grouped-by columns in chunk so as to
-                # avoid duplicates in the index and columns.
-                columns = [c for c in meta.columns if c not in by]
+            columns = meta.name if is_series_like(meta) else meta.columns
+
             return _shuffle_aggregate(
                 [self.obj] + by,
                 chunk=_apply_chunk,
@@ -2633,6 +2631,14 @@ def _shuffle_aggregate(
         token=chunk_name,
         **chunk_kwargs,
     )
+    if is_series_like(chunked):
+        # Temporarily convert series to dataframe for shuffle
+        series_name = chunked._meta.name
+        chunked = chunked.to_frame("__series__")
+        convert_back_to_series = True
+    else:
+        series_name = None
+        convert_back_to_series = False
 
     shuffle_npartitions = max(
         chunked.npartitions // split_every,
@@ -2667,6 +2673,9 @@ def _shuffle_aggregate(
             npartitions=shuffle_npartitions,
             shuffle=shuffle,
         ).map_partitions(aggregate, **aggregate_kwargs)
+
+    if convert_back_to_series:
+        result = result["__series__"].rename(series_name)
 
     if split_out < shuffle_npartitions:
         return result.repartition(npartitions=split_out)
