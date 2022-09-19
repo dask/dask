@@ -1399,7 +1399,7 @@ def test_reduction_with_sparse_matrices():
 
 
 def test_empty():
-    list(db.from_sequence([])) == []
+    assert list(db.from_sequence([])) == []
 
 
 def test_bag_picklable():

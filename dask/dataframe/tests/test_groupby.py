@@ -1,4 +1,5 @@
 import collections
+import contextlib
 import operator
 import pickle
 import warnings
@@ -10,7 +11,13 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_130, PANDAS_GT_150, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_130,
+    PANDAS_GT_150,
+    check_numeric_only_deprecation,
+    tm,
+)
 from dask.dataframe.backends import grouper_dispatch
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
@@ -1115,8 +1122,9 @@ def test_aggregate_dask():
                 assert len(other.dask) == len(result2.dask)
 
 
+@pytest.mark.parametrize("split_every", [1, 8])
 @pytest.mark.parametrize("split_out", [2, 32])
-def test_shuffle_aggregate(shuffle_method, split_out):
+def test_shuffle_aggregate(shuffle_method, split_out, split_every):
 
     pdf = pd.DataFrame(
         {
@@ -1131,7 +1139,7 @@ def test_shuffle_aggregate(shuffle_method, split_out):
 
     spec = {"b": "mean", "c": ["min", "max"]}
     result = ddf.groupby(["a", "b"]).agg(
-        spec, split_out=split_out, shuffle=shuffle_method
+        spec, split_out=split_out, split_every=split_every, shuffle=shuffle_method
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
 
@@ -1170,6 +1178,33 @@ def test_shuffle_aggregate_sort(shuffle_method, sort):
             ddf.groupby(["a", "b"], sort=sort).agg(
                 spec, split_out=2, shuffle=shuffle_method
             )
+
+
+def test_shuffle_aggregate_defaults(shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 100,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 100,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 100,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=100)
+
+    spec = {"b": "mean", "c": ["min", "max"]}
+
+    # No shuffle layer when  split_out = 1
+    dsk = ddf.groupby("a").agg(spec, split_out=1).dask
+    assert not any("shuffle" in l for l in dsk.layers)
+
+    # split_every=1 is invalid for tree reduction
+    with pytest.raises(ValueError):
+        ddf.groupby("a").agg(spec, split_out=1, split_every=1)
+
+    # If split_out > 1, default to shuffling.
+    dsk = ddf.groupby("a").agg(spec, split_out=2, split_every=1).dask
+    assert any("shuffle" in l for l in dsk.layers)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -2032,7 +2067,9 @@ def test_std_object_dtype(func):
     df = pd.DataFrame({"x": [1, 2, 1], "y": ["a", "b", "c"], "z": [11.0, 22.0, 33.0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(func(df), func(ddf))
+    with check_numeric_only_deprecation():
+        expected = func(df)
+    assert_eq(expected, func(ddf))
 
 
 def test_std_columns_int():
@@ -2513,14 +2550,8 @@ def test_groupby_dropna_pandas(dropna):
     "group_keys",
     [
         True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
-        pytest.param(
-            None,
-            marks=pytest.mark.xfail(reason="cudf hasn't updated group_keys default"),
-        ),
+        False,
+        None,
     ],
 )
 def test_groupby_dropna_cudf(dropna, by, group_keys):
@@ -2695,7 +2726,10 @@ def test_groupby_sort_argument(by, agg, sort):
 
     # Basic groupby aggregation
     result_1 = getattr(gb, agg)
-    result_1_pd = getattr(gb_pd, agg)
+
+    def result_1_pd():
+        with check_numeric_only_deprecation():
+            return getattr(gb_pd, agg)()
 
     # Choose single column
     result_2 = getattr(gb.e, agg)
@@ -2781,7 +2815,12 @@ def test_groupby_aggregate_categorical_observed(
         ddf["cat_2"] = ddf["cat_2"].cat.as_unknown()
 
     def agg(grp, **kwargs):
-        return getattr(grp, agg_func)(**kwargs)
+        if isinstance(grp, pd.core.groupby.DataFrameGroupBy):
+            ctx = check_numeric_only_deprecation
+        else:
+            ctx = contextlib.nullcontext
+        with ctx():
+            return getattr(grp, agg_func)(**kwargs)
 
     # only include numeric columns when passing to "min" or "max"
     # pandas default is numeric_only=False
@@ -2919,3 +2958,10 @@ def test_groupby_iter_fails():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.raises(NotImplementedError, match="computing the groups"):
         list(ddf.groupby("A"))
+
+
+def test_groupby_None_split_out_warns():
+    df = pd.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    with pytest.warns(FutureWarning, match="split_out=None"):
+        ddf.groupby("a").agg({"b": "max"}, split_out=None)

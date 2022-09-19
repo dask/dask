@@ -1785,7 +1785,7 @@ def test_coerce():
     a2 = np.arange(2)
     d2 = da.from_array(a2, chunks=(2,))
     for func in (int, float, complex):
-        pytest.raises(TypeError, lambda: func(d2))
+        pytest.raises(TypeError, lambda func=func: func(d2))
 
 
 def test_bool():
@@ -1873,9 +1873,9 @@ def test_store_delayed_target():
         assert_eq(st[0], a)
         assert_eq(st[1], b)
 
-        pytest.raises(ValueError, lambda: store([a], [at, bt]))
-        pytest.raises(ValueError, lambda: store(at, at))
-        pytest.raises(ValueError, lambda: store([at, bt], [at, bt]))
+        pytest.raises(ValueError, lambda at=at, bt=bt: store([a], [at, bt]))
+        pytest.raises(ValueError, lambda at=at: store(at, at))
+        pytest.raises(ValueError, lambda at=at, bt=bt: store([at, bt], [at, bt]))
 
 
 def test_store():
