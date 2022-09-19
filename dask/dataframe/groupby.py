@@ -338,7 +338,7 @@ def _set_index_chunk(df, *by, columns=None):
     else:
         if isinstance(columns, (tuple, list, set, pd.Index)):
             columns = list(columns)
-        return df[columns].set_index(list(by))
+        return df.set_index(list(by))[columns]
 
 
 def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
@@ -1577,7 +1577,7 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def median(self, split_every=None, split_out=1):
-        meta = self.obj._meta
+        meta = self._meta_nonempty.median()
         columns = meta.name if is_series_like(meta) else meta.columns
         chunk_args = (
             [self.obj, self.by]
