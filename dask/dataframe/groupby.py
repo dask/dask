@@ -1255,7 +1255,18 @@ class _GroupBy:
         )
         return _maybe_slice(grouped, self._slice)
 
-    def _single_agg(self, func, token, split_every, split_out, shuffle):
+    def _single_agg(
+        self,
+        func,
+        token,
+        aggfunc=None,
+        meta=None,
+        split_every=None,
+        split_out=1,
+        shuffle=None,
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
+    ):
         """
         Aggregation with a single function, rather than a compound spec like in
         GroupBy.aggregate.
@@ -1266,6 +1277,15 @@ class _GroupBy:
                 shuffle = shuffle or config.get("shuffle", None) or "tasks"
             else:
                 shuffle = False
+
+        if aggfunc == None:
+            aggfunc = func
+
+        if chunk_kwargs is None:
+            chunk_kwargs = {}
+
+        if aggregate_kwargs is None:
+            aggregate_kwargs = {}
 
         if shuffle:
             # Shuffle-based aggregation
@@ -1278,11 +1298,12 @@ class _GroupBy:
             return _shuffle_aggregate(
                 [self.obj] + by,
                 chunk=_apply_chunk,
-                chunk_kwargs={"chunk": func, "columns": columns},
+                chunk_kwargs={"chunk": func, "columns": columns, **chunk_kwargs},
                 aggregate=_groupby_aggregate,
                 aggregate_kwargs={
-                    "aggfunc": func,
+                    "aggfunc": aggfunc,
                     "levels": _determine_levels(self.by),
+                    **aggregate_kwargs,
                 },
                 token=token,
                 split_every=split_every,
@@ -1292,7 +1313,14 @@ class _GroupBy:
             )
 
         return self._aca_agg(
-            token=token, func=func, split_every=split_every, split_out=split_out
+            token=token,
+            func=func,
+            aggfunc=aggfunc,
+            meta=meta,
+            split_every=split_every,
+            split_out=split_out,
+            chunk_kwargs=chunk_kwargs,
+            aggregate_kwargs=aggregate_kwargs,
         )
 
     def _aca_agg(
@@ -1543,9 +1571,13 @@ class _GroupBy:
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def sum(self, split_every=None, split_out=1, min_count=None):
-        result = self._aca_agg(
-            token="sum", func=M.sum, split_every=split_every, split_out=split_out
+    def sum(self, split_every=None, split_out=1, shuffle=None, min_count=None):
+        result = self._single_agg(
+            func=M.sum,
+            token="sum",
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1553,9 +1585,13 @@ class _GroupBy:
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def prod(self, split_every=None, split_out=1, min_count=None):
-        result = self._aca_agg(
-            token="prod", func=M.prod, split_every=split_every, split_out=split_out
+    def prod(self, split_every=None, split_out=1, shuffle=None, min_count=None):
+        result = self._single_agg(
+            func=M.prod,
+            token="prod",
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
         if min_count:
             return result.where(self.count() >= min_count, other=np.NaN)
@@ -1563,9 +1599,13 @@ class _GroupBy:
             return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def min(self, split_every=None, split_out=1):
-        return self._aca_agg(
-            token="min", func=M.min, split_every=split_every, split_out=split_out
+    def min(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
+            func=M.min,
+            token="min",
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -1604,53 +1644,61 @@ class _GroupBy:
         )
 
     @derived_from(pd.DataFrame)
-    def idxmin(self, split_every=None, split_out=1, axis=None, skipna=True):
-        return self._aca_agg(
-            token="idxmin",
+    def idxmin(
+        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
+    ):
+        return self._single_agg(
             func=M.idxmin,
+            token="idxmin",
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
             chunk_kwargs=dict(skipna=skipna),
         )
 
     @derived_from(pd.DataFrame)
-    def idxmax(self, split_every=None, split_out=1, axis=None, skipna=True):
-        return self._aca_agg(
-            token="idxmax",
+    def idxmax(
+        self, split_every=None, split_out=1, shuffle=None, axis=None, skipna=True
+    ):
+        return self._single_agg(
             func=M.idxmax,
+            token="idxmax",
             aggfunc=M.first,
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
             chunk_kwargs=dict(skipna=skipna),
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def count(self, split_every=None, split_out=1):
-        return self._aca_agg(
-            token="count",
+    def count(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
             func=M.count,
+            token="count",
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def mean(self, split_every=None, split_out=1):
-        s = self.sum(split_every=split_every, split_out=split_out)
-        c = self.count(split_every=split_every, split_out=split_out)
+    def mean(self, split_every=None, split_out=1, shuffle=None):
+        s = self.sum(split_every=split_every, split_out=split_out, shuffle=shuffle)
+        c = self.count(split_every=split_every, split_out=split_out, shuffle=shuffle)
         if is_dataframe_like(s):
             c = c[s.columns]
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    def size(self, split_every=None, split_out=1):
-        return self._aca_agg(
+    def size(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
             token="size",
             func=M.size,
             aggfunc=M.sum,
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -1738,15 +1786,23 @@ class _GroupBy:
         return result
 
     @derived_from(pd.core.groupby.GroupBy)
-    def first(self, split_every=None, split_out=1):
-        return self._aca_agg(
-            token="first", func=M.first, split_every=split_every, split_out=split_out
+    def first(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
+            func=M.first,
+            token="first",
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
-    def last(self, split_every=None, split_out=1):
-        return self._aca_agg(
-            token="last", func=M.last, split_every=split_every, split_out=split_out
+    def last(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
+            token="last",
+            func=M.last,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(
@@ -2455,53 +2511,57 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def value_counts(self, split_every=None, split_out=1):
-        return self._aca_agg(
-            token="value_counts",
+    def value_counts(self, split_every=None, split_out=1, shuffle=None):
+        return self._single_agg(
             func=_value_counts,
+            token="value_counts",
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def unique(self, split_every=None, split_out=1):
+    def unique(self, split_every=None, split_out=1, shuffle=None):
         name = self._meta.obj.name
-        return self._aca_agg(
-            token="unique",
+        return self._single_agg(
             func=M.unique,
+            token="unique",
             aggfunc=_unique_aggregate,
             aggregate_kwargs={"name": name},
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def tail(self, n=5, split_every=None, split_out=1):
+    def tail(self, n=5, split_every=None, split_out=1, shuffle=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
-        return self._aca_agg(
-            token="tail",
+        return self._single_agg(
             func=_tail_chunk,
+            token="tail",
             aggfunc=_tail_aggregate,
             meta=M.tail(self._meta_nonempty),
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
-    def head(self, n=5, split_every=None, split_out=1):
+    def head(self, n=5, split_every=None, split_out=1, shuffle=None):
         index_levels = len(self.by) if isinstance(self.by, list) else 1
-        return self._aca_agg(
-            token="head",
+        return self._single_agg(
             func=_head_chunk,
+            token="head",
             aggfunc=_head_aggregate,
             meta=M.head(self._meta_nonempty),
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
+            shuffle=shuffle,
         )
 
 
