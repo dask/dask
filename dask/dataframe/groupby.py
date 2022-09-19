@@ -1257,8 +1257,8 @@ class _GroupBy:
 
     def _single_agg(
         self,
-        func,
         token,
+        func,
         aggfunc=None,
         meta=None,
         split_every=None,
@@ -1268,75 +1268,15 @@ class _GroupBy:
         aggregate_kwargs=None,
     ):
         """
-        Aggregation with a single function, rather than a compound spec like in
-        GroupBy.aggregate.
+        Aggregation with a single function/aggfunc rather than a compound spec
+        like in GroupBy.aggregate
         """
-
         if shuffle is None:
             if split_out > 1:
                 shuffle = shuffle or config.get("shuffle", None) or "tasks"
             else:
                 shuffle = False
 
-        if aggfunc == None:
-            aggfunc = func
-
-        if chunk_kwargs is None:
-            chunk_kwargs = {}
-
-        if aggregate_kwargs is None:
-            aggregate_kwargs = {}
-
-        if shuffle:
-            # Shuffle-based aggregation
-            with check_numeric_only_deprecation():
-                meta = func(self._meta_nonempty)
-
-            by = self.by if isinstance(self.by, list) else [self.by]
-            columns = meta.name if is_series_like(meta) else meta.columns
-
-            return _shuffle_aggregate(
-                [self.obj] + by,
-                chunk=_apply_chunk,
-                chunk_kwargs={"chunk": func, "columns": columns, **chunk_kwargs},
-                aggregate=_groupby_aggregate,
-                aggregate_kwargs={
-                    "aggfunc": aggfunc,
-                    "levels": _determine_levels(self.by),
-                    **aggregate_kwargs,
-                },
-                token=token,
-                split_every=split_every,
-                split_out=split_out,
-                shuffle=shuffle,
-                sort=self.sort,
-            )
-
-        return self._aca_agg(
-            token=token,
-            func=func,
-            aggfunc=aggfunc,
-            meta=meta,
-            split_every=split_every,
-            split_out=split_out,
-            chunk_kwargs=chunk_kwargs,
-            aggregate_kwargs=aggregate_kwargs,
-        )
-
-    def _aca_agg(
-        self,
-        token,
-        func,
-        aggfunc=None,
-        meta=None,
-        split_every=None,
-        split_out=1,
-        chunk_kwargs=None,
-        aggregate_kwargs=None,
-    ):
-        """
-        ACA-based aggregation with a single function.
-        """
         if aggfunc is None:
             aggfunc = func
 
@@ -1351,14 +1291,31 @@ class _GroupBy:
             aggregate_kwargs = {}
 
         columns = meta.name if is_series_like(meta) else meta.columns
+        by = self.by if isinstance(self.by, list) else [self.by]
 
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
 
+        if shuffle:
+            return _shuffle_aggregate(
+                [self.obj] + by,
+                chunk=_apply_chunk,
+                chunk_kwargs={"chunk": func, "columns": columns, **chunk_kwargs},
+                aggregate=_groupby_aggregate,
+                aggregate_kwargs={
+                    "aggfunc": aggfunc,
+                    "levels": levels,
+                    **aggregate_kwargs,
+                },
+                token=token,
+                split_every=split_every,
+                split_out=split_out,
+                shuffle=shuffle,
+                sort=self.sort,
+            )
+
         return aca(
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by,
+            [self.obj] + by,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,

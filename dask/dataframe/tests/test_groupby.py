@@ -2775,8 +2775,8 @@ def test_groupby_sort_true_split_out():
     M.sum(ddf.groupby("x"), split_out=2)
 
     with pytest.raises(NotImplementedError):
-        # Cannot use sort=True with split_out>1 (for now)
-        M.sum(ddf.groupby("x", sort=True), split_out=2)
+        # Cannot use sort=True with split_out>1 using non-shuffle-based approach
+        M.sum(ddf.groupby("x", sort=True), shuffle=False, split_out=2)
 
     # Can use sort=True with split_out>1 with agg() if shuffle=True
     ddf.groupby("x", sort=True).agg("sum", split_out=2, shuffle=True)
