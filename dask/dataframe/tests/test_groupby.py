@@ -30,7 +30,6 @@ if dd._compat.PANDAS_GT_110:
 AGG_FUNCS = [
     "sum",
     "mean",
-    "median",
     "min",
     "max",
     "count",
