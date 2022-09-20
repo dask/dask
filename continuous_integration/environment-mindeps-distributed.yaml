@@ -14,7 +14,7 @@ dependencies:
   - pip
   - pip:
       # TODO: Replace this with distributed=2021.05.0 once it is out
-      - git+https://github.com/dask/distributed
+      - git+https://github.com/jrbourbeau/distributed@remove-factors
   # test dependencies
   - pre-commit
   - pytest

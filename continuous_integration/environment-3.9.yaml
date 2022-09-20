@@ -68,4 +68,4 @@ dependencies:
   - libprotobuf=3.19
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/jrbourbeau/distributed@remove-factors
