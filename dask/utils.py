@@ -1436,15 +1436,6 @@ def natural_sort_key(s: str) -> list[str | int]:
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
-def factors(n: int) -> set[int]:
-    """Return the factors of an integer
-
-    https://stackoverflow.com/a/6800214/616616
-    """
-    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return {j for l in seq for j in l}
-
-
 def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 

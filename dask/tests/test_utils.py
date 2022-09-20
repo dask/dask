@@ -23,7 +23,6 @@ from dask.utils import (
     ensure_set,
     ensure_unicode,
     extra_titles,
-    factors,
     format_bytes,
     format_time,
     funcname,
@@ -881,14 +880,6 @@ def test_cached_cumsum_non_tuple():
     assert cached_cumsum(a) == (1, 3, 6)
     a[1] = 4
     assert cached_cumsum(a) == (1, 5, 8)
-
-
-def test_factors():
-    assert factors(0) == set()
-    assert factors(1) == {1}
-    assert factors(2) == {1, 2}
-    assert factors(12) == {1, 2, 3, 4, 6, 12}
-    assert factors(15) == {1, 3, 5, 15}
 
 
 def test_tmpfile_naming():
