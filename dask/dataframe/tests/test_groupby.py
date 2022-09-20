@@ -30,6 +30,7 @@ if dd._compat.PANDAS_GT_110:
 AGG_FUNCS = [
     "sum",
     "mean",
+    "median",
     "min",
     "max",
     "count",
@@ -2785,10 +2786,10 @@ def test_groupby_sort_true_split_out():
 @pytest.mark.skipif(
     not PANDAS_GT_110, reason="observed only supported for newer pandas"
 )
-@pytest.mark.parametrize("known_cats", [True, False])
-@pytest.mark.parametrize("ordered_cats", [True, False])
+@pytest.mark.parametrize("known_cats", [True, False], ids=["known", "unknown"])
+@pytest.mark.parametrize("ordered_cats", [True, False], ids=["ordered", "unordererd"])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
-@pytest.mark.parametrize("observed", [True, False])
+@pytest.mark.parametrize("observed", [True, False], ids=["observed", "unobserved"])
 def test_groupby_aggregate_categorical_observed(
     known_cats, ordered_cats, agg_func, groupby, observed
 ):

@@ -1300,11 +1300,19 @@ class _GroupBy:
             return _shuffle_aggregate(
                 [self.obj] + by,
                 chunk=_apply_chunk,
-                chunk_kwargs={"chunk": func, "columns": columns, **chunk_kwargs},
+                chunk_kwargs={
+                    "chunk": func,
+                    "columns": columns,
+                    **self.observed,
+                    **self.dropna,
+                    **chunk_kwargs,
+                },
                 aggregate=_groupby_aggregate,
                 aggregate_kwargs={
                     "aggfunc": aggfunc,
                     "levels": levels,
+                    **self.observed,
+                    **self.dropna,
                     **aggregate_kwargs,
                 },
                 token=token,
@@ -1577,7 +1585,8 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def median(self, split_every=None, split_out=1):
-        meta = self._meta_nonempty.median()
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.median()
         columns = meta.name if is_series_like(meta) else meta.columns
         chunk_args = (
             [self.obj, self.by]
@@ -1593,6 +1602,8 @@ class _GroupBy:
             aggregate_kwargs={
                 "aggfunc": M.median,
                 "levels": _determine_levels(self.by),
+                **self.observed,
+                **self.dropna,
             },
             split_every=split_every,
             split_out=split_out,
