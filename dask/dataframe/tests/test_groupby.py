@@ -1321,7 +1321,8 @@ def test_bfill():
         lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
-def test_dataframe_aggregations_multilevel(grouper, agg_func):
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -1341,14 +1342,26 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
     if agg_func not in ("cov", "corr"):
         assert_eq(
             call(pdf.groupby(grouper(pdf))["c"], agg_func),
-            call(ddf.groupby(grouper(ddf))["c"], agg_func, split_every=2),
+            call(
+                ddf.groupby(grouper(ddf))["c"],
+                agg_func,
+                split_out=split_out,
+                split_every=2,
+            ),
         )
 
     # not supported by pandas
     if agg_func != "nunique":
+        if agg_func in ("cov", "corr") and split_out > 1:
+            pytest.skip("https://github.com/dask/dask/issues/9509")
         assert_eq(
             call(pdf.groupby(grouper(pdf))[["c", "d"]], agg_func),
-            call(ddf.groupby(grouper(ddf))[["c", "d"]], agg_func, split_every=2),
+            call(
+                ddf.groupby(grouper(ddf))[["c", "d"]],
+                agg_func,
+                split_out=split_out,
+                split_every=2,
+            ),
         )
 
         if agg_func in ("cov", "corr"):
@@ -1356,7 +1369,9 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
             df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
             cols = sorted(list(df.columns))
             df = df[cols]
-            dddf = call(ddf.groupby(grouper(ddf)), agg_func, split_every=2).compute()
+            dddf = call(
+                ddf.groupby(grouper(ddf)), agg_func, split_out=split_out, split_every=2
+            ).compute()
             dddf = dddf.sort_index()
             cols = sorted(list(dddf.columns))
             dddf = dddf[cols]
@@ -1364,7 +1379,12 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         else:
             assert_eq(
                 call(pdf.groupby(grouper(pdf)), agg_func),
-                call(ddf.groupby(grouper(ddf)), agg_func, split_every=2),
+                call(
+                    ddf.groupby(grouper(ddf)),
+                    agg_func,
+                    split_out=split_out,
+                    split_every=2,
+                ),
             )
 
 
@@ -1376,7 +1396,8 @@ def test_dataframe_aggregations_multilevel(grouper, agg_func):
         lambda df: [df["a"] > 2, df["b"] > 1],
     ],
 )
-def test_series_aggregations_multilevel(grouper, agg_func):
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     """
     similar to ``test_dataframe_aggregations_multilevel``, but series do not
     support all groupby args.
@@ -1402,7 +1423,9 @@ def test_series_aggregations_multilevel(grouper, agg_func):
 
     assert_eq(
         call(pdf["c"].groupby(grouper(pdf)), agg_func),
-        call(ddf["c"].groupby(grouper(ddf)), agg_func, split_every=2),
+        call(
+            ddf["c"].groupby(grouper(ddf)), agg_func, split_out=split_out, split_every=2
+        ),
         # for pandas ~ 0.18, the name is not not properly propagated for
         # the mean aggregation
         check_names=(agg_func not in {"mean", "nunique"}),
