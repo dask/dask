@@ -1625,7 +1625,9 @@ class _GroupBy:
             split_every=split_every,
             split_out=split_out,
             shuffle=config.get("shuffle", None) or "tasks",
-            chunk_kwargs={"reindex_unobserved": self.observed.get("observed", True)},
+            chunk_kwargs={
+                "include_unobserved": not self.observed.get("observed", False)
+            },
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2544,7 +2546,7 @@ def _head_aggregate(series_gb, **kwargs):
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
 
 
-def _no_op_reindex_chunk(series_gb, reindex_unobserved=True):
+def _no_op_reindex_chunk(series_gb, include_unobserved=True):
     """
     A non-aggregating chunk aggregation. This doesn't drop any rows, but does
     set group keys as the index like a regular aggregator.
@@ -2561,8 +2563,23 @@ def _no_op_reindex_chunk(series_gb, reindex_unobserved=True):
 
     result = series_gb.apply(_reindex).reset_index(level=-1, drop=True)
     # Now, result should have the group keys.
-    if not reindex_unobserved:
-        result = series_gb._reindex_output(result)
+    if include_unobserved:
+        has_categoricals = False
+        if isinstance(result.index, pd.CategoricalIndex):
+            has_categoricals = True
+            full_index = result.index.categories
+        elif isinstance(result.index, pd.MultiIndex) and any(
+            isinstance(level, pd.CategoricalIndex) for level in result.index.levels
+        ):
+            has_categoricals = True
+            full_index = pd.MultiIndex.from_product(
+                level.categories if isinstance(level, pd.CategoricalIndex) else level
+                for level in result.index.levels
+            )
+        if has_categoricals:
+            new_cats = full_index[~full_index.isin(result.index)]
+            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
+            result = pd.concat([result, empty])
     return result
 
 
