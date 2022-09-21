@@ -1790,9 +1790,6 @@ class _GroupBy:
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
-
         if shuffle:
             # Shuffle-based aggregation
             #
@@ -1823,6 +1820,9 @@ class _GroupBy:
                 shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                 sort=self.sort,
             )
+
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         # Check sort behavior
         if self.sort and split_out > 1:
@@ -2573,6 +2573,17 @@ def _shuffle_aggregate(
     if sort is not None:
         aggregate_kwargs = aggregate_kwargs or {}
         aggregate_kwargs["sort"] = sort
+
+    if sort is None and split_out > 1:
+        idx = set(chunked._meta.columns) - set(chunked._meta.reset_index().columns)
+        if len(idx) > 1:
+            warnings.warn(
+                "In the future, `sort` for groupby operations will default to `True`"
+                " to match the behavior of pandas. However, `sort=True` does not work"
+                " with `split_out>1` when grouping by multiple columns. To retain the"
+                " current behavior for multiple output partitions, set `sort=False`.",
+                FutureWarning,
+            )
 
     # Perform global sort or shuffle
     if sort and split_out > 1:
