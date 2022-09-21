@@ -1614,6 +1614,21 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
+    def median(self, split_every=None, split_out=1):
+        with check_numeric_only_deprecation():
+            meta = self._meta_nonempty.median()
+        return self._single_agg(
+            token="median",
+            meta=meta,
+            func=_no_op_reindex_chunk,
+            aggfunc=_median_aggregate,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=config.get("shuffle", None) or "tasks",
+            chunk_kwargs={"reindex_unobserved": self.observed.get("observed", True)},
+        )
+
+    @derived_from(pd.core.groupby.GroupBy)
     def size(self, split_every=None, split_out=1, shuffle=None):
         return self._single_agg(
             token="size",
@@ -2529,6 +2544,33 @@ def _head_aggregate(series_gb, **kwargs):
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
 
 
+def _no_op_reindex_chunk(series_gb, reindex_unobserved=True):
+    """
+    A non-aggregating chunk aggregation. This doesn't drop any rows, but does
+    set group keys as the index like a regular aggregator.
+    """
+    # An apply function that intentionally messes with the index so as to
+    # look different, which results in pandas prepending group keys after
+    # the apply step. The same trick is used in `_drop_duplicates_reindex`.
+    # In future versions of pandas (~2.0?), we should be able to remove this, as
+    # group_keys will always be prepended.
+    def _reindex(df):
+        r = df.reset_index(drop=True)
+        r.index = [pd.NA] * len(df)
+        return r
+
+    result = series_gb.apply(_reindex).reset_index(level=-1, drop=True)
+    # Now, result should have the group keys.
+    if not reindex_unobserved:
+        result = series_gb._reindex_output(result)
+    return result
+
+
+def _median_aggregate(series_gb, **kwargs):
+    with check_numeric_only_deprecation():
+        return series_gb.median(**kwargs)
+
+
 def _shuffle_aggregate(
     args,
     chunk=None,
@@ -2602,13 +2644,15 @@ def _shuffle_aggregate(
     elif split_every < 1 or not isinstance(split_every, Integral):
         raise ValueError("split_every must be an integer >= 1")
 
-    # Shuffle-based groupby aggregation
+    # Shuffle-based groupby aggregation. N.B. we have to use `_meta_nonempty`
+    # as some chunk aggregation functions depend on the index having values to
+    # determine `group_keys` behavior.
     chunk_name = f"{token or funcname(chunk)}-chunk"
     chunked = map_partitions(
         chunk,
         *args,
         meta=chunk(
-            *[arg._meta if isinstance(arg, _Frame) else arg for arg in args],
+            *[arg._meta_nonempty if isinstance(arg, _Frame) else arg for arg in args],
             **chunk_kwargs,
         ),
         token=chunk_name,
