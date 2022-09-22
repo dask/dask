@@ -55,6 +55,15 @@ analyze pipeline:
    from dask.multiprocessing import get
    get(dsk, 'store')  # executes in parallel
 
+In the above example, while multiprocessing, if a notebook is not being 
+used to run, the ``get(dsk, 'store')`` command needs to be run inside an 
+``if __name__ == '__main__':`` block as shown below:
+
+.. code-block:: python
+
+   if __name__ == '__main__':
+      get(dsk, "store")
+
 
 
 Keyword arguments in custom Dask graphs
