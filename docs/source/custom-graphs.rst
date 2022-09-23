@@ -52,21 +52,8 @@ analyze pipeline:
           'analyze': (analyze, ['clean-%d' % i for i in [1, 2, 3]]),
           'store': (store, 'analyze')}
 
-   from dask.multiprocessing import get
+   from dask.threaded import get
    get(dsk, 'store')  # executes in parallel
-
-If the above example is not being run inside a notebook, the ``get(dsk, 'store')``
-command should be placed inside an ``if __name__ == '__main__':`` block:
-
-.. code-block:: python
-
-   if __name__ == '__main__':
-       get(dsk, "store")
-       
-For an explanation of why ``if __name__ == '__main__'`` is necessary, see the
-standard `multiprocessing guidelines <https://docs.python.org/3/library/multiprocessing.html#programming-guidelines>`_
-for Python.
-
 
 
 Keyword arguments in custom Dask graphs
