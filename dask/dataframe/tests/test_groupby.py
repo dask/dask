@@ -1323,6 +1323,8 @@ def test_bfill():
 )
 @pytest.mark.parametrize("split_out", [1, 2])
 def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
+    sort = split_out == 1  # Don't sort for split_out > 1
+
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
 
@@ -1341,9 +1343,9 @@ def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
     # covariance only works with N+1 columns
     if agg_func not in ("cov", "corr"):
         assert_eq(
-            call(pdf.groupby(grouper(pdf))["c"], agg_func),
+            call(pdf.groupby(grouper(pdf), sort=sort)["c"], agg_func),
             call(
-                ddf.groupby(grouper(ddf))["c"],
+                ddf.groupby(grouper(ddf), sort=sort)["c"],
                 agg_func,
                 split_out=split_out,
                 split_every=2,
@@ -1355,9 +1357,9 @@ def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
         if agg_func in ("cov", "corr") and split_out > 1:
             pytest.skip("https://github.com/dask/dask/issues/9509")
         assert_eq(
-            call(pdf.groupby(grouper(pdf))[["c", "d"]], agg_func),
+            call(pdf.groupby(grouper(pdf), sort=sort)[["c", "d"]], agg_func),
             call(
-                ddf.groupby(grouper(ddf))[["c", "d"]],
+                ddf.groupby(grouper(ddf), sort=sort)[["c", "d"]],
                 agg_func,
                 split_out=split_out,
                 split_every=2,
@@ -1366,11 +1368,14 @@ def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
 
         if agg_func in ("cov", "corr"):
             # there are sorting issues between pandas and chunk cov w/dask
-            df = call(pdf.groupby(grouper(pdf)), agg_func).sort_index()
+            df = call(pdf.groupby(grouper(pdf), sort=sort), agg_func).sort_index()
             cols = sorted(list(df.columns))
             df = df[cols]
             dddf = call(
-                ddf.groupby(grouper(ddf)), agg_func, split_out=split_out, split_every=2
+                ddf.groupby(grouper(ddf), sort=sort),
+                agg_func,
+                split_out=split_out,
+                split_every=2,
             ).compute()
             dddf = dddf.sort_index()
             cols = sorted(list(dddf.columns))
@@ -1378,9 +1383,9 @@ def test_dataframe_aggregations_multilevel(grouper, split_out, agg_func):
             assert_eq(df, dddf)
         else:
             assert_eq(
-                call(pdf.groupby(grouper(pdf)), agg_func),
+                call(pdf.groupby(grouper(pdf), sort=sort), agg_func),
                 call(
-                    ddf.groupby(grouper(ddf)),
+                    ddf.groupby(grouper(ddf), sort=sort),
                     agg_func,
                     split_out=split_out,
                     split_every=2,
@@ -1402,6 +1407,7 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     similar to ``test_dataframe_aggregations_multilevel``, but series do not
     support all groupby args.
     """
+    sort = split_out == 1  # Don't sort for split_out > 1
 
     def call(g, m, **kwargs):
         return getattr(g, m)(**kwargs)
@@ -1422,9 +1428,12 @@ def test_series_aggregations_multilevel(grouper, split_out, agg_func):
     ddf = dd.from_pandas(pdf, npartitions=10)
 
     assert_eq(
-        call(pdf["c"].groupby(grouper(pdf)), agg_func),
+        call(pdf["c"].groupby(grouper(pdf), sort=sort), agg_func),
         call(
-            ddf["c"].groupby(grouper(ddf)), agg_func, split_out=split_out, split_every=2
+            ddf["c"].groupby(grouper(ddf), sort=sort),
+            agg_func,
+            split_out=split_out,
+            split_every=2,
         ),
         # for pandas ~ 0.18, the name is not not properly propagated for
         # the mean aggregation
