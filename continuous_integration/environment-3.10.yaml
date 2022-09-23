@@ -65,4 +65,4 @@ dependencies:
   - jinja2
   - pip
   - pip:
-    - git+https://github.com/jrbourbeau/distributed@remove-factors
+    - git+https://github.com/dask/distributed
