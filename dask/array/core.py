@@ -3016,7 +3016,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     "auto" to ask for a particular size
 
     >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
-    ((250, 250, 250, 250, 250, 250, 250, 250),)
+    ((256, 256, 256, 256, 256, 256, 256, 208),)
 
     Respects null dimensions
 
