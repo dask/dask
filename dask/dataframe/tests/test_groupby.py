@@ -784,12 +784,12 @@ def test_groupby_reduction_split(keyword):
         # covariance/correlation is not a series aggregation
         if m in ("nunique", "cov", "corr"):
             continue
-        res = call(ddf.groupby("b"), m, **{keyword: 2})
+        res = call(ddf.groupby("b", sort=False), m, **{keyword: 2})
         sol = call(pdf.groupby("b"), m)
         assert_eq(res, sol)
         assert call(ddf.groupby("b"), m)._name != res._name
 
-    res = call(ddf.groupby("b"), "var", ddof=2, **{keyword: 2})
+    res = call(ddf.groupby("b", sort=False), "var", ddof=2, **{keyword: 2})
     sol = call(pdf.groupby("b"), "var", ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby("b"), "var", ddof=2)._name != res._name
@@ -799,12 +799,12 @@ def test_groupby_reduction_split(keyword):
         # covariance/correlation is not a series aggregation
         if m in ("cov", "corr"):
             continue
-        res = call(ddf.groupby("b").a, m, **{keyword: 2})
+        res = call(ddf.groupby("b", sort=False).a, m, **{keyword: 2})
         sol = call(pdf.groupby("b").a, m)
         assert_eq(res, sol)
         assert call(ddf.groupby("b").a, m)._name != res._name
 
-    res = call(ddf.groupby("b").a, "var", ddof=2, **{keyword: 2})
+    res = call(ddf.groupby("b", sort=False).a, "var", ddof=2, **{keyword: 2})
     sol = call(pdf.groupby("b").a, "var", ddof=2)
     assert_eq(res, sol)
     assert call(ddf.groupby("b").a, "var", ddof=2)._name != res._name
@@ -814,14 +814,14 @@ def test_groupby_reduction_split(keyword):
         # covariance/correlation is not a series aggregation
         if m in ("cov", "corr"):
             continue
-        res = call(ddf.a.groupby(ddf.b), m, **{keyword: 2})
+        res = call(ddf.a.groupby(ddf.b, sort=False), m, **{keyword: 2})
         sol = call(pdf.a.groupby(pdf.b), m)
         # There's a bug in pandas 0.18.0 with `pdf.a.groupby(pdf.b).count()`
         # not forwarding the series name. Skip name checks here for now.
         assert_eq(res, sol, check_names=False)
         assert call(ddf.a.groupby(ddf.b), m)._name != res._name
 
-    res = call(ddf.a.groupby(ddf.b), "var", ddof=2, **{keyword: 2})
+    res = call(ddf.a.groupby(ddf.b, sort=False), "var", ddof=2, **{keyword: 2})
     sol = call(pdf.a.groupby(pdf.b), "var", ddof=2)
 
     assert_eq(res, sol)
@@ -1138,7 +1138,7 @@ def test_shuffle_aggregate(shuffle_method, split_out, split_every):
     ddf = dd.from_pandas(pdf, npartitions=100)
 
     spec = {"b": "mean", "c": ["min", "max"]}
-    result = ddf.groupby(["a", "b"]).agg(
+    result = ddf.groupby(["a", "b"], sort=False).agg(
         spec, split_out=split_out, split_every=split_every, shuffle=shuffle_method
     )
     expect = pdf.groupby(["a", "b"]).agg(spec)
@@ -1203,7 +1203,7 @@ def test_shuffle_aggregate_defaults(shuffle_method):
         ddf.groupby("a").agg(spec, split_out=1, split_every=1)
 
     # If split_out > 1, default to shuffling.
-    dsk = ddf.groupby("a").agg(spec, split_out=2, split_every=1).dask
+    dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
     assert any("shuffle" in l for l in dsk.layers)
 
 
@@ -1543,19 +1543,21 @@ def test_groupy_series_wrong_grouper():
 
 @pytest.mark.parametrize("npartitions", [1, 4, 20])
 @pytest.mark.parametrize("split_every", [2, 5])
-@pytest.mark.parametrize("split_out", [None, 1, 5, 20])
+@pytest.mark.parametrize("split_out", [1, 5, 20])
 def test_hash_groupby_aggregate(npartitions, split_every, split_out):
     df = pd.DataFrame({"x": np.arange(100) % 10, "y": np.ones(100)})
     ddf = dd.from_pandas(df, npartitions)
 
-    result = ddf.groupby("x").y.var(split_every=split_every, split_out=split_out)
+    result = ddf.groupby("x", sort=(split_out == 1)).y.var(
+        split_every=split_every, split_out=split_out
+    )
 
     dsk = result.__dask_optimize__(result.dask, result.__dask_keys__())
     from dask.core import get_deps
 
     dependencies, dependents = get_deps(dsk)
 
-    assert result.npartitions == (split_out or 1)
+    assert result.npartitions == split_out
     assert len([k for k, v in dependencies.items() if not v]) == npartitions
 
     assert_eq(result, df.groupby("x").y.var())
@@ -1568,7 +1570,7 @@ def test_split_out_multi_column_groupby():
 
     ddf = dd.from_pandas(df, npartitions=10)
 
-    result = ddf.groupby(["x", "y"]).z.mean(split_out=4)
+    result = ddf.groupby(["x", "y"], sort=False).z.mean(split_out=4)
     expected = df.groupby(["x", "y"]).z.mean()
 
     assert_eq(result, expected, check_dtype=False)
@@ -1580,8 +1582,8 @@ def test_groupby_split_out_num():
         pd.DataFrame({"A": [1, 1, 2, 2], "B": [1, 2, 3, 4]}), npartitions=2
     )
     assert ddf.groupby("A").sum().npartitions == 1
-    assert ddf.groupby("A").sum(split_out=2).npartitions == 2
-    assert ddf.groupby("A").sum(split_out=3).npartitions == 3
+    assert ddf.groupby("A", sort=False).sum(split_out=2).npartitions == 2
+    assert ddf.groupby("A", sort=False).sum(split_out=3).npartitions == 3
 
     with pytest.raises(TypeError):
         # groupby doesn't accept split_out
@@ -2692,14 +2694,14 @@ def test_groupby_split_out_multiindex(split_out, column):
     ddf = dd.from_pandas(df, npartitions=3)
 
     ddf_result_so1 = (
-        ddf.groupby(column).a.mean(split_out=1).compute().sort_values().dropna()
+        ddf.groupby(column, sort=False).a.mean(split_out=1).compute().dropna()
     )
 
     ddf_result = (
-        ddf.groupby(column).a.mean(split_out=split_out).compute().sort_values().dropna()
+        ddf.groupby(column, sort=False).a.mean(split_out=split_out).compute().dropna()
     )
 
-    assert_eq(ddf_result, ddf_result_so1, check_index=False)
+    assert_eq(ddf_result, ddf_result_so1)
 
 
 @pytest.mark.parametrize(
@@ -2795,7 +2797,10 @@ def test_groupby_sort_true_split_out():
     # Works fine for split_out==1 or sort=False/None
     M.sum(ddf.groupby("x", sort=True), split_out=1)
     M.sum(ddf.groupby("x", sort=False), split_out=2)
-    M.sum(ddf.groupby("x"), split_out=2)
+
+    # Warns for sort=None
+    with pytest.warns(FutureWarning, match="split_out>1"):
+        M.sum(ddf.groupby("x"), split_out=2)
 
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 using non-shuffle-based approach

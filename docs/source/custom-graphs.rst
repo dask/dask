@@ -52,9 +52,8 @@ analyze pipeline:
           'analyze': (analyze, ['clean-%d' % i for i in [1, 2, 3]]),
           'store': (store, 'analyze')}
 
-   from dask.multiprocessing import get
+   from dask.threaded import get
    get(dsk, 'store')  # executes in parallel
-
 
 
 Keyword arguments in custom Dask graphs
