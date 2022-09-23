@@ -262,8 +262,10 @@ and eventually an error is raised.
       The "freeze_support()" line can be omitted if the program
       is not going to be frozen to produce an executable.
 
-To avoid this types of error, you should place your Dask code inside a ``if __name__ == "__main__":``
-block to ensure subprocesses are only created when your script is run as the main program.
+To avoid this types of error, you should place any Dask code that create subprocesses
+(for example, all ``compute()`` calls that use the multiprocessing scheduler, or when creating
+a local distributed cluster) inside a ``if __name__ == "__main__":`` block. This ensures
+subprocesses are only created when your script is run as the main program.
 
 For example, running ``python myscript.py`` with the script below will raise an error:
 
