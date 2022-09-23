@@ -339,14 +339,19 @@ def _set_index_chunk(df, *by, dropna=None, observed=None, **kwargs):
         has_categoricals = False
         if isinstance(result.index, pd.CategoricalIndex):
             has_categoricals = True
-            full_index = result.index.categories
+            full_index = result.index.categories.copy().rename(result.index.name)
         elif isinstance(result.index, pd.MultiIndex) and any(
             isinstance(level, pd.CategoricalIndex) for level in result.index.levels
         ):
             has_categoricals = True
             full_index = pd.MultiIndex.from_product(
-                level.categories if isinstance(level, pd.CategoricalIndex) else level
-                for level in result.index.levels
+                (
+                    level.categories
+                    if isinstance(level, pd.CategoricalIndex)
+                    else level
+                    for level in result.index.levels
+                ),
+                names=result.index.names,
             )
         if has_categoricals:
             new_cats = full_index[~full_index.isin(result.index)]
