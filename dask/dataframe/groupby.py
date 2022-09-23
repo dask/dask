@@ -2598,45 +2598,6 @@ def _head_aggregate(series_gb, **kwargs):
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
 
 
-def _no_op_reindex_chunk(df, columns=None, include_unobserved=True):
-    """
-    A non-aggregating chunk aggregation. This doesn't drop any rows, but does
-    set group keys as the index like a regular aggregator.
-    """
-    # An apply function that intentionally messes with the index so as to
-    # look different, which results in pandas prepending group keys after
-    # the apply step. The same trick is used in `_drop_duplicates_reindex`.
-    # In future versions of pandas (~2.0?), we should be able to remove this, as
-    # group_keys will always be prepended.
-    if is_series_like(df) or columns is None:
-        return df.set_index(by)
-    else:
-        if isinstance(columns, (tuple, list, set, pd.Index)):
-            columns = list(columns)
-        return df.set_index(list(by))[columns]
-
-    result = series_gb.apply(_reindex).reset_index(level=-1, drop=True)
-    # Now, result should have the group keys.
-    if include_unobserved and False:
-        has_categoricals = False
-        if isinstance(result.index, pd.CategoricalIndex):
-            has_categoricals = True
-            full_index = result.index.categories
-        elif isinstance(result.index, pd.MultiIndex) and any(
-            isinstance(level, pd.CategoricalIndex) for level in result.index.levels
-        ):
-            has_categoricals = True
-            full_index = pd.MultiIndex.from_product(
-                level.categories if isinstance(level, pd.CategoricalIndex) else level
-                for level in result.index.levels
-            )
-        if has_categoricals:
-            new_cats = full_index[~full_index.isin(result.index)]
-            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
-            result = pd.concat([result, empty])
-    return result
-
-
 def _median_aggregate(series_gb, **kwargs):
     with check_numeric_only_deprecation():
         return series_gb.median(**kwargs)
