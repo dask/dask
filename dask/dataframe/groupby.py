@@ -324,6 +324,22 @@ def _groupby_aggregate(
     return aggfunc(grouped, **kwargs)
 
 
+def _set_index_chunk(df, *by, dropna=None, observed=None, **kwargs):
+    columns = kwargs.pop("columns")
+
+    if is_series_like(df) or columns is None:
+        # result = pd.concat([df, *by], axis=1).set_index(list(by), drop=True)
+        # breakpoint()
+        result = df.to_frame().set_index(by[0] if len(by) == 1 else list(by))[df.name]
+        return result
+        # return df.set_index(by[0] if len(by) == 1 else list(by))
+    else:
+        df = df.set_index(list(by))
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
+        return df[columns]
+
+
 def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
@@ -1617,17 +1633,28 @@ class _GroupBy:
     def median(self, split_every=None, split_out=1):
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
-        return self._single_agg(
-            token="median",
-            meta=meta,
-            func=_no_op_reindex_chunk,
-            aggfunc=_median_aggregate,
+        columns = meta.name if is_series_like(meta) else meta.columns
+        chunk_args = (
+            [self.obj, self.by]
+            if not isinstance(self.by, list)
+            else [self.obj] + self.by
+        )
+        return _shuffle_aggregate(
+            chunk_args,
+            chunk=_set_index_chunk,
+            chunk_kwargs={"columns": columns},
+            token="set-index",
+            aggregate=_groupby_aggregate,
+            aggregate_kwargs={
+                "aggfunc": _median_aggregate,
+                "levels": _determine_levels(self.by),
+                **self.observed,
+                **self.dropna,
+            },
             split_every=split_every,
             split_out=split_out,
             shuffle=config.get("shuffle", None) or "tasks",
-            chunk_kwargs={
-                "include_unobserved": not self.observed.get("observed", False)
-            },
+            sort=self.sort,
         )
 
     @derived_from(pd.core.groupby.GroupBy)
@@ -2546,7 +2573,7 @@ def _head_aggregate(series_gb, **kwargs):
     return series_gb.head(**kwargs).droplevel(list(range(levels)))
 
 
-def _no_op_reindex_chunk(series_gb, include_unobserved=True):
+def _no_op_reindex_chunk(df, columns=None, include_unobserved=True):
     """
     A non-aggregating chunk aggregation. This doesn't drop any rows, but does
     set group keys as the index like a regular aggregator.
@@ -2556,14 +2583,16 @@ def _no_op_reindex_chunk(series_gb, include_unobserved=True):
     # the apply step. The same trick is used in `_drop_duplicates_reindex`.
     # In future versions of pandas (~2.0?), we should be able to remove this, as
     # group_keys will always be prepended.
-    def _reindex(df):
-        r = df.reset_index(drop=True)
-        r.index = [pd.NA] * len(df)
-        return r
+    if is_series_like(df) or columns is None:
+        return df.set_index(by)
+    else:
+        if isinstance(columns, (tuple, list, set, pd.Index)):
+            columns = list(columns)
+        return df.set_index(list(by))[columns]
 
     result = series_gb.apply(_reindex).reset_index(level=-1, drop=True)
     # Now, result should have the group keys.
-    if include_unobserved:
+    if include_unobserved and False:
         has_categoricals = False
         if isinstance(result.index, pd.CategoricalIndex):
             has_categoricals = True

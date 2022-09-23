@@ -28,21 +28,21 @@ if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 AGG_FUNCS = [
-    "sum",
-    "mean",
+    # "sum",
+    # "mean",
     "median",
-    "min",
-    "max",
-    "count",
-    "size",
-    "std",
-    "var",
-    "cov",
-    "corr",
-    "nunique",
-    "first",
-    "last",
-    "prod",
+    # "min",
+    # "max",
+    # "count",
+    # "size",
+    # "std",
+    # "var",
+    # "cov",
+    # "corr",
+    # "nunique",
+    # "first",
+    # "last",
+    # "prod",
 ]
 
 
@@ -2824,8 +2824,6 @@ def test_groupby_aggregate_categorical_observed(
         pytest.skip("Gives zeros rather than nans.")
     if agg_func in ["std", "var"] and observed:
         pytest.skip("Can't calculate observed with all nans")
-    if agg_func == "median":
-        pytest.skip("Median not implemented for DataFrameGroupBy with categoricals yet")
 
     pdf = pd.DataFrame(
         {
