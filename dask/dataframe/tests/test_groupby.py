@@ -2857,6 +2857,7 @@ def test_groupby_aggregate_categorical_observed(
     assert_eq(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
+        check_names=False,
     )
 
 

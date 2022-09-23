@@ -328,16 +328,32 @@ def _set_index_chunk(df, *by, dropna=None, observed=None, **kwargs):
     columns = kwargs.pop("columns")
 
     if is_series_like(df) or columns is None:
-        # result = pd.concat([df, *by], axis=1).set_index(list(by), drop=True)
-        # breakpoint()
         result = df.to_frame().set_index(by[0] if len(by) == 1 else list(by))[df.name]
-        return result
-        # return df.set_index(by[0] if len(by) == 1 else list(by))
     else:
-        df = df.set_index(list(by))
+        result = df.set_index(list(by))
         if isinstance(columns, (tuple, list, set, pd.Index)):
             columns = list(columns)
-        return df[columns]
+        result = result[columns]
+
+    if observed is False:
+        has_categoricals = False
+        if isinstance(result.index, pd.CategoricalIndex):
+            has_categoricals = True
+            full_index = result.index.categories
+        elif isinstance(result.index, pd.MultiIndex) and any(
+            isinstance(level, pd.CategoricalIndex) for level in result.index.levels
+        ):
+            has_categoricals = True
+            full_index = pd.MultiIndex.from_product(
+                level.categories if isinstance(level, pd.CategoricalIndex) else level
+                for level in result.index.levels
+            )
+        if has_categoricals:
+            new_cats = full_index[~full_index.isin(result.index)]
+            empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
+            result = pd.concat([result, empty])
+
+    return result
 
 
 def _apply_chunk(df, *by, dropna=None, observed=None, **kwargs):
@@ -1642,7 +1658,11 @@ class _GroupBy:
         return _shuffle_aggregate(
             chunk_args,
             chunk=_set_index_chunk,
-            chunk_kwargs={"columns": columns},
+            chunk_kwargs={
+                "columns": columns,
+                **self.observed,
+                **self.dropna,
+            },
             token="set-index",
             aggregate=_groupby_aggregate,
             aggregate_kwargs={
