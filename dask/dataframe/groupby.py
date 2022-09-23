@@ -324,19 +324,36 @@ def _groupby_aggregate(
     return aggfunc(grouped, **kwargs)
 
 
-def _set_index_chunk(df, *by, dropna=None, observed=None, **kwargs):
-    columns = kwargs.pop("columns")
-
-    if is_series_like(df) or columns is None:
+def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
+    """
+    A non-aggregation agg function. This simuates the behavior of an initial
+    partitionwise aggregation, but doesn't actually aggregate or throw away
+    any data.
+    """
+    if is_series_like(df):
+        # Handle a series-like groupby. `by` could be columns that are not the series,
+        # but are like-indexed, so we handle that case by temporarily converting to
+        # a dataframe, then setting the index.
         result = df.to_frame().set_index(by[0] if len(by) == 1 else list(by))[df.name]
     else:
+        # Handle a frame-like groupby.
         result = df.set_index(list(by))
-        if isinstance(columns, (tuple, list, set, pd.Index)):
-            columns = list(columns)
-        result = result[columns]
+        if isinstance(key, (tuple, list, set, pd.Index)):
+            key = list(key)
+        result = result[key]
 
+    # If observed is False, we have to check for categorical indices and possibly enrich
+    # them with unobserved values. This function is intended as an initial partitionwise
+    # aggregation, so you might expect that we could enrich the frame with unobserved
+    # values at the end. However, if you have multiple output partitions, that results
+    # in duplicated unobserved values in each partition. So we have to do this step
+    # at the start before any shuffling occurs so that we can consolidate all of the
+    # unobserved values in a single partition.
     if observed is False:
         has_categoricals = False
+
+        # Search for categorical indices and get new index objects that have all the
+        # categories in them.
         if isinstance(result.index, pd.CategoricalIndex):
             has_categoricals = True
             full_index = result.index.categories.copy().rename(result.index.name)
@@ -354,6 +371,8 @@ def _set_index_chunk(df, *by, dropna=None, observed=None, **kwargs):
                 names=result.index.names,
             )
         if has_categoricals:
+            # If we found any categoricals, append unobserved values to the end of the
+            # frame.
             new_cats = full_index[~full_index.isin(result.index)]
             empty = pd.DataFrame(pd.NA, index=new_cats, columns=result.columns)
             result = pd.concat([result, empty])
@@ -1658,13 +1677,13 @@ class _GroupBy:
         by = self.by if isinstance(self.by, list) else [self.by]
         return _shuffle_aggregate(
             [self.obj] + by,
-            chunk=_set_index_chunk,
+            token="non-agg",
+            chunk=_non_agg_chunk,
             chunk_kwargs={
-                "columns": columns,
+                "key": columns,
                 **self.observed,
                 **self.dropna,
             },
-            token="set-index",
             aggregate=_groupby_aggregate,
             aggregate_kwargs={
                 "aggfunc": _median_aggregate,
