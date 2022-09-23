@@ -28,21 +28,21 @@ if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 AGG_FUNCS = [
-    # "sum",
-    # "mean",
+    "sum",
+    "mean",
     "median",
-    # "min",
-    # "max",
-    # "count",
-    # "size",
-    # "std",
-    # "var",
-    # "cov",
-    # "corr",
-    # "nunique",
-    # "first",
-    # "last",
-    # "prod",
+    "min",
+    "max",
+    "count",
+    "size",
+    "std",
+    "var",
+    "cov",
+    "corr",
+    "nunique",
+    "first",
+    "last",
+    "prod",
 ]
 
 

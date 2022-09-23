@@ -1655,13 +1655,9 @@ class _GroupBy:
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
         columns = meta.name if is_series_like(meta) else meta.columns
-        chunk_args = (
-            [self.obj, self.by]
-            if not isinstance(self.by, list)
-            else [self.obj] + self.by
-        )
+        by = self.by if isinstance(self.by, list) else [self.by]
         return _shuffle_aggregate(
-            chunk_args,
+            [self.obj] + by,
             chunk=_set_index_chunk,
             chunk_kwargs={
                 "columns": columns,
