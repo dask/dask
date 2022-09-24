@@ -1,6 +1,122 @@
 Changelog
 =========
 
+.. _v2022.8.0:
+
+2022.8.0
+--------
+
+Released on August 5, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Ensure ``make_meta`` doesn't hold ref to data (:pr:`9354`) `Jim Crist-Harif`_
+- Revise ``divisions`` logic in ``from_pandas`` (:pr:`9221`) `Richard (Rick) Zamora`_
+- Warn if user sets index with existing index (:pr:`9341`) `Julia Signell`_
+- Add ``keepdims`` keyword for ``da.average`` (:pr:`9332`) `Ruth Comer`_
+- Change ``repr`` methods to avoid ``Layer`` materialization (:pr:`9289`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Make sure ``order`` kwarg will not crash the ``astype`` method (:pr:`9317`) `Genevieve Buckley`_
+- Fix bug for ``cumsum`` on cupy chunked dask arrays (:pr:`9320`) `Genevieve Buckley`_
+- Match input and output structure in ``_sample_reduce`` (:pr:`9272`) `Pavithra Eswaramoorthy`_
+- Include ``meta`` in array serialization (:pr:`9240`) `Frédéric BRIOL`_
+- Fix ``Index.memory_usage`` (:pr:`9290`) `James Bourbeau`_
+- Fix division calculation in ``dask.dataframe.io.from_dask_array`` (:pr:`9282`) `Jordan Yap`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fow to use kwargs with custom task graphs (:pr:`9322`) `Genevieve Buckley`_
+- Add note to ``da.from_array`` about how the order is not preserved (:pr:`9346`) `Julia Signell`_
+- Add I/O info for async functions (:pr:`9326`) `Logan Norman`_
+- Tidy up docs snippet for futures IO functions (:pr:`9340`) `Julia Signell`_
+- Use consistent variable names for pandas ``df`` and Dask ``ddf`` in ``dataframe-groupby.rst`` (:pr:`9304`) `ivojuroro`_
+- Switch ``js-yaml`` for ``yaml.js`` in config converter (:pr:`9306`) `Jacob Tomlinson`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``da.linalg.solve`` for SciPy 1.9.0 compatibility  (:pr:`9350`) `Pavithra Eswaramoorthy`_
+- Update ``test_getitem_avoids_large_chunks_missing`` (:pr:`9347`) `Pavithra Eswaramoorthy`_
+- Fix docs title formatting for "Extend ``sizeof``" `Doug Davis`_
+- Import ``loop_in_thread`` fixture in tests (:pr:`9337`) `James Bourbeau`_
+- Temporarily ``xfail`` ``test_solve_sym_pos`` (:pr:`9336`) `Pavithra Eswaramoorthy`_
+- Fix small typo in 10 minutes to Dask page (:pr:`9329`) `Shaghayegh`_
+- Temporarily pin ``werkzeug`` in CI to avoid test suite hanging  (:pr:`9325`) `James Bourbeau`_
+- Add tests for ``cupy.angle()`` (:pr:`9312`) `Peter Andreas Entschev`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.10`` (:pr:`9314`)
+- Add ``pandas[test]`` to ``test`` extra (:pr:`9110`) `Ben Beasley`_
+- Add ``bokeh`` and ``scipy`` to ``upstream`` CI build (:pr:`9265`) `James Bourbeau`_
+
+
+.. _v2022.7.1:
+
+2022.7.1
+--------
+
+Released on July 22, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Return Dask array if all axes are squeezed (:pr:`9250`) `Pavithra Eswaramoorthy`_
+- Make cycle reported by toposort shorter (:pr:`9068`) `Erik Welch`_
+- Unknown chunk slicing - raise informative error (:pr:`9285`) `Naty Clementi`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug in ``HighLevelGraph.cull`` (:pr:`9267`) `Richard (Rick) Zamora`_
+- Sort categories (:pr:`9264`) `Pavithra Eswaramoorthy`_
+- Use ``max`` (instead of ``sum``) for calculating ``warnsize`` (:pr:`9235`) `Pavithra Eswaramoorthy`_
+- Fix bug when filtering on partitioned column with pyarrow (:pr:`9252`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Updated repartition documentation to add note about ``partition_size`` (:pr:`9288`) `Dylan Stewart`_
+- Don't include docs in ``Array`` methods, just refer to module docs (:pr:`9244`) `Julia Signell`_
+- Remove outdated reference to scheduler and worker dashboards (:pr:`9278`) `Pavithra Eswaramoorthy`_
+- Fix a few typos (:pr:`9270`) `Tim Gates`_
+- Adds an custom aggregate example using numpy methods (:pr:`9260`) `geraninam`_
+
+Maintenance
+^^^^^^^^^^^
+- Add type annotations to ``dd.from_pandas`` and ``dd.from_delayed`` (:pr:`9237`) `Michael Milton`_
+- Update ``calculate_divisions`` docstring (:pr:`9275`) `Tom Augspurger`_
+- Update ``test_plot_multiple`` for upcoming ``bokeh`` release (:pr:`9261`) `James Bourbeau`_
+- Add typing to common array properties (:pr:`9255`) `Illviljan`_
+
+
+.. _v2022.7.0:
+
+2022.7.0
+--------
+
+Released on July 8, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Support ``pathlib.PurePath`` in ``normalize_token`` (:pr:`9229`) `Angus Hollands`_
+- Add ``AttributeNotImplementedError`` for properties so IPython glob search works (:pr:`9231`) `Erik Welch`_
+- ``map_overlap``: multiple dataframe handling (:pr:`9145`) `Fabien Aulaire`_
+- Read entrypoints in ``dask.sizeof`` (:pr:`7688`) `Angus Hollands`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``TypeError: 'Serialize' object is not subscriptable`` when writing parquet dataset with ``Client(processes=False)`` (:pr:`9015`) `Lucas Miguel Ponce`_
+- Correct dtypes when ``concat`` with an empty dataframe (:pr:`9193`) `Pavithra Eswaramoorthy`_
+
+Documentation
+^^^^^^^^^^^^^
+- Highlight note about persist (:pr:`9234`) `Pavithra Eswaramoorthy`_
+- Update release-procedure to include more detail and helpful commands (:pr:`9215`) `Julia Signell`_
+- Better SEO for Futures and Dask vs. Spark pages (:pr:`9217`) `Sarah Charlotte Johnson`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``math.prod`` instead of ``np.prod`` on lists, tuples, and iters (:pr:`9232`) `crusaderky`_
+- Only import IPython if type checking (:pr:`9230`) `Florian Jetter`_
+- Tougher mypy checks (:pr:`9206`) `crusaderky`_
+
+
 .. _v2022.6.1:
 
 2022.6.1
@@ -5708,3 +5824,14 @@ Other
 .. _`Sultan Orazbayev`: https://github.com/SultanOrazbayev
 .. _`Richard Pelgrim`: https://github.com/rrpelgrim
 .. _`Ben`: https://github.com/benjaminhduncan
+.. _`Angus Hollands`: https://github.com/agoose77
+.. _`Lucas Miguel Ponce`: https://github.com/lucasmsp
+.. _`Dylan Stewart`: https://github.com/drstewart19
+.. _`geraninam`: https://github.com/geraninam
+.. _`Michael Milton`: https://github.com/multimeric
+.. _`Ruth Comer`: https://github.com/rcomer
+.. _`Frédéric BRIOL`: https://github.com/fbriol
+.. _`Jordan Yap`: https://github.com/jjyap
+.. _`Logan Norman`: https://github.com/lognorman20
+.. _`ivojuroro`: https://github.com/ivojuroro
+.. _`Shaghayegh`: https://github.com/Shadimrad

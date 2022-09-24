@@ -441,11 +441,33 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
                 if nxt not in completed:
                     if nxt in seen:
                         # Cycle detected!
-                        cycle = [nxt]
+                        # Let's report only the nodes that directly participate in the cycle.
+                        # We use `priorities` below to greedily construct a short cycle.
+                        # Shorter cycles may exist.
+                        priorities = {}
+                        prev = nodes[-1]
+                        # Give priority to nodes that were seen earlier.
                         while nodes[-1] != nxt:
-                            cycle.append(nodes.pop())
-                        cycle.append(nodes.pop())
+                            priorities[nodes.pop()] = -len(priorities)
+                        priorities[nxt] = -len(priorities)
+                        # We're going to get the cycle by walking backwards along dependents,
+                        # so calculate dependents only for the nodes in play.
+                        inplay = set(priorities)
+                        dependents = reverse_dict(
+                            {k: inplay.intersection(dependencies[k]) for k in inplay}
+                        )
+                        # Begin with the node that was seen twice and the node `prev` from
+                        # which we detected the cycle.
+                        cycle = [nodes.pop()]
+                        cycle.append(prev)
+                        while prev != cycle[0]:
+                            # Greedily take a step that takes us closest to completing the cycle.
+                            # This may not give us the shortest cycle, but we get *a* short cycle.
+                            deps = dependents[cycle[-1]]
+                            prev = min(deps, key=priorities.__getitem__)
+                            cycle.append(prev)
                         cycle.reverse()
+
                         if returncycle:
                             return cycle
                         else:

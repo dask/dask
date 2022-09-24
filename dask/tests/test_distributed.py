@@ -9,9 +9,15 @@ from functools import partial
 from operator import add
 
 from distributed.utils_test import cleanup  # noqa F401
-from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import client as c  # noqa F401
-from distributed.utils_test import cluster, gen_cluster, inc, loop, varying  # noqa F401
+from distributed.utils_test import (  # noqa F401
+    cluster,
+    cluster_fixture,
+    gen_cluster,
+    loop,
+    loop_in_thread,
+    varying,
+)
 
 import dask
 import dask.bag as db
@@ -21,6 +27,7 @@ from dask.delayed import Delayed
 from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir, tmpfile
+from dask.utils_test import inc
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -792,54 +799,3 @@ def test_set_index_no_resursion_error(c):
         ddf.compute()
     except RecursionError:
         pytest.fail("dd.set_index triggered a recursion error")
-
-
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/8991", strict=True)
-@gen_cluster(client=True)
-async def test_gh_8991(c, s, a, b):
-    # Test illustrating something amiss with HighLevelGraph.key_dependencies.
-    # The intention is for this to be a cache, so if we clear it, things
-    # should still work.
-
-    # This is a bad test, and we should rethink/remove it as soon as the issue is
-    # resolved whether, it's fixing the underlying problem or removing
-    # HighLevelGraph.key_dependencies alltogether.
-    datasets = pytest.importorskip("dask.datasets")
-    result = datasets.timeseries().shuffle("x").to_orc("tmp", compute=False)
-
-    # Create a dsk and mock sending it to the scheduler.
-    dsk_opt = result.__dask_optimize__(result.dask, result.key)
-    unpacked = HighLevelGraph.__dask_distributed_unpack__(
-        dsk_opt.__dask_distributed_pack__(c, result.key)
-    )
-    deps = unpacked["deps"]
-
-    # Create a version of the dsk without the key_dependencies and mock sending it to
-    # the scheduler as well.
-    dsk_opt_nokeys = dsk_opt.copy()
-    dsk_opt_nokeys.key_dependencies.clear()
-    unpacked_nokeys = HighLevelGraph.__dask_distributed_unpack__(
-        dsk_opt_nokeys.__dask_distributed_pack__(c, result.key)
-    )
-    deps_nokeys = unpacked_nokeys["deps"]
-
-    # The recalculated dependencies should still be the same!
-    assert deps == deps_nokeys
-
-
-def test_parquet_processes_false(tmpdir):
-    # Check dask#8581 Parquet work-around
-    # See: https://github.com/dask/dask/pull/9015
-    dd = pytest.importorskip("dask.dataframe")
-
-    with distributed.LocalCluster(
-        scheduler_port=0,
-        dashboard_address=":0",
-        asynchronous=False,
-        n_workers=1,
-        nthreads=1,
-        processes=False,
-    ) as cluster:
-        with distributed.Client(cluster, asynchronous=False):
-            dd.DataFrame.from_dict({"a": range(10)}, npartitions=2).to_parquet(tmpdir)
-            dd.read_parquet(tmpdir).compute()

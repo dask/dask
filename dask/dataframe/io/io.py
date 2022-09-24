@@ -1,10 +1,14 @@
+from __future__ import annotations
+
 import os
 from collections.abc import Iterable
 from functools import partial
 from math import ceil
 from operator import getitem
 from threading import Lock
-from typing import TYPE_CHECKING, Iterable, Literal, Optional, Union
+
+from typing import TYPE_CHECKING, Iterable, Literal
+
 
 import numpy as np
 import pandas as pd
@@ -152,12 +156,12 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
 
 
 def from_pandas(
-    data: Union[pd.DataFrame, pd.Series],
-    npartitions: Optional[int] = None,
-    chunksize: Optional[int] = None,
+    data: pd.DataFrame | pd.Series,
+    npartitions: int | None = None,
+    chunksize: int | None = None,
     sort: bool = True,
-    name: Optional[str] = None,
-) -> DataFrame:
+    name: str | None = None,
+) -> DataFrame | Series:
     """
     Construct a Dask DataFrame from a Pandas DataFrame
 
@@ -178,11 +182,13 @@ def from_pandas(
     data : pandas.DataFrame or pandas.Series
         The DataFrame/Series with which to construct a Dask DataFrame/Series
     npartitions : int, optional
-        The number of partitions of the index to create. Note that depending on
-        the size and index of the dataframe, the output may have fewer
-        partitions than requested.
+        The number of partitions of the index to create. Note that if there
+        are duplicate values or insufficient elements in ``data.index``, the
+        output may have fewer partitions than requested.
     chunksize : int, optional
-        The number of rows per index partition to use.
+        The desired number of rows per index partition to use. Note that
+        depending on the size and index of the dataframe, actual partition
+        sizes may vary.
     sort: bool
         Sort the input by index first to obtain cleanly divided partitions
         (with known divisions).  If False, the input will not be sorted, and
@@ -230,23 +236,22 @@ def from_pandas(
     if not has_parallel_type(data):
         raise TypeError("Input must be a pandas DataFrame or Series.")
 
-    if (npartitions is None) == (none_chunksize := (chunksize is None)):
+    if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
     nrows = len(data)
 
-    if none_chunksize:
+    if chunksize is None:
         if not isinstance(npartitions, int):
             raise TypeError(
                 "Please provide npartitions as an int, or possibly as None if you specify chunksize."
             )
-        chunksize = int(ceil(nrows / npartitions))
     elif not isinstance(chunksize, int):
         raise TypeError(
             "Please provide chunksize as an int, or possibly as None if you specify npartitions."
         )
 
-    name = name or ("from_pandas-" + tokenize(data, chunksize))
+    name = name or ("from_pandas-" + tokenize(data, chunksize, npartitions))
 
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
@@ -261,9 +266,14 @@ def from_pandas(
         if not data.index.is_monotonic_increasing:
             data = data.sort_index(ascending=True)
         divisions, locations = sorted_division_locations(
-            data.index, chunksize=chunksize
+            data.index,
+            npartitions=npartitions,
+            chunksize=chunksize,
         )
     else:
+        if chunksize is None:
+            assert isinstance(npartitions, int)
+            chunksize = int(ceil(nrows / npartitions))
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
@@ -535,14 +545,20 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         # Create a mapping of chunk number in the incoming array to
         # (start row, stop row) tuples. These tuples will be used to create a sequential
         # RangeIndex later on that is continuous over the whole DataFrame.
+        n_elements = sum(x.chunks[0])
         divisions = [0]
         stop = 0
         index_mapping = {}
         for i, increment in enumerate(x.chunks[0]):
             stop += increment
             index_mapping[(i,)] = (divisions[i], stop)
+
+            # last division corrected, even if there are empty chunk(s) at the end
+            if stop == n_elements:
+                stop -= 1
+
             divisions.append(stop)
-        divisions[-1] -= 1
+
         arrays_and_indices.extend([BlockwiseDepDict(mapping=index_mapping), "i"])
 
     if is_series_like(meta):
@@ -652,47 +668,46 @@ def to_records(df):
 
 @insert_meta_param_description
 def from_delayed(
-    dfs: Union[Delayed, Iterable[Union[Delayed, distributed.Future]]],
+    dfs: Delayed | distributed.Future | Iterable[Delayed | distributed.Future],
     meta=None,
-    divisions=Union[tuple, Literal["sorted"], None],
+    divisions: tuple | Literal["sorted"] | None = None,
     prefix: str = "from-delayed",
     verify_meta: bool = True,
-):
+) -> DataFrame | Series:
     """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
     ----------
-    dfs : Delayed, list[Delayed, Future]
-        A ``dask.delayed.Delayed`` or an iterable of these objects, e.g. returned by
-        ``dask.delayed`` or an iterable of ``distributed.Future`` ,
-        e.g. returned by ``client.submit``. These comprise the individual
-        partitions of the resulting dataframe.
+    dfs :
+        A ``dask.delayed.Delayed``, a ``distributed.Future``, or an iterable of either
+        of these objects, e.g. returned by ``client.submit``. These comprise the
+        individual partitions of the resulting dataframe.
         If a single object is provided (not an iterable), then the resulting dataframe
         will have only one partition.
     $META
-    divisions : tuple, str, optional
+    divisions :
         Partition boundaries along the index.
         For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
         For string 'sorted' will compute the delayed values to find index
         values.  Assumes that the indexes are mutually sorted.
         If None, then won't use index information
-    prefix : str, optional
+    prefix :
         Prefix to prepend to the keys.
-    verify_meta : bool, optional
+    verify_meta :
         If True check that the partitions have consistent metadata, defaults to True.
     """
     from dask.delayed import Delayed
 
-    if isinstance(dfs, Delayed):
+    if isinstance(dfs, Delayed) or hasattr(dfs, "key"):
         dfs = [dfs]
     dfs = [
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
 
-    for df in dfs:
-        if not isinstance(df, Delayed):
-            raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
+    for item in dfs:
+        if not isinstance(item, Delayed):
+            raise TypeError("Expected Delayed object, got %s" % type(item).__name__)
 
     if meta is None:
         meta = delayed(make_meta)(dfs[0]).compute()
@@ -703,9 +718,9 @@ def from_delayed(
         dfs = [delayed(make_meta)(meta)]
 
     if divisions is None or divisions == "sorted":
-        divs = [None] * (len(dfs) + 1)
+        divs: list | tuple = [None] * (len(dfs) + 1)
     else:
-        divs = tuple(divisions)
+        divs = list(divisions)
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
@@ -728,7 +743,7 @@ def from_delayed(
     if divisions == "sorted":
         from dask.dataframe.shuffle import compute_and_set_divisions
 
-        df = compute_and_set_divisions(df)
+        return compute_and_set_divisions(df)
 
     return df
 
@@ -748,10 +763,10 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
 
     >>> L = ['A', 'A', 'A', 'A', 'B', 'B', 'B', 'C']
     >>> sorted_division_locations(L, chunksize=3)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(L, chunksize=2)
-    (['A', 'B', 'C'], [0, 4, 8])
+    (['A', 'B', 'C', 'C'], [0, 4, 7, 8])
 
     >>> sorted_division_locations(['A'], chunksize=2)
     (['A', 'A'], [0, 1])
@@ -759,26 +774,97 @@ def sorted_division_locations(seq, npartitions=None, chunksize=None):
     if (npartitions is None) == (chunksize is None):
         raise ValueError("Exactly one of npartitions and chunksize must be specified.")
 
+    # Find unique-offset array (if duplicates exist).
+    # Note that np.unique(seq) should work in all cases
+    # for newer versions of numpy/pandas
+    seq_unique = seq.unique() if hasattr(seq, "unique") else np.unique(seq)
+    duplicates = len(seq_unique) < len(seq)
+    enforce_exact = False
+    if duplicates:
+        offsets = (
+            # Avoid numpy conversion (necessary for dask-cudf)
+            seq.searchsorted(seq_unique, side="left")
+            if hasattr(seq, "searchsorted")
+            else np.array(seq).searchsorted(seq_unique, side="left")
+        )
+        enforce_exact = npartitions and len(offsets) >= npartitions
+    else:
+        offsets = seq_unique = None
+
+    # Define chunksize and residual so that
+    # npartitions can be exactly satisfied
+    # when duplicates is False
+    residual = 0
+    subtract_drift = False
     if npartitions:
-        chunksize = ceil(len(seq) / npartitions)
+        chunksize = len(seq) // npartitions
+        residual = len(seq) % npartitions
+        subtract_drift = True
 
-    positions = [0]
-    values = [seq[0]]
-    for pos in range(0, len(seq), chunksize):
-        if pos <= positions[-1]:
-            continue
-        while pos + 1 < len(seq) and seq[pos - 1] == seq[pos]:
-            pos += 1
-        values.append(seq[pos])
-        if pos == len(seq) - 1:
-            pos += 1
-        positions.append(pos)
+    def chunksizes(ind):
+        # Helper function to satisfy npartitions
+        return chunksize + int(ind < residual)
 
-    if positions[-1] != len(seq):
-        positions.append(len(seq))
-        values.append(seq[-1])
+    # Always start with 0th item in seqarr,
+    # and then try to take chunksize steps
+    # along the seqarr array
+    divisions = [seq[0]]
+    locations = [0]
+    i = chunksizes(0)
+    ind = None  # ind cache (sometimes avoids nonzero call)
+    drift = 0  # accumulated drift away from ideal chunksizes
+    divs_remain = npartitions - len(divisions) if enforce_exact else None
+    while i < len(seq):
+        # Map current position selection (i)
+        # to the corresponding division value (div)
+        div = seq[i]
+        # pos is the position of the first occurance of
+        # div (which is i when seq has no duplicates)
+        if duplicates:
+            # Note: cupy requires casts to `int` below
+            if ind is None:
+                ind = int((seq_unique == seq[i]).nonzero()[0][0])
+            if enforce_exact:
+                # Avoid "over-stepping" too many unique
+                # values when npartitions is approximately
+                # equal to len(offsets)
+                offs_remain = len(offsets) - ind
+                if divs_remain > offs_remain:
+                    ind -= divs_remain - offs_remain
+                    i = offsets[ind]
+                    div = seq[i]
+            pos = int(offsets[ind])
+        else:
+            pos = i
+        if div <= divisions[-1]:
+            # pos overlaps with divisions.
+            # Try the next element on the following pass
+            if duplicates:
+                ind += 1
+                # Note: cupy requires cast to `int`
+                i = int(offsets[ind]) if ind < len(offsets) else len(seq)
+            else:
+                i += 1
+        else:
+            # pos does not overlap with divisions.
+            # Append candidate pos/div combination, and
+            # take another chunksize step
+            if subtract_drift:
+                # Only subtract drift when user specified npartitions
+                drift = drift + ((pos - locations[-1]) - chunksizes(len(divisions) - 1))
+            if enforce_exact:
+                divs_remain -= 1
+            i = pos + max(1, chunksizes(len(divisions)) - drift)
+            divisions.append(div)
+            locations.append(pos)
+            ind = None
 
-    return values, positions
+    # The final element of divisions/locations
+    # will always be the same
+    divisions.append(seq[-1])
+    locations.append(len(seq))
+
+    return divisions, locations
 
 
 class _PackedArgCallable(DataFrameIOFunction):

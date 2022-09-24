@@ -170,8 +170,8 @@ def set_fill_value(a, fill_value):
 
 
 @derived_from(np.ma)
-def average(a, axis=None, weights=None, returned=False):
-    return _average(a, axis, weights, returned, is_masked=True)
+def average(a, axis=None, weights=None, returned=False, keepdims=False):
+    return _average(a, axis, weights, returned, is_masked=True, keepdims=keepdims)
 
 
 def _chunk_count(x, axis=None, keepdims=None):
