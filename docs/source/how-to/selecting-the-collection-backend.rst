@@ -51,7 +51,6 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
 
 
 .. code-block:: python
-   import dask.dataframe as dd
    from dask.dataframe.backends import DaskDataFrameBackendEntrypoint
    from dask.dataframe.dispatch import (
       ...
@@ -98,6 +97,12 @@ In order to expose this entrypoint as a ``dask.backend`` entrypoint, the necessa
 
 Compute dispatch
 ~~~~~~~~~~~~~~~~
+
+
+.. note::
+
+   The primary dispatching mechanism for array-like compute operations in both Dask-Array and Dask-DataFrame is the ``__array_function__`` protocol defined in `NEP-18 <https://numpy.org/neps/nep-0018-array-function-protocol.html>`_. For a custom collection backend to be functional, this protocol **must** cover many common numpy functions for the desired array backend. For example, the ``cudf`` backend for Dask-DataFrame depends on the ``__array_function__`` protocol being defined for both ``cudf`` and its complementary array backend (``cupy``). The compute-based dispatch functions discussed in this section correspond to functionality that is not already captured by NEP-18.
+
 
 Notice that the ``CudfBackendEntrypoint`` definition must define a distinct method definition for each dispatchable creation routine, and register all non-creation (compute-based) dispatch functions within the ``__init__`` logic. These compute dispatch functions do not operate at the collection-API level, but at computation time (within a task). The list of all current "compute" dispatch functions are listed below.
 

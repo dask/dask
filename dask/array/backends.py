@@ -354,7 +354,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
     @staticmethod
     def arange(start, /, stop=None, step=1, *, dtype=None, meta=None):
-        """Create an ascending or desciending array
+        """Create an ascending or descending array
 
         Returns evenly spaced values within the half-open interval
         ``[start, stop)`` as a one-dimensional array.
