@@ -159,8 +159,6 @@ def test_html_repr():
 
     text = y._repr_html_()
 
-    assert "COO" in text
-    assert "sparse" in text
     assert "Bytes" not in text
 
 
