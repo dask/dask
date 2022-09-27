@@ -63,6 +63,7 @@ def test_repr_html_size_units():
 
     assert "MB" in text or "MiB" in text
     assert str(x.shape) in text
+    assert str(x.dtype) in text
 
     parses(text)
 
