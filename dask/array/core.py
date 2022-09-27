@@ -77,7 +77,6 @@ from dask.utils import (
     is_index_like,
     is_integer,
     is_series_like,
-    maybe_pluralize,
     ndeepmap,
     ndimlist,
     parse_bytes,
@@ -1645,7 +1644,6 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
-            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
         )
 
     @cached_property
