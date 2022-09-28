@@ -594,6 +594,10 @@ def shuffle(
     set_partition
     shuffle_disk
     """
+    # Eagerly inspect config for global shuffle selection (if we don't
+    # do this and dask.config.shuffle == "tasks", then we pay the
+    # price of constructing a partitions column even when unnecessary)
+    shuffle = shuffle or config.get("shuffle", None) or "disk"
     method = shuffle_registry.get(shuffle, index, df.columns)
     return method(
         df,
