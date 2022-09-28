@@ -271,6 +271,9 @@ def from_pandas(
             "Please provide chunksize as an int, or possibly as None if you specify npartitions."
         )
 
+    if isinstance(data, pd.DataFrame):
+        for c in data.columns:
+            data[c] = data[c].convert_dtypes()
     name = name or ("from_pandas-" + tokenize(data, chunksize, npartitions))
 
     if not nrows:
