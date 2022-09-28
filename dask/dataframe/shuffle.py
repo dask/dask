@@ -403,12 +403,12 @@ class ShuffleRegistry:
     def known_priorities(self):
         return {m.priority for m in self.methods}
 
-    def register(
+    def add(
         self,
         priority: int,
         can_use: Callable[[Optional[str], Any, List[str]], bool],
         method: Callable,
-    ):
+    ) -> "ShuffleRegistry.Method":
         """Register a new shuffle method
 
         Parameters
@@ -425,6 +425,10 @@ class ShuffleRegistry:
             Function to perform the shuffle, should have the same
             signature as :func:`shuffle`.
 
+        Returns
+        -------
+        The new registered shuffle method
+
         Raises
         ------
         RuntimeError
@@ -435,9 +439,34 @@ class ShuffleRegistry:
                 "Registering multiple shuffle methods with same priority "
                 "is undefined behaviour"
             )
-        self.methods.add(
-            ShuffleRegistry.Method(can_use=can_use, method=method, priority=priority)
+        registered_method = ShuffleRegistry.Method(
+            can_use=can_use, method=method, priority=priority
         )
+        self.methods.add(registered_method)
+        return registered_method
+
+    def remove(self, method: "ShuffleRegistry.Method") -> "ShuffleRegistry.Method":
+        """Remove a shuffle method from the registry
+
+        Parameters
+        ----------
+        method
+            Method to remove
+
+        Returns
+        -------
+        The removed method
+
+        Raises
+        ------
+        KeyError
+            If the method is not registered
+        """
+        try:
+            self.methods.remove(method)
+            return method
+        except KeyError:
+            raise KeyError(f"Method {method} is not a known shuffle method")
 
     def get(
         self, shuffle_name: Optional[str], index: Any, df_columns: List[str]
@@ -463,7 +492,7 @@ class ShuffleRegistry:
         RuntimeError
             If no matching shuffle method was found.
         """
-        for method in sorted(self.methods, key=attrgetter("priority")):
+        for method in sorted(self.methods, key=attrgetter("priority"), reverse=True):
             if method.can_use(shuffle_name, index, df_columns):
                 return method.method
         raise RuntimeError("Unreachable, didn't find a shuffle method")
@@ -558,11 +587,11 @@ def _can_use_shuffle_default(
 
 shuffle_registry = ShuffleRegistry()
 
-shuffle_registry.register(
+shuffle_registry.add(
     priority=0, can_use=_can_use_shuffle_default, method=_shuffle_default
 )
 
-shuffle_registry.register(
+shuffle_registry.add(
     priority=1,
     can_use=_can_use_task_shuffle_no_partitions,
     method=_task_shuffle_no_partitions,
