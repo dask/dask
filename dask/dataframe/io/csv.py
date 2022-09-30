@@ -63,7 +63,11 @@ class CSVFunctionWrapper(DataFrameIOFunction):
 
     @property
     def columns(self):
-        return self.full_columns if self._columns is None else self._columns
+        if self._columns is None:
+            return self.full_columns
+        if self.colname:
+            return self._columns + [self.colname]
+        return self._columns
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
@@ -73,11 +77,15 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         columns = [c for c in self.head.columns if c in columns]
         if columns == self.columns:
             return self
+        if self.colname and self.colname not in columns:
+            head = self.head[columns + [self.colname]]
+        else:
+            head = self.head[columns]
         return CSVFunctionWrapper(
             self.full_columns,
             columns,
             self.colname,
-            self.head[columns],
+            head,
             self.header,
             self.reader,
             {c: self.dtypes[c] for c in columns},

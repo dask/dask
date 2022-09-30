@@ -1770,3 +1770,19 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
     )
 
     assert new_df.dask.keys() != old_df.dask.keys()
+
+
+def test_select_with_path_optimization(tmpdir):
+    # https://github.com/dask/dask/issues/9518
+
+    d = {"col1": [i for i in range(0, 100)], "col2": [i for i in range(100, 200)]}
+    df = pd.DataFrame(data=d)
+
+    temp_path = str(tmpdir) + "/"
+    for i in range(6):
+        df.to_csv(f"{temp_path}file_{i}.csv", index=False)
+
+    ddf = dd.read_csv(temp_path + "*.csv", include_path_column=True)
+
+    assert_eq(ddf.col1, pd.concat([df.col1] * 6))
+    assert ddf.groupby("path").col1.mean().compute().iloc[0] == 49.5
