@@ -1,6 +1,26 @@
 Changelog
 =========
 
+.. _v2022.9.2:
+
+2022.9.2
+--------
+
+Released on September 30, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove factorization logic from array auto chunking (:pr:`9507`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add docs on running Dask in a standalone Python script (:pr:`9513`) `James Bourbeau`_
+- Clarify custom-graph multiprocessing example (:pr:`9511`) `nouman`_
+
+Maintenance
+^^^^^^^^^^^
+- Groupby sort upstream compatibility (:pr:`9486`) `Ian Rose`_
+
 .. _v2022.9.1:
 
 2022.9.1
@@ -5963,3 +5983,4 @@ Other
 .. _`Nicolas Grandemange`: https://github.com/epizut
 .. _`Nat Tabris`: https://github.com/ntabris
 .. _`Lawrence Mitchell`: https://github.com/wence-
+.. _`nouman`: https://github.com/noumxn
