@@ -1,10 +1,7 @@
 <table>
-    <caption style="white-space: nowrap; overflow: hidden; caption-side: bottom;">
-      Dask graph: {{ array.npartitions }} Chunks in {{ layers }}, Data type: {{ array.dtype }} {{ array._meta | type | typename }}
-    </caption>
     <tr>
         <td>
-            <table>
+            <table style="border-collapse: collapse;">
                 <thead>
                     <tr>
                         <td> </td>
@@ -20,10 +17,18 @@
                         <td> {{ cbytes }} </td>
                     </tr>
                     {% endif %}
-                    <tr>
+                    <tr style="border-bottom: 1pt solid black;">
                         <th> Shape </th>
                         <td> {{ array.shape }} </td>
                         <td> {{ array.chunksize }} </td>
+                    </tr>
+                    <tr>
+                        <th> Dask graph </th>
+                        <td colspan="2"> {{ array.npartitions }} chunks in {{ layers }} </td>
+                    </tr>
+                    <tr>
+                        <th> Data type </th>
+                        <td colspan="2"> {{ array.dtype }} {{ array._meta | type | typename }} </td>
                     </tr>
                 </tbody>
             </table>
