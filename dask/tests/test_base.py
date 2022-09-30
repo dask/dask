@@ -1048,7 +1048,7 @@ def test_compute_nested():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 @pytest.mark.xfail(
     sys.platform == "win32",
@@ -1098,7 +1098,7 @@ def test_visualize():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_highlevelgraph():
     graphviz = pytest.importorskip("graphviz")
@@ -1111,7 +1111,7 @@ def test_visualize_highlevelgraph():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_order():
     pytest.importorskip("graphviz")
