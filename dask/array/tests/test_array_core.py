@@ -4271,6 +4271,11 @@ def test_setitem_errs():
     with pytest.raises(ValueError, match="Arrays chunk sizes are unknown"):
         dx[0] = 0
 
+    # np.nan assigned to integer array
+    x = da.ones((3, 3), dtype=int)
+    with pytest.raises(ValueError, match="cannot convert float NaN to integer"):
+        x[:, 1] = np.nan
+
 
 def test_zero_slice_dtypes():
     x = da.arange(5, chunks=1)
