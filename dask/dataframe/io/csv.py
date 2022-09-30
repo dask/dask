@@ -78,6 +78,8 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         if columns == self.columns:
             return self
         if self.colname and self.colname not in columns:
+            # when path-as-column is on, we must keep it at IO
+            # whatever the selection
             head = self.head[columns + [self.colname]]
         else:
             head = self.head[columns]
