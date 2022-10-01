@@ -574,6 +574,36 @@ def test_tokenize_datetime_date():
     assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
+def test_tokenize_datetime_time():
+    # Same time
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) == tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    )
+    assert tokenize(datetime.time(1, 2, 3, 4)) == tokenize(datetime.time(1, 2, 3, 4))
+    assert tokenize(datetime.time(1, 2, 3)) == tokenize(datetime.time(1, 2, 3))
+    assert tokenize(datetime.time(1, 2)) == tokenize(datetime.time(1, 2))
+    # Different hour
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(2, 2, 3, 4, datetime.timezone.utc)
+    )
+    # Different minute
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 3, 3, 4, datetime.timezone.utc)
+    )
+    # Different second
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 4, 4, datetime.timezone.utc)
+    )
+    # Different micros
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 5, datetime.timezone.utc)
+    )
+    # Different tz
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 4)
+    )
+
+
 def test_is_dask_collection():
     class DummyCollection:
         def __init__(self, dsk):
