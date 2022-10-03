@@ -18,7 +18,7 @@ except ImportError:
 try:
     import psutil
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 
 prof = Profiler()

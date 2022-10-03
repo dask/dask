@@ -6,7 +6,7 @@ from warnings import catch_warnings, simplefilter, warn
 try:
     import psutil
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 import numpy as np
 import pandas as pd
