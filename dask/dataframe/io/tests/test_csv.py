@@ -1772,7 +1772,7 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
     assert new_df.dask.keys() != old_df.dask.keys()
 
 
-def test_select_with_path_optimization(tmpdir):
+def test_select_with_include_path_column(tmpdir):
     # https://github.com/dask/dask/issues/9518
 
     d = {"col1": [i for i in range(0, 100)], "col2": [i for i in range(100, 200)]}
