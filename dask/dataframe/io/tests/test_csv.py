@@ -1785,4 +1785,3 @@ def test_select_with_include_path_column(tmpdir):
     ddf = dd.read_csv(temp_path + "*.csv", include_path_column=True)
 
     assert_eq(ddf.col1, pd.concat([df.col1] * 6))
-    assert ddf.groupby("path").col1.mean().compute().iloc[0] == 49.5
