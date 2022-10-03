@@ -948,6 +948,7 @@ normalize_token.register(
         type(Ellipsis),
         datetime.date,
         datetime.time,
+        datetime.datetime,
         datetime.timedelta,
         pathlib.PurePath,
     ),

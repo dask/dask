@@ -604,6 +604,48 @@ def test_tokenize_datetime_time():
     )
 
 
+def test_tokenize_datetime_datetime():
+    # Same datetime
+    required = [1, 2, 3]  # year, month, day
+    optional = [4, 5, 6, 7, datetime.timezone.utc]
+    for i in range(len(optional) + 1):
+        args = required + optional[:i]
+        assert tokenize(datetime.datetime(*args)) == tokenize(datetime.datetime(*args))
+
+    # Different year
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(2, 2, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different month
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 1, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different day
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 2, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different hour
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 3, 5, 6, 7, datetime.timezone.utc))
+    # Different minute
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 4, 6, 7, datetime.timezone.utc))
+    # Different second
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 5, 7, datetime.timezone.utc))
+    # Different micros
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 6, datetime.timezone.utc))
+    # Different tz
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
+
+
 def test_is_dask_collection():
     class DummyCollection:
         def __init__(self, dsk):
