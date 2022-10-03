@@ -13,11 +13,10 @@ pytest.importorskip("fastparquet")
 
 from dask.dataframe.utils import assert_eq
 
-if not sys.platform.startswith("linux"):
-    pytest.skip(
-        "Unnecessary, and hard to get spark working on non-linux platforms",
-        allow_module_level=True,
-    )
+pytestmark = pytest.mark.skipif(
+    sys.platform != "linux",
+    reason="Unnecessary, and hard to get spark working on non-linux platforms",
+)
 
 # pyspark auto-converts timezones -- round-tripping timestamps is easier if
 # we set everything to UTC.

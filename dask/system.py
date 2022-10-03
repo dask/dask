@@ -5,7 +5,7 @@ import sys
 try:
     import psutil
 except ImportError:
-    psutil = None
+    psutil = None  # type: ignore
 
 __all__ = ("cpu_count", "CPU_COUNT")
 
