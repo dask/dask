@@ -1,5 +1,3 @@
-# NOTE: autoupdate does not pick up flake8-bugbear since it is a transitive
-#  dependency. Make sure to update flake8-bugbear manually on a regular basis.
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.2.0
