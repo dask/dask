@@ -216,28 +216,25 @@ operation:
 
 For more information see :doc:`Joins <dataframe-joins>`.
 
-Store Data in Apache Parquet Format
------------------------------------
+Use Parquet
+-----------
 
-`Apache Parquet <https://parquet.apache.org/>`_ is a
-columnar binary format that is easy to split into multiple files (easier for
-parallel loading). It is also a common format used by other big data
-systems like `Apache Spark <https://spark.apache.org/>`_ and `Apache Impala
-<https://impala.apache.org/>`_, and so it is useful to interchange with other
-systems:
+`Apache Parquet <https://parquet.apache.org/>`_ is a columnar binary format.
+It is the de-facto standard for the storage of large volumes of tabular data
+and our recommended storage solution for basic tabular data.
 
 .. code-block:: python
 
    df.to_parquet('path/to/my-results/')
    df = dd.read_parquet('path/to/my-results/')
 
-Dask supports reading parquet files with different engine implementations of
-the Apache Parquet format for Python:
+When compared to formats like CSV, Parquet brings the following advantages:
 
-.. code-block:: python
-
-   df1 = dd.read_parquet('path/to/my-results/', engine='fastparquet')
-   df2 = dd.read_parquet('path/to/my-results/', engine='pyarrow')
-
+1. It's faster to read and write, often by 4-10x
+2. It's more compact to store, often by 2-5x
+4. It has a schema, and so there's no ambiguity about what types the columns are.  This avoids confusing errors.
+5. It supports more advanced data types, like categoricals, proper datetimes, and more
+6. It's more portable, and can be used with other systems like databases or Apache Spark
+7. Depending on how the data is partitioned Dask can identify sorted columns, and sometimes pick out subsets of data more efficiently
 
 See :ref:`dataframe.parquet` for more details.
