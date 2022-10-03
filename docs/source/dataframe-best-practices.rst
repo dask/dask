@@ -232,9 +232,9 @@ When compared to formats like CSV, Parquet brings the following advantages:
 
 1. It's faster to read and write, often by 4-10x
 2. It's more compact to store, often by 2-5x
-4. It has a schema, and so there's no ambiguity about what types the columns are.  This avoids confusing errors.
-5. It supports more advanced data types, like categoricals, proper datetimes, and more
-6. It's more portable, and can be used with other systems like databases or Apache Spark
-7. Depending on how the data is partitioned Dask can identify sorted columns, and sometimes pick out subsets of data more efficiently
+3. It has a schema, and so there's no ambiguity about what types the columns are.  This avoids confusing errors.
+4. It supports more advanced data types, like categoricals, proper datetimes, and more
+5. It's more portable, and can be used with other systems like databases or Apache Spark
+6. Depending on how the data is partitioned Dask can identify sorted columns, and sometimes pick out subsets of data more efficiently
 
 See :ref:`dataframe.parquet` for more details.
