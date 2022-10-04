@@ -69,6 +69,13 @@ from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
 #
 # #############################################
 
+SORT_SPLIT_OUT_WARNING = (
+    "In the future, `sort` for groupby operations will default to `True`"
+    " to match the behavior of pandas. However, `sort=True` does not work"
+    " with `split_out>1`. To retain the current behavior for multiple"
+    " output partitions, set `sort=False`."
+)
+
 
 def _determine_levels(by):
     """Determine the correct levels argument to groupby."""
@@ -1116,7 +1123,7 @@ class _GroupBy:
         Passed to pandas.DataFrame.groupby()
     dropna: bool
         Whether to drop null values from groupby index
-    sort: bool, defult None
+    sort: bool
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
     observed: bool, default False
@@ -1132,8 +1139,8 @@ class _GroupBy:
         slice=None,
         group_keys=GROUP_KEYS_DEFAULT,
         dropna=None,
-        sort=None,
-        observed=None,
+        sort=True,
+        observed=False,
     ):
 
         by_ = by if isinstance(by, (tuple, list)) else [by]
@@ -1249,6 +1256,9 @@ class _GroupBy:
         chunk_kwargs=None,
         aggregate_kwargs=None,
     ):
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         if aggfunc is None:
             aggfunc = func
 
@@ -1566,6 +1576,9 @@ class _GroupBy:
 
     @derived_from(pd.core.groupby.GroupBy)
     def var(self, ddof=1, split_every=None, split_out=1):
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         levels = _determine_levels(self.by)
         result = aca(
             [self.obj, self.by]
@@ -1615,6 +1628,8 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
         levels = _determine_levels(self.by)
 
@@ -1787,7 +1802,7 @@ class _GroupBy:
                 chunk=_groupby_apply_funcs,
                 chunk_kwargs=dict(
                     funcs=chunk_funcs,
-                    sort=self.sort,
+                    sort=False,
                     **self.observed,
                     **self.dropna,
                 ),
@@ -1806,6 +1821,9 @@ class _GroupBy:
                 sort=self.sort,
             )
 
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         # Check sort behavior
         if self.sort and split_out > 1:
             raise NotImplementedError(
@@ -1819,7 +1837,7 @@ class _GroupBy:
             chunk=_groupby_apply_funcs,
             chunk_kwargs=dict(
                 funcs=chunk_funcs,
-                sort=self.sort,
+                sort=False,
                 **self.observed,
                 **self.dropna,
             ),
@@ -1827,7 +1845,7 @@ class _GroupBy:
             combine_kwargs=dict(
                 funcs=aggregate_funcs,
                 level=levels,
-                sort=self.sort,
+                sort=False,
                 **self.observed,
                 **self.dropna,
             ),
@@ -2329,6 +2347,9 @@ class SeriesGroupBy(_GroupBy):
         else:
             chunk = _nunique_series_chunk
 
+        if self.sort is None and split_out > 1:
+            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+
         return aca(
             [self.obj, self.by]
             if not isinstance(self.by, list)
@@ -2466,7 +2487,7 @@ def _shuffle_aggregate(
     aggregate_kwargs=None,
     split_every=None,
     split_out=1,
-    sort=None,
+    sort=True,
     ignore_index=False,
     shuffle="tasks",
 ):
@@ -2502,7 +2523,7 @@ def _shuffle_aggregate(
         Number of output partitions.
     ignore_index : bool, default False
         Whether the index can be ignored during the shuffle.
-    sort : bool, default None
+    sort : bool
         If allowed, sort the keys of the output aggregation.
     shuffle : str, default "tasks"
         Shuffle option to be used by ``DataFrame.shuffle``.
@@ -2552,6 +2573,17 @@ def _shuffle_aggregate(
     if sort is not None:
         aggregate_kwargs = aggregate_kwargs or {}
         aggregate_kwargs["sort"] = sort
+
+    if sort is None and split_out > 1:
+        idx = set(chunked._meta.columns) - set(chunked._meta.reset_index().columns)
+        if len(idx) > 1:
+            warnings.warn(
+                "In the future, `sort` for groupby operations will default to `True`"
+                " to match the behavior of pandas. However, `sort=True` does not work"
+                " with `split_out>1` when grouping by multiple columns. To retain the"
+                " current behavior for multiple output partitions, set `sort=False`.",
+                FutureWarning,
+            )
 
     # Perform global sort or shuffle
     if sort and split_out > 1:
