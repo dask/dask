@@ -2,7 +2,7 @@ import sys
 
 try:
     import click
-except (ModuleNotFoundError, ImportError):
+except ImportError:
     click = None
 
 
