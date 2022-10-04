@@ -120,12 +120,8 @@ def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
         }
         # Note: we compute data for all dtypes in order, not just those in the output
         # columns. This ensures the same output given the same state_data, regardless
-        # of whether there is any column projection. So there is extra work done for
-        # the demo dataset in the presence of projection.
-        # It might be nice to use the internal `advance(n_samples)` method on the random
-        # state to avoid that extra work, but that is probably unreliable as different
-        # internal distributions reserve the right to advance the state as much as
-        # they want (e.g., for rejection sampling).
+        # of whether there is any column projection.
+        # cf. https://github.com/dask/dask/pull/9538#issuecomment-1267461887
         result = make[dt](len(index), state, **kws)
         if k in columns:
             data[k] = result
