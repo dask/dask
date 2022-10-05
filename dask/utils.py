@@ -22,6 +22,7 @@ from threading import Lock
 from typing import Any, ClassVar, Literal, TypeVar, overload
 from weakref import WeakValueDictionary
 
+from readerwriterlock import rwlock
 import tlz as toolz
 
 from dask.core import get_deps
@@ -581,6 +582,7 @@ class Dispatch:
         self._lazy = {}
         if name:
             self.__name__ = name
+        self.lock = rwlock.RWLockWriteD()
 
     def register(self, type, func=None):
         """Register dispatch of `func` on arguments of type `type`"""
@@ -610,26 +612,37 @@ class Dispatch:
     def dispatch(self, cls):
         """Return the function implementation for the given ``cls``"""
         lk = self._lookup
+        # if hasattr(self, "__name__") and self.__name__ == "dask_deserialize":
+        #     import numpy as np
+        #     if cls == np.ma.core.MaskedArray:
+        #         print("dispatch info")
+        #         print(lzy := "numpy" in self._lazy.keys())
+        #         print(cncrt := np.ma.core.MaskedArray in self._lookup.keys())
+        #         print(lzy or cncrt)
         for cls2 in cls.__mro__:
-            try:
-                impl = lk[cls2]
-            except KeyError:
-                pass
-            else:
-                if cls is not cls2:
-                    # Cache lookup
-                    lk[cls] = impl
-                return impl
+            with self.lock.gen_rlock():
+                try:
+                    impl = lk[cls2]
+                except KeyError:
+                    pass
+                else:
+                    if cls is not cls2:
+                        # Cache lookup
+                        lk[cls] = impl
+                    return impl
+            l = self.lock.gen_wlock()
+            l.acquire()
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
                 register = self._lazy.pop(toplevel)
             except KeyError:
-                pass
+                l.release()
             else:
                 register()
+                l.release()
                 return self.dispatch(cls)  # recurse
-        raise TypeError(f"No dispatch for {cls}")
+        raise TypeError(f"No dispatch for {cls}. Only have {self._lookup} and {self._lazy}")
 
     def __call__(self, arg, *args, **kwargs):
         """
