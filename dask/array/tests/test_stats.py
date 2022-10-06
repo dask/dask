@@ -166,3 +166,13 @@ def test_kurtosis_single_return_type():
     result_non_fisher = dask.array.stats.kurtosis(dask_array, fisher=False).compute()
     assert isinstance(result, np.float64)
     assert isinstance(result_non_fisher, np.float64)
+
+
+def test_nan_dimensional_inputs():
+    """This function tests to ensure that the ttest can handle input arrays with nan dimensions"""
+    da.random.seed(1337)
+    inputs = da.random.random(100)
+    outputs = da.random.random(100)
+
+    result_ttest = dask.array.stats.ttest_ind( outputs[ inputs > 0.5], outputs[ inputs < 0.5]).compute()
+    assert not da.isnan( result_ttest.pvalue )
