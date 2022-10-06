@@ -324,6 +324,20 @@ def _groupby_aggregate(
     return aggfunc(grouped, **kwargs)
 
 
+def _groupby_aggregate_spec(
+    df, spec, levels=None, dropna=None, sort=False, observed=None, **kwargs
+):
+    """
+    A simpler version of _groupby_aggregate that just calls ``aggregate`` using
+    the user-provided spec.
+    """
+    dropna = {"dropna": dropna} if dropna is not None else {}
+    observed = {"observed": observed} if observed is not None else {}
+    return df.groupby(level=levels, sort=sort, **observed, **dropna).aggregate(
+        spec, **kwargs
+    )
+
+
 def _non_agg_chunk(df, *by, key, dropna=None, observed=None, **kwargs):
     """
     A non-aggregation agg function. This simuates the behavior of an initial
@@ -772,7 +786,7 @@ def _build_agg_args(spec):
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    known_np_funcs = {np.min: "min", np.max: "max"}
+    known_np_funcs = {np.min: "min", np.max: "max", np.median: "median"}
 
     # check that there are no name conflicts for a single input column
     by_name = {}
@@ -818,6 +832,10 @@ def _build_agg_args_single(result_column, func, input_column):
         "first": (M.first, M.first),
         "last": (M.last, M.last),
         "prod": (M.prod, M.prod),
+        "median": (
+            None,
+            M.median,
+        ),  # No chunk func for median, we can only take it when aggregating
     }
 
     if func in simple_impl.keys():
@@ -1927,6 +1945,15 @@ class _GroupBy:
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
+        # If any of the agg funcs contain a "median", we *must* use the shuffle
+        # implementation.
+        has_median = any(s[1] == "median" for s in spec)
+        if has_median and not shuffle:
+            raise ValueError(
+                "In order to aggregate with 'median', you must use shuffling-based "
+                "aggregation (e.g., shuffle='tasks')"
+            )
+
         if shuffle:
             # Shuffle-based aggregation
             #
@@ -1934,29 +1961,57 @@ class _GroupBy:
             # for larger values of split_out. However, the shuffle
             # step requires that the result of `chunk` produces a
             # proper DataFrame type
-            return _shuffle_aggregate(
-                chunk_args,
-                chunk=_groupby_apply_funcs,
-                chunk_kwargs=dict(
-                    funcs=chunk_funcs,
+
+            # If we have a median in the spec, we cannot do an initial
+            # aggregation.
+            if has_median:
+                return _shuffle_aggregate(
+                    chunk_args,
+                    chunk=_non_agg_chunk,
+                    chunk_kwargs={
+                        "key": list(
+                            set(non_group_columns) & (column_projection or set())
+                        ),
+                        **self.observed,
+                        **self.dropna,
+                    },
+                    aggregate=_groupby_aggregate_spec,
+                    aggregate_kwargs={
+                        "spec": arg,
+                        "levels": _determine_levels(self.by),
+                        **self.observed,
+                        **self.dropna,
+                    },
+                    token="aggregate",
+                    split_every=split_every,
+                    split_out=split_out,
+                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                     sort=self.sort,
-                    **self.observed,
-                    **self.dropna,
-                ),
-                aggregate=_agg_finalize,
-                aggregate_kwargs=dict(
-                    aggregate_funcs=aggregate_funcs,
-                    finalize_funcs=finalizers,
-                    level=levels,
-                    **self.observed,
-                    **self.dropna,
-                ),
-                token="aggregate",
-                split_every=split_every,
-                split_out=split_out,
-                shuffle=shuffle if isinstance(shuffle, str) else "tasks",
-                sort=self.sort,
-            )
+                )
+            else:
+                return _shuffle_aggregate(
+                    chunk_args,
+                    chunk=_groupby_apply_funcs,
+                    chunk_kwargs={
+                        "funcs": chunk_funcs,
+                        "sort": self.sort,
+                        **self.observed,
+                        **self.dropna,
+                    },
+                    aggregate=_agg_finalize,
+                    aggregate_kwargs=dict(
+                        aggregate_funcs=aggregate_funcs,
+                        finalize_funcs=finalizers,
+                        level=levels,
+                        **self.observed,
+                        **self.dropna,
+                    ),
+                    token="aggregate",
+                    split_every=split_every,
+                    split_out=split_out,
+                    shuffle=shuffle if isinstance(shuffle, str) else "tasks",
+                    sort=self.sort,
+                )
 
         # Check sort behavior
         if self.sort and split_out > 1:
