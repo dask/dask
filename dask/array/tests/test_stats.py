@@ -174,5 +174,7 @@ def test_nan_dimensional_inputs():
     inputs = da.random.random(100)
     outputs = da.random.random(100)
 
-    result_ttest = dask.array.stats.ttest_ind( outputs[ inputs > 0.5], outputs[ inputs < 0.5]).compute()
-    assert not da.isnan( result_ttest.pvalue )
+    result_ttest = dask.array.stats.ttest_ind(
+        outputs[inputs > 0.5], outputs[inputs < 0.5]
+    ).compute()
+    assert not da.isnan(result_ttest.pvalue)

@@ -229,8 +229,8 @@ def skewtest(a, axis=0, nan_policy="propagate"):
 
     b2 = skew(a, axis)
     n = _lazy_shape(a, axis)
-    if a.shape[axis] < 8: 
-        # fails to catch nan dimensional inputs with <8 samples 
+    if a.shape[axis] < 8:
+        # fails to catch nan dimensional inputs with <8 samples
         raise ValueError(
             "skewtest is not valid with less than 8 samples; %i samples"
             " were given." % int(n)
@@ -437,12 +437,13 @@ def _count(x, axis=None):
 
 
 def _lazy_shape(x, axis):
-    """ lazy evaluation of array shape along the specified axis """
+    """lazy evaluation of array shape along the specified axis"""
+
     @delayed
     def delayed_shape(x, axis):
         return x.shape[axis]
 
-    return da.from_delayed( delayed_shape(x, axis), shape=(1,), dtype=int )
+    return da.from_delayed(delayed_shape(x, axis), shape=(1,), dtype=int)
 
 
 def _sum_of_squares(a, axis=0):
