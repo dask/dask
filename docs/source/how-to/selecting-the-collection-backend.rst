@@ -45,13 +45,13 @@ Defining a new collection backend
 **Warning**: Defining a custom backend is **not** yet recommended for most users and down-stream libraries. The backend-entrypoint system should still be treated as experimental.
 
 
-Dask curreontly exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.backend`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DaskDataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
+Dask curreontly exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.backend`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
 
 For example, a cudf-based backend definition for Dask-Dataframe would look something like the `CudfBackendEntrypoint` definition below:
 
 
 .. code-block:: python
-   from dask.dataframe.backends import DaskDataFrameBackendEntrypoint
+   from dask.dataframe.backends import DataFrameBackendEntrypoint
    from dask.dataframe.dispatch import (
       ...
       make_meta_dispatch,
@@ -63,7 +63,7 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
       return x.head(0)
    ...
 
-   class CudfBackendEntrypoint(DaskDataFrameBackendEntrypoint):
+   class CudfBackendEntrypoint(DataFrameBackendEntrypoint):
 
       def __init__(self):
          # Register compute-based dispatch functions
