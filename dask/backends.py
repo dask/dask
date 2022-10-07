@@ -48,18 +48,7 @@ class CreationDispatch:
 
     def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
         """Register a target class for a specific backend label"""
-
-        def wrapper(cls_target):
-            if isinstance(cls_target, DaskBackendEntrypoint):
-                self._lookup[backend] = cls_target
-            else:
-                raise ValueError(
-                    f"CreationDispatch only supports DaskBackendEntrypoint "
-                    f"registration. Got {cls_target}"
-                )
-            return cls_target
-
-        return wrapper(cls_target)
+        raise NotImplementedError
 
     def dispatch(self, backend):
         """Return the function implementation for the given backend"""

@@ -378,7 +378,25 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
         return np.random.RandomState
 
 
-array_creation_dispatch = CreationDispatch(
+class ArrayCreationDispatch(CreationDispatch):
+    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+        """Register a target class for a specific array-backend label"""
+
+        def wrapper(cls_target):
+            if isinstance(cls_target, ArrayBackendEntrypoint):
+                self._lookup[backend] = cls_target
+            else:
+                raise ValueError(
+                    f"ArrayCreationDispatch only supports "
+                    f"ArrayBackendEntrypoint registration. "
+                    f"Got {cls_target}"
+                )
+            return cls_target
+
+        return wrapper(cls_target)
+
+
+array_creation_dispatch = ArrayCreationDispatch(
     config_field="array.backend.library",
     default="numpy",
     name="array_creation_dispatch",

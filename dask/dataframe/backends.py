@@ -166,7 +166,25 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
-dataframe_creation_dispatch = CreationDispatch(
+class DataFrameCreationDispatch(CreationDispatch):
+    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+        """Register a target class for a specific dataframe-backend label"""
+
+        def wrapper(cls_target):
+            if isinstance(cls_target, DataFrameBackendEntrypoint):
+                self._lookup[backend] = cls_target
+            else:
+                raise ValueError(
+                    f"DataFrameCreationDispatch only supports "
+                    f"DataFrameBackendEntrypoint registration. "
+                    f"Got {cls_target}"
+                )
+            return cls_target
+
+        return wrapper(cls_target)
+
+
+dataframe_creation_dispatch = DataFrameCreationDispatch(
     config_field="dataframe.backend.library",
     default="pandas",
     name="dataframe_creation_dispatch",
