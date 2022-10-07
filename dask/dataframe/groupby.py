@@ -85,6 +85,16 @@ def _determine_levels(by):
         return 0
 
 
+def _determine_shuffle(shuffle, split_out):
+    """Determine the default shuffle behavior based on split_out"""
+    if shuffle is None:
+        if split_out > 1:
+            return shuffle or config.get("shuffle", None) or "tasks"
+        else:
+            return False
+    return shuffle
+
+
 def _normalize_by(df, by):
     """Replace series with column names wherever possible."""
     if not isinstance(df, DataFrame):
@@ -1261,11 +1271,7 @@ class _GroupBy:
         Aggregation with a single function/aggfunc rather than a compound spec
         like in GroupBy.aggregate
         """
-        if shuffle is None:
-            if split_out > 1:
-                shuffle = shuffle or config.get("shuffle", None) or "tasks"
-            else:
-                shuffle = False
+        shuffle = _determine_shuffle(shuffle, split_out)
 
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
@@ -1284,14 +1290,14 @@ class _GroupBy:
             aggregate_kwargs = {}
 
         columns = meta.name if is_series_like(meta) else meta.columns
-        by = self.by if isinstance(self.by, list) else [self.by]
+        args = [self.obj] + (self.by if isinstance(self.by, list) else [self.by])
 
         token = self._token_prefix + token
         levels = _determine_levels(self.by)
 
         if shuffle:
             return _shuffle_aggregate(
-                [self.obj] + by,
+                args,
                 chunk=_apply_chunk,
                 chunk_kwargs={
                     "chunk": func,
@@ -1316,7 +1322,7 @@ class _GroupBy:
             )
 
         return aca(
-            [self.obj] + by,
+            args,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
                 chunk=func,
@@ -1774,11 +1780,7 @@ class _GroupBy:
                 category=FutureWarning,
             )
             split_out = 1
-        if shuffle is None:
-            if split_out > 1:
-                shuffle = shuffle or config.get("shuffle", None) or "tasks"
-            else:
-                shuffle = False
+        shuffle = _determine_shuffle(shuffle, split_out)
 
         column_projection = None
         if isinstance(self.obj, DataFrame):
