@@ -48,38 +48,121 @@ from dask.utils import is_arraylike, is_series_like, typename
 
 
 class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
-    """Dask-DataFrame version of ``DaskBackendEntrypoint``"""
+    """Dask-DataFrame version of ``DaskBackendEntrypoint``
+
+    See Also
+    --------
+    PandasBackendEntrypoint
+    """
 
     def __init__(self):
         """Register data-directed dispatch functions"""
         raise NotImplementedError
 
     @staticmethod
-    def from_dict(*args, **kwargs):
-        """Create a DataFrame collection from a dictionary"""
+    def from_dict(data: dict, *, npartitions: int, **kwargs):
+        """Create a DataFrame collection from a dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The desirted number of output partitions.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_dict
+        """
         raise NotImplementedError
 
     @staticmethod
-    def read_parquet(*args, **kwargs):
-        """Read Parquet files into a DataFrame collection"""
-        raise NotImplementedError
+    def read_parquet(path: str | list, **kwargs):
+        """Read Parquet files into a DataFrame collection
 
-    def read_json(*args, **kwargs):
-        """Read json files into a DataFrame collection"""
-        raise NotImplementedError
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
 
-    def read_orc(*args, **kwargs):
-        """Read ORC files into a DataFrame collection"""
+        See Also
+        --------
+        dask.dataframe.io.parquet.core.read_parquet
+        """
         raise NotImplementedError
 
     @staticmethod
-    def read_csv(*args, **kwargs):
-        """Read CSV files into a DataFrame collection"""
+    def read_json(url_path: str | list, **kwargs):
+        """Read json files into a DataFrame collection
+
+        Parameters
+        ----------
+        url_path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.json.read_json
+        """
         raise NotImplementedError
 
     @staticmethod
-    def read_hdf(*args, **kwargs):
-        """Read HDF5 files into a DataFrame collection"""
+    def read_orc(path: str | list, **kwargs):
+        """Read ORC files into a DataFrame collection
+
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.orc.core.read_orc
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_csv(urlpath: str | list, **kwargs):
+        """Read CSV files into a DataFrame collection
+
+        Parameters
+        ----------
+        urlpath : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.csv.read_csv
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_hdf(pattern: str | list, key: str, **kwargs):
+        """Read HDF5 files into a DataFrame collection
+
+        Parameters
+        ----------
+        pattern : str or list
+            Source path(s).
+        key : str
+            Group identifier in the store.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.hdf.read_hdf
+        """
         raise NotImplementedError
 
 

@@ -302,7 +302,12 @@ def _nannumel_sparse(x, **kwargs):
 
 
 class ArrayBackendEntrypoint(DaskBackendEntrypoint):
-    """Dask-Array version of ``DaskBackendEntrypoint``"""
+    """Dask-Array version of ``DaskBackendEntrypoint``
+
+    See Also
+    --------
+    NumpyBackendEntrypoint
+    """
 
     def __init__(self):
         """Register data-directed dispatch functions"""
