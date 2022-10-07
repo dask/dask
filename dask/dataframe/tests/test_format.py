@@ -480,7 +480,7 @@ D       ...
 G       ...
 H       ...
 dtype: object
-Dask Name: from_pandas, 2 graph layers"""
+Dask Name: from_pandas-index, 2 graph layers"""
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
 
@@ -498,7 +498,7 @@ Dask Name: from_pandas, 2 graph layers"""
     7                ...
     8                ...
     Name: YYY, dtype: category
-    Dask Name: from_pandas, 2 graph layers"""
+    Dask Name: from_pandas-index, 2 graph layers"""
     )
     assert repr(ds.index) == exp
     assert str(ds.index) == exp
