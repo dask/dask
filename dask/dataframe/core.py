@@ -562,7 +562,7 @@ Dask Name: {name}, {layers}"""
         return self.map_partitions(
             getattr,
             "index",
-            token=self._name + "-index",
+            token=key_split(self._name) + "-index",
             meta=self._meta.index,
             enforce_metadata=False,
         )
