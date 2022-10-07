@@ -69,7 +69,6 @@ from dask.utils import (
     cached_property,
     concrete,
     derived_from,
-    factors,
     format_bytes,
     funcname,
     has_keyword,
@@ -1877,6 +1876,10 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
+        if not is_dask_collection(value) and np.isnan(value).any():
+            if issubclass(self.dtype.type, Integral):
+                raise ValueError("cannot convert float NaN to integer")
+
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
             from dask.array.routines import where
@@ -3017,7 +3020,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     "auto" to ask for a particular size
 
     >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
-    ((250, 250, 250, 250, 250, 250, 250, 250),)
+    ((256, 256, 256, 256, 256, 256, 256, 208),)
 
     Respects null dimensions
 
@@ -3259,19 +3262,14 @@ def round_to(c, s):
 
     We want values for c that are nicely aligned with s.
 
-    If c is smaller than s then we want the largest factor of s that is less than the
-    desired chunk size, but not less than half, which is too much.  If no such
-    factor exists then we just go with the original chunk size and accept an
+    If c is smaller than s we use the original chunk size and accept an
     uneven chunk at the end.
 
     If c is larger than s then we want the largest multiple of s that is still
     smaller than c.
     """
     if c <= s:
-        try:
-            return max(f for f in factors(s) if c / 2 <= f <= c)
-        except ValueError:  # no matching factors within factor of two
-            return max(1, int(c))
+        return max(1, int(c))
     else:
         return c // s * s
 

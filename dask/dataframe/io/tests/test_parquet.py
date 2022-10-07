@@ -196,7 +196,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})[:0]
     if index:
-        df.set_index("a", inplace=True, drop=True)
+        df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine, write_metadata_file=True)
@@ -208,7 +208,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(
@@ -221,7 +221,7 @@ def test_simple(tmpdir, write_engine, read_engine):
 def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(
         fn, engine=write_engine, compute=False, write_metadata_file=False
@@ -845,9 +845,9 @@ def test_append_wo_index(tmpdir, engine, metadata_file):
     ("index", "offset"),
     [
         (
-            pd.date_range("2022-01-01", "2022-01-02", periods=500)
-            .to_series()
-            .astype("datetime64[ms]"),
+            # There is some odd behavior with date ranges and pyarrow in some cirucmstances!
+            # https://github.com/pandas-dev/pandas/issues/48573
+            pd.date_range("2022-01-01", "2022-01-31", freq="D"),
             pd.Timedelta(days=1),
         ),
         (pd.RangeIndex(0, 500, 1), 499),
@@ -3333,7 +3333,7 @@ def test_divisions_with_null_partition(tmpdir, engine):
 def test_pyarrow_dataset_simple(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
-    df.set_index("a", inplace=True, drop=True)
+    df = df.set_index("a", drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
     read_df = dd.read_parquet(fn, engine="pyarrow", calculate_divisions=True)
