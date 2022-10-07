@@ -635,7 +635,7 @@ def assert_sane_keynames(ddf):
         while isinstance(k, tuple):
             k = k[0]
         assert isinstance(k, (str, bytes))
-        assert len(k) < 150
+        assert len(k) < 100
         assert " " not in k
         assert k.split("-")[0].isidentifier(), k
 
