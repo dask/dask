@@ -53,7 +53,7 @@ jobs:
           regex: false
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER }}  # make sure new ucx-py nightlies are available
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
