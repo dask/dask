@@ -415,6 +415,56 @@ def test_slicing_with_numpy_arrays():
     np.testing.assert_equal(a, c)
 
 
+def test_slicing_row_with_0d_numpy_arrays():
+    a, bd1 = slice_array(
+        "y",
+        "x",
+        ((3, 3, 3, 2), (3, 3, 3, 1)),
+        (np.array(0), slice(None, None, None)),
+        itemsize=8,
+    )
+
+    i = [True] + [False] * 10
+    index = (i, slice(None, None, None))
+    index = normalize_index(index, (11, 10))
+    b, bd2 = slice_array("y", "x", ((3, 3, 3, 2), (3, 3, 3, 1)), index, itemsize=8)
+
+    # bd1=((3, 3, 3, 1),)
+    # bd2=((1,), (3, 3, 3, 1))
+    assert bd1[0] == bd2[1]
+    for key_b, value in b.items():
+        if key_b[0] == "x":
+            key_a = key_b
+        elif key_b[0] == "y":
+            key_a = key_b[::2]
+        np.testing.assert_equal(a[key_a], value)
+
+
+def test_slicing_col_with_0d_numpy_arrays():
+    a, bd1 = slice_array(
+        "y",
+        "x",
+        ((3, 3, 3, 1), (3, 3, 3, 2)),
+        (slice(None, None, None), np.array(0)),
+        itemsize=8,
+    )
+
+    i = [True] + [False] * 10
+    index = (slice(None, None, None), i)
+    index = normalize_index(index, (10, 11))
+    b, bd2 = slice_array("y", "x", ((3, 3, 3, 1), (3, 3, 3, 2)), index, itemsize=8)
+
+    # bd1=((3, 3, 3, 1),)
+    # bd2=((3, 3, 3, 1), (1,))
+    assert bd1[0] == bd2[0]
+    for key_b, value in b.items():
+        if key_b[0] == "x":
+            key_a = key_b
+        elif key_b[0] == "y":
+            key_a = key_b[:2]
+        np.testing.assert_equal(a[key_a], value)
+
+
 def test_slicing_and_chunks():
     o = da.ones((24, 16), chunks=((4, 8, 8, 4), (2, 6, 6, 2)))
     t = o[4:-4, 2:-2]
