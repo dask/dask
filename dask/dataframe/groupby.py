@@ -7,6 +7,11 @@ from numbers import Integral
 
 import numpy as np
 import pandas as pd
+from pandas.core.apply import (
+    is_multi_agg_with_relabel,
+    normalize_keyword_aggregation,
+    validate_func_kwargs
+)
 
 from dask import config
 from dask.base import tokenize
@@ -1698,7 +1703,7 @@ class _GroupBy:
         )
 
     @_aggregate_docstring()
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         if split_out is None:
             warnings.warn(
                 "split_out=None is deprecated, please use a positive integer, "
@@ -1713,6 +1718,20 @@ class _GroupBy:
                 shuffle = False
 
         column_projection = None
+        relabling = None
+        columns = None
+        order = None
+
+        if isinstance(self, DataFrameGroupBy):
+            relabeling = arg is None and is_multi_agg_with_relabel(**kwargs)
+            if relabeling:
+                arg, columns, order = normalize_keyword_aggregation(kwargs)
+
+        elif isinstance(self, SeriesGroupBy):
+            relabeling = arg is None
+            if relabeling:
+                columns, arg = validate_func_kwargs(kwargs)
+
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1832,7 +1851,7 @@ class _GroupBy:
                 " Otherwise, try using split_out=1, or grouping with sort=False."
             )
 
-        return aca(
+        result = aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
             chunk_kwargs=dict(
@@ -1863,6 +1882,14 @@ class _GroupBy:
             split_out_setup=split_out_on_index,
             sort=self.sort,
         )
+
+        if relabeling and result is not None:
+            if order is not None:
+                result = result.iloc[:, order]
+            result.columns = columns
+        
+        return result
+
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
@@ -2286,18 +2313,18 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         if arg == "size":
             return self.size()
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg, split_every=split_every, split_out=split_out, shuffle=shuffle, **kwargs
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg, split_every=split_every, split_out=split_out, shuffle=shuffle, **kwargs
         )
 
 
@@ -2368,22 +2395,25 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         result = super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg, split_every=split_every, split_out=split_out, shuffle=shuffle, **kwargs
         )
         if self._slice:
-            result = result[self._slice]
+            try:
+                result = result[self._slice]
+            except KeyError:
+                pass
 
-        if not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
+        if arg is not None and not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
             result = result[result.columns[0]]
 
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg, split_every=split_every, split_out=split_out, shuffle=shuffle, **kwargs
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
