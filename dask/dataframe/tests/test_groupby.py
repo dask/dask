@@ -2841,11 +2841,13 @@ def test_groupby_aggregate_categorical_observed(
 
 
 def test_dataframe_named_agg():
-    df = pd.DataFrame({
-        "a":[1,1,2,2],
-        "b":[1,2,5,6],
-        "c":[6,3,6,7],
-    })
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 5, 6],
+            "c": [6, 3, 6, 7],
+        }
+    )
     ddf = dd.from_pandas(df, npartitions=2)
 
     expected = df.groupby("a").agg(
@@ -2861,10 +2863,12 @@ def test_dataframe_named_agg():
 
 @pytest.mark.parametrize("agg", ["count", np.mean, partial(np.var, ddof=1)])
 def test_series_named_agg(agg):
-    df = pd.DataFrame({
-        "a":[5,4,3,5,4,2,3,2],
-        "b":[1,2,5,6,9,2,6,8],
-    })
+    df = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
     ddf = dd.from_pandas(df, npartitions=2)
 
     expected = df.groupby("a").b.agg(c=agg, d="sum")
