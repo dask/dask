@@ -2219,7 +2219,9 @@ def test_repartition_object_index():
 
 @pytest.mark.slow
 @pytest.mark.parametrize("npartitions", [1, 20, 243])
-@pytest.mark.parametrize("freq", ["1D", "7D", "28h", "1h"])
+@pytest.mark.parametrize(
+    "freq", ["1D", "7D", "28h", "1h", pd.to_timedelta("1D"), pd.to_timedelta("1h")]
+)
 @pytest.mark.parametrize(
     "end", ["2000-04-15", "2000-04-15 12:37:01", "2000-01-01 12:37:00"]
 )
@@ -2234,6 +2236,9 @@ def test_repartition_freq(npartitions, freq, start, end):
     ddf = dd.from_pandas(df, npartitions=npartitions, name="x")
 
     ddf2 = ddf.repartition(freq=freq)
+    assert_eq(ddf2, df)
+
+    ddf2 = ddf.repartition(freq)
     assert_eq(ddf2, df)
 
 
@@ -2251,26 +2256,58 @@ def test_repartition_freq_divisions():
     assert ddf2.divisions[-1] == df.index.max()
     assert_eq(ddf2, df)
 
+    ddf2 = ddf.repartition("15s")
+    for div in ddf2.divisions[1:-1]:
+        assert div == div.round("15s")
+    assert ddf2.divisions[0] == df.index.min()
+    assert ddf2.divisions[-1] == df.index.max()
+    assert_eq(ddf2, df)
+
 
 def test_repartition_freq_errors():
+    df = pd.DataFrame(
+        {"x": np.random.random(10)},
+        index=pd.DatetimeIndex(np.random.random(10) * 100e9),
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with pytest.raises(ValueError) as info:
+        ddf.repartition(freq="not a freq")
+    assert "Invalid frequency" in str(info.value)
+
+    with pytest.raises(ValueError) as info:
+        ddf.repartition("not a freq")
+    assert "Both partition size and freq parsing failed" in str(info.value)
+    # byte parsing error
+    assert "not interpret" in str(info.value) and "byte unit" in str(info.value)
+    # freq parsing error
+    assert "Invalid frequency" in str(info.value)
+
+
+def test_repartition_parse_freq_errors():
     df = pd.DataFrame({"x": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
+
     with pytest.raises(TypeError) as info:
         ddf.repartition(freq="1s")
+    assert "only" in str(info.value)
+    assert "timeseries" in str(info.value)
 
+    with pytest.raises(TypeError) as info:
+        ddf.repartition("1s")
     assert "only" in str(info.value)
     assert "timeseries" in str(info.value)
 
 
-def test_repartition_freq_month():
+@pytest.mark.parametrize("freq", ["MS", pd.tseries.frequencies.to_offset("MS")])
+def test_repartition_freq_month(freq):
     ts = pd.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
     df = pd.DataFrame(
         np.random.randint(0, 100, size=(len(ts), 4)), columns=list("ABCD"), index=ts
     )
-    ddf = dd.from_pandas(df, npartitions=1).repartition(freq="MS")
 
+    ddf = dd.from_pandas(df, npartitions=1).repartition(freq=freq)
     assert_eq(df, ddf)
-
     assert ddf.divisions == (
         pd.Timestamp("2015-1-1 00:00:00"),
         pd.Timestamp("2015-2-1 00:00:00"),
@@ -2279,7 +2316,18 @@ def test_repartition_freq_month():
         pd.Timestamp("2015-5-1 00:00:00"),
         pd.Timestamp("2015-5-1 23:50:00"),
     )
+    assert ddf.npartitions == 5
 
+    ddf = dd.from_pandas(df, npartitions=1).repartition(freq)
+    assert_eq(df, ddf)
+    assert ddf.divisions == (
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
+    )
     assert ddf.npartitions == 5
 
 
@@ -2291,7 +2339,17 @@ def test_repartition_freq_day():
         pd.Timestamp("2020-1-2"),
     ]
     pdf = pd.DataFrame(index=index, data={"foo": "foo"})
+
     ddf = dd.from_pandas(pdf, npartitions=1).repartition(freq="D")
+    assert_eq(ddf, pdf)
+    assert ddf.npartitions == 2
+    assert ddf.divisions == (
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
+        pd.Timestamp("2020-1-2"),
+    )
+
+    ddf = dd.from_pandas(pdf, npartitions=1).repartition("D")
     assert_eq(ddf, pdf)
     assert ddf.npartitions == 2
     assert ddf.divisions == (

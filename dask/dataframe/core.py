@@ -1382,8 +1382,10 @@ Dask Name: {name}, {layers}"""
             where the new index contained [0, 10), [10, 50), and [50, 100), respectively.
             See https://docs.dask.org/en/latest/dataframe-design.html#partitions.
             Only used if npartitions and partition_size isn't specified.
-            For convenience if given an integer this will defer to npartitions
-            and if given a string it will defer to partition_size (see below)
+            For convenience if given an integer this will defer to npartitions,
+            TimeDelta or DateOffset will directly go to freq,
+            while a string may defer to both partition_size or freq
+            prioritizing partition_size if it matches both a bytes size and a freq (see below).
         npartitions : int, optional
             Approximate number of partitions of output. Only used if partition_size
             isn't specified. The number of partitions used may be slightly
@@ -1401,7 +1403,7 @@ Dask Name: {name}, {layers}"""
                This keyword argument triggers computation to determine
                the memory size of each partition, which may be expensive.
 
-        freq : str, pd.Timedelta
+        freq : str, pd.Timedelta, pd.DateOffset
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
         force : bool, default False
@@ -1436,8 +1438,25 @@ Dask Name: {name}, {layers}"""
         if isinstance(divisions, int):
             npartitions = divisions
             divisions = None
-        if isinstance(divisions, str):
-            partition_size = divisions
+        elif isinstance(divisions, str):
+            try:
+                parse_bytes(divisions)
+                # Not exception: bytes convertible
+                partition_size = divisions
+            except ValueError as bytes_exc:
+                try:
+                    pd.tseries.frequencies.to_offset(divisions)
+                    # Not exception: time offset convertible
+                    freq = divisions
+                except ValueError as freq_exc:
+                    raise ValueError(
+                        "Both partition size and freq parsing failed: {}, {}".format(
+                            bytes_exc, freq_exc
+                        )
+                    )
+            divisions = None
+        elif isinstance(divisions, (pd.Timedelta, pd.DateOffset)):
+            freq = divisions
             divisions = None
         if (
             sum(
