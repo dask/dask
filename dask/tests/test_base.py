@@ -983,17 +983,6 @@ def test_persist_scalar_rename():
     dd.utils.assert_eq(dds2, 5)
 
 
-@pytest.mark.skipif("not dd or not np")
-def test_dataframe_multi_index():
-    # see https://github.com/dask/dask/issues/4845
-    df = pd.DataFrame({"ind_a": np.arange(100), "ind_b": 1, "var": "whatever"})
-    df = dd.from_pandas(df, npartitions=90)
-
-    # Only fails when grouping with two variables.
-    df["nr"] = df.groupby(["ind_a", "ind_b"]).cumcount()
-    assert len(df) == 100
-
-
 @pytest.mark.skipif("not dd or not da")
 def test_compute_array_dataframe():
     arr = np.arange(100).reshape((10, 10))
