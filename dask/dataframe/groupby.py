@@ -1964,7 +1964,7 @@ class _GroupBy:
 
         # If any of the agg funcs contain a "median", we *must* use the shuffle
         # implementation.
-        has_median = any(s[1] == "median" for s in spec)
+        has_median = any(s[1] in ("median", np.median) for s in spec)
         if has_median and not shuffle:
             raise ValueError(
                 "In order to aggregate with 'median', you must use shuffling-based "

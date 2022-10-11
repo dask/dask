@@ -1209,6 +1209,27 @@ def test_shuffle_aggregate_defaults(shuffle_method):
     assert any("shuffle" in l for l in dsk.layers)
 
 
+@pytest.mark.parametrize("spec", [{"c": "median"}, {"b": np.median, "c": np.max}])
+@pytest.mark.parametrize("keys", ["a", ["a", "d"]])
+def test_aggregate_median(spec, keys, shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    actual = ddf.groupby(keys).aggregate(spec, shuffle=shuffle_method)
+    expected = pdf.groupby(keys).aggregate(spec)
+    assert_eq(actual, expected)
+
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).aggregate(spec, shuffle=False)
+
+
 @pytest.mark.parametrize("axis", [0, 1])
 @pytest.mark.parametrize("group_keys", [True, False, None])
 @pytest.mark.parametrize("method", ["ffill", "bfill"])
