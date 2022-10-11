@@ -183,6 +183,8 @@ def test_set_index_general(npartitions, shuffle_method):
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
         index=np.random.random(100),
     )
+    # Ensure extension dtypes work
+    df = df.astype({"x": "Float64"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 

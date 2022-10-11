@@ -72,7 +72,10 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64tz_dtype
+from pandas.api.types import (  # is_extension_array_dtype,
+    is_datetime64tz_dtype,
+    is_integer_dtype,
+)
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
@@ -375,11 +378,13 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
     if is_categorical_dtype(dtype):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
     elif is_datetime64tz_dtype(dtype):
-        rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
+        rv = pd.DatetimeIndex(rv).tz_convert(dtype.tz)
+        # rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
-        rv = rv.astype(dtype)
+        # rv = rv.astype(dtype)
+        rv = pd.array(rv, dtype=dtype)
     return rv
 
 
@@ -401,7 +406,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.array.dispatch import percentile_lookup as _percentile
+    # from dask.array.dispatch import percentile_lookup as _percentile
 
     length = len(df)
     if length == 0:
@@ -414,11 +419,20 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.cat.codes
         interpolation = "nearest"
-    elif isinstance(data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
-        data.dtype, np.integer
-    ):
+    elif isinstance(
+        data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype
+    ) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
-    vals, n = _percentile(data, qs, interpolation=interpolation)
+
+    vals = data.quantile(q=qs / 100, interpolation=interpolation)
+    # TODO: pandas quantile doesn't work with some data types. We get errors like:
+    # `TypeError: unsupported operand type(s) for -: 'str' and 'str'`
+
+    # if is_extension_array_dtype(data):
+    #     vals = data.quantile(q=qs/100, interpolation=interpolation)
+    # else:
+    #     vals, _ = _percentile(data, qs, interpolation=interpolation)
+
     if (
         is_cupy_type(data)
         and interpolation == "linear"
