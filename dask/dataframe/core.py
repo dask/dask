@@ -63,6 +63,8 @@ from dask.dataframe.utils import (
     is_series_like,
     make_meta,
     raise_on_meta_error,
+    serial_frame_constructor,
+    serial_series_constructor,
     valid_divisions,
 )
 from dask.delayed import Delayed, delayed, unpack_collections
@@ -2482,8 +2484,8 @@ Dask Name: {name}, {layers}"""
             # since each standard deviation will just be NaN
             needs_time_conversion = False
             numeric_dd = from_pandas(
-                pd.DataFrame(
-                    {"_": pd.Series([np.nan])},
+                serial_frame_constructor(self)(
+                    {"_": serial_series_constructor(self)([np.nan])},
                     index=self.index,
                 ),
                 npartitions=self.npartitions,
@@ -3062,7 +3064,7 @@ Dask Name: {name}, {layers}"""
                 _take_last,
                 cumpart,
                 skipna,
-                meta=pd.Series([], dtype="float"),
+                meta=serial_series_constructor(self)([], dtype="float"),
                 token=name2,
             )
 
@@ -3260,7 +3262,7 @@ Dask Name: {name}, {layers}"""
         def _dot_series(*args, **kwargs):
             # .sum() is invoked on each partition before being applied to all
             # partitions. The return type is expected to be a series, not a numpy object
-            return pd.Series(M.dot(*args, **kwargs))
+            return serial_series_constructor(self)(M.dot(*args, **kwargs))
 
         return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
             skipna=False
@@ -3532,7 +3534,7 @@ class Series(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
 
-        return pd.Series(array, index=index, name=self.name)
+        return serial_series_constructor(self)(array, index=index, name=self.name)
 
     @property
     def axes(self):
@@ -3675,7 +3677,9 @@ Dask Name: {name}, {layers}""".format(
             res = self.map_partitions(M.rename, index, enforce_metadata=False)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
-                    old = pd.Series(range(self.npartitions + 1), index=self.divisions)
+                    old = serial_series_constructor(self)(
+                        range(self.npartitions + 1), index=self.divisions
+                    )
                     new = old.rename(index).index
                     if not new.is_monotonic_increasing:
                         msg = (
@@ -4398,7 +4402,9 @@ class Index(Series):
         applied = super().map(arg, na_action=na_action, meta=meta)
         if is_monotonic and self.known_divisions:
             applied.divisions = tuple(
-                pd.Series(self.divisions).map(arg, na_action=na_action)
+                serial_series_constructor(self)(self.divisions).map(
+                    arg, na_action=na_action
+                )
             )
         else:
             applied = applied.clear_divisions()
@@ -4513,7 +4519,7 @@ class DataFrame(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
-        return pd.DataFrame(array, index=index, columns=self.columns)
+        return serial_frame_constructor(self)(array, index=index, columns=self.columns)
 
     @property
     def axes(self):
@@ -5973,7 +5979,9 @@ class DataFrame(_Frame):
         index = self._repr_divisions
         cols = meta.columns
         if len(cols) == 0:
-            series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
+            series_df = serial_frame_constructor(self)(
+                [[]] * len(index), columns=cols, index=index
+            )
         else:
             series_df = pd.concat(
                 [_repr_data_series(s, index=index) for _, s in meta.items()], axis=1
@@ -6345,7 +6353,7 @@ def split_evenly(df, k):
 def split_out_on_index(df):
     h = df.index
     if isinstance(h, pd.MultiIndex):
-        h = pd.DataFrame([], index=h).reset_index()
+        h = serial_frame_constructor(df)([], index=h).reset_index()
     return h
 
 
@@ -7070,6 +7078,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
         min_periods,
         corr,
         scalar,
+        df._meta,
     )
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
@@ -7150,7 +7159,7 @@ def cov_corr_combine(data_in, corr=False):
     return out
 
 
-def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
+def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
     out = cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
@@ -7164,7 +7173,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    return pd.DataFrame(mat, columns=cols, index=cols)
+    return serial_frame_constructor(like_df)(mat, columns=cols, index=cols)
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
@@ -7477,7 +7486,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = pd.Series(split_mem_usages)
+        mem_usages = serial_series_constructor(df)(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
@@ -7509,7 +7518,9 @@ def repartition_npartitions(df, npartitions):
     else:
         # Drop duplcates in case last partition has same
         # value for min and max division
-        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
+        original_divisions = divisions = serial_series_constructor(df)(
+            df.divisions
+        ).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)
@@ -7528,7 +7539,9 @@ def repartition_npartitions(df, npartitions):
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
                 divisions = methods.tolist(
-                    pd.Series(divisions).astype(original_divisions.dtype)
+                    serial_series_constructor(df)(divisions).astype(
+                        original_divisions.dtype
+                    )
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)
@@ -7679,10 +7692,10 @@ def idxmaxmin_chunk(x, fn=None, skipna=True):
         idx = getattr(x, fn)(skipna=skipna)
         value = getattr(x, minmax)(skipna=skipna)
     else:
-        idx = value = pd.Series([], dtype="i8")
+        idx = value = serial_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
-        return pd.DataFrame({"idx": idx, "value": value})
-    return pd.DataFrame({"idx": [idx], "value": [value]})
+        return serial_frame_constructor(x)({"idx": idx, "value": value})
+    return serial_frame_constructor(x)({"idx": [idx], "value": [value]})
 
 
 def idxmaxmin_row(x, fn=None, skipna=True):
@@ -7692,8 +7705,8 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         idx = [getattr(x.value, fn)(skipna=skipna)]
         value = [getattr(x.value, minmax)(skipna=skipna)]
     else:
-        idx = value = pd.Series([], dtype="i8")
-    return pd.DataFrame({"idx": idx, "value": value})
+        idx = value = serial_series_constructor(x)([], dtype="i8")
+    return serial_frame_constructor(x)({"idx": idx, "value": value})
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
@@ -7787,7 +7800,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
+            meta = serial_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
@@ -7797,7 +7810,7 @@ def to_datetime(arg, meta=None, **kwargs):
 def to_timedelta(arg, unit=None, errors="raise"):
     if not PANDAS_GT_110 and unit is None:
         unit = "ns"
-    meta = pd.Series([pd.Timedelta(1, unit=unit)])
+    meta = serial_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
 
@@ -7818,7 +7831,9 @@ def _repr_data_series(s, index):
             dtype = "category[unknown]"
     else:
         dtype = str(s.dtype)
-    return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
+    return serial_series_constructor(s)(
+        [dtype] + ["..."] * npartitions, index=index, name=s.name
+    )
 
 
 def has_parallel_type(x):

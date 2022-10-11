@@ -734,3 +734,23 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
 
 class AttributeNotImplementedError(NotImplementedError, AttributeError):
     """NotImplementedError and AttributeError"""
+
+
+def serial_frame_constructor(like=None):
+    """Return a serial DataFrame constructor"""
+    if is_dask_collection(like):
+        like = like._meta
+    if hasattr(like, "to_frame"):
+        # `like` is a Series rather than a DataFrame
+        like = like.iloc[:1].to_frame()
+    return pd.DataFrame if like is None else like._constructor
+
+
+def serial_series_constructor(like=None):
+    """Return a serial Series constructor"""
+    if is_dask_collection(like):
+        like = like._meta
+    if not hasattr(like, "to_frame"):
+        # `like` is a DataFrame rather than a Series
+        return like._constructor_sliced
+    return pd.Series if like is None else like._constructor
