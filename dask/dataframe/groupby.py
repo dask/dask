@@ -7,15 +7,14 @@ from numbers import Integral
 
 import numpy as np
 import pandas as pd
-from pandas.core.apply import (
-    is_multi_agg_with_relabel,
-    normalize_keyword_aggregation,
-    validate_func_kwargs,
-)
 
 from dask import config
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_150, check_numeric_only_deprecation
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    check_numeric_only_deprecation,
+)
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
@@ -41,6 +40,9 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+
+if PANDAS_GT_140:
+    from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 # #############################################
 #
@@ -1719,19 +1721,19 @@ class _GroupBy:
             else:
                 shuffle = False
 
-        column_projection = None
+        relabeling = None
         columns = None
         order = None
+        column_projection = None
+        if PANDAS_GT_140:
+            if isinstance(self, DataFrameGroupBy):
+                if arg is None:
+                    relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
 
-        if isinstance(self, DataFrameGroupBy):
-            relabeling = arg is None and is_multi_agg_with_relabel(**kwargs)
-            if relabeling:
-                arg, columns, order = normalize_keyword_aggregation(kwargs)
-
-        elif isinstance(self, SeriesGroupBy):
-            relabeling = arg is None
-            if relabeling:
-                columns, arg = validate_func_kwargs(kwargs)
+            elif isinstance(self, SeriesGroupBy):
+                relabeling = arg is None
+                if relabeling:
+                    columns, arg = validate_func_kwargs(kwargs)
 
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
