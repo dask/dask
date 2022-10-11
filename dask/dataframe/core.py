@@ -7831,9 +7831,7 @@ def _repr_data_series(s, index):
             dtype = "category[unknown]"
     else:
         dtype = str(s.dtype)
-    return serial_series_constructor(s)(
-        [dtype] + ["..."] * npartitions, index=index, name=s.name
-    )
+    return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
 
 
 def has_parallel_type(x):
