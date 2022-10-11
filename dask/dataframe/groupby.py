@@ -1985,9 +1985,9 @@ class _GroupBy:
                     chunk_args,
                     chunk=_non_agg_chunk,
                     chunk_kwargs={
-                        "key": list(
-                            set(non_group_columns) & (column_projection or set())
-                        ),
+                        "key": [
+                            c for c in _obj.columns.tolist() if c not in group_columns
+                        ],
                         **self.observed,
                         **self.dropna,
                     },

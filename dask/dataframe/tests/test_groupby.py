@@ -983,8 +983,6 @@ def test_groupby_normalize_by():
 
 
 def test_aggregate__single_element_groups(agg_func):
-    if agg_func == "median":
-        pytest.skip("median unsupported for agg spec")
     spec = agg_func
 
     # nunique/cov is not supported in specs
@@ -1003,7 +1001,8 @@ def test_aggregate__single_element_groups(agg_func):
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 
-    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec))
+    shuffle = {"shuffle": "tasks"} if agg_func == "median" else {}
+    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec, **shuffle))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
