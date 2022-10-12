@@ -420,31 +420,31 @@ try:
         @staticmethod
         def ones(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend.library": "numpy"}):
+            with config.set({"array.backend": "numpy"}):
                 return da.ones(*args, meta=meta, **kwargs)
 
         @staticmethod
         def zeros(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend.library": "numpy"}):
+            with config.set({"array.backend": "numpy"}):
                 return da.zeros(*args, meta=meta, **kwargs)
 
         @staticmethod
         def empty(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend.library": "numpy"}):
+            with config.set({"array.backend": "numpy"}):
                 return da.empty(*args, meta=meta, **kwargs)
 
         @staticmethod
         def full(*args, meta=None, **kwargs):
             meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend.library": "numpy"}):
+            with config.set({"array.backend": "numpy"}):
                 return da.full(*args, meta=meta, **kwargs)
 
         @staticmethod
         def arange(*args, like=None, **kwargs):
             like = cupy.empty(()) if like is None else like
-            with config.set({"array.backend.library": "numpy"}):
+            with config.set({"array.backend": "numpy"}):
                 return da.arange(*args, like=like, **kwargs)
 
     array_creation_dispatch.register_backend("cupy", CupyBackendEntrypoint())

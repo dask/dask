@@ -8,13 +8,13 @@ Selecting the collection backend
 Changing the default backend library
 ------------------------------------
 
-The Dask-Dataframe and Dask-Array modules were originally designed with the Pandas and Numpy backend libraries in mind, respectively. However, other dataframe and array libraries can take advantage of the same collection APIs for out-of-core and parallel processing. For example, users with `cupy <https://cupy.dev/>` installed can change their default Dask-Array backend to ``cupy`` with the ``"array.backend.library"`` configuration option:
+The Dask-Dataframe and Dask-Array modules were originally designed with the Pandas and Numpy backend libraries in mind, respectively. However, other dataframe and array libraries can take advantage of the same collection APIs for out-of-core and parallel processing. For example, users with `cupy <https://cupy.dev/>` installed can change their default Dask-Array backend to ``cupy`` with the ``"array.backend"`` configuration option:
 
 .. code-block:: python
 
    >>> import dask
    >>> import dask.array as da
-   >>> with dask.config.set({"array.backend.library": "cupy"}):
+   >>> with dask.config.set({"array.backend": "cupy"}):
    ...     darr = da.ones(10, chunks=(5,))  # Get cupy-backed collection
 
 This code opts out of the default (``"numpy"``) backend for dispatchable Dask-Array creation functions, and uses the creation functions registered for ``"cupy"`` instead. The current set of dispatchable creation functions for Dask-Array is:

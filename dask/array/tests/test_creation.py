@@ -39,7 +39,7 @@ def test_arr_like(
     funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order, backend
 ):
     backend_lib = pytest.importorskip(backend)
-    with dask.config.set({"array.backend.library": backend}):
+    with dask.config.set({"array.backend": backend}):
 
         np_func = getattr(backend_lib, funcname)
         da_func = getattr(da, funcname)

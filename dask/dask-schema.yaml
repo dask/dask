@@ -39,16 +39,12 @@ properties:
     properties:
 
       backend:
-        type: object
-        properties:
-
-          library:
-            type:
-            - string
-            - "null"
-            description: |
-              Backend dataframe library to use for data creation and input IO.
-              Available options include "pandas" and "cudf". Default is "pandas".
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported dataframe-creation functions.
+          Default is "pandas".
 
       shuffle-compression:
         type:
@@ -81,16 +77,12 @@ properties:
     properties:
 
       backend:
-        type: object
-        properties:
-
-          library:
-            type:
-            - string
-            - "null"
-            description: |
-              Backend array library to use for data creation and input IO.
-              Available options include "numpy" and "cupy". Default is "numpy".
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported array-creation functions.
+          Default is "numpy".
 
       svg:
         type: object

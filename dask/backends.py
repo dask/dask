@@ -53,7 +53,7 @@ class CreationDispatch:
     def __init__(self, module_name: str, default: str, name: str | None = None):
         self._lookup = {}
         self._module_name = module_name
-        self._config_field = f"{module_name}.backend.library"
+        self._config_field = f"{module_name}.backend"
         self.default = default
         if name:
             self.__name__ = name
