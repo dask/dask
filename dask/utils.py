@@ -628,7 +628,7 @@ class Dispatch:
                 pass
             else:
                 register()
-                self._lazy.pop(toplevel)
+                self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
         raise TypeError(f"No dispatch for {cls}")
 
