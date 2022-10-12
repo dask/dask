@@ -415,13 +415,11 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.cat.codes
         interpolation = "nearest"
-    elif isinstance(
-        data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype
-    ) or is_integer_dtype(data.dtype):
+    elif is_datetime64tz_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
-    # For now we're converting to an ndarray as a workaround.
+    # We fall back to an ndarray as a workaround.
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation)
     except TypeError:
