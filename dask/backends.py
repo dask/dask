@@ -45,7 +45,11 @@ BackendEntrypointType = TypeVar(
 class CreationDispatch:
     """Simple backend dispatch for collection-creation functions"""
 
-    def __init__(self, config_field, default, name=None):
+    _lookup: dict
+    config_field: str
+    default: str
+
+    def __init__(self, config_field: str, default: str, name: str | None = None):
         self._lookup = {}
         self.config_field = config_field
         self.default = default
@@ -58,7 +62,7 @@ class CreationDispatch:
         """Register a target class for a specific backend label"""
         raise NotImplementedError
 
-    def dispatch(self, backend):
+    def dispatch(self, backend: str):
         """Return the desired backend entrypoint"""
         try:
             impl = self._lookup[backend]
@@ -72,17 +76,22 @@ class CreationDispatch:
         raise ValueError(f"No backend dispatch registered for {backend}")
 
     @property
-    def backend(self):
+    def backend(self) -> str:
         """Return the desired collection backend"""
         return config.get(self.config_field, self.default) or self.default
 
     @backend.setter
-    def backend(self, value):
+    def backend(self, value: str):
         raise RuntimeError(
             f"Set the backend by configuring the {self.config_field} option"
         )
 
-    def register_inplace(self, backend=None, func_name=None, function=None) -> Callable:
+    def register_inplace(
+        self,
+        backend: str | None = None,
+        func_name: str | None = None,
+        function: Callable | None = None,
+    ) -> Callable:
         """Register dispatchable function"""
         if function is not None:
             function.__name__ = func_name or function.__name__
@@ -100,7 +109,7 @@ class CreationDispatch:
 
         return inner(function) if function is not None else inner
 
-    def __getattr__(self, item):
+    def __getattr__(self, item: str):
         """
         Return the appropriate attribute for the current backend
         """
