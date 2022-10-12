@@ -3,7 +3,6 @@ import pytest
 
 pytestmark = pytest.mark.gpu
 
-import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
@@ -168,64 +167,3 @@ def test_tri_like(xp, N, M, k, dtype, chunks):
     xp_a = xp.tri(*args, like=da.from_array(cupy.array(())))
 
     assert_eq(xp_a, cp_a)
-
-
-@pytest.mark.parametrize(
-    "funcname",
-    [
-        "empty",
-        "ones",
-        "zeros",
-        "full",
-    ],
-)
-@pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
-@pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
-@pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
-@pytest.mark.parametrize("name", [None, "my-name"])
-@pytest.mark.parametrize("order", ["C", "F"])
-@pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_cupy_backend(
-    funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order
-):
-    # Logic here is (mostly) copied from test_creation.py::test_arr_like
-    # However, we use `dask.config` to set the backend library to cupy
-    np_func = getattr(cupy, funcname)
-    da_func = getattr(da, funcname)
-    shape = cast_shape(shape)
-    chunks = cast_chunks(chunks)
-
-    if "full" in funcname:
-        old_np_func = np_func
-        old_da_func = da_func
-
-        np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
-        da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
-
-    dtype = np.dtype(dtype)
-
-    with dask.config.set({"array.backend.library": "cupy"}):
-        if "like" in funcname:
-            a = np.random.randint(0, 10, shape).astype(dtype)
-
-            np_r = np_func(a, order=order)
-            da_r = da_func(a, order=order, chunks=chunks, name=name)
-        else:
-            np_r = np_func(shape, order=order, dtype=dtype)
-            da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
-
-    # Make sure we have the cupy backend
-    assert np_r.shape == da_r.shape
-    assert np_r.dtype == da_r.dtype
-    assert isinstance(da_r._meta, cupy.ndarray)
-    assert isinstance(da_r.compute(), cupy.ndarray)
-
-    if name is None:
-        assert funcname.split("_")[0] in da_r.name
-    else:
-        assert da_r.name == name
-
-    if "order" == "F":
-        assert np.isfortran(da_r.compute())
-    else:
-        assert not np.isfortran(da_r.compute())

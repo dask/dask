@@ -13,6 +13,10 @@ from dask.array.utils import assert_eq, same_keys
 
 
 @pytest.mark.parametrize(
+    "backend",
+    ["numpy", pytest.param("cupy", marks=pytest.mark.gpu)],
+)
+@pytest.mark.parametrize(
     "funcname",
     [
         "empty_like",
@@ -31,45 +35,54 @@ from dask.array.utils import assert_eq, same_keys
 @pytest.mark.parametrize("name", [None, "my-name"])
 @pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order):
-    np_func = getattr(np, funcname)
-    da_func = getattr(da, funcname)
-    shape = cast_shape(shape)
-    chunks = cast_chunks(chunks)
+def test_arr_like(
+    funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order, backend
+):
+    backend_lib = pytest.importorskip(backend)
+    with dask.config.set({"array.backend.library": backend}):
 
-    if "full" in funcname:
-        old_np_func = np_func
-        old_da_func = da_func
+        np_func = getattr(backend_lib, funcname)
+        da_func = getattr(da, funcname)
+        shape = cast_shape(shape)
+        chunks = cast_chunks(chunks)
 
-        np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
-        da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
+        if "full" in funcname:
+            old_np_func = np_func
+            old_da_func = da_func
 
-    dtype = np.dtype(dtype)
+            np_func = lambda *a, **k: old_np_func(*a, fill_value=5, **k)
+            da_func = lambda *a, **k: old_da_func(*a, fill_value=5, **k)
 
-    if "like" in funcname:
-        a = np.random.randint(0, 10, shape).astype(dtype)
+        dtype = np.dtype(dtype)
 
-        np_r = np_func(a, order=order)
-        da_r = da_func(a, order=order, chunks=chunks, name=name)
-    else:
-        np_r = np_func(shape, order=order, dtype=dtype)
-        da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
+        if "like" in funcname:
+            a = backend_lib.random.randint(0, 10, shape).astype(dtype)
 
-    assert np_r.shape == da_r.shape
-    assert np_r.dtype == da_r.dtype
+            np_r = np_func(a, order=order)
+            da_r = da_func(a, order=order, chunks=chunks, name=name)
+        else:
+            np_r = np_func(shape, order=order, dtype=dtype)
+            da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
 
-    if "empty" not in funcname:
-        assert (np_r == np.asarray(da_r)).all()
+        assert np_r.shape == da_r.shape
+        assert np_r.dtype == da_r.dtype
 
-    if name is None:
-        assert funcname.split("_")[0] in da_r.name
-    else:
-        assert da_r.name == name
+        # Make sure we are using the desired backend
+        assert isinstance(da_r._meta, backend_lib.ndarray)
+        assert isinstance(da_r.compute(), backend_lib.ndarray)
 
-    if "order" == "F":
-        assert np.isfortran(da_r.compute())
-    else:
-        assert not np.isfortran(da_r.compute())
+        if "empty" not in funcname:
+            assert_eq(np_r, da_r)
+
+        if name is None:
+            assert funcname.split("_")[0] in da_r.name
+        else:
+            assert da_r.name == name
+
+        if "order" == "F":
+            assert np.isfortran(da_r.compute())
+        else:
+            assert not np.isfortran(da_r.compute())
 
 
 @pytest.mark.parametrize(
