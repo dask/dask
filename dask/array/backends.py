@@ -395,7 +395,7 @@ class ArrayCreationDispatch(CreationDispatch):
 
 
 array_creation_dispatch = ArrayCreationDispatch(
-    config_field="array.backend.library",
+    module_name="array",
     default="numpy",
     name="array_creation_dispatch",
 )

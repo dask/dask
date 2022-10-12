@@ -45,7 +45,7 @@ Defining a new collection backend
 **Warning**: Defining a custom backend is **not** yet recommended for most users and down-stream libraries. The backend-entrypoint system should still be treated as experimental.
 
 
-Dask currently exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.backend`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
+Dask currently exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.array.backends`` and ``dask.dataframe.backends`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
 
 For example, a cudf-based backend definition for Dask-Dataframe would look something like the `CudfBackendEntrypoint` definition below:
 
@@ -86,12 +86,12 @@ For example, a cudf-based backend definition for Dask-Dataframe would look somet
       ...
 
 
-In order to expose this entrypoint as a ``dask.backend`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
+In order to expose this entrypoint as a ``dask.dataframe.backends`` entrypoint, the necessary ``setup.cfg`` configuration in ``cudf`` (or ``dask_cudf``) would be as follows:
 
 .. code-block:: ini
 
    [options.entry_points]
-   dask.backends =
+   dask.dataframe.backends =
       cudf = <module-path>:CudfBackendEntrypoint
 
 

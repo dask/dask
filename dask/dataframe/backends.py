@@ -182,7 +182,7 @@ class DataFrameCreationDispatch(CreationDispatch):
 
 
 dataframe_creation_dispatch = DataFrameCreationDispatch(
-    config_field="dataframe.backend.library",
+    module_name="dataframe",
     default="pandas",
     name="dataframe_creation_dispatch",
 )
