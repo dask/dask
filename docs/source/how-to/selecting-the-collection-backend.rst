@@ -17,7 +17,7 @@ The Dask-Dataframe and Dask-Array modules were originally designed with the Pand
    >>> with dask.config.set({"array.backend.library": "cupy"}):
    ...     darr = da.ones(10, chunks=(5,))  # Get cupy-backed collection
 
-This code opts out of the default (``"numpy"``) backend for dispatchable Dask-Array creation functions, and uses the creation functions registered for ``"cupy"`` instead. The current set of dispatchable creation functions for Dask-Array include:
+This code opts out of the default (``"numpy"``) backend for dispatchable Dask-Array creation functions, and uses the creation functions registered for ``"cupy"`` instead. The current set of dispatchable creation functions for Dask-Array is:
 
 - ``ones``
 - ``zeros``
@@ -27,7 +27,7 @@ This code opts out of the default (``"numpy"``) backend for dispatchable Dask-Ar
 
 The Dask-Array API can also dispatch the backend ``RandomState`` class to be used for random-number generation. This means all creation functions in ``dask.array.random`` are also dispatchable.
 
-The current set of dispatchable creation functions for Dask-Dataframe include:
+The current set of dispatchable creation functions for Dask-Dataframe is:
 
 - ``from_dict``
 - ``read_parquet``
@@ -45,7 +45,7 @@ Defining a new collection backend
 **Warning**: Defining a custom backend is **not** yet recommended for most users and down-stream libraries. The backend-entrypoint system should still be treated as experimental.
 
 
-Dask curreontly exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.backend`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
+Dask currently exposes an `entrypoint <https://packaging.python.org/specifications/entry-points/>` under the group ``dask.backend`` to enable users and third-party libraries to develop and maintain backend implementations for Dask-Array and Dask-Dataframe. A custom Dask-Array backend should define a subclass of ``DaskArrayBackendEntrypoint`` (defined in ``dask.array.backends``), while a custom Dask-DataFrame backend should define a subclass of ``DataFrameBackendEntrypoint`` (defined in ``dask.dataframe.backends``).
 
 For example, a cudf-based backend definition for Dask-Dataframe would look something like the `CudfBackendEntrypoint` definition below:
 
