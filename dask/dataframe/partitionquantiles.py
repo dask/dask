@@ -80,11 +80,6 @@ from dask.dataframe.core import Series
 from dask.dataframe.utils import is_categorical_dtype
 from dask.utils import is_cupy_type, random_state_data
 
-try:
-    from pyarrow.lib import ArrowNotImplementedError
-except ImportError:
-    ArrowNotImplementedError = False
-
 
 def sample_percentiles(num_old, num_new, chunk_length, upsample=1.0, random_state=None):
     """Construct percentiles for a chunk for repartitioning.
@@ -425,14 +420,9 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
     # We fall back to an ndarray as a workaround.
-    if ArrowNotImplementedError:
-        # `string[pyarrow]` dtypes will throw `ArrowNotImplementedError`
-        exceptions = (TypeError, ArrowNotImplementedError)
-    else:
-        exceptions = (TypeError,)
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation)
-    except exceptions:
+    except (TypeError, NotImplementedError):
         vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
 
     if (
