@@ -458,7 +458,7 @@ _cached_random_states = {}
 
 def _make_api(attr):
     def wrapper(*args, **kwargs):
-        backend = array_creation_dispatch.get_backend()
+        backend = array_creation_dispatch.backend
         if backend not in _cached_random_states:
             # Cache the default RandomState object for this backend
             _cached_random_states[backend] = RandomState()
