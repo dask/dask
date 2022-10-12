@@ -72,12 +72,7 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_datetime64tz_dtype,
-    is_extension_array_dtype,
-    is_integer_dtype,
-    is_string_dtype,
-)
+from pandas.api.types import is_datetime64tz_dtype, is_integer_dtype
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
@@ -426,12 +421,10 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
     # For now we're converting to NumPy arrays as a workaround.
-    if is_string_dtype(data):
-        data = data.to_numpy()
-    if is_extension_array_dtype(data):
+    try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation)
-    else:
-        vals, _ = _percentile(data, qs, interpolation)
+    except TypeError:
+        vals, _ = _percentile(np.array(data), qs, interpolation)
 
     if (
         is_cupy_type(data)
