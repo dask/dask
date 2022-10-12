@@ -179,17 +179,23 @@ def test_partitioning_index_categorical_on_values():
     "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
 )
 def test_set_index_general(npartitions, shuffle_method):
+    names = ["alice", "bob", "ricky"]
     df = pd.DataFrame(
-        {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
+        {
+            "x": np.random.random(100),
+            "y": np.random.random(100) // 0.2,
+            "z": np.random.choice(names, 100),
+        },
         index=np.random.random(100),
     )
     # Ensure extension dtypes work
-    df = df.astype({"x": "Float64"})
+    df = df.astype({"x": "Float64", "z": "string"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
     assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
     assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
+    assert_eq(df.set_index("z"), ddf.set_index("z", shuffle=shuffle_method))
     assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
     assert_eq(
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)

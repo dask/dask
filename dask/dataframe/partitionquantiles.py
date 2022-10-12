@@ -72,9 +72,11 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (  # is_extension_array_dtype,
+from pandas.api.types import (
     is_datetime64tz_dtype,
+    is_extension_array_dtype,
     is_integer_dtype,
+    is_string_dtype,
 )
 from tlz import merge, merge_sorted, take
 
@@ -379,11 +381,9 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = pd.Categorical.from_codes(rv, info[0], info[1])
     elif is_datetime64tz_dtype(dtype):
         rv = pd.DatetimeIndex(rv).tz_convert(dtype.tz)
-        # rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
     elif rv.dtype != dtype:
-        # rv = rv.astype(dtype)
         rv = pd.array(rv, dtype=dtype)
     return rv
 
@@ -406,7 +406,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    # from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.dispatch import percentile_lookup as _percentile
 
     length = len(df)
     if length == 0:
@@ -424,14 +424,14 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     ) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
-    vals = data.quantile(q=qs / 100, interpolation=interpolation)
-    # TODO: pandas quantile doesn't work with some data types. We get errors like:
-    # `TypeError: unsupported operand type(s) for -: 'str' and 'str'`
-
-    # if is_extension_array_dtype(data):
-    #     vals = data.quantile(q=qs/100, interpolation=interpolation)
-    # else:
-    #     vals, _ = _percentile(data, qs, interpolation=interpolation)
+    # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
+    # For now we're converting to NumPy arrays as a workaround.
+    if is_string_dtype(data):
+        data = data.to_numpy()
+    if is_extension_array_dtype(data):
+        vals = data.quantile(q=qs / 100, interpolation=interpolation)
+    else:
+        vals, _ = _percentile(data, qs, interpolation)
 
     if (
         is_cupy_type(data)
