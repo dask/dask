@@ -22,6 +22,7 @@ from dask.dataframe.core import (
     partitionwise_graph,
 )
 from dask.dataframe.multi import _maybe_align_partitions
+from dask.dataframe.utils import insert_meta_param_description
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, apply, derived_from, funcname, has_keyword
@@ -83,6 +84,7 @@ def overlap_chunk(func, before, after, *args, **kwargs):
     return out.iloc[before:-after]
 
 
+@insert_meta_param_description
 def map_overlap(
     func,
     df,
