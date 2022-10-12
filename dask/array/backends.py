@@ -18,7 +18,7 @@ from dask.array.dispatch import (
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
 from dask.array.percentile import _percentile
-from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.backends import BackendEntrypointType, CreationDispatch, DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -369,8 +369,8 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
 class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
     def __init__(self):
-        # Importing this class will already guarentee
-        # that data-dispatch functions are registered
+        # Data dispatch functions are already registered
+        # in the current module
         pass
 
     @property
@@ -379,21 +379,18 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
 
 
 class ArrayCreationDispatch(CreationDispatch):
-    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+    def register_backend(
+        self, name: str, backend: BackendEntrypointType
+    ) -> BackendEntrypointType:
         """Register a target class for a specific array-backend label"""
-
-        def wrapper(cls_target):
-            if isinstance(cls_target, ArrayBackendEntrypoint):
-                self._lookup[backend] = cls_target
-            else:
-                raise ValueError(
-                    f"ArrayCreationDispatch only supports "
-                    f"ArrayBackendEntrypoint registration. "
-                    f"Got {cls_target}"
-                )
-            return cls_target
-
-        return wrapper(cls_target)
+        if not isinstance(backend, ArrayBackendEntrypoint):
+            raise ValueError(
+                f"ArrayCreationDispatch only supports "
+                f"ArrayBackendEntrypoint registration. "
+                f"Got {type(backend)}"
+            )
+        self._lookup[name] = backend
+        return backend
 
 
 array_creation_dispatch = ArrayCreationDispatch(
@@ -411,8 +408,8 @@ try:
 
     class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         def __init__(self):
-            # Importing this class will already guarentee
-            # that data-dispatch functions are registered
+            # Data dispatch functions are already registered
+            # in the current module
             pass
 
         @property

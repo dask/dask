@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Callable
+from typing import Callable, TypeVar
 
 from dask import config
 from dask.compatibility import entry_points
@@ -36,6 +36,12 @@ def detect_entrypoints():
     return {ep.name: ep for ep in entrypoints}
 
 
+BackendEntrypointType = TypeVar(
+    "BackendEntrypointType",
+    bound="DaskBackendEntrypoint",
+)
+
+
 class CreationDispatch:
     """Simple backend dispatch for collection-creation functions"""
 
@@ -46,20 +52,21 @@ class CreationDispatch:
         if name:
             self.__name__ = name
 
-    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+    def register_backend(
+        self, name: str, backend: BackendEntrypointType
+    ) -> BackendEntrypointType:
         """Register a target class for a specific backend label"""
         raise NotImplementedError
 
     def dispatch(self, backend):
-        """Return the function implementation for the given backend"""
+        """Return the desired backend entrypoint"""
         try:
             impl = self._lookup[backend]
         except KeyError:
             # Check entrypoints for the specified backend
             entrypoints = detect_entrypoints()
             if backend in entrypoints:
-                self.register_backend(backend, entrypoints[backend].load()())
-                return self._lookup[backend]
+                return self.register_backend(backend, entrypoints[backend].load()())
         else:
             return impl
         raise ValueError(f"No backend dispatch registered for {backend}")

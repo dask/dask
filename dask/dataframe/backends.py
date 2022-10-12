@@ -17,7 +17,7 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.backends import CreationDispatch, DaskBackendEntrypoint
+from dask.backends import BackendEntrypointType, CreationDispatch, DaskBackendEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -68,7 +68,7 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         data : dict
             Of the form {field : array-like} or {field : dict}.
         npartitions : int
-            The desirted number of output partitions.
+            The desired number of output partitions.
         **kwargs :
             Optional backend kwargs.
 
@@ -167,21 +167,18 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
 
 
 class DataFrameCreationDispatch(CreationDispatch):
-    def register_backend(self, backend: str, cls_target: DaskBackendEntrypoint):
+    def register_backend(
+        self, name: str, backend: BackendEntrypointType
+    ) -> BackendEntrypointType:
         """Register a target class for a specific dataframe-backend label"""
-
-        def wrapper(cls_target):
-            if isinstance(cls_target, DataFrameBackendEntrypoint):
-                self._lookup[backend] = cls_target
-            else:
-                raise ValueError(
-                    f"DataFrameCreationDispatch only supports "
-                    f"DataFrameBackendEntrypoint registration. "
-                    f"Got {cls_target}"
-                )
-            return cls_target
-
-        return wrapper(cls_target)
+        if not isinstance(backend, DataFrameBackendEntrypoint):
+            raise ValueError(
+                f"DataFrameCreationDispatch only supports "
+                f"DataFrameBackendEntrypoint registration. "
+                f"Got {type(backend)}"
+            )
+        self._lookup[name] = backend
+        return backend
 
 
 dataframe_creation_dispatch = DataFrameCreationDispatch(
@@ -714,8 +711,8 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """
 
     def __init__(self):
-        # Importing this class will already guarentee
-        # that data-dispatch functions are registered
+        # Data dispatch functions are already registered
+        # in the current module
         pass
 
 
