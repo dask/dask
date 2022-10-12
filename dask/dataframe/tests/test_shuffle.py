@@ -211,6 +211,26 @@ def test_set_index_general(npartitions, shuffle_method):
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+)
+@pytest.mark.parametrize("string_dtype", ["string[python]", "string[pyarrow]"])
+def test_set_index_pyarrow_string(shuffle_method, string_dtype):
+    if string_dtype == "string[pyarrow]":
+        pytest.importorskip("pyarrow")
+    names = ["alice", "bob", "ricky"]
+    df = pd.DataFrame(
+        {
+            "x": np.random.random(100),
+            "y": np.random.choice(names, 100),
+        },
+        index=np.random.random(100),
+    )
+    df = df.astype({"y": string_dtype})
+    ddf = dd.from_pandas(df, npartitions=10)
+    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
+
+
 def test_set_index_self_index(shuffle_method):
     df = pd.DataFrame(
         {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
