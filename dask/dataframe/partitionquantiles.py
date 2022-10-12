@@ -421,7 +421,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
     # We fall back to an ndarray as a workaround.
     try:
-        vals = data.quantile(q=qs / 100, interpolation=interpolation)
+        vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
         vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
 
