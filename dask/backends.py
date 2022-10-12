@@ -71,11 +71,16 @@ class CreationDispatch:
             return impl
         raise ValueError(f"No backend dispatch registered for {backend}")
 
-    def get_backend(self):
+    @property
+    def backend(self):
         """Return the desired collection backend"""
-        if self.config_field:
-            return config.get(self.config_field) or self.default
-        return self.default
+        return config.get(self.config_field, self.default) or self.default
+
+    @backend.setter
+    def backend(self, value):
+        raise RuntimeError(
+            f"Set the backend by configuring the {self.config_field} option"
+        )
 
     def register_inplace(self, backend=None, func_name=None, function=None) -> Callable:
         """Register dispatchable function"""
@@ -99,5 +104,5 @@ class CreationDispatch:
         """
         Return the appropriate attribute for the current backend
         """
-        backend = self.dispatch(self.get_backend())
+        backend = self.dispatch(self.backend)
         return getattr(backend, item)
