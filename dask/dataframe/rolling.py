@@ -121,10 +121,10 @@ def map_overlap(
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work,
         but it won't raise if dtypes don't match.
-    before : int or timedelta
+    before : int, timedelta or string timedelta
         The rows to prepend to partition ``i`` from the end of
         partition ``i - 1``.
-    after : int or timedelta
+    after : int, timedelta or string timedelta
         The rows to append to partition ``i`` from the beginning
         of partition ``i + 1``.
     transform_divisions : bool, default True
@@ -148,6 +148,11 @@ def map_overlap(
     args = (df,) + args
 
     dfs = [df for df in args if isinstance(df, _Frame)]
+
+    if isinstance(before, str):
+        before = pd.to_timedelta(before)
+    if isinstance(after, str):
+        after = pd.to_timedelta(after)
 
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
         if not is_datetime64_any_dtype(dfs[0].index._meta_nonempty.inferred_type):
