@@ -214,8 +214,10 @@ def test_set_index_general(npartitions, shuffle_method):
 @pytest.mark.skipif(
     not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
 )
-@pytest.mark.parametrize("string_dtype", ["string[python]", "string[pyarrow]"])
-def test_set_index_pyarrow_string(shuffle_method, string_dtype):
+@pytest.mark.parametrize(
+    "string_dtype", ["string[python]", "string[pyarrow]", "object"]
+)
+def test_set_index_string(shuffle_method, string_dtype):
     if string_dtype == "string[pyarrow]":
         pytest.importorskip("pyarrow")
     names = ["alice", "bob", "ricky"]
