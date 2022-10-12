@@ -1,4 +1,5 @@
 import math
+from typing import cast
 
 import numpy as np
 
@@ -390,7 +391,7 @@ class ArrayCreationDispatch(CreationDispatch):
                 f"Got {type(backend)}"
             )
         self._lookup[name] = backend
-        return backend
+        return cast(BackendEntrypointType, backend)
 
 
 array_creation_dispatch = ArrayCreationDispatch(

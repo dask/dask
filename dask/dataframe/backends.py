@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Iterable
+from typing import Iterable, cast
 
 import numpy as np
 import pandas as pd
@@ -178,7 +178,7 @@ class DataFrameCreationDispatch(CreationDispatch):
                 f"Got {type(backend)}"
             )
         self._lookup[name] = backend
-        return backend
+        return cast(BackendEntrypointType, backend)
 
 
 dataframe_creation_dispatch = DataFrameCreationDispatch(
