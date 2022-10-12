@@ -17,7 +17,12 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    assert_categorical_equal,
+    tm,
+)
 from dask.dataframe.shuffle import (
     _noop,
     maybe_buffered_partd,
@@ -189,7 +194,10 @@ def test_set_index_general(npartitions, shuffle_method):
         index=np.random.random(100),
     )
     # Ensure extension dtypes work
-    df = df.astype({"x": "Float64", "z": "string"})
+    # NOTE: Older version of pandas have known issues with extension dtypes.
+    # We generally expect extension dtypes to work well when using `pandas>=1.4.0`.
+    if PANDAS_GT_140:
+        df = df.astype({"x": "Float64", "z": "string"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
