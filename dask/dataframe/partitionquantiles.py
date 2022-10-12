@@ -402,6 +402,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.dispatch import percentile_lookup as _percentile
+    from dask.array.utils import array_safe
 
     length = len(df)
     if length == 0:
@@ -420,11 +421,11 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         interpolation = "nearest"
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
-    # For now we're converting to NumPy arrays as a workaround.
+    # For now we're converting to an ndarray as a workaround.
     try:
         vals = data.quantile(q=qs / 100, interpolation=interpolation)
     except TypeError:
-        vals, _ = _percentile(np.array(data), qs, interpolation)
+        vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
 
     if (
         is_cupy_type(data)
