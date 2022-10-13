@@ -736,21 +736,43 @@ class AttributeNotImplementedError(NotImplementedError, AttributeError):
     """NotImplementedError and AttributeError"""
 
 
-def serial_frame_constructor(like=None):
-    """Return a serial DataFrame constructor"""
+def serial_frame_constructor(like):
+    """Return a serial DataFrame constructor
+
+    Parameters
+    ----------
+    like :
+        Any series-like or dataframe-like object.
+    """
     if is_dask_collection(like):
-        like = like._meta
-    if hasattr(like, "to_frame"):
-        # `like` is a Series rather than a DataFrame
-        like = like.iloc[:1].to_frame()
-    return pd.DataFrame if like is None else like._constructor
+        try:
+            like = like._meta
+        except AttributeError:
+            pass  # TODO: Handle array-like
+    if is_dataframe_like(like):
+        return like._constructor
+    elif is_series_like(like):
+        return like._constructor_expanddim
+    else:
+        raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
 
 
-def serial_series_constructor(like=None):
-    """Return a serial Series constructor"""
+def serial_series_constructor(like):
+    """Return a serial Series constructor
+
+    Parameters
+    ----------
+    like :
+        Any series-like or dataframe-like object.
+    """
     if is_dask_collection(like):
-        like = like._meta
-    if not hasattr(like, "to_frame"):
-        # `like` is a DataFrame rather than a Series
+        try:
+            like = like._meta
+        except AttributeError:
+            pass  # TODO: Handle array-like
+    if is_dataframe_like(like):
         return like._constructor_sliced
-    return pd.Series if like is None else like._constructor
+    elif is_series_like(like):
+        return like._constructor
+    else:
+        raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
