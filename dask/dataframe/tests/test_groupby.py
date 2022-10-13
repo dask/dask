@@ -1228,6 +1228,8 @@ def test_aggregate_median(spec, keys, shuffle_method):
 
     with pytest.raises(ValueError, match="must use shuffl"):
         ddf.groupby(keys).aggregate(spec, shuffle=False)
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).median(shuffle=False)
 
 
 @pytest.mark.parametrize("axis", [0, 1])

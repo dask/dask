@@ -1704,7 +1704,14 @@ class _GroupBy:
         return s / c
 
     @derived_from(pd.core.groupby.GroupBy)
-    def median(self, split_every=None, split_out=1):
+    def median(self, split_every=None, split_out=1, shuffle=None):
+        if shuffle is False:
+            raise ValueError(
+                "In order to aggregate with 'median', you must use shuffling-based "
+                "aggregation (e.g., shuffle='tasks')"
+            )
+        shuffle = shuffle or config.get("shuffle", None) or "tasks"
+
         with check_numeric_only_deprecation():
             meta = self._meta_nonempty.median()
         columns = meta.name if is_series_like(meta) else meta.columns
@@ -1727,7 +1734,7 @@ class _GroupBy:
             },
             split_every=split_every,
             split_out=split_out,
-            shuffle=config.get("shuffle", None) or "tasks",
+            shuffle=shuffle,
             sort=self.sort,
         )
 
