@@ -562,7 +562,7 @@ Dask Name: {name}, {layers}"""
         return self.map_partitions(
             getattr,
             "index",
-            token=self._name + "-index",
+            token=key_split(self._name) + "-index",
             meta=self._meta.index,
             enforce_metadata=False,
         )
@@ -882,10 +882,10 @@ Dask Name: {name}, {layers}"""
         ----------
         func : function
             Function applied to each partition.
-        before : int or timedelta
+        before : int, timedelta or string timedelta
             The rows to prepend to partition ``i`` from the end of
             partition ``i - 1``.
-        after : int or timedelta
+        after : int, timedelta or string timedelta
             The rows to append to partition ``i`` from the beginning
             of partition ``i + 1``.
         args, kwargs :
@@ -984,7 +984,7 @@ Dask Name: {name}, {layers}"""
         4  4.0  1.0
 
         If you have a ``DatetimeIndex``, you can use a ``pd.Timedelta`` for time-
-        based windows.
+        based windows or any ``pd.Timedelta`` convertible string:
 
         >>> ts = pd.Series(range(10), index=pd.date_range('2017', periods=10))
         >>> dts = dd.from_pandas(ts, npartitions=2)
