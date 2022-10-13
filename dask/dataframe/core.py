@@ -6401,7 +6401,11 @@ def apply_concat_apply(
         and all intermediates will be concatenated and passed to ``aggregate``.
         Default is 8.
     split_out : int, optional
-        Number of output partitions. Split occurs after first chunk reduction.
+        Number of output partitions. If ``split_out > 1``, the output of
+        ``chunk`` must be dataframe-like or series-like. Otherwise, ``chunk``
+        must output a ``dict`` with keys in the range ``[0, split_out)``.
+        The split will occur after the first ``chunk`` reduction if it is not
+        handled within the ``chunk`` function itself.
     split_out_setup : callable, optional
         If provided, this function is called on each chunk before performing
         the hash-split. It should return a pandas object, where each row
@@ -6495,15 +6499,28 @@ def apply_concat_apply(
     # objects anymore.
 
     # Blockwise Split Layer
+    meta_chunk = None
     if split_out and split_out > 1:
-        chunked = chunked.map_partitions(
-            hash_shard,
-            split_out,
-            split_out_setup,
-            split_out_setup_kwargs,
-            ignore_index,
-            token="split-%s" % token_key,
+        # Only use hash_shard if the output of `chunk` is
+        # not alreay a dictionary
+        meta_chunk = chunk(
+            *[arg._meta_nonempty if isinstance(arg, _Frame) else arg for arg in args],
+            **chunk_kwargs,
         )
+        if not isinstance(meta_chunk, dict):
+            chunked = chunked.map_partitions(
+                hash_shard,
+                split_out,
+                split_out_setup,
+                split_out_setup_kwargs,
+                ignore_index,
+                token="split-%s" % token_key,
+            )
+        elif set(meta_chunk.keys())!= set(range(split_out)):
+            raise ValueError(
+                f"Output of {chunk} must be a dict with keys in the "
+                f"range 0-{split_out-1}. Got {set(meta_chunk.keys())}."
+            )
 
     # Handle sort behavior
     if sort is not None:
@@ -6532,7 +6549,10 @@ def apply_concat_apply(
     )
 
     if meta is no_default:
-        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        if isinstance(meta_chunk, dict):
+            meta_chunk = next(iter(meta_chunk.values()))
+        else:
+            meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )

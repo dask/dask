@@ -18,10 +18,12 @@ from dask.dataframe.core import (
     _extract_meta,
     _Frame,
     aca,
+    hash_shard,
     map_partitions,
     new_dd_object,
     no_default,
     split_out_on_index,
+    split_out_on_cols,
 )
 from dask.dataframe.dispatch import grouper_dispatch
 from dask.dataframe.methods import concat, drop_columns
@@ -458,7 +460,7 @@ def _mul_cols(df, cols):
     return _df
 
 
-def _cov_chunk(df, *by):
+def _cov_chunk(df, *by, split_out=1):
     """Covariance Chunk Logic
 
     Parameters
@@ -490,13 +492,22 @@ def _cov_chunk(df, *by):
         by = [col_mapping[k] for k in by]
         cols = cols.drop(np.array(by))
 
-    g = _groupby_raise_unaligned(df, by=by)
-    x = g.sum()
+    out = {}
+    for shard, df in (
+        hash_shard(
+            df,
+            split_out,
+            split_out_setup=split_out_on_cols,
+            split_out_setup_kwargs={"cols": by},
+        ) if split_out > 1 else {0: df}
+    ).items():
+        g = _groupby_raise_unaligned(df, by=by)
+        x = g.sum()
+        mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+        n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
+        out[shard] = (x, mul, n, col_mapping)
 
-    mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
-
-    n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
-    return (x, mul, n, col_mapping)
+    return out[0] if split_out == 1 else out
 
 
 def _cov_agg(_t, levels, ddof, std=False, sort=False):
