@@ -72,7 +72,7 @@ class MakeTimeseriesPart(DataFrameIOFunction):
 
     def __init__(self, dtypes, freq, kwargs, columns=None):
         self._columns = columns or list(dtypes.keys())
-        self.dtypes = {c: dtypes[c] for c in self.columns}
+        self.dtypes = dtypes
         self.freq = freq
         self.kwargs = kwargs
 
@@ -98,22 +98,34 @@ class MakeTimeseriesPart(DataFrameIOFunction):
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
         return make_timeseries_part(
-            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
+            divisions[0],
+            divisions[1],
+            self.dtypes,
+            self.columns,
+            self.freq,
+            state_data,
+            self.kwargs,
         )
 
 
-def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
+def make_timeseries_part(start, end, dtypes, columns, freq, state_data, kwargs):
     index = pd.date_range(start=start, end=end, freq=freq, name="timestamp")
     state = np.random.RandomState(state_data)
-    columns = {}
+    data = {}
     for k, dt in dtypes.items():
         kws = {
             kk.rsplit("_", 1)[1]: v
             for kk, v in kwargs.items()
             if kk.rsplit("_", 1)[0] == k
         }
-        columns[k] = make[dt](len(index), state, **kws)
-    df = pd.DataFrame(columns, index=index, columns=sorted(columns))
+        # Note: we compute data for all dtypes in order, not just those in the output
+        # columns. This ensures the same output given the same state_data, regardless
+        # of whether there is any column projection.
+        # cf. https://github.com/dask/dask/pull/9538#issuecomment-1267461887
+        result = make[dt](len(index), state, **kws)
+        if k in columns:
+            data[k] = result
+    df = pd.DataFrame(data, index=index, columns=columns)
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return df
@@ -184,7 +196,9 @@ def make_timeseries(
     return from_map(
         MakeTimeseriesPart(dtypes, freq, kwargs),
         parts,
-        meta=make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs),
+        meta=make_timeseries_part(
+            "2000", "2000", dtypes, list(dtypes.keys()), "1H", state_data[0], kwargs
+        ),
         divisions=divisions,
         label="make-timeseries",
         token=tokenize(start, end, dtypes, freq, partition_freq, state_data),

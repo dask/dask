@@ -370,10 +370,10 @@ def test_choice(generator_class):
 def test_create_with_auto_dimensions():
     with dask.config.set({"array.chunk-size": "128MiB"}):
         x = da.random.random((10000, 10000), chunks=(-1, "auto"))
-        assert x.chunks == ((10000,), (1250,) * 8)
+        assert x.chunks == ((10000,), (1677,) * 5 + (1615,))
 
         y = da.random.random((10000, 10000), chunks="auto")
-        assert y.chunks == ((2500,) * 4, (2500,) * 4)
+        assert y.chunks == ((4096, 4096, 1808),) * 2
 
 
 def test_names():

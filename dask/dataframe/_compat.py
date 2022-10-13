@@ -1,4 +1,6 @@
+import contextlib
 import string
+import warnings
 
 import numpy as np
 import pandas as pd
@@ -13,10 +15,7 @@ PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
 PANDAS_GT_133 = PANDAS_VERSION >= parse_version("1.3.3")
 PANDAS_GT_140 = PANDAS_VERSION >= parse_version("1.4.0")
-# FIXME: Using `.release` below as versions like `1.5.0.dev0+268.gbe8d1ec880`
-# are less than `1.5.0` with `packaging.version`. Update to use `parse_version("1.5.0")`
-# below once `pandas=1.5.0` is released
-PANDAS_GT_150 = PANDAS_VERSION.release >= (1, 5, 0)
+PANDAS_GT_150 = PANDAS_VERSION >= parse_version("1.5.0")
 
 import pandas.testing as tm
 
@@ -82,3 +81,18 @@ def makeMixedDataFrame():
         }
     )
     return df
+
+
+@contextlib.contextmanager
+def check_numeric_only_deprecation():
+
+    if PANDAS_GT_150:
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="The default value of numeric_only in",
+                category=FutureWarning,
+            )
+            yield
+    else:
+        yield

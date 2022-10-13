@@ -1,6 +1,78 @@
 Changelog
 =========
 
+.. _v2022.9.2:
+
+2022.9.2
+--------
+
+Released on September 30, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove factorization logic from array auto chunking (:pr:`9507`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add docs on running Dask in a standalone Python script (:pr:`9513`) `James Bourbeau`_
+- Clarify custom-graph multiprocessing example (:pr:`9511`) `nouman`_
+
+Maintenance
+^^^^^^^^^^^
+- Groupby sort upstream compatibility (:pr:`9486`) `Ian Rose`_
+
+.. _v2022.9.1:
+
+2022.9.1
+--------
+
+Released on September 16, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``DataFrame`` and ``Series`` ``median`` methods (:pr:`9483`) `James Bourbeau`_
+
+Enhancements
+^^^^^^^^^^^^
+- Shuffle ``groupby`` default (:pr:`9453`) `Ian Rose`_
+- Filter by list (:pr:`9419`) `Greg Hayes`_
+- Added ``distributed.utils.key_split`` functionality to ``dask.utils.key_split`` (:pr:`9464`) `Luke Conibear`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix overlap so that ``set_index`` doesn't drop rows (:pr:`9423`) `Julia Signell`_
+- Fix assigning pandas ``Series`` to column when ``ddf.columns.min()`` raises (:pr:`9485`) `Erik Welch`_
+- Fix metadata comparison ``stack_partitions`` (:pr:`9481`) `James Bourbeau`_
+- Provide default for ``split_out`` (:pr:`9493`) `Lawrence Mitchell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Allow ``split_out`` to be ``None``, which then defaults to ``1`` in ``groupby().aggregate()`` (:pr:`9491`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fixing ``enforce_metadata`` documentation, not checking for dtypes (:pr:`9474`) `Nicolas Grandemange`_
+- Fix ``it's`` --> ``its`` typo (:pr:`9484`) `Nat Tabris`_
+
+Maintenance
+^^^^^^^^^^^
+- Workaround for parquet writing failure using some datetime series but not others (:pr:`9500`) `Ian Rose`_
+- Filter out ``numeric_only`` warnings from ``pandas`` (:pr:`9496`) `James Bourbeau`_
+- Avoid ``set_index(..., inplace=True)`` where not necessary (:pr:`9472`) `James Bourbeau`_
+- Avoid passing groupby key list of length one (:pr:`9495`) `James Bourbeau`_
+- Update ``test_groupby_dropna_cudf`` based on ``cudf`` support for ``group_keys`` (:pr:`9482`) `James Bourbeau`_
+- Remove ``dd.from_bcolz`` (:pr:`9479`) `James Bourbeau`_
+- Added ``flake8-bugbear`` to ``pre-commit`` hooks (:pr:`9457`) `Luke Conibear`_
+- Bind loop variables in function definitions (``B023``) (:pr:`9461`) `Luke Conibear`_
+- Added assert for comparisons (``B015``) (:pr:`9459`) `Luke Conibear`_
+- Set top-level default shell in CI workflows (:pr:`9469`) `James Bourbeau`_
+- Removed unused loop control variables (``B007``) (:pr:`9458`) `Luke Conibear`_
+- Replaced ``getattr`` calls for constant attributes (``B009``) (:pr:`9460`) `Luke Conibear`_
+- Pin ``libprotobuf`` to allow nightly ``pyarrow`` in the upstream CI build (:pr:`9465`) `Joris Van den Bossche`_
+- Replaced mutable data structures for default arguments (``B006``) (:pr:`9462`) `Luke Conibear`_
+- Changed ``flake8`` mirror and updated version (:pr:`9456`) `Luke Conibear`_
+
+
 .. _v2022.9.0:
 
 2022.9.0
@@ -5907,3 +5979,8 @@ Other
 .. _`ivojuroro`: https://github.com/ivojuroro
 .. _`Shaghayegh`: https://github.com/Shadimrad
 .. _`Hendrik Makait`: https://github.com/hendrikmakait
+.. _`Luke Conibear`: https://github.com/lukeconibear
+.. _`Nicolas Grandemange`: https://github.com/epizut
+.. _`Nat Tabris`: https://github.com/ntabris
+.. _`Lawrence Mitchell`: https://github.com/wence-
+.. _`nouman`: https://github.com/noumxn
