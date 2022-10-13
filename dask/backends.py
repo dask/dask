@@ -103,7 +103,6 @@ class CreationDispatch:
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
-                print(backend)
                 return getattr(self, dispatch_name)(*args, **kwargs)
 
             wrapper.__name__ = dispatch_name
