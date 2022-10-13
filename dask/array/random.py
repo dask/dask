@@ -104,59 +104,18 @@ class Generator:
         shuffle=True,
         chunks="auto",
     ):
-        dependencies = []
-        # Normalize and validate `a`
-        if isinstance(a, Integral):
-            dtype = np.random.default_rng().choice(1, size=(), p=None).dtype
-            len_a = a
-            if a < 0:
-                raise ValueError("a must be greater than 0")
-        else:
-            a = asarray(a)
-            a = a.rechunk(a.shape)
-            dtype = a.dtype
-            if a.ndim != 1:
-                raise ValueError("a must be one dimensional")
-            len_a = len(a)
-            dependencies.append(a)
-            a = a.__dask_keys__()[0]
 
-        # Normalize and validate `p`
-        if p is not None:
-            if not isinstance(p, Array):
-                # If p is not a dask array, first check the sum is close
-                # to 1 before converting.
-                p = np.asarray(p)
-                if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
-                    raise ValueError("probabilities do not sum to 1")
-                p = asarray(p)
-            else:
-                p = p.rechunk(p.shape)
+        (
+            a,
+            size,
+            replace,
+            p,
+            axis,
+            chunks,
+            dtype,
+            dependencies,
+        ) = _choice_validate_params(a, size, replace, p, axis, chunks)
 
-            if p.ndim != 1:
-                raise ValueError("p must be one dimensional")
-            if len(p) != len_a:
-                raise ValueError("a and p must have the same size")
-
-            dependencies.append(p)
-            p = p.__dask_keys__()[0]
-
-        if size is None:
-            size = ()
-        elif not isinstance(size, (tuple, list)):
-            size = (size,)
-
-        if axis != 0:
-            raise ValueError("axis must be 0 since a is one dimensinal")
-
-        chunks = normalize_chunks(chunks, size, dtype=np.float64)
-        if not replace and len(chunks[0]) > 1:
-            err_msg = (
-                "replace=False is not currently supported for "
-                "dask.array.choice with multi-chunk output "
-                "arrays"
-            )
-            raise NotImplementedError(err_msg)
         sizes = list(product(*chunks))
         bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
 
@@ -552,59 +511,17 @@ class RandomState:
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
-            dependencies = []
-            # Normalize and validate `a`
-            if isinstance(a, Integral):
-                # On windows the output dtype differs if p is provided or
-                # absent, see https://github.com/numpy/numpy/issues/9867
-                dummy_p = np.array([1]) if p is not None else p
-                dtype = np.random.choice(1, size=(), p=dummy_p).dtype
-                len_a = a
-                if a < 0:
-                    raise ValueError("a must be greater than 0")
-            else:
-                a = asarray(a)
-                a = a.rechunk(a.shape)
-                dtype = a.dtype
-                if a.ndim != 1:
-                    raise ValueError("a must be one dimensional")
-                len_a = len(a)
-                dependencies.append(a)
-                a = a.__dask_keys__()[0]
+            (
+                a,
+                size,
+                replace,
+                p,
+                axis,  # np.random.RandomState.choice does not use axis
+                chunks,
+                dtype,
+                dependencies,
+            ) = _choice_validate_params(a, size, replace, p, 0, chunks)
 
-            # Normalize and validate `p`
-            if p is not None:
-                if not isinstance(p, Array):
-                    # If p is not a dask array, first check the sum is close
-                    # to 1 before converting.
-                    p = np.asarray(p)
-                    if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
-                        raise ValueError("probabilities do not sum to 1")
-                    p = asarray(p)
-                else:
-                    p = p.rechunk(p.shape)
-
-                if p.ndim != 1:
-                    raise ValueError("p must be one dimensional")
-                if len(p) != len_a:
-                    raise ValueError("a and p must have the same size")
-
-                dependencies.append(p)
-                p = p.__dask_keys__()[0]
-
-            if size is None:
-                size = ()
-            elif not isinstance(size, (tuple, list)):
-                size = (size,)
-
-            chunks = normalize_chunks(chunks, size, dtype=np.float64)
-            if not replace and len(chunks[0]) > 1:
-                err_msg = (
-                    "replace=False is not currently supported for "
-                    "dask.array.choice with multi-chunk output "
-                    "arrays"
-                )
-                raise NotImplementedError(err_msg)
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
 
@@ -613,7 +530,7 @@ class RandomState:
             )
             keys = product([name], *(range(len(bd)) for bd in chunks))
             dsk = {
-                k: (_choice, state, a, size, replace, p)
+                k: (_choice_rs, state, a, size, replace, p)
                 for k, state, size in zip(keys, state_data, sizes)
             }
 
@@ -826,11 +743,6 @@ class RandomState:
         return _wrap_func(self, "zipf", a, size=size, chunks=chunks, **kwargs)
 
 
-def _choice_rng(state_data, a, size, replace, p, axis, shuffle):
-    state = np.random.default_rng(state_data)
-    return state.choice(a, size=size, replace=replace, p=p, axis=axis, shuffle=shuffle)
-
-
 def _shuffle(state_data, x, axis=0):
     bit_generator = np.random.PCG64()
     bit_generator.state = state_data
@@ -858,11 +770,6 @@ def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     return func(*args, size=size, **kwargs)
 
 
-def _choice(state_data, a, size, replace, p):
-    state = np.random.RandomState(state_data)
-    return state.choice(a, size=size, replace=replace, p=p)
-
-
 def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     """Apply RandomState method with seed"""
     if RandomState is None:
@@ -870,6 +777,74 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     state = RandomState(state_data)
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
+
+
+def _choice_rng(state_data, a, size, replace, p, axis, shuffle):
+    state = np.random.default_rng(state_data)
+    return state.choice(a, size=size, replace=replace, p=p, axis=axis, shuffle=shuffle)
+
+
+def _choice_rs(state_data, a, size, replace, p):
+    state = np.random.RandomState(state_data)
+    return state.choice(a, size=size, replace=replace, p=p)
+
+
+def _choice_validate_params(a, size, replace, p, axis, chunks):
+    dependencies = []
+    # Normalize and validate `a`
+    if isinstance(a, Integral):
+        dtype = np.random.default_rng().choice(1, size=(), p=None).dtype
+        len_a = a
+        if a < 0:
+            raise ValueError("a must be greater than 0")
+    else:
+        a = asarray(a)
+        a = a.rechunk(a.shape)
+        dtype = a.dtype
+        if a.ndim != 1:
+            raise ValueError("a must be one dimensional")
+        len_a = len(a)
+        dependencies.append(a)
+        a = a.__dask_keys__()[0]
+
+    # Normalize and validate `p`
+    if p is not None:
+        if not isinstance(p, Array):
+            # If p is not a dask array, first check the sum is close
+            # to 1 before converting.
+            p = np.asarray(p)
+            if not np.isclose(p.sum(), 1, rtol=1e-7, atol=0):
+                raise ValueError("probabilities do not sum to 1")
+            p = asarray(p)
+        else:
+            p = p.rechunk(p.shape)
+
+        if p.ndim != 1:
+            raise ValueError("p must be one dimensional")
+        if len(p) != len_a:
+            raise ValueError("a and p must have the same size")
+
+        dependencies.append(p)
+        p = p.__dask_keys__()[0]
+
+    if size is None:
+        size = ()
+    elif not isinstance(size, (tuple, list)):
+        size = (size,)
+
+    if axis != 0:
+        raise ValueError("axis must be 0 since a is one dimensinal")
+
+    chunks = normalize_chunks(chunks, size, dtype=np.float64)
+    if not replace and len(chunks[0]) > 1:
+        err_msg = (
+            "replace=False is not currently supported for "
+            "dask.array.choice with multi-chunk output "
+            "arrays"
+        )
+        raise NotImplementedError(err_msg)
+
+    return a, size, replace, p, axis, chunks, dtype, dependencies
 
 
 def _wrap_func(
