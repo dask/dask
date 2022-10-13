@@ -62,12 +62,16 @@ def test_map_overlap(npartitions, use_dask_input):
 
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = dask.dataframe.rolling.map_overlap(shifted_sum, ddf, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf, before, after, before, after, c=2
+        )
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = dask.dataframe.rolling.map_overlap(shifted_sum, ddf.b, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf.b, before, after, before, after, c=2
+        )
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
@@ -93,7 +97,12 @@ def test_map_overlap(npartitions, use_dask_input):
     ],
 )
 def test_map_overlap_multiple_dataframes(
-    use_dask_input, npartitions, enforce_metadata, transform_divisions, align_dataframes, overlap_setup
+    use_dask_input,
+    npartitions,
+    enforce_metadata,
+    transform_divisions,
+    align_dataframes,
+    overlap_setup,
 ):
     dataframe, before, after = overlap_setup
 

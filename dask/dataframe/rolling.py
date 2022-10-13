@@ -22,8 +22,8 @@ from dask.dataframe.core import (
     partitionwise_graph,
 )
 from dask.dataframe.io import from_pandas
-from dask.dataframe.utils import is_dask_collection, is_series_like, is_dataframe_like
 from dask.dataframe.multi import _maybe_align_partitions
+from dask.dataframe.utils import is_dask_collection, is_dataframe_like, is_series_like
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, apply, derived_from, funcname, has_keyword
@@ -148,7 +148,11 @@ def map_overlap(
     dd.DataFrame.map_overlap
     """
 
-    df = from_pandas(df, 1) if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df) else df
+    df = (
+        from_pandas(df, 1)
+        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
+        else df
+    )
 
     args = (df,) + args
 
