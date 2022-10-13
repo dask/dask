@@ -1819,7 +1819,7 @@ class _GroupBy:
             # for larger values of split_out. However, the shuffle
             # step requires that the result of `chunk` produces a
             # proper DataFrame type
-            return _shuffle_aggregate(
+            result = _shuffle_aggregate(
                 chunk_args,
                 chunk=_groupby_apply_funcs,
                 chunk_kwargs=dict(
@@ -1842,49 +1842,49 @@ class _GroupBy:
                 shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                 sort=self.sort,
             )
+        else:
+            if self.sort is None and split_out > 1:
+                warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+            # Check sort behavior
+            if self.sort and split_out > 1:
+                raise NotImplementedError(
+                    "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
+                    " Try using `shuffle=True` if you are grouping on a single column."
+                    " Otherwise, try using split_out=1, or grouping with sort=False."
+                )
 
-        # Check sort behavior
-        if self.sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
-                " Try using `shuffle=True` if you are grouping on a single column."
-                " Otherwise, try using split_out=1, or grouping with sort=False."
+            result = aca(
+                chunk_args,
+                chunk=_groupby_apply_funcs,
+                chunk_kwargs=dict(
+                    funcs=chunk_funcs,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                combine=_groupby_apply_funcs,
+                combine_kwargs=dict(
+                    funcs=aggregate_funcs,
+                    level=levels,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                aggregate=_agg_finalize,
+                aggregate_kwargs=dict(
+                    aggregate_funcs=aggregate_funcs,
+                    finalize_funcs=finalizers,
+                    level=levels,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                token="aggregate",
+                split_every=split_every,
+                split_out=split_out,
+                split_out_setup=split_out_on_index,
+                sort=self.sort,
             )
-
-        result = aca(
-            chunk_args,
-            chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(
-                funcs=chunk_funcs,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            combine=_groupby_apply_funcs,
-            combine_kwargs=dict(
-                funcs=aggregate_funcs,
-                level=levels,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            aggregate=_agg_finalize,
-            aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs,
-                finalize_funcs=finalizers,
-                level=levels,
-                **self.observed,
-                **self.dropna,
-            ),
-            token="aggregate",
-            split_every=split_every,
-            split_out=split_out,
-            split_out_setup=split_out_on_index,
-            sort=self.sort,
-        )
 
         if relabeling and result is not None:
             if order is not None:
