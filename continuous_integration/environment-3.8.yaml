@@ -22,7 +22,7 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  # Pinning `tiledb-py=0.17.5` lead to strange seg faults in CI.
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
   # We should unpin when possible.
   # https://github.com/dask/dask/pull/9569
   - tiledb-py<0.17.4
