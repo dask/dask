@@ -202,9 +202,13 @@ def test_map_overlap_errors():
     with pytest.raises(NotImplementedError):
         ddf.map_overlap(shifted_sum, 0, 100, 0, 100, c=2).compute()
 
-    # Offset with non-datetime
+    # Timedelta offset with non-datetime
     with pytest.raises(TypeError):
         ddf.map_overlap(shifted_sum, pd.Timedelta("1s"), pd.Timedelta("1s"), 0, 2, c=2)
+
+    # String timedelta offset with non-datetime
+    with pytest.raises(TypeError):
+        ddf.map_overlap(shifted_sum, "1s", "1s", 0, 2, c=2)
 
 
 def test_map_overlap_provide_meta():
@@ -459,10 +463,16 @@ def test_time_rolling_large_window_variable_chunks(window):
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
 def test_time_rolling(before, after):
     window = before
+    expected = dts.compute().rolling(window).count()
+
+    # String timedelta
+    result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
+    assert_eq(result, expected)
+
+    # Timedelta
     before = pd.Timedelta(before)
     after = pd.Timedelta(after)
     result = dts.map_overlap(lambda x: x.rolling(window).count(), before, after)
-    expected = dts.compute().rolling(window).count()
     assert_eq(result, expected)
 
 
