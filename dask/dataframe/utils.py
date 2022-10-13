@@ -753,6 +753,8 @@ def serial_frame_constructor(like):
         return like._constructor
     elif is_series_like(like):
         return like._constructor_expanddim
+    elif is_index_like(like):
+        return like.to_frame()._constructor
     else:
         raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
 
@@ -774,5 +776,7 @@ def serial_series_constructor(like):
         return like._constructor_sliced
     elif is_series_like(like):
         return like._constructor
+    elif is_index_like(like):
+        return like.to_frame()._constructor_sliced
     else:
         raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
