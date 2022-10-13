@@ -114,7 +114,7 @@ class Generator:
             chunks,
             dtype,
             dependencies,
-        ) = _choice_validate_params(a, size, replace, p, axis, chunks)
+        ) = _choice_validate_params("Generator", a, size, replace, p, axis, chunks)
 
         sizes = list(product(*chunks))
         bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
@@ -520,7 +520,7 @@ class RandomState:
                 chunks,
                 dtype,
                 dependencies,
-            ) = _choice_validate_params(a, size, replace, p, 0, chunks)
+            ) = _choice_validate_params("RandomState", a, size, replace, p, 0, chunks)
 
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
@@ -789,11 +789,19 @@ def _choice_rs(state_data, a, size, replace, p):
     return state.choice(a, size=size, replace=replace, p=p)
 
 
-def _choice_validate_params(a, size, replace, p, axis, chunks):
+def _choice_validate_params(state, a, size, replace, p, axis, chunks):
     dependencies = []
     # Normalize and validate `a`
     if isinstance(a, Integral):
-        dtype = np.random.default_rng().choice(1, size=(), p=None).dtype
+        if state == "Generator":
+            dtype = np.random.default_rng().choice(1, size=(), p=None).dtype
+        elif state == "RandomState":
+            # On windows the output dtype differs if p is provided or
+            # # absent, see https://github.com/numpy/numpy/issues/9867
+            dummy_p = np.array([1]) if p is not None else p
+            dtype = np.random.choice(1, size=(), p=dummy_p).dtype
+        else:
+            raise ValueError("Unknown generator class")
         len_a = a
         if a < 0:
             raise ValueError("a must be greater than 0")
