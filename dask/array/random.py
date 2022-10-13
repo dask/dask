@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import numbers
 from itertools import chain, product
 from numbers import Integral
@@ -511,8 +512,6 @@ def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
         state = np.random.default_rng(bitgen)
     else:
         # cupy or cupy-like library that provides `random.default_rng()`
-        import importlib
-
         lib = rng.__module__.split(".")[0]
         xp = importlib.import_module(lib)
         state = xp.random.default_rng(bitgen._seed_seq)
