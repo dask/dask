@@ -3,8 +3,6 @@ from typing import cast
 
 import numpy as np
 
-import dask.array as da
-from dask import config
 from dask.array import chunk
 from dask.array.dispatch import (
     concatenate_lookup,
@@ -310,10 +308,6 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
     NumpyBackendEntrypoint
     """
 
-    def __init__(self):
-        """Register data-directed dispatch functions"""
-        raise NotImplementedError
-
     @property
     def RandomState(self):
         """Return the backend-specific RandomState class
@@ -369,11 +363,6 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
 
 class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
-    def __init__(self):
-        # Data dispatch functions are already registered
-        # in the current module
-        pass
-
     @property
     def RandomState(self):
         return np.random.RandomState
@@ -402,52 +391,3 @@ array_creation_dispatch = ArrayCreationDispatch(
 
 
 array_creation_dispatch.register_backend("numpy", NumpyBackendEntrypoint())
-
-
-try:
-    import cupy
-
-    class CupyBackendEntrypoint(ArrayBackendEntrypoint):
-        def __init__(self):
-            # Data dispatch functions are already registered
-            # in the current module
-            pass
-
-        @property
-        def RandomState(self):
-            return cupy.random.RandomState
-
-        @staticmethod
-        def ones(*args, meta=None, **kwargs):
-            meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend": "numpy"}):
-                return da.ones(*args, meta=meta, **kwargs)
-
-        @staticmethod
-        def zeros(*args, meta=None, **kwargs):
-            meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend": "numpy"}):
-                return da.zeros(*args, meta=meta, **kwargs)
-
-        @staticmethod
-        def empty(*args, meta=None, **kwargs):
-            meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend": "numpy"}):
-                return da.empty(*args, meta=meta, **kwargs)
-
-        @staticmethod
-        def full(*args, meta=None, **kwargs):
-            meta = cupy.empty(()) if meta is None else meta
-            with config.set({"array.backend": "numpy"}):
-                return da.full(*args, meta=meta, **kwargs)
-
-        @staticmethod
-        def arange(*args, like=None, **kwargs):
-            like = cupy.empty(()) if like is None else like
-            with config.set({"array.backend": "numpy"}):
-                return da.arange(*args, like=like, **kwargs)
-
-    array_creation_dispatch.register_backend("cupy", CupyBackendEntrypoint())
-
-except ImportError:
-    pass

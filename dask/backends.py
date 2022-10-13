@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from functools import lru_cache, wraps
 from typing import Any, Callable, TypeVar, cast
 
@@ -8,7 +7,7 @@ from dask import config
 from dask.compatibility import entry_points
 
 
-class DaskBackendEntrypoint(ABC):
+class DaskBackendEntrypoint:
     """Base Collection-Backend Entrypoint Class
 
     Most methods in this class correspond to collection-creation
@@ -19,15 +18,7 @@ class DaskBackendEntrypoint(ABC):
     registered when ``__init__`` is called.
     """
 
-    @abstractmethod
-    def __init__(self):
-        """Register data-directed dispatch functions
-
-        This may be a ``pass`` operation if the data dispatch functions
-        are already registered within the same module that the
-        ``DaskBackendEntrypoint`` subclass is defined.
-        """
-        raise NotImplementedError
+    pass
 
 
 @lru_cache(maxsize=1)
