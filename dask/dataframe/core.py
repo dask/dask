@@ -7160,6 +7160,8 @@ def cov_corr_combine(data_in, corr=False):
 
 
 def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
+    # TODO: Remove like_df when a serial_constructor_from_array
+    # dispatch definition is added in dask_cudf
     out = cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]

@@ -31,6 +31,7 @@ from dask.dataframe.dispatch import (
     make_meta_obj,
     meta_nonempty,
     pyarrow_schema_dispatch,
+    serial_constructor_from_array,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -83,6 +84,13 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@serial_constructor_from_array.register(np.ndarray)
+def serial_constructor_from_array_numpy(obj, series=False):
+    if series:
+        return pd.Series
+    return pd.DataFrame
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
