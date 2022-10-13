@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from functools import lru_cache
-from typing import Callable, TypeVar
+from functools import lru_cache, wraps
+from typing import Any, Callable, TypeVar, cast
 
 from dask import config
 from dask.compatibility import entry_points
@@ -40,6 +40,7 @@ BackendEntrypointType = TypeVar(
     "BackendEntrypointType",
     bound="DaskBackendEntrypoint",
 )
+BackendFuncType = TypeVar("BackendFuncType", bound=Callable[..., Any])
 
 
 class CreationDispatch:
@@ -90,26 +91,25 @@ class CreationDispatch:
 
     def register_inplace(
         self,
-        backend: str | None = None,
-        func_name: str | None = None,
-        function: Callable | None = None,
+        backend: str,
+        name: str | None = None,
     ) -> Callable:
         """Register dispatchable function"""
-        if function is not None:
-            function.__name__ = func_name or function.__name__
 
-        def inner(function):
-            func_name = function.__name__
-            if backend:
-                self.dispatch(backend).__setattr__(func_name, function)
+        def decorator(fn: BackendFuncType) -> BackendFuncType:
+            dispatch_name = name or fn.__name__
+            dispatcher = self.dispatch(backend)
+            dispatcher.__setattr__(dispatch_name, fn)
 
-            def _func(*args, **kwargs):
-                return getattr(self, func_name)(*args, **kwargs)
+            @wraps(fn)
+            def wrapper(*args, **kwargs):
+                print(backend)
+                return getattr(self, dispatch_name)(*args, **kwargs)
 
-            _func.__doc__ = function.__doc__
-            return _func
+            wrapper.__name__ = dispatch_name
+            return cast(BackendFuncType, wrapper)
 
-        return inner(function) if function is not None else inner
+        return decorator
 
     def __getattr__(self, item: str):
         """

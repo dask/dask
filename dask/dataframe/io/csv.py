@@ -774,9 +774,8 @@ def make_reader(reader, reader_name, file_type):
 
 read_csv = dataframe_creation_dispatch.register_inplace(
     backend="pandas",
-    func_name="read_csv",
-    function=make_reader(pd.read_csv, "read_csv", "CSV"),
-)
+    name="read_csv",
+)(make_reader(pd.read_csv, "read_csv", "CSV"))
 
 
 read_table = make_reader(pd.read_table, "read_table", "delimited")

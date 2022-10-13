@@ -165,23 +165,20 @@ def broadcast_trick(func):
 
 ones = array_creation_dispatch.register_inplace(
     backend="numpy",
-    func_name="ones",
-    function=w(broadcast_trick(np.ones_like), dtype="f8"),
-)
+    name="ones",
+)(w(broadcast_trick(np.ones_like), dtype="f8"))
 
 
 zeros = array_creation_dispatch.register_inplace(
     backend="numpy",
-    func_name="zeros",
-    function=w(broadcast_trick(np.zeros_like), dtype="f8"),
-)
+    name="zeros",
+)(w(broadcast_trick(np.zeros_like), dtype="f8"))
 
 
 empty = array_creation_dispatch.register_inplace(
     backend="numpy",
-    func_name="empty",
-    function=w(broadcast_trick(np.empty_like), dtype="f8"),
-)
+    name="empty",
+)(w(broadcast_trick(np.empty_like), dtype="f8"))
 
 
 w_like = wrap(wrap_func_like)
@@ -194,9 +191,8 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 # Generate wrapped functions only once
 _full = array_creation_dispatch.register_inplace(
     backend="numpy",
-    func_name="full",
-    function=w(broadcast_trick(np.full_like)),
-)
+    name="full",
+)(w(broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
