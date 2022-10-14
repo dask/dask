@@ -72,7 +72,11 @@ import math
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64tz_dtype, is_integer_dtype
+from pandas.api.types import (
+    is_datetime64_dtype,
+    is_datetime64tz_dtype,
+    is_integer_dtype,
+)
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
@@ -415,7 +419,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.cat.codes
         interpolation = "nearest"
-    elif is_datetime64tz_dtype(data.dtype) or is_integer_dtype(data.dtype):
+    elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
         interpolation = "nearest"
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
