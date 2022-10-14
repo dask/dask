@@ -1,5 +1,4 @@
 import math
-from typing import cast
 
 import numpy as np
 
@@ -17,7 +16,7 @@ from dask.array.dispatch import (
 from dask.array.numpy_compat import divide as np_divide
 from dask.array.numpy_compat import ma_divide
 from dask.array.percentile import _percentile
-from dask.backends import BackendEntrypointType, CreationDispatch, DaskBackendEntrypoint
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -368,24 +367,10 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
         return np.random.RandomState
 
 
-class ArrayCreationDispatch(CreationDispatch):
-    def register_backend(
-        self, name: str, backend: BackendEntrypointType
-    ) -> BackendEntrypointType:
-        """Register a target class for a specific array-backend label"""
-        if not isinstance(backend, ArrayBackendEntrypoint):
-            raise ValueError(
-                f"ArrayCreationDispatch only supports "
-                f"ArrayBackendEntrypoint registration. "
-                f"Got {type(backend)}"
-            )
-        self._lookup[name] = backend
-        return cast(BackendEntrypointType, backend)
-
-
-array_creation_dispatch = ArrayCreationDispatch(
+array_creation_dispatch = CreationDispatch(
     module_name="array",
     default="numpy",
+    entrypoint_class=ArrayBackendEntrypoint,
     name="array_creation_dispatch",
 )
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Iterable, cast
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -17,7 +17,7 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
-from dask.backends import BackendEntrypointType, CreationDispatch, DaskBackendEntrypoint
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -166,24 +166,10 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
 
-class DataFrameCreationDispatch(CreationDispatch):
-    def register_backend(
-        self, name: str, backend: BackendEntrypointType
-    ) -> BackendEntrypointType:
-        """Register a target class for a specific dataframe-backend label"""
-        if not isinstance(backend, DataFrameBackendEntrypoint):
-            raise ValueError(
-                f"DataFrameCreationDispatch only supports "
-                f"DataFrameBackendEntrypoint registration. "
-                f"Got {type(backend)}"
-            )
-        self._lookup[name] = backend
-        return cast(BackendEntrypointType, backend)
-
-
-dataframe_creation_dispatch = DataFrameCreationDispatch(
+dataframe_creation_dispatch = CreationDispatch(
     module_name="dataframe",
     default="pandas",
+    entrypoint_class=DataFrameBackendEntrypoint,
     name="dataframe_creation_dispatch",
 )
 

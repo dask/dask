@@ -40,21 +40,36 @@ class CreationDispatch:
     _lookup: dict
     _module_name: str
     _config_field: str
-    default: str
+    _default: str
+    _entrypoint_class: type
 
-    def __init__(self, module_name: str, default: str, name: str | None = None):
+    def __init__(
+        self,
+        module_name: str,
+        default: str,
+        name: str | None = None,
+        entrypoint_class: type | None = None,
+    ):
         self._lookup = {}
         self._module_name = module_name
         self._config_field = f"{module_name}.backend"
-        self.default = default
+        self._default = default
+        self._entrypoint_class = entrypoint_class or DaskBackendEntrypoint
         if name:
             self.__name__ = name
 
     def register_backend(
         self, name: str, backend: BackendEntrypointType
     ) -> BackendEntrypointType:
-        """Register a target class for a specific backend label"""
-        raise NotImplementedError
+        """Register a target class for a specific array-backend label"""
+        if not isinstance(backend, self._entrypoint_class):
+            raise ValueError(
+                f"This CreationDispatch only supports "
+                f"{self._entrypoint_class} registration. "
+                f"Got {type(backend)}"
+            )
+        self._lookup[name] = backend
+        return cast(BackendEntrypointType, backend)
 
     def dispatch(self, backend: str):
         """Return the desired backend entrypoint"""
@@ -72,7 +87,7 @@ class CreationDispatch:
     @property
     def backend(self) -> str:
         """Return the desired collection backend"""
-        return config.get(self._config_field, self.default) or self.default
+        return config.get(self._config_field, self._default) or self._default
 
     @backend.setter
     def backend(self, value: str):
