@@ -55,10 +55,6 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     PandasBackendEntrypoint
     """
 
-    def __init__(self):
-        """Register data-directed dispatch functions"""
-        raise NotImplementedError
-
     @staticmethod
     def from_dict(data: dict, *, npartitions: int, **kwargs):
         """Create a DataFrame collection from a dictionary
@@ -696,10 +692,7 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     ``io`` module.
     """
 
-    def __init__(self):
-        # Data dispatch functions are already registered
-        # in the current module
-        pass
+    pass
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
