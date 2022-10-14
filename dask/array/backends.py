@@ -318,7 +318,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
     @staticmethod
-    def ones(shape, *, dtype=None, meta=None):
+    def ones(shape, *, dtype=None, meta=None, **kwargs):
         """Create an array of ones
 
         Returns a new array having a specified shape and filled
@@ -327,7 +327,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
     @staticmethod
-    def zeros(shape, *, dtype=None, meta=None):
+    def zeros(shape, *, dtype=None, meta=None, **kwargs):
         """Create an array of zeros
 
         Returns a new array having a specified shape and filled
@@ -336,7 +336,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
     @staticmethod
-    def empty(shape, *, dtype=None, meta=None):
+    def empty(shape, *, dtype=None, meta=None, **kwargs):
         """Create an empty array
 
         Returns an uninitialized array having a specified shape.
@@ -344,7 +344,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
     @staticmethod
-    def full(shape, fill_value, *, dtype=None, meta=None):
+    def full(shape, fill_value, *, dtype=None, meta=None, **kwargs):
         """Create a uniformly filled array
 
         Returns a new array having a specified shape and filled
@@ -353,7 +353,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         raise NotImplementedError
 
     @staticmethod
-    def arange(start, /, stop=None, step=1, *, dtype=None, meta=None):
+    def arange(start, /, stop=None, step=1, *, dtype=None, meta=None, **kwargs):
         """Create an ascending or descending array
 
         Returns evenly spaced values within the half-open interval
