@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache, wraps
-from typing import TYPE_CHECKING, Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
 
 from dask import config
 from dask.compatibility import entry_points
@@ -40,27 +40,27 @@ BackendEntrypointType = TypeVar(
 BackendFuncType = TypeVar("BackendFuncType", bound=Callable[..., Any])
 
 
-class CreationDispatch:
+class CreationDispatch(Generic[BackendEntrypointType]):
     """Simple backend dispatch for collection-creation functions"""
 
-    _lookup: dict
+    _lookup: dict[str, BackendEntrypointType]
     _module_name: str
     _config_field: str
     _default: str
-    _entrypoint_class: type
+    _entrypoint_class: type[BackendEntrypointType]
 
     def __init__(
         self,
         module_name: str,
         default: str,
+        entrypoint_class: type[BackendEntrypointType],
         name: str | None = None,
-        entrypoint_class: type | None = None,
     ):
         self._lookup = {}
         self._module_name = module_name
         self._config_field = f"{module_name}.backend"
         self._default = default
-        self._entrypoint_class = entrypoint_class or DaskBackendEntrypoint
+        self._entrypoint_class = entrypoint_class
         if name:
             self.__name__ = name
 
@@ -75,7 +75,7 @@ class CreationDispatch:
                 f"Got {type(backend)}"
             )
         self._lookup[name] = backend
-        return cast(BackendEntrypointType, backend)
+        return backend
 
     def dispatch(self, backend: str):
         """Return the desired backend entrypoint"""
