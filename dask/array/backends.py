@@ -367,8 +367,8 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
         return np.random.RandomState
 
     @property
-    def default_rng(self):
-        return np.random.default_rng
+    def default_bit_generator(self):
+        return np.random.PCG64
 
 
 array_creation_dispatch = CreationDispatch(

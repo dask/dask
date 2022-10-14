@@ -452,8 +452,8 @@ def default_rng(seed=None):
         res = Generator(seed.bit_generator)
         res._generator = type(seed)
         return res
-    # Otherwise, use the backend-default Generator
-    return default_rng(array_creation_dispatch.default_rng(seed))
+    # Otherwise, use the backend-default BitGenerator
+    return default_rng(array_creation_dispatch.default_bit_generator(seed))
 
 
 class RandomState:
