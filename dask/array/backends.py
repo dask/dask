@@ -316,6 +316,20 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
         """
         raise NotImplementedError
 
+    @property
+    def default_rng(self):
+        """Return the backend-specific default_rng function
+
+        For example, the 'numpy' backend simply returns
+        ``numpy.random.default_rng``.
+        """
+        raise NotImplementedError
+
+    @property
+    def default_bit_generator(self):
+        """Return the default BitGenerator type"""
+        raise NotImplementedError
+
     @staticmethod
     def ones(shape, *, dtype=None, meta=None, **kwargs):
         """Create an array of ones
@@ -365,6 +379,10 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
     @property
     def RandomState(self):
         return np.random.RandomState
+
+    @property
+    def default_rng(self):
+        return np.random.default_rng
 
     @property
     def default_bit_generator(self):

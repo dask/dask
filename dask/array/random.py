@@ -453,7 +453,7 @@ def default_rng(seed=None):
         res._generator = type(seed)
         return res
     # Otherwise, use the backend-default BitGenerator
-    return default_rng(array_creation_dispatch.default_bit_generator(seed))
+    return Generator(array_creation_dispatch.default_bit_generator(seed))
 
 
 class RandomState:
@@ -762,7 +762,7 @@ def _spawn_bitgens(bitgen, n_bitgens):
 def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random module method with seed"""
     if rng is None or rng is Generator:
-        state = np.random.default_rng(bitgen)
+        state = array_creation_dispatch.default_rng(bitgen)
     else:
         # cupy or cupy-like library that provides `random.default_rng()`
         lib = rng.__module__.split(".")[0]
