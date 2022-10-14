@@ -15,6 +15,7 @@ from dask.base import (
     named_schedulers,
     tokenize,
 )
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame
 from dask.dataframe.io.io import _link, from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
@@ -320,6 +321,7 @@ class HDFFunctionWrapper(DataFrameIOFunction):
         return result
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_hdf(
     pattern,
     key,
