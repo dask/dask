@@ -28,7 +28,7 @@ def test_generators(generator_class):
 
 
 @pytest.mark.parametrize(
-    "sd", [None, 42, np.random.PCG64DXSM, da.random.Generator(np.random.PCG64DXSM)], ids=type
+    "sd", [None, 42, np.random.PCG64, da.random.Generator(np.random.PCG64)], ids=type
 )
 def test_default_rng(sd):
     rng = da.random.default_rng(seed=sd)

@@ -60,9 +60,9 @@ class Generator:
 
     Examples
     --------
-    >>> from numpy.random import PCG64DXSM
+    >>> from numpy.random import PCG64
     >>> from dask.array.random import Generator
-    >>> rng = Generator(PCG64DXSM())
+    >>> rng = Generator(PCG64())
     >>> rng.standard_normal().compute() # doctest: +SKIP
     array(0.44595957)  # random
 
@@ -360,7 +360,7 @@ class Generator:
 
 def default_rng(seed=None):
     """
-    Construct a new Generator with the default BitGenerator (PCG64DXSM).
+    Construct a new Generator with the default BitGenerator (PCG64).
 
     Parameters
     ----------
@@ -394,10 +394,10 @@ def default_rng(seed=None):
     >>> import dask.array as da
     >>> rng = da.random.default_rng(12345)
     >>> print(rng)
-    Generator(PCG64DXSM)
+    Generator(PCG64)
     >>> rfloat = rng.random().compute()
     >>> rfloat
-    array(0.22559443)
+    array(0.56088184)
     >>> type(rfloat)
     <class 'numpy.ndarray'>
 
@@ -408,7 +408,7 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(12345)
     >>> rints = rng.integers(low=0, high=10, size=3).compute()
     >>> rints
-    array([5, 1, 8])
+    array([2, 8, 7])
     >>> type(rints[0])
     <class 'numpy.int64'>
 
@@ -417,12 +417,12 @@ def default_rng(seed=None):
     >>> import dask.array as da
     >>> rng = da.random.default_rng(seed=42)
     >>> print(rng)
-    Generator(PCG64DXSM)
+    Generator(PCG64)
     >>> arr1 = rng.random((3, 3)).compute()
     >>> arr1
-    array([[0.74370893, 0.61622548, 0.23942605],
-           [0.82252623, 0.22646868, 0.79815313],
-           [0.10703598, 0.98735712, 0.97109264]])
+    array([[0.91674416, 0.91098667, 0.8765925 ],
+           [0.30931841, 0.95465607, 0.17509458],
+           [0.99662814, 0.75203348, 0.15038118]])
 
     If we exit and restart our Python interpreter, we'll see that we
     generate the same random numbers again:
@@ -431,10 +431,10 @@ def default_rng(seed=None):
     >>> rng = da.random.default_rng(seed=42)
     >>> arr2 = rng.random((3, 3)).compute()
     >>> arr2
-    array([[0.74370893, 0.61622548, 0.23942605],
-           [0.82252623, 0.22646868, 0.79815313],
-           [0.10703598, 0.98735712, 0.97109264]])
-    
+    array([[0.91674416, 0.91098667, 0.8765925 ],
+           [0.30931841, 0.95465607, 0.17509458],
+           [0.99662814, 0.75203348, 0.15038118]])
+
     See Also
     --------
     np.random.default_rng
@@ -448,11 +448,11 @@ def default_rng(seed=None):
         return seed
     elif hasattr(seed, "standard_normal"):
         # a Generator. Just not ours
-        res = Generator(np.random.PCG64DXSM())
+        res = Generator(np.random.PCG64())
         res._generator = type(seed)
         return res
     # Otherwise return default Generator
-    return Generator(np.random.PCG64DXSM(seed))
+    return Generator(np.random.PCG64(seed))
 
 
 class RandomState:
@@ -744,7 +744,7 @@ class RandomState:
 
 
 def _shuffle(state_data, x, axis=0):
-    bit_generator = np.random.PCG64DXSM()
+    bit_generator = np.random.PCG64()
     bit_generator.state = state_data
     state = np.random.Generator(bit_generator)
     return state.shuffle(x, axis=axis)
