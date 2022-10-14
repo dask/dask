@@ -13,6 +13,13 @@ def _cupy(strict=True):
     return cupy
 
 
+def _da_with_cupy_meta(attr, *args, meta=None, **kwargs):
+    # Call the dask.array api with cupy-based meta
+    meta = _cupy().empty(()) if meta is None else meta
+    with config.set({"array.backend": "numpy"}):
+        return getattr(da, attr)(*args, meta=meta, **kwargs)
+
+
 class CupyBackendEntrypoint(ArrayBackendEntrypoint):
     def __init__(self):
         """Register data-directed dispatch functions"""
@@ -24,28 +31,20 @@ class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         return _cupy().random.RandomState
 
     @staticmethod
-    def ones(*args, meta=None, **kwargs):
-        meta = _cupy().empty(()) if meta is None else meta
-        with config.set({"array.backend": "numpy"}):
-            return da.ones(*args, meta=meta, **kwargs)
+    def ones(*args, **kwargs):
+        return _da_with_cupy_meta("ones", *args, **kwargs)
 
     @staticmethod
-    def zeros(*args, meta=None, **kwargs):
-        meta = _cupy().empty(()) if meta is None else meta
-        with config.set({"array.backend": "numpy"}):
-            return da.zeros(*args, meta=meta, **kwargs)
+    def zeros(*args, **kwargs):
+        return _da_with_cupy_meta("zeros", *args, **kwargs)
 
     @staticmethod
-    def empty(*args, meta=None, **kwargs):
-        meta = _cupy().empty(()) if meta is None else meta
-        with config.set({"array.backend": "numpy"}):
-            return da.empty(*args, meta=meta, **kwargs)
+    def empty(*args, **kwargs):
+        return _da_with_cupy_meta("empty", *args, **kwargs)
 
     @staticmethod
-    def full(*args, meta=None, **kwargs):
-        meta = _cupy().empty(()) if meta is None else meta
-        with config.set({"array.backend": "numpy"}):
-            return da.full(*args, meta=meta, **kwargs)
+    def full(*args, **kwargs):
+        return _da_with_cupy_meta("full", *args, **kwargs)
 
     @staticmethod
     def arange(*args, like=None, **kwargs):
