@@ -343,6 +343,7 @@ intersphinx_mapping = {
         "https://filesystem-spec.readthedocs.io/en/latest/",
         "https://filesystem-spec.readthedocs.io/en/latest/objects.inv",
     ),
+    "click": ("https://click.palletsprojects.com/en/latest/", None),
     "scipy": ("https://docs.scipy.org/doc/scipy", None),
 }
 
