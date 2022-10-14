@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache, wraps
-from typing import Callable, TypeVar
-
-from typing_extensions import ParamSpec
+from typing import Any, Callable, TypeVar, cast
 
 from dask import config
 from dask.compatibility import entry_points
@@ -33,8 +31,7 @@ BackendEntrypointType = TypeVar(
     "BackendEntrypointType",
     bound="DaskBackendEntrypoint",
 )
-BackendFuncParams = ParamSpec("BackendFuncParams")
-BackendFuncReturn = TypeVar("BackendFuncReturn")
+BackendFuncType = TypeVar("BackendFuncType", bound=Callable[..., Any])
 
 
 class CreationDispatch:
@@ -87,15 +84,10 @@ class CreationDispatch:
         self,
         backend: str,
         name: str | None = None,
-    ) -> Callable[
-        [Callable[BackendFuncParams, BackendFuncReturn]],
-        Callable[BackendFuncParams, BackendFuncReturn],
-    ]:
+    ) -> Callable:
         """Register dispatchable function"""
 
-        def decorator(
-            fn: Callable[BackendFuncParams, BackendFuncReturn]
-        ) -> Callable[BackendFuncParams, BackendFuncReturn]:
+        def decorator(fn: BackendFuncType) -> BackendFuncType:
             dispatch_name = name or fn.__name__
             dispatcher = self.dispatch(backend)
             dispatcher.__setattr__(dispatch_name, fn)
@@ -105,7 +97,7 @@ class CreationDispatch:
                 return getattr(self, dispatch_name)(*args, **kwargs)
 
             wrapper.__name__ = dispatch_name
-            return wrapper
+            return cast(BackendFuncType, wrapper)
 
         return decorator
 
