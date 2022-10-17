@@ -238,7 +238,14 @@ allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
 
 
-def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **kwargs):
+def merge_chunk(
+    lhs,
+    *args,
+    empty_index_dtype=None,
+    categorical_columns=None,
+    result_meta=None,
+    **kwargs,
+):
 
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
@@ -280,6 +287,12 @@ def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **
 
     out = lhs.merge(rhs, *args, **kwargs)
 
+    # Workaround for pandas bug where if the left frame of a merge operation is
+    # empty, the resulting dataframe can have columns in the wrong order.
+    # https://github.com/pandas-dev/pandas/issues/9937
+    if len(lhs) == 0:
+        out = out[result_meta.columns]
+
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
@@ -300,6 +313,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
     name = "join-indexed-" + tokenize(lhs, rhs, **kwargs)
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
+    kwargs["result_meta"] = meta
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
@@ -378,6 +392,7 @@ def hash_join(
 
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["result_meta"] = meta
 
     joined = map_partitions(
         merge_chunk,
@@ -416,6 +431,7 @@ def single_partition_join(left, right, **kwargs):
 
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["result_meta"] = meta
 
     if right.npartitions == 1 and kwargs["how"] in allowed_left:
         if use_left:
@@ -643,6 +659,7 @@ def merge(
             indicator=indicator,
             empty_index_dtype=meta.index.dtype,
             categorical_columns=categorical_columns,
+            result_meta=meta,
         )
     # Catch all hash join
     else:

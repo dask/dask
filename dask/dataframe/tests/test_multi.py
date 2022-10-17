@@ -1015,7 +1015,7 @@ def test_merge_empty_left_df(shuffle_method, how):
 
     result = dd_left.merge(dd_right, on="a", how=how)
     expected = left.merge(right, on="a", how=how)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_index=False)
 
 
 def test_merge_how_raises():
