@@ -6491,7 +6491,7 @@ def apply_concat_apply(
                 ignore_index,
                 token="split-%s" % token_key,
             )
-        elif set(meta_chunk.keys())!= set(range(split_out)):
+        elif set(meta_chunk.keys()) != set(range(split_out)):
             raise ValueError(
                 f"Output of {chunk} must be a dict with keys in the "
                 f"range 0-{split_out-1}. Got {set(meta_chunk.keys())}."
