@@ -22,10 +22,10 @@ from dask.dataframe.core import (
     map_partitions,
     new_dd_object,
     no_default,
-    split_out_on_index,
     split_out_on_cols,
+    split_out_on_index,
 )
-from dask.dataframe.dispatch import grouper_dispatch
+from dask.dataframe.dispatch import grouper_dispatch, meta_nonempty
 from dask.dataframe.methods import concat, drop_columns
 from dask.dataframe.shuffle import shuffle
 from dask.dataframe.utils import (
@@ -562,19 +562,31 @@ def _cov_chunk(df, *by, split_out=1):
         by = [col_mapping[k] for k in by]
         cols = cols.drop(np.array(by))
 
-    out = {}
-    for shard, df in (
+    # Convert df to dict
+    df = (
         hash_shard(
             df,
             split_out,
             split_out_setup=split_out_on_cols,
             split_out_setup_kwargs={"cols": by},
-        ) if split_out > 1 else {0: df}
-    ).items():
-        g = _groupby_raise_unaligned(df, by=by)
+        )
+        if split_out > 1
+        else {0: df}
+    )
+
+    out = {}
+    for shard, _df in df.items():
+        len_df = len(_df)
+        g = _groupby_raise_unaligned(_df, by=by)
         x = g.sum()
-        mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
         n = g[x.columns].count().rename(columns=lambda c: f"{c}-count")
+
+        # Empty `_df` will result in bad schema for `mul`.
+        # Use meta_nonempty and then pass iloc[:0]
+        g = g if len_df else _groupby_raise_unaligned(meta_nonempty(_df), by=by)
+        mul = g.apply(_mul_cols, cols=cols).reset_index(level=-1, drop=True)
+        mul = mul if len_df else mul.iloc[:0]
+
         out[shard] = (x, mul, n, col_mapping)
 
     return out[0] if split_out == 1 else out
@@ -1832,6 +1844,7 @@ class _GroupBy:
             if not isinstance(self.by, list)
             else [self.obj] + self.by,
             chunk=_cov_chunk,
+            chunk_kwargs={"split_out": split_out},
             aggregate=_cov_agg,
             combine=_cov_combine,
             token=self._token_prefix + "cov",
