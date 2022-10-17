@@ -1,10 +1,16 @@
 from __future__ import annotations
 
 from functools import lru_cache, wraps
-from typing import Any, Callable, TypeVar, cast
+from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 from dask import config
 from dask.compatibility import entry_points
+
+if TYPE_CHECKING:
+    from typing_extensions import ParamSpec
+
+    BackendFuncParams = ParamSpec("BackendFuncParams")
+    BackendFuncReturn = TypeVar("BackendFuncReturn")
 
 
 class DaskBackendEntrypoint:
@@ -31,30 +37,29 @@ BackendEntrypointType = TypeVar(
     "BackendEntrypointType",
     bound="DaskBackendEntrypoint",
 )
-BackendFuncType = TypeVar("BackendFuncType", bound=Callable[..., Any])
 
 
-class CreationDispatch:
+class CreationDispatch(Generic[BackendEntrypointType]):
     """Simple backend dispatch for collection-creation functions"""
 
-    _lookup: dict
+    _lookup: dict[str, BackendEntrypointType]
     _module_name: str
     _config_field: str
     _default: str
-    _entrypoint_class: type
+    _entrypoint_class: type[BackendEntrypointType]
 
     def __init__(
         self,
         module_name: str,
         default: str,
+        entrypoint_class: type[BackendEntrypointType],
         name: str | None = None,
-        entrypoint_class: type | None = None,
     ):
         self._lookup = {}
         self._module_name = module_name
         self._config_field = f"{module_name}.backend"
         self._default = default
-        self._entrypoint_class = entrypoint_class or DaskBackendEntrypoint
+        self._entrypoint_class = entrypoint_class
         if name:
             self.__name__ = name
 
@@ -69,7 +74,7 @@ class CreationDispatch:
                 f"Got {type(backend)}"
             )
         self._lookup[name] = backend
-        return cast(BackendEntrypointType, backend)
+        return backend
 
     def dispatch(self, backend: str):
         """Return the desired backend entrypoint"""
@@ -99,10 +104,15 @@ class CreationDispatch:
         self,
         backend: str,
         name: str | None = None,
-    ) -> Callable:
+    ) -> Callable[
+        [Callable[BackendFuncParams, BackendFuncReturn]],
+        Callable[BackendFuncParams, BackendFuncReturn],
+    ]:
         """Register dispatchable function"""
 
-        def decorator(fn: BackendFuncType) -> BackendFuncType:
+        def decorator(
+            fn: Callable[BackendFuncParams, BackendFuncReturn]
+        ) -> Callable[BackendFuncParams, BackendFuncReturn]:
             dispatch_name = name or fn.__name__
             dispatcher = self.dispatch(backend)
             dispatcher.__setattr__(dispatch_name, fn)
@@ -112,7 +122,7 @@ class CreationDispatch:
                 return getattr(self, dispatch_name)(*args, **kwargs)
 
             wrapper.__name__ = dispatch_name
-            return cast(BackendFuncType, wrapper)
+            return wrapper
 
         return decorator
 
