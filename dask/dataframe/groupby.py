@@ -524,7 +524,7 @@ def _mul_cols(df, cols):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
-    _df.index = [0] * len(_df)
+    _df.index = pd.Index([0] * len(_df), dtype="int")
     return _df
 
 
@@ -634,7 +634,7 @@ def _drop_duplicates_reindex(df):
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
     result = df.drop_duplicates()
-    result.index = [0] * len(result)
+    result.index = pd.Index([0] * len(result), dtype="int")
     return result
 
 
