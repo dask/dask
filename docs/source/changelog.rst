@@ -1,6 +1,74 @@
 Changelog
 =========
 
+.. _v2022.10.0:
+
+2022.10.0
+---------
+
+Released on October 14, 2022
+
+New Features
+^^^^^^^^^^^^
+- Backend library dispatching for IO in Dask-Array and Dask-DataFrame (:pr:`9475`) `Richard (Rick) Zamora`_
+- Add new CLI that is extensible (:pr:`9283`) `Doug Davis`_
+
+Enhancements
+^^^^^^^^^^^^
+- Groupby median (:pr:`9516`) `Ian Rose`_
+- Fix array copy not being a no-op (:pr:`9555`) `David Hoese`_
+- Add support for string timedelta in ``map_overlap`` (:pr:`9559`) `Nicolas Grandemange`_
+- Shuffle-based groupby for single functions (:pr:`9504`) `Ian Rose`_
+- Make ``datetime.datetime`` tokenize idempotantly (:pr:`9532`) `Martin Durant`_
+- Support tokenizing ``datetime.time`` (:pr:`9528`) `Tim Paine`_
+
+Bug Fixes
+^^^^^^^^^
+- Avoid race condition in lazy dispatch registration (:pr:`9545`) `James Bourbeau`_
+- Do not allow setitem to ``np.nan`` for ``int`` dtype (:pr:`9531`) `Doug Davis`_
+- Stable demo column projection (:pr:`9538`) `Ian Rose`_
+- Ensure ``pickle``-able binops in ``delayed`` (:pr:`9540`) `Ian Rose`_
+- Fix project CSV columns when selecting (:pr:`9534`) `Martin Durant`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update Parquet best practice (:pr:`9537`) `Matthew Rocklin`_
+
+Maintenance
+^^^^^^^^^^^
+- Restrict ``tiledb-py`` version to avoid CI failures  (:pr:`9569`) `James Bourbeau`_
+- Bump ``actions/github-script`` from 3 to 6 (:pr:`9564`)
+- Bump ``actions/stale`` from 4 to 6 (:pr:`9551`)
+- Bump ``peter-evans/create-pull-request`` from 3 to 4 (:pr:`9550`)
+- Bump ``actions/checkout`` from 2 to 3.1.0 (:pr:`9552`)
+- Bump ``codecov/codecov-action`` from 1 to 3 (:pr:`9549`)
+- Bump ``the-coding-turtle/ga-yaml-parser`` from 0.1.1 to 0.1.2 (:pr:`9553`)
+- Move dependabot configuration file (:pr:`9547`) `James Bourbeau`_
+- Add dependabot for GitHub actions (:pr:`9542`) `James Bourbeau`_
+- Run mypy on Windows and Linux (:pr:`9530`) `crusaderky`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.12`` (:pr:`9524`)
+
+
+.. _v2022.9.2:
+
+2022.9.2
+--------
+
+Released on September 30, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove factorization logic from array auto chunking (:pr:`9507`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add docs on running Dask in a standalone Python script (:pr:`9513`) `James Bourbeau`_
+- Clarify custom-graph multiprocessing example (:pr:`9511`) `nouman`_
+
+Maintenance
+^^^^^^^^^^^
+- Groupby sort upstream compatibility (:pr:`9486`) `Ian Rose`_
+
 .. _v2022.9.1:
 
 2022.9.1
@@ -5963,3 +6031,5 @@ Other
 .. _`Nicolas Grandemange`: https://github.com/epizut
 .. _`Nat Tabris`: https://github.com/ntabris
 .. _`Lawrence Mitchell`: https://github.com/wence-
+.. _`nouman`: https://github.com/noumxn
+.. _`Tim Paine`: https://github.com/timkpaine

@@ -4,6 +4,7 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass, replace
+from functools import partial
 
 from tlz import concat, curry, merge, unique
 
@@ -496,13 +497,13 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         return Delayed(name, graph, nout)
 
 
+def _swap(method, self, other):
+    return method(other, self)
+
+
 def right(method):
     """Wrapper to create 'right' version of operator given left version"""
-
-    def _inner(self, other):
-        return method(other, self)
-
-    return _inner
+    return partial(_swap, method)
 
 
 def optimize(dsk, keys, **kwargs):

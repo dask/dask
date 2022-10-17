@@ -63,7 +63,6 @@ from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
 from dask.utils import (
     IndexCallable,
-    M,
     SerializableLock,
     cached_cumsum,
     cached_property,
@@ -1876,6 +1875,10 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
 
+        if not is_dask_collection(value) and np.isnan(value).any():
+            if issubclass(self.dtype.type, Integral):
+                raise ValueError("cannot convert float NaN to integer")
+
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
             from dask.array.routines import where
@@ -2853,10 +2856,7 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        if self.npartitions == 1:
-            return self.map_blocks(M.copy)
-        else:
-            return Array(self.dask, self.name, self.chunks, meta=self)
+        return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()
