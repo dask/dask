@@ -30,6 +30,7 @@ if dd._compat.PANDAS_GT_110:
 AGG_FUNCS = [
     "sum",
     "mean",
+    "median",
     "min",
     "max",
     "count",
@@ -1000,7 +1001,8 @@ def test_aggregate__single_element_groups(agg_func):
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 
-    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec))
+    shuffle = {"shuffle": "tasks"} if agg_func == "median" else {}
+    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec, **shuffle))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
@@ -1205,6 +1207,29 @@ def test_shuffle_aggregate_defaults(shuffle_method):
     # If split_out > 1, default to shuffling.
     dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
     assert any("shuffle" in l for l in dsk.layers)
+
+
+@pytest.mark.parametrize("spec", [{"c": "median"}, {"b": np.median, "c": np.max}])
+@pytest.mark.parametrize("keys", ["a", ["a", "d"]])
+def test_aggregate_median(spec, keys, shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    actual = ddf.groupby(keys).aggregate(spec, shuffle=shuffle_method)
+    expected = pdf.groupby(keys).aggregate(spec)
+    assert_eq(actual, expected)
+
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).aggregate(spec, shuffle=False)
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).median(shuffle=False)
 
 
 @pytest.mark.parametrize("axis", [0, 1])

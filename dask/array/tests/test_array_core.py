@@ -2709,14 +2709,14 @@ def test_from_array_minus_one():
     assert_eq(x, y)
 
 
-def test_from_array_copy():
-    # Regression test for https://github.com/dask/dask/issues/3751
+@pytest.mark.parametrize("chunks", [-1, 2])
+def test_array_copy_noop(chunks):
+    # Regression test for https://github.com/dask/dask/issues/9533
+    # Which is a revert of the solution for https://github.com/dask/dask/issues/3751
     x = np.arange(10)
-    y = da.from_array(x, -1)
-    assert y.npartitions == 1
+    y = da.from_array(x, chunks=chunks)
     y_c = y.copy()
-    assert y is not y_c
-    assert y.compute() is not y_c.compute()
+    assert y.name == y_c.name
 
 
 def test_from_array_dask_array():
