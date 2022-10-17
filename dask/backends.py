@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import lru_cache, wraps
-from typing import TYPE_CHECKING, Any, Callable, Generic, TypeVar
+from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 from dask import config
 from dask.compatibility import entry_points
@@ -37,7 +37,6 @@ BackendEntrypointType = TypeVar(
     "BackendEntrypointType",
     bound="DaskBackendEntrypoint",
 )
-BackendFuncType = TypeVar("BackendFuncType", bound=Callable[..., Any])
 
 
 class CreationDispatch(Generic[BackendEntrypointType]):
