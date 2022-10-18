@@ -1001,6 +1001,26 @@ def test_merge(how, shuffle_method):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.parametrize("how", ["right", "outer"])
+def test_merge_empty_left_df(shuffle_method, how):
+    # We're merging on "a", but in a situation where the left
+    # frame is missing some values, so some of the blocked merges
+    # will involve an empty left frame.
+    # https://github.com/pandas-dev/pandas/issues/9937
+    left = pd.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
+    right = pd.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
+
+    dd_left = dd.from_pandas(left, npartitions=4)
+    dd_right = dd.from_pandas(right, npartitions=4)
+
+    merged = dd_left.merge(dd_right, on="a", how=how)
+    expected = left.merge(right, on="a", how=how)
+    assert_eq(merged, expected, check_index=False)
+
+    # Check that the individual partitions have the expected shape
+    merged.map_partitions(lambda x: x, meta=merged._meta).compute()
+
+
 def test_merge_how_raises():
     left = pd.DataFrame(
         {
