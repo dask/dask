@@ -1013,9 +1013,12 @@ def test_merge_empty_left_df(shuffle_method, how):
     dd_left = dd.from_pandas(left, npartitions=4)
     dd_right = dd.from_pandas(right, npartitions=4)
 
-    result = dd_left.merge(dd_right, on="a", how=how)
+    merged = dd_left.merge(dd_right, on="a", how=how)
     expected = left.merge(right, on="a", how=how)
-    assert_eq(result, expected, check_index=False)
+    assert_eq(merged, expected, check_index=False)
+
+    # Check that the individual partitions have the expected shape
+    merged.map_partitions(lambda x: x, meta=merged._meta).compute()
 
 
 def test_merge_how_raises():
