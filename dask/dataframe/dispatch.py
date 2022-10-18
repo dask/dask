@@ -12,7 +12,6 @@ from dask.utils import Dispatch
 
 make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
-meta_class_from_array = Dispatch("meta_class_from_array")
 meta_nonempty = Dispatch("meta_nonempty")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
 group_split_dispatch = Dispatch("group_split_dispatch")
