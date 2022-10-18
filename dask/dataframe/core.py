@@ -3677,9 +3677,7 @@ Dask Name: {name}, {layers}""".format(
             res = self.map_partitions(M.rename, index, enforce_metadata=False)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
-                    old = meta_series_constructor(self)(
-                        range(self.npartitions + 1), index=self.divisions
-                    )
+                    old = pd.Series(range(self.npartitions + 1), index=self.divisions)
                     new = old.rename(index).index
                     if not new.is_monotonic_increasing:
                         msg = (
@@ -7146,8 +7144,6 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=No
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    if like_df is None:
-        like_df = pd.DataFrame
     return (pd.DataFrame if like_df is None else meta_frame_constructor(like_df))(
         mat, columns=cols, index=cols
     )
@@ -7463,7 +7459,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = meta_series_constructor(df)(split_mem_usages)
+        mem_usages = pd.Series(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
