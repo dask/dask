@@ -3792,11 +3792,7 @@ def test_index_nulls(null_value):
     df = pd.DataFrame(
         {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
     )
-    # an object column all set to nulls fails
-    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
-    with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index("non_numeric")
-    # an object column with only some nulls also fails
+    # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
