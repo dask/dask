@@ -1008,7 +1008,7 @@ def test_merge_empty_left_df(shuffle_method, how):
     # will involve an empty left frame.
     # https://github.com/pandas-dev/pandas/issues/9937
     left = pd.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
-    right = pd.DataFrame({"a": [2, 2, 3, 3], "val": [11, 12, 13, 14]})
+    right = pd.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
 
     dd_left = dd.from_pandas(left, npartitions=4)
     dd_right = dd.from_pandas(right, npartitions=4)
