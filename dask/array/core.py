@@ -1644,7 +1644,7 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
-            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @cached_property
