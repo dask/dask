@@ -17,6 +17,7 @@ from pandas.api.types import (
 
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
+from dask.backends import CreationDispatch, DaskBackendEntrypoint
 from dask.dataframe.core import DataFrame, Index, Scalar, Series, _Frame
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -45,6 +46,130 @@ from dask.dataframe.utils import (
 )
 from dask.sizeof import SimpleSizeof, sizeof
 from dask.utils import is_arraylike, is_series_like, typename
+
+
+class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
+    """Dask-DataFrame version of ``DaskBackendEntrypoint``
+
+    See Also
+    --------
+    PandasBackendEntrypoint
+    """
+
+    @staticmethod
+    def from_dict(data: dict, *, npartitions: int, **kwargs):
+        """Create a DataFrame collection from a dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The desired number of output partitions.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_dict
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_parquet(path: str | list, **kwargs):
+        """Read Parquet files into a DataFrame collection
+
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.parquet.core.read_parquet
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_json(url_path: str | list, **kwargs):
+        """Read json files into a DataFrame collection
+
+        Parameters
+        ----------
+        url_path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.json.read_json
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_orc(path: str | list, **kwargs):
+        """Read ORC files into a DataFrame collection
+
+        Parameters
+        ----------
+        path : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.orc.core.read_orc
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_csv(urlpath: str | list, **kwargs):
+        """Read CSV files into a DataFrame collection
+
+        Parameters
+        ----------
+        urlpath : str or list
+            Source path(s).
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.csv.read_csv
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def read_hdf(pattern: str | list, key: str, **kwargs):
+        """Read HDF5 files into a DataFrame collection
+
+        Parameters
+        ----------
+        pattern : str or list
+            Source path(s).
+        key : str
+            Group identifier in the store.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.hdf.read_hdf
+        """
+        raise NotImplementedError
+
+
+dataframe_creation_dispatch = CreationDispatch(
+    module_name="dataframe",
+    default="pandas",
+    entrypoint_class=DataFrameBackendEntrypoint,
+    name="dataframe_creation_dispatch",
+)
+
 
 ##########
 # Pandas #
@@ -565,6 +690,20 @@ def get_grouper_pandas(obj):
 @percentile_lookup.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
+
+
+class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
+    """Pandas-Backend Entrypoint Class for Dask-DataFrame
+
+    Note that all DataFrame-creation functions are defined
+    and registered 'in-place' within the ``dask.dataframe``
+    ``io`` module.
+    """
+
+    pass
+
+
+dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())
 
 
 ######################################

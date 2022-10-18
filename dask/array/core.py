@@ -63,7 +63,6 @@ from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
 from dask.utils import (
     IndexCallable,
-    M,
     SerializableLock,
     cached_cumsum,
     cached_property,
@@ -1645,7 +1644,7 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
-            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @cached_property
@@ -2857,10 +2856,7 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        if self.npartitions == 1:
-            return self.map_blocks(M.copy)
-        else:
-            return Array(self.dask, self.name, self.chunks, meta=self)
+        return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()

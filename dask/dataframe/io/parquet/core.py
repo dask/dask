@@ -12,6 +12,7 @@ from packaging.version import parse as parse_version
 import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
@@ -171,6 +172,7 @@ class ToParquetFunctionWrapper:
         )
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_parquet(
     path,
     columns=None,
