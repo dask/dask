@@ -4402,9 +4402,7 @@ class Index(Series):
         applied = super().map(arg, na_action=na_action, meta=meta)
         if is_monotonic and self.known_divisions:
             applied.divisions = tuple(
-                meta_series_constructor(self)(self.divisions).map(
-                    arg, na_action=na_action
-                )
+                pd.Series(self.divisions).map(arg, na_action=na_action)
             )
         else:
             applied = applied.clear_divisions()
@@ -5979,9 +5977,7 @@ class DataFrame(_Frame):
         index = self._repr_divisions
         cols = meta.columns
         if len(cols) == 0:
-            series_df = meta_frame_constructor(self)(
-                [[]] * len(index), columns=cols, index=index
-            )
+            series_df = pd.DataFrame([[]] * len(index), columns=cols, index=index)
         else:
             series_df = pd.concat(
                 [_repr_data_series(s, index=index) for _, s in meta.items()], axis=1
@@ -7150,7 +7146,11 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=No
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    return meta_frame_constructor(like_df)(mat, columns=cols, index=cols)
+    if like_df is None:
+        like_df = pd.DataFrame
+    return (pd.DataFrame if like_df is None else meta_frame_constructor(like_df))(
+        mat, columns=cols, index=cols
+    )
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
@@ -7495,9 +7495,7 @@ def repartition_npartitions(df, npartitions):
     else:
         # Drop duplcates in case last partition has same
         # value for min and max division
-        original_divisions = divisions = meta_series_constructor(df)(
-            df.divisions
-        ).drop_duplicates()
+        original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
             np.issubdtype(divisions.dtype, np.datetime64)
             or np.issubdtype(divisions.dtype, np.number)
@@ -7516,9 +7514,7 @@ def repartition_npartitions(df, npartitions):
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
                 divisions = methods.tolist(
-                    meta_series_constructor(df)(divisions).astype(
-                        original_divisions.dtype
-                    )
+                    pd.Series(divisions).astype(original_divisions.dtype)
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)
