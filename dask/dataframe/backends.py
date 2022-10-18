@@ -15,6 +15,7 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
@@ -216,6 +217,11 @@ def meta_class_from_array_numpy(obj):
     # Return a `meta` DataFrame constructor, given
     # a series-like object
     return pd.DataFrame
+
+
+@meta_class_from_array.register(Array)
+def meta_class_from_array_da(obj):
+    return meta_class_from_array(obj._meta)
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
