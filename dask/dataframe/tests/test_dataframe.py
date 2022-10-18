@@ -3213,9 +3213,8 @@ def test_cov_gpu():
     res = ddf.cov()
     res2 = ddf.cov(split_every=2)
     sol = df.cov()
-    # TODO: dtype of res.index is wrong before compute
-    assert_eq(res.compute(), sol)
-    assert_eq(res2.compute(), sol)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
     assert res._name == ddf.cov()._name
     assert res._name != res2._name
 
@@ -3278,9 +3277,8 @@ def test_corr_gpu():
     res = ddf.corr()
     res2 = ddf.corr(split_every=2)
     sol = df.corr()
-    # TODO: dtype of res.index is wrong before compute
-    assert_eq(res.compute(), sol)
-    assert_eq(res2.compute(), sol)
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
     assert res._name == ddf.corr()._name
     assert res._name != res2._name
 

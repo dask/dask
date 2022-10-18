@@ -2815,7 +2815,7 @@ Dask Name: {name}, {layers}"""
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
                 )
-                return DataFrame(graph, keyname, meta, quantiles[0].divisions)
+                return new_dd_object(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
     def describe(
@@ -7059,9 +7059,11 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     if scalar:
         return Scalar(graph, name, "f8")
     meta = make_meta(
-        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
+        [(c, "f8") for c in df.columns],
+        index=meta_series_constructor(df)(df.columns),
+        parent_meta=df._meta,
     )
-    return DataFrame(graph, name, meta, (df.columns.min(), df.columns.max()))
+    return new_dd_object(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
 def cov_corr_chunk(df, corr=False):
