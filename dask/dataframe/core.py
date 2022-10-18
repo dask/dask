@@ -62,9 +62,9 @@ from dask.dataframe.utils import (
     is_index_like,
     is_series_like,
     make_meta,
+    meta_frame_constructor,
+    meta_series_constructor,
     raise_on_meta_error,
-    serial_frame_constructor,
-    serial_series_constructor,
     valid_divisions,
 )
 from dask.delayed import Delayed, delayed, unpack_collections
@@ -2484,8 +2484,8 @@ Dask Name: {name}, {layers}"""
             # since each standard deviation will just be NaN
             needs_time_conversion = False
             numeric_dd = from_pandas(
-                serial_frame_constructor(self)(
-                    {"_": serial_series_constructor(self)([np.nan])},
+                meta_frame_constructor(self)(
+                    {"_": meta_series_constructor(self)([np.nan])},
                     index=self.index,
                 ),
                 npartitions=self.npartitions,
@@ -3064,7 +3064,7 @@ Dask Name: {name}, {layers}"""
                 _take_last,
                 cumpart,
                 skipna,
-                meta=serial_series_constructor(self)([], dtype="float"),
+                meta=meta_series_constructor(self)([], dtype="float"),
                 token=name2,
             )
 
@@ -3262,7 +3262,7 @@ Dask Name: {name}, {layers}"""
         def _dot_series(*args, **kwargs):
             # .sum() is invoked on each partition before being applied to all
             # partitions. The return type is expected to be a series, not a numpy object
-            return serial_series_constructor(self)(M.dot(*args, **kwargs))
+            return meta_series_constructor(self)(M.dot(*args, **kwargs))
 
         return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
             skipna=False
@@ -3534,7 +3534,7 @@ class Series(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
 
-        return serial_series_constructor(self)(array, index=index, name=self.name)
+        return meta_series_constructor(self)(array, index=index, name=self.name)
 
     @property
     def axes(self):
@@ -3677,7 +3677,7 @@ Dask Name: {name}, {layers}""".format(
             res = self.map_partitions(M.rename, index, enforce_metadata=False)
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
-                    old = serial_series_constructor(self)(
+                    old = meta_series_constructor(self)(
                         range(self.npartitions + 1), index=self.divisions
                     )
                     new = old.rename(index).index
@@ -4402,7 +4402,7 @@ class Index(Series):
         applied = super().map(arg, na_action=na_action, meta=meta)
         if is_monotonic and self.known_divisions:
             applied.divisions = tuple(
-                serial_series_constructor(self)(self.divisions).map(
+                meta_series_constructor(self)(self.divisions).map(
                     arg, na_action=na_action
                 )
             )
@@ -4519,7 +4519,7 @@ class DataFrame(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
-        return serial_frame_constructor(self)(array, index=index, columns=self.columns)
+        return meta_frame_constructor(self)(array, index=index, columns=self.columns)
 
     @property
     def axes(self):
@@ -5979,7 +5979,7 @@ class DataFrame(_Frame):
         index = self._repr_divisions
         cols = meta.columns
         if len(cols) == 0:
-            series_df = serial_frame_constructor(self)(
+            series_df = meta_frame_constructor(self)(
                 [[]] * len(index), columns=cols, index=index
             )
         else:
@@ -6328,7 +6328,7 @@ def split_evenly(df, k):
 def split_out_on_index(df):
     h = df.index
     if isinstance(h, pd.MultiIndex):
-        h = serial_frame_constructor(df)([], index=h).reset_index()
+        h = meta_frame_constructor(df)([], index=h).reset_index()
     return h
 
 
@@ -7135,8 +7135,6 @@ def cov_corr_combine(data_in, corr=False):
 
 
 def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
-    # TODO: Remove like_df when a serial_constructor_from_array
-    # dispatch definition is added in dask_cudf
     out = cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
@@ -7150,7 +7148,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=No
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    return serial_frame_constructor(like_df)(mat, columns=cols, index=cols)
+    return meta_frame_constructor(like_df)(mat, columns=cols, index=cols)
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
@@ -7463,7 +7461,7 @@ def repartition_size(df, size):
         split_mem_usages = []
         for n, usage in zip(nsplits, mem_usages):
             split_mem_usages.extend([usage / n] * n)
-        mem_usages = serial_series_constructor(df)(split_mem_usages)
+        mem_usages = meta_series_constructor(df)(split_mem_usages)
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
@@ -7495,7 +7493,7 @@ def repartition_npartitions(df, npartitions):
     else:
         # Drop duplcates in case last partition has same
         # value for min and max division
-        original_divisions = divisions = serial_series_constructor(df)(
+        original_divisions = divisions = meta_series_constructor(df)(
             df.divisions
         ).drop_duplicates()
         if df.known_divisions and (
@@ -7516,7 +7514,7 @@ def repartition_npartitions(df, npartitions):
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
                 divisions = methods.tolist(
-                    serial_series_constructor(df)(divisions).astype(
+                    meta_series_constructor(df)(divisions).astype(
                         original_divisions.dtype
                     )
                 )
@@ -7669,10 +7667,10 @@ def idxmaxmin_chunk(x, fn=None, skipna=True):
         idx = getattr(x, fn)(skipna=skipna)
         value = getattr(x, minmax)(skipna=skipna)
     else:
-        idx = value = serial_series_constructor(x)([], dtype="i8")
+        idx = value = meta_series_constructor(x)([], dtype="i8")
     if is_series_like(idx):
-        return serial_frame_constructor(x)({"idx": idx, "value": value})
-    return serial_frame_constructor(x)({"idx": [idx], "value": [value]})
+        return meta_frame_constructor(x)({"idx": idx, "value": value})
+    return meta_frame_constructor(x)({"idx": [idx], "value": [value]})
 
 
 def idxmaxmin_row(x, fn=None, skipna=True):
@@ -7682,8 +7680,8 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         idx = [getattr(x.value, fn)(skipna=skipna)]
         value = [getattr(x.value, minmax)(skipna=skipna)]
     else:
-        idx = value = serial_series_constructor(x)([], dtype="i8")
-    return serial_frame_constructor(x)({"idx": idx, "value": value})
+        idx = value = meta_series_constructor(x)([], dtype="i8")
+    return meta_frame_constructor(x)({"idx": idx, "value": value})
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
@@ -7777,7 +7775,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = serial_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
+            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
@@ -7787,7 +7785,7 @@ def to_datetime(arg, meta=None, **kwargs):
 def to_timedelta(arg, unit=None, errors="raise"):
     if not PANDAS_GT_110 and unit is None:
         unit = "ns"
-    meta = serial_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
+    meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
 

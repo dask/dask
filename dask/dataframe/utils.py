@@ -25,12 +25,10 @@ from dask.dataframe.dispatch import (  # noqa : F401
     make_meta,
     make_meta_obj,
     meta_nonempty,
-    serial_constructor_from_array,
 )
 from dask.dataframe.extensions import make_scalar
 from dask.utils import (
     asciitable,
-    is_arraylike,
     is_dataframe_like,
     is_index_like,
     is_series_like,
@@ -738,7 +736,7 @@ class AttributeNotImplementedError(NotImplementedError, AttributeError):
     """NotImplementedError and AttributeError"""
 
 
-def serial_frame_constructor(like):
+def meta_frame_constructor(like):
     """Return a serial DataFrame constructor
 
     Parameters
@@ -750,20 +748,18 @@ def serial_frame_constructor(like):
         try:
             like = like._meta
         except AttributeError:
-            like = like.meta
+            raise TypeError(f"{type(like)} not supported by meta_frame_constructor")
     if is_dataframe_like(like):
         return like._constructor
     elif is_series_like(like):
         return like._constructor_expanddim
     elif is_index_like(like):
         return like.to_frame()._constructor
-    elif is_arraylike(like):
-        return serial_constructor_from_array(like)
     else:
-        raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
+        raise TypeError(f"{type(like)} not supported by meta_frame_constructor")
 
 
-def serial_series_constructor(like):
+def meta_series_constructor(like):
     """Return a serial Series constructor
 
     Parameters
@@ -775,14 +771,12 @@ def serial_series_constructor(like):
         try:
             like = like._meta
         except AttributeError:
-            like = like.meta
+            raise TypeError(f"{type(like)} not supported by meta_series_constructor")
     if is_dataframe_like(like):
         return like._constructor_sliced
     elif is_series_like(like):
         return like._constructor
     elif is_index_like(like):
         return like.to_frame()._constructor_sliced
-    elif is_arraylike(like):
-        return serial_constructor_from_array(like, series=True)
     else:
-        raise TypeError(f"{type(like)} not supported by serial_frame_constructor")
+        raise TypeError(f"{type(like)} not supported by meta_series_constructor")
