@@ -30,6 +30,7 @@ from dask.dataframe.dispatch import (
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
+    meta_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
     tolist_dispatch,
@@ -208,6 +209,13 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@meta_from_array.register(np.ndarray)
+def meta_from_array_numpy(obj, series=False):
+    if series:
+        return pd.Series
+    return pd.DataFrame
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))
