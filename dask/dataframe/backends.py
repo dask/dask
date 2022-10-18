@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Iterable
+from typing import Any, Iterable
 
 import numpy as np
 import pandas as pd
@@ -31,7 +31,6 @@ from dask.dataframe.dispatch import (
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
-    meta_class_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
     tolist_dispatch,
@@ -56,6 +55,46 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     --------
     PandasBackendEntrypoint
     """
+
+    @staticmethod
+    def from_array(x, meta: Any = None, **kwargs):
+        """Read any sliceable array into a Dask Dataframe
+
+        The type of ``meta`` and ``x`` (in that order) should
+        take precedence over the "backend" configuration.
+
+        Parameters
+        ----------
+        x : array_like
+        meta : Any, optional
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_array
+        """
+        raise NotImplementedError
+
+    @staticmethod
+    def from_dask_array(x: Array, meta: Any = None, **kwargs):
+        """Create a Dask DataFrame from a Dask Array
+
+        The type of ``meta`` and ``x`` (in that order) should
+        take precedence over the "backend" configuration.
+
+        Parameters
+        ----------
+        x : dask.array.Array
+        meta : Any, optional
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_dask_array
+        """
+        raise NotImplementedError
 
     @staticmethod
     def from_dict(data: dict, *, npartitions: int, **kwargs):
@@ -210,18 +249,6 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
-
-
-@meta_class_from_array.register(np.ndarray)
-def meta_class_from_array_numpy(obj):
-    # Return a `meta` DataFrame constructor, given
-    # a series-like object
-    return pd.DataFrame
-
-
-@meta_class_from_array.register(Array)
-def meta_class_from_array_da(obj):
-    return meta_class_from_array(obj._meta)
 
 
 @pyarrow_schema_dispatch.register((pd.DataFrame,))

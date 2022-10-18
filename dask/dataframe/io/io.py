@@ -24,7 +24,6 @@ from dask.dataframe.core import (
     has_parallel_type,
     new_dd_object,
 )
-from dask.dataframe.dispatch import meta_class_from_array
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
@@ -59,7 +58,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
         index = index._meta
 
     if meta is None:
-        meta = meta_class_from_array(x)()
+        meta = pd.DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
@@ -100,6 +99,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def from_array(x, chunksize=50000, columns=None, meta=None):
     """Read any sliceable array into a Dask Dataframe
 
@@ -370,6 +370,7 @@ def _partition_from_array(data, index=None, initializer=None, **kwargs):
     return initializer(data, index=index, **kwargs)
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def from_dask_array(x, columns=None, index=None, meta=None):
     """Create a Dask DataFrame from a Dask Array.
 
