@@ -30,6 +30,8 @@ The Dask-Array API can also dispatch the backend ``RandomState`` class to be use
 The current set of dispatchable creation functions for Dask-Dataframe is:
 
 - ``from_dict``
+- ``from_array``
+- ``from_dask_array``
 - ``read_parquet``
 - ``read_json``
 - ``read_orc``
