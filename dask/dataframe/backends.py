@@ -31,6 +31,7 @@ from dask.dataframe.dispatch import (
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
+    meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
     tolist_dispatch,
@@ -57,11 +58,34 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     """
 
     @staticmethod
+    def from_dict(data: dict, *, npartitions: int, **kwargs):
+        """Create a DataFrame collection from a dictionary
+
+        Parameters
+        ----------
+        data : dict
+            Of the form {field : array-like} or {field : dict}.
+        npartitions : int
+            The desired number of output partitions.
+        **kwargs :
+            Optional backend kwargs.
+
+        See Also
+        --------
+        dask.dataframe.io.io.from_dict
+        """
+        raise NotImplementedError
+
+    @staticmethod
     def from_array(x, meta: Any = None, **kwargs):
         """Read any sliceable array into a Dask Dataframe
 
-        The type of ``meta`` and ``x`` (in that order) should
-        take precedence over the "backend" configuration.
+        This dispatch function is **optional**. Compute-based
+        dispatching should handle ``Array`` -> ``DataFrame``
+        creation in most cases.
+
+        The type of ``meta`` must take precedence over
+        the "backend" configuration.
 
         Parameters
         ----------
@@ -80,8 +104,12 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     def from_dask_array(x: Array, meta: Any = None, **kwargs):
         """Create a Dask DataFrame from a Dask Array
 
-        The type of ``meta`` and ``x`` (in that order) should
-        take precedence over the "backend" configuration.
+        This dispatch function is **optional**. Compute-based
+        dispatching should handle ``Array`` -> ``DataFrame``
+        creation in most cases.
+
+        The type of ``meta`` must take precedence over
+        the "backend" configuration.
 
         Parameters
         ----------
@@ -93,25 +121,6 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         See Also
         --------
         dask.dataframe.io.io.from_dask_array
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def from_dict(data: dict, *, npartitions: int, **kwargs):
-        """Create a DataFrame collection from a dictionary
-
-        Parameters
-        ----------
-        data : dict
-            Of the form {field : array-like} or {field : dict}.
-        npartitions : int
-            The desired number of output partitions.
-        **kwargs :
-            Optional backend kwargs.
-
-        See Also
-        --------
-        dask.dataframe.io.io.from_dict
         """
         raise NotImplementedError
 
@@ -472,6 +481,18 @@ def _nonempty_series(s, idx=None):
     out = pd.Series(data, name=s.name, index=idx)
     out.attrs = s.attrs
     return out
+
+
+@meta_lib_from_array.register(Array)
+def meta_lib_from_array_da(x):
+    # Use x._meta for dask arrays
+    return meta_lib_from_array(x._meta)
+
+
+@meta_lib_from_array.register(np.ndarray)
+def meta_lib_from_array_numpy(x):
+    # numpy -> pandas
+    return pd
 
 
 @union_categoricals_dispatch.register(
