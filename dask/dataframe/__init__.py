@@ -18,6 +18,7 @@ try:
         from_array,
         from_dask_array,
         from_delayed,
+        from_dict,
         from_map,
         from_pandas,
         read_csv,

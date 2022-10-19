@@ -1,4 +1,5 @@
 properties:
+
   temporary-directory:
     type:
     - string
@@ -37,6 +38,14 @@ properties:
     type: object
     properties:
 
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported dataframe-creation functions.
+          Default is "pandas".
+
       shuffle-compression:
         type:
         - string
@@ -66,6 +75,14 @@ properties:
   array:
     type: object
     properties:
+
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported array-creation functions.
+          Default is "numpy".
 
       svg:
         type: object
