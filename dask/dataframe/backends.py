@@ -81,11 +81,11 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         """Read any sliceable array into a Dask Dataframe
 
         This dispatch function is **optional**. Compute-based
-        dispatching should handle ``Array`` -> ``DataFrame``
+        dispatching should already handle ``Array`` -> ``DataFrame``
         creation in most cases.
 
-        The type of ``meta`` must take precedence over
-        the "backend" configuration.
+        If this function **is** overriden, the type of ``meta``
+        must take precedence over the "backend" configuration.
 
         Parameters
         ----------
@@ -105,11 +105,11 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         """Create a Dask DataFrame from a Dask Array
 
         This dispatch function is **optional**. Compute-based
-        dispatching should handle ``Array`` -> ``DataFrame``
+        dispatching should already handle ``Array`` -> ``DataFrame``
         creation in most cases.
 
-        The type of ``meta`` must take precedence over
-        the "backend" configuration.
+        If this function **is** overriden, the type of ``meta``
+        must take precedence over the "backend" configuration.
 
         Parameters
         ----------
@@ -772,6 +772,7 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
+@meta_lib_from_array.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
