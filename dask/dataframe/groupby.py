@@ -1169,13 +1169,14 @@ def _aggregate_docstring(based_on=None):
         {based_on_str}
         Parameters
         ----------
-        arg : callable, str, list or dict
+        arg : callable, str, list or dict, optional
             Aggregation spec. Accepted combinations are:
 
             - callable function
             - string function name
             - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
             - dict of column names -> function, function name or list of such.
+            - None only if named aggregation syntax is used
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
             This defaults to 8. If your intermediate partitions are likely to
@@ -1192,6 +1193,12 @@ def _aggregate_docstring(based_on=None):
             ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
             set by the ``shuffle`` option in the dask config system, or ``"tasks"``
             if nothing is set.
+        kwargs: tuple or pd.NamedAgg, optional
+            Used for named aggregations where the keywords are the output column
+            names and the values are tuples where the first element is the input
+            column name and the second element is the aggregation function.
+            ``pandas.NamedAgg`` can also be used as the value. To use the named
+            aggregation syntax, arg must be set to None.
         """
         return func
 
