@@ -541,6 +541,10 @@ def assert_eq(
     scheduler="sync",
     **kwargs,
 ):
+    if isinstance(a, (pd.DataFrame, pd.Series)):
+        a = a.convert_dtypes()
+    if isinstance(b, (pd.DataFrame, pd.Series)):
+        b = b.convert_dtypes()
     if check_divisions:
         assert_divisions(a, scheduler=scheduler)
         assert_divisions(b, scheduler=scheduler)
