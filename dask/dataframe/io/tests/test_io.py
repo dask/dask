@@ -6,6 +6,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
@@ -478,6 +479,28 @@ def test_from_dask_array_unknown_width_error():
     dx = da.Array(dsk, "x", ((np.nan, np.nan), (np.nan,)), np.float64)
     with pytest.raises(ValueError, match="Shape along axis 1 must be known"):
         dd.from_dask_array(dx)
+
+
+@pytest.mark.gpu
+def test_from_array_cupy():
+    # Check cupy -> cudf dispatching
+    pytest.importorskip("cupy")
+
+    with config.set({"array.backend": "cupy"}):
+        darr = da.ones(10)
+
+    ddf1 = dd.from_array(darr)  # Invokes `from_dask_array`
+
+    # Import dask_cudf after from_array to
+    # check that import order is not a problem
+    dask_cudf = pytest.importorskip("dask_cudf")
+
+    ddf2 = dd.from_array(darr.compute())
+
+    assert isinstance(ddf1, dask_cudf.Series)
+    assert isinstance(ddf2, dask_cudf.Series)
+    ddf1.compute()
+    ddf2.compute()
 
 
 def test_to_bag():
