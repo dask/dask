@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Iterable
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -73,54 +73,6 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         See Also
         --------
         dask.dataframe.io.io.from_dict
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def from_array(x, meta: Any = None, **kwargs):
-        """Read any sliceable array into a Dask Dataframe
-
-        This dispatch function is **optional**. Compute-based
-        dispatching should already handle ``Array`` -> ``DataFrame``
-        creation in most cases.
-
-        If this function **is** overriden, the type of ``meta``
-        must take precedence over the "backend" configuration.
-
-        Parameters
-        ----------
-        x : array_like
-        meta : Any, optional
-        **kwargs :
-            Optional backend kwargs.
-
-        See Also
-        --------
-        dask.dataframe.io.io.from_array
-        """
-        raise NotImplementedError
-
-    @staticmethod
-    def from_dask_array(x: Array, meta: Any = None, **kwargs):
-        """Create a Dask DataFrame from a Dask Array
-
-        This dispatch function is **optional**. Compute-based
-        dispatching should already handle ``Array`` -> ``DataFrame``
-        creation in most cases.
-
-        If this function **is** overriden, the type of ``meta``
-        must take precedence over the "backend" configuration.
-
-        Parameters
-        ----------
-        x : dask.array.Array
-        meta : Any, optional
-        **kwargs :
-            Optional backend kwargs.
-
-        See Also
-        --------
-        dask.dataframe.io.io.from_dask_array
         """
         raise NotImplementedError
 
@@ -772,7 +724,22 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
-@meta_lib_from_array.register_lazy("cudf")
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@meta_lib_from_array.register_lazy("cupy")
+def _register_cupy_to_cudf():
+    # Handle cupy.ndarray -> cudf.DataFrame dispatching
+    try:
+        import cudf
+        import cupy
+
+        @meta_lib_from_array.register(cupy.ndarray)
+        def meta_lib_from_array_cupy(x):
+            # cupy -> cudf
+            return cudf
+
+    except ImportError:
+        pass

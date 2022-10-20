@@ -104,7 +104,6 @@ class CreationDispatch(Generic[BackendEntrypointType]):
         self,
         backend: str,
         name: str | None = None,
-        optional: bool = False,
     ) -> Callable[
         [Callable[BackendFuncParams, BackendFuncReturn]],
         Callable[BackendFuncParams, BackendFuncReturn],
@@ -120,18 +119,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
-                try:
-                    return getattr(self, dispatch_name)(*args, **kwargs)
-                except NotImplementedError as err:
-                    if optional:
-                        # Current backend has not registered a
-                        # dispatch for this "optional" creation
-                        # function. Use default version
-                        return getattr(
-                            self.dispatch(self._default),
-                            dispatch_name,
-                        )(*args, **kwargs)
-                    raise err
+                return getattr(self, dispatch_name)(*args, **kwargs)
 
             wrapper.__name__ = dispatch_name
             return wrapper
