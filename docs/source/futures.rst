@@ -959,6 +959,9 @@ API
 .. autoclass:: Event
    :members:
 
+.. autoclass:: Semaphore
+   :members:
+
 .. autoclass:: Pub
    :members:
 
