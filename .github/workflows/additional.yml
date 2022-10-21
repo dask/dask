@@ -2,17 +2,21 @@ name: Additional
 
 on: [push, pull_request]
 
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
   mindeps:
     runs-on: "ubuntu-latest"
-
     strategy:
       matrix:
         environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
@@ -27,18 +31,16 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
   doctest:
     runs-on: "ubuntu-latest"
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
@@ -53,11 +55,9 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
-        shell: bash -l {0}
         run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
 
   imports:
@@ -68,7 +68,7 @@ jobs:
         python-version: ["3.8", "3.9", "3.10"]
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v2
@@ -82,7 +82,6 @@ jobs:
           auto-activate-base: false
 
       - name: Run import tests
-        shell: bash -l {0}
         env:
           PYTHON_VERSION: ${{ matrix.python-version }}
         run: source continuous_integration/scripts/test_imports.sh

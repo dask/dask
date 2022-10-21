@@ -11,6 +11,11 @@ concurrency:
   group: ${{ github.ref }}
   cancel-in-progress: true
 
+# Required shell entrypoint to have properly activated conda environments
+defaults:
+  run:
+    shell: bash -l {0}
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -33,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3.1.0
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
@@ -55,7 +60,6 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
 
       # This environment file is created in continuous_integration/scripts/install.sh
@@ -67,8 +71,7 @@ jobs:
           path: env.yaml
 
       - name: Run tests
-        shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
       - name: Coverage
-        uses: codecov/codecov-action@v1
+        uses: codecov/codecov-action@v3

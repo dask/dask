@@ -5,6 +5,7 @@ from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
 from dask.base import compute_as_if_collection, tokenize
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.orc.utils import ORCEngine
@@ -49,6 +50,7 @@ class ORCFunctionWrapper(DataFrameIOFunction):
         )
         if self.index:
             _df.set_index(self.index, inplace=True)
+
         return _df
 
 
@@ -68,6 +70,7 @@ def _get_engine(engine, write=False):
     return engine
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_orc(
     path,
     engine="pyarrow",

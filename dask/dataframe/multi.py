@@ -89,6 +89,7 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import (
     asciitable,
+    check_meta,
     is_dataframe_like,
     is_series_like,
     make_meta,
@@ -238,11 +239,18 @@ allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
 
 
-def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **kwargs):
+def merge_chunk(
+    lhs,
+    *args,
+    result_meta,
+    **kwargs,
+):
 
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
+    empty_index_dtype = result_meta.index.dtype
+    categorical_columns = result_meta.select_dtypes(include="category").columns
 
     if categorical_columns is not None:
         for col in categorical_columns:
@@ -280,6 +288,12 @@ def merge_chunk(lhs, *args, empty_index_dtype=None, categorical_columns=None, **
 
     out = lhs.merge(rhs, *args, **kwargs)
 
+    # Workaround for pandas bug where if the left frame of a merge operation is
+    # empty, the resulting dataframe can have columns in the wrong order.
+    # https://github.com/pandas-dev/pandas/issues/9937
+    if len(lhs) == 0:
+        out = out[result_meta.columns]
+
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
@@ -300,8 +314,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
     name = "join-indexed-" + tokenize(lhs, rhs, **kwargs)
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
-    kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["result_meta"] = meta
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -421,8 +434,7 @@ def hash_join(
     if isinstance(right_on, list):
         right_on = (list, tuple(right_on))
 
-    kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["result_meta"] = meta
 
     joined = map_partitions(
         merge_chunk,
@@ -460,8 +472,7 @@ def single_partition_join(left, right, **kwargs):
         else:
             meta.index = meta.index.astype("int64")
 
-    kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["result_meta"] = meta
 
     if right.npartitions == 1 and kwargs["how"] in allowed_left:
         if use_left:
@@ -662,7 +673,6 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
         )
-        categorical_columns = meta.select_dtypes(include="category").columns
 
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
@@ -687,8 +697,7 @@ def merge(
             right_index=right_index,
             suffixes=suffixes,
             indicator=indicator,
-            empty_index_dtype=meta.index.dtype,
-            categorical_columns=categorical_columns,
+            result_meta=meta,
         )
     # Catch all hash join
     else:
@@ -1143,7 +1152,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
         # this case we need to pass along the meta object to transform each
         # partition, so they're all equivalent.
         try:
-            df._meta == meta
+            check_meta(df._meta, meta)
             match = True
         except (ValueError, TypeError):
             match = False
@@ -1554,8 +1563,7 @@ def broadcast_join(
 
     # dummy result
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **merge_kwargs)
-    merge_kwargs["empty_index_dtype"] = meta.index.dtype
-    merge_kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    merge_kwargs["result_meta"] = meta
 
     # Assume the output partitions/divisions
     # should correspond to the collection that

@@ -111,6 +111,7 @@ def _write_partitioned(
             subschema = subschema.remove(subschema.get_field_index(col))
 
     md_list = []
+    partition_keys = partition_keys[0] if len(partition_keys) == 1 else partition_keys
     for keys, subgroup in data_df.groupby(partition_keys):
         if not isinstance(keys, tuple):
             keys = (keys,)
@@ -1383,7 +1384,7 @@ class ArrowDatasetEngine(Engine):
                                 "total_byte_size": row_group.total_byte_size,
                             }
                         cstats = []
-                        for name, i in stat_col_indices.items():
+                        for name in stat_col_indices.keys():
                             if name in statistics:
                                 cmin = statistics[name]["min"]
                                 cmax = statistics[name]["max"]

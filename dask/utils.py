@@ -623,11 +623,12 @@ class Dispatch:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
-                register = self._lazy.pop(toplevel)
+                register = self._lazy[toplevel]
             except KeyError:
                 pass
             else:
                 register()
+                self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
         raise TypeError(f"No dispatch for {cls}")
 
@@ -1436,15 +1437,6 @@ def natural_sort_key(s: str) -> list[str | int]:
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", s)]
 
 
-def factors(n: int) -> set[int]:
-    """Return the factors of an integer
-
-    https://stackoverflow.com/a/6800214/616616
-    """
-    seq = ([i, n // i] for i in range(1, int(pow(n, 0.5) + 1)) if n % i == 0)
-    return {j for l in seq for j in l}
-
-
 def parse_bytes(s: float | str) -> int:
     """Parse byte string to numbers
 
@@ -2029,7 +2021,10 @@ def show_versions() -> None:
     from platform import uname
     from sys import stdout, version_info
 
-    from distributed import __version__ as distributed_version
+    try:
+        from distributed import __version__ as distributed_version
+    except ImportError:
+        distributed_version = None
 
     from dask import __version__ as dask_version
 

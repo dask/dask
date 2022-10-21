@@ -1,7 +1,4 @@
-import contextlib
-from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
-from threading import Lock
 
 import numpy as np
 import pandas as pd
@@ -13,14 +10,13 @@ from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.optimize import optimize
-from dask.dataframe.utils import assert_eq, is_categorical_dtype
+from dask.dataframe.utils import assert_eq
 from dask.delayed import Delayed, delayed
-from dask.utils import tmpfile
 from dask.utils_test import hlg_layer_topological
 
-####################
-# Arrays and BColz #
-####################
+##########
+# Arrays #
+##########
 
 
 def test_meta_from_array():
@@ -115,130 +111,6 @@ def test_from_array_with_record_dtype():
     assert d.divisions == (0, 4, 8, 9)
 
     assert (d.compute().to_records(index=False) == x).all()
-
-
-@contextlib.contextmanager
-def check_bcolz_deprecation_warning():
-    with pytest.warns(FutureWarning, match="bcolz was deprecated"):
-        yield
-
-
-def test_from_bcolz_multiple_threads():
-    bcolz = pytest.importorskip("bcolz")
-
-    def check(i):
-        t = bcolz.ctable(
-            [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
-        )
-
-        d = dd.from_bcolz(t, chunksize=2)
-
-        assert d.npartitions == 2
-        assert is_categorical_dtype(d.dtypes["a"])
-        assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
-        assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
-
-        d = dd.from_bcolz(t, chunksize=2, index="x")
-
-        L = list(d.index.compute(scheduler="sync"))
-        assert L == [1, 2, 3] or L == [1, 3, 2]
-
-        # Names
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
-            dd.from_bcolz(t, chunksize=2).dask
-        )
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
-            dd.from_bcolz(t, chunksize=3).dask
-        )
-
-    with check_bcolz_deprecation_warning():
-        with ThreadPoolExecutor(5) as pool:
-            list(pool.map(check, range(5)))
-
-
-def test_from_bcolz():
-    bcolz = pytest.importorskip("bcolz")
-
-    t = bcolz.ctable(
-        [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
-    )
-
-    with check_bcolz_deprecation_warning():
-        d = dd.from_bcolz(t, chunksize=2)
-        assert d.npartitions == 2
-        assert is_categorical_dtype(d.dtypes["a"])
-        assert list(d.x.compute(scheduler="sync")) == [1, 2, 3]
-        assert list(d.a.compute(scheduler="sync")) == ["a", "b", "a"]
-        L = list(d.index.compute(scheduler="sync"))
-        assert L == [0, 1, 2]
-
-        d = dd.from_bcolz(t, chunksize=2, index="x")
-        L = list(d.index.compute(scheduler="sync"))
-        assert L == [1, 2, 3] or L == [1, 3, 2]
-
-        # Names
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) == sorted(
-            dd.from_bcolz(t, chunksize=2).dask
-        )
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(
-            dd.from_bcolz(t, chunksize=3).dask
-        )
-
-        dsk = dd.from_bcolz(t, chunksize=3).dask
-
-        t.append((4, 4.0, "b"))
-        t.flush()
-
-        assert sorted(dd.from_bcolz(t, chunksize=2).dask) != sorted(dsk)
-
-
-def test_from_bcolz_no_lock():
-    bcolz = pytest.importorskip("bcolz")
-    locktype = type(Lock())
-
-    t = bcolz.ctable(
-        [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"], chunklen=2
-    )
-
-    with check_bcolz_deprecation_warning():
-        a = dd.from_bcolz(t, chunksize=2)
-        b = dd.from_bcolz(t, chunksize=2, lock=True)
-        c = dd.from_bcolz(t, chunksize=2, lock=False)
-
-    assert_eq(a, b)
-    assert_eq(a, c)
-
-    assert not any(isinstance(item, locktype) for v in c.dask.values() for item in v)
-
-
-def test_from_bcolz_filename():
-    bcolz = pytest.importorskip("bcolz")
-
-    with tmpfile(".bcolz") as fn:
-        t = bcolz.ctable(
-            [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]],
-            names=["x", "y", "a"],
-            rootdir=fn,
-        )
-        t.flush()
-
-        with check_bcolz_deprecation_warning():
-            d = dd.from_bcolz(fn, chunksize=2)
-
-        assert list(d.x.compute()) == [1, 2, 3]
-
-
-def test_from_bcolz_column_order():
-    bcolz = pytest.importorskip("bcolz")
-
-    t = bcolz.ctable(
-        [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]], names=["x", "y", "a"]
-    )
-
-    with check_bcolz_deprecation_warning():
-        df = dd.from_bcolz(t, chunksize=2)
-
-    assert list(df.loc[0].compute().columns) == ["x", "y", "a"]
 
 
 def test_from_pandas_dataframe():

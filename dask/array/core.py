@@ -63,13 +63,11 @@ from dask.layers import ArraySliceDep, reshapelist
 from dask.sizeof import sizeof
 from dask.utils import (
     IndexCallable,
-    M,
     SerializableLock,
     cached_cumsum,
     cached_property,
     concrete,
     derived_from,
-    factors,
     format_bytes,
     funcname,
     has_keyword,
@@ -1646,7 +1644,7 @@ class Array(DaskMethodsMixin):
             grid=grid,
             nbytes=nbytes,
             cbytes=cbytes,
-            layers=maybe_pluralize(len(self.dask.layers), "Graph Layer"),
+            layers=maybe_pluralize(len(self.dask.layers), "graph layer"),
         )
 
     @cached_property
@@ -1876,6 +1874,10 @@ class Array(DaskMethodsMixin):
     def __setitem__(self, key, value):
         if value is np.ma.masked:
             value = np.ma.masked_all((), dtype=self.dtype)
+
+        if not is_dask_collection(value) and np.isnan(value).any():
+            if issubclass(self.dtype.type, Integral):
+                raise ValueError("cannot convert float NaN to integer")
 
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -2854,10 +2856,7 @@ class Array(DaskMethodsMixin):
         """
         Copy array.  This is a no-op for dask.arrays, which are immutable
         """
-        if self.npartitions == 1:
-            return self.map_blocks(M.copy)
-        else:
-            return Array(self.dask, self.name, self.chunks, meta=self)
+        return Array(self.dask, self.name, self.chunks, meta=self)
 
     def __deepcopy__(self, memo):
         c = self.copy()
@@ -3017,7 +3016,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     "auto" to ask for a particular size
 
     >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
-    ((250, 250, 250, 250, 250, 250, 250, 250),)
+    ((256, 256, 256, 256, 256, 256, 256, 208),)
 
     Respects null dimensions
 
@@ -3259,19 +3258,14 @@ def round_to(c, s):
 
     We want values for c that are nicely aligned with s.
 
-    If c is smaller than s then we want the largest factor of s that is less than the
-    desired chunk size, but not less than half, which is too much.  If no such
-    factor exists then we just go with the original chunk size and accept an
+    If c is smaller than s we use the original chunk size and accept an
     uneven chunk at the end.
 
     If c is larger than s then we want the largest multiple of s that is still
     smaller than c.
     """
     if c <= s:
-        try:
-            return max(f for f in factors(s) if c / 2 <= f <= c)
-        except ValueError:  # no matching factors within factor of two
-            return max(1, int(c))
+        return max(1, int(c))
     else:
         return c // s * s
 
@@ -5418,7 +5412,7 @@ def _vindex(x, *indexes):
 
     nonfancy_indexes = []
     reduced_indexes = []
-    for i, ind in enumerate(indexes):
+    for ind in indexes:
         if isinstance(ind, Number):
             nonfancy_indexes.append(ind)
         elif isinstance(ind, slice):

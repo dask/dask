@@ -1,6 +1,126 @@
 Changelog
 =========
 
+.. _v2022.10.0:
+
+2022.10.0
+---------
+
+Released on October 14, 2022
+
+New Features
+^^^^^^^^^^^^
+- Backend library dispatching for IO in Dask-Array and Dask-DataFrame (:pr:`9475`) `Richard (Rick) Zamora`_
+- Add new CLI that is extensible (:pr:`9283`) `Doug Davis`_
+
+Enhancements
+^^^^^^^^^^^^
+- Groupby median (:pr:`9516`) `Ian Rose`_
+- Fix array copy not being a no-op (:pr:`9555`) `David Hoese`_
+- Add support for string timedelta in ``map_overlap`` (:pr:`9559`) `Nicolas Grandemange`_
+- Shuffle-based groupby for single functions (:pr:`9504`) `Ian Rose`_
+- Make ``datetime.datetime`` tokenize idempotantly (:pr:`9532`) `Martin Durant`_
+- Support tokenizing ``datetime.time`` (:pr:`9528`) `Tim Paine`_
+
+Bug Fixes
+^^^^^^^^^
+- Avoid race condition in lazy dispatch registration (:pr:`9545`) `James Bourbeau`_
+- Do not allow setitem to ``np.nan`` for ``int`` dtype (:pr:`9531`) `Doug Davis`_
+- Stable demo column projection (:pr:`9538`) `Ian Rose`_
+- Ensure ``pickle``-able binops in ``delayed`` (:pr:`9540`) `Ian Rose`_
+- Fix project CSV columns when selecting (:pr:`9534`) `Martin Durant`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update Parquet best practice (:pr:`9537`) `Matthew Rocklin`_
+
+Maintenance
+^^^^^^^^^^^
+- Restrict ``tiledb-py`` version to avoid CI failures  (:pr:`9569`) `James Bourbeau`_
+- Bump ``actions/github-script`` from 3 to 6 (:pr:`9564`)
+- Bump ``actions/stale`` from 4 to 6 (:pr:`9551`)
+- Bump ``peter-evans/create-pull-request`` from 3 to 4 (:pr:`9550`)
+- Bump ``actions/checkout`` from 2 to 3.1.0 (:pr:`9552`)
+- Bump ``codecov/codecov-action`` from 1 to 3 (:pr:`9549`)
+- Bump ``the-coding-turtle/ga-yaml-parser`` from 0.1.1 to 0.1.2 (:pr:`9553`)
+- Move dependabot configuration file (:pr:`9547`) `James Bourbeau`_
+- Add dependabot for GitHub actions (:pr:`9542`) `James Bourbeau`_
+- Run mypy on Windows and Linux (:pr:`9530`) `crusaderky`_
+- Update gpuCI ``RAPIDS_VER`` to ``22.12`` (:pr:`9524`)
+
+
+.. _v2022.9.2:
+
+2022.9.2
+--------
+
+Released on September 30, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove factorization logic from array auto chunking (:pr:`9507`) `James Bourbeau`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add docs on running Dask in a standalone Python script (:pr:`9513`) `James Bourbeau`_
+- Clarify custom-graph multiprocessing example (:pr:`9511`) `nouman`_
+
+Maintenance
+^^^^^^^^^^^
+- Groupby sort upstream compatibility (:pr:`9486`) `Ian Rose`_
+
+.. _v2022.9.1:
+
+2022.9.1
+--------
+
+Released on September 16, 2022
+
+New Features
+^^^^^^^^^^^^
+- Add ``DataFrame`` and ``Series`` ``median`` methods (:pr:`9483`) `James Bourbeau`_
+
+Enhancements
+^^^^^^^^^^^^
+- Shuffle ``groupby`` default (:pr:`9453`) `Ian Rose`_
+- Filter by list (:pr:`9419`) `Greg Hayes`_
+- Added ``distributed.utils.key_split`` functionality to ``dask.utils.key_split`` (:pr:`9464`) `Luke Conibear`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix overlap so that ``set_index`` doesn't drop rows (:pr:`9423`) `Julia Signell`_
+- Fix assigning pandas ``Series`` to column when ``ddf.columns.min()`` raises (:pr:`9485`) `Erik Welch`_
+- Fix metadata comparison ``stack_partitions`` (:pr:`9481`) `James Bourbeau`_
+- Provide default for ``split_out`` (:pr:`9493`) `Lawrence Mitchell`_
+
+Deprecations
+^^^^^^^^^^^^
+- Allow ``split_out`` to be ``None``, which then defaults to ``1`` in ``groupby().aggregate()`` (:pr:`9491`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fixing ``enforce_metadata`` documentation, not checking for dtypes (:pr:`9474`) `Nicolas Grandemange`_
+- Fix ``it's`` --> ``its`` typo (:pr:`9484`) `Nat Tabris`_
+
+Maintenance
+^^^^^^^^^^^
+- Workaround for parquet writing failure using some datetime series but not others (:pr:`9500`) `Ian Rose`_
+- Filter out ``numeric_only`` warnings from ``pandas`` (:pr:`9496`) `James Bourbeau`_
+- Avoid ``set_index(..., inplace=True)`` where not necessary (:pr:`9472`) `James Bourbeau`_
+- Avoid passing groupby key list of length one (:pr:`9495`) `James Bourbeau`_
+- Update ``test_groupby_dropna_cudf`` based on ``cudf`` support for ``group_keys`` (:pr:`9482`) `James Bourbeau`_
+- Remove ``dd.from_bcolz`` (:pr:`9479`) `James Bourbeau`_
+- Added ``flake8-bugbear`` to ``pre-commit`` hooks (:pr:`9457`) `Luke Conibear`_
+- Bind loop variables in function definitions (``B023``) (:pr:`9461`) `Luke Conibear`_
+- Added assert for comparisons (``B015``) (:pr:`9459`) `Luke Conibear`_
+- Set top-level default shell in CI workflows (:pr:`9469`) `James Bourbeau`_
+- Removed unused loop control variables (``B007``) (:pr:`9458`) `Luke Conibear`_
+- Replaced ``getattr`` calls for constant attributes (``B009``) (:pr:`9460`) `Luke Conibear`_
+- Pin ``libprotobuf`` to allow nightly ``pyarrow`` in the upstream CI build (:pr:`9465`) `Joris Van den Bossche`_
+- Replaced mutable data structures for default arguments (``B006``) (:pr:`9462`) `Luke Conibear`_
+- Changed ``flake8`` mirror and updated version (:pr:`9456`) `Luke Conibear`_
+
+
 .. _v2022.9.0:
 
 2022.9.0
@@ -5907,3 +6027,9 @@ Other
 .. _`ivojuroro`: https://github.com/ivojuroro
 .. _`Shaghayegh`: https://github.com/Shadimrad
 .. _`Hendrik Makait`: https://github.com/hendrikmakait
+.. _`Luke Conibear`: https://github.com/lukeconibear
+.. _`Nicolas Grandemange`: https://github.com/epizut
+.. _`Nat Tabris`: https://github.com/ntabris
+.. _`Lawrence Mitchell`: https://github.com/wence-
+.. _`nouman`: https://github.com/noumxn
+.. _`Tim Paine`: https://github.com/timkpaine

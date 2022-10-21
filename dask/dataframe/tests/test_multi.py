@@ -19,6 +19,7 @@ from dask.dataframe.multi import (
 from dask.dataframe.utils import (
     assert_divisions,
     assert_eq,
+    check_meta,
     clear_known_categories,
     has_known_categories,
     make_meta,
@@ -712,6 +713,18 @@ def test_merge_asof_on_left_right(left_col, right_col):
     assert_eq(result_df, result_dd, check_index=False)
 
 
+def test_merge_asof_with_various_npartitions():
+    # https://github.com/dask/dask/issues/8999
+    df = pd.DataFrame(dict(ts=[pd.to_datetime("1-1-2020")] * 3, foo=[1, 2, 3]))
+    expected = pd.merge_asof(left=df, right=df, on="ts")
+
+    for npartitions in range(1, 5):
+        ddf = dd.from_pandas(df, npartitions=npartitions)
+
+        result = dd.merge_asof(left=ddf, right=ddf, on="ts")
+        assert_eq(expected, result)
+
+
 @pytest.mark.parametrize("join", ["inner", "outer"])
 def test_indexed_concat(join):
     A = pd.DataFrame(
@@ -986,6 +999,26 @@ def test_merge(how, shuffle_method):
     # pandas result looks buggy
     # list_eq(dd.merge(a, B, left_index=True, right_on='y'),
     #         pd.merge(A, B, left_index=True, right_on='y'))
+
+
+@pytest.mark.parametrize("how", ["right", "outer"])
+def test_merge_empty_left_df(shuffle_method, how):
+    # We're merging on "a", but in a situation where the left
+    # frame is missing some values, so some of the blocked merges
+    # will involve an empty left frame.
+    # https://github.com/pandas-dev/pandas/issues/9937
+    left = pd.DataFrame({"a": [1, 1, 2, 2], "val": [5, 6, 7, 8]})
+    right = pd.DataFrame({"a": [0, 0, 3, 3], "val": [11, 12, 13, 14]})
+
+    dd_left = dd.from_pandas(left, npartitions=4)
+    dd_right = dd.from_pandas(right, npartitions=4)
+
+    merged = dd_left.merge(dd_right, on="a", how=how)
+    expected = left.merge(right, on="a", how=how)
+    assert_eq(merged, expected, check_index=False)
+
+    # Check that the individual partitions have the expected shape
+    merged.map_partitions(lambda x: x, meta=merged._meta).compute()
 
 
 def test_merge_how_raises():
@@ -2068,7 +2101,7 @@ def test_concat_categorical(known, cat_index, divisions):
                 dd.DataFrame, res.dask, res.__dask_keys__()
             )
             for p in [i.iloc[:0] for i in parts]:
-                res._meta == p  # will error if schemas don't align
+                check_meta(res._meta, p)  # will error if schemas don't align
         assert not cat_index or has_known_categories(res.index) == known
         return res
 

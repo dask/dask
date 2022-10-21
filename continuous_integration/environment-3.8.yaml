@@ -22,7 +22,10 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  - tiledb-py
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
+  # We should unpin when possible.
+  # https://github.com/dask/dask/pull/9569
+  - tiledb-py<0.17.4
   - pyspark
   - tiledb>=2.5.0
   - xarray
@@ -32,7 +35,6 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - bcolz
   - blosc
   - boto3
   - botocore

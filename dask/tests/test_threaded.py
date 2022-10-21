@@ -1,5 +1,5 @@
-import os
 import signal
+import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
@@ -85,7 +85,7 @@ def test_threaded_within_thread():
 
     before = threading.active_count()
 
-    for i in range(20):
+    for _ in range(20):
         t = threading.Thread(target=f, args=(1,))
         t.daemon = True
         t.start()
@@ -102,9 +102,9 @@ def test_threaded_within_thread():
 def test_dont_spawn_too_many_threads():
     before = threading.active_count()
 
-    dsk = {("x", i): (lambda: i,) for i in range(10)}
+    dsk = {("x", i): (lambda i=i: i,) for i in range(10)}
     dsk["x"] = (sum, list(dsk))
-    for i in range(20):
+    for _ in range(20):
         get(dsk, "x", num_workers=4)
 
     after = threading.active_count()
@@ -115,9 +115,9 @@ def test_dont_spawn_too_many_threads():
 def test_dont_spawn_too_many_threads_CPU_COUNT():
     before = threading.active_count()
 
-    dsk = {("x", i): (lambda: i,) for i in range(10)}
+    dsk = {("x", i): (lambda i=i: i,) for i in range(10)}
     dsk["x"] = (sum, list(dsk))
-    for i in range(20):
+    for _ in range(20):
         get(dsk, "x")
 
     after = threading.active_count()
@@ -137,7 +137,7 @@ def test_thread_safety():
         L.append(get(dsk, "y"))
 
     threads = []
-    for i in range(20):
+    for _ in range(20):
         t = threading.Thread(target=test_f)
         t.daemon = True
         t.start()
@@ -154,7 +154,7 @@ def test_interrupt():
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
     # Python 3 on other platforms requires sending SIGINT to the main thread.
-    if os.name == "nt":
+    if sys.platform == "win32":
         from _thread import interrupt_main
     else:
         main_thread = threading.get_ident()
@@ -162,7 +162,7 @@ def test_interrupt():
         def interrupt_main() -> None:
             signal.pthread_kill(main_thread, signal.SIGINT)
 
-    # 7 seconds is is how long the test will take when you factor in teardown.
+    # 7 seconds is how long the test will take when you factor in teardown.
     # Don't set it too short or the test will become flaky on non-performing CI
     dsk = {("x", i): (sleep, 7) for i in range(20)}
     dsk["x"] = (len, list(dsk.keys()))

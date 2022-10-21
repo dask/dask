@@ -229,7 +229,7 @@ async def test_serializable_groupby_agg(c, s, a, b):
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [1, 0, 1, 0]})
     ddf = dd.from_pandas(df, npartitions=2)
 
-    result = ddf.groupby("y").agg("count", split_out=2)
+    result = ddf.groupby("y", sort=False).agg("count", split_out=2)
 
     # Check Culling and Compute
     agg0 = await c.compute(result.partitions[0])

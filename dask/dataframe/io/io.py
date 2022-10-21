@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from collections.abc import Iterable
 from functools import partial
 from math import ceil
@@ -12,8 +11,9 @@ import numpy as np
 import pandas as pd
 
 import dask.array as da
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.blockwise import BlockwiseDepDict, blockwise
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
     Index,
@@ -26,7 +26,6 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.io.utils import DataFrameIOFunction
-from dask.dataframe.shuffle import set_partition
 from dask.dataframe.utils import (
     check_meta,
     insert_meta_param_description,
@@ -36,7 +35,7 @@ from dask.dataframe.utils import (
 from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import M, _deprecated, funcname, is_arraylike
+from dask.utils import M, funcname, is_arraylike
 
 if TYPE_CHECKING:
     import distributed
@@ -323,169 +322,48 @@ def from_pandas(
     )
 
 
-@_deprecated(after_version="2022.02.1")
-def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
-    """Read BColz CTable into a Dask Dataframe
-
-    BColz is a fast on-disk compressed column store with careful attention
-    given to compression.  https://bcolz.readthedocs.io/en/latest/
+@dataframe_creation_dispatch.register_inplace("pandas")
+def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
+    """
+    Construct a Dask DataFrame from a Python Dictionary
 
     Parameters
     ----------
-    x : bcolz.ctable
-    chunksize : int, optional
-        The size(rows) of blocks to pull out from ctable.
-    categorize : bool, defaults to True
-        Automatically categorize all string dtypes
-    index : string, optional
-        Column to make the index
-    lock: bool or Lock
-        Lock to use when reading or False for no lock (not-thread-safe)
+    data : dict
+        Of the form {field : array-like} or {field : dict}.
+    npartitions : int
+        The number of partitions of the index to create. Note that depending on
+        the size and index of the dataframe, the output may have fewer
+        partitions than requested.
+    orient : {'columns', 'index', 'tight'}, default 'columns'
+        The "orientation" of the data. If the keys of the passed dict
+        should be the columns of the resulting DataFrame, pass 'columns'
+        (default). Otherwise if the keys should be rows, pass 'index'.
+        If 'tight', assume a dict with keys
+        ['index', 'columns', 'data', 'index_names', 'column_names'].
+    dtype: bool
+        Data type to force, otherwise infer.
+    columns: string, optional
+        Column labels to use when ``orient='index'``. Raises a ValueError
+        if used with ``orient='columns'`` or ``orient='tight'``.
 
-    See Also
+    Examples
     --------
-    from_array: more generic function not optimized for bcolz
+    >>> import dask.dataframe as dd
+    >>> ddf = dd.from_dict({"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]}, npartitions=2)
     """
-    if lock is True:
-        lock = Lock()
 
-    import bcolz
-
-    import dask.array as da
-
-    if isinstance(x, str):
-        x = bcolz.ctable(rootdir=x)
-    bc_chunklen = max(x[name].chunklen for name in x.names)
-    if chunksize is None and bc_chunklen > 10000:
-        chunksize = bc_chunklen
-
-    categories = dict()
-    if categorize:
-        for name in x.names:
-            if (
-                np.issubdtype(x.dtype[name], np.string_)
-                or np.issubdtype(x.dtype[name], np.unicode_)
-                or np.issubdtype(x.dtype[name], np.object_)
-            ):
-                a = da.from_array(x[name], chunks=(chunksize * len(x.names),))
-                categories[name] = da.unique(a).compute()
-
-    columns = tuple(x.dtype.names)
-    divisions = tuple(range(0, len(x), chunksize))
-    divisions = divisions + (len(x) - 1,)
-    if x.rootdir:
-        token = tokenize(
-            (x.rootdir, os.path.getmtime(x.rootdir)),
-            chunksize,
-            categorize,
-            index,
-            kwargs,
+    collection_types = {type(v) for v in data.values() if is_dask_collection(v)}
+    if collection_types:
+        raise NotImplementedError(
+            "from_dict doesn't currently support Dask collections as inputs. "
+            f"Objects of type {collection_types} were given in the input dict."
         )
-    else:
-        token = tokenize(
-            (id(x), x.shape, x.dtype), chunksize, categorize, index, kwargs
-        )
-    new_name = "from_bcolz-" + token
 
-    dsk = {
-        (new_name, i): (
-            dataframe_from_ctable,
-            x,
-            (slice(i * chunksize, (i + 1) * chunksize),),
-            columns,
-            categories,
-            lock,
-        )
-        for i in range(0, int(ceil(len(x) / chunksize)))
-    }
-
-    meta = dataframe_from_ctable(x, slice(0, 0), columns, categories, lock)
-    result = DataFrame(dsk, new_name, meta, divisions)
-
-    if index:
-        assert index in x.names
-        a = da.from_array(x[index], chunks=(chunksize * len(x.names),))
-        q = np.linspace(0, 100, len(x) // chunksize + 2)
-        divisions = tuple(da.percentile(a, q).compute())
-        return set_partition(result, index, divisions, **kwargs)
-    else:
-        return result
-
-
-def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
-    """Get DataFrame from bcolz.ctable
-
-    Parameters
-    ----------
-    x: bcolz.ctable
-    slc: slice
-    columns: list of column names or None
-
-    >>> import bcolz
-    >>> x = bcolz.ctable([[1, 2, 3, 4], [10, 20, 30, 40]], names=['a', 'b'])
-    >>> dataframe_from_ctable(x, slice(1, 3))
-       a   b
-    1  2  20
-    2  3  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns=['b'])
-        b
-    1  20
-    2  30
-
-    >>> dataframe_from_ctable(x, slice(1, 3), columns='b')
-    1    20
-    2    30
-    Name: b, dtype: int...
-
-    """
-    import bcolz
-
-    if columns is None:
-        columns = x.dtype.names
-    if isinstance(columns, tuple):
-        columns = list(columns)
-
-    x = x[columns]
-    if type(slc) is slice:
-        start = slc.start
-        stop = slc.stop if slc.stop < len(x) else len(x)
-    else:
-        start = slc[0].start
-        stop = slc[0].stop if slc[0].stop < len(x) else len(x)
-    idx = pd.Index(range(start, stop))
-
-    if lock:
-        lock.acquire()
-    try:
-        if isinstance(x, bcolz.ctable):
-            chunks = [x[name][slc] for name in columns]
-            if categories is not None:
-                chunks = [
-                    pd.Categorical.from_codes(
-                        np.searchsorted(categories[name], chunk), categories[name], True
-                    )
-                    if name in categories
-                    else chunk
-                    for name, chunk in zip(columns, chunks)
-                ]
-            result = pd.DataFrame(
-                dict(zip(columns, chunks)), columns=columns, index=idx
-            )
-
-        elif isinstance(x, bcolz.carray):
-            chunk = x[slc]
-            if categories is not None and columns and columns in categories:
-                chunk = pd.Categorical.from_codes(
-                    np.searchsorted(categories[columns], chunk),
-                    categories[columns],
-                    True,
-                )
-            result = pd.Series(chunk, name=columns, index=idx)
-    finally:
-        if lock:
-            lock.release()
-    return result
+    return from_pandas(
+        pd.DataFrame.from_dict(data, orient, dtype, columns),
+        npartitions,
+    )
 
 
 def _partition_from_array(data, index=None, initializer=None, **kwargs):
@@ -1017,7 +895,8 @@ def from_map(
         Whether to enforce at runtime that the structure of the DataFrame
         produced by ``func`` actually matches the structure of ``meta``.
         This will rename and reorder columns for each partition,
-        and will raise an error if this doesn't work or types don't match.
+        and will raise an error if this doesn't work,
+        but it won't raise if dtypes don't match.
     **kwargs:
         Key-word arguments to broadcast to each output partition. These
         same arguments will be passed to ``func`` for every output partition.

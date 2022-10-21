@@ -8,6 +8,7 @@ import numpy as np
 from tlz import sliding_window
 
 from dask.array import chunk
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import (
     Array,
     asarray,
@@ -327,6 +328,7 @@ def linspace(
         return Array(dsk, name, chunks, dtype=dtype)
 
 
+@array_creation_dispatch.register_inplace("numpy")
 def arange(*args, chunks="auto", like=None, dtype=None, **kwargs):
     """
     Return evenly spaced values from `start` to `stop` with step size `step`.
@@ -1235,4 +1237,4 @@ def pad(array, pad_width, mode="constant", **kwargs):
     elif mode in ["reflect", "symmetric", "wrap"]:
         return pad_reuse(array, pad_width, mode, **kwargs)
 
-    assert False, "unreachable"
+    raise RuntimeError("unreachable")

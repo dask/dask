@@ -947,6 +947,8 @@ normalize_token.register(
         complex,
         type(Ellipsis),
         datetime.date,
+        datetime.time,
+        datetime.datetime,
         datetime.timedelta,
         pathlib.PurePath,
     ),
@@ -1187,8 +1189,8 @@ def register_numpy():
                 offset = 0  # root memmap's have mmap object as base
             if hasattr(
                 x, "offset"
-            ):  # offset numpy used while opening, and not the offset to the beginning of the file
-                offset += getattr(x, "offset")
+            ):  # offset numpy used while opening, and not the offset to the beginning of file
+                offset += x.offset
             return (
                 x.filename,
                 os.path.getmtime(x.filename),

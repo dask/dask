@@ -1071,10 +1071,12 @@ def fix_overlap(ddf, mins, maxes, lens):
         # this partition (i) if the data from this partition will need to be moved
         # to the next partition (i+1) anyway.  If we concatenate data too early,
         # we may lose rows (https://github.com/dask/dask/issues/6972).
-        if i == len(mins) - 2 or divisions[i] != divisions[i + 1]:
-            frames.append(ddf_keys[i])
-            dsk[(name, i)] = (methods.concat, frames)
-            frames = []
+        if divisions[i] == divisions[i + 1] and i + 1 in overlap:
+            continue
+
+        frames.append(ddf_keys[i])
+        dsk[(name, i)] = (methods.concat, frames)
+        frames = []
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, ddf._meta, divisions)

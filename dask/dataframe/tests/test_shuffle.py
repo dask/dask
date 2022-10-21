@@ -17,7 +17,12 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.base import compute_as_if_collection
-from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
+from dask.dataframe._compat import (
+    PANDAS_GT_120,
+    PANDAS_GT_140,
+    assert_categorical_equal,
+    tm,
+)
 from dask.dataframe.shuffle import (
     _noop,
     maybe_buffered_partd,
@@ -179,20 +184,53 @@ def test_partitioning_index_categorical_on_values():
     "npartitions", [1, 4, 7, pytest.param(23, marks=pytest.mark.slow)]
 )
 def test_set_index_general(npartitions, shuffle_method):
+    names = ["alice", "bob", "ricky"]
     df = pd.DataFrame(
-        {"x": np.random.random(100), "y": np.random.random(100) // 0.2},
+        {
+            "x": np.random.random(100),
+            "y": np.random.random(100) // 0.2,
+            "z": np.random.choice(names, 100),
+        },
         index=np.random.random(100),
     )
+    # Ensure extension dtypes work
+    # NOTE: Older version of pandas have known issues with extension dtypes.
+    # We generally expect extension dtypes to work well when using `pandas>=1.4.0`.
+    if PANDAS_GT_140:
+        df = df.astype({"x": "Float64", "z": "string"})
 
     ddf = dd.from_pandas(df, npartitions=npartitions)
 
     assert_eq(df.set_index("x"), ddf.set_index("x", shuffle=shuffle_method))
     assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
+    assert_eq(df.set_index("z"), ddf.set_index("z", shuffle=shuffle_method))
     assert_eq(df.set_index(df.x), ddf.set_index(ddf.x, shuffle=shuffle_method))
     assert_eq(
         df.set_index(df.x + df.y), ddf.set_index(ddf.x + ddf.y, shuffle=shuffle_method)
     )
     assert_eq(df.set_index(df.x + 1), ddf.set_index(ddf.x + 1, shuffle=shuffle_method))
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_140, reason="Only test `string[pyarrow]` on recent versions of pandas"
+)
+@pytest.mark.parametrize(
+    "string_dtype", ["string[python]", "string[pyarrow]", "object"]
+)
+def test_set_index_string(shuffle_method, string_dtype):
+    if string_dtype == "string[pyarrow]":
+        pytest.importorskip("pyarrow")
+    names = ["alice", "bob", "ricky"]
+    df = pd.DataFrame(
+        {
+            "x": np.random.random(100),
+            "y": np.random.choice(names, 100),
+        },
+        index=np.random.random(100),
+    )
+    df = df.astype({"y": string_dtype})
+    ddf = dd.from_pandas(df, npartitions=10)
+    assert_eq(df.set_index("y"), ddf.set_index("y", shuffle=shuffle_method))
 
 
 def test_set_index_self_index(shuffle_method):
@@ -749,7 +787,7 @@ def test_set_index_timezone():
         assert not d2.divisions[0] == s2badtype[0]
     else:
         with pytest.raises(TypeError):
-            d2.divisions[0] == s2badtype[0]
+            assert d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():
@@ -1180,6 +1218,17 @@ def test_set_index_overlap_2():
 
     assert_eq(ddf1, ddf2)
     assert ddf2.npartitions == 8
+
+
+def test_set_index_overlap_does_not_drop_rows_when_divisions_overlap():
+    # https://github.com/dask/dask/issues/9339
+    df = pd.DataFrame({"ts": [1, 1, 2, 2, 3, 3, 3, 3], "value": "abc"})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    expected = df.set_index("ts")
+    actual = ddf.set_index("ts", sorted=True)
+
+    assert_eq(expected, actual)
 
 
 def test_compute_current_divisions_nan_partition():

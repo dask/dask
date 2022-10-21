@@ -15,6 +15,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 import dask.dataframe.groupby
+from dask import delayed
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
@@ -23,6 +24,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_120,
     PANDAS_GT_140,
     PANDAS_GT_150,
+    check_numeric_only_deprecation,
     tm,
 )
 from dask.dataframe.core import (
@@ -40,6 +42,11 @@ from dask.datasets import timeseries
 from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 from dask.utils_test import _check_warning, hlg_layer
 
+try:
+    import crick
+except ImportError:
+    crick = None
+
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
@@ -50,6 +57,7 @@ meta = make_meta(
 )
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
@@ -190,7 +198,7 @@ def test_Index():
     ]:
         ddf = dd.from_pandas(case, 3)
         assert_eq(ddf.index, case.index)
-        pytest.raises(AttributeError, lambda: ddf.index.index)
+        pytest.raises(AttributeError, lambda ddf=ddf: ddf.index.index)
 
 
 def test_axes():
@@ -391,11 +399,17 @@ def test_rename_series_method_2():
 
 
 @pytest.mark.parametrize(
-    "method,test_values", [("tdigest", (6, 10)), ("dask", (4, 20))]
+    "method,test_values",
+    [
+        pytest.param(
+            "tdigest",
+            (6, 10),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
+        ),
+        ("dask", (4, 20)),
+    ],
 )
 def test_describe_numeric(method, test_values):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # prepare test case which approx quantiles will be the same as actuals
     s = pd.Series(list(range(test_values[1])) * test_values[0])
     df = pd.DataFrame(
@@ -1271,22 +1285,48 @@ def test_isin():
     f_list = [1, 2, 3]
     f_series = pd.Series(f_list)
     f_dict = {"a": [0, 3], "b": [1, 2]}
+    f_list2 = [1, "2"]
+    f_list_delayed = [delayed(1), delayed(2), delayed(3)]
+    f_list_of_lists = [[1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
     # Series
     assert_eq(d.a.isin(f_list), full.a.isin(f_list))
     assert_eq(d.a.isin(f_series), full.a.isin(f_series))
+    assert_eq(d.a.isin(f_list2), full.a.isin(f_list2))
+    assert_eq(
+        d.a.isin(f_list_delayed),
+        full.a.isin(f_list),
+    )
+    assert_eq(
+        d.a.isin(f_list_of_lists),
+        full.a.isin(f_list_of_lists),
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # Index
     da.utils.assert_eq(d.index.isin(f_list), full.index.isin(f_list))
     da.utils.assert_eq(d.index.isin(f_series), full.index.isin(f_series))
+    da.utils.assert_eq(d.index.isin(f_list2), full.index.isin(f_list2))
+    da.utils.assert_eq(
+        d.index.isin(f_list_delayed),
+        full.index.isin(f_list),
+    )
     with pytest.raises(NotImplementedError):
         d.a.isin(d.a)
 
     # DataFrame test
     assert_eq(d.isin(f_list), full.isin(f_list))
     assert_eq(d.isin(f_dict), full.isin(f_dict))
+    assert_eq(d.isin(f_list2), full.isin(f_list2))
+    assert_eq(
+        d.isin(f_list_delayed),
+        full.isin(f_list),
+    )
+    assert_eq(
+        d.isin(f_list_of_lists),
+        full.isin(f_list_of_lists),
+    )
     for obj in [d, f_series, full]:
         with pytest.raises(NotImplementedError):
             d.isin(obj)
@@ -1337,11 +1377,16 @@ def test_nbytes():
 
 @pytest.mark.parametrize(
     "method,expected",
-    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 4.0, 1.2, 6.2, 2.0))],
+    [
+        pytest.param(
+            "tdigest",
+            (0.35, 3.80, 2.5, 6.5, 2.0),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
+        ),
+        ("dask", (0.0, 4.0, 1.2, 6.2, 2.0)),
+    ],
 )
 def test_quantile(method, expected):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # series / multiple
     result = d.b.quantile([0.3, 0.7], method=method)
 
@@ -1380,10 +1425,16 @@ def test_quantile(method, expected):
     assert result == expected[4]
 
 
-@pytest.mark.parametrize("method", ["tdigest", "dask"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+        ),
+        "dask",
+    ],
+)
 def test_quantile_missing(method):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     df = pd.DataFrame({"A": [0, np.nan, 2]})
     # TODO: Test npartitions=2
     # (see https://github.com/dask/dask/issues/9227)
@@ -1397,10 +1448,16 @@ def test_quantile_missing(method):
     assert_eq(result, expected)
 
 
-@pytest.mark.parametrize("method", ["tdigest", "dask"])
+@pytest.mark.parametrize(
+    "method",
+    [
+        pytest.param(
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+        ),
+        "dask",
+    ],
+)
 def test_empty_quantile(method):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     result = d.b.quantile([], method=method)
     exp = full.b.quantile([])
     assert result.divisions == (None, None)
@@ -1417,7 +1474,7 @@ def test_empty_quantile(method):
 @pytest.mark.parametrize(
     "method,expected",
     [
-        (
+        pytest.param(
             "tdigest",
             (
                 pd.Series([9.5, 29.5, 19.5], index=["A", "X", "B"]),
@@ -1427,6 +1484,7 @@ def test_empty_quantile(method):
                     columns=["A", "X", "B"],
                 ),
             ),
+            marks=pytest.mark.skipif(not crick, reason="Requires crick"),
         ),
         (
             "dask",
@@ -1442,8 +1500,6 @@ def test_empty_quantile(method):
     ],
 )
 def test_dataframe_quantile(method, expected):
-    if method == "tdigest":
-        pytest.importorskip("crick")
     # column X is for test column order and result division
     df = pd.DataFrame(
         {
@@ -1456,7 +1512,8 @@ def test_dataframe_quantile(method, expected):
     )
     ddf = dd.from_pandas(df, 3)
 
-    result = ddf.quantile(method=method)
+    with check_numeric_only_deprecation():
+        result = ddf.quantile(method=method)
     assert result.npartitions == 1
     assert result.divisions == ("A", "X")
 
@@ -1477,7 +1534,9 @@ def test_dataframe_quantile(method, expected):
 
     assert (result == expected[1]).all().all()
 
-    assert_eq(ddf.quantile(axis=1, method=method), df.quantile(axis=1))
+    with check_numeric_only_deprecation():
+        expected = df.quantile(axis=1)
+    assert_eq(ddf.quantile(axis=1, method=method), expected)
     pytest.raises(ValueError, lambda: ddf.quantile([0.25, 0.75], axis=1, method=method))
 
 
@@ -1621,6 +1680,14 @@ def test_assign_dtypes():
         res.dtypes,
         pd.Series(data=["object", "int64", "object"], index=["col1", "col2", "col3"]),
     )
+
+
+def test_assign_pandas_series():
+    # Make sure we handle when `df.columns.min()` raises TypeError
+    df = pd.DataFrame({"a": [1, 2], 1: [5, 6]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.assign(c=df["a"])
+    assert_eq(ddf, df.assign(c=df["a"]))
 
 
 def test_map():
@@ -1952,7 +2019,7 @@ def test_repartition():
         [10, 10, 20, 60],
     ]:  # not unique (last element can be duplicated)
 
-        pytest.raises(ValueError, lambda: a.repartition(divisions=div))
+        pytest.raises(ValueError, lambda div=div: a.repartition(divisions=div))
 
     pdf = pd.DataFrame(np.random.randn(7, 5), columns=list("abxyz"))
     for p in range(1, 7):
@@ -2720,7 +2787,10 @@ def test_reduction_method():
 
     # Test with keywords
     res2 = ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})
-    res2._name == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
+    assert (
+        res2._name
+        == ddf.reduction(chunk, aggregate=agg, chunk_kwargs={"val": 25})._name
+    )
     assert res2._name != res._name
     assert_eq(res2, (df >= 25).sum())
 
@@ -3240,8 +3310,12 @@ def test_cov_corr_mixed():
     df["unique_id"] = df["unique_id"].astype(str)
 
     ddf = dd.from_pandas(df, npartitions=20)
-    assert_eq(ddf.corr(split_every=4), df.corr(), check_divisions=False)
-    assert_eq(ddf.cov(split_every=4), df.cov(), check_divisions=False)
+    with check_numeric_only_deprecation():
+        expected = df.corr()
+    assert_eq(ddf.corr(split_every=4), expected, check_divisions=False)
+    with check_numeric_only_deprecation():
+        expected = df.cov()
+    assert_eq(ddf.cov(split_every=4), expected, check_divisions=False)
 
 
 def test_autocorr():
@@ -3321,25 +3395,25 @@ def test_nlargest_nsmallest():
     ddf = dd.from_pandas(df, npartitions=3)
 
     for m in ["nlargest", "nsmallest"]:
-        f = lambda df, *args, **kwargs: getattr(df, m)(*args, **kwargs)
+        f = lambda df=df, m=m, *args, **kwargs: getattr(df, m)(*args, **kwargs)
 
-        res = f(ddf, 5, "a")
-        res2 = f(ddf, 5, "a", split_every=2)
-        sol = f(df, 5, "a")
+        res = f(ddf, m, 5, "a")
+        res2 = f(ddf, m, 5, "a", split_every=2)
+        sol = f(df, m, 5, "a")
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf, 5, ["a", "c"])
-        res2 = f(ddf, 5, ["a", "c"], split_every=2)
-        sol = f(df, 5, ["a", "c"])
+        res = f(ddf, m, 5, ["a", "c"])
+        res2 = f(ddf, m, 5, ["a", "c"], split_every=2)
+        sol = f(df, m, 5, ["a", "c"])
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
 
-        res = f(ddf.a, 5)
-        res2 = f(ddf.a, 5, split_every=2)
-        sol = f(df.a, 5)
+        res = f(ddf.a, m, 5)
+        res2 = f(ddf.a, m, 5, split_every=2)
+        sol = f(df.a, m, 5)
         assert_eq(res, sol)
         assert_eq(res2, sol)
         assert res._name != res2._name
@@ -3718,11 +3792,7 @@ def test_index_nulls(null_value):
     df = pd.DataFrame(
         {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
     )
-    # an object column all set to nulls fails
-    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
-    with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index("non_numeric")
-    # an object column with only some nulls also fails
+    # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
@@ -4304,6 +4374,54 @@ def test_dataframe_mode():
     assert_eq(ddf.mode(), df.mode(), check_index=False)
 
 
+def test_median():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [1.1, 2.2, 3.3, 4.4, 5.5]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    # Exact medians work when `axis=1` or when there's only have a single partition
+    assert_eq(ddf.median(axis=1), df.median(axis=1))
+    ddf_single = dd.from_pandas(df, npartitions=1)
+    assert_eq(ddf_single.median(axis=1), df.median(axis=1))
+    assert_eq(ddf_single.median(axis=0), df.median(axis=0))
+    assert_eq(ddf_single.x.median(), df.x.median())
+
+    # Ensure `median` redirects to `median_approximate` appropriately
+    for axis in [None, 0, "rows"]:
+        with pytest.raises(
+            NotImplementedError, match="See the `median_approximate` method instead"
+        ):
+            ddf.median(axis=axis)
+
+    with pytest.raises(
+        NotImplementedError, match="See the `median_approximate` method instead"
+    ):
+        ddf.x.median()
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "dask",
+        pytest.param(
+            "tdigest", marks=pytest.mark.skipif(not crick, reason="Requires crick")
+        ),
+    ],
+)
+def test_median_approximate(method):
+    df = pd.DataFrame({"x": range(100), "y": range(100, 200)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    if PANDAS_GT_110:
+        assert_eq(
+            ddf.median_approximate(method=method),
+            df.median(),
+            atol=1,
+        )
+    else:
+        result = ddf.median_approximate(method=method)
+        expected = df.median()
+        assert ((result - expected).abs() < 1).all().compute()
+
+
 def test_datetime_loc_open_slicing():
     dtRange = pd.date_range("01.01.2015", "05.05.2015")
     df = pd.DataFrame(np.random.random((len(dtRange), 2)), index=dtRange)
@@ -4492,7 +4610,7 @@ def test_coerce():
     ddf = dd.from_pandas(df, npartitions=2)
     funcs = (int, float, complex)
     for d, t in product(funcs, (ddf, ddf[0])):
-        pytest.raises(TypeError, lambda: t(d))
+        pytest.raises(TypeError, lambda t=t, d=d: t(d))
 
 
 def test_bool():

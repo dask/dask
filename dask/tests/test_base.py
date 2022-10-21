@@ -574,6 +574,78 @@ def test_tokenize_datetime_date():
     assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
+def test_tokenize_datetime_time():
+    # Same time
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) == tokenize(
+        datetime.time(1, 2, 3, 4, datetime.timezone.utc)
+    )
+    assert tokenize(datetime.time(1, 2, 3, 4)) == tokenize(datetime.time(1, 2, 3, 4))
+    assert tokenize(datetime.time(1, 2, 3)) == tokenize(datetime.time(1, 2, 3))
+    assert tokenize(datetime.time(1, 2)) == tokenize(datetime.time(1, 2))
+    # Different hour
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(2, 2, 3, 4, datetime.timezone.utc)
+    )
+    # Different minute
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 3, 3, 4, datetime.timezone.utc)
+    )
+    # Different second
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 4, 4, datetime.timezone.utc)
+    )
+    # Different micros
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 5, datetime.timezone.utc)
+    )
+    # Different tz
+    assert tokenize(datetime.time(1, 2, 3, 4, datetime.timezone.utc)) != tokenize(
+        datetime.time(1, 2, 3, 4)
+    )
+
+
+def test_tokenize_datetime_datetime():
+    # Same datetime
+    required = [1, 2, 3]  # year, month, day
+    optional = [4, 5, 6, 7, datetime.timezone.utc]
+    for i in range(len(optional) + 1):
+        args = required + optional[:i]
+        assert tokenize(datetime.datetime(*args)) == tokenize(datetime.datetime(*args))
+
+    # Different year
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(2, 2, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different month
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 1, 3, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different day
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 2, 4, 5, 6, 7, datetime.timezone.utc))
+    # Different hour
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 3, 5, 6, 7, datetime.timezone.utc))
+    # Different minute
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 4, 6, 7, datetime.timezone.utc))
+    # Different second
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 5, 7, datetime.timezone.utc))
+    # Different micros
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 6, datetime.timezone.utc))
+    # Different tz
+    assert tokenize(
+        datetime.datetime(1, 2, 3, 4, 5, 6, 7, datetime.timezone.utc)
+    ) != tokenize(datetime.datetime(1, 2, 3, 4, 5, 6, 7, None))
+
+
 def test_is_dask_collection():
     class DummyCollection:
         def __init__(self, dsk):
@@ -1048,7 +1120,7 @@ def test_compute_nested():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 @pytest.mark.xfail(
     sys.platform == "win32",
@@ -1098,7 +1170,7 @@ def test_visualize():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_highlevelgraph():
     graphviz = pytest.importorskip("graphviz")
@@ -1111,7 +1183,7 @@ def test_visualize_highlevelgraph():
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
 )
 def test_visualize_order():
     pytest.importorskip("graphviz")
@@ -1381,7 +1453,7 @@ def test_persist_item_change_name():
 
 
 def test_normalize_function_limited_size():
-    for i in range(1000):
+    for _ in range(1000):
         normalize_function(lambda x: x)
 
     assert 50 < len(function_cache) < 600
