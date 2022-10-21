@@ -459,7 +459,7 @@ class PartitionMetadata:
         if isinstance(partitioning, dict):
             self._partitioning = partitioning
         else:
-            self._partitioning = {("__index__",): "order"} if divisions else {}
+            self._partitioning = {("__index__",): "ascending"} if divisions else {}
 
         # Optional partition-wise statistics:
         #   - "__num_rows__": Series of partition row counts
