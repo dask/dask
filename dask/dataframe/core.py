@@ -655,7 +655,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 # it is also partitioned by ("A", "B", ...)
                 if _by[: len(group)] == group:
                     return self.partition_metadata.partitioning[group]
-        return False
+            return False
+        raise TypeError(f"columns should be str, list, or tuple. Got {type(columns)}.")
 
     @property
     def _meta(self):

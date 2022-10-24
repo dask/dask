@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import PANDAS_GT_150, check_numeric_only_deprecation
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
@@ -2141,7 +2141,7 @@ class _GroupBy:
         df = self.obj
         should_shuffle = not (
             df.known_divisions and df._contains_index_name(self.by)
-        ) and not df.partitioned_by(self.by)
+        ) and (is_dask_collection(self.by) or not df.partitioned_by(self.by))
 
         if should_shuffle:
             df2, by = self._shuffle(meta)
