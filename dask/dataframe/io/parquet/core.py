@@ -534,11 +534,13 @@ def read_parquet(
         if meta.index.name == NONE_LABEL:
             meta.index.name = None
 
+    empty = False
     if len(divisions) < 2:
         # empty dataframe - just use meta
         divisions = (None, None)
         io_func = lambda x: x
         parts = [meta]
+        empty = True
     else:
         # Use IO function wrapper
         io_func = ParquetFunctionWrapper(
@@ -562,8 +564,8 @@ def read_parquet(
         ctx = contextlib.nullcontext()
 
     # Define partition_metadata, using callback if necessary
-    _partition_lens, _column_stats = None, None
-    if hasattr(engine, "read_partition_stats"):
+    _partition_lens, _column_stats = None, {}
+    if not empty and hasattr(engine, "read_partition_stats"):
         _func = partial(_lazy_pq_partition_stats, parts, columns, engine, fs)
         _partition_lens, _column_stats = _func, {k: _func for k in set(columns)}
     if processed_stats:
