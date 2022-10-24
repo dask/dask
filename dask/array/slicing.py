@@ -302,12 +302,8 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
                 f"Arrays chunk sizes are unknown: {shape}{unknown_chunk_message}"
             )
 
-    def normalize_np_scalars(ind):
-        if isinstance(ind, np.ndarray) and ind.ndim == 0:
-            ind = ind.flatten()[0]
-        return ind
-
-    index = tuple(map(normalize_np_scalars, index))
+    # Extract 0-dimension ndarrays
+    index = [i.item() if is_arraylike(i) and i.ndim == 0 else i for i in index]
 
     assert all(isinstance(ind, (slice, Integral)) for ind in index)
     assert len(index) == len(blockdims)
