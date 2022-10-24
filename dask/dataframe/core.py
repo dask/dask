@@ -345,15 +345,93 @@ class PartitionStatistics:
         column_statistics: dict | None = None,
         partition_lens: tuple | Callable | None = None,
     ):
-        # _column_statistics : dict[<column-name>, Iterable[dict{<stat-name>: <value>}]]
         self._column_statistics = column_statistics or {}
-        # _partition_lens : tuple of partition lengths
         self._partition_lens = partition_lens
 
-    @classmethod
-    def from_records(cls, records: list, schema: dict):
-        """Create a PartitionStatistics object from a partition-wise list of statistics"""
-        raise NotImplementedError
+    @property
+    def partition_lens(self) -> tuple | Callable | None:
+        """Return partition lengths (if known)"""
+        if callable(self._partition_lens):
+            success = self.load_statistics(partition_lens=True, columns=set())
+            if not success:
+                raise KeyError("partition_lens could not be loaded")
+        assert not callable(self._partition_lens)
+        return self._partition_lens
+
+    def column(self, column_name: str):
+        """Return statistics for a specific column (if known)"""
+        column = self._column_statistics.get(column_name, None)
+        if callable(column):
+            success = self.load_statistics(columns={column_name})
+            if not success:
+                raise KeyError(f"{column_name} statistics could not be loaded")
+            column = self._column_statistics.get(column_name, None)
+        assert not callable(column)
+        return column
+
+    def load_statistics(
+        self, partition_lens: bool = True, columns: set | None = None
+    ) -> bool:
+        """Load multiple lazy statistics at once
+
+        Return value specifies if the desired statistics
+        were successfully loaded.
+        """
+
+        # Check if we are loading partition lengths
+        _load_partition_lens = False
+        if partition_lens:
+            if self._partition_lens is None:
+                raise KeyError(
+                    "partition_lens statistic was requested, "
+                    "but it is not available."
+                )
+            elif callable(self._partition_lens):
+                _load_partition_lens = True
+
+        # Deal with column statistics
+        columns = columns or set()
+        _available = set(self._column_statistics.keys())
+        if not columns.issubset(_available):
+            raise KeyError(
+                f"{columns} stat columns were requested, "
+                f"but only {_available} stats are available."
+            )
+
+        _columns = (
+            columns - {k for k, v in self._column_statistics.items() if not callable(v)}
+            if columns
+            else set()
+        )
+        if not _columns and not _load_partition_lens:
+            return True  # No lazy stats to load
+
+        # Aggregate lazy-function calls
+        _lazy_column_stats = defaultdict(set)
+        for col in _columns:
+            _func = self._column_statistics[col]
+            _lazy_column_stats[_func].add(col)
+
+        # Make sure partition_lens callback is represented
+        if _load_partition_lens:
+            if self._partition_lens not in _lazy_column_stats:
+                _lazy_column_stats[self._partition_lens] = set()
+
+        # Perform update
+        new_column_stats = {}
+        for _func, _keyset in _lazy_column_stats.items():
+            new_partition_lens, column_stats = _func(columns=_keyset)
+            if isinstance(new_partition_lens, tuple):
+                self._partition_lens = new_partition_lens
+            new_column_stats.update(column_stats)
+        self._column_statistics.update(new_column_stats)
+
+        # Check if update was successful
+        if (_columns - set(new_column_stats.keys())) or (
+            _load_partition_lens and callable(self._partition_lens)
+        ):
+            return False
+        return True
 
     def copy(
         self, partition_lens: bool = True, columns: set | None = None
@@ -374,99 +452,6 @@ class PartitionStatistics:
             ),
             partition_lens=self._partition_lens if partition_lens else None,
         )
-
-    @property
-    def partition_lens(self) -> tuple | Callable | None:
-        return self._partition_lens
-
-    @property
-    def known_columns(self) -> set:
-        """Return all column names with known partition statistics"""
-        return {k for k, v in self._column_statistics.items() if not callable(v)}
-
-    @property
-    def available_columns(self) -> set:
-        """Return all column names with available partition statistics"""
-        return set(self._column_statistics.keys())
-
-    def get(self, columns: set | None = None, partition_lens: bool = True) -> dict:
-        """Return partition lengths and requested column statistics"""
-        columns = columns or set()
-        success = self.load_statistics(partition_lens=partition_lens, columns=columns)
-        if not success:
-            missing = self.known_columns - columns
-            if partition_lens and (
-                not bool(self.partition_lens) or callable(self.partition_lens)
-            ):
-                # Partition lengths are still unknown
-                missing.add("partition_lens")
-            raise KeyError(f"{missing} stats could not be loaded")
-        return {
-            "partition_lens": self.partition_lens if partition_lens else None,
-            "columns": {col: self._column_statistics[col] for col in columns},
-        }
-
-    def load_statistics(
-        self, partition_lens: bool = True, columns: set | None = None
-    ) -> bool:
-        """Load lazy statistics
-
-        Return value specifies if the desired statistics
-        were successfully loaded.
-        """
-
-        # Check if we are loading partition lengths
-        _load_partition_lens = False
-        if partition_lens:
-            if self.partition_lens is None:
-                raise KeyError(
-                    "partition_lens statistic was requested, "
-                    "but it is not available."
-                )
-            elif callable(self.partition_lens):
-                _load_partition_lens = True
-
-        # Deal with column statistics
-        _available = self.available_columns
-        if columns:
-            if not columns.issubset(_available):
-                raise KeyError(
-                    f"{columns} stat columns were requested, "
-                    f"but only {_available} stats are available."
-                )
-        else:
-            columns = _available
-
-        _columns = columns - self.known_columns
-        if not _columns and not _load_partition_lens:
-            return True  # No lazy stats to load
-
-        # Aggregate lazy-function calls
-        _lazy_column_stats = defaultdict(set)
-        for col in _columns:
-            _func = self._column_statistics[col]
-            _lazy_column_stats[_func].add(col)
-
-        # Make sure partition_lens callback is represented
-        if _load_partition_lens:
-            if self.partition_lens not in _lazy_column_stats:
-                _lazy_column_stats[self.partition_lens] = set()
-
-        # Perform update
-        new_column_stats = {}
-        for _func, _keyset in _lazy_column_stats.items():
-            new_partition_lens, column_stats = _func(columns=_keyset)
-            if isinstance(new_partition_lens, tuple):
-                self._partition_lens = new_partition_lens
-            new_column_stats.update(column_stats)
-        self._column_statistics.update(new_column_stats)
-
-        # Check if update was successful
-        if (_columns - set(new_column_stats.keys())) or (
-            _load_partition_lens and callable(self.partition_lens)
-        ):
-            return False
-        return True
 
 
 class PartitionMetadata:
@@ -608,12 +593,6 @@ class PartitionMetadata:
     def statistics(self) -> PartitionStatistics:
         """Return partition-statistics object"""
         return self._statistics
-
-    def get_stats(
-        self, columns: set | None = None, partition_lens: bool = True
-    ) -> dict:
-        """Return requested partition statistics"""
-        return self.statistics.get(columns=columns, partition_lens=partition_lens)
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
@@ -4917,13 +4896,10 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
-        try:
-            # Use partition statistics if they are available
-            part_sizes = self.partition_metadata.get_stats()["partition_lens"]
-            if part_sizes:
-                return sum(part_sizes)
-        except KeyError:
-            pass
+        # Use partition statistics if they are available
+        partition_lens = self.partition_metadata.statistics.partition_lens
+        if partition_lens is not None:
+            return sum(partition_lens)
         try:
             s = self.iloc[:, 0]
         except IndexError:
@@ -5344,10 +5320,9 @@ class DataFrame(_Frame):
 
             # Use partition statistics to check if new index is already sorted
             if not pre_sorted and divisions is None:
-                try:
-                    _stats = self.partition_metadata.get_stats(columns={other})[
-                        "columns"
-                    ][other]
+                _stats = self.partition_metadata.statistics.column(other)
+                if _stats is not None:
+                    _stats = pd.DataFrame(_stats)  # Convert to DataFrame
                     if _stats is not None:
                         pre_sorted = all(
                             _stats["min"][1:].values > _stats["max"][:-1].values
@@ -5356,8 +5331,6 @@ class DataFrame(_Frame):
                             divisions = tuple(
                                 list(_stats["min"]) + [_stats["max"].iloc[-1]]
                             )
-                except KeyError:
-                    pass
 
         # Check divisions
         if divisions is not None:

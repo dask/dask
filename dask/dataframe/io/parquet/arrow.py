@@ -400,12 +400,28 @@ class ArrowDatasetEngine(Engine):
                     name = col.path_in_schema
                     if name in columns:
                         if col.statistics and col.statistics.has_min_max:
-                            column_stats[name] = {
-                                "min": col.statistics.min,
-                                "max": col.statistics.max,
-                            }
+                            if name in column_stats:
+                                column_stats[name]["min"] = min(
+                                    column_stats[name]["min"], col.statistics.min
+                                )
+                                column_stats[name]["max"] = max(
+                                    column_stats[name]["max"], col.statistics.max
+                                )
+                            else:
+                                column_stats[name] = {
+                                    "min": col.statistics.min,
+                                    "max": col.statistics.max,
+                                }
 
-        return {"num-rows": num_rows, **column_stats}
+        column_stats_list = [
+            {
+                "name": name,
+                "min": column_stats[name]["min"],
+                "max": column_stats[name]["max"],
+            }
+            for name in column_stats.keys()
+        ]
+        return {"num-rows": num_rows, "columns": column_stats_list}
 
     @classmethod
     def read_partition(

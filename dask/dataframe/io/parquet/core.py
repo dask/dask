@@ -3,9 +3,9 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
+from collections import defaultdict
 from functools import partial
 
-import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
@@ -563,11 +563,12 @@ def read_parquet(
 
     # Define partition_metadata, using callback if necessary
     _partition_lens, _column_stats = None, None
-    if processed_stats:
-        _partition_lens, _column_stats = _pq_partition_stats(processed_stats)
-    elif hasattr(engine, "read_partition_stats"):
+    if hasattr(engine, "read_partition_stats"):
         _func = partial(_lazy_pq_partition_stats, parts, columns, engine, fs)
         _partition_lens, _column_stats = _func, {k: _func for k in set(columns)}
+    if processed_stats:
+        _partition_lens, _known_column_stats = _pq_partition_stats(processed_stats)
+        _column_stats.update(_known_column_stats)
     partition_metadata = PartitionMetadata(
         meta=meta,
         divisions=divisions,
@@ -1588,27 +1589,32 @@ def _lazy_pq_partition_stats(
     fs,
     columns=None,
 ):
-    if columns:
-        columns = [c for c in columns if c in available_columns]
-    else:
-        columns = available_columns
+    columns = [c for c in columns if c in available_columns] if columns else []
     processed_stats = [engine.read_partition_stats(part, columns, fs) for part in parts]
     return _pq_partition_stats(processed_stats)
 
 
 def _pq_partition_stats(stats):
-    results = {}
+    column_stats = defaultdict(list)
+    partition_lens = []
     for stat in stats:
-        for key in stat:
-            if key not in results:
-                results[key] = []
-            results[key].append(stat[key])
-    for k in set(results.keys()) - {"num-rows"}:
-        # TODO: Skip DataFrame formatting
-        results[k] = pd.DataFrame(results[k])
+        # Partition lengths
+        num_rows = stat.get("num-rows", None)
+        if num_rows is None:
+            partition_lens = None
+        elif partition_lens is not None:
+            partition_lens.append(num_rows)
+        # Column statistics
+        columns = stat.get("columns", [])
+        for col_stats in columns:
+            column_stats[col_stats["name"]].append(
+                {
+                    "min": col_stats["min"],
+                    "max": col_stats["max"],
+                }
+            )
 
-    partition_lens = results.pop("num-rows", None)
-    return partition_lens, results
+    return tuple(partition_lens), dict(column_stats)
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__
