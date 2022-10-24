@@ -74,6 +74,7 @@ jobs:
         run: source continuous_integration/scripts/run_tests.sh
       
       - uses: actions/upload-artifact@v3
+        if: always()
         with:
           name: spark-written-dataset
           path: test.parquet
