@@ -92,7 +92,9 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
         }
     )
     # Ensure all columns are extension dtypes
-    assert all([pd.api.types.is_extension_array_dtype(dtype) for dtype in pdf.dtypes])
+    assert all(
+        [pd.api.types.is_extension_array_dtype(dtype) for dtype in pdf.dtypes]
+    ), pdf.dtypes
 
     sdf = spark_session.createDataFrame(pdf)
     # We are not overwriting any data, but spark complains if the directory
@@ -100,8 +102,10 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
     ddf = dd.read_parquet(tmpdir, engine=engine)
-    assert all([pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes])
     assert ddf.npartitions == npartitions
+    assert all(
+        [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
+    ), ddf.dtypes
     assert_eq(ddf, pdf, check_index=False)
 
 
