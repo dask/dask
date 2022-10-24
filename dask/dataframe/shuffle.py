@@ -19,6 +19,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import (
     DataFrame,
     PartitionMetadata,
+    PartitionStatistics,
     Series,
     _Frame,
     map_partitions,
@@ -203,7 +204,14 @@ def sort_values(
     )
     partition_metadata = df.partition_metadata.copy(
         partitioning={tuple(by): "ascending" if ascending else "descending"},
-        statistics={by[0]: pd.DataFrame({"min": divisions[:-1], "max": divisions[1:]})},
+        statistics=PartitionStatistics(
+            column_statistics={
+                by[0]: [
+                    {"min": divisions[i], "max": divisions[i + 1]}
+                    for i in range(len(divisions) - 1)
+                ]
+            }
+        ),
     )
     df = df.map_partitions(
         sort_function,
