@@ -67,12 +67,15 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     assert_eq(ddf, pdf, check_index=False)
 
 
-@pytest.mark.parametrize("npartitions", (1, 5, 10))
-@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+# @pytest.mark.parametrize("npartitions", (1, 5, 10))
+# @pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+@pytest.mark.parametrize("npartitions", (5,))
+@pytest.mark.parametrize("engine", ("pyarrow",))
 def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
     spark_session, npartitions, tmpdir, engine
 ):
-    tmpdir = str(tmpdir)
+    # tmpdir = str(tmpdir)
+    tmpdir = "test.parquet"
 
     size = 20
     pdf = pd.DataFrame(

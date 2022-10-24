@@ -72,6 +72,11 @@ jobs:
 
       - name: Run tests
         run: source continuous_integration/scripts/run_tests.sh
+      
+      - uses: actions/upload-artifact@v3
+        with:
+          name: spark-written-dataset
+          path: test.parquet
 
       - name: Coverage
         uses: codecov/codecov-action@v3
