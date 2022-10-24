@@ -7,6 +7,8 @@ import pytest
 from dask.datasets import timeseries
 
 dd = pytest.importorskip("dask.dataframe")
+np = pytest.importorskip("numpy")
+pd = pytest.importorskip("pandas")
 pyspark = pytest.importorskip("pyspark")
 pytest.importorskip("pyarrow")
 pytest.importorskip("fastparquet")
@@ -63,6 +65,41 @@ def test_roundtrip_parquet_spark_to_dask(spark_session, npartitions, tmpdir, eng
     assert ddf.npartitions == npartitions
 
     assert_eq(ddf, pdf, check_index=False)
+
+
+@pytest.mark.parametrize("npartitions", (1, 5, 10))
+@pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
+def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
+    spark_session, npartitions, tmpdir, engine
+):
+    tmpdir = str(tmpdir)
+
+    size = 20
+    pdf = pd.DataFrame(
+        {
+            "a": range(size),
+            "b": np.random.random(size=size),
+            "c": [True, False] * (size // 2),
+            "d": ["alice", "bob"] * (size // 2),
+        }
+    )
+    pdf = pdf.astype(
+        {
+            "a": "Int64",
+            "b": "Float64",
+            "c": "boolean",
+            "d": "string[pyarrow]",
+        }
+    )
+
+    sdf = spark_session.createDataFrame(pdf)
+    # We are not overwriting any data, but spark complains if the directory
+    # already exists (as tmpdir does) and we don't set overwrite
+    sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
+
+    ddf = dd.read_parquet(tmpdir, engine=engine)
+    assert ddf.npartitions == npartitions
+    assert_eq(ddf, pdf)
 
 
 @pytest.mark.parametrize("engine", ("pyarrow", "fastparquet"))
