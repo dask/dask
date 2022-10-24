@@ -1,27 +1,34 @@
 Command Line Interface
 ======================
 
-Dask provides the ``dask`` executable to accomplish tasks directly
-from the command line. Projects in the Dask ecosystem (such as
-``distributed``) leverage the command line tool by adding subcommands.
-For example, additional commands implemented in ``distributed`` are
-:ref:`documented here <deploying-cli>`.
+Dask provides a ``dask`` executable for a command line interface.
+Dask's CLI is :ref:`designed to be extensible <extending-cli>` allowing
+other projects in the Dask ecosystem (such as ``distributed``) to
+add subcommands.
 
-Built in commands
+Built-in commands
 -----------------
 
-dask docs
-~~~~~~~~~
+``dask`` comes with the following commands.
 
-Command to open the Dask documentation website.
+.. click:: dask.cli:info
+   :prog: dask info
+   :show-nested:
 
-dask info
-~~~~~~~~~
+.. click:: dask.cli:docs
+   :prog: dask docs
+   :show-nested:
 
-Command to inspect the details of your Dask installation.
+
+.. _extending-cli:
 
 Extending the Dask CLI
 ----------------------
+
+.. note::
+
+    This section is intended for library authors who want to
+    integrate their library with the ``dask`` CLI.
 
 Third party packages can extend the ``dask`` command line tool via
 entry points and Click_. Dask will discover :obj:`click.Command` and
