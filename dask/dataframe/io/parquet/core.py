@@ -15,7 +15,12 @@ import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, PartitionMetadata, Scalar
+from dask.dataframe.core import (
+    DataFrame,
+    PartitionMetadata,
+    PartitionStatistics,
+    Scalar,
+)
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
@@ -557,17 +562,21 @@ def read_parquet(
         ctx = contextlib.nullcontext()
 
     # Define partition_metadata, using callback if necessary
-    _partition_stats = None
+    _partition_lens, _column_stats = None, None
     if processed_stats:
-        _partition_stats = _pq_partition_stats(processed_stats)
+        _partition_lens, _column_stats = _pq_partition_stats(processed_stats)
     elif hasattr(engine, "read_partition_stats"):
         _func = partial(_lazy_pq_partition_stats, parts, columns, engine, fs)
-        _partition_stats = {k: _func for k in {"__num_rows__"} | set(columns)}
-
+        _partition_lens, _column_stats = _func, {k: _func for k in set(columns)}
     partition_metadata = PartitionMetadata(
         meta=meta,
         divisions=divisions,
-        statistics=_partition_stats,
+        statistics=PartitionStatistics(
+            partition_lens=_partition_lens,
+            column_statistics=_column_stats,
+        )
+        if (_partition_lens or _column_stats)
+        else None,
     )
 
     with ctx:
@@ -1574,13 +1583,15 @@ def aggregate_row_groups(
 
 def _lazy_pq_partition_stats(
     parts,
-    columns,
+    available_columns,
     engine,
     fs,
-    keys=None,
+    columns=None,
 ):
-    if keys:
-        columns = [c for c in columns if c in keys]
+    if columns:
+        columns = [c for c in columns if c in available_columns]
+    else:
+        columns = available_columns
     processed_stats = [engine.read_partition_stats(part, columns, fs) for part in parts]
     return _pq_partition_stats(processed_stats)
 
@@ -1593,12 +1604,11 @@ def _pq_partition_stats(stats):
                 results[key] = []
             results[key].append(stat[key])
     for k in set(results.keys()) - {"num-rows"}:
+        # TODO: Skip DataFrame formatting
         results[k] = pd.DataFrame(results[k])
-    if "num-rows" in results:
-        # Convert "num-rows" key to "__num_rows__"
-        results["__num_rows__"] = results.pop("num-rows")
 
-    return results
+    partition_lens = results.pop("num-rows", None)
+    return partition_lens, results
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

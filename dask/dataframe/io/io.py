@@ -18,6 +18,7 @@ from dask.dataframe.core import (
     DataFrame,
     Index,
     PartitionMetadata,
+    PartitionStatistics,
     Series,
     _concat,
     _emulate,
@@ -306,11 +307,11 @@ def from_pandas(
 
     # Define partition metadata
     # TODO: Include min/max column statistics
-    _partition_stats = {
-        "__num_rows__": [
+    _partition_stats = PartitionStatistics(
+        partition_lens=tuple(
             stop - start for start, stop in zip(locations[:-1], locations[1:])
-        ]
-    }
+        )
+    )
     partition_metadata = PartitionMetadata(
         meta=data,
         divisions=divisions,
