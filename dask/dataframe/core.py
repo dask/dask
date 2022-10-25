@@ -317,18 +317,24 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
-class PartitionStatistics:
+class PartitionMetadata:
     """
-    Container for DataFrame partition statistics
+    Container for DataFrame partition metadata
 
     Parameters
     ----------
-    column_statistics: dict
+    meta: Backend-library DataFrame, Series, or Index
+        An empty backend object with names, dtypes, and indices
+        matching the expected output.
+    npartitions: int, optional
+    divisions: tuple, optional
+    partitioning: dict, optional
+    column_statistics: dict, optional
         Dictionary of partition-wise column statistics. The
         keys should be column names, and each value should
         be an iterable of statistics
         (e.g. ``Iterable[Mapping[str, Any]]``).
-    partition_lens: tuple, Callable or None
+    partition_lens: tuple, Callable or None, optional
         Tuple of partition lengths.
 
     If ``partition_lens`` (or any value in ``column_statistics``)
@@ -340,16 +346,140 @@ class PartitionStatistics:
     should return a tuple: ``(partition_lens, column_statistics)``.
     """
 
-    _column_statistics: dict
+    _meta: Any
+    _npartitions: int
+    _divisions: tuple | None
+    _partitioning: dict
     _partition_lens: tuple | Callable | None
+    _column_statistics: dict
 
     def __init__(
         self,
-        column_statistics: dict | None = None,
+        meta: Any = None,
+        npartitions: int | None = None,
+        divisions: tuple | None = None,
+        partitioning: dict | None = None,
         partition_lens: tuple | Callable | None = None,
+        column_statistics: dict | None = None,
     ):
-        self._column_statistics = column_statistics or {}
+        # Store meta (global schema)
+        self._meta = meta
+
+        # Set npartitions
+        if npartitions is None and divisions:
+            self._npartitions = len(divisions) - 1
+        elif isinstance(npartitions, int):
+            self._npartitions = npartitions
+        else:
+            raise ValueError(
+                "Must specify `npartitions` and/or `divisions` "
+                "to PartitionMetadata initializer."
+            )
+
+        # Unknown divisions should just result in divisions == None
+        if isinstance(divisions, (list, tuple)) and all(
+            map(lambda x: x is None, divisions)
+        ):
+            divisions = None
+        self._divisions = divisions
+
+        # Track which columns the DataFrame is partitioned by,
+        # and "how" the columns are partitioned. "How" options
+        # include: "ascending", "descending" and "hash".
+        #   e.g. {<column-name-tuple>: <how-str>}
+        # This is distinct from `divisions`, which requires
+        # "ascending" ordering to be useful.
+        # NOTE: "__index__" corresponds to an unnamed index.
+        if isinstance(partitioning, dict):
+            self._partitioning = partitioning
+        else:
+            self._partitioning = {("__index__",): "ascending"} if divisions else {}
+
+        # Optional partition lengths
+        if (
+            partition_lens is not None
+            and not isinstance(partition_lens, tuple)
+            and not callable(partition_lens)
+        ):
+            raise TypeError(
+                f"partition_lens must be tuple, Callable or None, got {type(partition_lens)}"
+            )
         self._partition_lens = partition_lens
+
+        # Optional column statistics
+        if column_statistics is not None and not isinstance(column_statistics, dict):
+            raise TypeError(
+                f"column_statistics must be dict or None, got {type(column_statistics)}"
+            )
+        self._column_statistics = column_statistics or {}
+
+    def copy(self, **kwargs):
+        """Return copy of this PartitionMetadata object"""
+        new_kwargs = dict(
+            meta=None if self._meta is None else self._meta.copy(),
+            npartitions=self.npartitions,
+            divisions=self.divisions,
+            partitioning=self.partitioning.copy(),
+            partition_lens=self._partition_lens,
+            column_statistics=self._column_statistics.copy(),
+        )
+        new_kwargs.update(**kwargs)
+        return PartitionMetadata(**new_kwargs)
+
+    def __getstate__(self):
+        return dict(
+            _meta=None if self._meta is None else self._meta.copy(),
+            _npartitions=self.npartitions,
+            _divisions=self.divisions,
+            _partitioning=self.partitioning.copy(),
+            _partition_lens=self._partition_lens,
+            _column_statistics=self._column_statistics.copy(),
+        )
+
+    @property
+    def meta(self) -> Any:
+        """Return global DataFrame schema"""
+        return make_meta(self._meta)
+
+    @property
+    def meta_nonempty(self) -> Any:
+        """Return non-empty global DataFrame schema"""
+        return meta_nonempty(self._meta)
+
+    @property
+    def npartitions(self) -> int:
+        """Total partition count"""
+        return self._npartitions
+
+    @property
+    def divisions(self) -> tuple:
+        """Get Min/max Index statistics, if known"""
+        if not self.known_divisions:
+            return (None,) * (self.npartitions + 1)
+        if isinstance(self._divisions, (list, tuple)):
+            return tuple(self._divisions)
+        else:
+            raise ValueError
+
+    @property
+    def known_divisions(self):
+        """Return if divisions are known"""
+        return self._divisions is not None
+
+    @property
+    def partitioning(self) -> dict:
+        """Summary of DataFrame partitioning
+
+        This dictionary is used to track "which" columns in
+        the DataFrame collection are partitioned,
+        and "how" those columns are partitioned. Options
+        for "how" include: "ascending", "descending" and "hash".
+
+        Note that this metadata is distinct from `divisions`,
+        because divisions are only useful for a sorted index.
+        NOTE: "__index__" corresponds to an unnamed index.
+        """
+        return self._partitioning
 
     @property
     def partition_lens(self) -> tuple | Callable | None:
@@ -361,7 +491,7 @@ class PartitionStatistics:
         assert not callable(self._partition_lens)
         return self._partition_lens
 
-    def column(self, column_name: str):
+    def column_statistics(self, column_name: str):
         """Return statistics for a specific column (if known)"""
         column = self._column_statistics.get(column_name, None)
         if callable(column):
@@ -380,7 +510,6 @@ class PartitionStatistics:
         Return value specifies if the desired statistics
         were successfully loaded.
         """
-
         # Check if we are loading partition lengths
         _load_partition_lens = False
         if partition_lens:
@@ -435,157 +564,6 @@ class PartitionStatistics:
         ):
             return False
         return True
-
-    def copy(
-        self, partition_lens: bool = True, columns: set | None = None
-    ) -> PartitionStatistics:
-        """Return a copy of this PartitionStatistics object"""
-        return PartitionStatistics(
-            column_statistics=(
-                self._column_statistics.copy()
-                if columns is None
-                else {
-                    col: (
-                        self._column_statistics[col].copy()
-                        if hasattr(self._column_statistics[col], "copy")
-                        else self._column_statistics[col]
-                    )
-                    for col in columns
-                }
-            ),
-            partition_lens=self._partition_lens if partition_lens else None,
-        )
-
-
-class PartitionMetadata:
-    """
-    Container for DataFrame partition metadata
-    """
-
-    _meta: Any
-    _npartitions: int
-    _divisions: tuple | None
-    _partitioning: dict
-    _statistics: PartitionStatistics
-
-    def __init__(
-        self,
-        meta: Any = None,
-        npartitions: int | None = None,
-        divisions: tuple | None = None,
-        partitioning: dict | None = None,
-        statistics: PartitionStatistics | None = None,
-    ):
-        # Store meta (global schema)
-        self._meta = meta
-
-        # Set npartitions
-        if npartitions is None and divisions:
-            self._npartitions = len(divisions) - 1
-        elif isinstance(npartitions, int):
-            self._npartitions = npartitions
-        else:
-            raise ValueError(
-                "Must specify `npartitions` and/or `divisions` "
-                "to PartitionMetadata initializer."
-            )
-
-        # Unknown divisions should just result in divisions == None
-        if isinstance(divisions, (list, tuple)) and all(
-            map(lambda x: x is None, divisions)
-        ):
-            divisions = None
-        self._divisions = divisions
-
-        # Track which columns the DataFrame is partitioned by,
-        # and "how" the columns are partitioned. "How" options
-        # include: "ascending", "descending" and "hash".
-        #   e.g. {<column-name-tuple>: <how-str>}
-        # This is distinct from `divisions`, which requires
-        # "ascending" ordering to be useful.
-        # NOTE: "__index__" corresponds to an unnamed index.
-        if isinstance(partitioning, dict):
-            self._partitioning = partitioning
-        else:
-            self._partitioning = {("__index__",): "ascending"} if divisions else {}
-
-        # Optional partition-wise statistics
-        if statistics is None:
-            statistics = PartitionStatistics()
-        elif not isinstance(statistics, PartitionStatistics):
-            raise TypeError(f"Expected PartitionStatistics, got {type(statistics)}.")
-        self._statistics = statistics
-
-    def copy(self, **kwargs):
-        """Return copy of this PartitionMetadata object"""
-        new_kwargs = dict(
-            meta=None if self._meta is None else self._meta.copy(),
-            npartitions=self.npartitions,
-            divisions=self.divisions,
-            partitioning=self.partitioning.copy(),
-            statistics=self._statistics.copy(),
-        )
-        new_kwargs.update(**kwargs)
-        return PartitionMetadata(**new_kwargs)
-
-    def __getstate__(self):
-        return dict(
-            _meta=None if self._meta is None else self._meta.copy(),
-            _npartitions=self.npartitions,
-            _divisions=self.divisions,
-            _partitioning=self.partitioning.copy(),
-            _statistics=self._statistics.copy(),
-        )
-
-    @property
-    def meta(self) -> Any:
-        """Return global DataFrame schema"""
-        return make_meta(self._meta)
-
-    @property
-    def meta_nonempty(self) -> Any:
-        """Return non-empty global DataFrame schema"""
-        return meta_nonempty(self._meta)
-
-    @property
-    def npartitions(self) -> int:
-        """Total partition count"""
-        return self._npartitions
-
-    @property
-    def divisions(self) -> tuple:
-        """Get Min/max Index statistics, if known"""
-        if not self.known_divisions:
-            return (None,) * (self.npartitions + 1)
-        if isinstance(self._divisions, (list, tuple)):
-            return tuple(self._divisions)
-        else:
-            raise ValueError
-
-    @property
-    def known_divisions(self):
-        """Return if divisions are known"""
-        return self._divisions is not None
-
-    @property
-    def partitioning(self) -> dict:
-        """Summary of DataFrame partitioning
-
-        This dictionary is used to track "which" columns in
-        the DataFrame collection are partitioned,
-        and "how" those columns are partitioned. Options
-        for "how" include: "ascending", "descending" and "hash".
-
-        Note that this metadata is distinct from `divisions`,
-        because divisions are only useful for a sorted index.
-        NOTE: "__index__" corresponds to an unnamed index.
-        """
-        return self._partitioning
-
-    @property
-    def statistics(self) -> PartitionStatistics:
-        """Return partition-statistics object"""
-        return self._statistics
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
@@ -4891,7 +4869,7 @@ class DataFrame(_Frame):
 
     def __len__(self):
         # Use partition statistics if they are available
-        partition_lens = self.partition_metadata.statistics.partition_lens
+        partition_lens = self.partition_metadata.partition_lens
         if partition_lens is not None:
             return sum(partition_lens)
         try:
@@ -5312,7 +5290,7 @@ class DataFrame(_Frame):
 
             # Use partition statistics to check if new index is already sorted
             if not pre_sorted and divisions is None:
-                _stats = self.partition_metadata.statistics.column(other)
+                _stats = self.partition_metadata.column_statistics(other)
                 if _stats is not None:
                     _stats = pd.DataFrame(_stats)  # Convert to DataFrame
                     if _stats is not None:

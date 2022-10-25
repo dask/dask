@@ -15,12 +15,7 @@ import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import (
-    DataFrame,
-    PartitionMetadata,
-    PartitionStatistics,
-    Scalar,
-)
+from dask.dataframe.core import DataFrame, PartitionMetadata, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
@@ -574,12 +569,8 @@ def read_parquet(
     partition_metadata = PartitionMetadata(
         meta=meta,
         divisions=divisions,
-        statistics=PartitionStatistics(
-            partition_lens=_partition_lens,
-            column_statistics=_column_stats,
-        )
-        if (_partition_lens or _column_stats)
-        else None,
+        partition_lens=_partition_lens,
+        column_statistics=_column_stats,
     )
 
     with ctx:
