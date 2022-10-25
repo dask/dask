@@ -24,6 +24,7 @@ requirements:
 
   run:
     - python >=3.8
+    - click >=6.6
     - cloudpickle >=1.1.1
     - fsspec >=0.6.0
     - packaging >=20.0

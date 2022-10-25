@@ -1,12 +1,10 @@
-import pytest
-
-click = pytest.importorskip("click")
-
 import importlib.metadata
 import json
 import platform
 import sys
 
+import click
+import pytest
 from click.testing import CliRunner
 
 import dask
