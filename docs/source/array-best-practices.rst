@@ -66,6 +66,13 @@ Note that if you provide ``chunks='auto'`` then Dask Array will look for a
 Avoid Oversubscribing Threads
 -----------------------------
 
+.. tip::
+
+   When using the ``distributed`` scheduler, the ``OMP_NUM_THREADS``,
+   ``MKL_NUM_THREADS``, and ``OPENBLAS_NUM_THREADS`` environment variables
+   are automatically set to ``1`` when using :ref:`nanny` workers.
+   This helps avoid oversubscribing threads in common cases.
+
 By default Dask will run as many concurrent tasks as you have logical cores.
 It assumes that each task will consume about one core.  However, many
 array-computing libraries are themselves multi-threaded, which can cause
