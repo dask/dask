@@ -95,7 +95,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
             "d": "string[pyarrow]",
         }
     )
-    pdf.loc[4, "b"] = pd.NA
+    # pdf.loc[4, "b"] = pd.NA
     # # Ensure all columns are extension dtypes
     # assert all(
     #     [pd.api.types.is_extension_array_dtype(dtype) for dtype in pdf.dtypes]
