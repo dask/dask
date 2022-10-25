@@ -16,6 +16,8 @@ dependencies:
       - git+https://github.com/dask/distributed
   # test dependencies
   - pre-commit
+  # Adding `py` as a temporary workaround for https://github.com/dask/dask/issues/9597
+  - py
   - pytest
   - pytest-cov
   - pytest-rerunfailures

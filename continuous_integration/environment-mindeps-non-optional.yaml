@@ -12,6 +12,8 @@ dependencies:
   - toolz=0.8.2
   # test dependencies
   - pre-commit
+  # Adding `py` as a temporary workaround for https://github.com/dask/dask/issues/9597
+  - py
   - pytest
   - pytest-cov
   - pytest-rerunfailures
