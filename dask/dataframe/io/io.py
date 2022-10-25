@@ -318,9 +318,7 @@ def from_pandas(
         statistics=_partition_stats,
     )
 
-    return new_dd_object(
-        dsk, name, data, divisions, partition_metadata=partition_metadata
-    )
+    return new_dd_object(dsk, name, partition_metadata, divisions)
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
@@ -858,7 +856,6 @@ def from_map(
     label=None,
     token=None,
     enforce_metadata=True,
-    partition_metadata=None,
     **kwargs,
 ):
     """Create a DataFrame collection from a custom function map
@@ -1013,6 +1010,12 @@ def from_map(
         inputs = list(zip(*iterables))
         packed = True
 
+    if isinstance(meta, PartitionMetadata):
+        partition_metadata = meta
+        meta = partition_metadata.meta
+    else:
+        partition_metadata = None
+
     # Define collection name
     label = label or funcname(func)
     token = token or tokenize(
@@ -1079,11 +1082,12 @@ def from_map(
     )
 
     # Return new DataFrame-collection object
-    divisions = divisions or [None] * (len(inputs) + 1)
-    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
-    return new_dd_object(
-        graph, name, meta, divisions, partition_metadata=partition_metadata
+    partition_metadata = partition_metadata or PartitionMetadata(
+        meta=meta,
+        divisions=divisions or (None,) * (len(inputs) + 1),
     )
+    graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
+    return new_dd_object(graph, name, partition_metadata, None)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

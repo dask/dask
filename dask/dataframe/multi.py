@@ -427,7 +427,7 @@ def hash_join(
             partitioning={tuple(col for col in _left_on): "hash"},
         )
     else:
-        partition_metadata = None
+        partition_metadata = meta
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -440,11 +440,10 @@ def hash_join(
         merge_chunk,
         lhs2,
         rhs2,
-        meta=meta,
+        meta=partition_metadata,
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
-        partition_metadata=partition_metadata,
         **kwargs,
     )
 

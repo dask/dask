@@ -215,7 +215,7 @@ def sort_values(
     )
     df = df.map_partitions(
         sort_function,
-        partition_metadata=partition_metadata,
+        meta=partition_metadata,
         **sort_kwargs,
     )
     return df
@@ -749,9 +749,8 @@ def rearrange_by_column_tasks(
         return new_dd_object(
             graph,
             shuffle_name,
-            df._meta,
+            partition_metadata,
             [None] * (npartitions + 1),
-            partition_metadata=partition_metadata,
         )
 
     n = df.npartitions
@@ -785,9 +784,8 @@ def rearrange_by_column_tasks(
         df = new_dd_object(
             graph,
             stage_name,
-            df._meta,
+            partition_metadata,
             df.divisions,
-            partition_metadata=partition_metadata,
         )
 
     if npartitions is not None and npartitions != npartitions_orig:
@@ -820,9 +818,8 @@ def rearrange_by_column_tasks(
         df2 = new_dd_object(
             graph2,
             repartition_get_name,
-            df._meta,
+            partition_metadata,
             [None] * (npartitions + 1),
-            partition_metadata=partition_metadata,
         )
     else:
         df2 = df
@@ -1167,10 +1164,9 @@ def set_sorted_index(
         df,
         index,
         drop=drop,
-        meta=meta,
+        meta=df.partition_metadata.copy(meta=meta),
         align_dataframes=False,
         transform_divisions=False,
-        partition_metadata=df.partition_metadata.copy(meta=meta),
     )
 
     if not divisions:

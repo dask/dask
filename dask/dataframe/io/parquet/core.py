@@ -587,7 +587,7 @@ def read_parquet(
         return from_map(
             io_func,
             parts,
-            meta=meta,
+            meta=partition_metadata,
             divisions=divisions,
             label="read-parquet",
             token=tokenize(path, **input_kwargs),
@@ -597,7 +597,6 @@ def read_parquet(
                 "args": (path,),
                 "kwargs": input_kwargs,
             },
-            partition_metadata=partition_metadata,
         )
 
 
