@@ -84,6 +84,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
             "b": np.random.random(size=size),
             "c": [True, False] * (size // 2),
             "d": ["alice", "bob"] * (size // 2),
+            "e": np.random.random(size=size),
         }
     )
     pdf = pdf.astype(
@@ -94,6 +95,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(
             "d": "string[pyarrow]",
         }
     )
+    pdf.loc[4, "b"] = pd.NA
     # Ensure all columns are extension dtypes
     assert all(
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in pdf.dtypes]
