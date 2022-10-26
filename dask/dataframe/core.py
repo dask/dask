@@ -8239,9 +8239,13 @@ def new_dd_object(dsk, name, meta, divisions=None, parent_meta=None):
                 "Cannot pass divisions=None if a PartitionMetadata "
                 "object is not passed to meta"
             )
-        partition_metadata = PartitionMetadata(
-            meta=meta,
-            divisions=tuple(divisions),
+        partition_metadata = (
+            PartitionMetadata(
+                meta=meta,
+                divisions=tuple(divisions),
+            )
+            if has_parallel_type(meta)
+            else meta
         )
 
     if has_parallel_type(meta):
