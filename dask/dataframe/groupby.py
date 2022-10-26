@@ -2178,7 +2178,10 @@ class _GroupBy:
         df = self.obj
         should_shuffle = not (
             df.known_divisions and df._contains_index_name(self.by)
-        ) and (is_dask_collection(self.by) or not df.partitioned_by(self.by))
+        ) and (
+            is_dask_collection(self.by)
+            or not df.partition_metadata.partitioned_by(self.by)
+        )
 
         if should_shuffle:
             df2, by = self._shuffle(meta)

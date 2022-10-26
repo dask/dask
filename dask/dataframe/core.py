@@ -516,6 +516,21 @@ class PartitionMetadata:
         """
         return self._partitioning
 
+    def partitioned_by(self, columns: str | list | tuple | int) -> bool:
+        """Whether the collection is partitioned by the specified columns"""
+        if isinstance(columns, (str, list, tuple, int)):
+            _by = (columns,) if isinstance(columns, (str, int)) else tuple(columns)
+            for group in self.partitioning:
+                # Don't need all columns from _by to match group.
+                # If the DataFrame is partitioned by ("A",), then
+                # it is also partitioned by ("A", "B", ...)
+                if _by[: len(group)] == group:
+                    return self.partitioning[group]
+            return False
+        raise TypeError(
+            f"columns should be str, list, int, or tuple. Got {type(columns)}."
+        )
+
     @property
     def partition_lens(self) -> tuple | Callable | None:
         """Return partition lengths (if known)"""
@@ -653,21 +668,6 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def partition_metadata(self):
         return self._partition_metadata
 
-    def partitioned_by(self, columns):
-        """Whether the DataFrame is partitioned by the specified columns"""
-        if isinstance(columns, (str, list, tuple, int)):
-            _by = (columns,) if isinstance(columns, (str, int)) else tuple(columns)
-            for group in self.partition_metadata.partitioning:
-                # Don't need all columns from _by to match group.
-                # If the DataFrame is partitioned by ("A",), then
-                # it is also partitioned by ("A", "B", ...)
-                if _by[: len(group)] == group:
-                    return self.partition_metadata.partitioning[group]
-            return False
-        raise TypeError(
-            f"columns should be str, list, int, or tuple. Got {type(columns)}."
-        )
-
     @property
     def _meta(self):
         return self.partition_metadata.meta
@@ -712,17 +712,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _divisions(self):
         # _divisions Compatability
-        raise FutureWarning(
-            "_Frame._divisions is depracated. Please use _Frame.divisions"
-        )
+        raise FutureWarning("_divisions is depracated. Please use divisions")
         return self.divisions
 
     @_divisions.setter
     def _divisions(self, value):
         # _divisions Compatability
-        raise FutureWarning(
-            "_Frame._divisions is depracated. Please use _Frame.divisions"
-        )
+        raise FutureWarning("_divisions is depracated. Please use divisions")
         self.divisions = value
 
     @property

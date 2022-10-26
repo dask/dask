@@ -353,7 +353,7 @@ def hash_join(
     if (
         (lhs.npartitions == npartitions)
         and isinstance(left_on, (str, list, tuple))
-        and lhs.partitioned_by(left_on) == "hash"
+        and lhs.partition_metadata.partitioned_by(left_on) == "hash"
     ):
         lhs2 = lhs
     else:
@@ -369,7 +369,7 @@ def hash_join(
     if (
         (rhs.npartitions == npartitions)
         and isinstance(right_on, (str, list, tuple))
-        and rhs.partitioned_by(right_on) == "hash"
+        and rhs.partition_metadata.partitioned_by(right_on) == "hash"
     ):
         rhs2 = rhs
     else:
