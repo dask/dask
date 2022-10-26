@@ -464,7 +464,7 @@ class PartitionMetadata:
     @property
     def meta(self) -> Any:
         """Return global DataFrame schema"""
-        return make_meta(self._meta)
+        return self._meta
 
     @property
     def meta_nonempty(self) -> Any:
