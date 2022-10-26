@@ -166,6 +166,8 @@ In this example we don't wait on ``s.finished()``, so this will terminate
 relatively quickly.  You could have called ``await s.finished()`` though if you
 wanted this to run forever.
 
+.. _nanny:
+
 Nanny
 -----
 
