@@ -29,6 +29,7 @@ from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
     insert_meta_param_description,
+    is_dataframe_like,
     is_series_like,
     make_meta,
 )
@@ -299,19 +300,33 @@ def from_pandas(
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
-    dsk = {
-        (name, i): data.iloc[start:stop]
-        for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-    }
+    # Build graph and collect statistics
+    dsk = {}
+    partition_lens = []
+    column_statistics: dict = (
+        {col: [] for col in data.columns} if is_dataframe_like(data) else {}
+    )
+    for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:])):
+        dsk[(name, i)] = data.iloc[start:stop]
+        partition_lens.append(len(dsk[(name, i)]))
+        for col in list(column_statistics.keys()):
+            try:
+                column_statistics[col].append(
+                    {
+                        "min": dsk[(name, i)][col].min(),
+                        "max": dsk[(name, i)][col].max(),
+                    }
+                )
+            except TypeError:
+                # Min or max failed, drop this column's stats
+                column_statistics.pop(col)
 
     # Define partition metadata
-    # TODO: Include min/max column statistics
     partition_metadata = PartitionMetadata(
         meta=data,
         divisions=divisions,
-        partition_lens=tuple(
-            stop - start for start, stop in zip(locations[:-1], locations[1:])
-        ),
+        partition_lens=tuple(partition_lens),
+        column_statistics=column_statistics,
     )
 
     return new_dd_object(dsk, name, partition_metadata, divisions)

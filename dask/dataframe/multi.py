@@ -90,6 +90,7 @@ from dask.dataframe.shuffle import (
 from dask.dataframe.utils import (
     asciitable,
     check_meta,
+    hash_partitioning_token,
     is_dataframe_like,
     is_series_like,
     make_meta,
@@ -349,43 +350,58 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    # Maybe shuffle left
-    if (
-        (lhs.npartitions == npartitions)
-        and isinstance(left_on, (str, list, tuple))
-        and lhs.partition_metadata.partitioned_by(left_on) == "hash"
+    # Maybe shuffle lhs and rhs
+    def _partitioning(_df, _on, pre_shuffle):
+        return (
+            (
+                _df.partition_metadata.partitioned_by(_on)
+                if pre_shuffle
+                else hash_partitioning_token(_on, npartitions, _df._meta)
+            )
+            if isinstance(_on, (str, list, tuple))
+            else False
+        )
+
+    shuffle_left = shuffle_right = True
+    lhs_partitioning = _partitioning(lhs, left_on, True)
+    rhs_partitioning = _partitioning(rhs, right_on, True)
+    if bool(lhs_partitioning):
+        if lhs_partitioning == rhs_partitioning:
+            # lhs and rhs are already aligned
+            shuffle_left = shuffle_right = False
+        elif lhs_partitioning == _partitioning(rhs, right_on, False):
+            # Only need to shuffle rhs
+            shuffle_left = False
+    elif (
+        bool(rhs_partitioning)
+        and _partitioning(lhs, left_on, False) == rhs_partitioning
     ):
-        lhs2 = lhs
-    else:
-        lhs2 = shuffle_func(
+        # Only need to shuffle lhs
+        shuffle_right = False
+
+    lhs2 = (
+        shuffle_func(
             lhs,
             left_on,
             npartitions=npartitions,
             shuffle=shuffle,
             max_branch=max_branch,
         )
+        if shuffle_left
+        else lhs
+    )
 
-    # Maybe shuffle right
-    if (
-        (rhs.npartitions == npartitions)
-        and isinstance(right_on, (str, list, tuple))
-        and rhs.partition_metadata.partitioned_by(right_on) == "hash"
-    ):
-        rhs2 = rhs
-    else:
-        rhs2 = shuffle_func(
+    rhs2 = (
+        shuffle_func(
             rhs,
             right_on,
             npartitions=npartitions,
             shuffle=shuffle,
             max_branch=max_branch,
         )
-
-    # TODO: Can also skip shuffle for "ascending" and
-    # "descending" partitioning, but would need to check
-    # min/max alignment in partition statistics, and
-    # would need to use `sort_values` if one frame is
-    # not partitioned correctly
+        if shuffle_right
+        else rhs
+    )
 
     if isinstance(left_on, Index):
         left_on = None
@@ -424,7 +440,13 @@ def hash_join(
         partition_metadata = PartitionMetadata(
             meta=meta,
             npartitions=lhs2.npartitions,
-            partitioning={tuple(col for col in _left_on): "hash"},
+            partitioning={
+                tuple(col for col in _left_on): hash_partitioning_token(
+                    columns=_left_on,
+                    npartitions=lhs2.npartitions,
+                    meta=_lhs_meta,
+                ),
+            },
         )
     else:
         partition_metadata = meta

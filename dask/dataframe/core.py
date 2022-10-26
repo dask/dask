@@ -349,12 +349,21 @@ class PartitionMetadata:
     should return a tuple: ``(partition_lens, column_statistics)``.
     """
 
-    _meta: Any
-    _npartitions: int
-    _divisions: tuple | None
-    _partitioning: dict
-    _partition_lens: tuple | Callable | None
-    _column_statistics: dict
+    __meta: Any
+    __npartitions: int
+    __divisions: tuple | None
+    __partitioning: dict
+    __partition_lens: tuple | Callable | None
+    __column_statistics: dict
+
+    __slots__ = (
+        "__meta",
+        "__npartitions",
+        "__divisions",
+        "__partitioning",
+        "__partition_lens",
+        "__column_statistics",
+    )
 
     def __init__(
         self,
@@ -367,13 +376,13 @@ class PartitionMetadata:
         process_meta: bool = True,
     ):
         # Store meta (global schema)
-        self._meta = make_meta(meta) if process_meta else meta
+        self.__meta = make_meta(meta) if process_meta else meta
 
         # Set npartitions
         if npartitions is None and divisions:
-            self._npartitions = len(divisions) - 1
+            self.__npartitions = len(divisions) - 1
         elif isinstance(npartitions, int):
-            self._npartitions = npartitions
+            self.__npartitions = npartitions
         else:
             raise ValueError(
                 "Must specify `npartitions` and/or `divisions` "
@@ -385,7 +394,7 @@ class PartitionMetadata:
             map(lambda x: x is None, divisions)
         ):
             divisions = None
-        self._divisions = divisions
+        self.__divisions = divisions
 
         # Optional partition lengths
         if (
@@ -396,22 +405,22 @@ class PartitionMetadata:
             raise TypeError(
                 f"partition_lens must be tuple, Callable or None, got {type(partition_lens)}"
             )
-        self._partition_lens = partition_lens
+        self.__partition_lens = partition_lens
 
         # Optional column statistics
         if column_statistics is not None and not isinstance(column_statistics, dict):
             raise TypeError(
                 f"column_statistics must be dict or None, got {type(column_statistics)}"
             )
-        self._column_statistics = column_statistics or {}
+        self.__column_statistics = column_statistics or {}
 
         # Set divisions from column statistics (if possible)
         if divisions is None and (
-            self._index_name in self._column_statistics
+            self._index_name in self.__column_statistics
             and
             # Avoid loading lazy statistics
             # (We don't know if the user-code "needs" divisions)
-            not callable(self._column_statistics[self._index_name])
+            not callable(self.__column_statistics[self._index_name])
         ):
             stats = self.column_statistics(self._index_name)
             divisions = tuple(s["min"] for s in stats) + (stats[-1]["max"],)
@@ -420,7 +429,7 @@ class PartitionMetadata:
                 if hasattr(meta, "_constructor_sliced")
                 else meta._constructor
             )(divisions).is_monotonic_increasing:
-                self._divisions = divisions
+                self.__divisions = divisions
             else:
                 # Max/min statistics not monotonically increasing
                 divisions = None
@@ -433,57 +442,71 @@ class PartitionMetadata:
         # "ascending" ordering to be useful.
         # NOTE: "__index__" corresponds to an unnamed index.
         if isinstance(partitioning, dict):
-            self._partitioning = partitioning
+            self.__partitioning = partitioning
         else:
-            self._partitioning = {("__index__",): "ascending"} if divisions else {}
+            self.__partitioning = (
+                {("__index__",): ("ascending", tuple(divisions))} if divisions else {}
+            )
 
     def copy(self, **kwargs):
         """Return copy of this PartitionMetadata object"""
         new_kwargs = dict(
-            meta=None if self._meta is None else self._meta.copy(),
+            meta=None if self.__meta is None else self.__meta.copy(),
             npartitions=self.npartitions,
             divisions=self.divisions,
             partitioning=self.partitioning.copy(),
-            partition_lens=self._partition_lens,
-            column_statistics=self._column_statistics.copy(),
+            partition_lens=self.__partition_lens,
+            column_statistics=self.__column_statistics.copy(),
             process_meta=False,  # Don't re-process meta if it is set via copy
         )
         new_kwargs.update(**kwargs)
         return PartitionMetadata(**new_kwargs)
 
-    def __getstate__(self):
-        return dict(
-            _meta=None if self._meta is None else self._meta.copy(),
-            _npartitions=self.npartitions,
-            _divisions=self.divisions,
-            _partitioning=self.partitioning.copy(),
-            _partition_lens=self._partition_lens,
-            _column_statistics=self._column_statistics.copy(),
+    def __reduce__(self):
+        return (
+            PartitionMetadata,
+            (
+                self.meta.copy(),
+                self.npartitions,
+                self.divisions,
+                self.partitioning,
+                self.__partition_lens,
+                self.__column_statistics.copy(),
+            ),
+        )
+
+    def __repr__(self):
+        return "PartitionMetadata<{}, divisions={}, partitioning={}, lens={}, stats={}>".format(
+            type(self.meta).__name__,
+            self.known_divisions,
+            bool(self.partitioning),
+            bool(self.__partition_lens),
+            bool(self.__column_statistics),
         )
 
     @property
     def meta(self) -> Any:
         """Return global DataFrame schema"""
-        return self._meta
+        return self.__meta
 
     @property
     def meta_nonempty(self) -> Any:
         """Return non-empty global DataFrame schema"""
-        return meta_nonempty(self._meta)
+        return meta_nonempty(self.__meta)
 
     @property
     def npartitions(self) -> int:
         """Total partition count"""
-        return self._npartitions
+        return self.__npartitions
 
     @property
     def _index_name(self) -> str:
         val = None
-        if hasattr(self._meta, "index"):
+        if hasattr(self.__meta, "index"):
             try:
-                val = self._meta.index.names[0]
+                val = self.__meta.index.names[0]
             except AttributeError:
-                val = self._meta.index.name
+                val = self.__meta.index.name
         return val or "__index__"
 
     @property
@@ -491,15 +514,15 @@ class PartitionMetadata:
         """Get Min/max Index statistics, if known"""
         if not self.known_divisions:
             return (None,) * (self.npartitions + 1)
-        if isinstance(self._divisions, (list, tuple)):
-            return tuple(self._divisions)
+        if isinstance(self.__divisions, (list, tuple)):
+            return tuple(self.__divisions)
         else:
             raise ValueError
 
     @property
     def known_divisions(self):
         """Return if divisions are known"""
-        return self._divisions is not None
+        return self.__divisions is not None
 
     @property
     def partitioning(self) -> dict:
@@ -508,15 +531,19 @@ class PartitionMetadata:
         This dictionary is used to track "which" columns in
         the DataFrame collection are partitioned,
         and "how" those columns are partitioned. Options
-        for "how" include: "ascending", "descending" and "hash".
+        for "how" include:
+
+        - ("ascending", <divisions: tuple>)
+        - ("descending", <divisions: tuple>)
+        - ("hash", <hashing-token: str>)
 
         Note that this metadata is distinct from `divisions`,
         because divisions are only useful for a sorted index.
         NOTE: "__index__" corresponds to an unnamed index.
         """
-        return self._partitioning
+        return self.__partitioning.copy()
 
-    def partitioned_by(self, columns: str | list | tuple | int) -> bool:
+    def partitioned_by(self, columns: str | list | tuple | int) -> bool | tuple:
         """Whether the collection is partitioned by the specified columns"""
         if isinstance(columns, (str, list, tuple, int)):
             _by = (columns,) if isinstance(columns, (str, int)) else tuple(columns)
@@ -534,21 +561,21 @@ class PartitionMetadata:
     @property
     def partition_lens(self) -> tuple | Callable | None:
         """Return partition lengths (if known)"""
-        if callable(self._partition_lens):
+        if callable(self.__partition_lens):
             success = self.load_statistics(partition_lens=True, columns=set())
             if not success:
                 raise KeyError("partition_lens could not be loaded")
-        assert not callable(self._partition_lens)
-        return self._partition_lens
+        assert not callable(self.__partition_lens)
+        return self.__partition_lens
 
     def column_statistics(self, column_name: str):
         """Return statistics for a specific column (if known)"""
-        column = self._column_statistics.get(column_name, None)
+        column = self.__column_statistics.get(column_name, None)
         if callable(column):
             success = self.load_statistics(columns={column_name})
             if not success:
                 raise KeyError(f"{column_name} statistics could not be loaded")
-            column = self._column_statistics.get(column_name, None)
+            column = self.__column_statistics.get(column_name, None)
         assert not callable(column)
         return column
 
@@ -563,17 +590,17 @@ class PartitionMetadata:
         # Check if we are loading partition lengths
         _load_partition_lens = False
         if partition_lens:
-            if self._partition_lens is None:
+            if self.__partition_lens is None:
                 raise KeyError(
                     "partition_lens statistic was requested, "
                     "but it is not available."
                 )
-            elif callable(self._partition_lens):
+            elif callable(self.__partition_lens):
                 _load_partition_lens = True
 
         # Deal with column statistics
         columns = columns or set()
-        _available = set(self._column_statistics.keys())
+        _available = set(self.__column_statistics.keys())
         if not columns.issubset(_available):
             raise KeyError(
                 f"{columns} stat columns were requested, "
@@ -581,7 +608,8 @@ class PartitionMetadata:
             )
 
         _columns = (
-            columns - {k for k, v in self._column_statistics.items() if not callable(v)}
+            columns
+            - {k for k, v in self.__column_statistics.items() if not callable(v)}
             if columns
             else set()
         )
@@ -591,26 +619,26 @@ class PartitionMetadata:
         # Aggregate lazy-function calls
         _lazy_column_stats = defaultdict(set)
         for col in _columns:
-            _func = self._column_statistics[col]
+            _func = self.__column_statistics[col]
             _lazy_column_stats[_func].add(col)
 
         # Make sure partition_lens callback is represented
         if _load_partition_lens:
-            if self._partition_lens not in _lazy_column_stats:
-                _lazy_column_stats[self._partition_lens] = set()
+            if self.__partition_lens not in _lazy_column_stats:
+                _lazy_column_stats[self.__partition_lens] = set()
 
         # Perform update
         new_column_stats = {}
         for _func, _keyset in _lazy_column_stats.items():
             new_partition_lens, column_stats = _func(columns=_keyset)
             if isinstance(new_partition_lens, tuple):
-                self._partition_lens = new_partition_lens
+                self.__partition_lens = new_partition_lens
             new_column_stats.update(column_stats)
-        self._column_statistics.update(new_column_stats)
+        self.__column_statistics.update(new_column_stats)
 
         # Check if update was successful
         if (_columns - set(new_column_stats.keys())) or (
-            _load_partition_lens and callable(self._partition_lens)
+            _load_partition_lens and callable(self.__partition_lens)
         ):
             return False
         return True

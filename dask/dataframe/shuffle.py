@@ -25,7 +25,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
-from dask.dataframe.utils import UNKNOWN_CATEGORIES
+from dask.dataframe.utils import UNKNOWN_CATEGORIES, hash_partitioning_token
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
@@ -202,7 +202,11 @@ def sort_values(
         duplicates=False,
     )
     partition_metadata = df.partition_metadata.copy(
-        partitioning={tuple(by): "ascending" if ascending else "descending"},
+        partitioning={
+            tuple(by): ("ascending", tuple(divisions))
+            if ascending
+            else ("descending", tuple(divisions))
+        },
         column_statistics={
             by[0]: [
                 {"min": divisions[i], "max": divisions[i + 1]}
@@ -715,7 +719,13 @@ def rearrange_by_column_tasks(
 
     # Track output partitioning
     if isinstance(column, list) and "_partitions" not in column:
-        _partitioning = {tuple(column): "hash"}
+        _partitioning = {
+            tuple(column): hash_partitioning_token(
+                columns=column,
+                npartitions=(npartitions or df.npartitions),
+                meta=df._meta,
+            ),
+        }
     else:
         _partitioning = None
     partition_metadata = PartitionMetadata(

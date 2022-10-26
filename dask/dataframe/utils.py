@@ -14,7 +14,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
-from dask.base import get_scheduler, is_dask_collection
+from dask.base import get_scheduler, is_dask_collection, tokenize
 from dask.core import get_deps
 from dask.dataframe import (  # noqa: F401 register pandas extension types
     _dtypes,
@@ -730,6 +730,11 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
         columns = [columns]
     df2.drop(columns=columns, inplace=True, errors=errors)
     return df2
+
+
+def hash_partitioning_token(columns, npartitions, meta):
+    """Return a hash-based partitioning token for PartitionMetadata"""
+    return ("hash", tokenize(*columns, npartitions, type(meta)))
 
 
 class AttributeNotImplementedError(NotImplementedError, AttributeError):
