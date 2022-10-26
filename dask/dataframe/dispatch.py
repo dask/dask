@@ -112,6 +112,10 @@ def make_meta(x, index=None, parent_meta=None):
     A valid meta-data
     """
 
+    # Backwards compatibility for down-stream libraries
+    if isinstance(x, dd.core.PartitionMetadata):
+        x = x.meta
+
     if isinstance(
         x,
         (

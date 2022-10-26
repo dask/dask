@@ -781,7 +781,7 @@ def rearrange_by_column_tasks(
         df = new_dd_object(
             graph,
             stage_name,
-            partition_metadata,
+            partition_metadata.copy(divisions=df.divisions),
             df.divisions,
         )
 
@@ -816,7 +816,7 @@ def rearrange_by_column_tasks(
             graph2,
             repartition_get_name,
             partition_metadata,
-            [None] * (npartitions + 1),
+            (None,) * (npartitions + 1),
         )
     else:
         df2 = df

@@ -336,6 +336,9 @@ class PartitionMetadata:
         (e.g. ``Iterable[Mapping[str, Any]]``).
     partition_lens: tuple, Callable or None, optional
         Tuple of partition lengths.
+    process_meta: bool, optional
+        Whether the input ``meta`` argument should be processed
+        by ``make_meta``. Default is ``True``.
 
     If ``partition_lens`` (or any value in ``column_statistics``)
     is ``callable``, the corresponding statistic will be
@@ -361,9 +364,10 @@ class PartitionMetadata:
         partitioning: dict | None = None,
         partition_lens: tuple | Callable | None = None,
         column_statistics: dict | None = None,
+        process_meta: bool = True,
     ):
         # Store meta (global schema)
-        self._meta = meta
+        self._meta = make_meta(meta) if process_meta else meta
 
         # Set npartitions
         if npartitions is None and divisions:
@@ -383,18 +387,6 @@ class PartitionMetadata:
             divisions = None
         self._divisions = divisions
 
-        # Track which columns the DataFrame is partitioned by,
-        # and "how" the columns are partitioned. "How" options
-        # include: "ascending", "descending" and "hash".
-        #   e.g. {<column-name-tuple>: <how-str>}
-        # This is distinct from `divisions`, which requires
-        # "ascending" ordering to be useful.
-        # NOTE: "__index__" corresponds to an unnamed index.
-        if isinstance(partitioning, dict):
-            self._partitioning = partitioning
-        else:
-            self._partitioning = {("__index__",): "ascending"} if divisions else {}
-
         # Optional partition lengths
         if (
             partition_lens is not None
@@ -413,6 +405,38 @@ class PartitionMetadata:
             )
         self._column_statistics = column_statistics or {}
 
+        # Set divisions from column statistics (if possible)
+        if divisions is None and (
+            self._index_name in self._column_statistics
+            and
+            # Avoid loading lazy statistics
+            # (We don't know if the user-code "needs" divisions)
+            not callable(self._column_statistics[self._index_name])
+        ):
+            stats = self.column_statistics(self._index_name)
+            divisions = tuple(s["min"] for s in stats) + (stats[-1]["max"],)
+            if (
+                meta._constructor_sliced
+                if hasattr(meta, "_constructor_sliced")
+                else meta._constructor
+            )(divisions).is_monotonic_increasing:
+                self._divisions = divisions
+            else:
+                # Max/min statistics not monotonically increasing
+                divisions = None
+
+        # Track which columns the DataFrame is partitioned by,
+        # and "how" the columns are partitioned. "How" options
+        # include: "ascending", "descending" and "hash".
+        #   e.g. {<column-name-tuple>: <how-str>}
+        # This is distinct from `divisions`, which requires
+        # "ascending" ordering to be useful.
+        # NOTE: "__index__" corresponds to an unnamed index.
+        if isinstance(partitioning, dict):
+            self._partitioning = partitioning
+        else:
+            self._partitioning = {("__index__",): "ascending"} if divisions else {}
+
     def copy(self, **kwargs):
         """Return copy of this PartitionMetadata object"""
         new_kwargs = dict(
@@ -422,6 +446,7 @@ class PartitionMetadata:
             partitioning=self.partitioning.copy(),
             partition_lens=self._partition_lens,
             column_statistics=self._column_statistics.copy(),
+            process_meta=False,  # Don't re-process meta if it is set via copy
         )
         new_kwargs.update(**kwargs)
         return PartitionMetadata(**new_kwargs)
@@ -450,6 +475,16 @@ class PartitionMetadata:
     def npartitions(self) -> int:
         """Total partition count"""
         return self._npartitions
+
+    @property
+    def _index_name(self) -> str:
+        val = None
+        if hasattr(self._meta, "index"):
+            try:
+                val = self._meta.index.names[0]
+            except AttributeError:
+                val = self._meta.index.name
+        return val or "__index__"
 
     @property
     def divisions(self) -> tuple:
@@ -8209,7 +8244,7 @@ def new_dd_object(dsk, name, meta, divisions=None, parent_meta=None):
         )
 
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, partition_metadata, None)
+        return get_parallel_type(meta)(dsk, name, partition_metadata, divisions)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
