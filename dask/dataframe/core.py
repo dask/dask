@@ -655,8 +655,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     def partitioned_by(self, columns):
         """Whether the DataFrame is partitioned by the specified columns"""
-        if isinstance(columns, (str, list, tuple)):
-            _by = (columns,) if isinstance(columns, str) else tuple(columns)
+        if isinstance(columns, (str, list, tuple, int)):
+            _by = (columns,) if isinstance(columns, (str, int)) else tuple(columns)
             for group in self.partition_metadata.partitioning:
                 # Don't need all columns from _by to match group.
                 # If the DataFrame is partitioned by ("A",), then
@@ -664,7 +664,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 if _by[: len(group)] == group:
                     return self.partition_metadata.partitioning[group]
             return False
-        raise TypeError(f"columns should be str, list, or tuple. Got {type(columns)}.")
+        raise TypeError(
+            f"columns should be str, list, int, or tuple. Got {type(columns)}."
+        )
 
     @property
     def _meta(self):
@@ -711,7 +713,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def _divisions(self):
         # _divisions Compatability
         raise FutureWarning(
-            "_Frame._divisions is depracated. " "Please use _Frame.divisions"
+            "_Frame._divisions is depracated. Please use _Frame.divisions"
         )
         return self.divisions
 
@@ -719,7 +721,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def _divisions(self, value):
         # _divisions Compatability
         raise FutureWarning(
-            "_Frame._divisions is depracated. " "Please use _Frame.divisions"
+            "_Frame._divisions is depracated. Please use _Frame.divisions"
         )
         self.divisions = value
 
@@ -6526,7 +6528,6 @@ def elemwise(
     meta=no_default,
     out=None,
     transform_divisions=True,
-    partition_metadata=None,
     **kwargs,
 ):
     """Elementwise operation for Dask dataframes
