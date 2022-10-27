@@ -90,7 +90,6 @@ from dask.dataframe.shuffle import (
 from dask.dataframe.utils import (
     asciitable,
     check_meta,
-    hash_partitioning_token,
     is_dataframe_like,
     is_series_like,
     make_meta,
@@ -356,7 +355,9 @@ def hash_join(
             (
                 _df.partition_metadata.partitioned_by(_on)
                 if pre_shuffle
-                else hash_partitioning_token(_on, npartitions, _df._meta)
+                else _df.partition_metadata.hash_partitioning_token(
+                    _on, npartitions, _df._meta
+                )
             )
             if isinstance(_on, (str, list, tuple))
             else False
@@ -441,7 +442,9 @@ def hash_join(
             meta=meta,
             npartitions=lhs2.npartitions,
             partitioning={
-                tuple(col for col in _left_on): hash_partitioning_token(
+                tuple(
+                    col for col in _left_on
+                ): PartitionMetadata.hash_partitioning_token(
                     columns=_left_on,
                     npartitions=lhs2.npartitions,
                     meta=_lhs_meta,

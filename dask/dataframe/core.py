@@ -389,22 +389,19 @@ class PartitionMetadata:
                 "to PartitionMetadata initializer."
             )
 
-        # Unknown divisions should just result in divisions == None
-        if isinstance(divisions, (list, tuple)) and all(
-            map(lambda x: x is None, divisions)
-        ):
-            divisions = None
-        self.__divisions = divisions
-
         # Optional partition lengths
-        if (
-            partition_lens is not None
-            and not isinstance(partition_lens, tuple)
-            and not callable(partition_lens)
-        ):
-            raise TypeError(
-                f"partition_lens must be tuple, Callable or None, got {type(partition_lens)}"
-            )
+        if partition_lens is not None:
+            if not isinstance(partition_lens, tuple) and not callable(partition_lens):
+                raise TypeError(
+                    f"partition_lens must be tuple, Callable or None, got {type(partition_lens)}."
+                )
+            if (
+                isinstance(partition_lens, tuple)
+                and len(partition_lens) != self.__npartitions
+            ):
+                raise ValueError(
+                    f"partition_lens must be length {self.__npartitions}, got {len(partition_lens)}."
+                )
         self.__partition_lens = partition_lens
 
         # Optional column statistics
@@ -414,36 +411,59 @@ class PartitionMetadata:
             )
         self.__column_statistics = column_statistics or {}
 
-        # Set divisions from column statistics (if possible).
-        # Note that this code block is not currently accessed
-        # in any tests
-        if divisions is None and (
-            self._index_name in self.__column_statistics
-            and
-            # Avoid loading lazy statistics
-            # (We don't know if the user-code "needs" divisions)
-            not callable(self.__column_statistics[self._index_name])
+        # Unknown divisions should just result in divisions == None
+        if isinstance(divisions, (list, tuple)) and all(
+            map(lambda x: x is None, divisions)
         ):
-            stats = self.column_statistics(self._index_name)
-            divisions = tuple(stats["min"]) + (stats["max"][-1],)
-            if (
-                meta._constructor_sliced
-                if hasattr(meta, "_constructor_sliced")
-                else meta._constructor
-            )(divisions).is_monotonic_increasing:
-                self.__divisions = divisions
-            else:
-                # Max/min statistics not monotonically increasing
-                divisions = None
+            divisions = None
 
-        # Track which columns the DataFrame is partitioned by,
-        # and "how" the columns are partitioned.
+        # Set divisions from column statistics (if possible).
+        # NOTE: divisions -> stats is a bit trickier, because
+        # divisions do not necessarily represent the actual
+        # min or max value in a given partition.
+        divisions = divisions or self._divisions_from_stats()
+
+        # Save which columns we know the DataFrame is partitioned by,
+        # and "how" the columns are partitioned
         if isinstance(partitioning, dict):
             self.__partitioning = partitioning
         else:
             self.__partitioning = (
                 {("__index__",): ("ascending", tuple(divisions))} if divisions else {}
             )
+
+        # Save immutable index divisions
+        self.__divisions = divisions
+
+    def _divisions_from_stats(
+        self,
+        columns: int | str | list | None = None,
+        load_lazy: bool = False,
+    ):
+        """Use column statistics to calculate divisions"""
+        if isinstance(columns, list):
+            if len(columns) > 1:
+                raise ValueError("multi-column divisions not yet supported.")
+            index_name: str | int = columns[0]
+        else:
+            index_name = columns or self._index_name
+        if (index_name in self.__column_statistics) and (
+            # Avoid loading lazy statistics
+            # (We don't know if the user-code "needs" divisions)
+            not callable(self.__column_statistics[index_name])
+            or load_lazy
+        ):
+            stats = self.column_statistics(index_name)
+            divisions = tuple(stats["min"]) + (stats["max"][-1],)
+            if (
+                self.meta._constructor_sliced
+                if hasattr(self.meta, "_constructor_sliced")
+                else self.meta._constructor
+            )(divisions).is_monotonic_increasing:
+                return divisions
+            else:
+                # Max/min statistics not monotonically increasing
+                return None
 
     def copy(self, **kwargs):
         """Return copy of this PartitionMetadata object"""
@@ -498,13 +518,12 @@ class PartitionMetadata:
 
     @property
     def _index_name(self) -> str:
-        val = None
-        if hasattr(self.__meta, "index"):
-            try:
-                val = self.__meta.index.names[0]
-            except AttributeError:
-                val = self.__meta.index.name
-        return val or "__index__"
+        name = None
+        if is_dataframe_like(self.__meta) or is_series_like(self.__meta):
+            name = self.__meta.index.names[0]
+        elif is_index_like(self.__meta):
+            name = self.__meta.names[0]
+        return name or "__index__"
 
     @property
     def divisions(self) -> tuple:
@@ -540,6 +559,11 @@ class PartitionMetadata:
         """
         return self.__partitioning.copy()
 
+    @staticmethod
+    def hash_partitioning_token(columns, npartitions, meta):
+        """Return a hash-based partitioning token"""
+        return ("hash", tokenize(*columns, npartitions, type(meta)))
+
     def partitioned_by(self, columns: str | list | tuple | int) -> bool | tuple:
         """Whether the collection is partitioned by the specified columns"""
         if isinstance(columns, (str, list, tuple, int)):
@@ -550,6 +574,11 @@ class PartitionMetadata:
                 # it is also partitioned by ("A", "B", ...)
                 if _by[: len(group)] == group:
                     return self.partitioning[group]
+            # TODO: Check column_statistics for ordered partitioning. Although
+            # we may not have a cached partitioning state for the specified
+            # columns, the min/max statistics may inform us that the data is
+            # indeed partitioned (allowing us to simplify groupby aggregations
+            # and shuffling, etc...)
             return False
         raise TypeError(
             f"columns should be str, list, int, or tuple. Got {type(columns)}."
@@ -565,7 +594,7 @@ class PartitionMetadata:
         assert not callable(self.__partition_lens)
         return self.__partition_lens
 
-    def column_statistics(self, column_name: str):
+    def column_statistics(self, column_name: str | int):
         """Return statistics for a specific column (if known)"""
         column = self.__column_statistics.get(column_name, None)
         if callable(column):

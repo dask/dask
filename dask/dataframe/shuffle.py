@@ -25,7 +25,7 @@ from dask.dataframe.core import (
     new_dd_object,
 )
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
-from dask.dataframe.utils import UNKNOWN_CATEGORIES, hash_partitioning_token
+from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ShuffleLayer, SimpleShuffleLayer
 from dask.sizeof import sizeof
@@ -720,7 +720,7 @@ def rearrange_by_column_tasks(
     # Track output partitioning
     if isinstance(column, list) and "_partitions" not in column:
         _partitioning = {
-            tuple(column): hash_partitioning_token(
+            tuple(column): PartitionMetadata.hash_partitioning_token(
                 columns=column,
                 npartitions=(npartitions or df.npartitions),
                 meta=df._meta,
