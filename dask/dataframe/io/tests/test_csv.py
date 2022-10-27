@@ -1804,31 +1804,31 @@ def test_retries_on_remote_filesystem_csv(tmpdir):
     assert all([layer.annotations for layer in layers])
     assert all([layer.annotations["retries"] == 5 for layer in layers])
 
-    breakpoint()
-    ddf2 = dd.read_csv(remote_fn, storage_options=storage_options)
-    print(ddf2)
     # breakpoint()
-    # layer = hlg_layer(ddf2.dask, "read-csv")
-    # assert layer.annotations
-    # assert layer.annotations["retries"] == 5
+    ddf2 = dd.read_csv(f"{remote_fn}/*.part", storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-csv")
+    assert layer.annotations
+    assert layer.annotations["retries"] == 5
 
-    # # But not for a local filesystem
-    # scalar = ddf.to_csv(fn, compute=False, storage_options=storage_options)
-    # layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
-    # assert not all([layer.annotations for layer in layers])
+    # But not for a local filesystem
+    scalar = ddf.to_csv(f"{fn}/*.part", compute=False, storage_options=storage_options)
+    layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
+    assert not all([layer.annotations for layer in layers])
 
-    # ddf2 = dd.read_csv(fn, storage_options=storage_options)
-    # layer = hlg_layer(ddf2.dask, "read-csv")
-    # assert not layer.annotations
+    ddf2 = dd.read_csv(f"{fn}/*.part", storage_options=storage_options)
+    layer = hlg_layer(ddf2.dask, "read-csv")
+    assert not layer.annotations
 
-    # # And we don't overwrite existing retries
-    # with dask.annotate(retries=2):
-    #     scalar = ddf.to_csv(remote_fn, compute=False, storage_options=storage_options)
-    #     layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
-    #     assert all([layer.annotations for layer in layers])
-    #     assert all([layer.annotations["retries"] == 2 for layer in layers])
+    # And we don't overwrite existing retries
+    with dask.annotate(retries=2):
+        scalar = ddf.to_csv(
+            f"{remote_fn}/*.part", compute=False, storage_options=storage_options
+        )
+        layers = [hlg_layer(s.dask, "_write_csv") for s in scalar]
+        assert all([layer.annotations for layer in layers])
+        assert all([layer.annotations["retries"] == 2 for layer in layers])
 
-    #     ddf2 = dd.read_csv(remote_fn, storage_options=storage_options)
-    #     layer = hlg_layer(ddf2.dask, "read-csv")
-    #     assert layer.annotations
-    #     assert layer.annotations["retries"] == 2
+        ddf2 = dd.read_csv(f"{remote_fn}/*.part", storage_options=storage_options)
+        layer = hlg_layer(ddf2.dask, "read-csv")
+        assert layer.annotations
+        assert layer.annotations["retries"] == 2

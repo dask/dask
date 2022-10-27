@@ -188,6 +188,7 @@ def pandas_read_text(
     --------
     dask.dataframe.csv.read_pandas_from_bytes
     """
+    # breakpoint()
     bio = BytesIO()
     if write_header and not b.startswith(header.rstrip()):
         bio.write(header)
@@ -393,6 +394,7 @@ def text_blocks_to_pandas(
 
     #### storage options is not available here, need to find how to include it
     fs, _, _ = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)
+
     annotations = dask.config.get("annotations", {})
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
