@@ -8,6 +8,8 @@ try:
 except ImportError:
     psutil = None  # type: ignore
 
+import contextlib
+
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
@@ -23,12 +25,13 @@ from pandas.api.types import (
     is_object_dtype,
 )
 
+import dask
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
-from dask.dataframe.io.utils import DataFrameIOFunction
+from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import delayed
 from dask.utils import asciitable, parse_bytes
@@ -307,6 +310,7 @@ def text_blocks_to_pandas(
     path=None,
     blocksize=None,
     urlpath=None,
+    storage_options=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -387,26 +391,36 @@ def text_blocks_to_pandas(
     for i in range(len(blocks)):
         parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
-    # Construct the output collection with from_map
-    return from_map(
-        CSVFunctionWrapper(
-            columns,
-            None,
-            colname,
-            head,
-            header,
-            reader,
-            dtypes,
-            enforce,
-            kwargs,
-        ),
-        parts,
-        meta=head,
-        label="read-csv",
-        token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
-        enforce_metadata=False,
-        produces_tasks=True,
-    )
+    #### storage options is not available here, need to find how to include it
+    fs, _, _ = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)
+
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
+    else:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        # Construct the output collection with from_map
+        return from_map(
+            CSVFunctionWrapper(
+                columns,
+                None,
+                colname,
+                head,
+                header,
+                reader,
+                dtypes,
+                enforce,
+                kwargs,
+            ),
+            parts,
+            meta=head,
+            label="read-csv",
+            token=tokenize(reader, urlpath, columns, enforce, head, blocksize),
+            enforce_metadata=False,
+            produces_tasks=True,
+        )
 
 
 def block_mask(block_lists):
@@ -660,6 +674,7 @@ def read_pandas(
         path=path,
         blocksize=blocksize,
         urlpath=urlpath,
+        storage_options=storage_options,
     )
 
 
@@ -932,30 +947,40 @@ def to_csv(
     )
     to_csv_chunk = delayed(_write_csv, pure=False)
     dfs = df.to_delayed()
-    if single_file:
-        first_file = open_file(filename, mode=mode, **file_options)
-        value = to_csv_chunk(dfs[0], first_file, **kwargs)
-        append_mode = mode.replace("w", "") + "a"
-        append_file = open_file(filename, mode=append_mode, **file_options)
-        kwargs["header"] = False
-        for d in dfs[1:]:
-            value = to_csv_chunk(d, append_file, depend_on=value, **kwargs)
-        values = [value]
-        files = [first_file]
+
+    fs, _, _ = get_fs_token_paths(filename, mode="wb", storage_options=storage_options)
+
+    annotations = dask.config.get("annotations", {})
+    if "retries" not in annotations and not _is_local_fs(fs):
+        ctx = dask.annotate(retries=5)
     else:
-        files = open_files(
-            filename,
-            mode=mode,
-            name_function=name_function,
-            num=df.npartitions,
-            **file_options,
-        )
-        values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
-        if header_first_partition_only:
+        ctx = contextlib.nullcontext()
+
+    with ctx:
+        if single_file:
+            first_file = open_file(filename, mode=mode, **file_options)
+            value = to_csv_chunk(dfs[0], first_file, **kwargs)
+            append_mode = mode.replace("w", "") + "a"
+            append_file = open_file(filename, mode=append_mode, **file_options)
             kwargs["header"] = False
-        values.extend(
-            [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
-        )
+            for d in dfs[1:]:
+                value = to_csv_chunk(d, append_file, depend_on=value, **kwargs)
+            values = [value]
+            files = [first_file]
+        else:
+            files = open_files(
+                filename,
+                mode=mode,
+                name_function=name_function,
+                num=df.npartitions,
+                **file_options,
+            )
+            values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
+            if header_first_partition_only:
+                kwargs["header"] = False
+            values.extend(
+                [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
+            )
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
