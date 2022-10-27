@@ -35,6 +35,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
+
+    # Used when automatically opening an issue when the `upstream` CI build fails
+    mamba install pytest-reportlog
 fi
 
 # Install dask
