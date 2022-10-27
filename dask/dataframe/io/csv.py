@@ -393,7 +393,6 @@ def text_blocks_to_pandas(
 
     #### storage options is not available here, need to find how to include it
     fs, _, _ = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)
-
     annotations = dask.config.get("annotations", {})
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
@@ -981,6 +980,7 @@ def to_csv(
             values.extend(
                 [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
             )
+
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
@@ -1008,7 +1008,7 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        import dask
+        # import dask
 
         return list(dask.compute(*values, **compute_kwargs))
     else:
