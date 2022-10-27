@@ -5,6 +5,8 @@ click = pytest.importorskip("click")
 import json
 import platform
 import sys
+
+# FIXME importing importlib.metadata fails when running the entire test suite with UPSTREAM_DEV=1
 from importlib import metadata as importlib_metadata
 
 from click.testing import CliRunner
