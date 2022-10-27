@@ -67,16 +67,17 @@ jobs:
           XTRATESTARGS: "--report-log output-log.jsonl"
         run: source continuous_integration/scripts/run_tests.sh
 
-      - name: Generate and publish the report
+      - name: Open or update issue on failure
         if: |
           failure()
           && github.event_name != 'pull_request'
           && github.repository == 'jrbourbeau/dask'
           && steps.run_tests.outcome == 'failure'
-        uses: jrbourbeau/issue-from-pytest-log@add-more-options
+        uses: xarray-contrib/issue-from-pytest-log@89ca5895ebd99c09f8222234a0976e7ff8b823a7
         with:
           log-path: output-log.jsonl
-          issue-title: test-issue-from-pytest-log
+          issue-title: ⚠️ Upstream CI failed ⚠️
+          issue-label: upstream
 
       - name: Coverage
         uses: codecov/codecov-action@v3
