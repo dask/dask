@@ -31,7 +31,6 @@ from dask.utils import tmpfile
 
 
 def test_canonical_name():
-    raise ValueError("asdf")
     c = {"foo-bar": 1, "fizz_buzz": 2}
     assert canonical_name("foo-bar", c) == "foo-bar"
     assert canonical_name("foo_bar", c) == "foo-bar"

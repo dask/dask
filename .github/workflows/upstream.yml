@@ -71,7 +71,7 @@ jobs:
         if: |
           failure()
           && github.event_name != 'pull_request'
-          && github.repository == 'jrbourbeau/dask'
+          && github.repository == 'dask/dask'
           && steps.run_tests.outcome == 'failure'
         uses: xarray-contrib/issue-from-pytest-log@89ca5895ebd99c09f8222234a0976e7ff8b823a7
         with:
