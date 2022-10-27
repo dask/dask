@@ -414,7 +414,9 @@ class PartitionMetadata:
             )
         self.__column_statistics = column_statistics or {}
 
-        # Set divisions from column statistics (if possible)
+        # Set divisions from column statistics (if possible).
+        # Note that this code block is not currently accessed
+        # in any tests
         if divisions is None and (
             self._index_name in self.__column_statistics
             and
@@ -423,7 +425,7 @@ class PartitionMetadata:
             not callable(self.__column_statistics[self._index_name])
         ):
             stats = self.column_statistics(self._index_name)
-            divisions = tuple(s["min"] for s in stats) + (stats[-1]["max"],)
+            divisions = tuple(stats["min"]) + (stats["max"][-1],)
             if (
                 meta._constructor_sliced
                 if hasattr(meta, "_constructor_sliced")
@@ -435,12 +437,7 @@ class PartitionMetadata:
                 divisions = None
 
         # Track which columns the DataFrame is partitioned by,
-        # and "how" the columns are partitioned. "How" options
-        # include: "ascending", "descending" and "hash".
-        #   e.g. {<column-name-tuple>: <how-str>}
-        # This is distinct from `divisions`, which requires
-        # "ascending" ordering to be useful.
-        # NOTE: "__index__" corresponds to an unnamed index.
+        # and "how" the columns are partitioned.
         if isinstance(partitioning, dict):
             self.__partitioning = partitioning
         else:
@@ -683,6 +680,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
                 meta=meta,
                 divisions=tuple(divisions),
             )
+
         if not self._is_partition_type(meta):
             raise TypeError(
                 f"Expected meta to specify type {type(self).__name__}, got type "
@@ -5353,15 +5351,14 @@ class DataFrame(_Frame):
             if not pre_sorted and divisions is None:
                 _stats = self.partition_metadata.column_statistics(other)
                 if _stats is not None:
-                    _stats = pd.DataFrame(_stats)  # Convert to DataFrame
-                    if _stats is not None:
-                        pre_sorted = all(
-                            _stats["min"][1:].values > _stats["max"][:-1].values
-                        )
-                        if pre_sorted:
-                            divisions = tuple(
-                                list(_stats["min"]) + [_stats["max"].iloc[-1]]
-                            )
+                    pre_sorted = all(
+                        [
+                            _stats["min"][i + 1] > _stats["max"][i]
+                            for i in range(len(_stats["min"]) - 1)
+                        ]
+                    )
+                    if pre_sorted:
+                        divisions = tuple(list(_stats["min"]) + [_stats["max"][-1]])
 
         # Check divisions
         if divisions is not None:

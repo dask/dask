@@ -304,19 +304,17 @@ def from_pandas(
     dsk = {}
     partition_lens = []
     column_statistics: dict = (
-        {col: [] for col in data.columns} if is_dataframe_like(data) else {}
+        {col: {"min": [], "max": []} for col in data.columns}
+        if is_dataframe_like(data)
+        else {}
     )
     for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:])):
         dsk[(name, i)] = data.iloc[start:stop]
         partition_lens.append(len(dsk[(name, i)]))
         for col in list(column_statistics.keys()):
             try:
-                column_statistics[col].append(
-                    {
-                        "min": dsk[(name, i)][col].min(),
-                        "max": dsk[(name, i)][col].max(),
-                    }
-                )
+                column_statistics[col]["min"].append(dsk[(name, i)][col].min())
+                column_statistics[col]["max"].append(dsk[(name, i)][col].max())
             except TypeError:
                 # Min or max failed, drop this column's stats
                 column_statistics.pop(col)

@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
-from collections import defaultdict
 from functools import partial
 
 import tlz as toolz
@@ -561,8 +560,9 @@ def read_parquet(
     # Define partition_metadata, using callback if necessary
     _partition_lens, _column_stats = None, {}
     if not empty and hasattr(engine, "read_partition_stats"):
-        _func = partial(_lazy_pq_partition_stats, parts, columns, engine, fs)
-        _partition_lens, _column_stats = _func, {k: _func for k in set(columns)}
+        lazy_columns = columns + (index or [])
+        _func = partial(_lazy_pq_partition_stats, parts, lazy_columns, engine, fs)
+        _partition_lens, _column_stats = _func, {k: _func for k in set(lazy_columns)}
     if processed_stats:
         _partition_lens, _known_column_stats = _pq_partition_stats(processed_stats)
         _column_stats.update(_known_column_stats)
@@ -1587,7 +1587,7 @@ def _lazy_pq_partition_stats(
 
 
 def _pq_partition_stats(stats):
-    column_stats = defaultdict(list)
+    column_stats = {}
     partition_lens = []
     for stat in stats:
         # Partition lengths
@@ -1599,12 +1599,10 @@ def _pq_partition_stats(stats):
         # Column statistics
         columns = stat.get("columns", [])
         for col_stats in columns:
-            column_stats[col_stats["name"]].append(
-                {
-                    "min": col_stats["min"],
-                    "max": col_stats["max"],
-                }
-            )
+            if col_stats["name"] not in column_stats:
+                column_stats[col_stats["name"]] = {"min": [], "max": []}
+            column_stats[col_stats["name"]]["min"].append(col_stats["min"])
+            column_stats[col_stats["name"]]["max"].append(col_stats["max"])
 
     return tuple(partition_lens), dict(column_stats)
 
