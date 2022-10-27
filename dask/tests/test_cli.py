@@ -40,7 +40,7 @@ def test_info_versions():
     assert table["distributed"] == distributed_version
 
 
-@click.group
+@click.group()
 def dummy_cli():
     pass
 
@@ -82,7 +82,7 @@ def test_register_command_ep():
     assert dummy_cli.commands["good"] is good_command
 
 
-@click.group
+@click.group()
 def dummy_cli_2():
     pass
 
