@@ -1,7 +1,3 @@
-import pytest
-
-click = pytest.importorskip("click")
-
 import json
 import platform
 import sys
@@ -9,6 +5,8 @@ import sys
 # FIXME importing importlib.metadata fails when running the entire test suite with UPSTREAM_DEV=1
 from importlib import metadata as importlib_metadata
 
+import click
+import pytest
 from click.testing import CliRunner
 
 import dask
@@ -44,7 +42,7 @@ def test_info_versions():
     assert table["distributed"] == distributed_version
 
 
-@click.group
+@click.group()
 def dummy_cli():
     pass
 
@@ -86,7 +84,7 @@ def test_register_command_ep():
     assert dummy_cli.commands["good"] is good_command
 
 
-@click.group
+@click.group()
 def dummy_cli_2():
     pass
 

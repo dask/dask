@@ -25,6 +25,7 @@ requirements:
 
   run:
     - python >=3.8
+    - click >=7.0
     - cloudpickle >=1.1.1
     - fsspec >=0.6.0
     - packaging >=20.0
@@ -42,7 +43,6 @@ test:
     - dask info versions --help
   requires:
     - pip
-    - click
 
 about:
   home: https://github.com/dask/dask/

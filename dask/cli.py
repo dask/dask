@@ -1,19 +1,9 @@
 import warnings
 
+import click
+
 from dask import __version__
 from dask.compatibility import entry_points
-
-try:
-    import click
-except ImportError as e:
-    msg = (
-        "The dask.cli module requires click to be installed.\n\n"
-        "Install with conda or pip:\n\n"
-        " conda install click\n"
-        " pip install click\n"
-    )
-    raise ImportError(msg) from e
-
 
 CONTEXT_SETTINGS = {
     "help_option_names": ["-h", "--help"],
