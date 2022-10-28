@@ -33,6 +33,7 @@ extras_require["test"] = [
 ]
 
 install_requires = [
+    "click >= 7.0",
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",
     "packaging >= 20.0",
