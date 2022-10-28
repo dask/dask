@@ -309,6 +309,7 @@ https://img.shields.io/travis/com/python-versioneer/python-versioneer.svg
 
 import configparser
 import errno
+import functools
 import json
 import os
 import re
@@ -316,7 +317,6 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Callable, Dict
-import functools
 
 have_tomllib = True
 if sys.version_info >= (3, 11):
