@@ -1,5 +1,7 @@
-import importlib.metadata
 import sys
+
+# FIXME importing importlib.metadata fails when running the entire test suite with UPSTREAM_DEV=1
+from importlib import metadata as importlib_metadata
 
 from packaging.version import parse as parse_version
 
@@ -16,9 +18,9 @@ def entry_points(group=None):
     This compatibility utility can be removed once Python 3.10 is the minimum.
     """
     if _PY_VERSION >= parse_version("3.10"):
-        return importlib.metadata.entry_points(group=group)
+        return importlib_metadata.entry_points(group=group)
     else:
-        eps = importlib.metadata.entry_points()
+        eps = importlib_metadata.entry_points()
         if group:
             return eps.get(group, [])
         return eps
