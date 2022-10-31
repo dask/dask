@@ -1803,6 +1803,11 @@ class _GroupBy:
 
         When `std` is True calculate Correlation
         """
+        from dask.dataframe.groupby import SeriesGroupBy
+
+        if isinstance(self.obj, SeriesGroupBy):
+            raise NotImplementedError
+
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
