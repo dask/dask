@@ -1,6 +1,17 @@
 Changelog
 =========
 
+.. _v2022.10.2:
+
+2022.10.2
+---------
+
+Released on October 31, 2022
+
+This was a hotfix and has no changes in this repository.
+The necessary fix was in dask/distributed, but we decided to bump this version
+number for consistency.
+
 .. _v2022.10.1:
 
 2022.10.1
