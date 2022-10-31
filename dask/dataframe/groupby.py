@@ -1805,7 +1805,7 @@ class _GroupBy:
         """
         from dask.dataframe.groupby import SeriesGroupBy
 
-        if isinstance(self.obj, SeriesGroupBy):
+        if isinstance(self, SeriesGroupBy):
             raise NotImplementedError
 
         if self.sort is None and split_out > 1:
