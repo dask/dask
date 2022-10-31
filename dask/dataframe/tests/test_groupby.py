@@ -547,9 +547,8 @@ def test_groupby_set_index():
     pytest.raises(TypeError, lambda: ddf.groupby(df.index.month, as_index=False))
 
 
-def test_cov_seriesgroupby():
-    """ Confirms that cov() on a SeriesGroupBy object fails with NotImplementedError """
-    ddofs = [0, 1, 2]
+def test_seriesgroupby_cov():
+    """Confirms that cov() on a SeriesGroupBy object fails with NotImplementedError"""
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7], "b": [4, 2, 7, 3, 3, 1, 1, 1, 2]},
         index=[0, 1, 3, 5, 6, 8, 9, 9, 9],
