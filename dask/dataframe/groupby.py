@@ -1806,7 +1806,7 @@ class _GroupBy:
         from dask.dataframe.groupby import SeriesGroupBy
 
         if isinstance(self, SeriesGroupBy):
-            raise NotImplementedError
+            raise NotImplementedError("cov() not implemented for SeriesGroupBy object")
 
         if self.sort is None and split_out > 1:
             warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
