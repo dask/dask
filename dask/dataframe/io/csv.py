@@ -116,7 +116,8 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         write_header = False
         rest_kwargs = self.kwargs.copy()
         if not is_first:
-            write_header = True
+            if "names" not in rest_kwargs:
+                write_header = True
             rest_kwargs.pop("skiprows", None)
             if rest_kwargs.get("header", 0) is not None:
                 rest_kwargs.pop("header", None)
