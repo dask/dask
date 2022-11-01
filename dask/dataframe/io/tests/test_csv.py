@@ -1787,7 +1787,8 @@ def test_select_with_include_path_column(tmpdir):
     assert_eq(ddf.col1, pd.concat([df.col1] * 6))
 
 
-def test_names_with_header_0(tmpdir):
+@pytest.mark.parametrize("use_names", [True, False])
+def test_names_with_header_0(tmpdir, use_names):
     # This test sets `blocksize` so that we will
     # get two partitions in `dd.read_csv`. We are
     # testing that `header=0` results in the expected
@@ -1805,16 +1806,20 @@ def test_names_with_header_0(tmpdir):
     """
     )
 
+    if use_names:
+        names = ["city", "date", "sales"]
+        usecols = ["city", "sales"]
+    else:
+        names = usecols = None
+
     path = os.path.join(str(tmpdir), "input.csv")
     pd.read_csv(csv, header=None).to_csv(path, index=False, header=False)
-    df = pd.read_csv(
-        path, header=0, names=["city", "date", "sales"], usecols=["city", "sales"]
-    )
+    df = pd.read_csv(path, header=0, names=names, usecols=usecols)
     ddf = dd.read_csv(
         path,
         header=0,
-        names=["city", "date", "sales"],
-        usecols=["city", "sales"],
+        names=names,
+        usecols=usecols,
         blocksize=60,
     )
 
