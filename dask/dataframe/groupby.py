@@ -1289,7 +1289,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property  # type: ignore
+    @property
     @_deprecated()
     def index(self):
         return self.by
