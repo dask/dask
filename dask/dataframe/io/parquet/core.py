@@ -481,6 +481,7 @@ def read_parquet(
         paths,
         categories=categories,
         index=index,
+        use_nullable_dtypes=use_nullable_dtypes,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,

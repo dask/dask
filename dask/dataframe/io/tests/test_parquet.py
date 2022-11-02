@@ -657,7 +657,7 @@ def test_pyarrow_use_nullable_dtypes(tmpdir):
         assert_eq(df, ddf2)
 
     ddf2 = dd.read_parquet(fn, engine="pyarrow", use_nullable_dtypes=True)
-    assert_eq(df, ddf2)
+    assert_eq(df, ddf2, check_index=False)
 
 
 @write_read_engines()
@@ -3185,11 +3185,11 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
         @classmethod
         def _arrow_table_to_pandas(
-            cls, arrow_table: pa.Table, categories, **kwargs
+            cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
             return super()._arrow_table_to_pandas(
-                fixed_arrow_table, categories, **kwargs
+                fixed_arrow_table, categories, use_nullable_dtypes, **kwargs
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range

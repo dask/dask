@@ -351,6 +351,7 @@ class ArrowDatasetEngine(Engine):
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -380,7 +381,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info)
+        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -991,7 +992,7 @@ class ArrowDatasetEngine(Engine):
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info):
+    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1063,7 +1064,7 @@ class ArrowDatasetEngine(Engine):
                 "categories: {} | columns: {}".format(categories, list(all_columns))
             )
 
-        dtypes = _get_pyarrow_dtypes(schema, categories)
+        dtypes = _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes)
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
         index_cols = index or ()
