@@ -601,7 +601,7 @@ def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
     typically add dtype metadata for this.
     """
     if read_engine == "fastparquet" or write_engine == "fastparquet":
-        pytest.xfail("not working yet")
+        pytest.xfail("https://github.com/dask/fastparquet/issues/465")
 
     fn = str(tmpdir.join("test.parquet"))
     df = pd.DataFrame(
@@ -622,7 +622,7 @@ def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
 
 
 @PYARROW_MARK
-def test_pyarrow_use_nullable_dtypes(tmpdir):
+def test_use_nullable_dtypes(tmpdir, engine):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
@@ -652,12 +652,21 @@ def test_pyarrow_use_nullable_dtypes(tmpdir):
     partitions = ddf.to_delayed()
     dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
 
-    with pytest.raises(AssertionError):
-        ddf2 = dd.read_parquet(fn, engine="pyarrow", use_nullable_dtypes=False)
-        assert_eq(df, ddf2)
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="not supported"):
+            ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=True)
 
-    ddf2 = dd.read_parquet(fn, engine="pyarrow", use_nullable_dtypes=True)
-    assert_eq(df, ddf2, check_index=False)
+    # Works in pyarrow
+    elif "arrow" in engine:
+        # Doesn't round-trip by default when we aren't using nullable dtypes
+        with pytest.raises(AssertionError):
+            ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=False)
+            assert_eq(df, ddf2)
+
+        # Round trip works when we use nullable dtypes
+        ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=True)
+        assert_eq(df, ddf2, check_index=False)
 
 
 @write_read_engines()
