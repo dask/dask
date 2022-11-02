@@ -188,7 +188,7 @@ def test_read_bytes_delimited():
             assert ours == test
 
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]  # type: ignore
+fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
 @pytest.mark.parametrize("fmt,blocksize", fmt_bs)
