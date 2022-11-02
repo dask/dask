@@ -595,6 +595,72 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
+def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
+    """
+    Test round-tripping nullable extension dtypes. Parquet engines will
+    typically add dtype metadata for this.
+    """
+    if read_engine == "fastparquet" or write_engine == "fastparquet":
+        pytest.xfail("not working yet")
+
+    fn = str(tmpdir.join("test.parquet"))
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string[python]"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(
+        fn, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
+    )
+    ddf2 = dd.read_parquet(fn, engine=read_engine)
+    print(ddf2.dtypes)
+    assert_eq(df, ddf2)
+
+
+@PYARROW_MARK
+def test_pyarrow_use_nullable_dtypes(tmpdir):
+    """
+    Test reading a parquet file without pandas metadata,
+    but forcing use of nullable dtypes where appropriate
+    """
+    fn = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string[python]"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    @dask.delayed
+    def write_partition(df, i):
+        "Write a parquet file without the pandas metadata"
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        table = pa.Table.from_pandas(df).replace_schema_metadata({})
+        pq.write_table(table, fn + f"/part.{i}.parquet")
+
+    # Create a pandas-metadata-free partitioned parquet. By default it will
+    # not read into nullable extension dtypes
+    partitions = ddf.to_delayed()
+    dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
+
+    with pytest.raises(AssertionError):
+        ddf2 = dd.read_parquet(fn, engine="pyarrow", use_nullable_dtypes=False)
+        assert_eq(df, ddf2)
+
+    ddf2 = dd.read_parquet(fn, engine="pyarrow", use_nullable_dtypes=True)
+    assert_eq(df, ddf2)
+
+
+@write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
