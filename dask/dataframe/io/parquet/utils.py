@@ -17,6 +17,7 @@ class Engine:
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         **kwargs,
@@ -37,6 +38,9 @@ class Engine:
             The column name(s) to be used as the index.
             If set to ``None``, pandas metadata (if available) can be used
             to reset the value in this function
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         gather_statistics: bool
             Whether or not to gather statistics to calculate divisions
             for the output DataFrame collection.
@@ -73,7 +77,9 @@ class Engine:
         raise NotImplementedError()
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, **kwargs):
+    def read_partition(
+        cls, fs, piece, columns, index, use_nullable_dtypes=False, **kwargs
+    ):
         """Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
@@ -88,6 +94,9 @@ class Engine:
             List of column names to pull out of that row group
         index: str, List[str], or False
             The index name(s).
+        use_nullable_dtypes: boolean
+            Whether to use pandas nullable dtypes (like "string" or "Int64")
+            where appropriate when reading parquet files.
         **kwargs:
             Includes `"kwargs"` values stored within the `parts` output
             of `engine.read_metadata`. May also include arguments to be
