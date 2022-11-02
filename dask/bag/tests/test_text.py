@@ -30,7 +30,7 @@ files = {
 
 expected = "".join([files[v] for v in sorted(files)])
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]  # type: ignore
+fmt_bs = [(fmt, None) for fmt in compr] + [(None, "10 B")]
 
 encodings = ["ascii", "utf-8"]  # + ['utf-16', 'utf-16-le', 'utf-16-be']
 fmt_bs_enc_path = [

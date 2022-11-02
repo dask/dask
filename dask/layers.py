@@ -1319,8 +1319,8 @@ class DataFrameTreeReduction(Layer):
         self.name = name
         self.name_input = name_input
         self.npartitions_input = npartitions_input
-        self.concat_func = concat_func  # type: ignore
-        self.tree_node_func = tree_node_func  # type: ignore
+        self.concat_func = concat_func
+        self.tree_node_func = tree_node_func
         self.finalize_func = finalize_func
         self.split_every = split_every
         self.split_out = split_out  # type: ignore

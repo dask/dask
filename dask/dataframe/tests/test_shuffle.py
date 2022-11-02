@@ -1443,11 +1443,11 @@ def test_sort_values_single_partition(nelem, by, ascending):
     "data",
     [
         {
-            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),  # type: ignore
-            "b": [None] * 100 + list(range(100, 150)),  # type: ignore
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
+            "b": [None] * 100 + list(range(100, 150)),
         },
         {
-            "a": list(range(15)) + [None] * 5,  # type: ignore
+            "a": list(range(15)) + [None] * 5,
             "b": list(reversed(range(20))),
         },
     ],
