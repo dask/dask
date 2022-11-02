@@ -61,12 +61,6 @@ if PANDAS_GT_120:
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
     PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
-
-def mapper(t):
-    print(t, PYARROW_NULLABLE_DTYPE_MAPPING.get(t))
-    return PYARROW_NULLABLE_DTYPE_MAPPING.get(t)
-
-
 #
 #  Helper Utilities
 #
