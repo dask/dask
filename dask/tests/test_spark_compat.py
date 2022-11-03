@@ -133,7 +133,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
             "a": "Int64",
             "b": "Float64",
             "c": "boolean",
-            "d": "string[python]",
+            "d": "string",
         }
     )
     # # Ensure all columns are extension dtypes

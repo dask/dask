@@ -609,7 +609,7 @@ def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
             "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
             "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
-            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string[python]"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
@@ -633,7 +633,7 @@ def test_use_nullable_dtypes(tmpdir, engine):
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
             "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
             "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
-            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string[python]"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
