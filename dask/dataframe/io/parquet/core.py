@@ -602,7 +602,7 @@ def read_parquet_part(
                     rg,
                     columns.copy(),
                     index,
-                    use_nullable_dtypes,
+                    use_nullable_dtypes=use_nullable_dtypes,
                     **toolz.merge(kwargs, kw),
                 )
                 for (rg, kw) in part
@@ -616,7 +616,7 @@ def read_parquet_part(
                 [p[0] for p in part],
                 columns.copy(),
                 index,
-                use_nullable_dtypes,
+                use_nullable_dtypes=use_nullable_dtypes,
                 **kwargs,
             )
     else:
@@ -628,7 +628,7 @@ def read_parquet_part(
             rg,
             columns,
             index,
-            use_nullable_dtypes,
+            use_nullable_dtypes=use_nullable_dtypes,
             **toolz.merge(kwargs, part_kwargs),
         )
 
