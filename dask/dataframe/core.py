@@ -6037,7 +6037,9 @@ class DataFrame(_Frame):
         )
 
     @classmethod
-    def from_dict(cls, data, *, npartitions, orient="columns", dtype=None, columns=None):
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
         """
         Construct a Dask DataFrame from a Python Dictionary
 

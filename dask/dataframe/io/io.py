@@ -306,7 +306,14 @@ def from_pandas(
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
-def from_dict(data, npartitions, orient="columns", dtype=None, columns=None, constructor=pd.DataFrame):
+def from_dict(
+    data,
+    npartitions,
+    orient="columns",
+    dtype=None,
+    columns=None,
+    constructor=pd.DataFrame,
+):
     """
     Construct a Dask DataFrame from a Python Dictionary
 
