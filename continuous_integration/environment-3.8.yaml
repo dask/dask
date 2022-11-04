@@ -35,7 +35,6 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - blosc
   - boto3
   - botocore
   # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved

@@ -52,7 +52,7 @@ properties:
         - "null"
         description: |
           Compression algorithm used for on disk-shuffling. Partd, the library used
-          for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+          for compression supports ZLib, BZ2, and SNAPPY
 
       parquet:
         type: object
