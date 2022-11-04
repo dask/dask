@@ -969,3 +969,13 @@ def test_from_map_column_projection():
     assert_eq(ddf["A"], expect["A"])
     assert set(projected) == {"A"}
     assert_eq(ddf, expect)
+
+
+@pytest.mark.gpu
+def test_dataframe_from_dict():
+    cudf = pytest.importorskip("cudf")
+    dask_cudf = pytest.importorskip("dask_cudf")
+    data = {"a": cudf.Series([1, 2, 3, 4]), "B": cudf.Series([10, 11, 12, 13])}
+    expected = cudf.DataFrame(data)
+    actual = dask_cudf.DataFrame.from_dict(data, npartitions=2)
+    assert_eq(expected, actual.compute())

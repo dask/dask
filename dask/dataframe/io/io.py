@@ -306,7 +306,7 @@ def from_pandas(
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
-def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
+def from_dict(data, npartitions, orient="columns", dtype=None, columns=None, constructor=pd.DataFrame):
     """
     Construct a Dask DataFrame from a Python Dictionary
 
@@ -329,6 +329,8 @@ def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
     columns: string, optional
         Column labels to use when ``orient='index'``. Raises a ValueError
         if used with ``orient='columns'`` or ``orient='tight'``.
+    constructor: class, default pd.DataFrame
+        Class with which ``from_dict`` should be called with.
 
     Examples
     --------
@@ -344,7 +346,7 @@ def from_dict(data, npartitions, orient="columns", dtype=None, columns=None):
         )
 
     return from_pandas(
-        pd.DataFrame.from_dict(data, orient, dtype, columns),
+        constructor.from_dict(data, orient, dtype, columns),
         npartitions,
     )
 
