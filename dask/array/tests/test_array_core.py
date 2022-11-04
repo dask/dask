@@ -3914,6 +3914,13 @@ def test_setitem_1d():
     with pytest.raises(ValueError, match="Boolean index assignment in Dask"):
         dx[index] = 1
 
+    # Test np.ma.masked assignment to object-type arrays
+    x = np.ma.array(["a", "bc", "cde"], dtype=object)
+    dx = da.from_array(x.copy(), chunks=2)
+    x[...] = np.ma.masked
+    dx[...] = np.ma.masked
+    assert_eq(x.mask, da.ma.getmaskarray(dx))
+
 
 def test_setitem_hardmask():
     x = np.ma.array([1, 2, 3, 4], dtype=int)
