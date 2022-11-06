@@ -1578,8 +1578,8 @@ class ArrowDatasetEngine(Engine):
             return arrow_table.to_pandas(
                 categories=categories,
                 types_mapper=PYARROW_NULLABLE_DTYPE_MAPPING.get,
-                **_kwargs
-                )
+                **_kwargs,
+            )
         else:
             return arrow_table.to_pandas(categories=categories, **_kwargs)
 
