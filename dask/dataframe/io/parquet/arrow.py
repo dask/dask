@@ -1573,11 +1573,14 @@ class ArrowDatasetEngine(Engine):
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
-
-        if use_nullable_dtypes:
-            _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
-
-        return arrow_table.to_pandas(categories=categories, **_kwargs)
+        if use_nullable_dtypes is True:
+            return arrow_table.to_pandas(
+                categories=categories,
+                types_mapper=PYARROW_NULLABLE_DTYPE_MAPPING.get,
+                **_kwargs
+                )
+        else:
+            return arrow_table.to_pandas(categories=categories, **_kwargs)
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):

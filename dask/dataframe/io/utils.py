@@ -57,6 +57,10 @@ def _get_pyarrow_dtypes(schema, categories, use_nullable_dtypes=False):
                 )
             else:
                 numpy_dtype = pandas_metadata_dtypes[field.name]
+
+            if use_nullable_dtypes and field.type in PYARROW_NULLABLE_DTYPE_MAPPING.keys():
+                numpy_dtype = type_mapper(field.type)
+
         else:
             try:
                 numpy_dtype = type_mapper(field.type)
