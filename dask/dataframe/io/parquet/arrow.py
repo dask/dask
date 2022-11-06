@@ -9,6 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from packaging.version import parse as parse_version
 
+from dask import config
 from dask.base import tokenize
 from dask.core import flatten
 from dask.dataframe._compat import PANDAS_GT_120
@@ -54,7 +55,7 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.uint32(): pd.UInt32Dtype(),
     pa.uint64(): pd.UInt64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
-    pa.string(): pd.StringDtype(),
+    pa.string(): pd.StringDtype(storage=config.get("dataframe.dtypes.string.storage")),
 }
 
 if PANDAS_GT_120:
