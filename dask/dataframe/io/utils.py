@@ -219,3 +219,31 @@ class DataFrameIOFunction(Protocol):
     def __call__(self, *args, **kwargs):
         """Return a new DataFrame partition"""
         raise NotImplementedError
+
+
+from warnings import catch_warnings, simplefilter
+
+try:
+    import psutil
+except ImportError:
+    psutil = None  # type: ignore
+
+
+def auto_blocksize(total_memory, cpu_count, memory_factor=10):
+    blocksize = int(total_memory // cpu_count / memory_factor)
+    return min(blocksize, int(64e6))
+
+
+def _infer_block_size(default=None, memory_factor=10):
+    # guess blocksize if psutil is installed or use acceptable default one if not
+    default = default or 2**25
+    if psutil is not None:
+        with catch_warnings():
+            simplefilter("ignore", RuntimeWarning)
+            mem = psutil.virtual_memory().total
+            cpu = psutil.cpu_count()
+
+        if mem and cpu:
+            return auto_blocksize(mem, cpu, memory_factor=memory_factor)
+
+    return default

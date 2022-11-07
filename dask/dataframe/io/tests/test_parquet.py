@@ -2839,6 +2839,7 @@ def test_chunksize_files(
             str(tmpdir),
             engine=read_engine,
             chunksize=chunksize,
+            split_row_groups=False,
             aggregate_files=partition_on if partition_on else True,
         )
 
@@ -2888,6 +2889,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
             str(tmpdir),
             engine=read_engine,
             chunksize=chunksize,
+            split_row_groups=False,
             aggregate_files=aggregate_files,
         )
 

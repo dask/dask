@@ -184,7 +184,8 @@ def read_parquet(
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
-    split_row_groups=False,
+    split_row_groups="auto",
+    blocksize=None,
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
@@ -275,11 +276,18 @@ def read_parquet(
         The default values for local and remote filesystems can be specified
         with the "metadata-task-size-local" and "metadata-task-size-remote"
         config fields, respectively (see "dataframe.parquet").
-    split_row_groups : bool or int, default False
+    split_row_groups : "auto", bool, or int, default "auto"
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
+        If "auto" (the default), the uncompressed storage size of all row-groups
+        in the first file will be used to automatically set a value that is
+        consistent with ``blocksize``.
+    blocksize : int or str, default None
+        The desired size of each output ``DataFrame`` partition in terms of total
+        (uncompressed) parquet storage space. This parameter is only used when
+        ``split_row_groups="auto"``. Default is system dependent.
     chunksize : int or str, default None
         WARNING: The ``chunksize`` argument will be deprecated in the future.
         Please use ``split_row_groups`` to specify how many row-groups should be
@@ -478,6 +486,7 @@ def read_parquet(
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
+        blocksize=blocksize,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
@@ -500,6 +509,7 @@ def read_parquet(
         # may be stored in the first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
+        split_row_groups = parts[0].pop("split_row_groups", split_row_groups)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

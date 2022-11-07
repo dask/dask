@@ -26,13 +26,14 @@ from dask.dataframe.io.parquet.utils import (
 )
 from dask.dataframe.io.utils import (
     _get_pyarrow_dtypes,
+    _infer_block_size,
     _is_local_fs,
     _meta_from_dtypes,
     _open_input_files,
 )
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import Delayed
-from dask.utils import getargspec, natural_sort_key
+from dask.utils import getargspec, natural_sort_key, parse_bytes
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
@@ -330,6 +331,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
+        blocksize="default",
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -358,7 +360,10 @@ class ArrowDatasetEngine(Engine):
         # Stage 2: Generate output `meta`
         meta = cls._create_dd_meta(dataset_info)
 
-        # Stage 3: Generate parts and stats
+        # Stage 3: Update split_row_groups
+        cls._update_partition_sizes(dataset_info, blocksize)
+
+        # Stage 4: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
 
         # Add `common_kwargs` and `aggregation_depth` to the first
@@ -367,6 +372,7 @@ class ArrowDatasetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         return (meta, stats, parts, dataset_info["index"])
 
@@ -1073,6 +1079,31 @@ class ArrowDatasetEngine(Engine):
         dataset_info["categories"] = categories
 
         return meta
+
+    @classmethod
+    def _default_block_size(cls):
+        return _infer_block_size()
+
+    @classmethod
+    def _update_partition_sizes(cls, dataset_info, blocksize):
+        # Automatically set split_row_groups
+        split_row_groups = dataset_info["split_row_groups"]
+        if split_row_groups == "auto":
+            # Sample row-group sizes in first file
+            try:
+                file_frag = next(iter(dataset_info["ds"].get_fragments()))
+                file_0_rg_sizes = [rg.total_byte_size for rg in file_frag.row_groups]
+                blocksize = parse_bytes(blocksize or cls._default_block_size())
+                if np.sum(file_0_rg_sizes) < blocksize:
+                    # File is already smaller than the desired blocksize
+                    split_row_groups = False
+                else:
+                    # File is larger than the desired blocksize, set split_row_groups
+                    split_row_groups = int(blocksize / float(np.mean(file_0_rg_sizes)))
+            except StopIteration:
+                # Empty dataset
+                split_row_groups = False
+            dataset_info["split_row_groups"] = split_row_groups
 
     @classmethod
     def _construct_collection_plan(cls, dataset_info):

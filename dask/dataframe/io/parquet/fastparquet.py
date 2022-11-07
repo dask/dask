@@ -37,10 +37,15 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
     _split_user_options,
 )
-from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
+from dask.dataframe.io.utils import (
+    _infer_block_size,
+    _is_local_fs,
+    _meta_from_dtypes,
+    _open_input_files,
+)
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.delayed import Delayed
-from dask.utils import natural_sort_key
+from dask.utils import natural_sort_key, parse_bytes
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()
@@ -602,6 +607,27 @@ class FastParquetEngine(Engine):
         return meta
 
     @classmethod
+    def _update_partition_sizes(cls, dataset_info, blocksize):
+        # Automatically set split_row_groups
+        split_row_groups = dataset_info["split_row_groups"]
+        if split_row_groups == "auto":
+            # Sample row-group sizes in first file
+            pf = ParquetFile(
+                dataset_info["paths"][0],
+                open_with=dataset_info["fs"].open,
+                **dataset_info["kwargs"]["dataset"],
+            )
+            file_0_rg_sizes = [rg.total_byte_size for rg in pf.row_groups]
+            blocksize = parse_bytes(blocksize or _infer_block_size())
+            if np.sum(file_0_rg_sizes) < blocksize:
+                # File is already smaller than the desired blocksize
+                split_row_groups = False
+            else:
+                # File is larger than the desired blocksize, set split_row_groups
+                split_row_groups = int(blocksize / float(np.mean(file_0_rg_sizes)))
+            dataset_info["split_row_groups"] = split_row_groups
+
+    @classmethod
     def _construct_collection_plan(cls, dataset_info):
 
         # Collect necessary information from dataset_info
@@ -823,6 +849,7 @@ class FastParquetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
+        blocksize="default",
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -851,7 +878,10 @@ class FastParquetEngine(Engine):
         # Stage 2: Generate output `meta`
         meta = cls._create_dd_meta(dataset_info)
 
-        # Stage 3: Generate parts and stats
+        # Stage 3: Update split_row_groups
+        cls._update_partition_sizes(dataset_info, blocksize)
+
+        # Stage 4: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
 
         # Cannot allow `None` in columns if the user has specified index=False
@@ -865,6 +895,7 @@ class FastParquetEngine(Engine):
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
             parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+            parts[0]["split_row_groups"] = dataset_info["split_row_groups"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 
