@@ -6,6 +6,7 @@ import pytest
 
 import dask.array as da
 import dask.dataframe as dd
+from dask import config
 from dask.blockwise import Blockwise
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
@@ -982,7 +983,7 @@ def test_from_dict_backends(backend):
         # Check dd.from_dict API
         got = dd.from_dict(data, npartitions=2)
         assert_eq(expected, got)
-        
+
         # Check from_dict classmethod
         got_classmethod = got.from_dict(data, npartitions=2)
         assert_eq(expected, got_classmethod)
