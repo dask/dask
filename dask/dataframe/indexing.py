@@ -13,6 +13,7 @@ from dask.dataframe._compat import PANDAS_GT_130
 from dask.dataframe.core import Series, new_dd_object
 from dask.dataframe.utils import is_index_like, is_series_like, meta_nonempty
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import is_arraylike
 
 
 class _IndexerBase:
@@ -209,7 +210,7 @@ class _LocIndexer(_IndexerBase):
         return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
-        if isinstance(keys, (list, np.ndarray)):
+        if isinstance(keys, (list, np.ndarray)) or is_arraylike(keys):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
             # element
@@ -343,7 +344,6 @@ def _partitions_of_index_values(divisions, values):
         raise ValueError(msg)
 
     results = defaultdict(list)
-    values = pd.Index(values, dtype=object)
     for val in values:
         i = bisect.bisect_right(divisions, val)
         div = min(len(divisions) - 2, max(0, i - 1))
