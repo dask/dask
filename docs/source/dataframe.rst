@@ -18,6 +18,7 @@ Dask DataFrame
    dataframe-extend.rst
    dataframe-parquet.rst
    dataframe-sql.rst
+   dataframe-api.rst
 
 A Dask DataFrame is a large parallel DataFrame composed of many smaller pandas
 DataFrames, split along the index.  These pandas DataFrames may live on disk
@@ -83,7 +84,7 @@ There are some slight alterations due to the parallel nature of Dask:
             0    2
             3    5
             Name: x, dtype: int64
-        
+
     .. grid-item-card:: pandas DataFrame API
 
         .. code-block:: python
