@@ -7,8 +7,9 @@ from dask import config
 from dask.dataframe.utils import assert_eq
 
 
-@pytest.mark.parametrize("use_nullables", (False, True))
+@pytest.mark.parametrize("use_nullables", (True, False))
 def test_roundtrip_parquet_dask_to_dask_pyarrow_stringtype(tmpdir, use_nullables):
+    stringtype = config.get("dataframe.parquet.dtypes.string.storage")
 
     tmpdir = str(tmpdir)
     npartitions = 3
@@ -32,26 +33,24 @@ def test_roundtrip_parquet_dask_to_dask_pyarrow_stringtype(tmpdir, use_nullables
                 "a": "Int64",
                 "b": "Float64",
                 "c": "boolean",
-                "d": "string[pyarrow]",
+                "d": f"string[{stringtype}]",
             }
         )
         # # Ensure all columns are extension dtypes
         assert all(
             [pd.api.types.is_extension_array_dtype(dtype) for dtype in pdf.dtypes]
         )
-
-    with config.set({"dataframe.parquet.dtypes.string.storage": "pyarrow"}):
-        ddf = dd.from_pandas(pdf, npartitions=npartitions)
-        ddf.to_parquet(tmpdir, overwrite=True, engine="pyarrow")
-        ddf2 = dd.read_parquet(
-            tmpdir, engine="pyarrow", use_nullable_dtypes=use_nullables
-        )
-        assert_eq(ddf2, pdf, check_index=False)
-        if use_nullables is True:
-            assert all(
-                [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf2.dtypes]
-            ), ddf2.dtypes
-        else:
-            assert not any(
-                [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf2.dtypes]
-            ), ddf2.dtypes
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+    ddf.to_parquet(tmpdir, overwrite=True, engine="pyarrow")
+    ddf2 = dd.read_parquet(
+        tmpdir, engine="pyarrow", use_nullable_dtypes=use_nullables
+    )
+    assert_eq(ddf2, pdf, check_index=False)
+    if use_nullables is True:
+        assert all(
+            [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf2.dtypes]
+        ), ddf2.dtypes
+    else:
+        assert not any(
+            [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf2.dtypes]
+        ), ddf2.dtypes
