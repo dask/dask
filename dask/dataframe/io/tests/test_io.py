@@ -972,10 +972,17 @@ def test_from_map_column_projection():
 
 
 @pytest.mark.gpu
-def test_dataframe_from_dict():
-    cudf = pytest.importorskip("cudf")
-    dask_cudf = pytest.importorskip("dask_cudf")
-    data = {"a": cudf.Series([1, 2, 3, 4]), "B": cudf.Series([10, 11, 12, 13])}
-    expected = cudf.DataFrame(data)
-    actual = dask_cudf.DataFrame.from_dict(data, npartitions=2)
-    assert_eq(expected, actual.compute())
+@pytest.mark.parametrize("backend", ["pandas", "cudf"])
+def test_from_dict_backends(backend):
+    _lib = pytest.importorskip(backend)
+    with config.set({"dataframe.backend": backend}):
+        data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
+        expected = _lib.DataFrame(data)
+
+        # Check dd.from_dict API
+        got = dd.from_dict(data, npartitions=2)
+        assert_eq(expected, got)
+        
+        # Check from_dict classmethod
+        got_classmethod = got.from_dict(data, npartitions=2)
+        assert_eq(expected, got_classmethod)
