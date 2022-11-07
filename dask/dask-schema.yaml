@@ -86,7 +86,7 @@ properties:
                   storage:
                     type: object
                     description: |
-                      The storage option for a Pandas StringDtype.  One of `python` of `pyarrow` 
+                      The storage option for a Pandas StringDtype.  One of python of pyarrow 
 
   array:
     type: object
