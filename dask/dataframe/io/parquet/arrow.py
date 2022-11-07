@@ -58,7 +58,9 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.string(): pd.StringDtype(
         storage=config.get("dataframe.parquet.dtypes.string.storage")
     ),
-    "null": pd.StringDtype(storage="python"),  # null values can not be stored with pyarrow
+    "null": pd.StringDtype(
+        storage="python"
+    ),  # null values can not be stored with pyarrow
 }
 
 if PANDAS_GT_120:

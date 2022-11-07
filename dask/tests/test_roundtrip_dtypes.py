@@ -42,9 +42,7 @@ def test_roundtrip_parquet_dask_to_dask_pyarrow_stringtype(tmpdir, use_nullables
         )
     ddf = dd.from_pandas(pdf, npartitions=npartitions)
     ddf.to_parquet(tmpdir, overwrite=True, engine="pyarrow")
-    ddf2 = dd.read_parquet(
-        tmpdir, engine="pyarrow", use_nullable_dtypes=use_nullables
-    )
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=use_nullables)
     assert_eq(ddf2, pdf, check_index=False)
     if use_nullables is True:
         assert all(
