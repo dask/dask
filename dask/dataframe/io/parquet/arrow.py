@@ -55,7 +55,9 @@ PYARROW_NULLABLE_DTYPE_MAPPING = {
     pa.uint32(): pd.UInt32Dtype(),
     pa.uint64(): pd.UInt64Dtype(),
     pa.bool_(): pd.BooleanDtype(),
-    pa.string(): pd.StringDtype(storage=config.get("dataframe.parquet.dtypes.string.storage")),
+    pa.string(): pd.StringDtype(
+        storage=config.get("dataframe.parquet.dtypes.string.storage")
+    ),
 }
 
 if PANDAS_GT_120:
