@@ -607,7 +607,7 @@ class FastParquetEngine(Engine):
         return meta
 
     @classmethod
-    def _update_partition_sizes(cls, dataset_info, blocksize):
+    def _update_partition_sizes(cls, dataset_info):
         # Automatically set split_row_groups
         split_row_groups = dataset_info["split_row_groups"]
         if split_row_groups == "auto":
@@ -618,13 +618,14 @@ class FastParquetEngine(Engine):
                 **dataset_info["kwargs"]["dataset"],
             )
             file_0_rg_sizes = [rg.total_byte_size for rg in pf.row_groups]
-            blocksize = parse_bytes(blocksize or _infer_block_size())
-            if np.sum(file_0_rg_sizes) < blocksize:
-                # File is already smaller than the desired blocksize
+            chunksize = parse_bytes(dataset_info["chunksize"] or _infer_block_size())
+            if np.sum(file_0_rg_sizes) < chunksize:
+                # File is already smaller than the desired chunksize
                 split_row_groups = False
             else:
-                # File is larger than the desired blocksize, set split_row_groups
-                split_row_groups = int(blocksize / float(np.mean(file_0_rg_sizes)))
+                # File is larger than the desired chunksize, set split_row_groups
+                split_row_groups = int(chunksize / float(np.mean(file_0_rg_sizes)))
+            dataset_info["chunksize"] = None
             dataset_info["split_row_groups"] = split_row_groups
 
     @classmethod
@@ -849,7 +850,6 @@ class FastParquetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
-        blocksize="default",
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -879,7 +879,7 @@ class FastParquetEngine(Engine):
         meta = cls._create_dd_meta(dataset_info)
 
         # Stage 3: Update split_row_groups
-        cls._update_partition_sizes(dataset_info, blocksize)
+        cls._update_partition_sizes(dataset_info)
 
         # Stage 4: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)

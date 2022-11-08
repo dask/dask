@@ -2799,8 +2799,10 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
-        ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
+    with pytest.warns(UserWarning, match="often slow"):
+        ddf2 = dd.read_parquet(
+            tmpdir, engine=read_engine, split_row_groups=False, chunksize="1MiB"
+        )
     assert_eq(ddf1, ddf2, check_index=False)
 
 
@@ -2884,7 +2886,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
         partition_on=partition_on,
         write_index=False,
     )
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(UserWarning, match="often slow"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -2961,6 +2963,26 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
             # a single output partition
             assert ddf2.npartitions == 1
 
+    # Use (default) split_row_groups="auto"
+    # without file aggregation
+    ddf3 = dd.read_parquet(
+        path,
+        engine=engine,
+        chunksize=chunksize,
+        index="index",
+        aggregate_files=False,
+    )
+    assert_eq(df, ddf3)
+
+    num_row_groups = df_size // row_group_size
+    if chunksize in (1024, 4096):
+        # Should get partial aggregation
+        assert ddf3.npartitions < num_row_groups
+        assert ddf3.npartitions > ddf1.npartitions
+    else:
+        # Should get single partition per file
+        assert ddf3.npartitions == ddf1.npartitions
+
 
 @write_read_engines()
 def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
@@ -2971,7 +2993,7 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
         path, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
     )
 
-    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+    with pytest.warns(UserWarning, match="often slow"):
         ddf_read = dd.read_parquet(
             path,
             engine=read_engine,
