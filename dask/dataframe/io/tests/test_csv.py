@@ -813,7 +813,7 @@ def test_header_None():
         assert_eq(df.compute().reset_index(drop=True), expected)
 
 
-def test__auto_blocksize():
+def test_auto_blocksize():
     assert isinstance(_auto_blocksize(3000, 15), int)
     assert _auto_blocksize(3000, 3) == 100
     assert _auto_blocksize(5000, 2) == 250
@@ -836,13 +836,13 @@ def test__infer_block_size(monkeypatch):
     assert _infer_block_size()
 
 
-def test__auto_blocksize_max64mb():
+def test_auto_blocksize_max64mb():
     blocksize = _auto_blocksize(1000000000000, 3)
     assert blocksize == int(64e6)
     assert isinstance(blocksize, int)
 
 
-def test__auto_blocksize_csv(monkeypatch):
+def test_auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip("psutil")
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()

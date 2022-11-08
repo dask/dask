@@ -2799,10 +2799,9 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
-    with pytest.warns(UserWarning, match="often slow"):
-        ddf2 = dd.read_parquet(
-            tmpdir, engine=read_engine, split_row_groups=False, chunksize="1MiB"
-        )
+    ddf2 = dd.read_parquet(
+        tmpdir, engine=read_engine, split_row_groups=False, chunksize="1MiB"
+    )
     assert_eq(ddf1, ddf2, check_index=False)
 
 
@@ -2886,7 +2885,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
         partition_on=partition_on,
         write_index=False,
     )
-    with pytest.warns(UserWarning, match="often slow"):
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
         ddf2 = dd.read_parquet(
             str(tmpdir),
             engine=read_engine,
@@ -2993,15 +2992,14 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
         path, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
     )
 
-    with pytest.warns(UserWarning, match="often slow"):
-        ddf_read = dd.read_parquet(
-            path,
-            engine=read_engine,
-            chunksize="10 kiB",
-            calculate_divisions=True,
-            split_row_groups=True,
-            index="index",
-        )
+    ddf_read = dd.read_parquet(
+        path,
+        engine=read_engine,
+        chunksize="10 kiB",
+        calculate_divisions=True,
+        split_row_groups=True,
+        index="index",
+    )
 
     assert_eq(pdf, ddf_read)
 

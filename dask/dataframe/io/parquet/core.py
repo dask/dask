@@ -369,21 +369,12 @@ def read_parquet(
     """
 
     # Check `chunksize` setting
-    if chunksize:
-        if split_row_groups not in (True, False, "auto"):
-            raise ValueError(
-                f"chunksize not supported for split_row_groups={split_row_groups}. "
-                f"Please specify `'auto'` (or `True` if row-group sizes vary "
-                f"significantly between files)."
-            )
-        elif split_row_groups != "auto":
-            # Warn on legacy usage (for now)?
-            warnings.warn(
-                "WARNING: Setting `chunksize` whithout `split_row_groups='auto'` "
-                "is often slow on large and/or remote datasets.\n\n"
-                "Please consider using `split_row_groups='auto'`.",
-                UserWarning,
-            )
+    if chunksize and split_row_groups not in (True, False, "auto"):
+        raise ValueError(
+            f"chunksize not supported for split_row_groups={split_row_groups}. "
+            f"Please specify `'auto'` (or `True`) if row-group sizes vary "
+            f"significantly between files."
+        )
 
     # "Pre-deprecation" warning for `aggregate_files`
     if aggregate_files:
