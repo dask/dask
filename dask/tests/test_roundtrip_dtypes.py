@@ -21,6 +21,8 @@ def test_roundtrip_parquet_dask_to_dask_pyarrow_stringtype(tmpdir, use_nullables
             "b": np.random.random(size=size),
             "c": [True, False] * (size // 2),
             "d": ["alice", "bob"] * (size // 2),
+            "e": [None, None] * (size // 2),
+            "f": [np.nan, np.nan] * (size // 2),
         }
     )
     # Note: since we set use_nullable_dtypes=True below, we are expecting *all*
@@ -34,6 +36,8 @@ def test_roundtrip_parquet_dask_to_dask_pyarrow_stringtype(tmpdir, use_nullables
                 "b": "Float64",
                 "c": "boolean",
                 "d": f"string[{stringtype}]",
+                "e": f"string[{stringtype}]",
+                "f": "Float64",
             }
         )
         # # Ensure all columns are extension dtypes

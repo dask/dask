@@ -84,7 +84,7 @@ properties:
                 properties:
 
                   storage:
-                    type: object
+                    type: string
                     description: |
                       The storage option for a Pandas StringDtype.  One of python of pyarrow 
 
