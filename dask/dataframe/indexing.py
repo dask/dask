@@ -117,10 +117,10 @@ class _LocIndexer(_IndexerBase):
 
             if isinstance(iindexer, slice):
                 return self._loc_slice(iindexer, cindexer)
-            elif isinstance(iindexer, (list, np.ndarray)):
-                return self._loc_list(iindexer, cindexer)
             elif is_series_like(iindexer) and not is_bool_dtype(iindexer.dtype):
                 return self._loc_list(iindexer.values, cindexer)
+            elif isinstance(iindexer, list) or is_arraylike(iindexer):
+                return self._loc_list(iindexer, cindexer)
             else:
                 # element should raise KeyError
                 return self._loc_element(iindexer, cindexer)
@@ -193,6 +193,7 @@ class _LocIndexer(_IndexerBase):
         name = "loc-%s" % tokenize(iindexer, self.obj)
         part = self._get_partitions(iindexer)
 
+        breakpoint()
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
             raise KeyError("the label [%s] is not in the index" % str(iindexer))
 
@@ -210,7 +211,7 @@ class _LocIndexer(_IndexerBase):
         return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
 
     def _get_partitions(self, keys):
-        if isinstance(keys, (list, np.ndarray)) or is_arraylike(keys):
+        if isinstance(keys, list) or is_arraylike(keys):
             return _partitions_of_index_values(self.obj.divisions, keys)
         else:
             # element
