@@ -6036,8 +6036,10 @@ class DataFrame(_Frame):
             and key in self.columns
         )
 
-    @staticmethod
-    def from_dict(data, *, npartitions, orient="columns", dtype=None, columns=None):
+    @classmethod
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
         """
         Construct a Dask DataFrame from a Python Dictionary
 
@@ -6053,6 +6055,7 @@ class DataFrame(_Frame):
             orient=orient,
             dtype=dtype,
             columns=columns,
+            constructor=cls._partition_type,
         )
 
 
