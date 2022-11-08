@@ -229,7 +229,7 @@ except ImportError:
     psutil = None  # type: ignore
 
 
-def auto_blocksize(total_memory, cpu_count, memory_factor=10):
+def _auto_blocksize(total_memory, cpu_count, memory_factor=10):
     blocksize = int(total_memory // cpu_count / memory_factor)
     return min(blocksize, int(64e6))
 
@@ -244,6 +244,6 @@ def _infer_block_size(default=None, memory_factor=10):
             cpu = psutil.cpu_count()
 
         if mem and cpu:
-            return auto_blocksize(mem, cpu, memory_factor=memory_factor)
+            return _auto_blocksize(mem, cpu, memory_factor=memory_factor)
 
     return default

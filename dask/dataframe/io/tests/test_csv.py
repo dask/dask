@@ -18,13 +18,8 @@ from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 from dask.core import flatten
 from dask.dataframe._compat import tm
-from dask.dataframe.io.csv import (
-    _infer_block_size,
-    auto_blocksize,
-    block_mask,
-    pandas_read_text,
-    text_blocks_to_pandas,
-)
+from dask.dataframe.io.csv import block_mask, pandas_read_text, text_blocks_to_pandas
+from dask.dataframe.io.utils import _auto_blocksize, _infer_block_size
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.layers import DataFrameIOLayer
@@ -818,10 +813,10 @@ def test_header_None():
         assert_eq(df.compute().reset_index(drop=True), expected)
 
 
-def test_auto_blocksize():
-    assert isinstance(auto_blocksize(3000, 15), int)
-    assert auto_blocksize(3000, 3) == 100
-    assert auto_blocksize(5000, 2) == 250
+def test__auto_blocksize():
+    assert isinstance(_auto_blocksize(3000, 15), int)
+    assert _auto_blocksize(3000, 3) == 100
+    assert _auto_blocksize(5000, 2) == 250
 
 
 def test__infer_block_size(monkeypatch):
@@ -841,20 +836,20 @@ def test__infer_block_size(monkeypatch):
     assert _infer_block_size()
 
 
-def test_auto_blocksize_max64mb():
-    blocksize = auto_blocksize(1000000000000, 3)
+def test__auto_blocksize_max64mb():
+    blocksize = _auto_blocksize(1000000000000, 3)
     assert blocksize == int(64e6)
     assert isinstance(blocksize, int)
 
 
-def test_auto_blocksize_csv(monkeypatch):
+def test__auto_blocksize_csv(monkeypatch):
     psutil = pytest.importorskip("psutil")
     total_memory = psutil.virtual_memory().total
     cpu_count = psutil.cpu_count()
     mock_read_bytes = mock.Mock(wraps=read_bytes)
     monkeypatch.setattr(dask.dataframe.io.csv, "read_bytes", mock_read_bytes)
 
-    expected_block_size = auto_blocksize(total_memory, cpu_count)
+    expected_block_size = _auto_blocksize(total_memory, cpu_count)
     with filetexts(csv_files, mode="b"):
         dd.read_csv("2014-01-01.csv")
         assert mock_read_bytes.called

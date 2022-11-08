@@ -440,7 +440,7 @@ def block_mask_last(block_lists):
         yield True
 
 
-AUTO_BLOCKSIZE = _infer_block_size()
+_auto_blocksize = _infer_block_size()
 
 
 def read_pandas(
@@ -514,7 +514,7 @@ def read_pandas(
         compression = infer_compression(paths[0])
 
     if blocksize == "default":
-        blocksize = AUTO_BLOCKSIZE
+        blocksize = _auto_blocksize
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
