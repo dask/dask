@@ -193,7 +193,6 @@ class _LocIndexer(_IndexerBase):
         name = "loc-%s" % tokenize(iindexer, self.obj)
         part = self._get_partitions(iindexer)
 
-        breakpoint()
         if iindexer < self.obj.divisions[0] or iindexer > self.obj.divisions[-1]:
             raise KeyError("the label [%s] is not in the index" % str(iindexer))
 
