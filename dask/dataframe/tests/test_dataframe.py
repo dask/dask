@@ -3201,6 +3201,23 @@ def test_cov():
     assert res._name != res3._name
 
 
+@pytest.mark.gpu
+def test_cov_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.cov()
+    res2 = ddf.cov(split_every=2)
+    sol = df.cov()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.cov()._name
+    assert res._name != res2._name
+
+
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
@@ -3246,6 +3263,23 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method="spearman"))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+@pytest.mark.gpu
+def test_corr_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.corr()
+    res2 = ddf.corr(split_every=2)
+    sol = df.corr()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.corr()._name
+    assert res._name != res2._name
 
 
 def test_corr_same_name():
