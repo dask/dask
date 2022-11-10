@@ -298,7 +298,7 @@ def test_groupby_on_index(scheduler):
 
     # Check column projection for `groupby().agg`
     agg = ddf.groupby("a").agg({"b": "mean"})
-    assert_eq(ddf.groupby("a").b.mean(), agg.b)
+    assert_eq(ddf2.groupby("a").b.mean(), agg.b)
     assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
