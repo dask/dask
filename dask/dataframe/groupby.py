@@ -1984,7 +1984,14 @@ class _GroupBy:
         # aggregation involves implicit column projection.
         # This makes it possible for the column-projection
         # to be pushed into the IO layer
-        _obj = self.obj[list(column_projection)] if column_projection else self.obj
+        _obj = (
+            self.obj[
+                # Make sure we only include column names
+                list(column_projection.intersection(self.obj.columns))
+            ]
+            if column_projection
+            else self.obj
+        )
 
         if not isinstance(self.by, list):
             chunk_args = [_obj, self.by]
