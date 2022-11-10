@@ -14,6 +14,7 @@ from dask.core import flatten
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    _auto_split_row_groups,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -26,14 +27,13 @@ from dask.dataframe.io.parquet.utils import (
 )
 from dask.dataframe.io.utils import (
     _get_pyarrow_dtypes,
-    _infer_block_size,
     _is_local_fs,
     _meta_from_dtypes,
     _open_input_files,
 )
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import Delayed
-from dask.utils import getargspec, natural_sort_key, parse_bytes
+from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
@@ -1080,10 +1080,6 @@ class ArrowDatasetEngine(Engine):
         return meta
 
     @classmethod
-    def _default_block_size(cls):
-        return _infer_block_size()
-
-    @classmethod
     def _update_partition_sizes(cls, dataset_info):
         # Automatically set split_row_groups
         split_row_groups = dataset_info["split_row_groups"]
@@ -1091,16 +1087,10 @@ class ArrowDatasetEngine(Engine):
             # Sample row-group sizes in first file
             try:
                 file_frag = next(iter(dataset_info["ds"].get_fragments()))
-                file_0_rg_sizes = [rg.total_byte_size for rg in file_frag.row_groups]
-                chunksize = parse_bytes(
-                    dataset_info["chunksize"] or cls._default_block_size()
+                split_row_groups = _auto_split_row_groups(
+                    [rg.total_byte_size for rg in file_frag.row_groups],
+                    dataset_info["chunksize"],
                 )
-                if np.sum(file_0_rg_sizes) < chunksize:
-                    # File is already smaller than the desired chunksize
-                    split_row_groups = False
-                else:
-                    # File is larger than the desired chunksize, set split_row_groups
-                    split_row_groups = int(chunksize / float(np.mean(file_0_rg_sizes)))
             except StopIteration:
                 # Empty dataset
                 split_row_groups = False

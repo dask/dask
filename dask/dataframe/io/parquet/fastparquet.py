@@ -27,6 +27,7 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
+    _auto_split_row_groups,
     _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -37,15 +38,10 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
     _split_user_options,
 )
-from dask.dataframe.io.utils import (
-    _infer_block_size,
-    _is_local_fs,
-    _meta_from_dtypes,
-    _open_input_files,
-)
+from dask.dataframe.io.utils import _is_local_fs, _meta_from_dtypes, _open_input_files
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.delayed import Delayed
-from dask.utils import natural_sort_key, parse_bytes
+from dask.utils import natural_sort_key
 
 # Thread lock required to reset row-groups
 _FP_FILE_LOCK = threading.RLock()
@@ -617,14 +613,10 @@ class FastParquetEngine(Engine):
                 open_with=dataset_info["fs"].open,
                 **dataset_info["kwargs"]["dataset"],
             )
-            file_0_rg_sizes = [rg.total_byte_size for rg in pf.row_groups]
-            chunksize = parse_bytes(dataset_info["chunksize"] or _infer_block_size())
-            if np.sum(file_0_rg_sizes) < chunksize:
-                # File is already smaller than the desired chunksize
-                split_row_groups = False
-            else:
-                # File is larger than the desired chunksize, set split_row_groups
-                split_row_groups = int(chunksize / float(np.mean(file_0_rg_sizes)))
+            split_row_groups = _auto_split_row_groups(
+                [rg.total_byte_size for rg in pf.row_groups],
+                dataset_info["chunksize"],
+            )
             dataset_info["chunksize"] = None
             dataset_info["split_row_groups"] = split_row_groups
 

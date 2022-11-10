@@ -1,10 +1,11 @@
 import re
 
+import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.dataframe.io.utils import _is_local_fs
-from dask.utils import natural_sort_key
+from dask.dataframe.io.utils import _infer_block_size, _is_local_fs
+from dask.utils import natural_sort_key, parse_bytes
 
 
 class Engine:
@@ -765,3 +766,13 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+def _auto_split_row_groups(row_group_sizes, chunksize):
+    # Use chunksize to choose an appropriate split_row_groups value
+    if row_group_sizes:
+        chunksize = parse_bytes(chunksize or _infer_block_size())
+        if np.sum(row_group_sizes) > chunksize:
+            # File is larger than the desired chunksize, set split_row_groups
+            return int(chunksize / float(np.mean(row_group_sizes)))
+    return False
