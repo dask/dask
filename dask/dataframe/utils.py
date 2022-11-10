@@ -734,3 +734,49 @@ def drop_by_shallow_copy(df, columns, errors="raise"):
 
 class AttributeNotImplementedError(NotImplementedError, AttributeError):
     """NotImplementedError and AttributeError"""
+
+
+def meta_frame_constructor(like):
+    """Return a serial DataFrame constructor
+
+    Parameters
+    ----------
+    like :
+        Any series-like, Index-like or dataframe-like object.
+    """
+    if is_dask_collection(like):
+        try:
+            like = like._meta
+        except AttributeError:
+            raise TypeError(f"{type(like)} not supported by meta_frame_constructor")
+    if is_dataframe_like(like):
+        return like._constructor
+    elif is_series_like(like):
+        return like._constructor_expanddim
+    elif is_index_like(like):
+        return like.to_frame()._constructor
+    else:
+        raise TypeError(f"{type(like)} not supported by meta_frame_constructor")
+
+
+def meta_series_constructor(like):
+    """Return a serial Series constructor
+
+    Parameters
+    ----------
+    like :
+        Any series-like, Index-like or dataframe-like object.
+    """
+    if is_dask_collection(like):
+        try:
+            like = like._meta
+        except AttributeError:
+            raise TypeError(f"{type(like)} not supported by meta_series_constructor")
+    if is_dataframe_like(like):
+        return like._constructor_sliced
+    elif is_series_like(like):
+        return like._constructor
+    elif is_index_like(like):
+        return like.to_frame()._constructor_sliced
+    else:
+        raise TypeError(f"{type(like)} not supported by meta_series_constructor")
