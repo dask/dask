@@ -634,8 +634,8 @@ def test_assert_eq_scheduler():
     ],
 )
 def test_meta_constructor_utilities(data):
-    assert meta_series_constructor(data) == pd.Series
-    assert meta_frame_constructor(data) == pd.DataFrame
+    assert meta_series_constructor(data) is pd.Series
+    assert meta_frame_constructor(data) is pd.DataFrame
 
 
 @pytest.mark.parametrize(
