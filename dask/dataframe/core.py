@@ -62,8 +62,6 @@ from dask.dataframe.utils import (
     is_index_like,
     is_series_like,
     make_meta,
-    meta_frame_constructor,
-    meta_series_constructor,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -2484,8 +2482,8 @@ Dask Name: {name}, {layers}"""
             # since each standard deviation will just be NaN
             needs_time_conversion = False
             numeric_dd = from_pandas(
-                meta_frame_constructor(self)(
-                    {"_": meta_series_constructor(self)([np.nan])},
+                pd.DataFrame(
+                    {"_": pd.Series([np.nan])},
                     index=self.index,
                 ),
                 npartitions=self.npartitions,
@@ -2815,7 +2813,7 @@ Dask Name: {name}, {layers}"""
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
                 )
-                return new_dd_object(graph, keyname, meta, quantiles[0].divisions)
+                return DataFrame(graph, keyname, meta, quantiles[0].divisions)
 
     @derived_from(pd.DataFrame)
     def describe(
@@ -3064,7 +3062,7 @@ Dask Name: {name}, {layers}"""
                 _take_last,
                 cumpart,
                 skipna,
-                meta=meta_series_constructor(self)([], dtype="float"),
+                meta=pd.Series([], dtype="float"),
                 token=name2,
             )
 
@@ -3262,7 +3260,7 @@ Dask Name: {name}, {layers}"""
         def _dot_series(*args, **kwargs):
             # .sum() is invoked on each partition before being applied to all
             # partitions. The return type is expected to be a series, not a numpy object
-            return meta_series_constructor(self)(M.dot(*args, **kwargs))
+            return pd.Series(M.dot(*args, **kwargs))
 
         return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
             skipna=False
@@ -3534,7 +3532,7 @@ class Series(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.Series`."
             )
 
-        return meta_series_constructor(self)(array, index=index, name=self.name)
+        return pd.Series(array, index=index, name=self.name)
 
     @property
     def axes(self):
@@ -4515,7 +4513,7 @@ class DataFrame(_Frame):
                 f"{method_name} is not implemented for `dask.dataframe.DataFrame`."
             )
 
-        return meta_frame_constructor(self)(array, index=index, columns=self.columns)
+        return pd.DataFrame(array, index=index, columns=self.columns)
 
     @property
     def axes(self):
@@ -6325,7 +6323,7 @@ def split_evenly(df, k):
 def split_out_on_index(df):
     h = df.index
     if isinstance(h, pd.MultiIndex):
-        h = meta_frame_constructor(df)([], index=h).reset_index()
+        h = pd.DataFrame([], index=h).reset_index()
     return h
 
 
@@ -6381,11 +6379,7 @@ def apply_concat_apply(
         and all intermediates will be concatenated and passed to ``aggregate``.
         Default is 8.
     split_out : int, optional
-        Number of output partitions. If ``split_out > 1``, the output of
-        ``chunk`` must be dataframe-like or series-like. Otherwise, ``chunk``
-        must output a ``dict`` with keys in the range ``[0, split_out)``.
-        The split will occur after the first ``chunk`` reduction if it is not
-        handled within the ``chunk`` function itself.
+        Number of output partitions. Split occurs after first chunk reduction.
     split_out_setup : callable, optional
         If provided, this function is called on each chunk before performing
         the hash-split. It should return a pandas object, where each row
@@ -6479,28 +6473,15 @@ def apply_concat_apply(
     # objects anymore.
 
     # Blockwise Split Layer
-    meta_chunk = None
     if split_out and split_out > 1:
-        # Only use hash_shard if the output of `chunk` is
-        # not alreay a dictionary
-        meta_chunk = chunk(
-            *[arg._meta_nonempty if isinstance(arg, _Frame) else arg for arg in args],
-            **chunk_kwargs,
+        chunked = chunked.map_partitions(
+            hash_shard,
+            split_out,
+            split_out_setup,
+            split_out_setup_kwargs,
+            ignore_index,
+            token="split-%s" % token_key,
         )
-        if not isinstance(meta_chunk, dict):
-            chunked = chunked.map_partitions(
-                hash_shard,
-                split_out,
-                split_out_setup,
-                split_out_setup_kwargs,
-                ignore_index,
-                token="split-%s" % token_key,
-            )
-        elif set(meta_chunk.keys()) != set(range(split_out)):
-            raise ValueError(
-                f"Output of {chunk} must be a dict with keys in the "
-                f"range 0-{split_out-1}. Got {set(meta_chunk.keys())}."
-            )
 
     # Handle sort behavior
     if sort is not None:
@@ -6529,10 +6510,7 @@ def apply_concat_apply(
     )
 
     if meta is no_default:
-        if isinstance(meta_chunk, dict):
-            meta_chunk = next(iter(meta_chunk.values()))
-        else:
-            meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
@@ -7070,17 +7048,14 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
         min_periods,
         corr,
         scalar,
-        df._meta,
     )
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
     meta = make_meta(
-        [(c, "f8") for c in df.columns],
-        index=meta_series_constructor(df)(df.columns),
-        parent_meta=df._meta,
+        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
     )
-    return new_dd_object(graph, name, meta, (df.columns.min(), df.columns.max()))
+    return DataFrame(graph, name, meta, (df.columns.min(), df.columns.max()))
 
 
 def cov_corr_chunk(df, corr=False):
@@ -7153,7 +7128,7 @@ def cov_corr_combine(data_in, corr=False):
     return out
 
 
-def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=None):
+def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
     out = cov_corr_combine(data, corr)
     counts = out["count"]
     C = out["cov"]
@@ -7167,9 +7142,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False, like_df=No
         mat = C / den
     if scalar:
         return float(mat[0, 1])
-    return (pd.DataFrame if like_df is None else meta_frame_constructor(like_df))(
-        mat, columns=cols, index=cols
-    )
+    return pd.DataFrame(mat, columns=cols, index=cols)
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
@@ -7684,10 +7657,10 @@ def idxmaxmin_chunk(x, fn=None, skipna=True):
         idx = getattr(x, fn)(skipna=skipna)
         value = getattr(x, minmax)(skipna=skipna)
     else:
-        idx = value = meta_series_constructor(x)([], dtype="i8")
+        idx = value = pd.Series([], dtype="i8")
     if is_series_like(idx):
-        return meta_frame_constructor(x)({"idx": idx, "value": value})
-    return meta_frame_constructor(x)({"idx": [idx], "value": [value]})
+        return pd.DataFrame({"idx": idx, "value": value})
+    return pd.DataFrame({"idx": [idx], "value": [value]})
 
 
 def idxmaxmin_row(x, fn=None, skipna=True):
@@ -7697,8 +7670,8 @@ def idxmaxmin_row(x, fn=None, skipna=True):
         idx = [getattr(x.value, fn)(skipna=skipna)]
         value = [getattr(x.value, minmax)(skipna=skipna)]
     else:
-        idx = value = meta_series_constructor(x)([], dtype="i8")
-    return meta_frame_constructor(x)({"idx": idx, "value": value})
+        idx = value = pd.Series([], dtype="i8")
+    return pd.DataFrame({"idx": idx, "value": value})
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
@@ -7792,7 +7765,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = meta_series_constructor(arg)([pd.Timestamp("2000", **tz_kwarg)])
+            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
@@ -7802,7 +7775,7 @@ def to_datetime(arg, meta=None, **kwargs):
 def to_timedelta(arg, unit=None, errors="raise"):
     if not PANDAS_GT_110 and unit is None:
         unit = "ns"
-    meta = meta_series_constructor(arg)([pd.Timedelta(1, unit=unit)])
+    meta = pd.Series([pd.Timedelta(1, unit=unit)])
     return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
 
 

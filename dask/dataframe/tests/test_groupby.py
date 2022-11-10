@@ -297,8 +297,8 @@ def test_groupby_on_index(scheduler):
     assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
 
     # Check column projection for `groupby().agg`
-    agg = ddf.groupby("a").agg({"b": "mean"})
-    assert_eq(ddf2.groupby("a").b.mean(), agg.b)
+    agg = ddf2.groupby("a").agg({"b": "mean"})
+    assert_eq(ddf.groupby("a").b.mean(), agg.b)
     assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
@@ -2206,8 +2206,7 @@ def test_groupby_group_keys(group_keys):
     "columns",
     [["a", "b", "c"], np.array([1.0, 2.0, 3.0]), ["1", "2", "3"], ["", "a", "b"]],
 )
-@pytest.mark.parametrize("split_out", [1, 2])
-def test_groupby_cov(columns, split_out):
+def test_groupby_cov(columns):
     rows = 20
     cols = 3
     data = np.random.randn(rows, cols)
@@ -2216,7 +2215,7 @@ def test_groupby_cov(columns, split_out):
     ddf = dd.from_pandas(df, npartitions=3)
 
     expected = df.groupby("key").cov()
-    result = ddf.groupby("key", sort=split_out == 1).cov(split_out=split_out)
+    result = ddf.groupby("key").cov()
     # when using numerical values for columns
     # the column mapping and stacking leads to a float typed
     # MultiIndex.  Pandas will normally create a object typed
