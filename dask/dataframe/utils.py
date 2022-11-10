@@ -742,7 +742,7 @@ def meta_frame_constructor(like):
     Parameters
     ----------
     like :
-        Any series-like or dataframe-like object.
+        Any series-like, Index-like or dataframe-like object.
     """
     if is_dask_collection(like):
         try:
@@ -765,7 +765,7 @@ def meta_series_constructor(like):
     Parameters
     ----------
     like :
-        Any series-like or dataframe-like object.
+        Any series-like, Index-like or dataframe-like object.
     """
     if is_dask_collection(like):
         try:

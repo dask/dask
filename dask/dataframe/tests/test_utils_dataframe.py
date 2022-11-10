@@ -20,7 +20,9 @@ from dask.dataframe.utils import (
     is_index_like,
     is_series_like,
     make_meta,
+    meta_frame_constructor,
     meta_nonempty,
+    meta_series_constructor,
     raise_on_meta_error,
     shard_df_on_index,
 )
@@ -618,3 +620,33 @@ def test_assert_eq_scheduler():
     assert_eq(ddf2, ddf2, scheduler=custom_scheduler)
     with dask.config.set(scheduler=custom_scheduler):
         assert_eq(ddf2, ddf2, scheduler=None)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DataFrame([0]),
+        pd.Series([0]),
+        pd.Index([0]),
+        dd.from_dict({"x": [0]}, npartitions=1),
+        dd.from_dict({"x": [0]}, npartitions=1).x,
+        dd.from_dict({"x": [0]}, npartitions=1).index,
+    ],
+)
+def test_meta_constructor_utilities(data):
+    assert meta_series_constructor(data) == pd.Series
+    assert meta_frame_constructor(data) == pd.DataFrame
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        dd.from_dict({"x": [0]}, npartitions=1).x.values,
+        np.array([0]),
+    ],
+)
+def test_meta_constructor_utilities_raise(data):
+    with pytest.raises(TypeError, match="not supported by meta_series"):
+        meta_series_constructor(data)
+    with pytest.raises(TypeError, match="not supported by meta_frame"):
+        meta_frame_constructor(data)
