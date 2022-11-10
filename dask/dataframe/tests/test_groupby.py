@@ -2206,7 +2206,8 @@ def test_groupby_group_keys(group_keys):
     "columns",
     [["a", "b", "c"], np.array([1.0, 2.0, 3.0]), ["1", "2", "3"], ["", "a", "b"]],
 )
-def test_groupby_cov(columns):
+@pytest.mark.parametrize("split_out", [1, 2])
+def test_groupby_cov(columns, split_out):
     rows = 20
     cols = 3
     data = np.random.randn(rows, cols)
@@ -2215,7 +2216,7 @@ def test_groupby_cov(columns):
     ddf = dd.from_pandas(df, npartitions=3)
 
     expected = df.groupby("key").cov()
-    result = ddf.groupby("key").cov()
+    result = ddf.groupby("key", sort=split_out == 1).cov(split_out=split_out)
     # when using numerical values for columns
     # the column mapping and stacking leads to a float typed
     # MultiIndex.  Pandas will normally create a object typed
