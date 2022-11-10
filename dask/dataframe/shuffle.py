@@ -6,7 +6,19 @@ import tempfile
 import uuid
 import warnings
 from collections.abc import Sequence
-from typing import Any, Callable, List, Literal, Mapping, Optional, Tuple, Union
+from operator import attrgetter
+from typing import (
+    Any,
+    Callable,
+    List,
+    Literal,
+    Mapping,
+    NamedTuple,
+    Optional,
+    Set,
+    Tuple,
+    Union,
+)
 
 import numpy as np
 import pandas as pd
@@ -376,52 +388,165 @@ def set_partition(
     return df4.map_partitions(M.sort_index)
 
 
-def shuffle(
+class ShuffleRegistry:
+    """A registry of methods for shuffling a dataframe."""
+
+    class Method(NamedTuple):
+        can_use: Callable[[Optional[str], Any, List[str]], bool]
+        method: Callable
+        priority: int
+
+    def __init__(self):
+        self.methods: Set[ShuffleRegistry.Method] = set()
+
+    @property
+    def known_priorities(self):
+        return {m.priority for m in self.methods}
+
+    def add(
+        self,
+        priority: int,
+        can_use: Callable[[Optional[str], Any, List[str]], bool],
+        method: Callable,
+    ) -> "ShuffleRegistry.Method":
+        """Register a new shuffle method
+
+        Parameters
+        ----------
+        priority
+            The priority of this method, higher priority methods are tried first
+        can_use
+            Function to check if this method is useable for the given
+            shuffle parameters. Receives the requested shuffle name
+            (e.g. "tasks", "disk"), the index to shuffle on, and a
+            list of dataframe column names. Should return True if this
+            method can shuffle the dataframe, and False otherwise.
+        method
+            Function to perform the shuffle, should have the same
+            signature as :func:`shuffle`.
+
+        Returns
+        -------
+        The new registered shuffle method
+
+        Raises
+        ------
+        RuntimeError
+            If the requested priority is already in use for another method.
+        """
+        if priority in self.known_priorities:
+            raise RuntimeError(
+                "Registering multiple shuffle methods with same priority "
+                "is undefined behaviour"
+            )
+        registered_method = ShuffleRegistry.Method(
+            can_use=can_use, method=method, priority=priority
+        )
+        self.methods.add(registered_method)
+        return registered_method
+
+    def remove(self, method: "ShuffleRegistry.Method") -> "ShuffleRegistry.Method":
+        """Remove a shuffle method from the registry
+
+        Parameters
+        ----------
+        method
+            Method to remove
+
+        Returns
+        -------
+        The removed method
+
+        Raises
+        ------
+        KeyError
+            If the method is not registered
+        """
+        try:
+            self.methods.remove(method)
+            return method
+        except KeyError:
+            raise KeyError(f"Method {method} is not a known shuffle method")
+
+    def get(
+        self, shuffle_name: Optional[str], index: Any, df_columns: List[str]
+    ) -> Callable:
+        """Return a function to perform a shuffle
+
+        Parameters
+        ----------
+        shuffle_name
+            Requested shuffle type (e.g. "tasks", "disk")
+        index
+            The index to shuffle on
+        df_columns
+            List of column names in the dataframe being shuffled
+
+        Returns
+        -------
+        Function to perform the shuffle (with the same signature as
+        :func:`shuffle`).
+
+        Raises
+        ------
+        RuntimeError
+            If no matching shuffle method was found.
+        """
+        for method in sorted(self.methods, key=attrgetter("priority"), reverse=True):
+            if method.can_use(shuffle_name, index, df_columns):
+                return method.method
+        raise RuntimeError("Unreachable, didn't find a shuffle method")
+
+
+def _task_shuffle_no_partitions(
     df,
     index,
+    *,
     shuffle=None,
     npartitions=None,
     max_branch=32,
     ignore_index=False,
-    compute=None,
+    compute=False,
 ):
-    """Group DataFrame by index
+    assert (
+        shuffle == "tasks"
+    ), f"Performing task-based shuffle, but shuffle is {shuffle}"
+    if isinstance(index, str):
+        index = [index]
+    else:
+        index = list(index)
+    return rearrange_by_column(
+        df,
+        index,
+        npartitions=npartitions,
+        max_branch=max_branch,
+        shuffle=shuffle,
+        ignore_index=ignore_index,
+        compute=compute,
+    )
 
-    Hash grouping of elements. After this operation all elements that have
-    the same index will be in the same partition. Note that this requires
-    full dataset read, serialization and shuffle. This is expensive. If
-    possible you should avoid shuffles.
 
-    This does not preserve a meaningful index/partitioning scheme. This is not
-    deterministic if done in parallel.
-
-    See Also
-    --------
-    set_index
-    set_partition
-    shuffle_disk
-    """
-    list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
-    if shuffle == "tasks" and (isinstance(index, str) or list_like):
-        # Avoid creating the "_partitions" column if possible.
-        # We currently do this if the user is passing in
-        # specific column names (and shuffle == "tasks").
+def _can_use_task_shuffle_no_partitions(
+    shuffle_name: Optional[str], index: Any, df_columns: List[str]
+) -> bool:
+    if shuffle_name != "tasks":
+        return False
+    if isinstance(index, str) or (
+        pd.api.types.is_list_like(index) and not is_dask_collection(index)
+    ):
         if isinstance(index, str):
             index = [index]
         else:
             index = list(index)
         nset = set(index)
-        if nset & set(df.columns) == nset:
-            return rearrange_by_column(
-                df,
-                index,
-                npartitions=npartitions,
-                max_branch=max_branch,
-                shuffle=shuffle,
-                ignore_index=ignore_index,
-                compute=compute,
-            )
+        return len(nset - set(df_columns)) == 0
+    return False
 
+
+def _shuffle_default(
+    df, index, shuffle, npartitions, max_branch, ignore_index, compute
+):
+    list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
     if not isinstance(index, _Frame):
         if list_like:
             # Make sure we don't try to select with pd.Series/pd.Index
@@ -452,6 +577,66 @@ def shuffle(
     )
     del df3["_partitions"]
     return df3
+
+
+def _can_use_shuffle_default(
+    shuffle_name: Optional[str], index: Any, df_columns: List[str]
+) -> bool:
+    return True
+
+
+shuffle_registry = ShuffleRegistry()
+
+shuffle_registry.add(
+    priority=0, can_use=_can_use_shuffle_default, method=_shuffle_default
+)
+
+shuffle_registry.add(
+    priority=1,
+    can_use=_can_use_task_shuffle_no_partitions,
+    method=_task_shuffle_no_partitions,
+)
+
+
+def shuffle(
+    df,
+    index,
+    shuffle=None,
+    npartitions=None,
+    max_branch=32,
+    ignore_index=False,
+    compute=None,
+):
+    """Group DataFrame by index
+
+    Hash grouping of elements. After this operation all elements that have
+    the same index will be in the same partition. Note that this requires
+    full dataset read, serialization and shuffle. This is expensive. If
+    possible you should avoid shuffles.
+
+    This does not preserve a meaningful index/partitioning scheme. This is not
+    deterministic if done in parallel.
+
+    See Also
+    --------
+    set_index
+    set_partition
+    shuffle_disk
+    """
+    # Eagerly inspect config for global shuffle selection (if we don't
+    # do this and dask.config.shuffle == "tasks", then we pay the
+    # price of constructing a partitions column even when unnecessary)
+    shuffle = shuffle or config.get("shuffle", None) or "disk"
+    method = shuffle_registry.get(shuffle, index, df.columns)
+    return method(
+        df,
+        index,
+        shuffle=shuffle,
+        npartitions=npartitions,
+        max_branch=max_branch,
+        ignore_index=ignore_index,
+        compute=compute,
+    )
 
 
 def rearrange_by_divisions(

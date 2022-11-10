@@ -31,6 +31,7 @@ from dask.dataframe.shuffle import (
     rearrange_by_divisions,
     remove_nans,
     shuffle,
+    shuffle_registry,
 )
 from dask.dataframe.utils import assert_eq, make_meta
 from dask.optimization import cull
@@ -1513,3 +1514,50 @@ def test_sort_values_bool_ascending():
     # attempt to sort with list of ascending booleans
     with pytest.raises(NotImplementedError):
         ddf.sort_values(by="a", ascending=[True, False])
+
+
+@pytest.fixture
+def shuffle_method():
+    class Method:
+        def __init__(self):
+            self.count = 0
+            self.in_call = False
+
+        def __call__(self, *args, **kwargs):
+            self.count += 1
+            self.in_call = True
+            result = shuffle(*args, **kwargs)
+            self.in_call = False
+            return result
+
+        def can_use(self, name, index, columns):
+            return not self.in_call
+
+    counting_method = Method()
+    method = shuffle_registry.add(
+        max(shuffle_registry.known_priorities) + 1,
+        counting_method.can_use,
+        counting_method,
+    )
+    yield counting_method
+    shuffle_registry.remove(method)
+    print(shuffle_registry.methods)
+
+
+def test_shuffle_registry_shuffle(shuffle_method):
+    df = pd.DataFrame({"a": [1, 3, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    got = ddf.shuffle("a").compute()
+    assert_eq(got, df.set_index("a").reset_index())
+    assert shuffle_method.count == 1
+
+
+def test_shuffle_registry_merge(shuffle_method):
+    df1 = pd.DataFrame({"a": [1, 3, 2]})
+    df2 = pd.DataFrame({"a": [1, 3, 2], "b": [4, 5, 6]})
+    ddf1 = dd.from_pandas(df1, npartitions=3)
+    ddf2 = dd.from_pandas(df2, npartitions=2)
+    got = ddf1.merge(ddf2, on="a", how="inner").compute().set_index("a")
+    expect = df1.merge(df2, on="a", how="inner").set_index("a")
+    assert_eq(got, expect)
+    assert shuffle_method.count == 2
