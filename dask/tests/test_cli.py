@@ -1,12 +1,12 @@
-import pytest
-
-click = pytest.importorskip("click")
-
-import importlib.metadata
 import json
 import platform
 import sys
 
+# FIXME importing importlib.metadata fails when running the entire test suite with UPSTREAM_DEV=1
+from importlib import metadata as importlib_metadata
+
+import click
+import pytest
 from click.testing import CliRunner
 
 import dask
@@ -42,7 +42,7 @@ def test_info_versions():
     assert table["distributed"] == distributed_version
 
 
-@click.group
+@click.group()
 def dummy_cli():
     pass
 
@@ -64,13 +64,13 @@ def good_command_2():
 def test_register_command_ep():
     from dask.cli import _register_command_ep
 
-    bad_ep = importlib.metadata.EntryPoint(
+    bad_ep = importlib_metadata.EntryPoint(
         name="bad",
         value="dask.tests.test_cli:bad_command",
         group="dask_cli",
     )
 
-    good_ep = importlib.metadata.EntryPoint(
+    good_ep = importlib_metadata.EntryPoint(
         name="good",
         value="dask.tests.test_cli:good_command",
         group="dask_cli",
@@ -84,7 +84,7 @@ def test_register_command_ep():
     assert dummy_cli.commands["good"] is good_command
 
 
-@click.group
+@click.group()
 def dummy_cli_2():
     pass
 
@@ -92,13 +92,13 @@ def dummy_cli_2():
 def test_repeated_name_registration_warn():
     from dask.cli import _register_command_ep
 
-    one = importlib.metadata.EntryPoint(
+    one = importlib_metadata.EntryPoint(
         name="one",
         value="dask.tests.test_cli:good_command",
         group="dask_cli",
     )
 
-    two = importlib.metadata.EntryPoint(
+    two = importlib_metadata.EntryPoint(
         name="two",
         value="dask.tests.test_cli:good_command_2",
         group="dask_cli",

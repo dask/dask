@@ -10,7 +10,11 @@ import pandas as pd
 
 from dask import config
 from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_150, check_numeric_only_deprecation
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    check_numeric_only_deprecation,
+)
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
@@ -36,6 +40,9 @@ from dask.dataframe.utils import (
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+
+if PANDAS_GT_140:
+    from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 # #############################################
 #
@@ -1162,13 +1169,14 @@ def _aggregate_docstring(based_on=None):
         {based_on_str}
         Parameters
         ----------
-        arg : callable, str, list or dict
+        arg : callable, str, list or dict, optional
             Aggregation spec. Accepted combinations are:
 
             - callable function
             - string function name
             - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
             - dict of column names -> function, function name or list of such.
+            - None only if named aggregation syntax is used
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
             This defaults to 8. If your intermediate partitions are likely to
@@ -1185,6 +1193,12 @@ def _aggregate_docstring(based_on=None):
             ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
             set by the ``shuffle`` option in the dask config system, or ``"tasks"``
             if nothing is set.
+        kwargs: tuple or pd.NamedAgg, optional
+            Used for named aggregations where the keywords are the output column
+            names and the values are tuples where the first element is the input
+            column name and the second element is the aggregation function.
+            ``pandas.NamedAgg`` can also be used as the value. To use the named
+            aggregation syntax, arg must be set to None.
         """
         return func
 
@@ -1275,7 +1289,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property  # type: ignore
+    @property
     @_deprecated()
     def index(self):
         return self.by
@@ -1881,7 +1895,9 @@ class _GroupBy:
         )
 
     @_aggregate_docstring()
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         if split_out is None:
             warnings.warn(
                 "split_out=None is deprecated, please use a positive integer, "
@@ -1891,7 +1907,20 @@ class _GroupBy:
             split_out = 1
         shuffle = _determine_shuffle(shuffle, split_out)
 
+        relabeling = None
+        columns = None
+        order = None
         column_projection = None
+        if PANDAS_GT_140:
+            if isinstance(self, DataFrameGroupBy):
+                if arg is None:
+                    relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
+
+            elif isinstance(self, SeriesGroupBy):
+                relabeling = arg is None
+                if relabeling:
+                    columns, arg = validate_func_kwargs(kwargs)
+
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1985,10 +2014,11 @@ class _GroupBy:
             # for larger values of split_out. However, the shuffle
             # step requires that the result of `chunk` produces a
             # proper DataFrame type
+
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
             if has_median:
-                return _shuffle_aggregate(
+                result = _shuffle_aggregate(
                     chunk_args,
                     chunk=_non_agg_chunk,
                     chunk_kwargs={
@@ -2012,7 +2042,7 @@ class _GroupBy:
                     sort=self.sort,
                 )
             else:
-                return _shuffle_aggregate(
+                result = _shuffle_aggregate(
                     chunk_args,
                     chunk=_groupby_apply_funcs,
                     chunk_kwargs={
@@ -2035,49 +2065,56 @@ class _GroupBy:
                     shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                     sort=self.sort,
                 )
+        else:
+            if self.sort is None and split_out > 1:
+                warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+            # Check sort behavior
+            if self.sort and split_out > 1:
+                raise NotImplementedError(
+                    "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
+                    " Try using `shuffle=True` if you are grouping on a single column."
+                    " Otherwise, try using split_out=1, or grouping with sort=False."
+                )
 
-        # Check sort behavior
-        if self.sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
-                " Try using `shuffle=True` if you are grouping on a single column."
-                " Otherwise, try using split_out=1, or grouping with sort=False."
+            result = aca(
+                chunk_args,
+                chunk=_groupby_apply_funcs,
+                chunk_kwargs=dict(
+                    funcs=chunk_funcs,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                combine=_groupby_apply_funcs,
+                combine_kwargs=dict(
+                    funcs=aggregate_funcs,
+                    level=levels,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                aggregate=_agg_finalize,
+                aggregate_kwargs=dict(
+                    aggregate_funcs=aggregate_funcs,
+                    finalize_funcs=finalizers,
+                    level=levels,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                token="aggregate",
+                split_every=split_every,
+                split_out=split_out,
+                split_out_setup=split_out_on_index,
+                sort=self.sort,
             )
 
-        return aca(
-            chunk_args,
-            chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(
-                funcs=chunk_funcs,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            combine=_groupby_apply_funcs,
-            combine_kwargs=dict(
-                funcs=aggregate_funcs,
-                level=levels,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            aggregate=_agg_finalize,
-            aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs,
-                finalize_funcs=finalizers,
-                level=levels,
-                **self.observed,
-                **self.dropna,
-            ),
-            token="aggregate",
-            split_every=split_every,
-            split_out=split_out,
-            split_out_setup=split_out_on_index,
-            sort=self.sort,
-        )
+        if relabeling and result is not None:
+            if order is not None:
+                result = result.iloc[:, order]
+            result.columns = columns
+
+        return result
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
@@ -2501,18 +2538,28 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         if arg == "size":
             return self.size()
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
 
@@ -2583,22 +2630,39 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         result = super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
         if self._slice:
-            result = result[self._slice]
+            try:
+                result = result[self._slice]
+            except KeyError:
+                pass
 
-        if not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
+        if (
+            arg is not None
+            and not isinstance(arg, (list, dict))
+            and isinstance(result, DataFrame)
+        ):
             result = result[result.columns[0]]
 
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

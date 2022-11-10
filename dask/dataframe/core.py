@@ -437,7 +437,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         """Return number of partitions"""
         return len(self.divisions) - 1
 
-    @property  # type: ignore
+    @property
     @derived_from(pd.DataFrame)
     def attrs(self):
         return self._meta.attrs
@@ -4185,7 +4185,7 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    @property  # type: ignore
+    @property
     @derived_from(pd.Series)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -4196,7 +4196,7 @@ Dask Name: {name}, {layers}""".format(
             )
         return self.is_monotonic_increasing
 
-    @property  # type: ignore
+    @property
     @derived_from(pd.Series)
     def is_monotonic_increasing(self):
         return aca(
@@ -4208,7 +4208,7 @@ Dask Name: {name}, {layers}""".format(
             token="monotonic_increasing",
         )
 
-    @property  # type: ignore
+    @property
     @derived_from(pd.Series)
     def is_monotonic_decreasing(self):
         return aca(
@@ -4407,7 +4407,7 @@ class Index(Series):
         return applied
 
     # Typing: https://github.com/python/mypy/issues/4125
-    @property  # type: ignore
+    @property
     @derived_from(pd.Index)
     def is_monotonic(self):
         if PANDAS_GT_150:
@@ -4419,12 +4419,12 @@ class Index(Series):
         return super().is_monotonic_increasing
 
     # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
-    @property  # type: ignore
+    @property
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
         return super().is_monotonic_increasing
 
-    @property  # type: ignore
+    @property
     @derived_from(pd.Index)
     def is_monotonic_decreasing(self):
         return super().is_monotonic_decreasing
@@ -6038,8 +6038,10 @@ class DataFrame(_Frame):
             and key in self.columns
         )
 
-    @staticmethod
-    def from_dict(data, *, npartitions, orient="columns", dtype=None, columns=None):
+    @classmethod
+    def from_dict(
+        cls, data, *, npartitions, orient="columns", dtype=None, columns=None
+    ):
         """
         Construct a Dask DataFrame from a Python Dictionary
 
@@ -6055,6 +6057,7 @@ class DataFrame(_Frame):
             orient=orient,
             dtype=dtype,
             columns=columns,
+            constructor=cls._partition_type,
         )
 
 
