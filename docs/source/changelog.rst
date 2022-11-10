@@ -1,6 +1,52 @@
 Changelog
 =========
 
+.. _v2022.10.2:
+
+2022.10.2
+---------
+
+Released on October 31, 2022
+
+This was a hotfix and has no changes in this repository.
+The necessary fix was in dask/distributed, but we decided to bump this version
+number for consistency.
+
+.. _v2022.10.1:
+
+2022.10.1
+---------
+
+Released on October 28, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Enable named aggregation syntax (:pr:`9563`) `ChrisJar`_
+- Add extension dtype support to ``set_index`` (:pr:`9566`) `James Bourbeau`_
+- Redesigning the array HTML repr for clarity (:pr:`9519`) `Shingo OKAWA`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``merge`` with emtpy left DataFrame (:pr:`9578`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add note about limiting thread oversubscription by default (:pr:`9592`) `James Bourbeau`_
+- Use ``sphinx-click`` for ``dask`` CLI (:pr:`9589`) `James Bourbeau`_
+- Fix Semaphore API docs (:pr:`9584`) `James Bourbeau`_
+- Render meta description in ``map_overlap`` docstring (:pr:`9568`) `James Bourbeau`_
+
+Maintenance
+^^^^^^^^^^^
+- Require Click 7.0+ in Dask (:pr:`9595`) `John A Kirkham`_
+- Temporarily restrict ``bokeh<3`` (:pr:`9607`) `James Bourbeau`_
+- Resolve ``importlib``-related failures in ``upstream`` CI (:pr:`9604`) `Charles Blackmon-Luca`_
+- Improve ``upstream`` CI report (:pr:`9603`) `James Bourbeau`_
+- Fix ``upstream`` CI report (:pr:`9602`) `James Bourbeau`_
+- Remove ``setuptools`` host dep, add CLI entrypoint (:pr:`9600`) `Charles Blackmon-Luca`_
+- More ``Backend`` dispatch class type annotations (:pr:`9573`) `Ian Rose`_
+
+
 .. _v2022.10.0:
 
 2022.10.0
@@ -6033,3 +6079,5 @@ Other
 .. _`Lawrence Mitchell`: https://github.com/wence-
 .. _`nouman`: https://github.com/noumxn
 .. _`Tim Paine`: https://github.com/timkpaine
+.. _`ChrisJar`: https://github.com/ChrisJar
+.. _`Shingo OKAWA`: https://github.com/ognis1205

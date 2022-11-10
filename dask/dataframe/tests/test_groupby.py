@@ -3,6 +3,7 @@ import contextlib
 import operator
 import pickle
 import warnings
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,7 @@ from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GT_110,
     PANDAS_GT_130,
+    PANDAS_GT_140,
     PANDAS_GT_150,
     check_numeric_only_deprecation,
     tm,
@@ -2894,6 +2896,47 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.parametrize("shuffle", [True, False])
+def test_dataframe_named_agg(shuffle):
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 5, 6],
+            "c": [6, 3, 6, 7],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby("a").agg(
+        x=pd.NamedAgg("b", aggfunc="sum"),
+        y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
+    )
+    actual = ddf.groupby("a").agg(
+        shuffle=shuffle,
+        x=pd.NamedAgg("b", aggfunc="sum"),
+        y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.parametrize("shuffle", [True, False])
+@pytest.mark.parametrize("agg", ["count", np.mean, partial(np.var, ddof=1)])
+def test_series_named_agg(shuffle, agg):
+    df = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby("a").b.agg(c=agg, d="sum")
+    actual = ddf.groupby("a").b.agg(shuffle=shuffle, c=agg, d="sum")
+    assert_eq(expected, actual)
 
 
 def test_empty_partitions_with_value_counts():

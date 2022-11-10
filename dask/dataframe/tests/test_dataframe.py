@@ -2142,15 +2142,14 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
+        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(k)
     assert_eq(a, b)
     assert b.npartitions == k
-    parts = dask.get(b.dask, b.__dask_keys__())
-    assert all(map(len, parts))
+    assert all(map(len, b.partitions))
 
 
 @pytest.mark.parametrize("use_index", [True, False])
@@ -3792,11 +3791,7 @@ def test_index_nulls(null_value):
     df = pd.DataFrame(
         {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
     )
-    # an object column all set to nulls fails
-    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
-    with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index("non_numeric")
-    # an object column with only some nulls also fails
+    # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))
