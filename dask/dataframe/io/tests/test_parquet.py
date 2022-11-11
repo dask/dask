@@ -3155,13 +3155,18 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
     else:
         path = str(tmpdir)
 
-    if write_cols == ["part", "kind", "col"]:
+    if engine == "fastparquet" and fastparquet_version > parse_version("0.8.3"):
+        # columns will change order and partitions will be categorical
+        result = dd.read_parquet(path, engine=engine)
+        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert result.compute().reset_index(drop=True).to_dict() == expect.to_dict()
+    elif write_cols == ["part", "kind", "col"]:
         result = dd.read_parquet(path, engine=engine)
         expect = pd.concat([_df1, _df2], ignore_index=True)
         assert_eq(result, expect, check_index=False)
     else:
         # For now, partial overlap between partition columns and
-        # real columns is not allowed
+        # real columns is not allowed for pyarrow or older fastparquet
         with pytest.raises(ValueError):
             dd.read_parquet(path, engine=engine)
 
