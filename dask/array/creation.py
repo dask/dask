@@ -878,7 +878,7 @@ def tile(A, reps):
 
 
 def expand_pad_value(array, pad_value):
-    if isinstance(pad_value, Number):
+    if isinstance(pad_value, Number) or getattr(pad_value, "ndim", None) == 0:
         pad_value = array.ndim * ((pad_value, pad_value),)
     elif (
         isinstance(pad_value, Sequence)
