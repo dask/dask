@@ -204,30 +204,28 @@ Progress
 --------
 
 The progress bars plot shows the progress of each individual task-prefix. The color of each bar matches the color of the
-individual tasks on the task stream from the same task-prefix. Each horizontal bar has three different components:
+individual tasks on the task stream from the same task-prefix. Each horizontal bar has four different components, from left to right:
 
 .. raw:: html
 
-    <table>
-        <tr>
-            <td>
-                <div role="img" aria-label="light grey square" style="color:rgba(128,128,128, 0.4); font-size: 25px ">&#9632;</div>
-            </td>
-            <td>Tasks that are ready to run.</td>
-        </tr>
-        <tr>
-            <td>
-                <div role="img" aria-label="teal square" style="color:rgba(30,151,138, 1); font-size: 25px ">&#9632;</div>
-            </td>
-            <td> Tasks that have been completed and are in memory.</td>
-        </tr>
-        <tr>
-            <td>
-                <div role="img" aria-label="light teal square" style="color:rgba(30,151,138, 0.6); font-size: 25px ">&#9632;</div>
-            </td>
-            <td>Tasks that have been completed, been in memory and have been released.</td>
-        </tr>
-    </table>
+    <ul style="list-style-type: none">
+        <li>
+            <span role="img" aria-label="light teal square" style="background:rgba(30,151,138, 0.6); width: 0.6em; height: 0.6em; border: 1px solid rgba(30,151,138, 0.6); display: inline-block"></span>
+            <span>Tasks that have completed, are not needed anymore, and now have been released from memory.</span>
+        </li>
+        <li>
+            <span role="img" aria-label="teal square" style="background:rgba(30,151,138, 1); width: 0.6em; height: 0.6em; border: 1px solid rgba(30,151,138, 1); display: inline-block"></span>
+            <span> Tasks that have completed and are in memory.</span>
+        </li>
+        <li>
+            <span role="img" aria-label="light grey square" style="background:rgba(128,128,128, 0.4); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
+            <span>Tasks that are ready to run.</span>
+        </li>
+        <li>
+            <span role="img" aria-label="hashed light grey square" style="background-image: linear-gradient(135deg, rgba(128,128,128, 0.4) 25%, #ffffff 25%, #ffffff 50%, rgba(128,128,128, 0.4) 50%, rgba(128,128,128, 0.4) 75%, #ffffff 75%, #ffffff 100%); width: 0.6em; height: 0.6em; border: 1px solid rgba(128,128,128, 0.4); display: inline-block"></span>
+            <span>Tasks that are <a href="https://distributed.dask.org/en/stable/scheduling-policies.html#queuing">queued</a>. They are ready to run, but not assigned to workers yet, so higher-priority tasks can run first.</span>
+        </li>
+    </ul>
 
 .. figure:: images/dashboard_progress.png
     :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and the "sum" bar is empty.
