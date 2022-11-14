@@ -108,7 +108,7 @@ pip or conda_
 
 ``conda``::
 
-  conda env create -n dask-dev -f continuous_integration/environment-3.9.yaml
+  conda env create -n dask-dev -f continuous_integration/environment-3.10.yaml
   conda activate dask-dev
   python -m pip install --no-deps -e .
 
