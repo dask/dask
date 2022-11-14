@@ -4283,7 +4283,7 @@ def test_select_filtered_column(tmp_path, engine):
 
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
     path = tmp_path / "test_select_filtered_column.parquet"
-    df.to_parquet(path)
+    df.to_parquet(path, index=False)
 
     ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
     assert_eq(df, ddf)
