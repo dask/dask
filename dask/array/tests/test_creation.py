@@ -755,6 +755,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     [
         ((10,), (3,), 1, "constant", {}),
         ((10,), (3,), 2, "constant", {"constant_values": -1}),
+        ((10,), (3,), 2, "constant", {"constant_values": np.array(-1)}),
         ((10,), (3,), ((2, 3)), "constant", {"constant_values": (-1, -2)}),
         (
             (10, 11),
