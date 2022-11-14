@@ -228,7 +228,7 @@ individual tasks on the task stream from the same task-prefix. Each horizontal b
     </ul>
 
 .. figure:: images/dashboard_progress.png
-    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a grey background, and the "sum" bar is empty.
+    :alt: Progress bar chart with one bar for each task-prefix matching with the names "add", "double", "inc", and "sum". The "double", "inc" and "add" bars have a progress of approximately one third of the total tasks, displayed in their individual color with different transparency levels. The "double" and "inc" bars have a striped grey background, and the "sum" bar is empty.
 
 
 Dask JupyterLab Extension
