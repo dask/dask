@@ -490,6 +490,7 @@ class FastParquetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
+                    "This restruction is removed as of fastparquet 0.8.4\n"
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
