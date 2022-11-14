@@ -1174,11 +1174,13 @@ def get_engine(engine):
 #####################
 
 
-def sorted_columns(statistics):
+def sorted_columns(statistics, columns=None):
     """Find sorted columns given row-group statistics
 
-    This finds all columns that are sorted, along with appropriate divisions
-    values for those columns
+    This finds all columns that are sorted, along with the
+    appropriate ``divisions`` for those columns. If the (optional)
+    ``columns`` argument is used, the search will be restricted
+    to the specified column set.
 
     Returns
     -------
@@ -1189,6 +1191,8 @@ def sorted_columns(statistics):
 
     out = []
     for i, c in enumerate(statistics[0]["columns"]):
+        if columns and c["name"] not in columns:
+            continue
         if not all(
             "min" in s["columns"][i] and "max" in s["columns"][i] for s in statistics
         ):
@@ -1326,6 +1330,7 @@ def process_statistics(
         )
         statistics = []
 
+    divisions = None
     if statistics:
         result = list(
             zip(
@@ -1346,23 +1351,17 @@ def process_statistics(
                 parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
             )
 
-        out = sorted_columns(statistics)
+        # Convert str index to list
+        index = [index] if isinstance(index, str) else index
 
-        if index and isinstance(index, str):
-            index = [index]
-        if index and out:
-            # Only one valid column
-            out = [o for o in out if o["name"] in index]
-        if index and len(out) == 1:
-            # Use only sorted column with statistics as the index
-            divisions = out[0]["divisions"]
-            if index != [out[0]["name"]]:
-                raise ValueError(f"Specified index is invalid.\nindex: {index}")
-        else:
-            divisions = [None] * (len(parts) + 1)
-    else:
-        divisions = [None] * (len(parts) + 1)
+        # Use statistics to define divisions
+        if index and len(index) == 1:
+            for sorted_column_info in sorted_columns(statistics, columns=index):
+                if sorted_column_info["name"] in index:
+                    divisions = sorted_column_info["divisions"]
+                    break
 
+    divisions = divisions or (None,) * (len(parts) + 1)
     return parts, divisions, index
 
 
