@@ -4277,3 +4277,13 @@ def test_retries_on_remote_filesystem(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-parquet")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+
+def test_select_filtered_column(tmp_path, engine):
+
+    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
+    path = tmp_path / "test_select_filtered_column.parquet"
+    df.to_parquet(path)
+
+    ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+    assert_eq(df, ddf)

@@ -502,7 +502,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index = process_statistics(
         parts,
         statistics,
         filters,
@@ -515,17 +515,9 @@ def read_parquet(
 
     # Account for index and columns arguments.
     # Modify `meta` dataframe accordingly
-    meta, index, columns = set_index_columns(
-        meta, index, columns, index_in_columns, auto_index_allowed
-    )
+    meta, index, columns = set_index_columns(meta, index, columns, auto_index_allowed)
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
-
-    # Set the index that was previously treated as a column
-    if index_in_columns:
-        meta = meta.set_index(index)
-        if meta.index.name == NONE_LABEL:
-            meta.index.name = None
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
@@ -1320,7 +1312,6 @@ def process_statistics(
     """Process row-group column statistics in metadata
     Used in read_parquet.
     """
-    index_in_columns = False
     if statistics and len(parts) != len(statistics):
         # It is up to the Engine to guarantee that these
         # lists are the same length (if statistics are defined).
@@ -1362,45 +1353,20 @@ def process_statistics(
         if index and out:
             # Only one valid column
             out = [o for o in out if o["name"] in index]
-        if index is not False and len(out) == 1:
+        if index and len(out) == 1:
             # Use only sorted column with statistics as the index
             divisions = out[0]["divisions"]
-            if index is None:
-                index_in_columns = True
-                index = [out[0]["name"]]
-            elif index != [out[0]["name"]]:
+            if index != [out[0]["name"]]:
                 raise ValueError(f"Specified index is invalid.\nindex: {index}")
-        elif index is not False and len(out) > 1:
-            if any(o["name"] == NONE_LABEL for o in out):
-                # Use sorted column matching NONE_LABEL as the index
-                [o] = [o for o in out if o["name"] == NONE_LABEL]
-                divisions = o["divisions"]
-                if index is None:
-                    index = [o["name"]]
-                    index_in_columns = True
-                elif index != [o["name"]]:
-                    raise ValueError(f"Specified index is invalid.\nindex: {index}")
-            else:
-                # Multiple sorted columns found, cannot autodetect the index
-                warnings.warn(
-                    "Multiple sorted columns found %s, cannot\n "
-                    "autodetect index. Will continue without an index.\n"
-                    "To pick an index column, use the index= keyword; to \n"
-                    "silence this warning use index=False."
-                    "" % [o["name"] for o in out],
-                    RuntimeWarning,
-                )
-                index = False
-                divisions = [None] * (len(parts) + 1)
         else:
             divisions = [None] * (len(parts) + 1)
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index
 
 
-def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
+def set_index_columns(meta, index, columns, auto_index_allowed):
     """Handle index/column arguments, and modify `meta`
     Used in read_parquet.
     """
@@ -1444,18 +1410,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
                     "index: {} | column: {}".format(index, columns)
                 )
 
-        # Leaving index as a column in `meta`, because the index
-        # will be reset below (in case the index was detected after
-        # meta was created)
-        if index_in_columns:
-            meta = meta[columns + index]
-        else:
-            meta = meta[columns]
-
-    else:
-        meta = meta[list(columns)]
-
-    return meta, index, columns
+    return meta[list(columns)], index, columns
 
 
 def aggregate_row_groups(
