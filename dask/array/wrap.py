@@ -202,6 +202,10 @@ if _full.__doc__ is not None:
         "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
         "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
     )
+    _full.__doc__ = _full.__doc__.replace(
+        ">>> np.full_like(y, [0, 0, 255])",
+        ">>> np.full_like(y, [0, 0, 255])  # doctest: +NORMALIZE_WHITESPACE",
+    )
 
 
 def full(shape, fill_value, *args, **kwargs):
