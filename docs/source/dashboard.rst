@@ -85,7 +85,7 @@ indicate the following.
 
 The different levels of transparency on these plot is related to the type of memory
 (Managed, Unmanaged and Unmanaged recent), and you can find a detailed explanation of them in the
-`Worker Memory management documentation <https://distributed.dask.org/en/latest/worker.html#memory-management>`_
+:doc:`Worker Memory management documentation <worker-memory>`
 
 
 .. _dashboard.proc-cpu-occ:
