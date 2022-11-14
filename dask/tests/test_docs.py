@@ -8,7 +8,7 @@ def test_development_guidelines_matches_ci():
     development_doc_file = root_dir / "docs" / "source" / "develop.rst"
     additional_ci_file = root_dir / ".github" / "workflows" / "additional.yml"
     upstream_ci_file = root_dir / ".github" / "workflows" / "upstream.yml"
-    latest_env = "environment-3.9.yaml"
+    latest_env = "environment-3.10.yaml"
 
     for filename in [development_doc_file, additional_ci_file, upstream_ci_file]:
         with open(filename, encoding="utf8") as f:
