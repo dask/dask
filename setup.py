@@ -17,7 +17,7 @@ extras_require: dict[str, list[str]] = {
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
     "distributed": ["distributed == 2022.10.2"],
     "diagnostics": [
-        "bokeh >= 2.4.2, <3",
+        "bokeh >= 2.4.2",
         "jinja2",
     ],
     "delayed": [],  # keeping for backwards compatibility
