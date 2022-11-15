@@ -37,8 +37,7 @@ dependencies:
   # other -- IO
   - boto3
   - botocore
-  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
-  - bokeh<3
+  - bokeh
   - httpretty
   - aiohttp
   # Need recent version of s3fs to support newer aiobotocore versions
