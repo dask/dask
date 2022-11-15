@@ -333,6 +333,7 @@ intersphinx_mapping = {
         "https://asyncssh.readthedocs.io/en/latest/",
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
+    "distributed": ("https://distributed.dask.org/en/latest", None),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
     "zarr": (
         "https://zarr.readthedocs.io/en/latest/",
