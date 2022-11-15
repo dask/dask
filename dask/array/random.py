@@ -1,4 +1,5 @@
 import contextlib
+import importlib
 import numbers
 from itertools import chain, product
 from numbers import Integral
@@ -81,6 +82,12 @@ class Generator:
         _str += "(" + self._bit_generator.__class__.__name__ + ")"
         return _str
 
+    @property
+    def _backend(self):
+        # Intended to return "numpy" or "cupy" - Dependent logic
+        # may need to change for other dask-array backends
+        return type(self._bit_generator).__module__.split(".")[0]
+
     @derived_from(np.random.Generator, skipblocks=1)
     def beta(self, a, b, size=None, chunks="auto", **kwargs):
         return _wrap_func(self, "beta", a, b, size=size, chunks=chunks, **kwargs)
@@ -112,9 +119,9 @@ class Generator:
             p,
             axis,
             chunks,
-            dtype,
+            meta,
             dependencies,
-        ) = _choice_validate_params("Generator", a, size, replace, p, axis, chunks)
+        ) = _choice_validate_params(self, a, size, replace, p, axis, chunks)
 
         sizes = list(product(*chunks))
         bitgens = _spawn_bitgens(self._bit_generator, len(sizes))
@@ -129,7 +136,7 @@ class Generator:
         }
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-        return Array(graph, name, chunks, dtype=dtype)
+        return Array(graph, name, chunks, meta=meta)
 
     @derived_from(np.random.Generator, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
@@ -274,10 +281,18 @@ class Generator:
     def permutation(self, x):
         from dask.array.slicing import shuffle_slice
 
+        if self._backend == "cupy":
+            raise NotImplementedError(
+                "`Generator.permutation` not supported for cupy-backed "
+                "Generator objects. Use the 'numpy' array backend to "
+                "call `dask.array.random.default_rng`, or pass in "
+                " `numpy.random.PCG64()`."
+            )
+
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")
 
-        index = np.arange(len(x))
+        index = importlib.import_module(self._backend).arange(len(x))
         _shuffle(self._bit_generator.state, index)
         return shuffle_slice(x, index)
 
@@ -487,6 +502,12 @@ class RandomState:
             array_creation_dispatch.RandomState if RandomState is None else RandomState
         )
 
+    @property
+    def _backend(self):
+        # Intended to return "numpy" or "cupy" - Dependent logic
+        # may need to change for other dask-array backends
+        return self._RandomState.__module__.split(".")[0]
+
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
 
@@ -513,9 +534,9 @@ class RandomState:
                 p,
                 axis,  # np.random.RandomState.choice does not use axis
                 chunks,
-                dtype,
+                meta,
                 dependencies,
-            ) = _choice_validate_params("RandomState", a, size, replace, p, 0, chunks)
+            ) = _choice_validate_params(self, a, size, replace, p, 0, chunks)
 
             sizes = list(product(*chunks))
             state_data = random_state_data(len(sizes), self._numpy_state)
@@ -532,7 +553,7 @@ class RandomState:
             graph = HighLevelGraph.from_collections(
                 name, dsk, dependencies=dependencies
             )
-            return Array(graph, name, chunks, dtype=dtype)
+            return Array(graph, name, chunks, meta=meta)
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
@@ -736,9 +757,9 @@ class RandomState:
 
 
 def _shuffle(state_data, x, axis=0):
-    bit_generator = np.random.PCG64()
+    bit_generator = array_creation_dispatch.default_bit_generator()
     bit_generator.state = state_data
-    state = np.random.Generator(bit_generator)
+    state = default_rng_lookup(bit_generator)
     return state.shuffle(x, axis=axis)
 
 
@@ -750,26 +771,28 @@ def _spawn_bitgens(bitgen, n_bitgens):
 
 def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random module method with seed"""
-    func = getattr(default_rng_lookup(bitgen), funcname)
+    if rng is None:
+        rng = default_rng_lookup(bitgen)
+    func = getattr(rng, funcname)
     return func(*args, size=size, **kwargs)
 
 
 def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
     """Apply RandomState method with seed"""
     if RandomState is None:
-        RandomState = np.random.RandomState
+        RandomState = array_creation_dispatch.RandomState
     state = RandomState(state_data)
     func = getattr(state, funcname)
     return func(*args, size=size, **kwargs)
 
 
 def _choice_rng(state_data, a, size, replace, p, axis, shuffle):
-    state = np.random.default_rng(state_data)
+    state = default_rng_lookup(state_data)
     return state.choice(a, size=size, replace=replace, p=p, axis=axis, shuffle=shuffle)
 
 
 def _choice_rs(state_data, a, size, replace, p):
-    state = np.random.RandomState(state_data)
+    state = array_creation_dispatch.RandomState(state_data)
     return state.choice(a, size=size, replace=replace, p=p)
 
 
@@ -777,13 +800,19 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
     dependencies = []
     # Normalize and validate `a`
     if isinstance(a, Integral):
-        if state == "Generator":
-            dtype = np.random.default_rng().choice(1, size=(), p=None).dtype
-        elif state == "RandomState":
+        if isinstance(state, Generator):
+            if state._backend == "cupy":
+                raise NotImplementedError(
+                    "`choice` not supported for cupy-backed `Generator`."
+                )
+            lib = importlib.import_module(state._backend)
+            meta = lib.random.choice(1, size=(), p=None)
+        elif isinstance(state, RandomState):
             # On windows the output dtype differs if p is provided or
             # # absent, see https://github.com/numpy/numpy/issues/9867
-            dummy_p = np.array([1]) if p is not None else p
-            dtype = np.random.choice(1, size=(), p=dummy_p).dtype
+            lib = importlib.import_module(state._backend)
+            dummy_p = lib.array([1]) if p is not None else p
+            meta = lib.random.choice(1, size=(), p=dummy_p)
         else:
             raise ValueError("Unknown generator class")
         len_a = a
@@ -792,7 +821,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
     else:
         a = asarray(a)
         a = a.rechunk(a.shape)
-        dtype = a.dtype
+        meta = a._meta
         if a.ndim != 1:
             raise ValueError("a must be one dimensional")
         len_a = len(a)
@@ -836,7 +865,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
         )
         raise NotImplementedError(err_msg)
 
-    return a, size, replace, p, axis, chunks, dtype, dependencies
+    return a, size, replace, p, axis, chunks, meta, dependencies
 
 
 def _wrap_func(
@@ -911,7 +940,7 @@ def _wrap_func(
     if isinstance(rng, Generator):
         bitgens = _spawn_bitgens(rng._bit_generator, len(sizes))
         func_applier = _apply_random_func
-        gen = type(rng)
+        gen = None
     elif isinstance(rng, RandomState):
         bitgens = random_state_data(len(sizes), rng._numpy_state)
         func_applier = _apply_random

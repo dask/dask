@@ -141,9 +141,9 @@ def register_cupy():
         return cupy.einsum(*args, **kwargs)
 
     @default_rng_lookup.register((cupy.random.BitGenerator, cupy.random.Generator))
-    def _default_rng_numpy(seed):
-        if isinstance(seed, cupy.random.BitGenerator):
-            seed = seed._seed_seq
+    def _default_rng_cupy(seed, sequence=False):
+        if sequence and isinstance(seed, cupy.random.BitGenerator):
+            seed = type(seed)(seed._seed_seq)
         return cupy.random.default_rng(seed)
 
 
@@ -308,7 +308,9 @@ def _nannumel_sparse(x, **kwargs):
 
 
 @default_rng_lookup.register((np.random.BitGenerator, np.random.Generator))
-def _default_rng_numpy(seed):
+def _default_rng_numpy(seed, sequence=False):
+    if sequence and isinstance(seed, np.random.BitGenerator):
+        seed = type(seed)(seed._seed_seq)
     return np.random.default_rng(seed)
 
 
@@ -326,15 +328,6 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
         For example, the 'numpy' backend simply returns
         ``numpy.random.RandomState``.
-        """
-        raise NotImplementedError
-
-    @property
-    def default_rng(self):
-        """Return the backend-specific default_rng function
-
-        For example, the 'numpy' backend simply returns
-        ``numpy.random.default_rng``.
         """
         raise NotImplementedError
 
@@ -392,10 +385,6 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
     @property
     def RandomState(self):
         return np.random.RandomState
-
-    @property
-    def default_rng(self):
-        return np.random.default_rng
 
     @property
     def default_bit_generator(self):

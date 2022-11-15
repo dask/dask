@@ -31,10 +31,6 @@ class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         return _cupy().random.RandomState
 
     @property
-    def default_rng(self):
-        return _cupy().random.default_rng
-
-    @property
     def default_bit_generator(self):
         return _cupy().random.XORWOW
 
