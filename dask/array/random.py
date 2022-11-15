@@ -1,5 +1,4 @@
 import contextlib
-import importlib
 import numbers
 from itertools import chain, product
 from numbers import Integral
@@ -17,6 +16,7 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.creation import arange
+from dask.array.dispatch import default_rng_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import derived_from, random_state_data
@@ -75,7 +75,6 @@ class Generator:
 
     def __init__(self, bit_generator):
         self._bit_generator = bit_generator
-        self._generator = Generator
 
     def __str__(self):
         _str = self.__class__.__name__
@@ -131,10 +130,6 @@ class Generator:
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
         return Array(graph, name, chunks, dtype=dtype)
-
-    # @derived_from(np.random.Generator, skipblocks=1)
-    # def dirichlet(self, alpha, size=None, chunks="auto"):
-    #     return _wrap_func(self, "dirichlet", alpha, size=size, chunks=chunks, **kwargs)
 
     @derived_from(np.random.Generator, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
@@ -445,13 +440,10 @@ def default_rng(seed=None):
         return Generator(seed)
     elif isinstance(seed, Generator):
         # Pass through a Generator
-        seed._generator = type(seed)
         return seed
     elif hasattr(seed, "bit_generator"):
         # a Generator. Just not ours
-        res = Generator(seed.bit_generator)
-        res._generator = type(seed)
-        return res
+        return Generator(seed.bit_generator)
     # Otherwise, use the backend-default BitGenerator
     return Generator(array_creation_dispatch.default_bit_generator(seed))
 
@@ -541,9 +533,6 @@ class RandomState:
                 name, dsk, dependencies=dependencies
             )
             return Array(graph, name, chunks, dtype=dtype)
-
-    # @derived_from(np.random.RandomState, skipblocks=1)
-    # def dirichlet(self, alpha, size=None, chunks="auto"):
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
@@ -761,15 +750,7 @@ def _spawn_bitgens(bitgen, n_bitgens):
 
 def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random module method with seed"""
-    if rng is None or rng is Generator:
-        state = array_creation_dispatch.default_rng(bitgen)
-    else:
-        # cupy or cupy-like library that provides `random.default_rng()`
-        lib = rng.__module__.split(".")[0]
-        xp = importlib.import_module(lib)
-        state = xp.random.default_rng(bitgen._seed_seq)
-
-    func = getattr(state, funcname)
+    func = getattr(default_rng_lookup(bitgen), funcname)
     return func(*args, size=size, **kwargs)
 
 
@@ -930,7 +911,7 @@ def _wrap_func(
     if isinstance(rng, Generator):
         bitgens = _spawn_bitgens(rng._bit_generator, len(sizes))
         func_applier = _apply_random_func
-        gen = rng._generator
+        gen = type(rng)
     elif isinstance(rng, RandomState):
         bitgens = random_state_data(len(sizes), rng._numpy_state)
         func_applier = _apply_random

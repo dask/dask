@@ -5,6 +5,7 @@ import numpy as np
 from dask.array import chunk
 from dask.array.dispatch import (
     concatenate_lookup,
+    default_rng_lookup,
     divide_lookup,
     einsum_lookup,
     empty_lookup,
@@ -120,6 +121,7 @@ def _tensordot(a, b, axes=2):
 @concatenate_lookup.register_lazy("cupy")
 @nannumel_lookup.register_lazy("cupy")
 @numel_lookup.register_lazy("cupy")
+@default_rng_lookup.register_lazy("cupy")
 def register_cupy():
     import cupy
 
@@ -137,6 +139,12 @@ def register_cupy():
         kwargs.pop("casting", None)
         kwargs.pop("order", None)
         return cupy.einsum(*args, **kwargs)
+
+    @default_rng_lookup.register((cupy.random.BitGenerator, cupy.random.Generator))
+    def _default_rng_numpy(seed):
+        if isinstance(seed, cupy.random.BitGenerator):
+            seed = seed._seed_seq
+        return cupy.random.default_rng(seed)
 
 
 @tensordot_lookup.register_lazy("cupyx")
@@ -297,6 +305,11 @@ def _nannumel_sparse(x, **kwargs):
     # If all dimensions are contracted, this will just be a number, otherwise we
     # want to densify it.
     return n.todense() if hasattr(n, "todense") else n
+
+
+@default_rng_lookup.register((np.random.BitGenerator, np.random.Generator))
+def _default_rng_numpy(seed):
+    return np.random.default_rng(seed)
 
 
 class ArrayBackendEntrypoint(DaskBackendEntrypoint):
