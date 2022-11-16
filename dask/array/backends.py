@@ -141,9 +141,7 @@ def register_cupy():
         return cupy.einsum(*args, **kwargs)
 
     @default_rng_lookup.register((cupy.random.BitGenerator, cupy.random.Generator))
-    def _default_rng_cupy(seed, sequence=False):
-        if sequence and isinstance(seed, cupy.random.BitGenerator):
-            seed = type(seed)(seed._seed_seq)
+    def _default_rng_cupy(seed):
         return cupy.random.default_rng(seed)
 
 
@@ -308,9 +306,7 @@ def _nannumel_sparse(x, **kwargs):
 
 
 @default_rng_lookup.register((np.random.BitGenerator, np.random.Generator))
-def _default_rng_numpy(seed, sequence=False):
-    if sequence and isinstance(seed, np.random.BitGenerator):
-        seed = type(seed)(seed._seed_seq)
+def _default_rng_numpy(seed):
     return np.random.default_rng(seed)
 
 

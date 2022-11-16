@@ -771,10 +771,9 @@ def _spawn_bitgens(bitgen, n_bitgens):
 
 def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random module method with seed"""
-    if rng is None:
-        if isinstance(bitgen, tuple):
-            bitgen = bitgen[0](bitgen[1])
-        rng = default_rng_lookup(bitgen)
+    if isinstance(bitgen, np.random.SeedSequence):
+        bitgen = rng(bitgen)
+    rng = default_rng_lookup(bitgen)
     func = getattr(rng, funcname)
     return func(*args, size=size, **kwargs)
 
@@ -942,9 +941,9 @@ def _wrap_func(
     if isinstance(rng, Generator):
         bitgens = _spawn_bitgens(rng._bit_generator, len(sizes))
         bitgen_token = tokenize(bitgens)
-        bitgens = [(type(_bitgen), _bitgen._seed_seq) for _bitgen in bitgens]
+        bitgens = [_bitgen._seed_seq for _bitgen in bitgens]
         func_applier = _apply_random_func
-        gen = None
+        gen = type(rng._bit_generator)
     elif isinstance(rng, RandomState):
         bitgens = random_state_data(len(sizes), rng._numpy_state)
         bitgen_token = tokenize(bitgens)
