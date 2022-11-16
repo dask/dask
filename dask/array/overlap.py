@@ -7,7 +7,7 @@ from tlz.curried import map
 
 from dask.array import chunk, numpy_compat
 from dask.array.core import Array, concatenate, map_blocks, unify_chunks
-from dask.array.creation import empty_like, full_like
+from dask.array.creation import empty_like, full_like, repeat
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import ArrayOverlapLayer
@@ -238,8 +238,8 @@ def nearest(x, axis, depth):
         + (slice(None, None, None),) * (x.ndim - axis - 1)
     )
 
-    l = concatenate([x[left]] * depth, axis=axis)
-    r = concatenate([x[right]] * depth, axis=axis)
+    l = repeat(x[left], depth, axis=axis)
+    r = repeat(x[right], depth, axis=axis)
 
     l, r = _remove_overlap_boundaries(l, r, axis, depth)
 
