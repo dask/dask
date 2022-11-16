@@ -828,6 +828,7 @@ class FastParquetEngine(Engine):
         ignore_metadata_file=False,
         metadata_task_size=None,
         parquet_file_extension=None,
+        storage_options=None,
         **kwargs,
     ):
 

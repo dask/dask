@@ -483,6 +483,7 @@ def read_parquet(
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
+        storage_options=storage_options,
         **kwargs,
     )
 
