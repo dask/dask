@@ -808,7 +808,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
                     "`choice` not supported for cupy-backed `Generator`."
                 )
             lib = importlib.import_module(state._backend)
-            meta = lib.random.choice(1, size=(), p=None)
+            meta = lib.random.default_rng().choice(1, size=(), p=None)
         elif isinstance(state, RandomState):
             # On windows the output dtype differs if p is provided or
             # # absent, see https://github.com/numpy/numpy/issues/9867
