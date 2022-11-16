@@ -293,7 +293,7 @@ class Generator:
             x = arange(x, chunks="auto")
 
         index = importlib.import_module(self._backend).arange(len(x))
-        _shuffle(self._bit_generator.state, index)
+        _shuffle(self._bit_generator, index)
         return shuffle_slice(x, index)
 
     @derived_from(np.random.Generator, skipblocks=1)
@@ -756,8 +756,9 @@ class RandomState:
         return _wrap_func(self, "zipf", a, size=size, chunks=chunks, **kwargs)
 
 
-def _shuffle(state_data, x, axis=0):
-    bit_generator = array_creation_dispatch.default_bit_generator()
+def _shuffle(bit_generator, x, axis=0):
+    state_data = bit_generator.state
+    bit_generator = type(bit_generator)()
     bit_generator.state = state_data
     state = default_rng_lookup(bit_generator)
     return state.shuffle(x, axis=axis)
