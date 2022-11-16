@@ -408,7 +408,7 @@ def default_rng(seed=None):
     Generator(PCG64)
     >>> rfloat = rng.random().compute()
     >>> rfloat
-    array(0.56088184)
+    array(0.86999885)
     >>> type(rfloat)
     <class 'numpy.ndarray'>
 
