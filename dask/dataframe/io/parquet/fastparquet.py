@@ -401,7 +401,7 @@ class FastParquetEngine(Engine):
             # Find all files if we are not using a _metadata file
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
-                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
+                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs, root=base)
                 _update_paths = False
                 for fn in ["_metadata", "_common_metadata"]:
                     try:
@@ -490,6 +490,7 @@ class FastParquetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
+                    "This restriction is removed as of fastparquet 0.8.4\n"
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
