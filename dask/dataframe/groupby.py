@@ -1245,9 +1245,21 @@ class _GroupBy:
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
+        # slicing key applied to _GroupBy instance
+        self._slice = slice
+
+        # Check if we can project columns
+        projection = None
+        if isinstance(self._slice, (str, list)):
+            projection = list(
+                set(by_)
+                .union({self._slice} if isinstance(self._slice, str) else self._slice)
+                .intersection(df.columns)
+            )
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
-        self.obj = df
+        self.obj = df[projection] if projection else df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
         self.sort = sort
@@ -1261,9 +1273,6 @@ class _GroupBy:
             raise NotImplementedError(
                 "The grouped object and 'by' of the groupby must have the same divisions."
             )
-
-        # slicing key applied to _GroupBy instance
-        self._slice = slice
 
         if isinstance(self.by, list):
             by_meta = [
