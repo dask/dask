@@ -814,7 +814,7 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
             # # absent, see https://github.com/numpy/numpy/issues/9867
             lib = importlib.import_module(state._backend)
             dummy_p = lib.array([1]) if p is not None else p
-            meta = lib.random.choice(1, size=(), p=dummy_p)
+            meta = lib.random.RandomState().choice(1, size=(), p=dummy_p)
         else:
             raise ValueError("Unknown generator class")
         len_a = a
