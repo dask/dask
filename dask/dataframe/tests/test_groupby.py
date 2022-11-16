@@ -3079,8 +3079,8 @@ def test_groupby_slice_getitem(by, slice_key):
         {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
-    expect = pdf.groupby(by)[slice_key].mean()
-    got = ddf.groupby(by)[slice_key].mean()
+    expect = pdf.groupby(by)[slice_key].count()
+    got = ddf.groupby(by)[slice_key].count()
 
     # We should have a getitem layer, enabling
     # column projection after read_parquet etc

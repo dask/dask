@@ -1251,11 +1251,10 @@ class _GroupBy:
         # Check if we can project columns
         projection = None
         if isinstance(self._slice, (str, list)):
-            projection = list(
-                set(by_)
-                .union({self._slice} if isinstance(self._slice, str) else self._slice)
-                .intersection(df.columns)
+            projection = set(by_).union(
+                {self._slice} if isinstance(self._slice, str) else self._slice
             )
+            projection = [c for c in df.columns if c in projection]
 
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
