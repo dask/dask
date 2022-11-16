@@ -129,6 +129,21 @@ def test_random_Generator_processes(backend):
         assert_eq(x, y, scheduler="processes")
 
 
+def test_cupy_unsupported():
+    with config.set({"array.backend": "cupy"}):
+        # permutation supported for np-backed BitGenerator
+        x = da.arange(12, chunks=3)
+        da.random.default_rng(np.random.PCG64()).permutation(x).compute()
+
+        # permutation not supported for default cupy BitGenerator
+        with pytest.raises(NotImplementedError):
+            da.random.default_rng().permutation(x).compute()
+
+        # choice not supported for cupy-backed Generator
+        with pytest.raises(NotImplementedError):
+            da.random.default_rng().choice(10).compute()
+
+
 @pytest.mark.parametrize("shape", [(2, 3), (2, 3, 4), (2, 3, 4, 2)])
 def test_random_shapes(shape):
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
