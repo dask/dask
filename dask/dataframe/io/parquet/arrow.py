@@ -339,8 +339,10 @@ class ArrowDatasetEngine(Engine):
         **kwargs,
     ):
 
-        # Optimize open_file_func for remote filesystems
-        cls._update_open_file_func(fs, storage_options, kwargs)
+        # Set default open_file_options for remote filesystems
+        kwargs["open_file_options"] = cls._default_open_file_options(
+            fs, storage_options, kwargs.pop("open_file_options", {})
+        )
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -767,26 +769,28 @@ class ArrowDatasetEngine(Engine):
     #
 
     @classmethod
-    def _update_open_file_func(cls, fs, storage_options, kwargs):
-        """Update kwargs if we can use a native pyarrow filesystem
+    def _default_open_file_options(cls, fs, storage_options, input_options):
+        """Set default open_file_options
+
+        Stick with user-provided options (if there are any). Otherwise:
+        Use native pyarrow filesystem for 'open_file_func' if possible.
 
         Currently supports ``s3fs`` -> ``pyarrow.fs.S3FileSystem``.
         """
-        is_s3fs = type(fs).__module__.split(".")[0] == "s3fs"
-        if is_s3fs and not kwargs.get("open_file_options", {}):
+        if "s3" in fs.protocol and not input_options:
             pa_option_map = {"anon": "anonymous"}
             try:
                 from pyarrow import fs as pa_fs
 
-                pa_options = {
-                    pa_option_map.get(k): v for k, v in storage_options.items()
+                pa_options = {pa_option_map[k]: v for k, v in storage_options.items()}
+                return {
+                    "open_file_func": pa_fs.S3FileSystem(**pa_options).open_input_file
                 }
-                _fs = pa_fs.S3FileSystem(**pa_options)
-                kwargs["open_file_options"] = {"open_file_func": _fs.open_input_file}
             except KeyError:
                 # Could not map one or more ``storage_options``
                 # keys to ``S3FileSystem`` options
                 pass
+        return input_options
 
     @classmethod
     def _collect_dataset_info(
