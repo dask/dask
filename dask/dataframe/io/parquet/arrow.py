@@ -16,7 +16,6 @@ from dask.dataframe.io.parquet.utils import (
     Engine,
     _get_aggregation_depth,
     _normalize_index_columns,
-    _parse_pandas_metadata,
     _process_open_file_options,
     _row_groups_to_parts,
     _set_gather_statistics,
@@ -24,12 +23,7 @@ from dask.dataframe.io.parquet.utils import (
     _sort_and_analyze_paths,
     _split_user_options,
 )
-from dask.dataframe.io.utils import (
-    _get_pyarrow_dtypes,
-    _is_local_fs,
-    _meta_from_dtypes,
-    _open_input_files,
-)
+from dask.dataframe.io.utils import _get_pyarrow_dtypes, _is_local_fs, _open_input_files
 from dask.dataframe.utils import clear_known_categories
 from dask.delayed import Delayed
 from dask.utils import getargspec, natural_sort_key
@@ -978,16 +972,9 @@ class ArrowDatasetEngine(Engine):
         physical_column_names = dataset_info.get("physical_schema", schema).names
         columns = None
 
-        # Set index and column names using
-        # pandas metadata (when available)
+        # Use pandas metadata to update categories
         pandas_metadata = _get_pandas_metadata(schema)
         if pandas_metadata:
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(pandas_metadata)
             if categories is None:
                 categories = []
                 for col in pandas_metadata["columns"]:
@@ -995,15 +982,29 @@ class ArrowDatasetEngine(Engine):
                         col["name"] not in categories
                     ):
                         categories.append(col["name"])
-        else:
-            # No pandas metadata implies no index, unless selected by the user
-            index_names = []
-            column_names = physical_column_names
-            # storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
+
+        # Use _arrow_table_to_pandas to generate meta
+        arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
+        meta = cls._arrow_table_to_pandas(
+            schema.empty_table(),
+            categories,
+            arrow_to_pandas=arrow_to_pandas,
+        )
+        index_names = list(meta.index.names)
+        column_names = list(meta.columns)
+        if index_names and index_names != [None]:
+            # Reset the index if non-null index name
+            meta.reset_index(inplace=True)
+
+        # Use index specified in the pandas metadata if
+        # the index column was not specified by the user
         if index is None and index_names:
-            # Pandas metadata has provided the index name for us
             index = index_names
+
+        # Set proper index for meta
+        index_cols = index or ()
+        if index_cols and index_cols != [None]:
+            meta.set_index(index_cols, inplace=True)
 
         # Ensure that there is no overlap between partition columns
         # and explicit column storage
@@ -1023,34 +1024,20 @@ class ArrowDatasetEngine(Engine):
                     )
                 )
 
+        # Get all available column names
         column_names, index_names = _normalize_index_columns(
             columns, column_names + partitions, index, index_names
         )
-
         all_columns = index_names + column_names
 
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
-
-        arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
-        _meta = cls._arrow_table_to_pandas(
-            schema.empty_table(),
-            categories,
-            arrow_to_pandas=arrow_to_pandas,
-        )
-        if _meta.index.names:
-            _meta.reset_index(inplace=True)
-        dtypes = dict(
-            _meta.dtypes
-        )  # {storage_name_mapping.get(k, k): v for k, v in _meta.dtypes.items()}
-
-        index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         if categories:
+            # Check that categories are included in columns
+            if not set(categories).intersection(all_columns):
+                raise ValueError(
+                    "categories not in available columns.\n"
+                    "categories: {} | columns: {}".format(categories, list(all_columns))
+                )
+
             # Make sure all categories are set to "unknown".
             # Cannot include index names in the `cols` argument.
             meta = clear_known_categories(
@@ -1058,7 +1045,7 @@ class ArrowDatasetEngine(Engine):
             )
 
         if partition_obj:
-
+            # Update meta dtypes for partitioned columns
             for partition in partition_obj:
                 if isinstance(index, list) and partition.name == index[0]:
                     # Index from directory structure
