@@ -999,7 +999,7 @@ class ArrowDatasetEngine(Engine):
             # No pandas metadata implies no index, unless selected by the user
             index_names = []
             column_names = physical_column_names
-            storage_name_mapping = {k: k for k in column_names}
+            # storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
         if index is None and index_names:
             # Pandas metadata has provided the index name for us
@@ -1036,8 +1036,17 @@ class ArrowDatasetEngine(Engine):
                 "categories: {} | columns: {}".format(categories, list(all_columns))
             )
 
-        dtypes = _get_pyarrow_dtypes(schema, categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+        arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
+        _meta = cls._arrow_table_to_pandas(
+            schema.empty_table(),
+            categories,
+            arrow_to_pandas=arrow_to_pandas,
+        )
+        if _meta.index.names:
+            _meta.reset_index(inplace=True)
+        dtypes = dict(
+            _meta.dtypes
+        )  # {storage_name_mapping.get(k, k): v for k, v in _meta.dtypes.items()}
 
         index_cols = index or ()
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
