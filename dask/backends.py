@@ -119,7 +119,13 @@ class CreationDispatch(Generic[BackendEntrypointType]):
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
-                return getattr(self, dispatch_name)(*args, **kwargs)
+                try:
+                    return getattr(self, dispatch_name)(*args, **kwargs)
+                except Exception as e:
+                    raise type(e)(
+                        f"Dispatch call failed in {getattr(self, dispatch_name)}\n"
+                        f"Original Message: {e}"
+                    )
 
             wrapper.__name__ = dispatch_name
             return wrapper

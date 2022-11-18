@@ -987,3 +987,8 @@ def test_from_dict_backends(backend):
         # Check from_dict classmethod
         got_classmethod = got.from_dict(data, npartitions=2)
         assert_eq(expected, got_classmethod)
+
+        # Check that passing unsupported kwargs results
+        # in a reasonable error message
+        with pytest.raises(TypeError, match="Dispatch call failed in"):
+            dd.from_dict(data, npartitions=2, unsupported_kwarg=True)
