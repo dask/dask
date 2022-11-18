@@ -1,7 +1,6 @@
 name: Check for gpuCI updates
 
 on:
-  pull_request:
   schedule:
     - cron: "0 0 * * *" # Daily “At 00:00” UTC
   workflow_dispatch:
@@ -56,7 +55,7 @@ jobs:
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
-        if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER && github.event_name != 'pull_request' }}  # make sure new ucx-py nightlies are available
+        if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER }}  # make sure new ucx-py nightlies are available
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
