@@ -1,6 +1,7 @@
 name: Check for gpuCI updates
 
 on:
+  pull_request:
   schedule:
     - cron: "0 0 * * *" # Daily “At 00:00” UTC
   workflow_dispatch:
@@ -14,6 +15,7 @@ jobs:
       - uses: actions/checkout@v3.1.0
 
       - name: Parse current axis YAML
+        id: rapids_current
         uses: the-coding-turtle/ga-yaml-parser@v0.1.2
         with:
           file: continuous_integration/gpuci/axis.yaml
@@ -39,8 +41,8 @@ jobs:
           FULL_RAPIDS_VER: ${{ steps.cudf_latest.outputs.version }}
           FULL_UCX_PY_VER: ${{ steps.ucx_py_latest.outputs.version }}
         run: |
-          echo RAPIDS_VER=$RAPIDS_VER_0 >> $GITHUB_ENV
-          echo UCX_PY_VER=$(curl -sL https://version.gpuci.io/rapids/$RAPIDS_VER_0) >> $GITHUB_ENV
+          echo RAPIDS_VER=${{ steps.rapids_current.outputs.RAPIDS_VER_0 }} >> $GITHUB_ENV
+          echo UCX_PY_VER=$(curl -sL https://version.gpuci.io/rapids/${{ steps.rapids_current.outputs.RAPIDS_VER_0 }}) >> $GITHUB_ENV
           echo NEW_RAPIDS_VER=${FULL_RAPIDS_VER::-10} >> $GITHUB_ENV
           echo NEW_UCX_PY_VER=${FULL_UCX_PY_VER::-10} >> $GITHUB_ENV
 
@@ -54,7 +56,7 @@ jobs:
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v4
-        if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER }}  # make sure new ucx-py nightlies are available
+        if: ${{ env.UCX_PY_VER != env.NEW_UCX_PY_VER && github.event_name != 'pull_request' }}  # make sure new ucx-py nightlies are available
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           draft: true
