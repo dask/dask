@@ -1,6 +1,25 @@
 Changelog
 =========
 
+.. _v2022.11.1:
+
+2022.11.1
+---------
+
+Released on November 18, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Restrict ``bokeh=3`` support (:pr:`9673`) `Gabe Joseph`_
+- Updates for ``fastparquet`` evolution (:pr:`9650`) `Martin Durant`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``ga-yaml-parser`` step in gpuCI updating workflow  (:pr:`9675`) `Charles Blackmon-Luca`_
+- Revert ``importlib.metadata`` workaround (:pr:`9658`) `James Bourbeau`_
+- Fix ``mindeps-distributed`` CI build to handle ``numpy``/``pandas`` not being installed  (:pr:`9668`) `James Bourbeau`_
+
+
 .. _v2022.11.0:
 
 2022.11.0
