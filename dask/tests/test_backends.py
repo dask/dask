@@ -12,7 +12,7 @@ def test_CreationDispatch_error_informative_message(backend):
     dd = pytest.importorskip("dask.dataframe")
     data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
     with dask.config.set({"dataframe.backend": backend}):
-        with pytest.raises(RuntimeError) as excinfo:
+        with pytest.raises(TypeError) as excinfo:
             dd.from_dict(data, npartitions=2, unsupported_kwarg=True)
 
         msg = str(excinfo.value)
