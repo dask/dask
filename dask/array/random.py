@@ -17,10 +17,9 @@ from dask.array.core import (
     slices_from_chunks,
 )
 from dask.array.creation import arange
-from dask.array.dispatch import default_rng_lookup
 from dask.base import tokenize
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import derived_from, random_state_data
+from dask.utils import derived_from, random_state_data, typename
 
 
 class Generator:
@@ -83,10 +82,16 @@ class Generator:
         return _str
 
     @property
+    def _backend_name(self):
+        # Assumes typename(self._RandomState) starts with an
+        # array-library name (e.g. "numpy" or "cupy")
+        return typename(self._bit_generator).split(".")[0]
+
+    @property
     def _backend(self):
-        # Intended to return "numpy" or "cupy" - Dependent logic
-        # may need to change for other dask-array backends
-        return type(self._bit_generator).__module__.split(".")[0]
+        # Assumes `self._backend_name` is an importable
+        # array-library name (e.g. "numpy" or "cupy")
+        return importlib.import_module(self._backend_name)
 
     @derived_from(np.random.Generator, skipblocks=1)
     def beta(self, a, b, size=None, chunks="auto", **kwargs):
@@ -281,7 +286,7 @@ class Generator:
     def permutation(self, x):
         from dask.array.slicing import shuffle_slice
 
-        if self._backend == "cupy":
+        if self._backend_name == "cupy":
             raise NotImplementedError(
                 "`Generator.permutation` not supported for cupy-backed "
                 "Generator objects. Use the 'numpy' array backend to "
@@ -292,7 +297,7 @@ class Generator:
         if isinstance(x, numbers.Number):
             x = arange(x, chunks="auto")
 
-        index = importlib.import_module(self._backend).arange(len(x))
+        index = self._backend.arange(len(x))
         _shuffle(self._bit_generator, index)
         return shuffle_slice(x, index)
 
@@ -504,9 +509,10 @@ class RandomState:
 
     @property
     def _backend(self):
-        # Intended to return "numpy" or "cupy" - Dependent logic
-        # may need to change for other dask-array backends
-        return self._RandomState.__module__.split(".")[0]
+        # Assumes typename(self._RandomState) starts with
+        # an importable array-library name (e.g. "numpy" or "cupy")
+        _backend_name = typename(self._RandomState).split(".")[0]
+        return importlib.import_module(_backend_name)
 
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
@@ -756,11 +762,19 @@ class RandomState:
         return _wrap_func(self, "zipf", a, size=size, chunks=chunks, **kwargs)
 
 
+def _rng_from_bitgen(bitgen):
+    # Assumes typename(bitgen) starts with importable
+    # library name (e.g. "numpy" or "cupy")
+    backend_name = typename(bitgen).split(".")[0]
+    backend_lib = importlib.import_module(backend_name)
+    return backend_lib.random.default_rng(bitgen)
+
+
 def _shuffle(bit_generator, x, axis=0):
     state_data = bit_generator.state
     bit_generator = type(bit_generator)()
     bit_generator.state = state_data
-    state = default_rng_lookup(bit_generator)
+    state = _rng_from_bitgen(bit_generator)
     return state.shuffle(x, axis=axis)
 
 
@@ -774,7 +788,7 @@ def _apply_random_func(rng, funcname, bitgen, size, args, kwargs):
     """Apply random module method with seed"""
     if isinstance(bitgen, np.random.SeedSequence):
         bitgen = rng(bitgen)
-    rng = default_rng_lookup(bitgen)
+    rng = _rng_from_bitgen(bitgen)
     func = getattr(rng, funcname)
     return func(*args, size=size, **kwargs)
 
@@ -789,7 +803,7 @@ def _apply_random(RandomState, funcname, state_data, size, args, kwargs):
 
 
 def _choice_rng(state_data, a, size, replace, p, axis, shuffle):
-    state = default_rng_lookup(state_data)
+    state = _rng_from_bitgen(state_data)
     return state.choice(a, size=size, replace=replace, p=p, axis=axis, shuffle=shuffle)
 
 
@@ -803,18 +817,16 @@ def _choice_validate_params(state, a, size, replace, p, axis, chunks):
     # Normalize and validate `a`
     if isinstance(a, Integral):
         if isinstance(state, Generator):
-            if state._backend == "cupy":
+            if state._backend_name == "cupy":
                 raise NotImplementedError(
                     "`choice` not supported for cupy-backed `Generator`."
                 )
-            lib = importlib.import_module(state._backend)
-            meta = lib.random.default_rng().choice(1, size=(), p=None)
+            meta = state._backend.random.default_rng().choice(1, size=(), p=None)
         elif isinstance(state, RandomState):
             # On windows the output dtype differs if p is provided or
             # # absent, see https://github.com/numpy/numpy/issues/9867
-            lib = importlib.import_module(state._backend)
-            dummy_p = lib.array([1]) if p is not None else p
-            meta = lib.random.RandomState().choice(1, size=(), p=dummy_p)
+            dummy_p = state._backend.array([1]) if p is not None else p
+            meta = state._backend.random.RandomState().choice(1, size=(), p=dummy_p)
         else:
             raise ValueError("Unknown generator class")
         len_a = a
