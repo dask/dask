@@ -296,6 +296,11 @@ def test_groupby_on_index(scheduler):
     pdf2 = pdf.set_index("a")
     assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
 
+    # Check column projection for `groupby().agg`
+    agg = ddf2.groupby("a").agg({"b": "mean"})
+    assert_eq(ddf.groupby("a").b.mean(), agg.b)
+    assert hlg_layer(agg.dask, "getitem")
+
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
