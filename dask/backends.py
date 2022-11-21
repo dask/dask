@@ -124,7 +124,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    raise RuntimeError(
+                    raise type(e)(
                         f"An error occurred while calling the {funcname(func)} "
                         f"method registered to the {self.backend} backend.\n"
                         f"Original Message: {e}"
