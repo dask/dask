@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
 from dask import config
 from dask.compatibility import entry_points
+from dask.utils import funcname
 
 if TYPE_CHECKING:
     from typing_extensions import ParamSpec
@@ -119,19 +120,15 @@ class CreationDispatch(Generic[BackendEntrypointType]):
 
             @wraps(fn)
             def wrapper(*args, **kwargs):
+                func = getattr(self, dispatch_name)
                 try:
-                    return getattr(self, dispatch_name)(*args, **kwargs)
+                    return func(*args, **kwargs)
                 except Exception as e:
-                    fullname = ".".join(
-                        [
-                            getattr(self, dispatch_name).__module__,
-                            getattr(self, dispatch_name).__qualname__,
-                        ]
-                    )
-                    raise type(e)(
-                        f"Backend dispatch to {fullname} failed.\n"
+                    raise RuntimeError(
+                        f"An error occurred while calling the {funcname(func)} "
+                        f"method registered to the {backend} backend.\n"
                         f"Original Message: {e}"
-                    )
+                    ) from e
 
             wrapper.__name__ = dispatch_name
             return wrapper
