@@ -122,8 +122,14 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 try:
                     return getattr(self, dispatch_name)(*args, **kwargs)
                 except Exception as e:
+                    fullname = ".".join(
+                        [
+                            getattr(self, dispatch_name).__module__,
+                            getattr(self, dispatch_name).__qualname__,
+                        ]
+                    )
                     raise type(e)(
-                        f"Dispatch call failed in {getattr(self, dispatch_name)}\n"
+                        f"Backend dispatch to {fullname} failed.\n"
                         f"Original Message: {e}"
                     )
 

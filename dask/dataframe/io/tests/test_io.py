@@ -990,5 +990,10 @@ def test_from_dict_backends(backend):
 
         # Check that passing unsupported kwargs results
         # in a reasonable error message
-        with pytest.raises(TypeError, match="Dispatch call failed in"):
+        funcname = (
+            "dask_cudf.backends.CudfBackendEntrypoint.from_dict"
+            if backend == "cudf"
+            else "dask.dataframe.io.io.from_dict"
+        )
+        with pytest.raises(TypeError, match=f"dispatch to {funcname} failed"):
             dd.from_dict(data, npartitions=2, unsupported_kwarg=True)
