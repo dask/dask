@@ -126,7 +126,7 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 except Exception as e:
                     raise RuntimeError(
                         f"An error occurred while calling the {funcname(func)} "
-                        f"method registered to the {backend} backend.\n"
+                        f"method registered to the {self.backend} backend.\n"
                         f"Original Message: {e}"
                     ) from e
 
