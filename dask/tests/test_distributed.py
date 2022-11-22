@@ -694,7 +694,11 @@ def test_map_partitions_df_input():
 
     with distributed.LocalCluster(
         scheduler_port=0,
-        dashboard_address=":0",
+        # Explicitly disabling dashboard to prevent related warnings being
+        # elevated to errors until `bokeh=3` is fully supported.
+        # See https://github.com/dask/dask/issues/9686 and
+        # https://github.com/dask/distributed/issues/7173 for details.
+        dashboard_address=None,
         asynchronous=False,
         n_workers=1,
         nthreads=1,
