@@ -7216,7 +7216,8 @@ def _take_last(a, skipna=True):
             if a.empty:
                 return series_typ([], dtype="float")
             return series_typ(
-                [_last_valid(a.iloc[:, i]) for i in range(len(a.columns))], index=a.columns
+                [_last_valid(a.iloc[:, i]) for i in range(len(a.columns))],
+                index=a.columns,
             )
         else:
             return _last_valid(a)
