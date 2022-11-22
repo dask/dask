@@ -698,7 +698,8 @@ def test_map_partitions_df_input():
         # elevated to errors until `bokeh=3` is fully supported.
         # See https://github.com/dask/dask/issues/9686 and
         # https://github.com/dask/distributed/issues/7173 for details.
-        dashboard_address=None,
+        dashboard_address=":0",
+        scheduler_kwargs={"dashboard": False},
         asynchronous=False,
         n_workers=1,
         nthreads=1,
