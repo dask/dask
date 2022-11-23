@@ -1289,7 +1289,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property  # type: ignore
+    @property
     @_deprecated()
     def index(self):
         return self.by
@@ -1950,7 +1950,9 @@ class _GroupBy:
 
             # Check if the aggregation involves implicit column projection
             if isinstance(arg, dict):
-                column_projection = group_columns | arg.keys()
+                column_projection = group_columns.union(arg.keys()).intersection(
+                    self.obj.columns
+                )
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):

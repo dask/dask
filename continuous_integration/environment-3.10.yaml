@@ -35,7 +35,6 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - blosc
   - boto3
   - botocore
   # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
@@ -69,5 +68,8 @@ dependencies:
   - mmh3
   - jinja2
   - pip
+  # The nightly pyarrow / arrow-cpp packages currently don't install with latest
+  # protobuf / abseil, see https://github.com/dask/dask/issues/9449
+  - libprotobuf=3.19
   - pip:
     - git+https://github.com/dask/distributed

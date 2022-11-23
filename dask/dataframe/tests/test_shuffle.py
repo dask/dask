@@ -1443,11 +1443,11 @@ def test_sort_values_single_partition(nelem, by, ascending):
     "data",
     [
         {
-            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),  # type: ignore
-            "b": [None] * 100 + list(range(100, 150)),  # type: ignore
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
+            "b": [None] * 100 + list(range(100, 150)),
         },
         {
-            "a": list(range(15)) + [None] * 5,  # type: ignore
+            "a": list(range(15)) + [None] * 5,
             "b": list(reversed(range(20))),
         },
     ],
@@ -1513,3 +1513,28 @@ def test_sort_values_bool_ascending():
     # attempt to sort with list of ascending booleans
     with pytest.raises(NotImplementedError):
         ddf.sort_values(by="a", ascending=[True, False])
+
+
+@pytest.mark.parametrize("npartitions", [1, 3])
+def test_sort_values_timestamp(npartitions):
+    # Regression test for https://github.com/dask/dask/issues/9641
+    df = pd.DataFrame.from_records(
+        [
+            [pd.Timestamp("2002-01-11 21:00:01+0000", tz="UTC"), 4223, 54719.0],
+            [pd.Timestamp("2002-01-14 21:00:01+0000", tz="UTC"), 6942, 19223.0],
+            [pd.Timestamp("2002-01-15 21:00:01+0000", tz="UTC"), 12551, 72865.0],
+            [pd.Timestamp("2002-01-23 21:00:01+0000", tz="UTC"), 6005, 57670.0],
+            [pd.Timestamp("2002-01-29 21:00:01+0000", tz="UTC"), 2043, 58600.0],
+            [pd.Timestamp("2002-02-01 21:00:01+0000", tz="UTC"), 6909, 8459.0],
+            [pd.Timestamp("2002-01-14 21:00:01+0000", tz="UTC"), 5326, 77339.0],
+            [pd.Timestamp("2002-01-14 21:00:01+0000", tz="UTC"), 4711, 54135.0],
+            [pd.Timestamp("2002-01-22 21:00:01+0000", tz="UTC"), 103, 57627.0],
+            [pd.Timestamp("2002-01-30 21:00:01+0000", tz="UTC"), 16862, 54458.0],
+            [pd.Timestamp("2002-01-31 21:00:01+0000", tz="UTC"), 4143, 56280.0],
+        ],
+        columns=["time", "id1", "id2"],
+    )
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+    result = ddf.sort_values("time")
+    expected = df.sort_values("time")
+    assert_eq(result, expected)

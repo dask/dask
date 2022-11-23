@@ -1,6 +1,63 @@
 Changelog
 =========
 
+.. _v2022.11.1:
+
+2022.11.1
+---------
+
+Released on November 18, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Restrict ``bokeh=3`` support (:pr:`9673`) `Gabe Joseph`_
+- Updates for ``fastparquet`` evolution (:pr:`9650`) `Martin Durant`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``ga-yaml-parser`` step in gpuCI updating workflow  (:pr:`9675`) `Charles Blackmon-Luca`_
+- Revert ``importlib.metadata`` workaround (:pr:`9658`) `James Bourbeau`_
+- Fix ``mindeps-distributed`` CI build to handle ``numpy``/``pandas`` not being installed  (:pr:`9668`) `James Bourbeau`_
+
+
+.. _v2022.11.0:
+
+2022.11.0
+---------
+
+Released on November 15, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Generalize ``from_dict`` implementation to allow usage from other backends (:pr:`9628`) `GALI PREM SAGAR`_
+
+Bug Fixes
+^^^^^^^^^
+- Avoid ``pandas`` constructors in ``dask.dataframe.core`` (:pr:`9570`) `Richard (Rick) Zamora`_
+- Fix ``sort_values`` with ``Timestamp`` data (:pr:`9642`) `James Bourbeau`_
+- Generalize array checking and remove ``pd.Index`` call in ``_get_partitions`` (:pr:`9634`) `Benjamin Zaitlen`_
+- Fix ``read_csv`` behavior for ``header=0`` and ``names`` (:pr:`9614`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update dashboard docs for queuing (:pr:`9660`) `Gabe Joseph`_
+- Remove ``import dask as d`` from docstrings (:pr:`9644`) `Matthew Rocklin`_
+- Fix link to partitions docs in ``read_parquet`` docstring (:pr:`9636`) `qheuristics`_
+- Add API doc links to ``array/bag/dataframe`` sections (:pr:`9630`) `Matthew Rocklin`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``conda-incubator/setup-miniconda@v2.2.0`` (:pr:`9662`) `John A Kirkham`_
+- Allow ``bokeh=3`` (:pr:`9659`) `James Bourbeau`_
+- Run ``upstream`` build with Python 3.10 (:pr:`9655`) `James Bourbeau`_
+- Pin ``pyyaml`` version in mindeps testing (:pr:`9640`) `Charles Blackmon-Luca`_
+- Add ``pre-commit`` to catch ``breakpoint()`` (:pr:`9638`) `James Bourbeau`_
+- Bump ``xarray-contrib/issue-from-pytest-log`` from 1.1 to 1.2 (:pr:`9635`)
+- Remove ``blosc`` references (:pr:`9625`) `Naty Clementi`_
+- Upgrade ``mypy`` and drop unused comments (:pr:`9616`) `Hendrik Makait`_
+- Harden ``test_repartition_npartitions`` (:pr:`9585`) `Richard (Rick) Zamora`_
+
+
 .. _v2022.10.2:
 
 2022.10.2
@@ -6081,3 +6138,4 @@ Other
 .. _`Tim Paine`: https://github.com/timkpaine
 .. _`ChrisJar`: https://github.com/ChrisJar
 .. _`Shingo OKAWA`: https://github.com/ognis1205
+.. _`qheuristics`: https://github.com/qheuristics
