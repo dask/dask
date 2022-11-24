@@ -1572,7 +1572,19 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         if use_nullable_dtypes:
-            _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
+            if "types_mapper" in _kwargs:
+                # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
+                types_mapper = _kwargs["types_mapper"]
+
+                def _types_mapper(pa_type):
+                    return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
+                        pa_type
+                    )
+
+                _kwargs["types_mapper"] = _types_mapper
+
+            else:
+                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 

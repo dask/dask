@@ -669,6 +669,34 @@ def test_use_nullable_dtypes(tmpdir, engine):
         assert_eq(df, ddf2, check_index=False)
 
 
+def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
+    # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
+    # Ensure `types_mapper` takes priority.
+    dataset_dir = tmp_path / "test.parquet"
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf.to_parquet(dataset_dir, engine=engine)
+
+    types_mapper = {
+        pa.int64(): pd.Float32Dtype(),
+    }
+    result = dd.read_parquet(
+        dataset_dir,
+        engine="pyarrow",
+        use_nullable_dtypes=True,
+        arrow_to_pandas={"types_mapper": types_mapper.get},
+    )
+    expected = df.astype({"a": pd.Float32Dtype()})
+    assert_eq(result, expected)
+
+
 @write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
