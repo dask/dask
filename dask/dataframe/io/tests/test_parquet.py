@@ -595,7 +595,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
-def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
+def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
     """
     Test round-tripping nullable extension dtypes. Parquet engines will
     typically add dtype metadata for this.
@@ -603,7 +603,6 @@ def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
     if read_engine == "fastparquet" or write_engine == "fastparquet":
         pytest.xfail("https://github.com/dask/fastparquet/issues/465")
 
-    fn = str(tmpdir.join("test.parquet"))
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
@@ -613,21 +612,17 @@ def test_roundtrip_nullable_dtypes(tmpdir, write_engine, read_engine):
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(
-        fn, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
-    )
-    ddf2 = dd.read_parquet(fn, engine=read_engine)
-    print(ddf2.dtypes)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
     assert_eq(df, ddf2)
 
 
 @PYARROW_MARK
-def test_use_nullable_dtypes(tmpdir, engine):
+def test_use_nullable_dtypes(tmp_path, engine):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
-    fn = str(tmpdir)
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
@@ -640,12 +635,9 @@ def test_use_nullable_dtypes(tmpdir, engine):
 
     @dask.delayed
     def write_partition(df, i):
-        "Write a parquet file without the pandas metadata"
-        import pyarrow as pa
-        import pyarrow.parquet as pq
-
+        """Write a parquet file without the pandas metadata"""
         table = pa.Table.from_pandas(df).replace_schema_metadata({})
-        pq.write_table(table, fn + f"/part.{i}.parquet")
+        pq.write_table(table, tmp_path / f"part.{i}.parquet")
 
     # Create a pandas-metadata-free partitioned parquet. By default it will
     # not read into nullable extension dtypes
@@ -654,25 +646,24 @@ def test_use_nullable_dtypes(tmpdir, engine):
 
     # Not supported by fastparquet
     if engine == "fastparquet":
-        with pytest.raises(ValueError, match="not supported"):
-            ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=True)
+        with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
 
     # Works in pyarrow
-    elif "arrow" in engine:
+    else:
         # Doesn't round-trip by default when we aren't using nullable dtypes
         with pytest.raises(AssertionError):
-            ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=False)
+            ddf2 = dd.read_parquet(tmp_path, engine=engine)
             assert_eq(df, ddf2)
 
         # Round trip works when we use nullable dtypes
-        ddf2 = dd.read_parquet(fn, engine=engine, use_nullable_dtypes=True)
+        ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
         assert_eq(df, ddf2, check_index=False)
 
 
 def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
     # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
     # Ensure `types_mapper` takes priority.
-    dataset_dir = tmp_path / "test.parquet"
     df = pd.DataFrame(
         {
             "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
@@ -682,13 +673,13 @@ def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
         }
     )
     ddf = dd.from_pandas(df, npartitions=3)
-    ddf.to_parquet(dataset_dir, engine=engine)
+    ddf.to_parquet(tmp_path, engine=engine)
 
     types_mapper = {
         pa.int64(): pd.Float32Dtype(),
     }
     result = dd.read_parquet(
-        dataset_dir,
+        tmp_path,
         engine="pyarrow",
         use_nullable_dtypes=True,
         arrow_to_pandas={"types_mapper": types_mapper.get},
