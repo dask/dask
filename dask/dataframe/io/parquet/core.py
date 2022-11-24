@@ -21,7 +21,7 @@ from dask.dataframe.methods import concat
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
-from dask.utils import apply, import_required, natural_sort_key, parse_bytes
+from dask.utils import apply, import_required, parse_bytes
 
 __all__ = ("read_parquet", "to_parquet")
 
@@ -179,6 +179,7 @@ def read_parquet(
     filters=None,
     categories=None,
     index=None,
+    sort_input_paths=True,
     storage_options=None,
     engine="auto",
     calculate_divisions=None,
@@ -186,7 +187,8 @@ def read_parquet(
     metadata_task_size=None,
     split_row_groups=False,
     chunksize=None,
-    aggregate_files=None,
+    aggregate_files=False,
+    file_groups=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
     **kwargs,
 ):
@@ -239,6 +241,11 @@ def read_parquet(
         If a list, assumes up to 2**16-1 labels; if a dict, specify the number
         of labels expected; if None, will load categories automatically for
         data written by dask/fastparquet, not otherwise.
+    sort_input_paths : bool, default True
+        Whether a user-specified path list should be sorted in "natural"
+        order (in contrast to glob ordering). Note that specifying
+        ``sort_input_paths=False`` will not preserve the orginal path
+        order if ``file_groups`` is also specified.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     open_file_options : dict, default None
@@ -279,52 +286,38 @@ def read_parquet(
         If True, then each output dataframe partition will correspond to a single
         parquet-file row-group. If False, each partition will correspond to a
         complete file.  If a positive integer value is given, each dataframe
-        partition will correspond to that number of parquet row-groups (or fewer).
+        partition will correspond to that number of Parquet row-groups (or fewer).
     chunksize : int or str, default None
-        WARNING: The ``chunksize`` argument will be deprecated in the future.
-        Please use ``split_row_groups`` to specify how many row-groups should be
-        mapped to each output partition. If you strongly oppose the deprecation of
-        ``chunksize``, please comment at https://github.com/dask/dask/issues/9043".
-
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. If specified, adjacent row-groups
-        and/or files will be aggregated into the same output partition until the
+        (uncompressed) Parquet storage space. If specified, multiple small
+        partitions will be aggregated into the same output partition until the
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
-        value. Use `aggregate_files` to enable/disable inter-file aggregation.
-    aggregate_files : bool or str, default None
-        WARNING: The ``aggregate_files`` argument will be deprecated in the future.
-        Please consider using ``from_map`` to create a DataFrame collection with a
-        custom file-to-partition mapping. If you strongly oppose the deprecation of
-        ``aggregate_files``, comment at https://github.com/dask/dask/issues/9051".
+        value. Use ``aggregate_files=True`` or ``split_row_groups=True`` to
+        control the size of the pre-aggregated partitions, and use
+        ``file_groups`` to specify which files may be aggregated together.
 
+        WARNING: The ``chunksize`` argument requires up-front metadata parsing
+        for every row-group in the dataset. This process can be slow for large
+        datasets or remote storage. Specifying an integer to ``split_row_groups``
+        or ``aggregate_files`` is typically faster.
+    aggregate_files : bool or int, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter is only used when `chunksize` is specified
-        or when `split_row_groups` is an integer >1. A setting of True means
-        that any two file paths may be aggregated into the same output partition,
-        while False means that inter-file aggregation is prohibited.
-
-        For "hive-partitioned" datasets, a "partition"-column name can also be
-        specified. In this case, we allow the aggregation of any two files
-        sharing a file path up to, and including, the corresponding directory name.
-        For example, if ``aggregate_files`` is set to ``"section"`` for the
-        directory structure below, ``03.parquet`` and ``04.parquet`` may be
-        aggregated together, but ``01.parquet`` and ``02.parquet`` cannot be.
-        If, however, ``aggregate_files`` is set to ``"region"``, ``01.parquet``
-        may be aggregated with ``02.parquet``, and ``03.parquet`` may be aggregated
-        with ``04.parquet``::
-
-            dataset-path/
-            ├── region=1/
-            │   ├── section=a/
-            │   │   └── 01.parquet
-            │   ├── section=b/
-            │   └── └── 02.parquet
-            └── region=2/
-                ├── section=a/
-                │   ├── 03.parquet
-                └── └── 04.parquet
-
-        Note that the default behavior of ``aggregate_files`` is ``False``.
+        partition. Default is ``True`` when ``chunksize`` is specified, and
+        ``False`` otherwise. A setting of ``True`` means that any two file paths
+        may be aggregated into the same output partition, while ``False`` means
+        that inter-file aggregation is prohibited. If a positive integer value
+        is given, each output dataframe partition will correspond to that number
+        of Parquet files (or fewer). Use ``file_groups`` to specify which files
+        may be aggregated.
+    file_groups : list or dict, default None
+        List of hive or directory-partitioned columns where categorical values
+        must match for files within the same file group. The group for each
+        file name may also be specified as as key-value dictionary (where keys
+        are file names and values are integer "file group" labels). Note that
+        Dask will only aggregate two distinct files into the same DataFrame
+        partition if they belong to the same file group. If this option is
+        defined, the user-specified dataset paths will always be sorted in
+        file-group order.
     parquet_file_extension: str, tuple[str], or None, default (".parq", ".parquet", ".pq")
         A file extension or an iterable of extensions to use when discovering
         parquet files in a directory. Files that don't match these extensions
@@ -361,27 +354,30 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    # "Pre-deprecation" warning for `chunksize`
-    if chunksize:
-        warnings.warn(
-            "The `chunksize` argument will be deprecated in the future. "
-            "Please use `split_row_groups` to specify how many row-groups "
-            "should be mapped to each output partition.\n\n"
-            "If you strongly oppose the deprecation of `chunksize`, please "
-            "comment at https://github.com/dask/dask/issues/9043",
-            FutureWarning,
+    # Error on "deprecated" aggregate_files usage
+    if isinstance(aggregate_files, str):
+        ValueError(
+            "Specifying a string value to `aggregate_files` is now deprecated. "
+            "Please use the (similar) `file_groups` argument instead."
         )
 
-    # "Pre-deprecation" warning for `aggregate_files`
-    if aggregate_files:
-        warnings.warn(
-            "The `aggregate_files` argument will be deprecated in the future. "
-            "Please consider using `from_map` to create a DataFrame collection "
-            "with a custom file-to-partition mapping.\n\n"
-            "If you strongly oppose the deprecation of `aggregate_files`, "
-            "please comment at https://github.com/dask/dask/issues/9051",
-            FutureWarning,
-        )
+    # Check for conflicting arguments related to file aggregation
+    if int(aggregate_files) > 1:
+        if split_row_groups:
+            raise ValueError(
+                "The aggregate_files option may not be set to a positive "
+                "integer >1 when split_row_groups is also specified. Try "
+                "using aggregate_files=True."
+            )
+        if chunksize:
+            raise ValueError(
+                "The aggregate_files option may not be set to a positive "
+                "integer >1 when chunksize is also specified. Try using "
+                "aggregate_files=True."
+            )
+    elif aggregate_files is None:
+        # Default setting for aggregate_files
+        aggregate_files = bool(chunksize)
 
     if "read_from_paths" in kwargs:
         kwargs.pop("read_from_paths")
@@ -431,6 +427,7 @@ def read_parquet(
         "filters": filters,
         "categories": categories,
         "index": index,
+        "sort_input_paths": sort_input_paths,
         "storage_options": storage_options,
         "engine": engine,
         "calculate_divisions": calculate_divisions,
@@ -439,6 +436,7 @@ def read_parquet(
         "split_row_groups": split_row_groups,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
+        "file_groups": file_groups,
         "parquet_file_extension": parquet_file_extension,
         **kwargs,
     }
@@ -460,8 +458,8 @@ def read_parquet(
     # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
+    # Get file system and fs-compatible paths
     fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
     if index is None:
@@ -479,7 +477,8 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         chunksize=chunksize,
-        aggregate_files=aggregate_files,
+        sort_input_paths=sort_input_paths,
+        aggregate_files=file_groups or bool(aggregate_files),
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
@@ -494,23 +493,59 @@ def read_parquet(
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
-    aggregation_depth = False
     if len(parts):
-        # For now, `common_kwargs` and `aggregation_depth`
-        # may be stored in the first element of `parts`
+        # For now, `common_kwargs` may be stored in the
+        # first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
-        aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
+
+    if statistics and len(parts) != len(statistics):
+        # It is up to the Engine to guarantee that these
+        # lists are the same length (if statistics are defined).
+        # This misalignment may be indicative of a bug or
+        # incorrect read_parquet usage, so throw a warning.
+        warnings.warn(
+            f"Length of partition statistics ({len(statistics)}) "
+            f"does not match the partition count ({len(parts)}). "
+            f"This may indicate a bug or incorrect read_parquet "
+            f"usage. We must ignore the statistics and disable: "
+            f"filtering, divisions, and/or file aggregation."
+        )
+        statistics = []
+
+    # Statistics-based `parts`` filtering
+    if statistics:
+        # Remove empty partitions (if statistics are known)
+        parts, statistics = _remove_empty_partitions(parts, statistics)
+
+        # Apply filters
+        if filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
+
+    # Aggregate parts/statistics
+    if chunksize and statistics:
+        # Use chunksize to aggregate adjacent row-groups/files
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_bytes=chunksize
+        )
+    elif isinstance(split_row_groups, int) and split_row_groups > 1:
+        # Use split_row_groups to aggregate adjacent row-groups/files
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_row_groups=split_row_groups
+        )
+    elif isinstance(aggregate_files, int) and aggregate_files > 1:
+        # Use aggregate_files to aggregate adjacent files
+        parts, statistics = _aggregate_parts(
+            parts, statistics, partition_size_files=aggregate_files
+        )
+    elif aggregate_files is True and not split_row_groups:
+        # Unconstrained aggregation within each file group
+        parts, statistics = _aggregate_parts(parts, statistics)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    divisions, index, index_in_columns = process_statistics(
         parts,
         statistics,
-        filters,
         index,
-        chunksize,
-        split_row_groups,
-        fs,
-        aggregation_depth,
     )
 
     # Account for index and columns arguments.
@@ -1307,56 +1342,14 @@ def apply_filters(parts, statistics, filters):
     return out_parts, out_statistics
 
 
-def process_statistics(
-    parts,
-    statistics,
-    filters,
-    index,
-    chunksize,
-    split_row_groups,
-    fs,
-    aggregation_depth,
-):
-    """Process row-group column statistics in metadata
+def process_statistics(parts, statistics, index):
+    """Use row-group statistics in metadata to calculate divisions
+
     Used in read_parquet.
     """
     index_in_columns = False
-    if statistics and len(parts) != len(statistics):
-        # It is up to the Engine to guarantee that these
-        # lists are the same length (if statistics are defined).
-        # This misalignment may be indicative of a bug or
-        # incorrect read_parquet usage, so throw a warning.
-        warnings.warn(
-            f"Length of partition statistics ({len(statistics)}) "
-            f"does not match the partition count ({len(parts)}). "
-            f"This may indicate a bug or incorrect read_parquet "
-            f"usage. We must ignore the statistics and disable: "
-            f"filtering, divisions, and/or file aggregation."
-        )
-        statistics = []
-
     if statistics:
-        result = list(
-            zip(
-                *[
-                    (part, stats)
-                    for part, stats in zip(parts, statistics)
-                    if stats["num-rows"] > 0
-                ]
-            )
-        )
-        parts, statistics = result or [[], []]
-        if filters:
-            parts, statistics = apply_filters(parts, statistics, filters)
-
-        # Aggregate parts/statistics if we are splitting by row-group
-        if chunksize or (split_row_groups and int(split_row_groups) > 1):
-            parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
-            )
-
         out = sorted_columns(statistics)
-
         if index and isinstance(index, str):
             index = [index]
         if index and out:
@@ -1397,7 +1390,22 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return divisions, index, index_in_columns
+
+
+def _remove_empty_partitions(parts, statistics):
+    if statistics:
+        result = list(
+            zip(
+                *[
+                    (part, stats)
+                    for part, stats in zip(parts, statistics)
+                    if stats["num-rows"] > 0
+                ]
+            )
+        )
+        parts, statistics = result or [[], []]
+    return parts, statistics
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
@@ -1458,99 +1466,93 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
+def _aggregate_parts(
+    parts,
+    stats,
+    partition_size_bytes=None,
+    partition_size_row_groups=None,
+    partition_size_files=None,
 ):
-    if not stats or not stats[0].get("file_path_0", None):
-        return parts, stats
+    """Aggregate parts using byte size, row-group count, or file count criteria"""
+
+    # Handle partition_size_bytes input (i.e. chunksize)
+    if partition_size_bytes:
+        partition_size_bytes = None if not stats else parse_bytes(partition_size_bytes)
+
+    def _partition_size_bytes_criteria(stat, next_stat):
+        if partition_size_bytes is None:
+            return True
+        return (
+            next_stat["total_byte_size"] + stat["total_byte_size"]
+        ) <= partition_size_bytes
+
+    def _partition_size_row_groups_criteria(part, next_row_group_count):
+        if partition_size_row_groups is None:
+            return True
+        return (
+            next_row_group_count + part.get("row_groups", 1)
+            <= partition_size_row_groups
+        )
+
+    def _partition_size_files_criteria(next_part):
+        if partition_size_files is None:
+            return True
+        return len(next_part) < partition_size_files
 
     parts_agg = []
     stats_agg = []
 
-    use_row_group_criteria = split_row_groups and int(split_row_groups) > 1
-    use_chunksize_criteria = bool(chunksize)
-    if use_chunksize_criteria:
-        chunksize = parse_bytes(chunksize)
-    next_part, next_stat = [parts[0].copy()], stats[0].copy()
+    next_row_group_count = parts[0].get("row_groups", 1)
+    next_part = [parts[0].copy()]
+    next_stat = stats[0].copy() if stats else {}
     for i in range(1, len(parts)):
-        stat, part = stats[i], parts[i]
+        part = parts[i]
+        stat = stats[i] if stats else {}
 
-        # Criteria #1 for aggregating parts: parts are within the same file
-        same_path = stat["file_path_0"] == next_stat["file_path_0"]
-        multi_path_allowed = False
-
-        if aggregation_depth:
-
-            # Criteria #2 for aggregating parts: The part does not include
-            # row-group information, or both parts include the same kind
-            # of row_group aggregation (all None, or all indices)
-            multi_path_allowed = len(part["piece"]) == 1
-            if not (same_path or multi_path_allowed):
-                rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
-                multi_path_allowed = (rgs == {None}) or (None not in rgs)
-
-            # Criteria #3 for aggregating parts: The parts share a
-            # directory at the "depth" allowed by `aggregation_depth`
-            if not same_path and multi_path_allowed:
-                if aggregation_depth is True:
-                    multi_path_allowed = True
-                elif isinstance(aggregation_depth, int):
-                    # Make sure files share the same directory
-                    root = stat["file_path_0"].split(fs.sep)[:-aggregation_depth]
-                    next_root = next_stat["file_path_0"].split(fs.sep)[
-                        :-aggregation_depth
-                    ]
-                    multi_path_allowed = root == next_root
-                else:
-                    raise ValueError(
-                        f"{aggregation_depth} not supported for `aggregation_depth`"
-                    )
-
-        def _check_row_group_criteria(stat, next_stat):
-            if use_row_group_criteria:
-                return (next_stat["num-row-groups"] + stat["num-row-groups"]) <= int(
-                    split_row_groups
-                )
-            else:
-                return False
-
-        def _check_chunksize_criteria(stat, next_stat):
-            if use_chunksize_criteria:
-                return (
-                    next_stat["total_byte_size"] + stat["total_byte_size"]
-                ) <= chunksize
-            else:
-                return False
+        # Criteria for aggregating parts: The parts are members
+        # of the same "file_group"
+        multi_path_allowed = next_part[-1].get("file_group", True) == part.get(
+            "file_group", False
+        )
 
         stat["num-row-groups"] = stat.get("num-row-groups", 1)
         next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
 
-        if (same_path or multi_path_allowed) and (
-            _check_row_group_criteria(stat, next_stat)
-            or _check_chunksize_criteria(stat, next_stat)
+        if (
+            multi_path_allowed
+            and _partition_size_bytes_criteria(stat, next_stat)
+            and _partition_size_row_groups_criteria(part, next_row_group_count)
+            and _partition_size_files_criteria(next_part)
         ):
 
             # Update part list
             next_part.append(part)
+            next_row_group_count += part.get("row_groups", 1)
 
             # Update Statistics
-            next_stat["total_byte_size"] += stat["total_byte_size"]
-            next_stat["num-rows"] += stat["num-rows"]
-            next_stat["num-row-groups"] += stat["num-row-groups"]
-            for col, col_add in zip(next_stat["columns"], stat["columns"]):
-                if col["name"] != col_add["name"]:
-                    raise ValueError("Columns are different!!")
-                if "min" in col:
-                    col["min"] = min(col["min"], col_add["min"])
-                if "max" in col:
-                    col["max"] = max(col["max"], col_add["max"])
+            if stats:
+                stat["num-row-groups"] = stat.get("num-row-groups", 1)
+                next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
+                next_stat["total_byte_size"] += stat["total_byte_size"]
+                next_stat["num-rows"] += stat["num-rows"]
+                next_stat["num-row-groups"] += stat["num-row-groups"]
+                for col, col_add in zip(next_stat["columns"], stat["columns"]):
+                    if col["name"] != col_add["name"]:
+                        raise ValueError("Columns are different!!")
+                    if "min" in col:
+                        col["min"] = min(col["min"], col_add["min"])
+                    if "max" in col:
+                        col["max"] = max(col["max"], col_add["max"])
         else:
             parts_agg.append(next_part)
-            stats_agg.append(next_stat)
+            if stats:
+                stats_agg.append(next_stat)
+            next_row_group_count = part.get("row_groups", 1)
             next_part, next_stat = [part.copy()], stat.copy()
 
     parts_agg.append(next_part)
-    stats_agg.append(next_stat)
+    if stats:
+        stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
 

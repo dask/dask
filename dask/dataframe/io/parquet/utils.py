@@ -392,8 +392,9 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
-def _sort_and_analyze_paths(file_list, fs, root=False):
-    file_list = sorted(file_list, key=natural_sort_key)
+def _sort_and_analyze_paths(file_list, fs, sort=True, root=False):
+    if sort:
+        file_list = sorted(file_list, key=natural_sort_key)
     base, fns = _analyze_paths(file_list, fs, root=root)
     return file_list, base, fns
 
@@ -554,10 +555,10 @@ def _aggregate_stats(
 def _row_groups_to_parts(
     gather_statistics,
     split_row_groups,
-    aggregation_depth,
     file_row_groups,
     file_row_group_stats,
     file_row_group_column_stats,
+    file_aggregation_groups,
     stat_col_indices,
     make_part_func,
     make_part_kwargs,
@@ -571,7 +572,16 @@ def _row_groups_to_parts(
         # limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
         residual = 0
-        for filename, row_groups in file_row_groups.items():
+        file_row_groups_items = list(file_row_groups.items())
+        for file_i, (filename, row_groups) in enumerate(file_row_groups_items):
+            this_agg_group = file_aggregation_groups.get(filename, 0)
+            try:
+                leave_residual = this_agg_group == file_aggregation_groups.get(
+                    file_row_groups_items[file_i + 1][0], None
+                )
+            except IndexError:
+                leave_residual = False
+
             row_group_count = len(row_groups)
             if residual:
                 _rgs = [0] + list(range(residual, row_group_count, split_row_groups))
@@ -581,10 +591,13 @@ def _row_groups_to_parts(
             for i in _rgs:
 
                 i_end = i + split_row_groups
-                if aggregation_depth is True:
-                    if residual and i == 0:
-                        i_end = residual
-                        residual = 0
+                if residual and i == 0:
+                    i_end = residual
+                    residual = 0
+                if leave_residual:
+                    # Only leave residual if we know we will be
+                    # able to aggregate row-groups from this file
+                    # with row-groups from the next file
                     _residual = i_end - row_group_count
                     if _residual > 0:
                         residual = _residual
@@ -594,6 +607,7 @@ def _row_groups_to_parts(
                 part = make_part_func(
                     filename,
                     rg_list,
+                    this_agg_group,
                     **make_part_kwargs,
                 )
                 if part is None:
@@ -614,6 +628,7 @@ def _row_groups_to_parts(
             part = make_part_func(
                 filename,
                 row_groups,
+                file_aggregation_groups.get(filename, 0),
                 **make_part_kwargs,
             )
             if part is None:
@@ -630,39 +645,6 @@ def _row_groups_to_parts(
                 stats.append(stat)
 
     return parts, stats
-
-
-def _get_aggregation_depth(aggregate_files, partition_names):
-    # Use `aggregate_files` to set `aggregation_depth`
-    #
-    # Note that `partition_names` must be ordered. `True` means that we allow
-    # aggregation of any two files. `False` means that we will never aggregate
-    # files.  If a string is specified, it must be the name of a partition
-    # column, and the "partition depth" of that column will be used for
-    # aggregation.  Note that we always convert the string into the partition
-    # "depth" to simplify the aggregation logic.
-
-    # Summary of output `aggregation_depth` settings:
-    #
-    # True  : Free-for-all aggregation (any two files may be aggregated)
-    # False : No file aggregation allowed
-    # <int> : Allow aggregation within this partition-hierarchy depth
-
-    aggregation_depth = aggregate_files
-    if isinstance(aggregate_files, str):
-        if aggregate_files in partition_names:
-            # aggregate_files corresponds to a partition column. Reset the
-            # value of this variable to reflect the partition "depth" (in the
-            # range of 1 to the total number of partition levels)
-            aggregation_depth = len(partition_names) - partition_names.index(
-                aggregate_files
-            )
-        else:
-            raise ValueError(
-                f"{aggregate_files} is not a recognized directory partition."
-            )
-
-    return aggregation_depth
 
 
 def _set_metadata_task_size(metadata_task_size, fs):
@@ -738,7 +720,6 @@ def _set_gather_statistics(
     gather_statistics,
     chunksize,
     split_row_groups,
-    aggregation_depth,
     filter_columns,
     stat_columns,
 ):
@@ -748,11 +729,7 @@ def _set_gather_statistics(
 
     # If the user has specified `calculate_divisions=True`, then
     # we will be starting with `gather_statistics=True` here.
-    if (
-        chunksize
-        or (int(split_row_groups) > 1 and aggregation_depth)
-        or filter_columns.intersection(stat_columns)
-    ):
+    if chunksize or filter_columns.intersection(stat_columns):
         # Need to gather statistics if we are aggregating files
         # or filtering
         # NOTE: Should avoid gathering statistics when the agg
@@ -765,3 +742,46 @@ def _set_gather_statistics(
         gather_statistics = False
 
     return bool(gather_statistics)
+
+
+class FileGroupLookup:
+    """FileGroupLookup
+
+    A convenience wrapper for mapping file paths
+    to "file group" values. The primary purpose of
+    this wrapper is to automatically translate
+    general file-path keys into standardized tuples.
+    """
+
+    def __init__(self, path_depth=1, sep="/"):
+        self._mapping = {}
+        self._path_depth = path_depth
+        self._sep = sep
+
+    def __len__(self):
+        return len(self._mapping)
+
+    def __getitem__(self, path):
+        if not isinstance(path, str):
+            raise ValueError
+
+        key = tuple(path.split(self._sep)[-self._path_depth :])
+        return self._mapping[key]
+
+    def get(self, key, default):
+        try:
+            return self[key]
+        except KeyError:
+            return default
+
+    def __setitem__(self, path, group):
+        if not isinstance(path, str):
+            raise ValueError
+        if not isinstance(group, int):
+            raise ValueError
+
+        key = tuple(path.split(self._sep)[-self._path_depth :])
+        self._mapping[key] = group
+
+    def __call__(self, path):
+        return self[path]

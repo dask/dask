@@ -27,7 +27,7 @@ from dask.base import tokenize
 #########################
 from dask.dataframe.io.parquet.utils import (
     Engine,
-    _get_aggregation_depth,
+    FileGroupLookup,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _process_open_file_options,
@@ -126,25 +126,11 @@ class FastParquetEngine(Engine):
         base_path,
         has_metadata_file,
         chunksize,
-        aggregation_depth,
     ):
         """Organize row-groups by file."""
 
         # Get partitioning metadata
         pqpartitions = list(pf.cats)
-
-        # Fastparquet does not use a natural sorting
-        # order for partitioned data. Re-sort by path
-        if (
-            pqpartitions
-            and aggregation_depth
-            and pf.row_groups
-            and pf.row_groups[0].columns[0].file_path
-        ):
-            pf.row_groups = sorted(
-                pf.row_groups,
-                key=lambda x: natural_sort_key(x.columns[0].file_path),
-            )
 
         # Store types specified in pandas metadata
         pandas_type = {}
@@ -241,7 +227,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not (filters or chunksize or aggregation_depth):
+                        if not (filters or chunksize):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -269,7 +255,7 @@ class FastParquetEngine(Engine):
                         cmax_last[name] = cmax
                     else:
                         if (
-                            not (filters or chunksize or aggregation_depth)
+                            not (filters or chunksize)
                             and column.meta_data.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -338,6 +324,7 @@ class FastParquetEngine(Engine):
         cls,
         filename,
         rg_list,
+        file_aggregation_group,
         fs=None,
         pf=None,
         base_path=None,
@@ -351,12 +338,20 @@ class FastParquetEngine(Engine):
                 filename,
                 rg_list,
             )
-            part = {"piece": (real_row_groups,)}
+            part = {
+                "piece": (real_row_groups,),
+                "file_group": file_aggregation_group,
+                "row_groups": len(rg_list),
+            }
         else:
             # Get full path (empty strings should be ignored)
             full_path = fs.sep.join([p for p in [base_path, filename] if p != ""])
             row_groups = [rg[0] for rg in rg_list]  # Don't need global IDs
-            part = {"piece": (full_path, row_groups)}
+            part = {
+                "piece": (full_path, row_groups),
+                "file_group": file_aggregation_group,
+                "row_groups": len(rg_list),
+            }
 
         return part
 
@@ -375,6 +370,7 @@ class FastParquetEngine(Engine):
         ignore_metadata_file,
         metadata_task_size,
         parquet_file_extension,
+        sort_input_paths,
         kwargs,
     ):
 
@@ -474,10 +470,13 @@ class FastParquetEngine(Engine):
                 if not gather_statistics:
                     parts = paths.copy()
 
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(
+        # Create file-group-lookup mapping
+        file_group_lookup = cls._get_file_group_lookup(
+            pf if _metadata_exists else paths,
             aggregate_files,
-            list(pf.cats),
+            pf.file_scheme,
+            sort_input_paths,
+            sep=fs.sep,
         )
 
         # Ensure that there is no overlap between partition columns
@@ -508,8 +507,8 @@ class FastParquetEngine(Engine):
             "split_row_groups": split_row_groups,
             "chunksize": chunksize,
             "aggregate_files": aggregate_files,
-            "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
+            "file_group_lookup": file_group_lookup,
             "kwargs": {
                 "dataset": dataset_kwargs,
                 "read": read_kwargs,
@@ -607,21 +606,21 @@ class FastParquetEngine(Engine):
 
         # Collect necessary information from dataset_info
         fs = dataset_info["fs"]
-        parts = dataset_info["parts"]
         paths = dataset_info["paths"]
+        parts = dataset_info["parts"]
         filters = dataset_info["filters"]
         pf = dataset_info["pf"]
         split_row_groups = dataset_info["split_row_groups"]
         chunksize = dataset_info["chunksize"]
         gather_statistics = dataset_info["gather_statistics"]
         base_path = dataset_info["base"]
-        aggregation_depth = dataset_info["aggregation_depth"]
         index_cols = dataset_info["index_cols"]
         categories = dataset_info["categories"]
         dtypes = dataset_info["dtypes"]
         categories_dict = dataset_info["categories_dict"]
         has_metadata_file = dataset_info["has_metadata_file"]
         metadata_task_size = dataset_info["metadata_task_size"]
+        file_group_lookup = dataset_info["file_group_lookup"]
         kwargs = dataset_info["kwargs"]
 
         # Ensure metadata_task_size is set
@@ -647,7 +646,6 @@ class FastParquetEngine(Engine):
             gather_statistics,
             chunksize,
             split_row_groups,
-            aggregation_depth,
             filter_columns,
             set(stat_col_indices) | filter_columns,
         )
@@ -673,7 +671,14 @@ class FastParquetEngine(Engine):
             and isinstance(parts[0], str)
         ):
             return (
-                [{"piece": (full_path, None)} for full_path in parts],
+                [
+                    {
+                        "piece": (part, None),
+                        "file_group": file_group_lookup[part],
+                    }
+                    # Make sure parts are sorted by file-group
+                    for part in sorted(parts, key=file_group_lookup)
+                ],
                 [],
                 common_kwargs,
             )
@@ -685,31 +690,42 @@ class FastParquetEngine(Engine):
             "filters": filters,
             "dtypes": dtypes,
             "stat_col_indices": stat_col_indices,
-            "aggregation_depth": aggregation_depth,
             "chunksize": chunksize,
             "root_cats": pf.cats,
             "root_file_scheme": pf.file_scheme,
             "base_path": "" if base_path is None else base_path,
             "has_metadata_file": has_metadata_file,
+            "file_group_lookup": file_group_lookup,
         }
 
         if (
             has_metadata_file
             or metadata_task_size == 0
-            or metadata_task_size > len(paths)
+            or metadata_task_size > len(file_group_lookup)
         ):
             # Construct the output-partitioning plan on the
             # client process (in serial).  This means we have
             # a global _metadata file, or that `metadata_task_size`
             # is zero or larger than the number of files.
-            pf_or_paths = pf if has_metadata_file else paths
-            parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
+            # pf_or_paths = pf if has_metadata_file else paths
+            # parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
+
+            if has_metadata_file:
+                pf.row_groups = sorted(
+                    pf.row_groups,
+                    key=lambda x: file_group_lookup(x.columns[0].file_path),
+                )
+                parts, stats = cls._collect_file_parts(pf, dataset_info_kwargs)
+            else:
+                paths = sorted(paths, key=file_group_lookup)
+                parts, stats = cls._collect_file_parts(paths, dataset_info_kwargs)
 
         else:
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
             parts, stats = [], []
-            if paths:
+            paths = sorted(paths, key=file_group_lookup)
+            if len(paths):
                 # Build and compute a task graph to construct stats/parts
                 gather_parts_dsk = {}
                 name = "gather-pq-parts-" + tokenize(paths, dataset_info_kwargs)
@@ -740,7 +756,7 @@ class FastParquetEngine(Engine):
     @classmethod
     def _collect_file_parts(
         cls,
-        pf_or_files,
+        pf_or_paths,
         dataset_info_kwargs,
     ):
 
@@ -752,27 +768,27 @@ class FastParquetEngine(Engine):
         filters = dataset_info_kwargs["filters"]
         dtypes = dataset_info_kwargs["dtypes"]
         chunksize = dataset_info_kwargs["chunksize"]
-        aggregation_depth = dataset_info_kwargs["aggregation_depth"]
         base_path = dataset_info_kwargs.get("base_path", None)
         root_cats = dataset_info_kwargs.get("root_cats", None)
         root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
         has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+        file_group_lookup = dataset_info_kwargs["file_group_lookup"]
 
-        # Get ParquetFile
-        if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
-            # Construct local `ParquetFile` object
-            pf = ParquetFile(
-                pf_or_files,
+        # Construct local `ParquetFile` object
+        pf = (
+            pf_or_paths
+            if isinstance(pf_or_paths, ParquetFile)
+            else ParquetFile(
+                pf_or_paths,
                 open_with=fs.open,
                 root=base_path,
             )
-            # Update hive-partitioning to match global cats/scheme
-            pf.cats = root_cats or {}
-            if root_cats:
-                pf.file_scheme = root_file_scheme
-        else:
-            # We already have a ParquetFile object to work with
-            pf = pf_or_files
+        )
+
+        # Update hive-partitioning to match global cats/scheme
+        pf.cats = root_cats or {}
+        if root_cats:
+            pf.file_scheme = root_file_scheme
 
         # Organize row-groups by file
         (
@@ -791,17 +807,16 @@ class FastParquetEngine(Engine):
             base_path,
             has_metadata_file,
             chunksize,
-            aggregation_depth,
         )
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
-            aggregation_depth,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
+            file_group_lookup,
             stat_col_indices,
             cls._make_part,
             make_part_kwargs={
@@ -829,6 +844,7 @@ class FastParquetEngine(Engine):
         ignore_metadata_file=False,
         metadata_task_size=None,
         parquet_file_extension=None,
+        sort_input_paths=True,
         **kwargs,
     ):
 
@@ -846,6 +862,7 @@ class FastParquetEngine(Engine):
             ignore_metadata_file,
             metadata_task_size,
             parquet_file_extension,
+            sort_input_paths,
             kwargs,
         )
 
@@ -865,7 +882,6 @@ class FastParquetEngine(Engine):
         # should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
-            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 
@@ -1295,3 +1311,115 @@ class FastParquetEngine(Engine):
         # if appending, could skip this, but would need to check existence
         fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
+
+    @classmethod
+    def _get_file_group_lookup(
+        cls, pf_or_paths, aggregate_files, scheme, natural_sort, sep="/"
+    ):
+        # Create "file group" mapping
+        #
+        # We use the FileGroupLookup class to label the file
+        # group for every file in the dataset. A "file group"
+        # corresponds to an integer value. Two files belonging
+        # to the same "file group" may be aggregated into
+        # the same output partition.
+        #
+
+        # Check if aggregate_files corresponds to
+        # a dictionary or partition boundary
+        partition_boundary = None
+        if isinstance(aggregate_files, dict):
+
+            # Get path_depth (number of partitioned cols in each path)
+            if isinstance(pf_or_paths, ParquetFile):
+                path = (
+                    pf_or_paths.row_groups[0].columns[0].file_path
+                    if (pf_or_paths.row_groups and pf_or_paths.row_groups[0].columns)
+                    else None
+                )
+            else:
+                path = pf_or_paths[0] if pf_or_paths else None
+            path_depth = len(paths_to_cats([path], scheme).values()) if path else 0
+
+            # path -> file-group mapping is already known
+            file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
+            for k, v in aggregate_files.items():
+                file_group_lookup[k] = v
+            return file_group_lookup
+
+        elif isinstance(aggregate_files, (list, str)):
+            partition_boundary = aggregate_files
+
+        if isinstance(pf_or_paths, ParquetFile):
+            paths = {rg.columns[0].file_path for rg in pf_or_paths.row_groups}
+        else:
+            paths = pf_or_paths
+
+        # Get path_depth
+        # (number of partitioned cols in each path)
+        path_depth = (
+            len(paths_to_cats([next(iter(paths))], scheme).values()) if paths else 0
+        )
+
+        # Deal with "natural" sorting
+        if natural_sort:
+            paths = sorted(paths, key=natural_sort_key)
+
+        # Start by defining raw table mapping the index
+        # and values of paths, along with the key values
+        # of directory-partitioned columns
+        records = []
+        for i, path in enumerate(paths):
+            record = {"file_id": i, "path": path}
+            if partition_boundary:
+                # If a partition boundary is defined,
+                # we need to collect partition keys
+                # TODO: Do this faster?
+                keys = []
+                for k, v in paths_to_cats([path], scheme).items():
+                    keys.append((k, v[0]))
+                if keys:
+                    record.update(keys)
+            records.append(record)
+        if not records:
+            records = {"file_id": [], "path": []}
+        raw_lookup_table = pd.DataFrame(records)
+
+        # Use partition_boundary or aggregate_files
+        # to re-order raw_lookup_table, and assign
+        # a "file_group" column
+        if partition_boundary:
+            select = ["file_id"] + (
+                partition_boundary
+                if isinstance(partition_boundary, list)
+                else [partition_boundary]
+            )
+            parts_df = (
+                raw_lookup_table[select]
+                .groupby(partition_boundary)
+                .agg(list)
+                .reset_index(drop=True)["file_id"]
+            )
+
+            # Re-order by partition_boundary constraints
+            raw_lookup_table = raw_lookup_table.take(np.concatenate(parts_df.values))
+            agg_group = np.concatenate(
+                [np.repeat(i, l) for i, l in enumerate(parts_df.apply(len))]
+            )
+        elif not aggregate_files:
+            # NO file aggregation allowed
+            agg_group = np.arange(0, len(raw_lookup_table))
+        else:
+            # ALL file aggregation allowed
+            agg_group = np.repeat(0, len(raw_lookup_table))
+        result = (
+            raw_lookup_table[["path"]]
+            .assign(file_group=agg_group)
+            .set_index("path")["file_group"]
+        )
+
+        # Use `result` to populate a FileGroupLookup mapping
+        file_group_lookup = FileGroupLookup(path_depth + 1, sep=sep)
+        for k, v in result.items():
+            file_group_lookup[k] = v
+        return file_group_lookup
