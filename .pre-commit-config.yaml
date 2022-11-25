@@ -36,7 +36,7 @@ repos:
         additional_dependencies:
           # NOTE: autoupdate does not pick up flake8-bugbear since it is a transitive
           #  dependency. Make sure to update flake8-bugbear manually on a regular basis.
-          - flake8-bugbear==22.8.23
+          - flake8-bugbear==22.10.27
   - repo: https://github.com/codespell-project/codespell
     rev: v2.1.0
     hooks:
