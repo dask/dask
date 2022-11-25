@@ -3736,8 +3736,9 @@ def test_dir_filter(tmpdir, engine):
     )
     ddf = dask.dataframe.from_pandas(df, npartitions=1)
     ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
-    dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
-    assert all
+    ddf2 = dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
+    ddf2["year"] = ddf2.year.astype("int64")
+    assert_eq(ddf2, df[df.year == 2020])
 
 
 @PYARROW_MARK
