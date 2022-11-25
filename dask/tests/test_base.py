@@ -663,7 +663,7 @@ def test_is_dask_collection():
 
 def test_unpack_collections():
     class ANamedTuple(NamedTuple):
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
     a = delayed(1) + 5
     b = a + 1

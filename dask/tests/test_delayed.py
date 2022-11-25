@@ -3,7 +3,7 @@ import types
 from collections import namedtuple
 from dataclasses import dataclass, field
 from functools import partial
-from operator import add, matmul, setitem
+from operator import add, setitem
 from random import random
 from typing import NamedTuple
 
@@ -96,7 +96,7 @@ def test_delayed():
 
 def test_delayed_with_namedtuple():
     class ANamedTuple(NamedTuple):
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ANamedTuple(a=literal)})
@@ -135,7 +135,7 @@ def test_delayed_with_dataclass(cls):
 def test_delayed_with_dataclass_with_custom_init():
     @dataclass()
     class ADataClass:
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
         def __init__(self, b: int):
             self.a = b
@@ -152,7 +152,7 @@ def test_delayed_with_dataclass_with_custom_init():
 def test_delayed_with_dataclass_with_eager_custom_init():
     @dataclass()
     class ADataClass:
-        a: int
+        a: int  # type: ignore[annotation-unchecked]
 
         def __init__(self, b: int):
             self.a = b
@@ -170,8 +170,8 @@ def test_delayed_with_dataclass_with_eager_custom_init():
 def test_delayed_with_eager_dataclass_with_set_init_false_field():
     @dataclass
     class ADataClass:
-        a: int
-        b: int = field(init=False)
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
 
     def prep_dataclass(a):
         data = ADataClass(a=a)
@@ -191,8 +191,8 @@ def test_delayed_with_eager_dataclass_with_set_init_false_field():
 def test_delayed_with_dataclass_with_set_init_false_field():
     @dataclass
     class ADataClass:
-        a: int
-        b: int = field(init=False)
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
 
     literal = dask.delayed(3)
 
@@ -211,8 +211,8 @@ def test_delayed_with_dataclass_with_set_init_false_field():
 def test_delayed_with_dataclass_with_unset_init_false_field():
     @dataclass
     class ADataClass:
-        a: int
-        b: int = field(init=False)
+        a: int  # type: ignore[annotation-unchecked]
+        b: int = field(init=False)  # type: ignore[annotation-unchecked]
 
     literal = dask.delayed(3)
     with_class = delayed({"data": ADataClass(a=literal)})
@@ -239,16 +239,13 @@ def test_operators():
     assert (a > 2).compute()
     assert (a**2).compute() == 100
 
-    if matmul:
+    class dummy:
+        def __matmul__(self, other):
+            return 4
 
-        class dummy:
-            def __matmul__(self, other):
-                return 4
-
-        c = delayed(dummy())  # noqa
-        d = delayed(dummy())  # noqa
-
-        assert (eval("c @ d")).compute() == 4
+    c = delayed(dummy())
+    d = delayed(dummy())
+    assert (c @ d).compute() == 4
 
 
 def test_methods():

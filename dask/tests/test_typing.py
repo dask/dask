@@ -162,14 +162,10 @@ def assert_isinstance(coll: DaskCollection, protocol: Any) -> None:
 
 @pytest.mark.parametrize("protocol", [DaskCollection, HLGDaskCollection])
 def test_isinstance_core(protocol):
-    from dask.array import Array
-    from dask.bag import Bag
-    from dask.dataframe import DataFrame
-
-    arr: Array = da.ones(10)
-    bag: Bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
-    df: DataFrame = dds.timeseries()
-    dobj: Delayed = increment(2)
+    arr = da.ones(10)
+    bag = db.from_sequence([1, 2, 3, 4, 5], npartitions=2)
+    df = dds.timeseries()
+    dobj = increment(2)
 
     assert_isinstance(arr, protocol)
     assert_isinstance(bag, protocol)

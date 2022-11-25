@@ -4406,7 +4406,6 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    # Typing: https://github.com/python/mypy/issues/4125
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
@@ -4418,7 +4417,6 @@ class Index(Series):
             )
         return super().is_monotonic_increasing
 
-    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
     @property
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
