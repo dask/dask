@@ -275,7 +275,6 @@ def read_sql_table(
         )
         con = kwargs.pop("uri")
 
-    deprecated_args = False
     if not isinstance(table_name, str):
         raise TypeError(
             "`table_name` must be of type str, not " + str(type(table_name))
