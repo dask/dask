@@ -30,7 +30,10 @@ from dask.utils import getargspec, natural_sort_key
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
+from fsspec.core import expand_paths_if_needed, stringify_path
+from fsspec.implementations.arrow import ArrowFSWrapper
 from pyarrow import dataset as pa_ds
+from pyarrow import fs as pa_fs
 
 subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
@@ -40,6 +43,10 @@ del _pa_version
 #
 #  Helper Utilities
 #
+
+
+def _dataset_fs(fs):
+    return fs.fs if isinstance(fs, ArrowFSWrapper) else fs
 
 
 def _append_row_groups(metadata, md):
@@ -315,6 +322,56 @@ class ArrowDatasetEngine(Engine):
     #
 
     @classmethod
+    def get_filesystem(
+        cls,
+        urlpath,
+        filesystem=None,
+        storage_options=None,
+        open_file_options=None,
+    ):
+        if filesystem is None:
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                strpath = stringify_path(next(iter(urlpath)))
+            else:
+                strpath = stringify_path(urlpath)
+            if strpath.startswith("s3://") and not open_file_options:
+                filesystem = "arrow"
+            else:
+                filesystem = "fsspec"
+
+        if isinstance(filesystem, pa_fs.FileSystem) or filesystem == "arrow":
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            if filesystem == "arrow":
+                filesystem = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
+                    **(storage_options or {})
+                )
+                if isinstance(filesystem, pa_fs.LocalFileSystem):
+                    filesystem = "fsspec"
+
+            fs = ArrowFSWrapper(filesystem)
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+            return (
+                fs,
+                [fs._strip_protocol(u) for u in paths],
+                {"open_file_func": filesystem.open_input_file},
+            )
+
+        return Engine.get_filesystem(
+            urlpath,
+            filesystem=filesystem,
+            storage_options=storage_options,
+            open_file_options=open_file_options,
+        )
+
+    @classmethod
     def read_metadata(
         cls,
         fs,
@@ -534,7 +591,7 @@ class ArrowDatasetEngine(Engine):
         metadata_file_exists = False
         if append:
             # Extract metadata and get file offset if appending
-            ds = pa_ds.dataset(path, filesystem=fs, format="parquet")
+            ds = pa_ds.dataset(path, filesystem=_dataset_fs(fs), format="parquet")
             i_offset = len(ds.files)
             if i_offset > 0:
                 try:
@@ -809,7 +866,7 @@ class ArrowDatasetEngine(Engine):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
-                    filesystem=fs,
+                    filesystem=_dataset_fs(fs),
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
@@ -837,7 +894,7 @@ class ArrowDatasetEngine(Engine):
                 if not ignore_metadata_file:
                     ds = pa_ds.parquet_dataset(
                         meta_path,
-                        filesystem=fs,
+                        filesystem=_dataset_fs(fs),
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
@@ -851,7 +908,7 @@ class ArrowDatasetEngine(Engine):
         if ds is None:
             ds = pa_ds.dataset(
                 paths,
-                filesystem=fs,
+                filesystem=_dataset_fs(fs),
                 **_dataset_kwargs,
             )
 
@@ -1284,7 +1341,7 @@ class ArrowDatasetEngine(Engine):
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
-                    filesystem=fs,
+                    filesystem=_dataset_fs(fs),
                     **dataset_options,
                 ).get_fragments()
             )
@@ -1477,7 +1534,7 @@ class ArrowDatasetEngine(Engine):
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
+                    filesystem=_dataset_fs(fs),
                     **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())

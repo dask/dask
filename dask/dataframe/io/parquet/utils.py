@@ -1,6 +1,9 @@
 import re
+import warnings
 
 import pandas as pd
+from fsspec.core import expand_paths_if_needed, get_fs_token_paths, stringify_path
+from fsspec.spec import AbstractFileSystem
 
 from dask import config
 from dask.dataframe.io.utils import _is_local_fs
@@ -9,6 +12,45 @@ from dask.utils import natural_sort_key
 
 class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
+
+    @classmethod
+    def get_filesystem(
+        cls,
+        urlpath,
+        filesystem=None,
+        storage_options=None,
+        open_file_options=None,
+    ):
+        # Use fsspec to infer a filesystem by default
+        filesystem = filesystem or "fsspec"
+        if filesystem != "fsspec":
+
+            if not isinstance(filesystem, AbstractFileSystem):
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem. Got {type(filesystem)}"
+                )
+
+            if storage_options:
+                warnings.warn(f"Ignoring storage_options: {storage_options}")
+
+            if isinstance(urlpath, (list, tuple, set)):
+                if not urlpath:
+                    raise ValueError("empty urlpath sequence")
+                urlpath = [stringify_path(u) for u in urlpath]
+            else:
+                urlpath = [stringify_path(urlpath)]
+
+            paths = expand_paths_if_needed(urlpath, "rb", 1, filesystem, None)
+            return (
+                filesystem,
+                [filesystem._strip_protocol(u) for u in paths],
+                open_file_options or {},
+            )
+
+        fs, _, paths = get_fs_token_paths(
+            urlpath, mode="rb", storage_options=storage_options
+        )
+        return fs, paths, open_file_options or {}
 
     @classmethod
     def read_metadata(

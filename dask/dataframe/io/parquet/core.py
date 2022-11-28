@@ -180,6 +180,7 @@ def read_parquet(
     categories=None,
     index=None,
     storage_options=None,
+    filesystem=None,
     engine="auto",
     calculate_divisions=None,
     ignore_metadata_file=False,
@@ -431,6 +432,7 @@ def read_parquet(
         "filters": filters,
         "categories": categories,
         "index": index,
+        "filesystem": filesystem,
         "storage_options": storage_options,
         "engine": engine,
         "calculate_divisions": calculate_divisions,
@@ -460,7 +462,10 @@ def read_parquet(
     # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
-    fs, _, paths = get_fs_token_paths(path, mode="rb", storage_options=storage_options)
+    # Get fsspec-compatible filesystem and paths
+    fs, paths, kwargs["open_file_options"] = engine.get_filesystem(
+        path, filesystem, storage_options
+    )
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
