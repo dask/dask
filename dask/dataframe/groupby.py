@@ -2195,7 +2195,7 @@ class _GroupBy:
             self._slice,
             func,
             token=funcname(func),
-            *args,
+            *args,  # noqa: B026
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,
@@ -2281,7 +2281,7 @@ class _GroupBy:
             self._slice,
             func,
             token=funcname(func),
-            *args,
+            *args,  # noqa: B026
             group_keys=self.group_keys,
             **self.observed,
             **self.dropna,
