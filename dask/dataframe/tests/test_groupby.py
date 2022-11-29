@@ -3073,10 +3073,25 @@ def test_groupby_None_split_out_warns():
 
 
 @pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
-@pytest.mark.parametrize("slice_key", ["value", ["value"], ("value",)])
+@pytest.mark.parametrize(
+    "slice_key",
+    [
+        3,
+        "value",
+        ["value"],
+        ("value",),
+        pd.Index(["value"]),
+        pd.Series(["value"]),
+    ],
+)
 def test_groupby_slice_getitem(by, slice_key):
     pdf = pd.DataFrame(
-        {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
+        {
+            "key1": ["a", "b", "a"],
+            "key2": ["c", "c", "c"],
+            "value": [1, 2, 3],
+            3: [1, 2, 3],
+        }
     )
     ddf = dd.from_pandas(pdf, npartitions=3)
     expect = pdf.groupby(by)[slice_key].count()

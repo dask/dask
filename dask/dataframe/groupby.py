@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -34,6 +34,7 @@ from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
@@ -1250,9 +1251,18 @@ class _GroupBy:
 
         # Check if we can project columns
         projection = None
-        if isinstance(self._slice, (str, list, tuple)):
+        if (
+            np.isscalar(self._slice)
+            or isinstance(self._slice, (str, list, tuple))
+            or (
+                (is_index_like(self._slice) or is_series_like(self._slice))
+                and not is_dask_collection(self._slice)
+            )
+        ):
             projection = set(by_).union(
-                {self._slice} if isinstance(self._slice, str) else self._slice
+                {self._slice}
+                if (np.isscalar(self._slice) or isinstance(self._slice, str))
+                else self._slice
             )
             projection = [c for c in df.columns if c in projection]
 
