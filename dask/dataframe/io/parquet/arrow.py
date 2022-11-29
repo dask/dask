@@ -973,7 +973,7 @@ class ArrowDatasetEngine(Engine):
         columns = None
 
         # Use pandas metadata to update categories
-        pandas_metadata = _get_pandas_metadata(schema)
+        pandas_metadata = _get_pandas_metadata(schema) or {}
         if pandas_metadata:
             if categories is None:
                 categories = []
@@ -998,7 +998,15 @@ class ArrowDatasetEngine(Engine):
 
         # Use index specified in the pandas metadata if
         # the index column was not specified by the user
-        if index is None and index_names:
+        if (
+            index is None
+            and index_names
+            and (
+                # Only set to `[None]` if pandas metadata includes an index
+                index_names != [None]
+                or pandas_metadata.get("index_columns", None)
+            )
+        ):
             index = index_names
 
         # Set proper index for meta
