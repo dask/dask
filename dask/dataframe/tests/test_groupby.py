@@ -3075,3 +3075,15 @@ def test_groupby_None_split_out_warns():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.warns(FutureWarning, match="split_out=None"):
         ddf.groupby("a").agg({"b": "max"}, split_out=None)
+
+
+@pytest.mark.xfail(reason="Problems with multi-index support", raises=ValueError)
+def test_dataframe_multi_index():
+    # see https://github.com/dask/dask/issues/4845
+    df = pd.DataFrame({"ind_a": np.arange(100), "ind_b": 1, "var": "whatever"})
+    df = dd.from_pandas(df, npartitions=90)
+
+    # Fails because of a thread-safety issue. Only fails when grouping with
+    # two or more variables.
+    df["nr"] = df.groupby(["ind_a", "ind_b"]).cumcount()
+    assert len(df) == 100
