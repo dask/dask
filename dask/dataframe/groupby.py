@@ -1250,7 +1250,7 @@ class _GroupBy:
 
         # Check if we can project columns
         projection = None
-        if isinstance(self._slice, (str, list)):
+        if isinstance(self._slice, (str, list, tuple)):
             projection = set(by_).union(
                 {self._slice} if isinstance(self._slice, str) else self._slice
             )

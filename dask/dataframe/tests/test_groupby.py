@@ -3073,7 +3073,7 @@ def test_groupby_None_split_out_warns():
 
 
 @pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
-@pytest.mark.parametrize("slice_key", ["value", ["value"]])
+@pytest.mark.parametrize("slice_key", ["value", ["value"], ("value",)])
 def test_groupby_slice_getitem(by, slice_key):
     pdf = pd.DataFrame(
         {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
