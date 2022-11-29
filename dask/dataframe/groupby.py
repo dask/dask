@@ -531,7 +531,7 @@ def _mul_cols(df, cols):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
-    _df.index = [0] * len(_df)
+    _df.index = np.repeat(np.array([0], dtype="int64"), len(_df))
     return _df
 
 
