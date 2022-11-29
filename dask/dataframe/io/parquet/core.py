@@ -1354,12 +1354,34 @@ def process_statistics(
         # Convert str index to list
         index = [index] if isinstance(index, str) else index
 
+        # TODO: Remove `filters` criteria below after deprecation cycle.
+        # We can then remove the `sorted_col_names` logic and warning.
+        # See: https://github.com/dask/dask/pull/9661
+        process_columns = index if index and len(index) == 1 else None
+        if filters:
+            process_columns = None
+
         # Use statistics to define divisions
-        if index and len(index) == 1:
-            for sorted_column_info in sorted_columns(statistics, columns=index):
-                if sorted_column_info["name"] in index:
+        if process_columns or filters:
+            sorted_col_names = []
+            for sorted_column_info in sorted_columns(
+                statistics, columns=process_columns
+            ):
+                if index and sorted_column_info["name"] in index:
                     divisions = sorted_column_info["divisions"]
                     break
+                else:
+                    # Filtered columns may also be sorted
+                    sorted_col_names.append(sorted_column_info["name"])
+
+            if index is None and sorted_col_names:
+                assert bool(filters)  # Should only get here when filtering
+                warnings.warn(
+                    f"Sorted columns detected: {sorted_col_names}\n"
+                    f"Use the `index` argument to set a sorted column as your "
+                    f"index to create a DataFrame collection with known `divisions`.",
+                    UserWarning,
+                )
 
     divisions = divisions or (None,) * (len(parts) + 1)
     return parts, divisions, index
