@@ -244,6 +244,7 @@ def test_dataframe_cull_key_dependencies(op):
     # "complex" DataFrame Layers
     # See: https://github.com/dask/dask/pull/9267
 
+    pytest.importorskip("dask.dataframe")
     datasets = pytest.importorskip("dask.datasets")
 
     result = op(datasets.timeseries(end="2000-01-15")).count()
