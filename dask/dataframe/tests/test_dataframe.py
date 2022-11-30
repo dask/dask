@@ -5387,6 +5387,15 @@ def test_dot():
         dask_s1.dot(da.array([1, 2, 3, 4]))
 
 
+def test_dot_dataframe_notimplemented():
+    A = pd.DataFrame(np.arange(12).reshape(3, 4))
+    B = pd.DataFrame(np.arange(12).reshape(4, 3))
+    dA = dd.from_pandas(A, npartitions=2)
+    dB = dd.from_pandas(B, npartitions=2)
+    with pytest.raises(NotImplementedError):
+        dA.dot(dB, meta=pd.DataFrame(columns=dB.columns))
+
+
 def test_dot_nan():
     # Test that nan inputs match pandas' behavior
     s1 = pd.Series([1, 2, 3, 4])

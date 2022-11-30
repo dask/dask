@@ -3452,6 +3452,9 @@ Dask Name: {name}, {layers}"""
         if not isinstance(other, _Frame):
             raise TypeError("The second operand must be a dask array or dask dataframe")
 
+        if isinstance(self, DataFrame):
+            raise NotImplementedError("DataFrame.dot is not implemented yet, sorry!")
+
         if isinstance(other, DataFrame):
             s = self.map_partitions(M.dot, other, token="dot", meta=meta)
             return s.groupby(by=s.index).apply(
