@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -34,6 +34,7 @@ from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
@@ -1245,9 +1246,29 @@ class _GroupBy:
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
+        # slicing key applied to _GroupBy instance
+        self._slice = slice
+
+        # Check if we can project columns
+        projection = None
+        if (
+            np.isscalar(self._slice)
+            or isinstance(self._slice, (str, list, tuple))
+            or (
+                (is_index_like(self._slice) or is_series_like(self._slice))
+                and not is_dask_collection(self._slice)
+            )
+        ):
+            projection = set(by_).union(
+                {self._slice}
+                if (np.isscalar(self._slice) or isinstance(self._slice, str))
+                else self._slice
+            )
+            projection = [c for c in df.columns if c in projection]
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
-        self.obj = df
+        self.obj = df[projection] if projection else df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
         self.sort = sort
@@ -1261,9 +1282,6 @@ class _GroupBy:
             raise NotImplementedError(
                 "The grouped object and 'by' of the groupby must have the same divisions."
             )
-
-        # slicing key applied to _GroupBy instance
-        self._slice = slice
 
         if isinstance(self.by, list):
             by_meta = [
