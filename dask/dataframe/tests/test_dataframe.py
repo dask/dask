@@ -717,6 +717,30 @@ def test_cumulative():
     assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
     assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
 
+    # With duplicate columns
+    df = pd.DataFrame(np.random.randn(100, 3), columns=list("abb"))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(df.cumsum(), ddf.cumsum())
+    assert_eq(df.cummin(), ddf.cummin())
+    assert_eq(df.cummax(), ddf.cummax())
+    assert_eq(df.cumprod(), ddf.cumprod())
+
+    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
+    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
+    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
+    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+
+    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
+    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
+    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
+    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+
+    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
+    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
+    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
+    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+
 
 @pytest.mark.parametrize(
     "func",
