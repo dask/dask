@@ -21,8 +21,14 @@ from dask.dataframe.core import (
     no_default,
     partitionwise_graph,
 )
+from dask.dataframe.io import from_pandas
 from dask.dataframe.multi import _maybe_align_partitions
-from dask.dataframe.utils import insert_meta_param_description
+from dask.dataframe.utils import (
+    insert_meta_param_description,
+    is_dask_collection,
+    is_dataframe_like,
+    is_series_like,
+)
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, apply, derived_from, funcname, has_keyword
@@ -147,9 +153,14 @@ def map_overlap(
     --------
     dd.DataFrame.map_overlap
     """
-    args = (df,) + args
 
-    dfs = [df for df in args if isinstance(df, _Frame)]
+    df = (
+        from_pandas(df, 1)
+        if (is_series_like(df) or is_dataframe_like(df)) and not is_dask_collection(df)
+        else df
+    )
+
+    args = (df,) + args
 
     if isinstance(before, str):
         before = pd.to_timedelta(before)
@@ -157,7 +168,7 @@ def map_overlap(
         after = pd.to_timedelta(after)
 
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
-        if not is_datetime64_any_dtype(dfs[0].index._meta_nonempty.inferred_type):
+        if not is_datetime64_any_dtype(df.index._meta_nonempty.inferred_type):
             raise TypeError(
                 "Must have a `DatetimeIndex` when using string offset "
                 "for `before` and `after`"
@@ -191,6 +202,8 @@ def map_overlap(
                 f"{e}. If you don't want the partitions to be aligned, and are "
                 "calling `map_overlap` directly, pass `align_dataframes=False`."
             ) from e
+
+    dfs = [df for df in args if isinstance(df, _Frame)]
 
     meta = _get_meta_map_partitions(args, dfs, func, kwargs, meta, parent_meta)
 
