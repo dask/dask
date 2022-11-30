@@ -4,6 +4,7 @@ from itertools import product
 import numpy as np
 from tlz import curry
 
+from dask.array.backends import array_creation_dispatch
 from dask.array.core import Array, normalize_chunks
 from dask.array.utils import meta_from_array
 from dask.base import tokenize
@@ -162,9 +163,22 @@ def broadcast_trick(func):
     return inner
 
 
-ones = w(broadcast_trick(np.ones_like), dtype="f8")
-zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
-empty = w(broadcast_trick(np.empty_like), dtype="f8")
+ones = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="ones",
+)(w(broadcast_trick(np.ones_like), dtype="f8"))
+
+
+zeros = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="zeros",
+)(w(broadcast_trick(np.zeros_like), dtype="f8"))
+
+
+empty = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="empty",
+)(w(broadcast_trick(np.empty_like), dtype="f8"))
 
 
 w_like = wrap(wrap_func_like)
@@ -175,14 +189,23 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full_like))
+_full = array_creation_dispatch.register_inplace(
+    backend="numpy",
+    name="full",
+)(w(broadcast_trick(np.full_like)))
 _full_like = w_like(np.full, func_like=np.full_like)
 
+
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
-_full.__doc__ = _full.__doc__.replace(
-    "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
-    "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
-)
+if _full.__doc__ is not None:
+    _full.__doc__ = _full.__doc__.replace(
+        "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+        "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+    )
+    _full.__doc__ = _full.__doc__.replace(
+        ">>> np.full_like(y, [0, 0, 255])",
+        ">>> np.full_like(y, [0, 0, 255])  # doctest: +NORMALIZE_WHITESPACE",
+    )
 
 
 def full(shape, fill_value, *args, **kwargs):

@@ -1,4 +1,5 @@
 properties:
+
   temporary-directory:
     type:
     - string
@@ -37,13 +38,21 @@ properties:
     type: object
     properties:
 
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported dataframe-creation functions.
+          Default is "pandas".
+
       shuffle-compression:
         type:
         - string
         - "null"
         description: |
           Compression algorithm used for on disk-shuffling. Partd, the library used
-          for compression supports ZLib, BZ2, SNAPPY, and BLOSC
+          for compression supports ZLib, BZ2, and SNAPPY
 
       parquet:
         type: object
@@ -66,6 +75,14 @@ properties:
   array:
     type: object
     properties:
+
+      backend:
+        type:
+        - string
+        - "null"
+        description: |
+          Backend to use for supported array-creation functions.
+          Default is "numpy".
 
       svg:
         type: object

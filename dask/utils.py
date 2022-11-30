@@ -623,11 +623,12 @@ class Dispatch:
             # Is a lazy registration function present?
             toplevel, _, _ = cls2.__module__.partition(".")
             try:
-                register = self._lazy.pop(toplevel)
+                register = self._lazy[toplevel]
             except KeyError:
                 pass
             else:
                 register()
+                self._lazy.pop(toplevel, None)
                 return self.dispatch(cls)  # recurse
         raise TypeError(f"No dispatch for {cls}")
 
@@ -2020,7 +2021,10 @@ def show_versions() -> None:
     from platform import uname
     from sys import stdout, version_info
 
-    from distributed import __version__ as distributed_version
+    try:
+        from distributed import __version__ as distributed_version
+    except ImportError:
+        distributed_version = None
 
     from dask import __version__ as dask_version
 

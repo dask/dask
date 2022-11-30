@@ -3,6 +3,7 @@ import contextlib
 import operator
 import pickle
 import warnings
+from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -14,6 +15,7 @@ from dask.dataframe import _compat
 from dask.dataframe._compat import (
     PANDAS_GT_110,
     PANDAS_GT_130,
+    PANDAS_GT_140,
     PANDAS_GT_150,
     check_numeric_only_deprecation,
     tm,
@@ -30,6 +32,7 @@ if dd._compat.PANDAS_GT_110:
 AGG_FUNCS = [
     "sum",
     "mean",
+    "median",
     "min",
     "max",
     "count",
@@ -292,6 +295,11 @@ def test_groupby_on_index(scheduler):
     ddf2 = ddf.set_index("a")
     pdf2 = pdf.set_index("a")
     assert_eq(ddf.groupby("a").b.mean(), ddf2.groupby(ddf2.index).b.mean())
+
+    # Check column projection for `groupby().agg`
+    agg = ddf2.groupby("a").agg({"b": "mean"})
+    assert_eq(ddf.groupby("a").b.mean(), agg.b)
+    assert hlg_layer(agg.dask, "getitem")
 
     def func(df):
         return df.assign(b=df.b - df.b.mean())
@@ -1000,7 +1008,8 @@ def test_aggregate__single_element_groups(agg_func):
     if spec in {"mean", "var"}:
         expected = expected.astype(float)
 
-    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec))
+    shuffle = {"shuffle": "tasks"} if agg_func == "median" else {}
+    assert_eq(expected, ddf.groupby(["a", "d"]).agg(spec, **shuffle))
 
 
 def test_aggregate_build_agg_args__reuse_of_intermediates():
@@ -1205,6 +1214,29 @@ def test_shuffle_aggregate_defaults(shuffle_method):
     # If split_out > 1, default to shuffling.
     dsk = ddf.groupby("a", sort=False).agg(spec, split_out=2, split_every=1).dask
     assert any("shuffle" in l for l in dsk.layers)
+
+
+@pytest.mark.parametrize("spec", [{"c": "median"}, {"b": np.median, "c": np.max}])
+@pytest.mark.parametrize("keys", ["a", ["a", "d"]])
+def test_aggregate_median(spec, keys, shuffle_method):
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
+            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
+            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
+            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
+        },
+        columns=["c", "b", "a", "d"],
+    )
+    ddf = dd.from_pandas(pdf, npartitions=10)
+    actual = ddf.groupby(keys).aggregate(spec, shuffle=shuffle_method)
+    expected = pdf.groupby(keys).aggregate(spec)
+    assert_eq(actual, expected)
+
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).aggregate(spec, shuffle=False)
+    with pytest.raises(ValueError, match="must use shuffl"):
+        ddf.groupby(keys).median(shuffle=False)
 
 
 @pytest.mark.parametrize("axis", [0, 1])
@@ -2871,6 +2903,47 @@ def test_groupby_aggregate_categorical_observed(
     )
 
 
+@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.parametrize("shuffle", [True, False])
+def test_dataframe_named_agg(shuffle):
+    df = pd.DataFrame(
+        {
+            "a": [1, 1, 2, 2],
+            "b": [1, 2, 5, 6],
+            "c": [6, 3, 6, 7],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby("a").agg(
+        x=pd.NamedAgg("b", aggfunc="sum"),
+        y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
+    )
+    actual = ddf.groupby("a").agg(
+        shuffle=shuffle,
+        x=pd.NamedAgg("b", aggfunc="sum"),
+        y=pd.NamedAgg("c", aggfunc=partial(np.std, ddof=1)),
+    )
+    assert_eq(expected, actual)
+
+
+@pytest.mark.skipif(not PANDAS_GT_140, reason="requires pandas >= 1.4.0")
+@pytest.mark.parametrize("shuffle", [True, False])
+@pytest.mark.parametrize("agg", ["count", np.mean, partial(np.var, ddof=1)])
+def test_series_named_agg(shuffle, agg):
+    df = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    expected = df.groupby("a").b.agg(c=agg, d="sum")
+    actual = ddf.groupby("a").b.agg(shuffle=shuffle, c=agg, d="sum")
+    assert_eq(expected, actual)
+
+
 def test_empty_partitions_with_value_counts():
     # https://github.com/dask/dask/issues/7065
     df = pd.DataFrame(
@@ -3002,3 +3075,34 @@ def test_groupby_None_split_out_warns():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.warns(FutureWarning, match="split_out=None"):
         ddf.groupby("a").agg({"b": "max"}, split_out=None)
+
+
+@pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
+@pytest.mark.parametrize(
+    "slice_key",
+    [
+        3,
+        "value",
+        ["value"],
+        ("value",),
+        pd.Index(["value"]),
+        pd.Series(["value"]),
+    ],
+)
+def test_groupby_slice_getitem(by, slice_key):
+    pdf = pd.DataFrame(
+        {
+            "key1": ["a", "b", "a"],
+            "key2": ["c", "c", "c"],
+            "value": [1, 2, 3],
+            3: [1, 2, 3],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    expect = pdf.groupby(by)[slice_key].count()
+    got = ddf.groupby(by)[slice_key].count()
+
+    # We should have a getitem layer, enabling
+    # column projection after read_parquet etc
+    assert hlg_layer(got.dask, "getitem")
+    assert_eq(expect, got)

@@ -26,6 +26,7 @@ from pandas.api.types import (
 from dask.base import tokenize
 from dask.bytes import read_bytes
 from dask.core import flatten
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import clear_known_categories
@@ -115,7 +116,8 @@ class CSVFunctionWrapper(DataFrameIOFunction):
         write_header = False
         rest_kwargs = self.kwargs.copy()
         if not is_first:
-            write_header = True
+            if rest_kwargs.get("names", None) is None:
+                write_header = True
             rest_kwargs.pop("skiprows", None)
             if rest_kwargs.get("header", 0) is not None:
                 rest_kwargs.pop("header", None)
@@ -771,7 +773,12 @@ def make_reader(reader, reader_name, file_type):
     return read
 
 
-read_csv = make_reader(pd.read_csv, "read_csv", "CSV")
+read_csv = dataframe_creation_dispatch.register_inplace(
+    backend="pandas",
+    name="read_csv",
+)(make_reader(pd.read_csv, "read_csv", "CSV"))
+
+
 read_table = make_reader(pd.read_table, "read_table", "delimited")
 read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 

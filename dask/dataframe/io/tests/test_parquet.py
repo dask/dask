@@ -3130,6 +3130,23 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
 
 
+@PYARROW_MARK
+def test_arrow_to_pandas(tmpdir, engine):
+    # Test that dtypes are correct when arrow_to_pandas is used
+    # (See: https://github.com/dask/dask/issues/9664)
+
+    df = pd.DataFrame({"A": [pd.Timestamp("2000-01-01")]})
+    path = str(tmpdir.join("test.parquet"))
+    df.to_parquet(path, engine=engine)
+
+    arrow_to_pandas = {"timestamp_as_object": True}
+    expect = pq.ParquetFile(path).read().to_pandas(**arrow_to_pandas)
+    got = dd.read_parquet(path, engine="pyarrow", arrow_to_pandas=arrow_to_pandas)
+
+    assert_eq(expect, got)
+    assert got.A.dtype == got.compute().A.dtype
+
+
 @pytest.mark.parametrize(
     "write_cols",
     [["part", "col"], ["part", "kind", "col"]],
@@ -3155,13 +3172,17 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
     else:
         path = str(tmpdir)
 
-    if write_cols == ["part", "kind", "col"]:
+    expect = pd.concat([_df1, _df2], ignore_index=True)
+    if engine == "fastparquet" and fastparquet_version > parse_version("0.8.3"):
+        # columns will change order and partitions will be categorical
         result = dd.read_parquet(path, engine=engine)
-        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert result.compute().reset_index(drop=True).to_dict() == expect.to_dict()
+    elif write_cols == ["part", "kind", "col"]:
+        result = dd.read_parquet(path, engine=engine)
         assert_eq(result, expect, check_index=False)
     else:
         # For now, partial overlap between partition columns and
-        # real columns is not allowed
+        # real columns is not allowed for pyarrow or older fastparquet
         with pytest.raises(ValueError):
             dd.read_parquet(path, engine=engine)
 
@@ -3715,8 +3736,9 @@ def test_dir_filter(tmpdir, engine):
     )
     ddf = dask.dataframe.from_pandas(df, npartitions=1)
     ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
-    dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
-    assert all
+    ddf2 = dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
+    ddf2["year"] = ddf2.year.astype("int64")
+    assert_eq(ddf2, df[df.year == 2020])
 
 
 @PYARROW_MARK

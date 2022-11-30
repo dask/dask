@@ -377,7 +377,7 @@ def test_read_bytes_delimited(s3, blocksize, s3so):
 
 @pytest.mark.parametrize(
     "fmt,blocksize",
-    [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr],  # type: ignore
+    [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr],
 )
 def test_compression(s3, fmt, blocksize, s3so):
     if fmt not in compress:

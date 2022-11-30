@@ -717,6 +717,30 @@ def test_cumulative():
     assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
     assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
 
+    # With duplicate columns
+    df = pd.DataFrame(np.random.randn(100, 3), columns=list("abb"))
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(df.cumsum(), ddf.cumsum())
+    assert_eq(df.cummin(), ddf.cummin())
+    assert_eq(df.cummax(), ddf.cummax())
+    assert_eq(df.cumprod(), ddf.cumprod())
+
+    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
+    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
+    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
+    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+
+    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
+    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
+    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
+    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+
+    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
+    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
+    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
+    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+
 
 @pytest.mark.parametrize(
     "func",
@@ -2142,15 +2166,14 @@ def test_repartition_on_pandas_dataframe():
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5, 6] * 10, "y": list("abdabd") * 10},
-        index=pd.Series([10, 20, 30, 40, 50, 60] * 10, dtype=dtype),
+        index=pd.Series(list(range(0, 30)) * 2, dtype=dtype),
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(k)
     assert_eq(a, b)
     assert b.npartitions == k
-    parts = dask.get(b.dask, b.__dask_keys__())
-    assert all(map(len, parts))
+    assert all(map(len, b.partitions))
 
 
 @pytest.mark.parametrize("use_index", [True, False])
@@ -3202,6 +3225,23 @@ def test_cov():
     assert res._name != res3._name
 
 
+@pytest.mark.gpu
+def test_cov_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.cov()
+    res2 = ddf.cov(split_every=2)
+    sol = df.cov()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.cov()._name
+    assert res._name != res2._name
+
+
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
@@ -3247,6 +3287,23 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method="spearman"))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+@pytest.mark.gpu
+def test_corr_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.corr()
+    res2 = ddf.corr(split_every=2)
+    sol = df.corr()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.corr()._name
+    assert res._name != res2._name
 
 
 def test_corr_same_name():
@@ -3792,11 +3849,7 @@ def test_index_nulls(null_value):
     df = pd.DataFrame(
         {"numeric": [1, 2, 3, 4], "non_numeric": ["foo", "bar", "foo", "bar"]}
     )
-    # an object column all set to nulls fails
-    ddf = dd.from_pandas(df, npartitions=2).assign(**{"non_numeric": null_value})
-    with pytest.raises(NotImplementedError, match="presence of nulls"):
-        ddf.set_index("non_numeric")
-    # an object column with only some nulls also fails
+    # an object column with only some nulls fails
     ddf = dd.from_pandas(df, npartitions=2)
     with pytest.raises(NotImplementedError, match="presence of nulls"):
         ddf.set_index(ddf["non_numeric"].map({"foo": "foo", "bar": null_value}))

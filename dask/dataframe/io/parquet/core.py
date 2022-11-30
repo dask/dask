@@ -12,6 +12,7 @@ from packaging.version import parse as parse_version
 import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
+from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
@@ -171,6 +172,7 @@ class ToParquetFunctionWrapper:
         )
 
 
+@dataframe_creation_dispatch.register_inplace("pandas")
 def read_parquet(
     path,
     columns=None,
@@ -259,7 +261,7 @@ def read_parquet(
         metadata. Note that ``calculate_divisions=True`` may be extremely slow
         when no global ``_metadata`` file is present, especially when reading
         from remote storage. Set this to ``True`` only when known divisions
-        are needed for your workload (see :ref:`dataframe-design-partitions).
+        are needed for your workload (see :ref:`dataframe-design-partitions`).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
         If ``True``, or if the global ``_metadata`` file is missing, the parquet
