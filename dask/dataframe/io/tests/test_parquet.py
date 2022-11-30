@@ -661,6 +661,14 @@ def test_use_nullable_dtypes(tmp_path, engine):
         assert_eq(df, ddf2, check_index=False)
 
 
+@pytest.mark.xfail(
+    not PANDAS_GT_130,
+    reason=(
+        "Known bug in pandas. "
+        "See https://issues.apache.org/jira/browse/ARROW-13413 "
+        "and https://github.com/pandas-dev/pandas/pull/41052."
+    ),
+)
 def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
     # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
     # Ensure `types_mapper` takes priority.
