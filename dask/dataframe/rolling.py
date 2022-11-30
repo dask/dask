@@ -24,10 +24,10 @@ from dask.dataframe.core import (
 from dask.dataframe.io import from_pandas
 from dask.dataframe.multi import _maybe_align_partitions
 from dask.dataframe.utils import (
-    insert_meta_param_description
+    insert_meta_param_description,
     is_dask_collection,
     is_dataframe_like,
-    is_series_like
+    is_series_like,
 )
 from dask.delayed import unpack_collections
 from dask.highlevelgraph import HighLevelGraph
