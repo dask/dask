@@ -17,6 +17,7 @@ from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import (
     DataFrame,
     Index,
+    PartitionMetadata,
     Series,
     _concat,
     _emulate,
@@ -28,6 +29,7 @@ from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
     insert_meta_param_description,
+    is_dataframe_like,
     is_series_like,
     make_meta,
 )
@@ -298,11 +300,34 @@ def from_pandas(
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
-    dsk = {
-        (name, i): data.iloc[start:stop]
-        for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-    }
-    return new_dd_object(dsk, name, data, divisions)
+    # Build graph and collect statistics
+    dsk = {}
+    partition_lens = []
+    column_statistics: dict = (
+        {col: {"min": [], "max": []} for col in data.columns}
+        if is_dataframe_like(data)
+        else {}
+    )
+    for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:])):
+        dsk[(name, i)] = data.iloc[start:stop]
+        partition_lens.append(len(dsk[(name, i)]))
+        for col in list(column_statistics.keys()):
+            try:
+                column_statistics[col]["min"].append(dsk[(name, i)][col].min())
+                column_statistics[col]["max"].append(dsk[(name, i)][col].max())
+            except TypeError:
+                # Min or max failed, drop this column's stats
+                column_statistics.pop(col)
+
+    # Define partition metadata
+    partition_metadata = PartitionMetadata(
+        meta=data,
+        divisions=divisions,
+        partition_lens=tuple(partition_lens),
+        column_statistics=column_statistics,
+    )
+
+    return new_dd_object(dsk, name, partition_metadata, divisions)
 
 
 @dataframe_creation_dispatch.register_inplace("pandas")
@@ -1003,6 +1028,12 @@ def from_map(
         inputs = list(zip(*iterables))
         packed = True
 
+    if isinstance(meta, PartitionMetadata):
+        partition_metadata = meta
+        meta = partition_metadata.meta
+    else:
+        partition_metadata = None
+
     # Define collection name
     label = label or funcname(func)
     token = token or tokenize(
@@ -1069,9 +1100,12 @@ def from_map(
     )
 
     # Return new DataFrame-collection object
-    divisions = divisions or [None] * (len(inputs) + 1)
+    partition_metadata = partition_metadata or PartitionMetadata(
+        meta=meta,
+        divisions=divisions or (None,) * (len(inputs) + 1),
+    )
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
-    return new_dd_object(graph, name, meta, divisions)
+    return new_dd_object(graph, name, partition_metadata, None)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

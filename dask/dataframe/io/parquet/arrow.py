@@ -369,6 +369,55 @@ class ArrowDatasetEngine(Engine):
         return cls == ArrowDatasetEngine
 
     @classmethod
+    def read_partition_stats(cls, part, columns, fs):
+
+        if not isinstance(part, list):
+            part = [part]
+
+        column_stats = {}
+        num_rows = 0
+        for p in part:
+            piece = p["piece"]
+            path = piece[0]
+            row_groups = piece[1]
+            if row_groups == [None]:
+                row_groups = None
+            with fs.open(path, default_cache="none") as f:
+                md = pq.ParquetFile(f).metadata
+            if row_groups is None:
+                row_groups = list(range(md.num_row_groups))
+            for rg in row_groups:
+                row_group = md.row_group(rg)
+                num_rows += row_group.num_rows
+                for i in range(row_group.num_columns):
+                    col = row_group.column(i)
+                    name = col.path_in_schema
+                    if name in columns:
+                        if col.statistics and col.statistics.has_min_max:
+                            if name in column_stats:
+                                column_stats[name]["min"] = min(
+                                    column_stats[name]["min"], col.statistics.min
+                                )
+                                column_stats[name]["max"] = max(
+                                    column_stats[name]["max"], col.statistics.max
+                                )
+                            else:
+                                column_stats[name] = {
+                                    "min": col.statistics.min,
+                                    "max": col.statistics.max,
+                                }
+
+        column_stats_list = [
+            {
+                "name": name,
+                "min": column_stats[name]["min"],
+                "max": column_stats[name]["max"],
+            }
+            for name in column_stats.keys()
+        ]
+        return {"num-rows": num_rows, "columns": column_stats_list}
+
+    @classmethod
     def read_partition(
         cls,
         fs,

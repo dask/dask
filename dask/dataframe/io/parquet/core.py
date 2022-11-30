@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
+from functools import partial
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -13,7 +14,7 @@ import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
-from dask.dataframe.core import DataFrame, Scalar
+from dask.dataframe.core import DataFrame, PartitionMetadata, Scalar
 from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
@@ -502,7 +503,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index, index_in_columns, processed_stats = process_statistics(
         parts,
         statistics,
         filters,
@@ -527,11 +528,13 @@ def read_parquet(
         if meta.index.name == NONE_LABEL:
             meta.index.name = None
 
+    empty = False
     if len(divisions) < 2:
         # empty dataframe - just use meta
         divisions = (None, None)
         io_func = lambda x: x
         parts = [meta]
+        empty = True
     else:
         # Use IO function wrapper
         io_func = ParquetFunctionWrapper(
@@ -554,12 +557,28 @@ def read_parquet(
     else:
         ctx = contextlib.nullcontext()
 
+    # Define partition_metadata, using callback if necessary
+    _partition_lens, _column_stats = None, {}
+    if not empty and hasattr(engine, "read_partition_stats"):
+        lazy_columns = columns + (index or [])
+        _func = partial(_lazy_pq_partition_stats, parts, lazy_columns, engine, fs)
+        _partition_lens, _column_stats = _func, {k: _func for k in set(lazy_columns)}
+    if processed_stats:
+        _partition_lens, _known_column_stats = _pq_partition_stats(processed_stats)
+        _column_stats.update(_known_column_stats)
+    partition_metadata = PartitionMetadata(
+        meta=meta,
+        divisions=divisions,
+        partition_lens=_partition_lens,
+        column_statistics=_column_stats,
+    )
+
     with ctx:
         # Construct the output collection with from_map
         return from_map(
             io_func,
             parts,
-            meta=meta,
+            meta=partition_metadata,
             divisions=divisions,
             label="read-parquet",
             token=tokenize(path, **input_kwargs),
@@ -1397,7 +1416,7 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index, index_in_columns, statistics
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
@@ -1553,6 +1572,39 @@ def aggregate_row_groups(
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
+
+
+def _lazy_pq_partition_stats(
+    parts,
+    available_columns,
+    engine,
+    fs,
+    columns=None,
+):
+    columns = [c for c in columns if c in available_columns] if columns else []
+    processed_stats = [engine.read_partition_stats(part, columns, fs) for part in parts]
+    return _pq_partition_stats(processed_stats)
+
+
+def _pq_partition_stats(stats):
+    column_stats = {}
+    partition_lens = []
+    for stat in stats:
+        # Partition lengths
+        num_rows = stat.get("num-rows", None)
+        if num_rows is None:
+            partition_lens = None
+        elif partition_lens is not None:
+            partition_lens.append(num_rows)
+        # Column statistics
+        columns = stat.get("columns", [])
+        for col_stats in columns:
+            if col_stats["name"] not in column_stats:
+                column_stats[col_stats["name"]] = {"min": [], "max": []}
+            column_stats[col_stats["name"]]["min"].append(col_stats["min"])
+            column_stats[col_stats["name"]]["max"].append(col_stats["max"])
+
+    return tuple(partition_lens), dict(column_stats)
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

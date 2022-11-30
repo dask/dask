@@ -16,7 +16,14 @@ from pandas.api.types import is_numeric_dtype
 from dask import config
 from dask.base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from dask.dataframe import methods
-from dask.dataframe.core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from dask.dataframe.core import (
+    DataFrame,
+    PartitionMetadata,
+    Series,
+    _Frame,
+    map_partitions,
+    new_dd_object,
+)
 from dask.dataframe.dispatch import group_split_dispatch, hash_object_dispatch
 from dask.dataframe.utils import UNKNOWN_CATEGORIES
 from dask.highlevelgraph import HighLevelGraph
@@ -194,7 +201,24 @@ def sort_values(
         na_position=na_position,
         duplicates=False,
     )
-    df = df.map_partitions(sort_function, **sort_kwargs)
+    partition_metadata = df.partition_metadata.copy(
+        partitioning={
+            tuple(by): ("ascending", tuple(divisions))
+            if ascending
+            else ("descending", tuple(divisions))
+        },
+        column_statistics={
+            by[0]: [
+                {"min": divisions[i], "max": divisions[i + 1]}
+                for i in range(len(divisions) - 1)
+            ]
+        },
+    )
+    df = df.map_partitions(
+        sort_function,
+        meta=partition_metadata,
+        **sort_kwargs,
+    )
     return df
 
 
@@ -693,6 +717,23 @@ def rearrange_by_column_tasks(
 
     max_branch = max_branch or 32
 
+    # Track output partitioning
+    if isinstance(column, list) and "_partitions" not in column:
+        _partitioning = {
+            tuple(column): PartitionMetadata.hash_partitioning_token(
+                columns=column,
+                npartitions=(npartitions or df.npartitions),
+                meta=df._meta,
+            ),
+        }
+    else:
+        _partitioning = None
+    partition_metadata = PartitionMetadata(
+        meta=df._meta,
+        npartitions=(npartitions or df.npartitions),
+        partitioning=_partitioning,
+    )
+
     if (npartitions or df.npartitions) <= max_branch:
         # We are creating a small number of output partitions.
         # No need for staged shuffling. Staged shuffling will
@@ -712,7 +753,12 @@ def rearrange_by_column_tasks(
         graph = HighLevelGraph.from_collections(
             shuffle_name, shuffle_layer, dependencies=[df]
         )
-        return new_dd_object(graph, shuffle_name, df._meta, [None] * (npartitions + 1))
+        return new_dd_object(
+            graph,
+            shuffle_name,
+            partition_metadata,
+            [None] * (npartitions + 1),
+        )
 
     n = df.npartitions
     stages = int(math.ceil(math.log(n) / math.log(max_branch)))
@@ -742,7 +788,12 @@ def rearrange_by_column_tasks(
         graph = HighLevelGraph.from_collections(
             stage_name, stage_layer, dependencies=[df]
         )
-        df = new_dd_object(graph, stage_name, df._meta, df.divisions)
+        df = new_dd_object(
+            graph,
+            stage_name,
+            partition_metadata.copy(divisions=df.divisions),
+            df.divisions,
+        )
 
     if npartitions is not None and npartitions != npartitions_orig:
         token = tokenize(df, npartitions)
@@ -772,7 +823,10 @@ def rearrange_by_column_tasks(
             repartition_get_name, dsk, dependencies=[df]
         )
         df2 = new_dd_object(
-            graph2, repartition_get_name, df._meta, [None] * (npartitions + 1)
+            graph2,
+            repartition_get_name,
+            partition_metadata,
+            (None,) * (npartitions + 1),
         )
     else:
         df2 = df
@@ -1092,7 +1146,7 @@ def compute_divisions(df: DataFrame, col: Optional[Any] = None, **kwargs) -> Tup
 def compute_and_set_divisions(df: DataFrame, **kwargs) -> DataFrame:
     mins, maxes, lens = _compute_partition_stats(df.index, allow_overlap=True, **kwargs)
     if len(mins) == len(df.divisions) - 1:
-        df._divisions = tuple(mins) + (maxes[-1],)
+        df.divisions = tuple(mins) + (maxes[-1],)
         if not any(mins[i] >= maxes[i - 1] for i in range(1, len(mins))):
             return df
 
@@ -1117,7 +1171,7 @@ def set_sorted_index(
         df,
         index,
         drop=drop,
-        meta=meta,
+        meta=df.partition_metadata.copy(meta=meta),
         align_dataframes=False,
         transform_divisions=False,
     )

@@ -68,6 +68,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import (
     DataFrame,
     Index,
+    PartitionMetadata,
     Series,
     _concat,
     _Frame,
@@ -348,11 +349,59 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(
-        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    # Maybe shuffle lhs and rhs
+    def _partitioning(_df, _on, pre_shuffle):
+        return (
+            (
+                _df.partition_metadata.partitioned_by(_on)
+                if pre_shuffle
+                else _df.partition_metadata.hash_partitioning_token(
+                    _on, npartitions, _df._meta
+                )
+            )
+            if isinstance(_on, (str, list, tuple))
+            else False
+        )
+
+    shuffle_left = shuffle_right = True
+    lhs_partitioning = _partitioning(lhs, left_on, True)
+    rhs_partitioning = _partitioning(rhs, right_on, True)
+    if bool(lhs_partitioning):
+        if lhs_partitioning == rhs_partitioning:
+            # lhs and rhs are already aligned
+            shuffle_left = shuffle_right = False
+        elif lhs_partitioning == _partitioning(rhs, right_on, False):
+            # Only need to shuffle rhs
+            shuffle_left = False
+    elif (
+        bool(rhs_partitioning)
+        and _partitioning(lhs, left_on, False) == rhs_partitioning
+    ):
+        # Only need to shuffle lhs
+        shuffle_right = False
+
+    lhs2 = (
+        shuffle_func(
+            lhs,
+            left_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if shuffle_left
+        else lhs
     )
-    rhs2 = shuffle_func(
-        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+
+    rhs2 = (
+        shuffle_func(
+            rhs,
+            right_on,
+            npartitions=npartitions,
+            shuffle=shuffle,
+            max_branch=max_branch,
+        )
+        if shuffle_right
+        else rhs
     )
 
     if isinstance(left_on, Index):
@@ -383,6 +432,28 @@ def hash_join(
     _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
     meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
+    if (
+        isinstance(left_on, (str, list, tuple))
+        and left_on == right_on
+        and not (left_index or right_index)
+    ):
+        _left_on = [left_on] if isinstance(left_on, str) else left_on
+        partition_metadata = PartitionMetadata(
+            meta=meta,
+            npartitions=lhs2.npartitions,
+            partitioning={
+                tuple(
+                    col for col in _left_on
+                ): PartitionMetadata.hash_partitioning_token(
+                    columns=_left_on,
+                    npartitions=lhs2.npartitions,
+                    meta=_lhs_meta,
+                ),
+            },
+        )
+    else:
+        partition_metadata = meta
+
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
     if isinstance(right_on, list):
@@ -394,7 +465,7 @@ def hash_join(
         merge_chunk,
         lhs2,
         rhs2,
-        meta=meta,
+        meta=partition_metadata,
         enforce_metadata=False,
         transform_divisions=False,
         align_dataframes=False,
