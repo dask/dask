@@ -294,6 +294,17 @@ def test_str_accessor_split_expand_more_columns():
     ds.str.split(n=10, expand=True).compute()
 
 
+@pytest.mark.parametrize("index", [None, [0]], ids=["range_index", "other index"])
+def test_str_split_no_warning(index):
+    df = pd.DataFrame({"a": ["a\nb"]}, index=index)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    pd_a = df["a"].str.split("\n", n=1, expand=True)
+    dd_a = ddf["a"].str.split("\n", n=1, expand=True)
+
+    assert_eq(dd_a, pd_a)
+
+
 def test_string_nullable_types(df_ddf):
     df, ddf = df_ddf
     assert_eq(ddf.string_col.str.count("A"), df.string_col.str.count("A"))
