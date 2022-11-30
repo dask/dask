@@ -533,7 +533,7 @@ def _mul_cols(df, cols):
     # https://github.com/pandas-dev/pandas/issues/43568
     # Make sure index dtype is "int64" (even if _df is empty)
     # https://github.com/dask/dask/pull/9701
-    _df.index = np.repeat(np.array([0], dtype="int64"), len(_df))
+    _df.index = np.zeros(len(_df), dtype=int)
     return _df
 
 
