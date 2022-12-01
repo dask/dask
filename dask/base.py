@@ -743,12 +743,11 @@ def visualize(
                 for i, (keys, isolated) in enumerate(cogroup(o, dependencies), start=1)
                 for k in keys
             }
-            values = {
-                k: g if not isolated else 0 for k, (g, isolated) in groups.items()
-            }
+            values = {k: g for k, (g, isolated) in groups.items()}
 
             def style(x) -> str | None:
-                return None if groups[x][1] else "dashed"
+                g, isolated = groups[x]
+                return None if isolated else "dashed"
 
             if color == "cogroup":
 
