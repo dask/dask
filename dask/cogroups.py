@@ -48,25 +48,16 @@ def cogroup(
             else:
                 # non-consecutive priority jump. this is our max node.
 
-                # check if we've jumped over a fully disjoint part of the graph
-                i = cogroup_start_i + (current_prio - start_prio)
-                if kps[i - 1][0] in dependencies[key]:
-                    # Seems connected
-
-                    if not was_chain:
-                        # ended up in this branch because `was_chain` was false, not because
-                        # inputs belonged to a different cogroup. so this is an isolated cogroup
-                        # because it doesn't need to consider the location of any inputs.
-                        isolated_cogroup = True
-                        assert current_prio > start_prio + 1, (
-                            current_prio,
-                            start_prio,
-                            key,
-                        )
-                else:
-                    # If we've jumped over a disjoint subgraph, don't eat it.
-                    # Roll back and just take the linear chain.
-                    current_prio = prev_prio
+                if not was_chain:
+                    # ended up in this branch because `was_chain` was false, not because
+                    # inputs belonged to a different cogroup. so this is an isolated cogroup
+                    # because it doesn't need to consider the location of any inputs.
+                    isolated_cogroup = True
+                    assert current_prio > start_prio + 1, (
+                        current_prio,
+                        start_prio,
+                        key,
+                    )
 
                 break
 
