@@ -1196,6 +1196,21 @@ def test_visualize_order():
         assert 'color="#' in text
 
 
+@pytest.mark.skipif("not da")
+@pytest.mark.skipif(
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
+)
+def test_visualize_cogroup():
+    pytest.importorskip("graphviz")
+    pytest.importorskip("matplotlib.pyplot")
+    x = da.arange(5, chunks=2).mean()
+    with tmpfile(extension="dot") as fn:
+        x.visualize(color="cogroup", filename=fn, cmap="RdBu")
+        with open(fn) as f:
+            text = f.read()
+        assert 'color="#' in text
+
+
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
     from textwrap import dedent
 

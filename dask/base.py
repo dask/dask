@@ -29,7 +29,7 @@ from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
-from dask.core import literal, quote
+from dask.core import get_dependencies, literal, quote, reverse_dict
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
 from dask.typing import SchedulerGetCallable
@@ -211,7 +211,7 @@ class DaskMethodsMixin:
         optimize_graph : bool, optional
             If True, the graph is optimized before rendering.  Otherwise,
             the graph is displayed as is. Default is False.
-        color: {None, 'order'}, optional
+        color: {None, 'order', 'cogroup'}, optional
             Options to color nodes.  Provide ``cmap=`` keyword for additional
             colormap
         **kwargs
@@ -645,6 +645,8 @@ def visualize(
 
         - None, the default, no colors.
         - 'order', colors the nodes' border based on the order they appear in the graph.
+        - 'cogroup', which tasks are in the same "coassignment group" and should be
+           scheduled on the same worker.
         - 'ages', how long the data of a node is held.
         - 'freed', the number of dependencies released after running a node.
         - 'memoryincreases', how many more outputs are held after the lifetime of a node.
@@ -707,12 +709,16 @@ def visualize(
         "memoryincreases",
         "memorydecreases",
         "memorypressure",
+        "cogroup",
     }:
         import matplotlib.pyplot as plt
 
         from dask.order import diagnostics, order
 
-        o = order(dsk)
+        dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+        dependents = reverse_dict(dependencies)
+
+        o = order(dsk, dependencies=dependencies, dependents=dependents)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -726,7 +732,21 @@ def visualize(
             return str(values[x])
 
         data_values = None
-        if color != "order":
+        if color == "cogroup":
+            from dask.cogroups import cogroup
+
+            values = {
+                k: i if isolated else 0
+                for i, (keys, isolated) in enumerate(
+                    cogroup(o, dependencies, dependents), start=1
+                )
+                for k in keys
+            }
+
+            def label(x):
+                return str(o[x]) + "-g" + str(values[x])
+
+        elif color != "order":
             info = diagnostics(dsk, o)[0]
             if color.endswith("age"):
                 values = {key: val.age for key, val in info.items()}
