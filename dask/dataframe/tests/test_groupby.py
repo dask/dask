@@ -3075,3 +3075,34 @@ def test_groupby_None_split_out_warns():
     ddf = dd.from_pandas(df, npartitions=1)
     with pytest.warns(FutureWarning, match="split_out=None"):
         ddf.groupby("a").agg({"b": "max"}, split_out=None)
+
+
+@pytest.mark.parametrize("by", ["key1", ["key1", "key2"]])
+@pytest.mark.parametrize(
+    "slice_key",
+    [
+        3,
+        "value",
+        ["value"],
+        ("value",),
+        pd.Index(["value"]),
+        pd.Series(["value"]),
+    ],
+)
+def test_groupby_slice_getitem(by, slice_key):
+    pdf = pd.DataFrame(
+        {
+            "key1": ["a", "b", "a"],
+            "key2": ["c", "c", "c"],
+            "value": [1, 2, 3],
+            3: [1, 2, 3],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=3)
+    expect = pdf.groupby(by)[slice_key].count()
+    got = ddf.groupby(by)[slice_key].count()
+
+    # We should have a getitem layer, enabling
+    # column projection after read_parquet etc
+    assert hlg_layer(got.dask, "getitem")
+    assert_eq(expect, got)

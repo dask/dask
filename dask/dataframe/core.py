@@ -4406,7 +4406,6 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    # Typing: https://github.com/python/mypy/issues/4125
     @property
     @derived_from(pd.Index)
     def is_monotonic(self):
@@ -4418,7 +4417,6 @@ class Index(Series):
             )
         return super().is_monotonic_increasing
 
-    # Typing: https://github.com/python/mypy/issues/1362#issuecomment-208605185
     @property
     @derived_from(pd.Index)
     def is_monotonic_increasing(self):
@@ -7216,7 +7214,8 @@ def _take_last(a, skipna=True):
             if a.empty:
                 return series_typ([], dtype="float")
             return series_typ(
-                {col: _last_valid(a[col]) for col in a.columns}, index=a.columns
+                [_last_valid(a.iloc[:, i]) for i in range(len(a.columns))],
+                index=a.columns,
             )
         else:
             return _last_valid(a)
