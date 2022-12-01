@@ -42,7 +42,7 @@ from dask.core import literal
 from dask.delayed import Delayed, delayed
 from dask.diagnostics import Profiler
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import tmpdir, tmpfile
+from dask.utils import key_split, tmpdir, tmpfile
 from dask.utils_test import dec, import_or_none, inc
 
 da = import_or_none("dask.array")
@@ -1209,6 +1209,22 @@ def test_visualize_cogroup():
         with open(fn) as f:
             text = f.read()
         assert 'color="#' in text
+
+
+@pytest.mark.skipif("not da")
+@pytest.mark.skipif(
+    bool(sys.flags.optimize), reason="graphviz exception with Python -OO flag"
+)
+def test_visualize_cogroup_name():
+    pytest.importorskip("graphviz")
+    pytest.importorskip("matplotlib.pyplot")
+    x = da.arange(5, chunks=2).mean()
+    with tmpfile(extension="dot") as fn:
+        x.visualize(color="cogroup-name", filename=fn, cmap="RdBu")
+        with open(fn) as f:
+            text = f.read()
+        assert 'color="#' in text
+        assert key_split(x.name) in text
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():

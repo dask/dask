@@ -647,6 +647,7 @@ def visualize(
         - 'order', colors the nodes' border based on the order they appear in the graph.
         - 'cogroup', which tasks are in the same "coassignment group" and should be
            scheduled on the same worker.
+        - 'cogroup-name', same as 'cogroup', but print task names instead of priority numbers.
         - 'ages', how long the data of a node is held.
         - 'freed', the number of dependencies released after running a node.
         - 'memoryincreases', how many more outputs are held after the lifetime of a node.
@@ -710,6 +711,7 @@ def visualize(
         "memorydecreases",
         "memorypressure",
         "cogroup",
+        "cogroup-name",
     }:
         import matplotlib.pyplot as plt
 
@@ -735,7 +737,7 @@ def visualize(
             return str(values[x])
 
         data_values = None
-        if color == "cogroup":
+        if color.startswith("cogroup"):
             from dask.cogroups import cogroup
 
             groups = {
@@ -749,12 +751,21 @@ def visualize(
                 k: g if not isolated else 0 for k, (g, isolated) in groups.items()
             }
 
-            def label(x):
-                return str(o[x]) + f" ({groups[x][0]})"
-
             def style(x) -> str | None:
                 return None if groups[x][1] else "dashed"
 
+            if color == "cogroup":
+
+                def label(x):
+                    return str(o[x]) + f" ({groups[x][0]})"
+
+            elif color == "cogroup-name":
+
+                def label(x):
+                    return key_split(x) + f" ({groups[x][0]})"
+
+            else:
+                raise NotImplementedError("Unknown value color=%s" % color)
         elif color != "order":
             info = diagnostics(dsk, o)[0]
             if color.endswith("age"):
