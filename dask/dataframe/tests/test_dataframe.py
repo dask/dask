@@ -5393,7 +5393,7 @@ def test_dot_dataframe_notimplemented():
     dA = dd.from_pandas(A, npartitions=2)
     dB = dd.from_pandas(B, npartitions=2)
     with pytest.raises(NotImplementedError):
-        dA.dot(dB, meta=pd.DataFrame(columns=dB.columns))
+        dA.dot(dB)
 
 
 def test_dot_nan():
