@@ -728,6 +728,9 @@ def visualize(
 
             cmap = getattr(plt.cm, cmap)
 
+        def style(x) -> str | None:
+            return None
+
         def label(x):
             return str(values[x])
 
@@ -735,16 +738,22 @@ def visualize(
         if color == "cogroup":
             from dask.cogroups import cogroup
 
-            values = {
-                k: i if isolated else 0
+            groups = {
+                k: (i, isolated)
                 for i, (keys, isolated) in enumerate(
                     cogroup(o, dependencies, dependents), start=1
                 )
                 for k in keys
             }
+            values = {
+                k: g if not isolated else 0 for k, (g, isolated) in groups.items()
+            }
 
             def label(x):
-                return str(o[x]) + "-g" + str(values[x])
+                return str(o[x]) + f" ({groups[x][0]})"
+
+            def style(x) -> str | None:
+                return None if groups[x][1] else "dashed"
 
         elif color != "order":
             info = diagnostics(dsk, o)[0]
@@ -788,9 +797,12 @@ def visualize(
             }
 
         kwargs["function_attributes"] = {
-            k: {"color": v, "label": label(k)} for k, v in colors.items()
+            k: {"color": v, "label": label(k), "style": style(k)}
+            for k, v in colors.items()
         }
-        kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
+        kwargs["data_attributes"] = {
+            k: {"color": v, "style": style(k)} for k, v in data_colors.items()
+        }
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 
