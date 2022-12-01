@@ -81,7 +81,7 @@ from math import log
 from dask.core import get_dependencies, get_deps, getcycle, reverse_dict
 
 
-def order(dsk, dependencies=None, dependents=None):
+def order(dsk, dependencies=None):
     """Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
@@ -112,8 +112,7 @@ def order(dsk, dependencies=None, dependents=None):
     if dependencies is None:
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
-    if dependents is None:
-        dependents = reverse_dict(dependencies)
+    dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     metrics = graph_metrics(dependencies, dependents, total_dependencies)
 
