@@ -210,5 +210,6 @@ def test_parameter_passing() -> None:
     assert compute2(array).shape == (10,)
 
 
-def test_inheriting_class() -> Inheriting:
-    return Inheriting(increment(2))
+def test_inheriting_class() -> None:
+    inheriting: Inheriting = Inheriting(increment(2))
+    assert isinstance(inheriting, Inheriting)
