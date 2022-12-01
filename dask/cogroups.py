@@ -3,12 +3,14 @@ from __future__ import annotations
 import operator
 from typing import Hashable, Iterator
 
+from dask.core import reverse_dict
+
 
 def cogroup(
     priorities: dict[Hashable, int],
     dependencies: dict[Hashable, set[Hashable]],
-    dependents: dict[Hashable, set[Hashable]],
 ) -> Iterator[tuple[list[Hashable], bool]]:
+    dependents: dict[Hashable, set[Hashable]] = reverse_dict(dependencies)
     kps = sorted(priorities.items(), key=operator.itemgetter(1))
 
     # Assume priorities are consecutive, starting from 0

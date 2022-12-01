@@ -29,7 +29,7 @@ from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
 from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
-from dask.core import get_dependencies, literal, quote, reverse_dict
+from dask.core import get_dependencies, literal, quote
 from dask.hashing import hash_buffer_hex
 from dask.system import CPU_COUNT
 from dask.typing import SchedulerGetCallable
@@ -718,9 +718,7 @@ def visualize(
         from dask.order import diagnostics, order
 
         dependencies = {k: get_dependencies(dsk, k) for k in dsk}
-        dependents = reverse_dict(dependencies)
-
-        o = order(dsk, dependencies=dependencies, dependents=dependents)
+        o = order(dsk, dependencies=dependencies)
         try:
             cmap = kwargs.pop("cmap")
         except KeyError:
@@ -742,9 +740,7 @@ def visualize(
 
             groups = {
                 k: (i, isolated)
-                for i, (keys, isolated) in enumerate(
-                    cogroup(o, dependencies, dependents), start=1
-                )
+                for i, (keys, isolated) in enumerate(cogroup(o, dependencies), start=1)
                 for k in keys
             }
             values = {
