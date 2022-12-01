@@ -821,6 +821,7 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -831,6 +832,10 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
+        if use_nullable_dtypes:
+            raise ValueError(
+                "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -890,6 +895,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
+        use_nullable_dtypes=False,
         categories=(),
         root_cats=None,
         root_file_scheme=None,

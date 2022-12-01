@@ -45,6 +45,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         meta,
         columns,
         index,
+        use_nullable_dtypes,
         kwargs,
         common_kwargs,
     ):
@@ -53,6 +54,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
         self.meta = meta
         self._columns = columns
         self.index = index
+        self.use_nullable_dtypes = use_nullable_dtypes
 
         # `kwargs` = user-defined kwargs to be passed
         #            identically for all partitions.
@@ -78,6 +80,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             self.meta,
             columns,
             self.index,
+            self.use_nullable_dtypes,
             None,  # Already merged into common_kwargs
             self.common_kwargs,
         )
@@ -101,6 +104,7 @@ class ParquetFunctionWrapper(DataFrameIOFunction):
             ],
             self.columns,
             self.index,
+            self.use_nullable_dtypes,
             self.common_kwargs,
         )
 
@@ -181,6 +185,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
+    use_nullable_dtypes=False,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -433,6 +438,7 @@ def read_parquet(
         "index": index,
         "storage_options": storage_options,
         "engine": engine,
+        "use_nullable_dtypes": use_nullable_dtypes,
         "calculate_divisions": calculate_divisions,
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
@@ -475,6 +481,7 @@ def read_parquet(
         paths,
         categories=categories,
         index=index,
+        use_nullable_dtypes=use_nullable_dtypes,
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
@@ -540,6 +547,7 @@ def read_parquet(
             meta,
             columns,
             index,
+            use_nullable_dtypes,
             {},  # All kwargs should now be in `common_kwargs`
             common_kwargs,
         )
@@ -578,7 +586,9 @@ def check_multi_support(engine):
     return hasattr(engine, "multi_support") and engine.multi_support()
 
 
-def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
+def read_parquet_part(
+    fs, engine, meta, part, columns, index, use_nullable_dtypes, kwargs
+):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
@@ -587,7 +597,14 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
             # Part kwargs expected
             func = engine.read_partition
             dfs = [
-                func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+                func(
+                    fs,
+                    rg,
+                    columns.copy(),
+                    index,
+                    use_nullable_dtypes=use_nullable_dtypes,
+                    **toolz.merge(kwargs, kw),
+                )
                 for (rg, kw) in part
             ]
             df = concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
@@ -595,14 +612,24 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
             # No part specific kwargs, let engine read
             # list of parts at once
             df = engine.read_partition(
-                fs, [p[0] for p in part], columns.copy(), index, **kwargs
+                fs,
+                [p[0] for p in part],
+                columns.copy(),
+                index,
+                use_nullable_dtypes=use_nullable_dtypes,
+                **kwargs,
             )
     else:
         # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
         #       be different for each part.
         rg, part_kwargs = part
         df = engine.read_partition(
-            fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs)
+            fs,
+            rg,
+            columns,
+            index,
+            use_nullable_dtypes=use_nullable_dtypes,
+            **toolz.merge(kwargs, part_kwargs),
         )
 
     if meta.columns.name:
