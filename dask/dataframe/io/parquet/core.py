@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import itertools
 import math
 import warnings
 
@@ -18,7 +19,7 @@ from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
 from dask.utils import apply, import_required, natural_sort_key, parse_bytes
@@ -1580,6 +1581,62 @@ def aggregate_row_groups(
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
+
+
+def _read_partition_stats_group(parts, fs, engine, columns=None):
+    # Helper function used by _extract_statistics
+    return [engine._read_partition_stats(part, fs, columns=columns) for part in parts]
+
+
+def _parquet_statistics(ddf, columns=None, task_size=None):
+    """Extract Parquet-metadata statistics from a DataFrame
+
+    WARNING: This API is experimental, and is likely to change.
+    """
+    from dask.utils_test import hlg_layer
+
+    # Check if we have a read-parquet layer
+    try:
+        layer = hlg_layer(ddf.dask, "read-parquet")
+    except KeyError:
+        # No "parquet" layer
+        return None
+
+    if len(ddf.dask.layers) > 1:
+        # Cannot trust statistics if there are
+        # multiple layers
+        return None
+
+    # Make sure we are dealing with a
+    # ParquetFunctionWrapper-based DataFrameIOLayer
+    if not isinstance(layer, DataFrameIOLayer) or not isinstance(
+        layer.io_func, ParquetFunctionWrapper
+    ):
+        return None
+
+    # Collect statistics using layer information
+    parts = layer.inputs
+    fs = layer.io_func.fs
+    engine = layer.io_func.engine
+    if not hasattr(engine, "_read_partition_stats"):
+        # Utility not supported for current engine
+        return None
+    func = delayed(_read_partition_stats_group)
+    task_size = task_size or (
+        # Use reasonable defaults for task size
+        len(parts)
+        if _is_local_fs(fs)
+        else 16
+    )
+
+    # Compute and return flattened result
+    result = dask.compute(
+        [
+            func(parts[i : i + task_size], fs, engine, columns=columns)
+            for i in range(0, len(parts), task_size)
+        ]
+    )[0]
+    return list(itertools.chain(*result))
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

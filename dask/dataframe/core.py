@@ -4549,6 +4549,13 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        from dask.dataframe.io.parquet.core import _parquet_statistics
+
+        # Try using Parquet statistics before reading in real data
+        pq_stats = _parquet_statistics(self)
+        if pq_stats:
+            return pd.DataFrame.from_dict(pq_stats)["num-rows"].sum()
+
         try:
             s = self.iloc[:, 0]
         except IndexError:
