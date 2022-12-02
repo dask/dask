@@ -37,15 +37,8 @@ def cogroup(
             if (
                 # linear chain
                 (was_chain := (i == prev_i + 1))
-                # TODO update this comment:
-                # where inputs don't already belong to a different cogroup.
-                # If a task has multiple families as inputs, we don't know how to group
-                # it yet---that's a `decide_worker` choice based on data size at
-                # runtime. This prevents multi-stage fan-in tasks from "eating" the
-                # whole graph.
-                # TODO can we just more broadly say linear chains have 1 dependency?
-                # IDEA: if it depends on exactly 1 other cogroup, then roll this cogroup
-                # into that previous cogroup?
+                # If an input comes from a different cogroup, and it's only
+                # used in this group, don't walk past it.
                 and not any(
                     priorities[dk] < start_i and len(dependents[dk]) == 1
                     for dk in dependencies[key]
