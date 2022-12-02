@@ -807,7 +807,8 @@ def visualize(
             for k, v in colors.items()
         }
         kwargs["data_attributes"] = {
-            k: {"color": v, "style": style(k)} for k, v in data_colors.items()
+            k: {"color": v, "label": label(k), "style": style(k)}
+            for k, v in data_colors.items()
         }
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
