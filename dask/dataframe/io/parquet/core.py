@@ -4,6 +4,7 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
@@ -365,6 +366,8 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
+
+    kwargs["string_storage"] = pd.get_option("mode.string_storage")
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:

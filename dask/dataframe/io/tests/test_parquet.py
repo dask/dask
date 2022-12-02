@@ -624,6 +624,10 @@ def test_pandas_string_storage_option(
     tmp_path, write_engine, read_engine, string_storage, scheduler
 ):
     # Ensure Dask respects pandas' `string_storage` option
+
+    if read_engine == "fastparquet" or write_engine == "fastparquet":
+        pytest.xfail("https://github.com/dask/fastparquet/issues/465")
+
     pd.set_option("mode.string_storage", string_storage)
 
     df = pd.DataFrame(
