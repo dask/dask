@@ -617,6 +617,27 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
     assert_eq(df, ddf2)
 
 
+@pytest.mark.parametrize("scheduler", ["sync", "multiprocessing"])
+@pytest.mark.parametrize("string_storage", ["python", "pyarrow"])
+@write_read_engines()
+def test_pandas_string_storage_option(
+    tmp_path, write_engine, read_engine, string_storage, scheduler
+):
+    # Ensure Dask respects pandas' `string_storage` option
+    pd.set_option("mode.string_storage", string_storage)
+
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
+    assert_eq(df, ddf2, scheduler=scheduler)
+
+
 @PYARROW_MARK
 def test_use_nullable_dtypes(tmp_path, engine):
     """
