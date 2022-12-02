@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Hashable
+from typing import Hashable, Iterable
 
 import pytest
 from tlz import partition_all
@@ -39,7 +39,9 @@ def tskchain(input, *names):
     return out
 
 
-def get_cogroups(xs: Delayed | list[Delayed]):
+def get_cogroups(
+    xs: Delayed | list[Delayed],
+) -> tuple[list[tuple[list[Hashable], bool]], dict[Hashable, int]]:
     if not isinstance(xs, list):
         xs = [xs]
 
@@ -48,11 +50,19 @@ def get_cogroups(xs: Delayed | list[Delayed]):
     dsk = collections_to_dsk(xs, optimize_graph=False)
     dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
-    priorities = order(dsk, dependencies=dependencies)
+    priorities: dict[Hashable, int] = order(dsk, dependencies=dependencies)
 
     cogroups = list(cogroup(priorities, dependencies))
 
     return cogroups, priorities
+
+
+def cogroup_to_dict(
+    cogroups: Iterable[tuple[list[Hashable], bool]]
+) -> dict[Hashable, tuple[int, bool]]:
+    return {
+        k: (i, isolated) for i, (keys, isolated) in enumerate(cogroups) for k in keys
+    }
 
 
 _ = "_"
@@ -109,11 +119,12 @@ def test_two_step_reduction(abcde):
 
     cogroups, prios = get_cogroups(final)
 
-    assert len(cogroups) == 7
+    assert len(cogroups) == 4
 
     for i in range(len(ats)):
-        assert_cogroup(cogroups[2 * i], [(a, i), (b, i), (d, i)], isolated=True)
-        assert_cogroup(cogroups[2 * i + 1], [(c, i), (e, i)], isolated=False)
+        assert_cogroup(
+            cogroups[i], [(a, i), (b, i), (d, i), (c, i), (e, i)], isolated=True
+        )
 
     assert_cogroup(cogroups[-1], ["final"], isolated=False)
 
@@ -123,19 +134,19 @@ def test_two_step_reduction_linear_chains(abcde):
                           final
                      /              \               \
                     /                \               \
-            --------------
-            |    s2      |            s2              s2
-            | /      \   |          /     \         /     \
-            |/______  \  |         |       |       |       |
-     -------------  |  | |         |       |       |       |
-     |     s1    |  |  | |         s1      |       s1      |
-     | /   |  \  |  |  | |     /   |  \    |   /   |  \    |
-     | x   |   | |  |  | |     x   |   |   |   x   |   |   |
-     | |   |   | |  |  | |     |   |   |   |   |   |   |   |
-     | x   |   x |  |  x |     x   |   x   x   x   |   x   x
-     | |   |   | |  |  | |     |   |   |   |   |   |   |   |
-     | a   b   c |  |  d |     a   b   c   d   a   b   c   d
-     -------------  ------    /   /   /  /   /   /    /   /
+           ---------------
+           |     s2      |            s2              s2
+           |  /      \   |          /     \         /     \
+           | /        \  |         |       |       |       |
+     -------           | |         |       |       |       |
+     |     s1          | |         s1      |       s1      |
+     | /   |  \        | |     /   |  \    |   /   |  \    |
+     | x   |   |       | |     x   |   |   |   x   |   |   |
+     | |   |   |       | |     |   |   |   |   |   |   |   |
+     | x   |   x       x |     x   |   x   x   x   |   x   x
+     | |   |   |       | |     |   |   |   |   |   |   |   |
+     | a   b   c       d |     a   b   c   d   a   b   c   d
+     ---------------------    /   /   /  /   /   /    /   /
        \   \   \   \   \  \  /   /   /  /   /   /    /   /
                             r
     """
@@ -156,34 +167,28 @@ def test_two_step_reduction_linear_chains(abcde):
 
     cogroups, prios = get_cogroups(final)
 
-    assert len(cogroups) == 7
+    assert len(cogroups) == 4
 
     assert_cogroup(
         cogroups[0],
         # TODO ideally `root` wouldn't be in there
-        ["root", (a, 0), _, _, (c, 0), _, (b, 0), ("s1", 0)],
+        ["root", (a, 0), _, _, (c, 0), _, (b, 0), ("s1", 0), (d, 0), _, ("s2", 0)],
         isolated=True,
     )
-    # TODO `isolated=False` right now but probably should be considered a proper group??
-    assert_cogroup(cogroups[1], [(d, 0), _, ("s2", 0)], isolated=False)
+
+    assert_cogroup(
+        cogroups[1],
+        [(a, 1), _, _, (c, 1), _, (b, 1), ("s1", 1), (d, 1), _, ("s2", 1)],
+        isolated=True,
+    )
 
     assert_cogroup(
         cogroups[2],
-        [(a, 1), _, _, (c, 1), _, (b, 1), ("s1", 1)],
+        [(a, 2), _, _, (c, 2), _, (b, 2), ("s1", 2), (d, 2), _, ("s2", 2)],
         isolated=True,
     )
-    # TODO `isolated=False` right now but probably should be considered a proper group??
-    assert_cogroup(cogroups[3], [(d, 1), _, ("s2", 1)], isolated=False)
 
-    assert_cogroup(
-        cogroups[4],
-        [(a, 2), _, _, (c, 2), _, (b, 2), ("s1", 2)],
-        isolated=True,
-    )
-    # TODO `isolated=False` right now but probably should be considered a proper group??
-    assert_cogroup(cogroups[5], [(d, 2), _, ("s2", 2)], isolated=False)
-
-    assert_cogroup(cogroups[6], ["final"], isolated=False)
+    assert_cogroup(cogroups[3], ["final"], isolated=False)
 
 
 @pytest.mark.xfail(reason="widely shared dependencies mess everything up")
@@ -558,45 +563,100 @@ def test_map_overlap(abcde):
         (d, 5): (f, (e, 5)),
         (c, 5): (f, (d, 5)),
         (b, 5): (f, (c, 4), (c, 5)),
+        # a: (f, (b, 1), (b, 2), (b, 3)),
+        # a: (f, (b, 1), (b, 3), (b, 5)),
     }
 
     cogroups, prios = get_cogroups([Delayed(k, dsk) for k in dsk])
 
     assert len([f for f in cogroups if f[1]]) == 2
 
-    # TODO `b` tasks aren't captured right now, maybe that's ok?
-    assert_cogroup_priority_range(cogroups[0], 0, 6, prios, isolated=True)
-    # b1 is its own group
-    assert_cogroup_priority_range(cogroups[2], 8, 12, prios, isolated=True)
-    # b2 is its own group
-    # assert_cogroup_priority_range(cogroups[1], 14, 15, prios, isolated=False)
+    assert_cogroup_priority_range(cogroups[0], 0, 7, prios, isolated=True)
+    assert_cogroup_priority_range(cogroups[1], 8, 13, prios, isolated=True)
 
-    # assert_cogroup(
-    #     cogroups[0],
-    #     [
-    #         (e, 1),
-    #         (d, 1),
-    #         (c, 1),
-    #         (c, 2),
-    #         (d, 3),
-    #         (d, 2),
-    #         (e, 3),
-    #     ],
-    #     isolated=True,
-    #     scheduler=s,
-    # )
 
-    # assert_cogroup(
-    #     cogroups[1],
-    #     [
-    #         # Why is this not part of the group? Maybe linked to order output
-    #         # (b, 5),
-    #         (c, 5),
-    #         (d, 5),
-    #         (e, 5),
-    #         (c, 4),
-    #         (d, 4),
-    #     ],
-    #     isolated=True,
-    #     scheduler=s,
-    # )
+@pytest.mark.parametrize(
+    "substructure",
+    [
+        "linear",
+        "sibling",
+        pytest.param(
+            "tree-sib",
+            marks=pytest.mark.xfail(reason="consecutive-sibling logic very brittle"),
+        ),
+    ],
+)
+def test_vorticity(abcde, substructure):
+    # See https://gist.github.com/TomNicholas/fe9c6b6c415d4fa42523216c87e2fff2
+    # https://github.com/dask/distributed/discussions/7128#discussioncomment-3910328
+    a, b, c, d, e = abcde
+    d1, d2, d3, d4, d5, d6, d7 = (d + i for i in "1234567")
+    e1, e2, e3, e4, e5 = (e + i for i in "12345")
+
+    def _gen_branch(ix):
+        if substructure == "linear":
+            return {
+                f"a{ix}": (f,),
+                f"b{ix}": (f, f"a{ix}"),
+                f"d{ix}": (f, f"b{ix}"),
+            }
+        elif substructure == "sibling":
+            return {
+                f"a{ix}": (f,),
+                f"b{ix}": (f, f"a{ix}"),
+                f"c{ix}": (f, f"a{ix}"),
+                f"d{ix}": (f, f"b{ix}", f"c{ix}", f"z{ix}"),
+            }
+        elif substructure == "tree-sib":
+            return {
+                f"a{ix}": (f,),
+                f"b{ix}": (f, f"a{ix}"),
+                f"c{ix}": (f, f"a{ix}"),
+                f"z{ix}": (f, f"a{ix}"),
+                f"y{ix}": (f, f"b{ix}", f"c{ix}"),
+                f"d{ix}": (f, f"y{ix}", f"z{ix}"),
+            }
+        raise ValueError(substructure)
+
+    dsk = {}
+    for ix in range(1, 12):
+        dsk.update(_gen_branch(ix))
+
+    dsk.update(
+        {
+            e1: (f, d1, d2, d3, d4, d5),
+            e2: (f, d3, d4, d5, d6, d7),
+            e3: (f, d5, d6, d7, "d8", "d9"),
+            e4: (f, d7, "d8", "d9", "d10", "d11"),
+        }
+    )
+    cogroups, prios = get_cogroups([Delayed(k, dsk) for k in dsk])
+    grouping = cogroup_to_dict(cogroups)
+
+    # Neighboring towers should be joined, since they feed into a common dependency.
+    assert grouping["a1"] == grouping["a2"] == grouping["d1"] == grouping["d2"]
+    assert grouping["a3"] == grouping["a4"] == grouping["d3"] == grouping["d4"]
+    assert grouping["a6"] == grouping["a7"] == grouping["d6"] == grouping["d7"]
+    assert grouping["a8"] == grouping["a9"] == grouping["d8"] == grouping["d9"]
+
+    # Debatable:
+    # assert not grouping[e1][1]
+    # assert not grouping[e2][1]
+    # assert not grouping[e3][1]
+
+
+def test_actual_map_overlap():
+    da = pytest.importorskip("dask.array")
+    arr = da.zeros(100, chunks=10)
+    # overlap = da.map_overlap(lambda x: x, arr, depth=1, boundary='reflect')
+    overlap = da.map_overlap(lambda x: x, arr, depth=1, boundary=0)
+
+    cogroups, prios = get_cogroups(overlap)
+
+
+def test_actual_shuffle():
+    dd = pytest.importorskip("dask.dataframe")
+    df = dd.demo.make_timeseries()
+    dfs = df.shuffle("id", shuffle="tasks")
+
+    cogroups, prios = get_cogroups(dfs)
