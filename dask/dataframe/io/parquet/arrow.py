@@ -1,3 +1,4 @@
+import contextlib
 import json
 import textwrap
 from collections import defaultdict
@@ -1596,8 +1597,14 @@ class ArrowDatasetEngine(Engine):
             else:
                 to_pandas_kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
 
-        with pd.option_context("mode.string_storage", kwargs["string_storage"]):
-            return arrow_table.to_pandas(categories=categories, **to_pandas_kwargs)
+        string_storage = kwargs["string_storage"]
+        if string_storage is None:
+            ctx = contextlib.nullcontext()
+        else:
+            ctx = pd.option_context("mode.string_storage", string_storage)
+        with ctx:
+            result = arrow_table.to_pandas(categories=categories, **to_pandas_kwargs)
+        return result
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):
