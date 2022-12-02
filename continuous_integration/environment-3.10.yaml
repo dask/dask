@@ -35,15 +35,16 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - blosc
   - boto3
   - botocore
-  - bokeh
+  # Temporary restriction until https://github.com/dask/distributed/issues/7173 is resolved
+  - bokeh<3
   - httpretty
   - aiohttp
   # Need recent version of s3fs to support newer aiobotocore versions
   # https://github.com/dask/s3fs/issues/514
   - s3fs>=2021.8.0
+  - click
   - cloudpickle
   - crick
   - cytoolz
@@ -67,5 +68,8 @@ dependencies:
   - mmh3
   - jinja2
   - pip
+  # The nightly pyarrow / arrow-cpp packages currently don't install with latest
+  # protobuf / abseil, see https://github.com/dask/dask/issues/9449
+  - libprotobuf=3.19
   - pip:
     - git+https://github.com/dask/distributed

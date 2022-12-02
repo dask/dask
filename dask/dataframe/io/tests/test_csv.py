@@ -1,7 +1,7 @@
 import gzip
 import os
 import warnings
-from io import BytesIO
+from io import BytesIO, StringIO
 from unittest import mock
 
 import pytest
@@ -1787,6 +1787,7 @@ def test_select_with_include_path_column(tmpdir):
     assert_eq(ddf.col1, pd.concat([df.col1] * 6))
 
 
+
 def test_retries_on_remote_filesystem_csv(tmpdir):
     # Fake a remote filesystem with a cached one
     fn = str(tmpdir)
@@ -1832,3 +1833,43 @@ def test_retries_on_remote_filesystem_csv(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-csv")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+@pytest.mark.parametrize("use_names", [True, False])
+def test_names_with_header_0(tmpdir, use_names):
+    # This test sets `blocksize` so that we will
+    # get two partitions in `dd.read_csv`. We are
+    # testing that `header=0` results in the expected
+    # behavior when `names` is also specified.
+    # See: https://github.com/dask/dask/issues/9610
+
+    csv = StringIO(
+        """\
+    city1,1992-09-13,10
+    city2,1992-09-13,14
+    city3,1992-09-13,98
+    city4,1992-09-13,13
+    city5,1992-09-13,45
+    city6,1992-09-13,64
+    """
+    )
+
+    if use_names:
+        names = ["city", "date", "sales"]
+        usecols = ["city", "sales"]
+    else:
+        names = usecols = None
+
+    path = os.path.join(str(tmpdir), "input.csv")
+    pd.read_csv(csv, header=None).to_csv(path, index=False, header=False)
+    df = pd.read_csv(path, header=0, names=names, usecols=usecols)
+    ddf = dd.read_csv(
+        path,
+        header=0,
+        names=names,
+        usecols=usecols,
+        blocksize=60,
+    )
+
+    # Result should only leave out 0th row
+    assert_eq(df, ddf, check_index=False)
+

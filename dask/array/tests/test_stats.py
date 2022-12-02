@@ -1,6 +1,7 @@
 import warnings
 
 import pytest
+from packaging.version import parse as parse_version
 
 scipy = pytest.importorskip("scipy")
 import numpy as np
@@ -67,7 +68,16 @@ def test_one(kind):
     [
         ("ttest_ind", {}),
         ("ttest_ind", {"equal_var": False}),
-        ("ttest_1samp", {}),
+        pytest.param(
+            "ttest_1samp",
+            {},
+            marks=pytest.mark.xfail(
+                # NOTE: using nested `parse_version` calls here to handle night scipy releases
+                parse_version(parse_version(scipy.__version__).base_version)
+                >= parse_version("1.10.0"),
+                reason="https://github.com/dask/dask/issues/9499",
+            ),
+        ),
         ("ttest_rel", {}),
         ("chisquare", {}),
         ("power_divergence", {}),

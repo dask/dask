@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.base import tokenize
+from dask.base import is_dask_collection, tokenize
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
@@ -34,6 +34,7 @@ from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
@@ -531,7 +532,9 @@ def _mul_cols(df, cols):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
-    _df.index = [0] * len(_df)
+    # Make sure index dtype is int (even if _df is empty)
+    # https://github.com/dask/dask/pull/9701
+    _df.index = np.zeros(len(_df), dtype=int)
     return _df
 
 
@@ -640,8 +643,10 @@ def _drop_duplicates_reindex(df):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
+    # Make sure index dtype is int (even if result is empty)
+    # https://github.com/dask/dask/pull/9701
     result = df.drop_duplicates()
-    result.index = [0] * len(result)
+    result.index = np.zeros(len(result), dtype=int)
     return result
 
 
@@ -1245,9 +1250,29 @@ class _GroupBy:
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
+        # slicing key applied to _GroupBy instance
+        self._slice = slice
+
+        # Check if we can project columns
+        projection = None
+        if (
+            np.isscalar(self._slice)
+            or isinstance(self._slice, (str, list, tuple))
+            or (
+                (is_index_like(self._slice) or is_series_like(self._slice))
+                and not is_dask_collection(self._slice)
+            )
+        ):
+            projection = set(by_).union(
+                {self._slice}
+                if (np.isscalar(self._slice) or isinstance(self._slice, str))
+                else self._slice
+            )
+            projection = [c for c in df.columns if c in projection]
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
-        self.obj = df
+        self.obj = df[projection] if projection else df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
         self.sort = sort
@@ -1261,9 +1286,6 @@ class _GroupBy:
             raise NotImplementedError(
                 "The grouped object and 'by' of the groupby must have the same divisions."
             )
-
-        # slicing key applied to _GroupBy instance
-        self._slice = slice
 
         if isinstance(self.by, list):
             by_meta = [
@@ -1289,7 +1311,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property  # type: ignore
+    @property
     @_deprecated()
     def index(self):
         return self.by
@@ -1950,7 +1972,9 @@ class _GroupBy:
 
             # Check if the aggregation involves implicit column projection
             if isinstance(arg, dict):
-                column_projection = group_columns | arg.keys()
+                column_projection = group_columns.union(arg.keys()).intersection(
+                    self.obj.columns
+                )
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):

@@ -1,6 +1,143 @@
 Changelog
 =========
 
+.. _v2022.12.0:
+
+2022.12.0
+---------
+
+Released on December 2, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove statistics-based ``set_index`` logic from ``read_parquet`` (:pr:`9661`) `Richard (Rick) Zamora`_
+- Add support for ``use_nullable_dtypes`` to ``dd.read_parquet`` (:pr:`9617`) `Ian Rose`_
+- Fix ``map_overlap`` in order to accept pandas arguments (:pr:`9571`) `Fabien Aulaire`_
+- Fix pandas 1.5+ ``FutureWarning`` in ``.str.split(..., expand=True)`` (:pr:`9704`) `Jacob Hayes`_
+- Enable column projection for ``groupby`` slicing (:pr:`9667`) `Richard (Rick) Zamora`_
+- Support duplicate column cum-functions (:pr:`9685`) `Ben`_
+- Improve error message for failed backend dispatch call (:pr:`9677`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Revise meta creation in arrow parquet engine (:pr:`9672`) `Richard (Rick) Zamora`_
+- Fix ``da.fft.fft`` for array-like inputs (:pr:`9688`) `James Bourbeau`_
+- Fix ``groupby`` -aggregation when grouping on an index by name (:pr:`9646`) `Richard (Rick) Zamora`_
+
+Maintenance
+^^^^^^^^^^^
+- Avoid ``PytestReturnNotNoneWarning`` in ``test_inheriting_class`` (:pr:`9707`) `Thomas Grainger`_
+- Fix flaky ``test_dataframe_aggregations_multilevel`` (:pr:`9701`) `Richard (Rick) Zamora`_
+- Bump ``mypy`` version (:pr:`9697`) `crusaderky`_
+- Disable dashboard in ``test_map_partitions_df_input`` (:pr:`9687`) `James Bourbeau`_
+- Use latest ``xarray-contrib/issue-from-pytest-log`` in ``upstream`` build (:pr:`9682`) `James Bourbeau`_
+- ``xfail`` ``ttest_1samp`` for upstream ``scipy`` (:pr:`9670`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.02`` (:pr:`9678`)
+
+
+.. _v2022.11.1:
+
+2022.11.1
+---------
+
+Released on November 18, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Restrict ``bokeh=3`` support (:pr:`9673`) `Gabe Joseph`_
+- Updates for ``fastparquet`` evolution (:pr:`9650`) `Martin Durant`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``ga-yaml-parser`` step in gpuCI updating workflow  (:pr:`9675`) `Charles Blackmon-Luca`_
+- Revert ``importlib.metadata`` workaround (:pr:`9658`) `James Bourbeau`_
+- Fix ``mindeps-distributed`` CI build to handle ``numpy``/``pandas`` not being installed  (:pr:`9668`) `James Bourbeau`_
+
+
+.. _v2022.11.0:
+
+2022.11.0
+---------
+
+Released on November 15, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Generalize ``from_dict`` implementation to allow usage from other backends (:pr:`9628`) `GALI PREM SAGAR`_
+
+Bug Fixes
+^^^^^^^^^
+- Avoid ``pandas`` constructors in ``dask.dataframe.core`` (:pr:`9570`) `Richard (Rick) Zamora`_
+- Fix ``sort_values`` with ``Timestamp`` data (:pr:`9642`) `James Bourbeau`_
+- Generalize array checking and remove ``pd.Index`` call in ``_get_partitions`` (:pr:`9634`) `Benjamin Zaitlen`_
+- Fix ``read_csv`` behavior for ``header=0`` and ``names`` (:pr:`9614`) `Richard (Rick) Zamora`_
+
+Documentation
+^^^^^^^^^^^^^
+- Update dashboard docs for queuing (:pr:`9660`) `Gabe Joseph`_
+- Remove ``import dask as d`` from docstrings (:pr:`9644`) `Matthew Rocklin`_
+- Fix link to partitions docs in ``read_parquet`` docstring (:pr:`9636`) `qheuristics`_
+- Add API doc links to ``array/bag/dataframe`` sections (:pr:`9630`) `Matthew Rocklin`_
+
+Maintenance
+^^^^^^^^^^^
+- Use ``conda-incubator/setup-miniconda@v2.2.0`` (:pr:`9662`) `John A Kirkham`_
+- Allow ``bokeh=3`` (:pr:`9659`) `James Bourbeau`_
+- Run ``upstream`` build with Python 3.10 (:pr:`9655`) `James Bourbeau`_
+- Pin ``pyyaml`` version in mindeps testing (:pr:`9640`) `Charles Blackmon-Luca`_
+- Add ``pre-commit`` to catch ``breakpoint()`` (:pr:`9638`) `James Bourbeau`_
+- Bump ``xarray-contrib/issue-from-pytest-log`` from 1.1 to 1.2 (:pr:`9635`)
+- Remove ``blosc`` references (:pr:`9625`) `Naty Clementi`_
+- Upgrade ``mypy`` and drop unused comments (:pr:`9616`) `Hendrik Makait`_
+- Harden ``test_repartition_npartitions`` (:pr:`9585`) `Richard (Rick) Zamora`_
+
+
+.. _v2022.10.2:
+
+2022.10.2
+---------
+
+Released on October 31, 2022
+
+This was a hotfix and has no changes in this repository.
+The necessary fix was in dask/distributed, but we decided to bump this version
+number for consistency.
+
+.. _v2022.10.1:
+
+2022.10.1
+---------
+
+Released on October 28, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Enable named aggregation syntax (:pr:`9563`) `ChrisJar`_
+- Add extension dtype support to ``set_index`` (:pr:`9566`) `James Bourbeau`_
+- Redesigning the array HTML repr for clarity (:pr:`9519`) `Shingo OKAWA`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix ``merge`` with emtpy left DataFrame (:pr:`9578`) `Ian Rose`_
+
+Documentation
+^^^^^^^^^^^^^
+- Add note about limiting thread oversubscription by default (:pr:`9592`) `James Bourbeau`_
+- Use ``sphinx-click`` for ``dask`` CLI (:pr:`9589`) `James Bourbeau`_
+- Fix Semaphore API docs (:pr:`9584`) `James Bourbeau`_
+- Render meta description in ``map_overlap`` docstring (:pr:`9568`) `James Bourbeau`_
+
+Maintenance
+^^^^^^^^^^^
+- Require Click 7.0+ in Dask (:pr:`9595`) `John A Kirkham`_
+- Temporarily restrict ``bokeh<3`` (:pr:`9607`) `James Bourbeau`_
+- Resolve ``importlib``-related failures in ``upstream`` CI (:pr:`9604`) `Charles Blackmon-Luca`_
+- Improve ``upstream`` CI report (:pr:`9603`) `James Bourbeau`_
+- Fix ``upstream`` CI report (:pr:`9602`) `James Bourbeau`_
+- Remove ``setuptools`` host dep, add CLI entrypoint (:pr:`9600`) `Charles Blackmon-Luca`_
+- More ``Backend`` dispatch class type annotations (:pr:`9573`) `Ian Rose`_
+
+
 .. _v2022.10.0:
 
 2022.10.0
@@ -6033,3 +6170,7 @@ Other
 .. _`Lawrence Mitchell`: https://github.com/wence-
 .. _`nouman`: https://github.com/noumxn
 .. _`Tim Paine`: https://github.com/timkpaine
+.. _`ChrisJar`: https://github.com/ChrisJar
+.. _`Shingo OKAWA`: https://github.com/ognis1205
+.. _`qheuristics`: https://github.com/qheuristics
+.. _`Jacob Hayes`: https://github.com/JacobHayes
