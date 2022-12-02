@@ -740,7 +740,7 @@ def visualize(
 
             groups = {
                 k: (i, isolated)
-                for i, (keys, isolated) in enumerate(cogroup(o, dependencies), start=1)
+                for i, (keys, isolated) in enumerate(cogroup(o, dependencies))
                 for k in keys
             }
             values = {k: g for k, (g, isolated) in groups.items()}
