@@ -1,6 +1,40 @@
 Changelog
 =========
 
+.. _v2022.12.0:
+
+2022.12.0
+---------
+
+Released on December 2, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove statistics-based ``set_index`` logic from ``read_parquet`` (:pr:`9661`) `Richard (Rick) Zamora`_
+- Add support for ``use_nullable_dtypes`` to ``dd.read_parquet`` (:pr:`9617`) `Ian Rose`_
+- Fix ``map_overlap`` in order to accept pandas arguments (:pr:`9571`) `Fabien Aulaire`_
+- Fix pandas 1.5+ ``FutureWarning`` in ``.str.split(..., expand=True)`` (:pr:`9704`) `Jacob Hayes`_
+- Enable column projection for ``groupby`` slicing (:pr:`9667`) `Richard (Rick) Zamora`_
+- Support duplicate column cum-functions (:pr:`9685`) `Ben`_
+- Improve error message for failed backend dispatch call (:pr:`9677`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Revise meta creation in arrow parquet engine (:pr:`9672`) `Richard (Rick) Zamora`_
+- Fix ``da.fft.fft`` for array-like inputs (:pr:`9688`) `James Bourbeau`_
+- Fix ``groupby`` -aggregation when grouping on an index by name (:pr:`9646`) `Richard (Rick) Zamora`_
+
+Maintenance
+^^^^^^^^^^^
+- Avoid ``PytestReturnNotNoneWarning`` in ``test_inheriting_class`` (:pr:`9707`) `Thomas Grainger`_
+- Fix flaky ``test_dataframe_aggregations_multilevel`` (:pr:`9701`) `Richard (Rick) Zamora`_
+- Bump ``mypy`` version (:pr:`9697`) `crusaderky`_
+- Disable dashboard in ``test_map_partitions_df_input`` (:pr:`9687`) `James Bourbeau`_
+- Use latest ``xarray-contrib/issue-from-pytest-log`` in ``upstream`` build (:pr:`9682`) `James Bourbeau`_
+- ``xfail`` ``ttest_1samp`` for upstream ``scipy`` (:pr:`9670`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.02`` (:pr:`9678`)
+
+
 .. _v2022.11.1:
 
 2022.11.1
@@ -6139,3 +6173,4 @@ Other
 .. _`ChrisJar`: https://github.com/ChrisJar
 .. _`Shingo OKAWA`: https://github.com/ognis1205
 .. _`qheuristics`: https://github.com/qheuristics
+.. _`Jacob Hayes`: https://github.com/JacobHayes
