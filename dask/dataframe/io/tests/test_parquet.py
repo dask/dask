@@ -628,18 +628,17 @@ def test_pandas_string_storage_option(
     if read_engine == "fastparquet" or write_engine == "fastparquet":
         pytest.xfail("https://github.com/dask/fastparquet/issues/465")
 
-    pd.set_option("mode.string_storage", string_storage)
-
-    df = pd.DataFrame(
-        {
-            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
-            "b": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
-        }
-    )
-    ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(tmp_path, engine=write_engine)
-    ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
-    assert_eq(df, ddf2, scheduler=scheduler)
+    with pd.option_context("mode.string_storage", string_storage):
+        df = pd.DataFrame(
+            {
+                "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+                "b": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+            }
+        )
+        ddf = dd.from_pandas(df, npartitions=2)
+        ddf.to_parquet(tmp_path, engine=write_engine)
+        ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
+        assert_eq(df, ddf2, scheduler=scheduler)
 
 
 @PYARROW_MARK
