@@ -712,6 +712,7 @@ def visualize(
         "memorypressure",
         "cogroup",
         "cogroup-name",
+        "cogroup-nonrec",
     }:
         import matplotlib.pyplot as plt
 
@@ -736,7 +737,10 @@ def visualize(
 
         data_values = None
         if color.startswith("cogroup"):
-            from dask.cogroups import cogroup
+            if color == "cogroup-nonrec":
+                from dask.cogroups import cogroup
+            else:
+                from dask.cogroups import cogroup_recursive as cogroup  # type: ignore
 
             groups = {
                 k: (i, isolated)
@@ -749,7 +753,7 @@ def visualize(
                 g, isolated = groups[x]
                 return None if isolated else "dashed"
 
-            if color == "cogroup":
+            if color in ("cogroup", "cogroup-nonrec"):
 
                 def label(x):
                     return str(o[x]) + f" ({groups[x][0]})"

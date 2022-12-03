@@ -7,7 +7,7 @@ from tlz import partition_all
 
 import dask
 from dask.base import collections_to_dsk, get_dependencies, tokenize
-from dask.cogroups import cogroup
+from dask.cogroups import cogroup_recursive
 from dask.delayed import Delayed
 from dask.order import order
 
@@ -52,7 +52,7 @@ def get_cogroups(
 
     priorities: dict[Hashable, int] = order(dsk, dependencies=dependencies)
 
-    cogroups = list(cogroup(priorities, dependencies))
+    cogroups = cogroup_recursive(priorities, dependencies)
 
     return cogroups, priorities
 
@@ -580,10 +580,7 @@ def test_map_overlap(abcde):
     [
         "linear",
         "sibling",
-        pytest.param(
-            "tree-sib",
-            marks=pytest.mark.xfail(reason="consecutive-sibling logic very brittle"),
-        ),
+        "tree-sib",
     ],
 )
 def test_vorticity(abcde, substructure):
