@@ -164,7 +164,10 @@ def _cogroup_recursive(
         assert len(new_groups) <= len(groups)
 
         translated_groups = [
-            ([k for gid in sorted(group) for k in groups[gid][0]], isolated)
+            (
+                [k for gid in sorted(group) for k in groups[gid][0]],
+                any(groups[gid][1] for gid in group),
+            )
             for (group, isolated) in new_groups
         ]
 
