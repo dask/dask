@@ -7,7 +7,7 @@ from typing import Hashable, Iterator, NewType, TypeVar
 import dask
 from dask.core import reverse_dict
 from dask.delayed import Delayed
-from dask.order import order
+from dask.order import graph_metrics, ndependencies, order
 
 KT = TypeVar("KT", bound=Hashable)
 
@@ -15,6 +15,7 @@ KT = TypeVar("KT", bound=Hashable)
 def cogroup(
     priorities: dict[KT, int],
     dependencies: dict[KT, set[KT]],
+    max_chain: int | None = None,
 ) -> Iterator[tuple[list[KT], bool]]:
     dependents: dict[KT, set[KT]] = reverse_dict(dependencies)
     kps = sorted(priorities.items(), key=operator.itemgetter(1))
@@ -30,6 +31,7 @@ def cogroup(
 
     i = 0
     while i < len(keys):
+        chain_len = 0
         start_i = prev_i = i
         key = keys[i]
         isolated_cogroup: bool = False
@@ -54,6 +56,9 @@ def cogroup(
                 # TODO if we reach the top without a jump, try again from the start with
                 # the next-smallest dependent
                 prev_i = i
+                chain_len += 1
+                if max_chain is not None and chain_len == max_chain:
+                    break
             else:
                 # non-consecutive priority jump. this is our max node.
 
@@ -63,8 +68,9 @@ def cogroup(
 
                     if not was_chain:
                         # ended up in this branch because `was_chain` was false, not because
-                        # inputs belonged to a different cogroup. so this is an isolated cogroup
-                        # because it doesn't need to consider the location of any inputs.
+                        # inputs belonged to a different cogroup or we maxed out the chain.
+                        # so this is an isolated cogroup because it doesn't need to consider
+                        # the location of any inputs.
                         isolated_cogroup = True
                         assert i > start_i + 1, (
                             i,
@@ -91,10 +97,12 @@ def f(*args):
 
 
 def _cogroup_recursive(
+    *,
     priorities: dict[KT, int],
     dependencies: dict[KT, set[KT]],
     prev_n_groups: int | None,
     min_groups: int | None,
+    max_chain: int | None,
     depth: int,
 ) -> tuple[list[tuple[list[KT], bool]], dict[CogroupID, set[CogroupID]]] | None:
 
@@ -105,6 +113,7 @@ def _cogroup_recursive(
         color="cogroup-nonrec",
         optimize_graph=False,
         collapse_outputs=True,
+        max_chain=max_chain,
     )
 
     groups: list[tuple[list[KT], bool]] = []
@@ -114,7 +123,9 @@ def _cogroup_recursive(
     def cogroup_of(key: KT) -> CogroupID:
         return CogroupID(bisect_right(group_end_idxs, priorities[key]))
 
-    for group_id, (keys, isolated) in enumerate(cogroup(priorities, dependencies)):
+    for group_id, (keys, isolated) in enumerate(
+        cogroup(priorities, dependencies, max_chain)
+    ):
         deps: set[CogroupID]
         group_deps[CogroupID(group_id)] = deps = set()
         groups.append((keys, isolated))
@@ -133,7 +144,7 @@ def _cogroup_recursive(
     assert (kps := [priorities[k] for k in ks]) == list(range(len(ks))), kps
 
     if (prev_n_groups and len(groups) == prev_n_groups) or (
-        min_groups and len(groups) < min_groups
+        min_groups and len(groups) <= min_groups
     ):
         # Terminal case: no more change, or we've collapsed too much.
         return None
@@ -144,16 +155,29 @@ def _cogroup_recursive(
         # bundled together).
         min_groups = sum(len(d) == 0 for d in reverse_dict(group_deps).values())
 
+    if max_chain is None:
+        dependents = reverse_dict(dependencies)
+        num_needed, total_dependencies = ndependencies(dependencies, dependents)
+        metrics = graph_metrics(dependencies, dependents, total_dependencies)
+
+        # item 5: **max_height**: The maximum height from a root node
+        # TODO don't generalize over the whole graph; different sections might have
+        # different heights.
+        max_chain = max(m[4] for m in metrics.values()) - 1
+
     # HACK: `order` doesn't actually care if `dsk` is a dask; just uses it to calculate dependencies.
     # if you don't pass them in. We can pass any collection as long as it's the right length.
     new_order = order(group_deps, dependencies=group_deps)
 
+    assert min_groups is not None
+    assert max_chain is not None
     if r := _cogroup_recursive(
-        new_order,
-        group_deps,
-        len(groups),
-        min_groups,
-        depth + 1,
+        priorities=new_order,
+        dependencies=group_deps,
+        prev_n_groups=len(groups),
+        min_groups=min_groups,
+        max_chain=max_chain - 1,
+        depth=depth + 1,
     ):
         # Recursive case: a subsequent co-grouping reduced the number of groups without collapsing too much.
         # Translate the keys back, and return it.
@@ -187,6 +211,13 @@ def cogroup_recursive(
     priorities: dict[KT, int],
     dependencies: dict[KT, set[KT]],
 ) -> list[tuple[list[KT], bool]]:
-    r = _cogroup_recursive(priorities, dependencies, None, None, 0)
+    r = _cogroup_recursive(
+        priorities=priorities,
+        dependencies=dependencies,
+        prev_n_groups=None,
+        min_groups=None,
+        max_chain=None,
+        depth=0,
+    )
     assert r
     return r[0]

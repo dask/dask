@@ -739,6 +739,8 @@ def visualize(
         if color.startswith("cogroup"):
             if color == "cogroup-nonrec":
                 from dask.cogroups import cogroup
+
+                cogroup = partial(cogroup, max_chain=kwargs.pop("max_chain", None))
             else:
                 from dask.cogroups import cogroup_recursive as cogroup  # type: ignore
 

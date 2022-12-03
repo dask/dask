@@ -107,6 +107,7 @@ def test_two_step_reduction(abcde):
     """
     a, b, c, d, e = abcde
 
+    # TODO parametrize to also be widely-shared
     ats = [tsk((a, i)) for i in range(3)]
     bts = [tsk((b, i)) for i in range(3)]
     cts = [tsk((c, i)) for i in range(3)]
