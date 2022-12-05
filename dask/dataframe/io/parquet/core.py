@@ -245,6 +245,8 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
+        Note that the default file-system backend can be configured with the
+        ``dataset`` argument, described below.
     open_file_options : dict, default None
         Key/value arguments to be passed along to ``AbstractFileSystem.open``
         when each parquet data file is open for reading. Experimental
@@ -341,19 +343,31 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
+    dataset: dict, default None
+        Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
+        or ``fastparquet.ParquetFile`` object. These options may include a
+        "filesystem" key (or "fs" for the "fastparquet" engine) to configure
+        the desired file-system backend. For the "arrow" engine, the
+        "filesystem" option may be set to "arrow" to specify that the backend
+        should correspond to ``pyarrow.fs.FileSystem``::
+
+            ``dd.read_parquet(..., dataset={"filesystem": "arrow"})``
+
+        For both engines, "filesystem" may be set to "fsspec" to specify that a
+        ``fsspec.spec.AbstractFileSystem`` is preferred. Note that the default
+        is "fsspec", unless reading from s3 storage with the "arrow" engine
+        (in which case ``pyarrow.fs.S3FileSystem`` is used, when possible).
+    read: dict, default None
+        Dictionary of options to pass through to ``engine.read_partitions``
+        using the ``read`` key-word argument.
+    arrow_to_pandas: dict, default None
+        Dictionary of options to use when converting from ``pyarrow.Table`` to
+        a pandas ``DataFrame`` object. Only used by the "arrow" engine.
     **kwargs: dict (of dicts)
-        Passthrough key-word arguments for read backend.
-        The top-level keys correspond to the appropriate operation type, and
-        the second level corresponds to the kwargs that will be passed on to
-        the underlying ``pyarrow`` or ``fastparquet`` function.
-        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
-        'file' or 'dataset' (for opening a ``fastparquet.ParquetFile``), 'read'
-        (for the backend read function), 'arrow_to_pandas' (for controlling the
-        arguments passed to convert from a ``pyarrow.Table.to_pandas()``).
-        Any element of kwargs that is not defined under these top-level keys
-        will be passed through to the `engine.read_partitions` classmethod as a
-        stand-alone argument (and will be ignored by the engine implementations
-        defined in ``dask.dataframe``).
+        Options to pass through to ``engine.read_partitions`` as staand-alone
+        key-word arguments. Note that these options will be ignored by the
+        engines defined in ``dask.dataframe``, but may be used by other custom
+        implementations.
 
     Examples
     --------

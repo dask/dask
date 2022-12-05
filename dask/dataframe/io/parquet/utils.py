@@ -792,14 +792,14 @@ def _process_open_file_options(
 
 def _split_user_options(**kwargs):
     # Check user-defined options.
-    # Split into "file" and "dataset"-specific kwargs
+    # Split into "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
 
     if "file" in user_kwargs:
         # Deprecation warning to move toward a single `dataset` key
         warnings.warn(
-            "Passing user options under the 'file' key is now deprecated. "
-            "Please use 'dataset' instead.",
+            "Passing user options with the 'file' argument is now deprecated."
+            " Please use 'dataset' instead.",
             FutureWarning,
         )
 
