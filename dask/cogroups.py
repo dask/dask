@@ -144,7 +144,7 @@ def _cogroup_recursive(
     assert (kps := [priorities[k] for k in ks]) == list(range(len(ks))), kps
 
     if (prev_n_groups and len(groups) == prev_n_groups) or (
-        min_groups and len(groups) <= min_groups
+        min_groups and len(groups) < min_groups
     ):
         # Terminal case: no more change, or we've collapsed too much.
         return None
@@ -153,7 +153,9 @@ def _cogroup_recursive(
         # Calculate the number of output groups (groups with no dependents) at depth 0.
         # We shouldn't consolidate more than this (otherwise unrelated outputs be getting
         # bundled together).
-        min_groups = sum(len(d) == 0 for d in reverse_dict(group_deps).values())
+        n_output_groups = sum(len(d) == 0 for d in reverse_dict(group_deps).values())
+        # If there's just 1 output, don't let it get overly collapsed.
+        min_groups = max(2, n_output_groups)
 
     if max_chain is None:
         dependents = reverse_dict(dependencies)
