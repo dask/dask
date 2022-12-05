@@ -11,7 +11,7 @@ KT = TypeVar("KT", bound=Hashable)
 def cogroup(
     priorities: dict[KT, int],
     dependencies: dict[KT, set[KT]],
-) -> Iterator[tuple[list[KT], bool]]:
+) -> Iterator[list[KT]]:
     dependents: dict[KT, set[KT]] = reverse_dict(dependencies)
     kps = sorted(priorities.items(), key=operator.itemgetter(1))
     # ^ can't `zip(*sorted...)` because of mypy: https://github.com/python/mypy/issues/5247
@@ -28,7 +28,6 @@ def cogroup(
     while i < len(keys):
         start_i = prev_i = i
         key = keys[i]
-        isolated_cogroup: bool = False
 
         # Walk linear chains of consecutive priority, either until we hit a priority jump,
         # or a task with dependencies that are outside of our group.
@@ -38,7 +37,7 @@ def cogroup(
 
             if (
                 # linear chain
-                (was_chain := (i == prev_i + 1))
+                i == prev_i + 1
                 # If an input comes from a different cogroup, and it's only
                 # used in this group, don't walk past it.
                 and not any(
@@ -54,21 +53,7 @@ def cogroup(
                 # non-consecutive priority jump. this is our max node.
 
                 # check if we've jumped over a fully disjoint part of the graph
-                if keys[i - 1] in dependencies[key]:
-                    # Seems connected
-
-                    if not was_chain:
-                        # ended up in this branch because `was_chain` was false, not because
-                        # inputs belonged to a different cogroup or we maxed out the chain.
-                        # so this is an isolated cogroup because it doesn't need to consider
-                        # the location of any inputs.
-                        isolated_cogroup = True
-                        assert i > start_i + 1, (
-                            i,
-                            start_i,
-                            key,
-                        )
-                else:
+                if keys[i - 1] not in dependencies[key]:
                     # If we've jumped over a disjoint subgraph, don't eat it.
                     # Roll back and just take the linear chain.
                     i = prev_i
@@ -77,4 +62,9 @@ def cogroup(
 
         # all tasks from the start to the current (inclusive) belong to the cogroup.
         i = i + 1
-        yield keys[start_i:i], isolated_cogroup
+
+        # If all inputs are from existing groups, this isn't a real co-group. Note that
+        # if there are no dependencies, this will be False. That's ok: if a task has no
+        # deps, but we weren't able to traverse past it, it would be a group of size 1.
+        if any(priorities[dk] >= start_i for dk in dependencies[key]):
+            yield keys[start_i:i]

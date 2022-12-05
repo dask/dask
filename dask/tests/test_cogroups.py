@@ -41,7 +41,7 @@ def tskchain(input, *names):
 
 def get_cogroups(
     xs: Delayed | list[Delayed],
-) -> tuple[list[tuple[list[Hashable], bool]], dict[Hashable, int]]:
+) -> tuple[list[list[Hashable]], dict[Hashable, int]]:
     if not isinstance(xs, list):
         xs = [xs]
 

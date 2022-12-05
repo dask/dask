@@ -738,26 +738,19 @@ def visualize(
         if color.startswith("cogroup"):
             from dask.cogroups import cogroup
 
-            groups = {
-                k: (i, isolated)
-                for i, (keys, isolated) in enumerate(cogroup(o, dependencies))
-                for k in keys
+            values = {
+                k: i for i, keys in enumerate(cogroup(o, dependencies)) for k in keys
             }
-            values = {k: g for k, (g, isolated) in groups.items()}
-
-            def style(x) -> str | None:
-                g, isolated = groups[x]
-                return None if isolated else "dashed"
 
             if color == "cogroup":
 
                 def label(x):
-                    return str(o[x]) + f" ({groups[x][0]})"
+                    return str(o[x]) + f" ({values[x]})"
 
             elif color == "cogroup-name":
 
                 def label(x):
-                    return key_split(x) + f" ({groups[x][0]})"
+                    return key_split(x) + f" ({values[x]})"
 
             else:
                 raise NotImplementedError("Unknown value color=%s" % color)
