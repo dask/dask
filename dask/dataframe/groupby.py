@@ -1466,12 +1466,20 @@ class _GroupBy:
         # rename "by" columns internally
         # to fix cumulative operations on the same "by" columns
         # ref: https://github.com/dask/dask/issues/9313
-        if columns is not None and set(columns).intersection(set(by_cols)):
+        if columns is not None:
+            # Handle series case (only a single column, but can't
+            # enlist above because that fails in pandas when
+            # constructing meta later)
+            grouping_columns = [columns] if is_series_like(meta) else columns
+            to_rename = set(grouping_columns) & set(by_cols)
             by = []
             for col in by_cols:
-                suffix = str(uuid.uuid4())
-                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
-                by.append(col + suffix)
+                if col in to_rename:
+                    suffix = str(uuid.uuid4())
+                    self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                    by.append(col + suffix)
+                else:
+                    by.append(col)
         else:
             by = by_cols
 

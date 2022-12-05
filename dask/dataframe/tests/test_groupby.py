@@ -1688,7 +1688,6 @@ def test_cumulative(func, key, sel):
             dg.cumcount(axis=0)
 
 
-@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/9715")
 def test_series_groupby_multi_character_column_name():
     df = pd.DataFrame({"aa": [1, 2, 1, 3, 4, 1, 2]})
     ddf = dd.from_pandas(df, npartitions=3)
