@@ -4,7 +4,6 @@ from uuid import uuid4
 
 import fsspec
 import pandas as pd
-from fsspec.implementations.arrow import ArrowFSWrapper
 from fsspec.implementations.local import LocalFileSystem
 from packaging.version import parse as parse_version
 
@@ -26,7 +25,7 @@ def _is_local_fs(fs):
 def _is_local_fs_pyarrow(fs):
     """Check if a pyarrow-based file-system is local"""
     if fs:
-        if isinstance(fs, ArrowFSWrapper):
+        if hasattr(fs, "fs"):
             # ArrowFSWrapper will have an "fs" attribute
             return _is_local_fs_pyarrow(fs.fs)
         elif hasattr(fs, "type_name"):
