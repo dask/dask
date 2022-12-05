@@ -12,6 +12,15 @@ def cogroup(
     priorities: dict[KT, int],
     dependencies: dict[KT, set[KT]],
 ) -> Iterator[list[KT]]:
+    # NOTE: it's possible there are items in `dependencies.values()` that aren't in `priorities`.
+    # This can happen when submitting tasks to the scheduler that depend on existing Futures, for example.
+    # If a dependency is missing from `priorities`, we assume it's highest-priority (-1).
+
+    assert priorities.keys() == dependencies.keys(), (
+        priorities.keys() - dependencies.keys(),
+        dependencies.keys() - priorities.keys(),
+    )
+
     dependents: dict[KT, set[KT]] = reverse_dict(dependencies)
     kps = sorted(priorities.items(), key=operator.itemgetter(1))
     # ^ can't `zip(*sorted...)` because of mypy: https://github.com/python/mypy/issues/5247
@@ -31,25 +40,18 @@ def cogroup(
 
         # Walk linear chains of consecutive priority, either until we hit a priority jump,
         # or a task with dependencies that are outside of our group.
-        while downstream := dependents[key]:
+
+        while not any(
+            # If an input comes from a different cogroup, and it's only
+            # used in this group, don't walk past it.
+            priorities.get(dk, -1) < start_i and len(dependents[dk]) == 1
+            for dk in dependencies[key]
+        ) and (downstream := dependents[key]):
             key = min(downstream, key=priorities.__getitem__)
+            prev_i = i
             i = priorities[key]
 
-            if (
-                # linear chain
-                i == prev_i + 1
-                # If an input comes from a different cogroup, and it's only
-                # used in this group, don't walk past it.
-                and not any(
-                    priorities[dk] < start_i and len(dependents[dk]) == 1
-                    for dk in dependencies[key]
-                )
-            ):
-                # walk up the linear chain
-                # TODO if we reach the top without a jump, try again from the start with
-                # the next-smallest dependent
-                prev_i = i
-            else:
+            if i != prev_i + 1:
                 # non-consecutive priority jump. this is our max node.
 
                 # check if we've jumped over a fully disjoint part of the graph
@@ -60,11 +62,14 @@ def cogroup(
 
                 break
 
+            # TODO if we reach the top without a jump, try again from the start with
+            # the next-smallest dependent
+
         # all tasks from the start to the current (inclusive) belong to the cogroup.
         i = i + 1
 
         # If all inputs are from existing groups, this isn't a real co-group. Note that
         # if there are no dependencies, this will be False. That's ok: if a task has no
         # deps, but we weren't able to traverse past it, it would be a group of size 1.
-        if any(priorities[dk] >= start_i for dk in dependencies[key]):
+        if any(priorities.get(dk, -1) >= start_i for dk in dependencies[key]):
             yield keys[start_i:i]

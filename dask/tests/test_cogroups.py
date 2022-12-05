@@ -6,8 +6,9 @@ import pytest
 from tlz import partition_all
 
 import dask
-from dask.base import collections_to_dsk, get_dependencies, tokenize
+from dask.base import collections_to_dsk, tokenize
 from dask.cogroups import cogroup
+from dask.core import get_dependencies
 from dask.delayed import Delayed
 from dask.order import order
 
@@ -57,27 +58,32 @@ def get_cogroups(
     return cogroups, priorities
 
 
-def cogroup_to_dict(
-    cogroups: Iterable[tuple[list[Hashable], bool]]
-) -> dict[Hashable, tuple[int, bool]]:
-    return {
-        k: (i, isolated) for i, (keys, isolated) in enumerate(cogroups) for k in keys
-    }
+def cogroup_by_key(
+    cogroups: Iterable[list[Hashable]],
+) -> dict[Hashable, list[Hashable]]:
+    return {k: group for group in cogroups for k in group}
 
 
 _ = "_"
 
 
 def assert_cogroup(
-    cogroup: tuple[list[Hashable], bool],
-    pattern: list[Hashable],
-    *,
-    isolated: bool,
+    cogroup: list[Hashable], pattern: list[Hashable], *, subset: bool = False
 ) -> None:
-    keys, is_isolated = cogroup
-    assert is_isolated == isolated
-    assert len(keys) == len(pattern)
-    for k, p in zip(keys, pattern):
+    if subset:
+        assert pattern[0] != "_"
+        for i, k in enumerate(cogroup):
+            if k == pattern[0]:
+                cogroup = cogroup[i:]
+                break
+        else:
+            pytest.fail(f"First element {pattern[0]!r} not found in cogroup {cogroup}")
+
+    if subset:
+        assert len(cogroup) >= len(pattern)
+    else:
+        assert len(cogroup) == len(pattern)
+    for k, p in zip(cogroup, pattern):
         if p != "_":
             assert k == p
 
@@ -93,6 +99,51 @@ def assert_cogroup_priority_range(
     keys, is_isolated = cogroup
     assert is_isolated == isolated
     assert [priorities[k] for k in keys] == list(range(start, stop_inclusive + 1))
+
+
+def test_client_map_existing_futures(abcde):
+    a, b, c, d, e = abcde
+    dsk = {(b, i): (f, (a, i)) for i in range(8)}
+
+    cogroups = list(
+        cogroup(
+            priorities={k: k[1] for k in dsk},
+            # Tasks have dependencies not given in `priorities`
+            dependencies={k: {(a, k[1])} for k in dsk},
+        )
+    )
+    assert not cogroups
+
+
+def test_reduce_existing_futures(abcde):
+    r"""
+               d
+           /       \
+         c           c
+     /  / \  \   /  / \ \
+    b  b  b  b  b  b  b  b
+    |  |  |  |  |  |  |  |
+    a  a  a  a  a  a  a  a  <--- existing futures not in graph
+    """
+    a, b, c, d, e = abcde
+    dsk = {(b, i): (f, (a, i)) for i in range(8)}
+    dsk[(c, 0)] = (f, (b, 0), (b, 1), (b, 2), (b, 3))
+    dsk[(c, 1)] = (f, (b, 4), (b, 5), (b, 6), (b, 7))
+    dsk[d] = (f, (c, 0), (c, 1))
+
+    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    for i in range(8):
+        dependencies[(b, i)] = {(a, i)}
+    priorities = order(dsk)
+
+    cogroups = list(
+        cogroup(
+            priorities=priorities,
+            # Tasks have dependencies not given in `priorities`
+            dependencies=dependencies,
+        )
+    )
+    assert not cogroups
 
 
 def test_two_step_reduction(abcde):
@@ -119,15 +170,17 @@ def test_two_step_reduction(abcde):
     final = tsk("final", *ets)
 
     cogroups, prios = get_cogroups(final)
-
-    assert len(cogroups) == 4
+    grouping = cogroup_by_key(cogroups)
 
     for i in range(len(ats)):
-        assert_cogroup(
-            cogroups[i], [(a, i), (b, i), (d, i), (c, i), (e, i)], isolated=True
-        )
+        group = grouping[(a, i)]
+        assert_cogroup(group, [(a, i), (b, i), (d, i)], subset=True)
+        if (c, i) not in group:
+            assert grouping[(c, i)] == [(c, i), (e, i)]
 
-    assert_cogroup(cogroups[-1], ["final"], isolated=False)
+    assert grouping[(a, 0)] != grouping[(a, 1)] != grouping[(a, 2)]
+    assert grouping[(b, 0)] != grouping[(b, 1)] != grouping[(a, 2)]
+    assert grouping[(c, 0)] != grouping[(c, 1)] != grouping[(a, 2)]
 
 
 def test_two_step_reduction_linear_chains(abcde):
@@ -167,29 +220,22 @@ def test_two_step_reduction_linear_chains(abcde):
     final = tsk("final", *s2ts)
 
     cogroups, prios = get_cogroups(final)
+    grouping = cogroup_by_key(cogroups)
 
-    assert len(cogroups) == 4
-
-    assert_cogroup(
-        cogroups[0],
-        # TODO ideally `root` wouldn't be in there
-        ["root", (a, 0), _, _, (c, 0), _, (b, 0), ("s1", 0), (d, 0), _, ("s2", 0)],
-        isolated=True,
-    )
-
-    assert_cogroup(
-        cogroups[1],
-        [(a, 1), _, _, (c, 1), _, (b, 1), ("s1", 1), (d, 1), _, ("s2", 1)],
-        isolated=True,
-    )
-
-    assert_cogroup(
-        cogroups[2],
-        [(a, 2), _, _, (c, 2), _, (b, 2), ("s1", 2), (d, 2), _, ("s2", 2)],
-        isolated=True,
-    )
-
-    assert_cogroup(cogroups[3], ["final"], isolated=False)
+    for i in range(len(ats)):
+        group = grouping[(a, i)]
+        if grouping[(d, i)] is grouping[(a, i)]:
+            assert_cogroup(
+                group,
+                [(a, i), _, _, (c, i), _, (b, i), ("s1", i), (d, i), _, _, ("s2", i)],
+            )
+        else:
+            assert_cogroup(
+                group,
+                [(a, i), _, _, (c, i), _, (b, i), ("s1", i)],
+                subset=True,
+            )
+            assert_cogroup(grouping[(d, i)], [(d, i), _, ("s2", i)])
 
 
 @pytest.mark.xfail(reason="widely shared dependencies mess everything up")
@@ -209,24 +255,13 @@ def test_cogroup_linear_chains_plus_widely_shared(abcde):
     cts = [tsk((c, i), axs) for i, axs in enumerate(partition_all(3, bts))]
 
     cogroups, prios = get_cogroups(cts)
-    assert len(cogroups) == 4
+    grouping = cogroup_by_key(cogroups)
 
-    assert_cogroup(cogroups[0], ["shared"], isolated=False)
-    assert_cogroup(
-        cogroups[1],
-        [(a, 0), (b, 0), (a, 1), (b, 1), (a, 2), (b, 2), (c, 0)],
-        isolated=True,
-    )
-    assert_cogroup(
-        cogroups[2],
-        [(a, 3), (b, 3), (a, 4), (b, 4), (a, 5), (b, 5), (c, 1)],
-        isolated=True,
-    )
-    assert_cogroup(
-        cogroups[3],
-        [(a, 6), (b, 6), (a, 7), (b, 7), (c, 3)],
-        isolated=True,
-    )
+    assert grouping[(a, 0)] == grouping[(a, 1)] == grouping[(a, 2)]
+    assert grouping[(a, 3)] == grouping[(a, 4)] == grouping[(a, 5)]
+    assert grouping[(a, 6)] == grouping[(a, 7)] == grouping[(a, 8)]
+
+    assert grouping[(a, 0)] != grouping[(a, 3)] != grouping[(a, 6)]
 
 
 # # @gen_cluster(nthreads=[], client=True)
@@ -414,12 +449,9 @@ def test_tree_reduce(abcde):
 
     cogroups, prios = get_cogroups(Delayed(c, dsk))
 
-    assert len(cogroups) == 4
-
-    assert_cogroup(cogroups[0], [a1, a2, a3, b1], isolated=True)
-    assert_cogroup(cogroups[1], [a4, a5, a6, b2], isolated=True)
-    assert_cogroup(cogroups[2], [a7, a8, a9, b3], isolated=True)
-    assert_cogroup(cogroups[3], [c], isolated=False)
+    assert_cogroup(cogroups[0], [a1, a2, a3, b1])
+    assert_cogroup(cogroups[1], [a4, a5, a6, b2])
+    assert_cogroup(cogroups[2], [a7, a8, a9, b3])
 
 
 # TODO not sure what the best behavior here is?
@@ -429,7 +461,7 @@ def test_nearest_neighbor(abcde):
      \  |  /  \ |  /  \ |  / \ |  /
         b1      b2      b3     b4
 
-    No co-groups
+    All separate co-groups
     """
     a, b, c, _, _ = abcde
     a1, a2, a3, a4, a5, a6, a7, a8, a9 = (a + i for i in "123456789")
@@ -452,9 +484,11 @@ def test_nearest_neighbor(abcde):
     }
 
     cogroups, prios = get_cogroups([Delayed(k, dsk) for k in dsk])
+    grouping = cogroup_by_key(cogroups)
 
-    # no isolated cogroups
-    assert len([f for f in cogroups if f[1]]) == 0
+    # having none would be fine / ideal
+    if cogroups:
+        assert grouping[b1] != grouping[b2] != grouping[b3] != grouping[b4]
 
 
 # @gen_cluster(nthreads=[], client=True)
@@ -569,19 +603,27 @@ def test_map_overlap(abcde):
     }
 
     cogroups, prios = get_cogroups([Delayed(k, dsk) for k in dsk])
+    grouping = cogroup_by_key(cogroups)
 
-    assert len([f for f in cogroups if f[1]]) == 2
+    assert grouping[(e, 1)] != grouping[(e, 5)]
+    assert grouping[(d, 2)] != grouping[(d, 4)]
 
-    assert_cogroup_priority_range(cogroups[0], 0, 7, prios, isolated=True)
-    assert_cogroup_priority_range(cogroups[1], 8, 13, prios, isolated=True)
+    if len(grouping[(d, 2)]) != 1:
+        assert grouping[(d, 2)] == grouping[(e, 1)]
+
+    if len(grouping[(d, 4)]) != 1:
+        assert grouping[(d, 4)] == grouping[(e, 5)]
+
+    assert_cogroup(grouping[(d, 1)], [(d, 1), (c, 1), (c, 2)], subset=True)
+    assert_cogroup(grouping[(d, 5)], [(d, 5), (c, 5), (c, 4)], subset=True)
 
 
 @pytest.mark.parametrize(
     "substructure",
     [
         "linear",
-        "sibling",
-        "tree-sib",
+        pytest.param("sibling", marks=pytest.mark.xfail),
+        pytest.param("tree-sib", marks=pytest.mark.xfail),
     ],
 )
 def test_vorticity(abcde, substructure):
@@ -629,7 +671,7 @@ def test_vorticity(abcde, substructure):
         }
     )
     cogroups, prios = get_cogroups([Delayed(k, dsk) for k in dsk])
-    grouping = cogroup_to_dict(cogroups)
+    grouping = cogroup_by_key(cogroups)
 
     # Neighboring towers should be joined, since they feed into a common dependency.
     assert grouping["a1"] == grouping["a2"] == grouping["d1"] == grouping["d2"]
@@ -637,10 +679,10 @@ def test_vorticity(abcde, substructure):
     assert grouping["a6"] == grouping["a7"] == grouping["d6"] == grouping["d7"]
     assert grouping["a8"] == grouping["a9"] == grouping["d8"] == grouping["d9"]
 
-    # Debatable:
-    # assert not grouping[e1][1]
-    # assert not grouping[e2][1]
-    # assert not grouping[e3][1]
+    assert grouping["a1"] == grouping["e1"]
+    assert grouping["a10"] == grouping["e4"]
+
+    assert grouping["a1"] != grouping["a10"]
 
 
 def test_actual_map_overlap():
