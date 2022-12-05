@@ -1588,11 +1588,6 @@ class ArrowDatasetEngine(Engine):
                 def default_types_mapper(pyarrow_dtype):  # type: ignore
                     return pd.ArrowDtype(pyarrow_dtype)
 
-            else:
-                raise ValueError(
-                    "Invalid `use_nullable_dtypes` received. Expected `True`, "
-                    f"`'pandas'`, or `'pyarrow'` but got {use_nullable_dtypes}."
-                )
             if "types_mapper" in _kwargs:
                 # User-provided entries take priority over default_types_mapper
                 types_mapper = _kwargs["types_mapper"]
