@@ -366,6 +366,12 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
+    if use_nullable_dtypes not in (True, False, "pandas", "pyarrow"):
+        raise ValueError(
+            "Invalid value for `use_nullable_dtypes` received. Expected `True`, `False`, "
+            f"`'pandas'`, or `'pyarrow'` but got {use_nullable_dtypes} instead."
+        )
+
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
         warnings.warn(

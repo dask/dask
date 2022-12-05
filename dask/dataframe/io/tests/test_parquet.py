@@ -618,17 +618,29 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 
 
 @PYARROW_MARK
-def test_use_nullable_dtypes(tmp_path, engine):
+@pytest.mark.parametrize("use_nullable_dtypes", [True, "pandas", "pyarrow"])
+def test_use_nullable_dtypes(tmp_path, engine, use_nullable_dtypes):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
+
+    if use_nullable_dtypes in (True, "pandas"):
+        nullable_backend = ""
+    else:
+        nullable_backend = "[pyarrow]"
     df = pd.DataFrame(
         {
-            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
-            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
-            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
-            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype=f"Int64{nullable_backend}"),
+            "b": pd.Series(
+                [True, pd.NA, False, True, False], dtype=f"boolean{nullable_backend}"
+            ),
+            "c": pd.Series(
+                [0.1, 0.2, 0.3, pd.NA, 0.4], dtype=f"Float64{nullable_backend}"
+            ),
+            "d": pd.Series(
+                ["a", "b", "c", "d", pd.NA], dtype=f"string{nullable_backend}"
+            ),
         }
     )
     ddf = dd.from_pandas(df, npartitions=2)
@@ -647,7 +659,9 @@ def test_use_nullable_dtypes(tmp_path, engine):
     # Not supported by fastparquet
     if engine == "fastparquet":
         with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
-            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+            dd.read_parquet(
+                tmp_path, engine=engine, use_nullable_dtypes=use_nullable_dtypes
+            )
 
     # Works in pyarrow
     else:
@@ -657,8 +671,28 @@ def test_use_nullable_dtypes(tmp_path, engine):
             assert_eq(df, ddf2)
 
         # Round trip works when we use nullable dtypes
-        ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+        ddf2 = dd.read_parquet(
+            tmp_path, engine=engine, use_nullable_dtypes=use_nullable_dtypes
+        )
         assert_eq(df, ddf2, check_index=False)
+
+
+def test_use_nullable_dtypes_raises(tmp_path, engine):
+    # Raise an informative error message when `use_nullable_dtypes` is invalid
+    df = pd.DataFrame({"a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64")})
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf.to_parquet(tmp_path, engine=engine)
+
+    bad_use_nullable_dtypes = "not-a-valid-option"
+    with pytest.raises(ValueError) as excinfo:
+        dd.read_parquet(
+            tmp_path,
+            engine=engine,
+            use_nullable_dtypes=bad_use_nullable_dtypes,
+        )
+    msg = str(excinfo.value)
+    assert "Invalid value for `use_nullable_dtypes`" in msg
+    assert bad_use_nullable_dtypes in msg
 
 
 @pytest.mark.xfail(
