@@ -18,6 +18,11 @@ def _(dtype):
     return pd.array(["a", pd.NA], dtype=dtype)
 
 
+@make_array_nonempty.register(pd.ArrowDtype)
+def _(dtype):
+    return dtype.empty(2)
+
+
 @make_scalar.register(str)
 def _(x):
     return "s"

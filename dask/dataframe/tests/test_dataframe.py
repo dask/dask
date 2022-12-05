@@ -1,3 +1,4 @@
+import decimal
 import platform
 import warnings
 import weakref
@@ -5462,3 +5463,53 @@ def test_repr_materialize():
     s.__repr__()
     s.to_frame().__repr__()
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="Requires native PyArrow-backed ExtensionArrays"
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int64[pyarrow]",
+        "int32[pyarrow]",
+        "float64[pyarrow]",
+        "float32[pyarrow]",
+        "uint8[pyarrow]",
+        "date64[pyarrow]",
+    ],
+)
+def test_pyarrow_extension_dtype(dtype):
+    # Ensure simple Dask DataFrame operations work with pyarrow extension dtypes
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"x": range(10)}, dtype="int64[pyarrow]")
+    ddf = dd.from_pandas(df, npartitions=3)
+    expected = (df.x + df.x) * 2
+    result = (ddf.x + ddf.x) * 2
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="Requires native PyArrow-backed ExtensionArrays"
+)
+def test_pyarrow_decimal_extension_dtype():
+    # Similar to `test_pyarrow_extension_dtype` but for pyarrow decimal dtypes
+    pa = pytest.importorskip("pyarrow")
+    pa_dtype = pa.decimal128(precision=7, scale=3)
+
+    data = pa.array(
+        [
+            decimal.Decimal("8093.234"),
+            decimal.Decimal("8094.234"),
+            decimal.Decimal("8095.234"),
+            decimal.Decimal("8096.234"),
+            decimal.Decimal("8097.234"),
+            decimal.Decimal("8098.234"),
+        ],
+        type=pa_dtype,
+    )
+    df = pd.DataFrame({"x": data}, dtype=pd.ArrowDtype(pa_dtype))
+    ddf = dd.from_pandas(df, npartitions=3)
+    expected = (df.x + df.x) * 2
+    result = (ddf.x + ddf.x) * 2
+    assert_eq(expected, result)
