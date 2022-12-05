@@ -7,7 +7,7 @@ from tlz import partition_all
 
 import dask
 from dask.base import collections_to_dsk, get_dependencies, tokenize
-from dask.cogroups import cogroup_recursive
+from dask.cogroups import cogroup
 from dask.delayed import Delayed
 from dask.order import order
 
@@ -52,7 +52,7 @@ def get_cogroups(
 
     priorities: dict[Hashable, int] = order(dsk, dependencies=dependencies)
 
-    cogroups = cogroup_recursive(priorities, dependencies)
+    cogroups = list(cogroup(priorities, dependencies))
 
     return cogroups, priorities
 
