@@ -14,21 +14,51 @@ class Engine:
     """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
-    def get_filesystem(
+    def extract_filesystem(
         cls,
         urlpath,
-        filesystem=None,
-        storage_options=None,
-        open_file_options=None,
+        dataset_options,
+        open_file_options,
+        storage_options,
     ):
-        # Use fsspec to infer a filesystem by default
-        filesystem = filesystem or "fsspec"
-        if filesystem != "fsspec":
+        """Extract filesystem object from urlpath or user arguments
 
-            if not isinstance(filesystem, AbstractFileSystem):
-                raise ValueError(
-                    f"Expected fsspec.AbstractFileSystem. Got {type(filesystem)}"
-                )
+        This classmethod should only be overridden for engines that need
+        to handle filesystem implementations other than ``fsspec``
+        (e.g. ``pyarrow.fs.S3FileSystem``).
+
+        Parameters
+        ----------
+        urlpath: str or List[str]
+            Source directory for data, or path(s) to individual parquet files.
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        storage_options: dict
+            Options to be passed on to the file-system backend.
+
+        Returns
+        -------
+        fs: Any
+            A global filesystem object to be used for metadata
+            processing and file-opening by the engine.
+        paths: List[str]
+            List of data-source paths.
+        dataset_options: dict
+            Engine-specific dataset options.
+        open_file_options: dict
+            Options to be used for file-opening at read time.
+        """
+
+        # Check if fs was already specified as a dataset option
+        fs = dataset_options.pop("fs", "fsspec")
+
+        # Use fsspec to infer a filesystem by default
+        if fs != "fsspec":
+
+            if not isinstance(fs, AbstractFileSystem):
+                raise ValueError(f"Expected fsspec.AbstractFileSystem. Got {type(fs)}")
 
             if storage_options:
                 warnings.warn(f"Ignoring storage_options: {storage_options}")
@@ -40,17 +70,18 @@ class Engine:
             else:
                 urlpath = [stringify_path(urlpath)]
 
-            paths = expand_paths_if_needed(urlpath, "rb", 1, filesystem, None)
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
             return (
-                filesystem,
-                [filesystem._strip_protocol(u) for u in paths],
-                open_file_options or {},
+                fs,
+                [fs._strip_protocol(u) for u in paths],
+                dataset_options,
+                open_file_options,
             )
 
         fs, _, paths = get_fs_token_paths(
             urlpath, mode="rb", storage_options=storage_options
         )
-        return fs, paths, open_file_options or {}
+        return fs, paths, dataset_options, open_file_options
 
     @classmethod
     def read_metadata(
@@ -763,15 +794,25 @@ def _split_user_options(**kwargs):
     # Check user-defined options.
     # Split into "file" and "dataset"-specific kwargs
     user_kwargs = kwargs.copy()
+
+    if "file" in user_kwargs:
+        # Deprecation warning to move toward a single `dataset` key
+        warnings.warn(
+            "Passing user options under the 'file' key is now deprecated. "
+            "Please use 'dataset' instead.",
+            FutureWarning,
+        )
+
     dataset_options = {
         **user_kwargs.pop("file", {}).copy(),
         **user_kwargs.pop("dataset", {}).copy(),
     }
     read_options = user_kwargs.pop("read", {}).copy()
-    read_options["open_file_options"] = user_kwargs.pop("open_file_options", {}).copy()
+    open_file_options = user_kwargs.pop("open_file_options", {}).copy()
     return (
         dataset_options,
         read_options,
+        open_file_options,
         user_kwargs,
     )
 

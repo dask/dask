@@ -15,7 +15,11 @@ from dask.blockwise import BlockIndex
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
-from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
+from dask.dataframe.io.parquet.utils import (
+    Engine,
+    _sort_and_analyze_paths,
+    _split_user_options,
+)
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
 from dask.delayed import Delayed
@@ -180,7 +184,6 @@ def read_parquet(
     categories=None,
     index=None,
     storage_options=None,
-    filesystem=None,
     engine="auto",
     calculate_divisions=None,
     ignore_metadata_file=False,
@@ -432,7 +435,6 @@ def read_parquet(
         "filters": filters,
         "categories": categories,
         "index": index,
-        "filesystem": filesystem,
         "storage_options": storage_options,
         "engine": engine,
         "calculate_divisions": calculate_divisions,
@@ -462,10 +464,22 @@ def read_parquet(
     # Update input_kwargs
     input_kwargs.update({"columns": columns, "engine": engine})
 
-    # Get fsspec-compatible filesystem and paths
-    fs, paths, kwargs["open_file_options"] = engine.get_filesystem(
-        path, filesystem, storage_options
+    # Process and split user options
+    (
+        dataset_options,
+        read_options,
+        open_file_options,
+        other_options,
+    ) = _split_user_options(**kwargs)
+
+    # Extract global filesystem and paths
+    fs, paths, dataset_options, open_file_options = engine.extract_filesystem(
+        path,
+        dataset_options,
+        open_file_options,
+        storage_options,
     )
+    read_options["open_file_options"] = open_file_options
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
 
     auto_index_allowed = False
@@ -488,7 +502,9 @@ def read_parquet(
         ignore_metadata_file=ignore_metadata_file,
         metadata_task_size=metadata_task_size,
         parquet_file_extension=parquet_file_extension,
-        **kwargs,
+        dataset=dataset_options,
+        read=read_options,
+        **other_options,
     )
 
     # In the future, we may want to give the engine the
