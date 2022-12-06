@@ -1586,7 +1586,12 @@ class ArrowDatasetEngine(Engine):
             elif use_nullable_dtypes == "pyarrow":
 
                 def default_types_mapper(pyarrow_dtype):  # type: ignore
-                    return pd.ArrowDtype(pyarrow_dtype)
+                    # Special case pyarrow strings to use more feature complete dtype
+                    # See https://github.com/pandas-dev/pandas/issues/50074
+                    if pyarrow_dtype == pa.string():
+                        return pd.StringDtype("pyarrow")
+                    else:
+                        return pd.ArrowDtype(pyarrow_dtype)
 
             if "types_mapper" in _kwargs:
                 # User-provided entries take priority over default_types_mapper
