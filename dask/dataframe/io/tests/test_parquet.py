@@ -15,7 +15,12 @@ import dask
 import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_121,
+    PANDAS_GT_130,
+    PANDAS_GT_150,
+)
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -618,7 +623,19 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize("use_nullable_dtypes", [True, "pandas", "pyarrow"])
+@pytest.mark.parametrize(
+    "use_nullable_dtypes",
+    [
+        True,
+        "pandas",
+        pytest.param(
+            "pyarrow",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes"
+            ),
+        ),
+    ],
+)
 def test_use_nullable_dtypes(tmp_path, engine, use_nullable_dtypes):
     """
     Test reading a parquet file without pandas metadata,
