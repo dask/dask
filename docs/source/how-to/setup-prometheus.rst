@@ -51,32 +51,32 @@ Semaphore metrics
 
 The following metrics about semaphores are available on the scheduler:
 
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-|                  Metric name                  |                                   Description                                   |
-+===============================================+=================================================================================+
-| ``dask_semaphore_max_leases``                 | Maximum leases allowed per semaphore                                            |
-|                                               |                                                                                 |
-|                                               | **Note:** This will be constant for each semaphore during its lifetime.         |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-| ``dask_semaphore_active_leases``              | Amount of currently active leases per semaphore                                 |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-| ``dask_semaphore_pending_leases``             | Amount of currently pending leases per semaphore                                |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-| ``dask_semaphore_acquire_total``              | Total number of leases acquired per semaphore                                   |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-| ``dask_semaphore_release_total``              | Total number of leases released per semaphore                                   |
-|                                               |                                                                                 |
-|                                               | **Note:** If a semaphore is closed while there are still leases active,         |
-|                                               | this count will not equal ``semaphore_acquired_total`` after execution.         |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
-| ``dask_semaphore_average_pending_lease_time`` | Exponential moving average of the time it took to acquire a lease per semaphore |
-|                                               |                                                                                 |
-|                                               | **Note:** This only includes time spent on scheduler side,                      |
-|                                               | it does not include time spent on communication.                                |
-|                                               |                                                                                 |
-|                                               | **Note:** This average is calculated based on order of leases                   |
-|                                               | instead of time of lease acquisition.                                           |
-+-----------------------------------------------+---------------------------------------------------------------------------------+
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+|                      Metric name                      |                                   Description                                   |
++=======================================================+=================================================================================+
+| ``dask_semaphore_max_leases``                         | Maximum leases allowed per semaphore                                            |
+|                                                       |                                                                                 |
+|                                                       | **Note:** This will be constant for each semaphore during its lifetime.         |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+| ``dask_semaphore_active_leases``                      | Amount of currently active leases per semaphore                                 |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+| ``dask_semaphore_pending_leases``                     | Amount of currently pending leases per semaphore                                |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+| ``dask_semaphore_acquire_total``                      | Total number of leases acquired per semaphore                                   |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+| ``dask_semaphore_release_total``                      | Total number of leases released per semaphore                                   |
+|                                                       |                                                                                 |
+|                                                       | **Note:** If a semaphore is closed while there are still leases active,         |
+|                                                       | this count will not equal ``semaphore_acquired_total`` after execution.         |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
+| ``dask_semaphore_average_pending_lease_time_seconds`` | Exponential moving average of the time it took to acquire a lease per semaphore |
+|                                                       |                                                                                 |
+|                                                       | **Note:** This only includes time spent on scheduler side,                      |
+|                                                       | it does not include time spent on communication.                                |
+|                                                       |                                                                                 |
+|                                                       | **Note:** This average is calculated based on order of leases                   |
+|                                                       | instead of time of lease acquisition.                                           |
++-------------------------------------------------------+---------------------------------------------------------------------------------+
 
 
 Work-stealing metrics
@@ -125,6 +125,10 @@ The worker exposes these metrics about itself:
 | ``dask_worker_concurrent_fetch_requests``     | **Deprecated:** This metric has been renamed to ``transfer_incoming_count``.   |
 |                                               |                                                                                |
 |                                               | Number of open fetch requests to other workers                                 |
++-----------------------------------------------+--------------------------------------------------------------------------------+
+| ``dask_worker_tick_duration_maximum_seconds`` | Maximum tick duration observed since Prometheus last scraped metrics           |
++-----------------------------------------------+--------------------------------------------------------------------------------+
+| ``dask_worker_tick_count_total``              | Total number of ticks observed since the server started                        |
 +-----------------------------------------------+--------------------------------------------------------------------------------+
 
 If the crick_ package is installed, the worker additionally exposes:
