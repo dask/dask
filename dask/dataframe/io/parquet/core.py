@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
+from typing import Literal
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -185,7 +186,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes=False,
+    use_nullable_dtypes: bool | Literal["pandas", "pyarrow"] = False,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -257,6 +258,17 @@ def read_parquet(
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
+    use_nullable_dtypes : {False, True, "pandas", "pyarrow"}
+        Whether to use dtypes that use ``pd.NA`` as a missing value indicator
+        for the resulting ``DataFrame``. ``True`` and ``"pandas"`` will use
+        pandas nullable dtypes (e.g. ``Int64``, ``string[python]``, etc.) while
+        ``"pyarrow"`` will use ``pyarrow``-backed extension dtypes (e.g.
+        ``int64[pyarrow]``, ``string[pyarrow]``, etc.).
+
+        .. note::
+            ``use_nullable_dtypes`` is only supported when ``engine="pyarrow"``
+            and ``use_nullable_dtypes="pyarrow"`` requires ``pandas`` 1.5+.
+
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -558,7 +570,7 @@ def read_parquet(
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
     else:
-        ctx = contextlib.nullcontext()
+        ctx = contextlib.nullcontext()  # type: ignore
 
     with ctx:
         # Construct the output collection with from_map
