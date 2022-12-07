@@ -6,6 +6,7 @@ import pytest
 from tlz import partition_all
 
 import dask
+from dask import graph_manipulation
 from dask.base import collections_to_dsk, tokenize
 from dask.cogroups import cogroup
 from dask.core import get_dependencies
@@ -704,11 +705,32 @@ def test_actual_shuffle():
     cogroups, prios = get_cogroups(dfs)
 
 
+def test_actual_tree_reduce_from_zarr():
+    da = pytest.importorskip("dask.array")
+    open_zarr = tsk("open-zzarr")
+    arr = graph_manipulation.bind(da.ones((30, 30, 30), chunks=(10, 10, 10)), open_zarr)
+    result = arr.sum()
+
+    cogroups, prios = get_cogroups(result)
+
+
 def test_actual_select_threshold():
     da = pytest.importorskip("dask.array")
     # arr = da.random.random((30, 30, 30, 30, 30, 30), chunks=(10, 10, 10, 10, 10, 10))
     arr = da.random.random((30, 30, 30), chunks=(10, 10, 10))
     # arr = da.random.random((30, 30), chunks=(10, 10))
+    result = arr[arr > 1]
+
+    cogroups, prios = get_cogroups(result)
+
+
+def test_actual_select_threshold_from_zarr():
+    da = pytest.importorskip("dask.array")
+    open_zarr = tsk("open-zzarr")
+    # _arr = da.random.random((30, 30, 30, 30, 30, 30), chunks=(10, 10, 10, 10, 10, 10))
+    _arr = da.random.random((30, 30, 30), chunks=(10, 10, 10))
+    # _arr = da.random.random((30, 30), chunks=(10, 10))
+    arr = graph_manipulation.bind(_arr, open_zarr)
     result = arr[arr > 1]
 
     cogroups, prios = get_cogroups(result)
