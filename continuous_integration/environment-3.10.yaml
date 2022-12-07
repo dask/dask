@@ -22,7 +22,6 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
   - tiledb-py >=0.18.3
   - pyspark
   - tiledb>=2.5.0
