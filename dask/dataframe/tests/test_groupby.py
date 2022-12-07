@@ -2615,7 +2615,7 @@ def test_groupby_aggregate_partial_function(agg):
             "b": [1, 2, 5, 6, 9, 2, 6, 8],
         }
     )
-    ddf = dd.from_pandas(pdf, 1)
+    ddf = dd.from_pandas(pdf, npartitions=2)
 
     # DataFrameGroupBy
     assert_eq(agg(pdf.groupby("a")), agg(ddf.groupby("a")))
