@@ -46,7 +46,9 @@ def get_cogroups(
     if not isinstance(xs, list):
         xs = [xs]
 
-    dask.visualize(xs, color="cogroup", optimize_graph=False, collapse_outputs=True)
+    dask.visualize(
+        xs, color="cogroup-name", optimize_graph=False, collapse_outputs=True
+    )
 
     dsk = collections_to_dsk(xs, optimize_graph=False)
     dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -700,3 +702,13 @@ def test_actual_shuffle():
     dfs = df.shuffle("id", shuffle="tasks")
 
     cogroups, prios = get_cogroups(dfs)
+
+
+def test_actual_select_threshold():
+    da = pytest.importorskip("dask.array")
+    # arr = da.random.random((30, 30, 30, 30, 30, 30), chunks=(10, 10, 10, 10, 10, 10))
+    arr = da.random.random((30, 30, 30), chunks=(10, 10, 10))
+    # arr = da.random.random((30, 30), chunks=(10, 10))
+    result = arr[arr > 1]
+
+    cogroups, prios = get_cogroups(result)
