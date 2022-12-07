@@ -185,7 +185,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         column to be columns
     values : scalar or list(scalar)
         column(s) to aggregate
-    aggfunc : {'mean', 'sum', 'count', 'first', 'last'}, default 'mean'
+    aggfunc : {'mean', 'sum', 'count', 'first', 'last', 'min', 'max'}, default 'mean'
 
     Returns
     -------
@@ -215,7 +215,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     ):
         raise ValueError("'values' must refer to an existing column or columns")
 
-    available_aggfuncs = ["mean", "sum", "count", "first", "last"]
+    available_aggfuncs = ["mean", "sum", "count", "first", "last", "min", "max"]
 
     if not is_scalar(aggfunc) or aggfunc not in available_aggfuncs:
         raise ValueError(
@@ -266,15 +266,6 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
 
-    if aggfunc in ["count", "mean"]:
-        pv_count = apply_concat_apply(
-            [df],
-            chunk=methods.pivot_count,
-            aggregate=methods.pivot_agg,
-            meta=meta,
-            token="pivot_table_count",
-            chunk_kwargs=kwargs,
-        )
 
     if aggfunc == "sum":
         return pv_sum
@@ -300,6 +291,24 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             token="pivot_table_last",
             chunk_kwargs=kwargs,
         )
+    elif aggfunc == "min":
+         return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_min,
+            aggregate=methods.pivot_agg_min,
+            meta=meta,
+            token="pivot_table_min",
+            chunk_kwargs=kwargs,
+        )
+    elif aggfunc == "max":
+        return apply_concat_apply(
+            [df],
+            chunk=methods.pivot_min,
+            aggregate=methods.pivot_agg_max,
+            meta=meta,
+            token="pivot_table_max",
+            chunk_kwargs=kwargs,
+        )               
     else:
         raise ValueError
 
