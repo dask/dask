@@ -275,7 +275,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             token="pivot_table_count",
             chunk_kwargs=kwargs,
         )
-        
+
     if aggfunc == "sum":
         return pv_sum
     elif aggfunc == "count":
@@ -301,7 +301,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
     elif aggfunc == "min":
-         return apply_concat_apply(
+        return apply_concat_apply(
             [df],
             chunk=methods.pivot_min,
             aggregate=methods.pivot_agg_min,
@@ -317,7 +317,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             meta=meta,
             token="pivot_table_max",
             chunk_kwargs=kwargs,
-        )               
+        )
     else:
         raise ValueError
 

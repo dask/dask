@@ -189,7 +189,9 @@ def test_get_dummies_errors():
 
 
 @pytest.mark.parametrize("values", ["B", ["B"], ["B", "D"]])
-@pytest.mark.parametrize("aggfunc", ["mean", "sum", "count", "first", "last", "min", "max"])
+@pytest.mark.parametrize(
+    "aggfunc", ["mean", "sum", "count", "first", "last", "min", "max"]
+)
 def test_pivot_table(values, aggfunc):
     df = pd.DataFrame(
         {
