@@ -3,6 +3,7 @@ import itertools as it
 import operator
 import uuid
 import warnings
+from functools import partial
 from numbers import Integral
 
 import numpy as np
@@ -815,7 +816,13 @@ def _build_agg_args(spec):
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    known_np_funcs = {np.min: "min", np.max: "max", np.median: "median"}
+    known_np_funcs = {
+        np.min: "min",
+        np.max: "max",
+        np.median: "median",
+        np.std: "std",
+        np.var: "var",
+    }
 
     # check that there are no name conflicts for a single input column
     by_name = {}
@@ -831,11 +838,20 @@ def _build_agg_args(spec):
     aggs = {}
     finalizers = []
 
+    # a partial may contain some arguments, pass then down
+    # https://github.com/dask/dask/issues/9615
     for (result_column, func, input_column) in spec:
+        func_args = ()
+        func_kwargs = {}
+        if isinstance(func, partial):
+            func_args, func_kwargs = func.args, func.keywords
+
         if not isinstance(func, Aggregation):
             func = funcname(known_np_funcs.get(func, func))
 
-        impls = _build_agg_args_single(result_column, func, input_column)
+        impls = _build_agg_args_single(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
         # overwrite existing result-columns, generate intermediates only once
         for spec in impls["chunk_funcs"]:
@@ -851,7 +867,7 @@ def _build_agg_args(spec):
     return chunks, aggs, finalizers
 
 
-def _build_agg_args_single(result_column, func, input_column):
+def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_column):
     simple_impl = {
         "sum": (M.sum, M.sum),
         "min": (M.min, M.min),
@@ -873,10 +889,14 @@ def _build_agg_args_single(result_column, func, input_column):
         )
 
     elif func == "var":
-        return _build_agg_args_var(result_column, func, input_column)
+        return _build_agg_args_var(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "std":
-        return _build_agg_args_std(result_column, func, input_column)
+        return _build_agg_args_std(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
@@ -914,7 +934,7 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
     )
 
 
-def _build_agg_args_var(result_column, func, input_column):
+def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_column):
     int_sum = _make_agg_id("sum", input_column)
     int_sum2 = _make_agg_id("sum2", input_column)
     int_count = _make_agg_id("count", input_column)
@@ -932,13 +952,21 @@ def _build_agg_args_var(result_column, func, input_column):
         finalizer=(
             result_column,
             _finalize_var,
-            dict(sum_column=int_sum, count_column=int_count, sum2_column=int_sum2),
+            dict(
+                sum_column=int_sum,
+                count_column=int_count,
+                sum2_column=int_sum2,
+                *func_args,
+                **func_kwargs,
+            ),
         ),
     )
 
 
-def _build_agg_args_std(result_column, func, input_column):
-    impls = _build_agg_args_var(result_column, func, input_column)
+def _build_agg_args_std(result_column, func, func_args, func_kwargs, input_column):
+    impls = _build_agg_args_var(
+        result_column, func, func_args, func_kwargs, input_column
+    )
 
     result_column, _, kwargs = impls["finalizer"]
     impls["finalizer"] = (result_column, _finalize_std, kwargs)
@@ -1118,7 +1146,8 @@ def _finalize_mean(df, sum_column, count_column):
     return df[sum_column] / df[count_column]
 
 
-def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
+def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+    ddof = kwargs.get("ddof", 1)
     n = df[count_column]
     x = df[sum_column]
     x2 = df[sum2_column]
@@ -1132,8 +1161,8 @@ def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
     return result
 
 
-def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
-    result = _finalize_var(df, count_column, sum_column, sum2_column, ddof)
+def _finalize_std(df, count_column, sum_column, sum2_column, **kwargs):
+    result = _finalize_var(df, count_column, sum_column, sum2_column, **kwargs)
     return np.sqrt(result)
 
 
