@@ -5476,13 +5476,12 @@ def test_repr_materialize():
         "float64[pyarrow]",
         "float32[pyarrow]",
         "uint8[pyarrow]",
-        "date64[pyarrow]",
     ],
 )
 def test_pyarrow_extension_dtype(dtype):
     # Ensure simple Dask DataFrame operations work with pyarrow extension dtypes
     pytest.importorskip("pyarrow")
-    df = pd.DataFrame({"x": range(10)}, dtype="int64[pyarrow]")
+    df = pd.DataFrame({"x": range(10)}, dtype=dtype)
     ddf = dd.from_pandas(df, npartitions=3)
     expected = (df.x + df.x) * 2
     result = (ddf.x + ddf.x) * 2
