@@ -1,5 +1,6 @@
 import os
 import pathlib
+import sys
 from time import sleep
 
 import numpy as np
@@ -46,6 +47,10 @@ def test_to_hdf():
         tm.assert_frame_equal(df, out[:])
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+)
 def test_to_hdf_multiple_nodes():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -388,6 +393,10 @@ def test_to_hdf_link_optimizations():
         assert dependency_depth(d.dask) == 2 + a.npartitions
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+)
 @pytest.mark.slow
 def test_to_hdf_lock_delays():
     pytest.importorskip("tables")
@@ -478,6 +487,10 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, "/data_*_*")
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+)
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
 @pytest.mark.parametrize("npartitions", [1, 4, 10])
 def test_to_hdf_schedulers(scheduler, npartitions):
@@ -679,6 +692,10 @@ def test_read_hdf_multiply_open():
             dd.read_hdf(fn, "/data", chunksize=2, mode="r")
 
 
+@pytest.mark.skipif(
+    sys.version_info >= (3, 11),
+    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+)
 def test_read_hdf_multiple():
     pytest.importorskip("tables")
     df = pd.DataFrame(
