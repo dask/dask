@@ -411,6 +411,14 @@ def pivot_agg_last(df):
     return df.groupby(level=0).last()
 
 
+def pivot_agg_min(df):
+    return df.groupby(level=0).min()
+
+
+def pivot_agg_max(df):
+    return df.groupby(level=0).max()
+
+
 def pivot_sum(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="sum", dropna=False
@@ -447,7 +455,7 @@ def pivot_max(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="max", dropna=False
     )
-    
+
 
 def assign_index(df, ind):
     df = df.copy()
