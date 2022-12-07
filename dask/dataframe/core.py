@@ -5879,7 +5879,7 @@ class DataFrame(_Frame):
             column to be index
         columns : scalar
             column to be columns
-        aggfunc : {'mean', 'sum', 'count'}, default 'mean'
+        aggfunc : {'mean', 'sum', 'count', 'min', 'max'}, default 'mean'
 
         Returns
         -------
