@@ -1370,9 +1370,12 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
                     )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
-                from distributed.worker import get_client
+                from dask.distributed import default_client, get_client
 
-                return get_client().get
+                try:
+                    return default_client().get
+                except ValueError:
+                    return get_client().get
             else:
                 raise ValueError(
                     "Expected one of [distributed, %s]"
