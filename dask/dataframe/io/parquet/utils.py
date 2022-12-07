@@ -17,6 +17,7 @@ class Engine:
     def extract_filesystem(
         cls,
         urlpath,
+        filesystem,
         dataset_options,
         open_file_options,
         storage_options,
@@ -31,6 +32,8 @@ class Engine:
         ----------
         urlpath: str or List[str]
             Source directory for data, or path(s) to individual parquet files.
+        filesystem: "fsspec" or fsspec.AbstractFileSystem
+            Filesystem backend to use. Default is "fsspec"
         dataset_options: dict
             Engine-specific dataset options.
         open_file_options: dict
@@ -51,16 +54,26 @@ class Engine:
             Options to be used for file-opening at read time.
         """
 
-        # Check if fs was already specified as a dataset option
+        # Check if fs was specified as a dataset option
         fs = dataset_options.pop("fs", "fsspec")
+        if filesystem is not None:
+            fs = filesystem
 
-        # Use fsspec to infer a filesystem by default
-        if fs != "fsspec":
+        if fs in (None, "fsspec"):
+            # Use fsspec to infer a filesystem by default
+            fs, _, paths = get_fs_token_paths(
+                urlpath, mode="rb", storage_options=storage_options
+            )
+            return fs, paths, dataset_options, open_file_options
 
+        else:
+            # Check that an initialized filesystem object was provided
             if not isinstance(fs, AbstractFileSystem):
                 raise ValueError(f"Expected fsspec.AbstractFileSystem. Got {type(fs)}")
 
             if storage_options:
+                # The filesystem was already specified. Can't pass in
+                # any storage options
                 warnings.warn(f"Ignoring storage_options: {storage_options}")
 
             if isinstance(urlpath, (list, tuple, set)):
@@ -77,11 +90,6 @@ class Engine:
                 dataset_options,
                 open_file_options,
             )
-
-        fs, _, paths = get_fs_token_paths(
-            urlpath, mode="rb", storage_options=storage_options
-        )
-        return fs, paths, dataset_options, open_file_options
 
     @classmethod
     def read_metadata(

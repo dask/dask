@@ -192,6 +192,7 @@ def read_parquet(
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
+    filesystem=None,
     **kwargs,
 ):
     """
@@ -246,7 +247,7 @@ def read_parquet(
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
         Note that the default file-system backend can be configured with the
-        ``dataset`` argument, described below.
+        ``filesystem`` argument, described below.
     open_file_options : dict, default None
         Key/value arguments to be passed along to ``AbstractFileSystem.open``
         when each parquet data file is open for reading. Experimental
@@ -343,20 +344,17 @@ def read_parquet(
         unsupported metadata files (like Spark's '_SUCCESS' and 'crc' files).
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
+    filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
+        Filesystem backend to use. Default is "fsspec", unless reading from s3
+        storage with the "pyarrow" engine and ``open_file_options=None`` (in
+        which case the default is "arrow"). Note that the "fastparquet" engine
+        only supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
         "filesystem" key (or "fs" for the "fastparquet" engine) to configure
-        the desired file-system backend. For the "arrow" engine, the
-        "filesystem" option may be set to "arrow" to specify that the backend
-        should correspond to ``pyarrow.fs.FileSystem``::
-
-            ``dd.read_parquet(..., dataset={"filesystem": "arrow"})``
-
-        For both engines, "filesystem" may be set to "fsspec" to specify that a
-        ``fsspec.spec.AbstractFileSystem`` is preferred. Note that the default
-        is "fsspec", unless reading from s3 storage with the "arrow" engine
-        (in which case ``pyarrow.fs.S3FileSystem`` is used, when possible).
+        the desired file-system backend. However, the top-level ``filesystem``
+        argument will always take precedence.
     read: dict, default None
         Dictionary of options to pass through to ``engine.read_partitions``
         using the ``read`` key-word argument.
@@ -458,6 +456,7 @@ def read_parquet(
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
+        "filesystem": filesystem,
         **kwargs,
     }
 
@@ -489,6 +488,7 @@ def read_parquet(
     # Extract global filesystem and paths
     fs, paths, dataset_options, open_file_options = engine.extract_filesystem(
         path,
+        filesystem,
         dataset_options,
         open_file_options,
         storage_options,

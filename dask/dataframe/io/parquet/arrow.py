@@ -48,8 +48,8 @@ del _pa_version
 _s3_note = (
     "Note that this version of `ArrowDatasetEngine` will attempt "
     "to use `S3FileSystem` by default when reading from s3 storage. "
-    "If necessary, try passing in `dataset=dict(filesystem='arrow')` "
-    "to revert the default to `s3fs` (if available)"
+    "If necessary, try passing in `filesystem='arrow'` to revert "
+    "the default to `s3fs` (if available)"
 )
 
 
@@ -358,56 +358,33 @@ class ArrowDatasetEngine(Engine):
     def extract_filesystem(
         cls,
         urlpath,
+        filesystem,
         dataset_options,
         open_file_options,
         storage_options,
     ):
 
-        # Check if fs was already specified as a dataset option
-        filesystem = dataset_options.pop("filesystem", None)
-        if filesystem is None:
+        # Check if filesystem was specified as a dataset option
+        fs = dataset_options.pop("filesystem", None)
+        if filesystem is not None:
+            fs = filesystem
+
+        default_pa_s3 = False
+        default_pa_s3_error = None
+        if fs is None:
             if isinstance(urlpath, (list, tuple, set)):
                 if not urlpath:
                     raise ValueError("empty urlpath sequence")
                 strpath = stringify_path(next(iter(urlpath)))
             else:
                 strpath = stringify_path(urlpath)
-            if (
-                strpath.startswith("s3://")
-                and not open_file_options
-                and not (
-                    # Only use PyArrow by default when storage is in s3,
-                    # and `storage_option` only includes simple options
-                    # # that are "expected" by `S3FileSystem`
-                    set(storage_options)
-                    - {
-                        "access_key",
-                        "secret_key",
-                        "session_token",
-                        "anonymous",
-                        "role_arn",
-                        "session_name",
-                        "external_id",
-                        "load_frequency",
-                        "region",
-                        "request_timeout",
-                        "connect_timeout",
-                        "scheme",
-                        "endpoint_override",
-                        "background_writes",
-                        "default_metadata",
-                        "proxy_options",
-                        "allow_bucket_creation",
-                        "allow_bucket_deletion",
-                        "retry_strategy",
-                    }
-                )
-            ):
-                filesystem = "arrow"
+            if strpath.startswith("s3://") and not open_file_options:
+                fs = "arrow"
+                default_pa_s3 = True
             else:
-                filesystem = "fsspec"
+                fs = "fsspec"
 
-        if isinstance(filesystem, pa_fs.FileSystem) or filesystem == "arrow":
+        if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
             if isinstance(urlpath, (list, tuple, set)):
                 if not urlpath:
                     raise ValueError("empty urlpath sequence")
@@ -415,37 +392,49 @@ class ArrowDatasetEngine(Engine):
             else:
                 urlpath = [stringify_path(urlpath)]
 
-            if filesystem == "arrow":
+            if fs in ("arrow", "pyarrow"):
                 try:
-                    filesystem = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
+                    fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
                         **(storage_options or {})
                     )
                 except (TypeError, pa.lib.ArrowInvalid) as err:
-                    # Try falling back to fsspec
-                    warnings.warn(
-                        f"Failed to initialize a pyarrow-based `FileSystem` object. "
-                        f"Falling back to `fsspec`.\n"
-                        f"{_s3_note}\n"
-                        f"Original Error: {err}"
-                    )
-                    filesystem = "fsspec"
+                    if default_pa_s3:
+                        # Fall back to fsspec
+                        default_pa_s3_error = err
+                        fs = "fsspec"
+                    else:
+                        raise err
 
-            if filesystem != "fsspec":
-                fs = ArrowFSWrapper(filesystem)
+            if isinstance(fs, pa_fs.FileSystem):
+                fs = ArrowFSWrapper(fs)
                 paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
                 return (
                     fs,
                     [fs._strip_protocol(u) for u in paths],
                     dataset_options,
-                    {"open_file_func": filesystem.open_input_file},
+                    {"open_file_func": fs.fs.open_input_file},
                 )
 
-        return Engine.extract_filesystem(
-            urlpath,
-            dataset_options,
-            open_file_options,
-            storage_options,
-        )
+        # Use default file-system initialization
+        try:
+            return Engine.extract_filesystem(
+                urlpath,
+                fs,
+                dataset_options,
+                open_file_options,
+                storage_options,
+            )
+        except Exception as err:
+            if default_pa_s3_error is None:
+                raise err
+            # Inform the user that we tried falling back to fsspec
+            warnings.warn(
+                f"Failed to initialize an fsspec-based filesystem after "
+                f"failing to initialize a `pyarrow.fs.S3FileSystem`."
+                f"\nOriginal Error: {default_pa_s3_error}"
+                f"\nFallback Error: {err}"
+                f"\n{_s3_note}"
+            )
 
     @classmethod
     def read_metadata(
