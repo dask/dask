@@ -437,6 +437,18 @@ def pivot_last(df, index, columns, values):
     )
 
 
+def pivot_min(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="min", dropna=False
+    )
+
+
+def pivot_max(df, index, columns, values):
+    return pd.pivot_table(
+        df, index=index, columns=columns, values=values, aggfunc="max", dropna=False
+    )
+    
+
 def assign_index(df, ind):
     df = df.copy()
     df.index = ind
