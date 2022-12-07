@@ -22,8 +22,11 @@ dependencies:
   - h5py
   - pytables
   - zarr
-  # `tiledb-py=0.17.5` lead to strange seg faults in CI.
-  - tiledb-py >=0.18.3
+  # `tiledb-py=0.17.5` lead to strange seg faults in CI
+  # but we can't upgrade to 0.18 because it requires numpy >=1.20.3
+  # and we want to test on py38 numpy 1.19.
+  # https://github.com/dask/dask/pull/9569
+  - tiledb-py !=0.17.5
   - pyspark
   - tiledb>=2.5.0
   - xarray
