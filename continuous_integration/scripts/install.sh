@@ -14,16 +14,21 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force numpy pandas fastparquet bokeh scipy
-
+    conda uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
 
+    # FIXME https://github.com/mamba-org/mamba/issues/412
+    # mamba uninstall --force ...
+    conda uninstall --force numpy pandas scipy
     python -m pip install --no-deps --pre --retries 10 \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
         pandas \
         scipy
 
+    # FIXME https://github.com/mamba-org/mamba/issues/412
+    # mamba uninstall --force ...
+    conda uninstall --force fastparquet
     python -m pip install \
         --upgrade \
         locket \
