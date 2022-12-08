@@ -54,10 +54,29 @@ def cogroup(
             if i != prev_i + 1:
                 # non-consecutive priority jump. this is our max node.
 
-                # check if we've jumped over a fully disjoint part of the graph
+                # Check if we've jumped over a fully disjoint part of the graph.
+                # `dask.order` does weird things sometimes; this can happen.
+
                 if keys[i - 1] not in dependencies[key]:
-                    # If we've jumped over a disjoint subgraph, don't eat it.
-                    # Roll back and just take the linear chain.
+                    # If the key 1 before the max node isn't an input to the max node,
+                    # we must have jumped over a disjoint part of the graph.
+                    # Don't eat it; roll back and just take the linear chain.
+                    i = prev_i
+                    break
+
+                # Try to walk up the graph, from the key 1 after where we jumped from.
+                # If we can't reach the apex node from there, we've jumped a disjoint subgraph.
+                # TODO not a full search, just following the biggest priority leaps assuming they'll
+                # get us there faster. This may be wrong??
+                di = prev_i + 1
+                while dts := dependents[keys[di]]:
+                    di = priorities[max(dts, key=priorities.__getitem__)]
+                    if di >= i:
+                        # TODO `>`?? might also be a bad sign.
+                        break
+                else:
+                    # Reached an output node (no dependents) that's not our apex node.
+                    # `[prev_i:i]` includes a disjoint subgraph, so roll back.
                     i = prev_i
 
                 break

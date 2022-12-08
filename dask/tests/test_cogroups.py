@@ -726,11 +726,20 @@ def test_actual_select_threshold():
 
 def test_actual_select_threshold_from_zarr():
     da = pytest.importorskip("dask.array")
-    open_zarr = tsk("open-zzarr")
+    open_zarr = tsk("open-zarr")
     # _arr = da.random.random((30, 30, 30, 30, 30, 30), chunks=(10, 10, 10, 10, 10, 10))
     _arr = da.random.random((30, 30, 30), chunks=(10, 10, 10))
     # _arr = da.random.random((30, 30), chunks=(10, 10))
     arr = graph_manipulation.bind(_arr, open_zarr)
     result = arr[arr > 1]
 
+    cogroups, prios = get_cogroups(result)
+
+
+def test_actual_double_diff():
+    da = pytest.importorskip("dask.array")
+    a = da.ones((30, 30), chunks=(10, 10))
+    b = da.zeros((30, 30), chunks=(10, 10))
+
+    result = a[1:, 1:] - b[:-1, :-1]
     cogroups, prios = get_cogroups(result)
