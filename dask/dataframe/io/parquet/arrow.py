@@ -1616,7 +1616,7 @@ class ArrowDatasetEngine(Engine):
             return meta
 
     @classmethod
-    def _read_partition_stats(cls, part, fs, columns=None):
+    def read_partition_stats(cls, part, fs, columns=None):
         """Read Parquet-metadata statistics for a single partition"""
 
         if not isinstance(part, list):
@@ -1628,11 +1628,7 @@ class ArrowDatasetEngine(Engine):
         for p in part:
             piece = p["piece"]
             path = piece[0]
-            row_groups = piece[1]
-            # TODO: Include partitioned-column stats (if requested)
-            if row_groups == [None]:
-                row_groups = None
-
+            row_groups = None if piece[1] == [None] else piece[1]
             md = _get_md(path, fs)
             if row_groups is None:
                 row_groups = list(range(md.num_row_groups))
@@ -1670,6 +1666,6 @@ class ArrowDatasetEngine(Engine):
 
 @lru_cache(maxsize=1)
 def _get_md(path, fs):
-    # Caching utility used by ArrowDatasetEngine._read_partition_stats
+    # Caching utility used by ArrowDatasetEngine.read_partition_stats
     with fs.open(path, default_cache="none") as f:
         return pq.ParquetFile(f).metadata

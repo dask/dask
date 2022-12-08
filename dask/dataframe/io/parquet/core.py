@@ -1585,27 +1585,50 @@ def aggregate_row_groups(
 
 def _read_partition_stats_group(parts, fs, engine, columns=None):
     # Helper function used by _extract_statistics
-    return [engine._read_partition_stats(part, fs, columns=columns) for part in parts]
+    return [engine.read_partition_stats(part, fs, columns=columns) for part in parts]
 
 
-def _parquet_statistics(ddf, columns=None, task_size=None):
-    """Extract Parquet-metadata statistics from a DataFrame
+def layer_statistics(
+    layer,
+    columns=None,
+    task_size=None,
+    compute_kwargs=None,
+):
+    """Load Parquet-metadata statistics from a DataFrameIOLayer
 
-    WARNING: This API is experimental, and is likely to change.
+    WARNING: This API is experimental, and is likely to change
+
+    Parameters
+    ----------
+    layer : DataFrameIOLayer
+        High-level-graph layer to extract Parquet statistics from.
+    columns : list or None, Optional
+        List of columns to collect min/max statistics for. If ``None``
+        (the default), only 'num-rows' statistics will be collected.
+    task_size : int or None, Optional
+        The number of ``layer`` tasks to collect statistics for
+        within each ``dask.delayed`` function. By default, this will
+        be set to the total number of ``layer`` tasks on local
+        filesystems, and 16 otherwise.
+    compute_kwargs : dict, Optional
+        Key-word argumentst to pass through to ``dask.compute``.
+
+    Returns
+    -------
+    statistics : List[dict]
+        List of Parquet statistics. Each list element corresponds
+        to a distinct task (partition) in ``layer``. Each element
+        of ``statistics`` will correspond to a dictionary with
+        'num-rows' and 'columns' keys::
+
+            ``{'num-rows': 1024, 'columns': [...]}``
+
+        If column statistics are available, each element of the
+        list stored under the "columns" key will correspond to
+        a dictionary with "name", "min", and "max" keys::
+
+            ``{'name': 'col0', 'min': 0, 'max': 100}``
     """
-    from dask.utils_test import hlg_layer
-
-    # Check if we have a read-parquet layer
-    try:
-        layer = hlg_layer(ddf.dask, "read-parquet")
-    except KeyError:
-        # No "parquet" layer
-        return None
-
-    if len(ddf.dask.layers) > 1:
-        # Cannot trust statistics if there are
-        # multiple layers
-        return None
 
     # Make sure we are dealing with a
     # ParquetFunctionWrapper-based DataFrameIOLayer
@@ -1618,7 +1641,7 @@ def _parquet_statistics(ddf, columns=None, task_size=None):
     parts = layer.inputs
     fs = layer.io_func.fs
     engine = layer.io_func.engine
-    if not hasattr(engine, "_read_partition_stats"):
+    if not hasattr(engine, "read_partition_stats"):
         # Utility not supported for current engine
         return None
     func = delayed(_read_partition_stats_group)
@@ -1634,7 +1657,8 @@ def _parquet_statistics(ddf, columns=None, task_size=None):
         [
             func(parts[i : i + task_size], fs, engine, columns=columns)
             for i in range(0, len(parts), task_size)
-        ]
+        ],
+        **(compute_kwargs or {}),
     )[0]
     return list(itertools.chain(*result))
 
