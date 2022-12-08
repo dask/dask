@@ -2624,6 +2624,36 @@ def test_groupby_aggregate_partial_function(agg):
     assert_eq(agg(pdf.groupby("a")["b"]), agg(ddf.groupby("a")["b"]))
 
 
+@pytest.mark.parametrize(
+    "agg",
+    [
+        lambda grp: grp.agg(partial(np.std, unexpected_arg=1)),
+        lambda grp: grp.agg(partial(np.var, unexpected_arg=1)),
+    ],
+)
+def test_groupby_aggregate_partial_function_unexpected_args(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    with pytest.raises((FutureWarning, TypeError)):
+        agg(pdf.groupby("a"))
+
+    with pytest.raises((FutureWarning, TypeError)):
+        agg(ddf.groupby("a")).compute()
+
+    # SeriesGroupBy
+    with pytest.raises((FutureWarning, TypeError)):
+        agg(pdf.groupby("a")["b"])
+
+    with pytest.raises((FutureWarning, TypeError)):
+        agg(ddf.groupby("a")["b"])
+
+
 @pytest.mark.xfail(
     not dask.dataframe.utils.PANDAS_GT_110,
     reason="dropna kwarg not supported in pandas < 1.1.0.",

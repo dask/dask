@@ -939,6 +939,20 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
     int_sum2 = _make_agg_id("sum2", input_column)
     int_count = _make_agg_id("count", input_column)
 
+    # we don't expect positional args here
+    if func_args:
+        raise TypeError(
+            f"aggregate function '{func}' got unexpected positional arguments: {func_args}"
+        )
+
+    # and we only expect ddof=N in kwargs
+    expected_kwargs = {"ddof"}
+    unexpected_kwargs = set(func_kwargs.keys()) - expected_kwargs
+    for arg in unexpected_kwargs:
+        raise TypeError(
+            f"aggregate function '{func}' got an unexpected keyword argument: {arg}"
+        )
+
     return dict(
         chunk_funcs=[
             (int_sum, _apply_func_to_column, dict(column=input_column, func=M.sum)),
@@ -956,7 +970,6 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
                 sum_column=int_sum,
                 count_column=int_count,
                 sum2_column=int_sum2,
-                *func_args,
                 **func_kwargs,
             ),
         ),
@@ -1147,6 +1160,8 @@ def _finalize_mean(df, sum_column, count_column):
 
 
 def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+    # arguments are being checked when building the finalizer. As of this moment,
+    # we're only using ddof, and raising an error on other keyword args.
     ddof = kwargs.get("ddof", 1)
     n = df[count_column]
     x = df[sum_column]
