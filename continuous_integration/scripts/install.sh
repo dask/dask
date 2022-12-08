@@ -51,12 +51,19 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # Numba doesn't currently support nightly `numpy`. Temporarily remove
     # `numba` from the upstream CI environment as a workaround.
     # https://github.com/numba/numba/issues/8615
+
     # Crick doesn't work with latest nightly `numpy`. Temporarily remove
     # `crick` from the upstream CI environment as a workaround.
     # Can restore `crick` once https://github.com/dask/crick/issues/25 is closed.
+
+    # Tiledb is causing segfaults. Temporarily remove `tiledb` and `tiledb-py`
+    # as a workaround.
+
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force numba crick
+    conda uninstall --force numba crick tiledb tiledb-py
+
+
 fi
 
 # Install dask
