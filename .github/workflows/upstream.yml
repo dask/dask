@@ -39,6 +39,7 @@ jobs:
 
     env:
       COVERAGE: "true"
+      PARALLEL: "true"
       UPSTREAM_DEV: 1
 
     steps:
