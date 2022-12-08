@@ -72,6 +72,14 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
+      nullable_backend:
+        enum:
+          - pandas
+          - pyarrow
+        description: |
+          The nullable dtype implementation to use. Must be either "pandas" or
+          "pyarrow". Default is "pandas".
+
   array:
     type: object
     properties:

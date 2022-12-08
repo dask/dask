@@ -1581,9 +1581,10 @@ class ArrowDatasetEngine(Engine):
 
         if use_nullable_dtypes:
             # Determine is `pandas` or `pyarrow`-backed dtypes should be used
-            if use_nullable_dtypes in ("pandas", True):
+            if use_nullable_dtypes == "pandas":
                 default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
-            elif use_nullable_dtypes == "pyarrow":
+            else:
+                # use_nullable_dtypes == "pyarrow"
 
                 def default_types_mapper(pyarrow_dtype):  # type: ignore
                     # Special case pyarrow strings to use more feature complete dtype

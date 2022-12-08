@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 import math
 import warnings
-from typing import Literal
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -186,7 +185,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes: bool | Literal["pandas", "pyarrow"] = False,
+    use_nullable_dtypes: bool = False,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -258,16 +257,21 @@ def read_parquet(
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
-    use_nullable_dtypes : {False, True, "pandas", "pyarrow"}
-        Whether to use dtypes that use ``pd.NA`` as a missing value indicator
-        for the resulting ``DataFrame``. ``True`` and ``"pandas"`` will use
-        pandas nullable dtypes (e.g. ``Int64``, ``string[python]``, etc.) while
-        ``"pyarrow"`` will use ``pyarrow``-backed extension dtypes (e.g.
-        ``int64[pyarrow]``, ``string[pyarrow]``, etc.).
+    use_nullable_dtypes : {False, True}
+        Whether to use extension dtypes for the resulting ``DataFrame``.
+        ``use_nullable_dtypes=True`` is only supported when ``engine="pyarrow"``.
 
         .. note::
-            ``use_nullable_dtypes`` is only supported when ``engine="pyarrow"``
-            and ``use_nullable_dtypes="pyarrow"`` requires ``pandas`` 1.5+.
+
+            Use the ``dataframe.nullable_backend`` config option to select which
+            dtype implementation to use.
+
+            ``dataframe.nullable_backend="pandas"`` (the default) will use
+            pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
+            ``string[python]``, etc.) while ``dataframe.nullable_backend="pyarrow"``
+            will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
+            ``string[pyarrow]``, etc.). ``dataframe.nullable_backend="pyarrow"``
+            requires ``pandas`` 1.5+.
 
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
@@ -378,11 +382,8 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    if use_nullable_dtypes not in (True, False, "pandas", "pyarrow"):
-        raise ValueError(
-            "Invalid value for `use_nullable_dtypes` received. Expected `True`, `False`, "
-            f"`'pandas'`, or `'pyarrow'` but got {use_nullable_dtypes} instead."
-        )
+    if use_nullable_dtypes:
+        use_nullable_dtypes = dask.config.get("dataframe.nullable_backend")
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
