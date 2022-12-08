@@ -1688,6 +1688,12 @@ def test_cumulative(func, key, sel):
             dg.cumcount(axis=0)
 
 
+def test_series_groupby_multi_character_column_name():
+    df = pd.DataFrame({"aa": [1, 2, 1, 3, 4, 1, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
+
+
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis1(func):
     df = pd.DataFrame(

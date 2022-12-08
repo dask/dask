@@ -4433,3 +4433,14 @@ def test_layer_statistics(tmpdir, engine):
     for column in columns:
         assert maxes[column] == ddf[column].max().compute()
         assert mins[column] == ddf[column].min().compute()
+
+
+def test_select_filtered_column(tmp_path, engine):
+
+    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
+    path = tmp_path / "test_select_filtered_column.parquet"
+    df.to_parquet(path, index=False)
+
+    with pytest.warns(UserWarning, match="Sorted columns detected"):
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+    assert_eq(df, ddf)
