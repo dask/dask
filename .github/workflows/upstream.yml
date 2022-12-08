@@ -39,6 +39,7 @@ jobs:
 
     env:
       COVERAGE: "true"
+      UPSTREAM_DEV: 1
 
     steps:
       - name: Checkout source
@@ -57,8 +58,6 @@ jobs:
           auto-activate-base: false
 
       - name: Install
-        env:
-          UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests
