@@ -7,6 +7,10 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
+
+    # NOTE: `dask/tests/test_ci.py::test_upstream_packages_installed` should up be
+    # updated when pacakges here are updated.
+
     # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
     arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
     export PYARROW_VERSION=${arr[1]}

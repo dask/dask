@@ -10,6 +10,8 @@ from packaging.version import Version
     reason="Only check for dev packages in `upstream` CI build",
 )
 def test_upstream_packages_installed():
+    # List of packages should match those specified in
+    # `continuous_integration/scripts/install.sh`
     packages = [
         "bokeh",
         "dask",
@@ -27,5 +29,5 @@ def test_upstream_packages_installed():
         "zict",
     ]
     for package in packages:
-        version = importlib.metadata.version(package)
-        assert Version(version).is_prerelease, (package, version)
+        v = Version(importlib.metadata.version(package))
+        assert v.is_prerelease or v.local is not None, (package, str(v))
