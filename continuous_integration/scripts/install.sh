@@ -19,15 +19,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
-    conda uninstall --force numpy pandas scipy
-    python -m pip install --no-deps --pre --retries 10 \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy \
-        pandas \
-        scipy
-
-    # FIXME https://github.com/mamba-org/mamba/issues/412
-    # mamba uninstall --force ...
     conda uninstall --force fastparquet
     python -m pip install \
         --upgrade \
@@ -40,6 +31,15 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
+
+    # FIXME https://github.com/mamba-org/mamba/issues/412
+    # mamba uninstall --force ...
+    conda uninstall --force numpy pandas scipy
+    python -m pip install --no-deps --pre --retries 10 \
+        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+        numpy \
+        pandas \
+        scipy
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
