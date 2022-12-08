@@ -11,15 +11,15 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # NOTE: `dask/tests/test_ci.py::test_upstream_packages_installed` should up be
     # updated when pacakges here are updated.
 
-    # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
-    arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
-    export PYARROW_VERSION=${arr[1]}
-    mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
-
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
     conda uninstall --force bokeh
     mamba install -y -c bokeh/label/dev bokeh
+
+    # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
+    arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
+    export PYARROW_VERSION=${arr[1]}
+    mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
