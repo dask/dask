@@ -545,6 +545,7 @@ def test__get_paths(monkeypatch):
         "/etc/dask",
         os.path.join(sys.prefix, "etc", "dask"),
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
+        os.path.join(os.getcwd(), ".dask"),
     ]
     paths = _get_paths()
     assert paths == expected
@@ -553,7 +554,7 @@ def test__get_paths(monkeypatch):
     with monkeypatch.context() as m:
         m.setenv("DASK_CONFIG", "foo-bar")
         paths = _get_paths()
-        assert paths == expected + ["foo-bar"]
+        assert paths == expected[0:-1] + ["foo-bar"] + [expected[-1]]
         assert len(paths) == len(set(paths))
 
     with monkeypatch.context() as m:

@@ -28,9 +28,10 @@ def _get_paths():
         os.path.join(sys.prefix, "etc", "dask"),
         *[os.path.join(prefix, "etc", "dask") for prefix in site.PREFIXES],
         os.path.join(os.path.expanduser("~"), ".config", "dask"),
+        os.path.join(os.getcwd(), ".dask"),
     ]
     if "DASK_CONFIG" in os.environ:
-        paths.append(os.environ["DASK_CONFIG"])
+        paths.insert(-1, os.environ["DASK_CONFIG"])
 
     # Remove duplicate paths while preserving ordering
     paths = list(reversed(list(dict.fromkeys(reversed(paths)))))
