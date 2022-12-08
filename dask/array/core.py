@@ -1184,7 +1184,7 @@ def store(
 
     if targets_dsks:
         targets_hlg = HighLevelGraph.merge(*targets_dsks)
-        targets_layer = Delayed.__dask_optimize__(targets_hlg, targets_keys)
+        targets_layer = targets_hlg.cull(targets_keys)
         targets_name = "store-targets-" + tokenize(targets_keys)
         layers[targets_name] = targets_layer
         dependencies[targets_name] = set()

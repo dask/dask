@@ -2165,8 +2165,8 @@ def test_store_deterministic_keys(return_stored, delayed_target):
     assert st1.dask.keys() == st2.dask.keys()
 
 
-def test_store_unoptimized_nocompute():
-    """Test that two store results can be optimized and share tasks."""
+def test_store_sources_unoptimized_nocompute():
+    """Test that two sources can be optimized and share tasks after storing."""
     total_calls = 0
 
     def _shared_task(arr1):
@@ -2190,6 +2190,30 @@ def test_store_unoptimized_nocompute():
         store_res2 = da.store(src[1], target2, compute=False)
         da.compute(store_res1, store_res2)
     assert total_calls == start.blocks.size
+
+
+def test_store_targets_unoptimized_nocompute():
+    """Test that two Delayed targets can be optimized and share tasks after storing."""
+    total_calls = 0
+
+    @dask.delayed(pure=True)
+    def _shared_target():
+        nonlocal total_calls
+        total_calls += 1
+        return np.zeros((2, 2))
+
+    @dask.delayed(pure=False)
+    def _additional_target(input):
+        return input
+
+    src = da.zeros((2, 2), chunks=1)
+    target1 = _additional_target(_shared_target())
+    target2 = _additional_target(_shared_target())
+    with dask.config.set(scheduler="single-threaded"):
+        store_res1 = da.store(src, target1, compute=False)
+        store_res2 = da.store(src, target2, compute=False)
+        da.compute(store_res1, store_res2)
+    assert total_calls == 1
 
 
 def test_to_hdf5():
