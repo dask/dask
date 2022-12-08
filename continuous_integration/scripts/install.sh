@@ -43,6 +43,13 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # Used when automatically opening an issue when the `upstream` CI build fails
     mamba install pytest-reportlog
+
+    # Numba doesn't currently support night `numpy`. Temporarily remove
+    # `numba` from the upstream CI environment as a workaround.
+    # https://github.com/numba/numba/issues/8615
+    # FIXME https://github.com/mamba-org/mamba/issues/412
+    # mamba uninstall --force ...
+    conda uninstall --force numba
 fi
 
 # Install dask
