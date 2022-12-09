@@ -2641,11 +2641,11 @@ def test_groupby_aggregate_partial_function_unexpected_kwargs(agg):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        agg(ddf.groupby("a")).compute()
+        agg(ddf.groupby("a"))
 
     # SeriesGroupBy
     with pytest.raises(TypeError, match="unexpected keyword argument"):
-        agg(ddf.groupby("a")["b"]).compute()
+        agg(ddf.groupby("a")["b"])
 
 
 @pytest.mark.parametrize(
@@ -2665,11 +2665,11 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     ddf = dd.from_pandas(pdf, npartitions=2)
 
     with pytest.raises(TypeError, match="unexpected positional arguments"):
-        agg(ddf.groupby("a")).compute()
+        agg(ddf.groupby("a"))
 
     # SeriesGroupBy
     with pytest.raises(TypeError, match="unexpected positional arguments"):
-        agg(ddf.groupby("a")["b"]).compute()
+        agg(ddf.groupby("a")["b"])
 
 
 @pytest.mark.xfail(
