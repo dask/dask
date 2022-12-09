@@ -33,6 +33,7 @@ def test_profiler():
         in_context_time = default_timer()
         out = get(dsk, "e")
     assert out == 6
+    assert prof.start_time < in_context_time < prof.end_time
     prof_data = sorted(prof.results, key=lambda d: d.key)
     keys = [i.key for i in prof_data]
     assert keys == ["c", "d", "e"]
@@ -40,7 +41,6 @@ def test_profiler():
     assert tasks == [(add, "a", "b"), (mul, "a", "b"), (mul, "c", "d")]
     prof.clear()
     assert prof.results == []
-    assert prof.start_time < in_context_time < prof.end_time
 
 
 def test_profiler_works_under_error():
@@ -277,6 +277,8 @@ def test_resource_profiler_plot():
     rprof.clear()
     for results in [[], [(1.0, 0, 0)]]:
         rprof.results = results
+        rprof.start_time = 0.0
+        rprof.end_time = 1.0
         with warnings.catch_warnings(record=True) as record:
             p = rprof.visualize(show=False, save=False)
         assert not record
