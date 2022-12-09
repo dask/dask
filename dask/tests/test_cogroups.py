@@ -47,9 +47,7 @@ def get_cogroups(
     if not isinstance(xs, list):
         xs = [xs]
 
-    dask.visualize(
-        xs, color="cogroup-name", optimize_graph=False, collapse_outputs=True
-    )
+    dask.visualize(xs, color="cogroup", optimize_graph=False, collapse_outputs=True)
 
     dsk = collections_to_dsk(xs, optimize_graph=False)
     dependencies = {k: get_dependencies(dsk, k) for k in dsk}
@@ -743,3 +741,17 @@ def test_actual_double_diff():
 
     result = a[1:, 1:] - b[:-1, :-1]
     cogroups, prios = get_cogroups(result)
+
+
+@pytest.mark.xfail(reason="disjoint check doesn't work; goes to `store`")
+def test_double_diff_store():
+    da = pytest.importorskip("dask.array")
+    a = da.ones((50, 50), chunks=(10, 10))
+    b = da.zeros((50, 50), chunks=(10, 10))
+
+    result = a[1:, 1:] - b[:-1, :-1]
+    final = da.store(result, {}, compute=False, lock=False)
+    cogroups, prios = get_cogroups(final)
+
+    lens = [len(cg) for cg in cogroups]
+    assert all(l < 20 for l in lens), (max(lens), lens)
