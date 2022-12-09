@@ -231,7 +231,9 @@ def visualize(
     return p
 
 
-def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
+def plot_tasks(
+    results, dsk, start_time, end_time, palette="Viridis", label_size=60, **kwargs
+):
     """Visualize the results of profiling in a bokeh plot.
 
     Parameters
@@ -240,6 +242,10 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         Output of Profiler.results
     dsk : dict
         The dask graph being profiled.
+    start_time : float
+        Start time of the profile in seconds
+    end_time : float
+        End time of the profile in seconds
     palette : string, optional
         Name of the bokeh palette to use, must be a member of
         bokeh.palettes.all_palettes.
@@ -284,18 +290,15 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
             )
         }
 
-        left = min(starts)
-        right = max(ends)
-
         p = bp.figure(
             y_range=[str(i) for i in range(len(id_lk))],
-            x_range=[0, right - left],
+            x_range=[0, end_time - start_time],
             **defaults,
         )
 
         data = {}
         data["width"] = width = [e - s for (s, e) in zip(starts, ends)]
-        data["x"] = [w / 2 + s - left for (w, s) in zip(width, starts)]
+        data["x"] = [w / 2 + s - start_time for (w, s) in zip(width, starts)]
         data["y"] = [id_lk[i] + 1 for i in ids]
         data["function"] = funcs = [pprint_task(i, dsk, label_size) for i in tasks]
         data["color"] = get_colors(palette, funcs)
@@ -336,13 +339,17 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     return p
 
 
-def plot_resources(results, palette="Viridis", **kwargs):
+def plot_resources(results, start_time, end_time, palette="Viridis", **kwargs):
     """Plot resource usage in a bokeh plot.
 
     Parameters
     ----------
     results : sequence
         Output of ResourceProfiler.results
+    start_time : float
+        Start time of the profile in seconds
+    end_time : float
+        End time of the profile in seconds
     palette : string, optional
         Name of the bokeh palette to use, must be a member of
         bokeh.palettes.all_palettes.
@@ -383,7 +390,8 @@ def plot_resources(results, palette="Viridis", **kwargs):
 
     if results:
         t, mem, cpu = zip(*results)
-        left, right = min(t), max(t)
+        left = start_time
+        right = end_time
         t = [i - left for i in t]
         p = bp.figure(
             y_range=fix_bounds(0, max(cpu), 100),
@@ -444,9 +452,9 @@ def plot_cache(
     dsk : dict
         The dask graph being profiled.
     start_time : float
-        Start time of the profile.
+        Start time of the profile in seconds
     end_time : float
-        End time of the profile.
+        End time of the profile in seconds
     metric_name : string
         Metric used to measure cache size
     palette : string, optional

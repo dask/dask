@@ -30,6 +30,7 @@ dsk2 = {"a": 1, "b": 2, "c": (slowadd, "a", "b")}
 
 def test_profiler():
     with prof:
+        in_context_time = default_timer()
         out = get(dsk, "e")
     assert out == 6
     prof_data = sorted(prof.results, key=lambda d: d.key)
@@ -39,6 +40,7 @@ def test_profiler():
     assert tasks == [(add, "a", "b"), (mul, "a", "b"), (mul, "c", "d")]
     prof.clear()
     assert prof.results == []
+    assert prof.start_time < in_context_time < prof.end_time
 
 
 def test_profiler_works_under_error():
@@ -75,10 +77,12 @@ def test_two_gets():
 @pytest.mark.skipif("not psutil")
 def test_resource_profiler():
     with ResourceProfiler(dt=0.01) as rprof:
+        in_context_time = default_timer()
         get(dsk2, "c")
     results = rprof.results
     assert len(results) > 0
     assert all(isinstance(i, tuple) and len(i) == 3 for i in results)
+    assert rprof.start_time < in_context_time < rprof.end_time
 
     # Tracker stopped on exit
     assert not rprof._is_running()
