@@ -838,7 +838,7 @@ def _build_agg_args(spec):
     aggs = {}
     finalizers = []
 
-    # a partial may contain some arguments, pass then down
+    # a partial may contain some arguments, pass them down
     # https://github.com/dask/dask/issues/9615
     for (result_column, func, input_column) in spec:
         func_args = ()
