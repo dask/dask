@@ -7,7 +7,7 @@ try:
 except ImportError:
     pa = None
 
-from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_150, PANDAS_GT_200
+from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150, PANDAS_GT_200
 
 # Pickling of pyarrow arrays is effectively broken - pickling a slice of an
 # array ends up pickling the entire backing array.
@@ -27,7 +27,10 @@ from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_150, PANDAS_GT_200
 
 def rebuild_arrowextensionarray(chunks):
     array = pa.chunked_array(chunks)
-    return pd.arrays.ArrowExtensionArray(array)
+    if PANDAS_GT_150:
+        return pd.arrays.ArrowExtensionArray(array)
+    else:
+        return pd.arrays.ArrowStringArray(array)
 
 
 def reduce_arrowextensionarray(x):
@@ -45,8 +48,6 @@ if pa is not None and not PANDAS_GT_200:
         copyreg.dispatch_table[
             pd.arrays.ArrowExtensionArray
         ] = reduce_arrowextensionarray
-    elif PANDAS_GT_120:
+    elif PANDAS_GT_130:
         # Only `string[pyarrow]` is implemented, so just patch that
-        from pandas.core.arrays.string_arrow import ArrowStringArray
-
-        copyreg.dispatch_table[ArrowStringArray] = reduce_arrowextensionarray
+        copyreg.dispatch_table[pd.arrays.ArrowStringArray] = reduce_arrowextensionarray

@@ -7,10 +7,10 @@ import pytest
 
 pa = pytest.importorskip("pyarrow")
 
-from dask.dataframe._compat import PANDAS_GT_120
+from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150
 
 pytestmark = pytest.mark.skipif(
-    not PANDAS_GT_120, reason="No `pyarrow`-backed extension dtypes are available"
+    not PANDAS_GT_130, reason="No `pyarrow`-backed extension arrays are available"
 )
 
 # Tests are from https://github.com/pandas-dev/pandas/pull/49078
@@ -18,7 +18,10 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture
 def data(dtype):
-    pa_dtype = dtype.pyarrow_dtype
+    if PANDAS_GT_150:
+        pa_dtype = dtype.pyarrow_dtype
+    else:
+        pa_dtype = pa.string()
     if pa.types.is_boolean(pa_dtype):
         data = [True, False] * 4 + [None] + [True, False] * 44 + [None] + [True, False]
     elif pa.types.is_floating(pa_dtype):
@@ -68,9 +71,15 @@ def data(dtype):
     return pd.array(data, dtype=dtype)
 
 
-@pytest.fixture(params=tm.ALL_PYARROW_DTYPES, ids=str)
+PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GT_150 else [pa.string()]
+
+
+@pytest.fixture(params=PYARROW_TYPES, ids=str)
 def dtype(request):
-    return pd.ArrowDtype(pyarrow_dtype=request.param)
+    if PANDAS_GT_150:
+        return pd.ArrowDtype(pyarrow_dtype=request.param)
+    else:
+        return pd.StringDtype("pyarrow")
 
 
 def test_pickle_roundtrip(data):
