@@ -2640,11 +2640,17 @@ def test_groupby_aggregate_partial_function_unexpected_kwargs(agg):
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    with pytest.raises(TypeError, match="unexpected keyword argument"):
+    with pytest.raises(
+        TypeError,
+        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+    ):
         agg(ddf.groupby("a"))
 
     # SeriesGroupBy
-    with pytest.raises(TypeError, match="unexpected keyword argument"):
+    with pytest.raises(
+        TypeError,
+        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+    ):
         agg(ddf.groupby("a")["b"])
 
 
@@ -2664,11 +2670,11 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    with pytest.raises(TypeError, match="unexpected positional arguments"):
+    with pytest.raises(TypeError, match="doesn't support positional arguments"):
         agg(ddf.groupby("a"))
 
     # SeriesGroupBy
-    with pytest.raises(TypeError, match="unexpected positional arguments"):
+    with pytest.raises(TypeError, match="doesn't support positional arguments"):
         agg(ddf.groupby("a")["b"])
 
 

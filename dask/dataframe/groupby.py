@@ -942,15 +942,15 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
     # we don't expect positional args here
     if func_args:
         raise TypeError(
-            f"aggregate function '{func}' got unexpected positional arguments {func_args}"
+            f"aggregate function '{func}' doesn't support positional arguments, but got {func_args}"
         )
 
     # and we only expect ddof=N in kwargs
     expected_kwargs = {"ddof"}
     unexpected_kwargs = set(func_kwargs.keys()) - expected_kwargs
-    for arg in unexpected_kwargs:
+    if unexpected_kwargs:
         raise TypeError(
-            f"aggregate function '{func}' got an unexpected keyword argument '{arg}'"
+            f"aggregate function '{func}' supports {expected_kwargs} keyword arguments, but got {unexpected_kwargs}"
         )
 
     return dict(
