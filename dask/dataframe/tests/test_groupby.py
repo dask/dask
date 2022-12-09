@@ -2631,6 +2631,30 @@ def test_groupby_aggregate_partial_function(agg):
         lambda grp: grp.agg(partial(np.var, unexpected_arg=1)),
     ],
 )
+def test_groupby_aggregate_partial_function_unexpected_kwargs(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        agg(ddf.groupby("a")).compute()
+
+    # SeriesGroupBy
+    with pytest.raises(TypeError, match="unexpected keyword argument"):
+        agg(ddf.groupby("a")["b"]).compute()
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        lambda grp: grp.agg(partial(np.std, "positional_arg")),
+        lambda grp: grp.agg(partial(np.var, "positional_arg")),
+    ],
+)
 def test_groupby_aggregate_partial_function_unexpected_args(agg):
     pdf = pd.DataFrame(
         {
@@ -2640,18 +2664,12 @@ def test_groupby_aggregate_partial_function_unexpected_args(agg):
     )
     ddf = dd.from_pandas(pdf, npartitions=2)
 
-    with pytest.raises((FutureWarning, TypeError)):
-        agg(pdf.groupby("a"))
-
-    with pytest.raises((FutureWarning, TypeError)):
+    with pytest.raises(TypeError, match="unexpected positional arguments"):
         agg(ddf.groupby("a")).compute()
 
     # SeriesGroupBy
-    with pytest.raises((FutureWarning, TypeError)):
-        agg(pdf.groupby("a")["b"])
-
-    with pytest.raises((FutureWarning, TypeError)):
-        agg(ddf.groupby("a")["b"])
+    with pytest.raises(TypeError, match="unexpected positional arguments"):
+        agg(ddf.groupby("a")["b"]).compute()
 
 
 @pytest.mark.xfail(
