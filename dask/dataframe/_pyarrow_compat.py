@@ -16,7 +16,7 @@ from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_150, PANDAS_GT_200
 #
 # This comes up when using pandas `string[pyarrow]` dtypes, which are backed by
 # a `pyarrow.StringArray`.  To fix this, we register a *global* override for
-# pickling `pandas.arrays.ArrowStringArray` or `pd.arrays.ArrowExtensionArray` types (where available).
+# pickling `ArrowStringArray` or `ArrowExtensionArray` types (where available).
 # We do this at the pandas level rather than the pyarrow level for efficiency reasons
 # (a pandas ArrowStringArray may contain many small pyarrow StringArray objects).
 #
@@ -47,4 +47,6 @@ if pa is not None and not PANDAS_GT_200:
         ] = reduce_arrowextensionarray
     elif PANDAS_GT_120:
         # Only `string[pyarrow]` is implemented, so just patch that
-        copyreg.dispatch_table[pd.arrays.ArrowStringArray] = reduce_arrowextensionarray
+        from pandas.core.arrays.string_arrow import ArrowStringArray
+
+        copyreg.dispatch_table[ArrowStringArray] = reduce_arrowextensionarray
