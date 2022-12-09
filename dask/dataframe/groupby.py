@@ -947,7 +947,7 @@ def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_colum
 
     # and we only expect ddof=N in kwargs
     expected_kwargs = {"ddof"}
-    unexpected_kwargs = set(func_kwargs.keys()) - expected_kwargs
+    unexpected_kwargs = func_kwargs.keys() - expected_kwargs
     if unexpected_kwargs:
         raise TypeError(
             f"aggregate function '{func}' supports {expected_kwargs} keyword arguments, but got {unexpected_kwargs}"
