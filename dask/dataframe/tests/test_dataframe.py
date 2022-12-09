@@ -3,6 +3,7 @@ import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
+from datetime import datetime, timedelta
 from itertools import product
 from operator import add
 
@@ -2240,6 +2241,21 @@ def test_repartition_object_index():
     assert b.npartitions == 10
     assert_eq(b, df)
     assert not b.known_divisions
+
+
+def test_repartition_datetime_tz_index():
+    # Regression test for https://github.com/dask/dask/issues/8788
+    # Use TZ-aware datetime index
+    s = pd.Series(range(10))
+    s.index = pd.to_datetime(
+        [datetime(2020, 1, 1, 12, 0) + timedelta(minutes=x) for x in s], utc=True
+    )
+    ds = dd.from_pandas(s, npartitions=2)
+    assert ds.npartitions == 2
+    assert_eq(s, ds)
+    result = ds.repartition(5)
+    assert result.npartitions == 5
+    assert_eq(s, result)
 
 
 @pytest.mark.slow
