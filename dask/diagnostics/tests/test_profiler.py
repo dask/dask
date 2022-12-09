@@ -2,6 +2,7 @@ import contextlib
 import os
 import warnings
 from operator import add, mul
+from timeit import default_timer
 
 import pytest
 
@@ -120,9 +121,11 @@ def test_resource_profiler_multiple_gets():
 
 def test_cache_profiler():
     with CacheProfiler() as cprof:
+        in_context_time = default_timer()
         get(dsk2, "c")
     results = cprof.results
     assert all(isinstance(i, tuple) and len(i) == 5 for i in results)
+    assert cprof.start_time < in_context_time < cprof.end_time
 
     cprof.clear()
     assert cprof.results == []

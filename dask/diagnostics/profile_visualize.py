@@ -426,7 +426,14 @@ def fix_bounds(start, end, min_span):
 
 
 def plot_cache(
-    results, dsk, start_time, metric_name, palette="Viridis", label_size=60, **kwargs
+    results,
+    dsk,
+    start_time,
+    end_time,
+    metric_name,
+    palette="Viridis",
+    label_size=60,
+    **kwargs,
 ):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -438,6 +445,8 @@ def plot_cache(
         The dask graph being profiled.
     start_time : float
         Start time of the profile.
+    end_time : float
+        End time of the profile.
     metric_name : string
         Metric used to measure cache size
     palette : string, optional
@@ -487,7 +496,7 @@ def plot_cache(
             data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
 
         tics = [0] + [i - start_time for i in tics]
-        p = bp.figure(x_range=[0, max(tics)], **defaults)
+        p = bp.figure(x_range=[0, end_time - start_time], **defaults)
 
         for (key, val), color in zip(data.items(), get_colors(palette, data.keys())):
             p.line(

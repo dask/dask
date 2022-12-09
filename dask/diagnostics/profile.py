@@ -341,12 +341,17 @@ class CacheProfiler(Callback):
 
     def __enter__(self):
         self.clear()
+        if not self.start_time:
+            self.start_time = default_timer()
         return super().__enter__()
+
+    def __exit__(self, *args):
+        if not self.end_time:
+            self.end_time = default_timer()
+        return super().__exit__(*args)
 
     def _start(self, dsk):
         self._dsk.update(dsk)
-        if not self._start_time:
-            self._start_time = default_timer()
 
     def _posttask(self, key, value, dsk, state, id):
         t = default_timer()
@@ -365,7 +370,12 @@ class CacheProfiler(Callback):
         from dask.diagnostics.profile_visualize import plot_cache
 
         return plot_cache(
-            self.results, self._dsk, self._start_time, self._metric_name, **kwargs
+            self.results,
+            self._dsk,
+            self.start_time,
+            self.end_time,
+            self._metric_name,
+            **kwargs,
         )
 
     def visualize(self, **kwargs):
@@ -384,4 +394,5 @@ class CacheProfiler(Callback):
         self.results = []
         self._cache = {}
         self._dsk = {}
-        self._start_time = None
+        self.start_time = None
+        self.end_time = None
