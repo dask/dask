@@ -684,7 +684,7 @@ def gradient(f, *varargs, axis=None, **kwargs):
             "Spacing must either be a single scalar, or a scalar / 1d-array per axis"
         )
 
-    if issubclass(f.dtype.type, (np.bool8, Integral)):
+    if issubclass(f.dtype.type, (np.bool_, Integral)):
         f = f.astype(float)
     elif issubclass(f.dtype.type, Real) and f.dtype.itemsize < 4:
         f = f.astype(float)
