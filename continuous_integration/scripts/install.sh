@@ -19,7 +19,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
     # FIXME workaround for https://github.com/mamba-org/mamba/issues/1682
     arr=($(mamba search --override-channels -c arrow-nightlies pyarrow | tail -n 1))
     export PYARROW_VERSION=${arr[1]}
-    mamba install -y -c arrow-nightlies "pyarrow=$PYARROW_VERSION"
+    # The nightly pyarrow / arrow-cpp packages currently don't install with latest
+    # protobuf / abseil, see https://github.com/dask/dask/issues/9449
+    mamba install -y -c arrow-nightlies -c conda-forge "pyarrow=$PYARROW_VERSION" "libprotobuf=3.19"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force ...
