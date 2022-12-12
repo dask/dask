@@ -7,6 +7,7 @@ from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_VERSION, tm
+from dask.dataframe.reshape import _get_dummies_dtype_default
 from dask.dataframe.utils import assert_eq, make_meta
 
 
@@ -118,7 +119,9 @@ def test_get_dummies_sparse():
     res = dd.get_dummies(ds, sparse=True)
     assert_eq(exp, res)
 
-    assert res.compute().a.dtype == "Sparse[uint8, 0]"
+    dtype = res.compute().a.dtype
+    assert dtype.fill_value == _get_dummies_dtype_default(0)
+    assert dtype.subtype == _get_dummies_dtype_default
     assert pd.api.types.is_sparse(res.a.compute())
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
@@ -140,8 +143,9 @@ def test_get_dummies_sparse_mix():
     exp = pd.get_dummies(df, sparse=True)
     res = dd.get_dummies(ddf, sparse=True)
     assert_eq(exp, res)
-
-    assert res.compute().A_a.dtype == "Sparse[uint8, 0]"
+    dtype = res.compute().A_a.dtype
+    assert dtype.fill_value == _get_dummies_dtype_default(0)
+    assert dtype.subtype == _get_dummies_dtype_default
     assert pd.api.types.is_sparse(res.A_a.compute())
 
 
