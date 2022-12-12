@@ -56,27 +56,10 @@ def cogroup(
 
                 # Check if we've jumped over a fully disjoint part of the graph.
                 # `dask.order` does weird things sometimes; this can happen.
-
-                if keys[i - 1] not in dependencies[key]:
-                    # If the key 1 before the max node isn't an input to the max node,
-                    # we must have jumped over a disjoint part of the graph.
-                    # Don't eat it; roll back and just take the linear chain.
-                    i = prev_i
-                    break
-
-                # Try to walk up the graph, from the key 1 after where we jumped from.
-                # If we can't reach the apex node from there, we've jumped a disjoint subgraph.
-                # TODO not a full search, just following the biggest priority leaps assuming they'll
-                # get us there faster. This may be wrong??
-                di = prev_i + 1
-                while dts := dependents[keys[di]]:
-                    di = priorities[max(dts, key=priorities.__getitem__)]
-                    if di >= i:
-                        # TODO `>`?? might also be a bad sign.
-                        break
-                else:
-                    # Reached an output node (no dependents) that's not our apex node.
-                    # `[prev_i:i]` includes a disjoint subgraph, so roll back.
+                if not _path_exists(
+                    prev_i + 1, i, keys, priorities, dependents, seen=set()
+                ):
+                    # Don't eat disjoint graph; roll back and take the linear chain.
                     i = prev_i
 
                 break
@@ -92,3 +75,30 @@ def cogroup(
         # deps, but we weren't able to traverse past it, it would be a group of size 1.
         if any(priorities.get(dk, -1) >= start_i for dk in dependencies[key]):
             yield keys[start_i:i]
+
+
+def _path_exists(
+    start_i: int,
+    end_i: int,
+    keys: list[KT],
+    priorities: dict[KT, int],
+    dependents: dict[KT, set[KT]],
+    seen: set[int],
+):
+    # TODO use stack instead of recursion
+    assert start_i not in seen, (start_i, seen)
+    assert start_i < end_i, (start_i, end_i)
+
+    for dk in dependents[keys[start_i]]:
+        di = priorities[dk]
+        if di not in seen:
+            if di == end_i:
+                return True
+            if di < end_i and _path_exists(
+                di, end_i, keys, priorities, dependents, seen
+            ):
+                return True
+
+            seen.add(di)
+
+    return False

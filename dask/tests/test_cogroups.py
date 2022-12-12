@@ -8,8 +8,8 @@ from tlz import partition_all
 import dask
 from dask import graph_manipulation
 from dask.base import collections_to_dsk, tokenize
-from dask.cogroups import cogroup
-from dask.core import get_dependencies
+from dask.cogroups import _path_exists, cogroup
+from dask.core import get_dependencies, reverse_dict
 from dask.delayed import Delayed
 from dask.order import order
 
@@ -100,6 +100,62 @@ def assert_cogroup_priority_range(
     keys, is_isolated = cogroup
     assert is_isolated == isolated
     assert [priorities[k] for k in keys] == list(range(start, stop_inclusive + 1))
+
+
+def test_path_exists(abcde):
+    r"""
+    b1      b3      b5
+     |\    / | \  / |
+    c1  c2  c3  c4  c5
+     |/  | \ | / | \|
+    d1  d2  d3  d4  d5
+     |       |      |
+    e1      e3      e5
+    """
+    a, b, c, d, e = abcde
+    dsk = {
+        (e, 1): (f,),
+        (d, 1): (f, (e, 1)),
+        (c, 1): (f, (d, 1)),
+        (b, 1): (f, (c, 1), (c, 2)),
+        (d, 2): (f,),
+        (c, 2): (f, (d, 1), (d, 2), (d, 3)),
+        (e, 3): (f,),
+        (d, 3): (f, (e, 3)),
+        (c, 3): (f, (d, 3)),
+        (b, 3): (f, (c, 2), (c, 3), (c, 4)),
+        (d, 4): (f,),
+        (c, 4): (f, (d, 3), (d, 4), (d, 5)),
+        (e, 5): (f,),
+        (d, 5): (f, (e, 5)),
+        (c, 5): (f, (d, 5)),
+        (b, 5): (f, (c, 4), (c, 5)),
+        # a: (f, (b, 1), (b, 2), (b, 3)),
+        # a: (f, (b, 1), (b, 3), (b, 5)),
+    }
+
+    dependencies = {k: get_dependencies(dsk, k) for k in dsk}
+    priorities: dict[Hashable, int] = order(dsk, dependencies=dependencies)
+    dependents = reverse_dict(dependencies)
+    keys = sorted(priorities, key=priorities.__getitem__)
+
+    def path_exists(k1: Hashable, k2: Hashable) -> bool:
+        return _path_exists(
+            priorities[k1], priorities[k2], keys, priorities, dependents, seen=set()
+        )
+
+    with pytest.raises(AssertionError):
+        path_exists((e, 1), (e, 1))
+
+    with pytest.raises(AssertionError):
+        path_exists((d, 1), (e, 1))
+
+    assert path_exists((e, 1), (d, 1))
+    assert path_exists((e, 1), (c, 1))
+    assert path_exists((e, 1), (b, 3))
+
+    assert not path_exists((d, 2), (e, 1))
+    assert not path_exists((e, 3), (e, 1))
 
 
 def test_client_map_existing_futures(abcde):
@@ -743,7 +799,6 @@ def test_actual_double_diff():
     cogroups, prios = get_cogroups(result)
 
 
-@pytest.mark.xfail(reason="disjoint check doesn't work; goes to `store`")
 def test_double_diff_store():
     da = pytest.importorskip("dask.array")
     a = da.ones((50, 50), chunks=(10, 10))
