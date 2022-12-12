@@ -25,18 +25,19 @@ from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150, PANDAS_GT_200
 # supported pandas version is at least 2.0.0.
 
 
-def rebuild_arrowextensionarray(chunks):
+def rebuild_arrowextensionarray(chunks, dtype):
     array = pa.chunked_array(chunks)
+
     if PANDAS_GT_150:
+        if isinstance(dtype, pd.StringDtype):
+            return pd.arrays.ArrowStringArray(array)
         return pd.arrays.ArrowExtensionArray(array)
     else:
         return pd.arrays.ArrowStringArray(array)
 
 
 def reduce_arrowextensionarray(x):
-    chunks = x._data.combine_chunks()
-    result = (rebuild_arrowextensionarray, (chunks,))
-    return result
+    return (rebuild_arrowextensionarray, (x._data.combine_chunks(), x.dtype))
 
 
 # `pandas=2` includes efficient serialization of `pyarrow`-backed extension arrays.
