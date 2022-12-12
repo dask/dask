@@ -1688,6 +1688,12 @@ def test_cumulative(func, key, sel):
             dg.cumcount(axis=0)
 
 
+def test_series_groupby_multi_character_column_name():
+    df = pd.DataFrame({"aa": [1, 2, 1, 3, 4, 1, 2]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    assert_eq(df.groupby("aa").aa.cumsum(), ddf.groupby("aa").aa.cumsum())
+
+
 @pytest.mark.parametrize("func", ["cumsum", "cumprod"])
 def test_cumulative_axis1(func):
     df = pd.DataFrame(
@@ -2591,6 +2597,85 @@ def test_groupby_aggregate_categoricals(grouping, agg):
 
     # SeriesGroupBy
     assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        lambda grp: grp.agg(partial(np.std, ddof=1)),
+        lambda grp: grp.agg(partial(np.std, ddof=-2)),
+        lambda grp: grp.agg(partial(np.var, ddof=1)),
+        lambda grp: grp.agg(partial(np.var, ddof=-2)),
+    ],
+)
+def test_groupby_aggregate_partial_function(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    # DataFrameGroupBy
+    assert_eq(agg(pdf.groupby("a")), agg(ddf.groupby("a")))
+
+    # SeriesGroupBy
+    assert_eq(agg(pdf.groupby("a")["b"]), agg(ddf.groupby("a")["b"]))
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        lambda grp: grp.agg(partial(np.std, unexpected_arg=1)),
+        lambda grp: grp.agg(partial(np.var, unexpected_arg=1)),
+    ],
+)
+def test_groupby_aggregate_partial_function_unexpected_kwargs(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    with pytest.raises(
+        TypeError,
+        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+    ):
+        agg(ddf.groupby("a"))
+
+    # SeriesGroupBy
+    with pytest.raises(
+        TypeError,
+        match="supports {'ddof'} keyword arguments, but got {'unexpected_arg'}",
+    ):
+        agg(ddf.groupby("a")["b"])
+
+
+@pytest.mark.parametrize(
+    "agg",
+    [
+        lambda grp: grp.agg(partial(np.std, "positional_arg")),
+        lambda grp: grp.agg(partial(np.var, "positional_arg")),
+    ],
+)
+def test_groupby_aggregate_partial_function_unexpected_args(agg):
+    pdf = pd.DataFrame(
+        {
+            "a": [5, 4, 3, 5, 4, 2, 3, 2],
+            "b": [1, 2, 5, 6, 9, 2, 6, 8],
+        }
+    )
+    ddf = dd.from_pandas(pdf, npartitions=2)
+
+    with pytest.raises(TypeError, match="doesn't support positional arguments"):
+        agg(ddf.groupby("a"))
+
+    # SeriesGroupBy
+    with pytest.raises(TypeError, match="doesn't support positional arguments"):
+        agg(ddf.groupby("a")["b"])
 
 
 @pytest.mark.xfail(
