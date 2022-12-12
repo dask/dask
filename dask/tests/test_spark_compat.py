@@ -16,6 +16,7 @@ pytest.importorskip("fastparquet")
 import numpy as np
 import pandas as pd
 
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.utils import assert_eq
 
 pytestmark = pytest.mark.skipif(
@@ -153,6 +154,7 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
     assert_eq(ddf, pdf, check_index=False)
 
 
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
 def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     tmpdir = str(tmpdir)
     npartitions = 3
