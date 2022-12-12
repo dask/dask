@@ -2179,7 +2179,7 @@ def check_append_with_warning(dask_obj, dask_append, pandas_obj, pandas_append):
     return result
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append():
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6], "b": [1, 2, 3, 4, 5, 6]})
     df2 = pd.DataFrame(
@@ -2211,7 +2211,7 @@ def test_append():
     check_append_with_warning(ddf.a, df3.b, df.a, df3.b)
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append2():
     dsk = {
         ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}),
@@ -2254,7 +2254,7 @@ def test_append2():
     check_append_with_warning(ddf3, df1, df3, df1)
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append_categorical():
     frames = [
         pd.DataFrame(
@@ -2303,7 +2303,7 @@ def test_append_categorical():
         assert has_known_categories(res) == known
 
 
-@pytest.mark.xfail(PANDAS_GT_200, reason="pandas removed append")
+@pytest.mark.skipif(PANDAS_GT_200, reason="pandas removed append")
 def test_append_lose_divisions():
     df = pd.DataFrame({"x": [1, 2, 3, 4]}, index=[1, 2, 3, 4])
     ddf = dd.from_pandas(df, npartitions=2)
