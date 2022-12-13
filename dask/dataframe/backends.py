@@ -56,16 +56,6 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     PandasBackendEntrypoint
     """
 
-    @classmethod
-    def to_backend_dispatch(cls):
-        """Return a dispatch function to move data to this backend"""
-        raise NotImplementedError
-
-    @staticmethod
-    def to_backend(data: DataFrame):
-        """Create a new DataFrame collection with this backend"""
-        raise NotImplementedError
-
     @staticmethod
     def from_dict(data: dict, *, npartitions: int, **kwargs):
         """Create a DataFrame collection from a dictionary
@@ -713,7 +703,7 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
         return to_pandas_dispatch
 
     @classmethod
-    def to_backend(cls, data: DataFrame):
+    def to_backend(cls, data: _Frame):
         if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
             # Already a pandas-backed collection
             return data
