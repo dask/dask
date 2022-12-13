@@ -703,11 +703,11 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
         return to_pandas_dispatch
 
     @classmethod
-    def to_backend(cls, data: _Frame):
+    def to_backend(cls, data: _Frame, **kwargs):
         if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
             # Already a pandas-backed collection
             return data
-        return data.map_partitions(cls.to_backend_dispatch())
+        return data.map_partitions(cls.to_backend_dispatch(), **kwargs)
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())

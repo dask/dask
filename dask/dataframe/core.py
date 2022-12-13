@@ -1772,7 +1772,7 @@ Dask Name: {name}, {layers}"""
             graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         return [Delayed(k, graph, layer=layer) for k in keys]
 
-    def to_backend(self, backend: str | None = None):
+    def to_backend(self, backend: str | None = None, **kwargs):
         """Move to a new DataFrame backend
 
         Parameters
@@ -1787,7 +1787,7 @@ Dask Name: {name}, {layers}"""
         """
         from dask.dataframe.io import to_backend
 
-        return to_backend(self, backend=backend)
+        return to_backend(self, backend=backend, **kwargs)
 
     @classmethod
     def _get_unary_operator(cls, op):

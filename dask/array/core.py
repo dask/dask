@@ -1840,7 +1840,7 @@ class Array(DaskMethodsMixin):
 
         return from_dask_array(self, columns=columns, index=index, meta=meta)
 
-    def to_backend(self, backend: str | None = None):
+    def to_backend(self, backend: str | None = None, **kwargs):
         """Move to a new Array backend
 
         Parameters
@@ -1855,7 +1855,7 @@ class Array(DaskMethodsMixin):
         """
         from dask.array.creation import to_backend
 
-        return to_backend(self, backend=backend)
+        return to_backend(self, backend=backend, **kwargs)
 
     def __bool__(self):
         if self.size > 1:

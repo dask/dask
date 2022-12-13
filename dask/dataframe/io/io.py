@@ -1075,7 +1075,7 @@ def from_map(
     return new_dd_object(graph, name, meta, divisions)
 
 
-def to_backend(ddf: _Frame, backend: str | None = None):
+def to_backend(ddf: _Frame, backend: str | None = None, **kwargs):
     """Move a DataFrame collection to a new backend
 
     Parameters
@@ -1097,7 +1097,7 @@ def to_backend(ddf: _Frame, backend: str | None = None):
     # Check that "backend" has a registered entrypoint
     backend_entrypoint = dataframe_creation_dispatch.dispatch(backend)
     # Call `DataFrameBackendEntrypoint.to_backend`
-    return backend_entrypoint.to_backend(ddf)
+    return backend_entrypoint.to_backend(ddf, **kwargs)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__

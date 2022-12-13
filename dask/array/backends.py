@@ -13,6 +13,7 @@ from dask.array.dispatch import (
     numel_lookup,
     percentile_lookup,
     tensordot_lookup,
+    to_cupy_dispatch,
     to_numpy_dispatch,
 )
 from dask.array.numpy_compat import divide as np_divide
@@ -122,10 +123,9 @@ def _tensordot(a, b, axes=2):
 @concatenate_lookup.register_lazy("cupy")
 @nannumel_lookup.register_lazy("cupy")
 @numel_lookup.register_lazy("cupy")
+@to_numpy_dispatch.register_lazy("cupy")
 def register_cupy():
     import cupy
-
-    from dask.array.dispatch import percentile_lookup, to_cupy_dispatch
 
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
@@ -382,11 +382,11 @@ class NumpyBackendEntrypoint(ArrayBackendEntrypoint):
         return to_numpy_dispatch
 
     @classmethod
-    def to_backend(cls, data: Array):
+    def to_backend(cls, data: Array, **kwargs):
         if isinstance(data._meta, np.ndarray):
             # Already a numpy-backed collection
             return data
-        return data.map_blocks(cls.to_backend_dispatch())
+        return data.map_blocks(cls.to_backend_dispatch(), **kwargs)
 
     @property
     def RandomState(self):

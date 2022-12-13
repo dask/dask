@@ -4,6 +4,7 @@ import pytest
 pytestmark = pytest.mark.gpu
 
 import dask.array as da
+from dask import config
 from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
@@ -167,3 +168,38 @@ def test_tri_like(xp, N, M, k, dtype, chunks):
     xp_a = xp.tri(*args, like=da.from_array(cupy.array(())))
 
     assert_eq(xp_a, cp_a)
+
+
+def test_to_backend_cupy():
+    # Test that `Array.to_backend` works as expected
+    with config.set({"array.backend": "numpy"}):
+
+        # Start with cupy-backed array
+        x = da.from_array(cupy.arange(11), chunks=(4,))
+        assert isinstance(x._meta, cupy.ndarray)
+
+        # Calling default `to_backend` should move
+        # backend to `numpy`
+        x_new = x.to_backend()
+        assert isinstance(x_new._meta, np.ndarray)
+
+        # Calling `to_backend("cudf")` should always
+        # move the data back to `cupy`
+        x_new = x.to_backend("cupy")
+        assert isinstance(x_new._meta, cupy.ndarray)
+
+        # Change global "array.backend" config to `cupy`
+        with config.set({"array.backend": "cupy"}):
+
+            # Calling `to_backend("numpy")` should
+            # always move the data to `numpy`
+            x_new = x.to_backend("numpy")
+            assert isinstance(x_new._meta, np.ndarray)
+
+            # Calling default `to_backend()` should
+            # satisfy the global config (now `cupy`)
+            x_new = x.to_backend()
+            assert isinstance(x_new._meta, cupy.ndarray)
+
+    assert_eq(x, x.to_backend("numpy"), check_type=False)
+    assert_eq(x, x.to_backend("cupy"))

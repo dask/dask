@@ -31,7 +31,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import cached_cumsum, derived_from, is_cupy_type
 
 
-def to_backend(x: Array, backend: str | None = None):
+def to_backend(x: Array, backend: str | None = None, **kwargs):
     """Move an Array collection to a new backend
 
     Parameters
@@ -53,7 +53,7 @@ def to_backend(x: Array, backend: str | None = None):
     # Check that "backend" has a registered entrypoint
     backend_entrypoint = array_creation_dispatch.dispatch(backend)
     # Call `ArrayBackendEntrypoint.to_backend`
-    return backend_entrypoint.to_backend(x)
+    return backend_entrypoint.to_backend(x, **kwargs)
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
