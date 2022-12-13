@@ -11,6 +11,6 @@ if [[ $COVERAGE == 'true' ]]; then
 fi
 
 echo "py.test dask --runslow $XTRATESTARGS"
-py.test dask --runslow $XTRATESTARGS
+py.test dask/tests/test_spark_compat.py::test_roundtrip_parquet_spark_to_dask_extension_dtypes --runslow $XTRATESTARGS
 
 set +e

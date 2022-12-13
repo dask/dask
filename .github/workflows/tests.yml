@@ -22,8 +22,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        python-version: ["3.8", "3.9", "3.10"]
+        os: ["ubuntu-latest"]
+        # os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        python-version: ["3.10"]
+        # python-version: ["3.8", "3.9", "3.10"]
         exclude:
             - os: "macos-latest"
               python-version: "3.8"
@@ -72,6 +74,12 @@ jobs:
 
       - name: Run tests
         run: source continuous_integration/scripts/run_tests.sh
+      
+      - uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: spark-written-dataset
+          path: test.parquet
 
       - name: Coverage
         uses: codecov/codecov-action@v3
