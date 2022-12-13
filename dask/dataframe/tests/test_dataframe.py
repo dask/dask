@@ -5528,3 +5528,19 @@ def test_pyarrow_decimal_extension_dtype():
     expected = (df.x + df.x) * 2
     result = (ddf.x + ddf.x) * 2
     assert_eq(expected, result)
+
+
+def test_to_backend():
+    # Test that `DataFrame.to_backend` works as expected
+    with dask.config.set({"dataframe.backend": "pandas"}):
+
+        # Start with pandas-backed data
+        df = dd.from_dict({"a": range(10)}, npartitions=2)
+        assert isinstance(df._meta, pd.DataFrame)
+
+        # Default `to_backend` shouldn't change data
+        assert_eq(df, df.to_backend())
+
+        # Moving to a "missing" backend should raise an error
+        with pytest.raises(ValueError, match="No backend dispatch registered"):
+            df.to_backend("missing")
