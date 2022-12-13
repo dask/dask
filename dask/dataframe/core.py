@@ -1772,6 +1772,23 @@ Dask Name: {name}, {layers}"""
             graph = HighLevelGraph.from_collections(layer, graph, dependencies=())
         return [Delayed(k, graph, layer=layer) for k in keys]
 
+    def to_backend(self, backend: str | None = None):
+        """Move to a new DataFrame backend
+
+        Parameters
+        ----------
+        backend : str, Optional
+            The name of the new backend to move to. The default
+            is the current "dataframe.backend" configuration.
+
+        Returns
+        -------
+        DataFrame, Series or Index
+        """
+        from dask.dataframe.io import to_backend
+
+        return to_backend(self, backend=backend)
+
     @classmethod
     def _get_unary_operator(cls, op):
         return lambda self: elemwise(op, self)

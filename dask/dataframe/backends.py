@@ -32,6 +32,7 @@ from dask.dataframe.dispatch import (
     make_meta_obj,
     meta_nonempty,
     pyarrow_schema_dispatch,
+    to_pandas_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -54,6 +55,16 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
     --------
     PandasBackendEntrypoint
     """
+
+    @classmethod
+    def to_backend_dispatch(cls):
+        """Return a dispatch function to move data to this backend"""
+        raise NotImplementedError
+
+    @staticmethod
+    def to_backend(data: DataFrame):
+        """Create a new DataFrame collection with this backend"""
+        raise NotImplementedError
 
     @staticmethod
     def from_dict(data: dict, *, npartitions: int, **kwargs):
@@ -684,6 +695,11 @@ def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
 
+@to_pandas_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
+def to_pandas_dispatch_from_pandas(data):
+    return data
+
+
 class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     """Pandas-Backend Entrypoint Class for Dask-DataFrame
 
@@ -692,7 +708,16 @@ class PandasBackendEntrypoint(DataFrameBackendEntrypoint):
     ``io`` module.
     """
 
-    pass
+    @classmethod
+    def to_backend_dispatch(cls):
+        return to_pandas_dispatch
+
+    @classmethod
+    def to_backend(cls, data: DataFrame):
+        if isinstance(data._meta, (pd.DataFrame, pd.Series, pd.Index)):
+            # Already a pandas-backed collection
+            return data
+        return data.map_partitions(cls.to_backend_dispatch())
 
 
 dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint())

@@ -23,6 +23,7 @@ is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
 grouper_dispatch = Dispatch("grouper")
 pyarrow_schema_dispatch = Dispatch("pyarrow_schema_dispatch")
+to_pandas_dispatch = Dispatch("to_pandas_dispatch")
 
 
 def concat(

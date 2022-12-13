@@ -20,6 +20,7 @@ from dask.dataframe.core import (
     Series,
     _concat,
     _emulate,
+    _Frame,
     apply_and_enforce,
     has_parallel_type,
     new_dd_object,
@@ -1072,6 +1073,31 @@ def from_map(
     divisions = divisions or [None] * (len(inputs) + 1)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=[])
     return new_dd_object(graph, name, meta, divisions)
+
+
+def to_backend(ddf: _Frame, backend: str | None = None):
+    """Move a DataFrame collection to a new backend
+
+    Parameters
+    ----------
+    ddf : DataFrame
+        The input DataFrame collection.
+    backend : str, Optional
+        The name of the new backend to move to. The default
+        is the current "dataframe.backend" configuration.
+
+    Returns
+    -------
+    dask.DataFrame, dask.Series or dask.Index
+        A new DataFrame collection with the backend
+        specified by ``backend``.
+    """
+    # Get desired backend
+    backend = backend or dataframe_creation_dispatch.backend
+    # Check that "backend" has a registered entrypoint
+    backend_entrypoint = dataframe_creation_dispatch.dispatch(backend)
+    # Call `DataFrameBackendEntrypoint.to_backend`
+    return backend_entrypoint.to_backend(ddf)
 
 
 DataFrame.to_records.__doc__ = to_records.__doc__
