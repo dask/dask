@@ -68,7 +68,7 @@ def data(dtype):
         data = [b"a", b"b"] * 4 + [None] + [b"1", b"2"] * 44 + [None] + [b"!", b">"]
     else:
         raise NotImplementedError
-    return pd.array(data, dtype=dtype)
+    return pd.array(data * 100, dtype=dtype)
 
 
 PYARROW_TYPES = tm.ALL_PYARROW_DTYPES if PANDAS_GT_150 else [pa.string()]
@@ -88,7 +88,29 @@ def test_pickle_roundtrip(data):
     full_pickled = pickle.dumps(expected)
     sliced_pickled = pickle.dumps(expected_sliced)
 
-    assert len(full_pickled) > len(sliced_pickled)
+    # Make sure slicing gives a large reduction in serialized bytes
+    assert len(full_pickled) > len(sliced_pickled) * 3
+
+    result = pickle.loads(full_pickled)
+    tm.assert_series_equal(result, expected)
+
+    result_sliced = pickle.loads(sliced_pickled)
+    tm.assert_series_equal(result_sliced, expected_sliced)
+
+
+@pytest.mark.parametrize(
+    "string_dtype", [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
+)
+def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
+    # There are two pyarrow string implementations in pandas.
+    # This tests that both implementations have similar serialization performance.
+    expected = pd.Series(map(str, range(1_000)), dtype=string_dtype)
+    expected_sliced = expected.head(2)
+    full_pickled = pickle.dumps(expected)
+    sliced_pickled = pickle.dumps(expected_sliced)
+
+    # Make sure slicing gives a large reduction in serialized bytes
+    assert len(full_pickled) > len(sliced_pickled) * 3
 
     result = pickle.loads(full_pickled)
     tm.assert_series_equal(result, expected)

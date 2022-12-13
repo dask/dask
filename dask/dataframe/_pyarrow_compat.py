@@ -25,19 +25,13 @@ from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_150, PANDAS_GT_200
 # supported pandas version is at least 2.0.0.
 
 
-def rebuild_arrowextensionarray(chunks, dtype):
+def rebuild_arrowextensionarray(type_, chunks):
     array = pa.chunked_array(chunks)
-
-    if PANDAS_GT_150:
-        if isinstance(dtype, pd.StringDtype):
-            return pd.arrays.ArrowStringArray(array)
-        return pd.arrays.ArrowExtensionArray(array)
-    else:
-        return pd.arrays.ArrowStringArray(array)
+    return type_(array)
 
 
 def reduce_arrowextensionarray(x):
-    return (rebuild_arrowextensionarray, (x._data.combine_chunks(), x.dtype))
+    return (rebuild_arrowextensionarray, (type(x), x._data.combine_chunks()))
 
 
 # `pandas=2` includes efficient serialization of `pyarrow`-backed extension arrays.
@@ -46,9 +40,8 @@ def reduce_arrowextensionarray(x):
 if pa is not None and not PANDAS_GT_200:
     if PANDAS_GT_150:
         # Applies to all `pyarrow`-backed extension arrays (e.g. `string[pyarrow]`, `int64[pyarrow]`)
-        copyreg.dispatch_table[
-            pd.arrays.ArrowExtensionArray
-        ] = reduce_arrowextensionarray
+        for type_ in [pd.arrays.ArrowExtensionArray, pd.arrays.ArrowStringArray]:
+            copyreg.dispatch_table[type_] = reduce_arrowextensionarray
     elif PANDAS_GT_130:
         # Only `string[pyarrow]` is implemented, so just patch that
         copyreg.dispatch_table[pd.arrays.ArrowStringArray] = reduce_arrowextensionarray
