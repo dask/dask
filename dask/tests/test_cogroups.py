@@ -810,3 +810,29 @@ def test_double_diff_store():
 
     lens = [len(cg) for cg in cogroups]
     assert all(l < 20 for l in lens), (max(lens), lens)
+
+
+@pytest.mark.xfail(reason="some groups too big. we group in the second stage of means.")
+def test_actual_anom_mean():
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+    open_zarr = tsk("open-zarr")
+    _arr = da.ones((50, 1), chunks=(1, 1))
+    arr = graph_manipulation.bind(_arr, open_zarr)
+    coordinate = np.arange(arr.shape[0]) % 5
+
+    groupby = [
+        arr[np.nonzero(coordinate == group_i)]
+        for group_i in range(coordinate.max() + 1)
+    ]
+
+    group_means = da.concatenate([group.mean(axis=0) for group in groupby])
+    group_anoms = da.concatenate(
+        [group - group_mean for group, group_mean in zip(groupby, group_means)]
+    )
+    anom_mean = group_anoms.mean(axis=0)
+
+    cogroups, prios = get_cogroups(anom_mean)
+
+    lens = [len(cg) for cg in cogroups]
+    assert all(l < 20 for l in lens), (max(lens), lens)
