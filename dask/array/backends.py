@@ -134,12 +134,12 @@ def register_cupy():
     nannumel_lookup.register(cupy.ndarray, _nannumel)
 
     @to_numpy_dispatch.register(cupy.ndarray)
-    def cupy_to_numpy(data):
-        return cupy.asnumpy(data)
+    def cupy_to_numpy(data, **kwargs):
+        return cupy.asnumpy(data, **kwargs)
 
     @to_cupy_dispatch.register(np.ndarray)
-    def numpy_to_cupy(data):
-        return cupy.asarray(data)
+    def numpy_to_cupy(data, **kwargs):
+        return cupy.asarray(data, **kwargs)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
@@ -372,7 +372,7 @@ class ArrayBackendEntrypoint(DaskBackendEntrypoint):
 
 
 @to_numpy_dispatch.register(np.ndarray)
-def to_numpy_dispatch_from_numpy(data):
+def to_numpy_dispatch_from_numpy(data, **kwargs):
     return data
 
 

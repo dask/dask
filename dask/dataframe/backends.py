@@ -686,7 +686,7 @@ def percentile(a, q, interpolation="linear"):
 
 
 @to_pandas_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def to_pandas_dispatch_from_pandas(data):
+def to_pandas_dispatch_from_pandas(data, **kwargs):
     return data
 
 

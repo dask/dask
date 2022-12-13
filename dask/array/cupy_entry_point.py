@@ -33,11 +33,11 @@ class CupyBackendEntrypoint(ArrayBackendEntrypoint):
         return to_cupy_dispatch
 
     @classmethod
-    def to_backend(cls, data: Array):
+    def to_backend(cls, data: Array, **kwargs):
         if isinstance(data._meta, _cupy().ndarray):
             # Already a cupy-backed collection
             return data
-        return data.map_blocks(cls.to_backend_dispatch())
+        return data.map_blocks(cls.to_backend_dispatch(), **kwargs)
 
     @property
     def RandomState(self):
