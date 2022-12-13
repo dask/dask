@@ -99,7 +99,14 @@ def test_pickle_roundtrip(data):
 
 
 @pytest.mark.parametrize(
-    "string_dtype", [pd.StringDtype("pyarrow"), pd.ArrowDtype(pa.string())]
+    "string_dtype",
+    [
+        pd.StringDtype("pyarrow"),
+        pytest.param(
+            pd.ArrowDtype(pa.string()),
+            marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Requires ArrowDtype"),
+        ),
+    ],
 )
 def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
     # There are two pyarrow string implementations in pandas.
