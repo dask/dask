@@ -101,9 +101,9 @@ def test_pickle_roundtrip(data):
 @pytest.mark.parametrize(
     "string_dtype",
     [
-        pd.StringDtype("pyarrow"),
+        "stringdtype",
         pytest.param(
-            pd.ArrowDtype(pa.string()),
+            "arrowdtype",
             marks=pytest.mark.skipif(not PANDAS_GT_150, reason="Requires ArrowDtype"),
         ),
     ],
@@ -111,6 +111,10 @@ def test_pickle_roundtrip(data):
 def test_pickle_roundtrip_pyarrow_string_implementations(string_dtype):
     # There are two pyarrow string implementations in pandas.
     # This tests that both implementations have similar serialization performance.
+    if string_dtype == "stringdtype":
+        string_dtype = pd.StringDtype("pyarrow")
+    else:
+        string_dtype = pd.ArrowDtype(pa.string())
     expected = pd.Series(map(str, range(1_000)), dtype=string_dtype)
     expected_sliced = expected.head(2)
     full_pickled = pickle.dumps(expected)
