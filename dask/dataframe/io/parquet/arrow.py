@@ -1,3 +1,4 @@
+import contextlib
 import json
 import textwrap
 from collections import defaultdict
@@ -1007,11 +1008,13 @@ class ArrowDatasetEngine(Engine):
 
         # Use _arrow_table_to_pandas to generate meta
         arrow_to_pandas = dataset_info["kwargs"].get("arrow_to_pandas", {}).copy()
+        string_storage = dataset_info["kwargs"]["string_storage"]
         meta = cls._arrow_table_to_pandas(
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
             use_nullable_dtypes=use_nullable_dtypes,
+            string_storage=string_storage,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1576,25 +1579,32 @@ class ArrowDatasetEngine(Engine):
     def _arrow_table_to_pandas(
         cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
     ) -> pd.DataFrame:
-        _kwargs = kwargs.get("arrow_to_pandas", {})
-        _kwargs.update({"use_threads": False, "ignore_metadata": False})
+        to_pandas_kwargs = kwargs.get("arrow_to_pandas", {})
+        to_pandas_kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         if use_nullable_dtypes:
-            if "types_mapper" in _kwargs:
+            if "types_mapper" in to_pandas_kwargs:
                 # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
-                types_mapper = _kwargs["types_mapper"]
+                types_mapper = to_pandas_kwargs["types_mapper"]
 
                 def _types_mapper(pa_type):
                     return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
                         pa_type
                     )
 
-                _kwargs["types_mapper"] = _types_mapper
+                to_pandas_kwargs["types_mapper"] = _types_mapper
 
             else:
-                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
+                to_pandas_kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
 
-        return arrow_table.to_pandas(categories=categories, **_kwargs)
+        string_storage = kwargs["string_storage"]
+        if string_storage is None:
+            ctx = contextlib.nullcontext()
+        else:
+            ctx = pd.option_context("mode.string_storage", string_storage)
+        with ctx:
+            result = arrow_table.to_pandas(categories=categories, **to_pandas_kwargs)
+        return result
 
     @classmethod
     def collect_file_metadata(cls, path, fs, file_path):

@@ -617,6 +617,34 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
     assert_eq(df, ddf2)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_130, reason="pandas `mode.string_storage` option needs pandas=1.3+"
+)
+@pytest.mark.parametrize("scheduler", ["sync", "multiprocessing"])
+@pytest.mark.parametrize("string_storage", ["python", "pyarrow"])
+@write_read_engines()
+def test_pandas_string_storage_option(
+    tmp_path, write_engine, read_engine, string_storage, scheduler
+):
+    # Ensure Dask respects pandas' `string_storage` option
+
+    if read_engine == "fastparquet" or write_engine == "fastparquet":
+        pytest.xfail("https://github.com/dask/fastparquet/issues/465")
+
+    with pd.option_context("mode.string_storage", string_storage):
+        df = pd.DataFrame(
+            {
+                "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+                "b": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+            }
+        )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    with pd.option_context("mode.string_storage", string_storage):
+        ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
+    assert_eq(df, ddf2, scheduler=scheduler)
+
+
 @PYARROW_MARK
 def test_use_nullable_dtypes(tmp_path, engine):
     """

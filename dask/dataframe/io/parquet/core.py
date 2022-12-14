@@ -4,6 +4,7 @@ import contextlib
 import math
 import warnings
 
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
@@ -12,6 +13,7 @@ from packaging.version import parse as parse_version
 import dask
 from dask.base import tokenize
 from dask.blockwise import BlockIndex
+from dask.dataframe._compat import PANDAS_GT_130
 from dask.dataframe.backends import dataframe_creation_dispatch
 from dask.dataframe.core import DataFrame, Scalar
 from dask.dataframe.io.io import from_map
@@ -365,6 +367,10 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
+
+    kwargs["string_storage"] = (
+        pd.get_option("mode.string_storage") if PANDAS_GT_130 else None
+    )
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
