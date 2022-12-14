@@ -30,7 +30,7 @@ dependencies:
   - xarray
   - fsspec
   - sqlalchemy>=1.4.0
-  # - pyarrow  needs 10+ for python3.11, conda-forge only has v9
+  - pyarrow>=10
   - coverage
   - jsonschema
   # # other -- IO
