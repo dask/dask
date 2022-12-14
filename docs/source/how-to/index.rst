@@ -13,4 +13,6 @@ using Dask. If you have an idea of a how-to that we should add, please
    :glob:
 
    *
+   Setup Prometheus monitoring <https://distributed.dask.org/en/latest/prometheus.html>
+   *
    Use GPUs <../gpu.rst>
