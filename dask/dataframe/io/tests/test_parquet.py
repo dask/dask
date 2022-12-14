@@ -2799,9 +2799,8 @@ def test_chunksize_empty(tmpdir, write_engine, read_engine):
     df = pd.DataFrame({"a": pd.Series(dtype="int"), "b": pd.Series(dtype="float")})
     ddf1 = dd.from_pandas(df, npartitions=1)
     ddf1.to_parquet(tmpdir, engine=write_engine, write_metadata_file=True)
-    ddf2 = dd.read_parquet(
-        tmpdir, engine=read_engine, split_row_groups=False, chunksize="1MiB"
-    )
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+        ddf2 = dd.read_parquet(tmpdir, engine=read_engine, chunksize="1MiB")
     assert_eq(ddf1, ddf2, check_index=False)
 
 
@@ -2840,7 +2839,6 @@ def test_chunksize_files(
             str(tmpdir),
             engine=read_engine,
             chunksize=chunksize,
-            split_row_groups=False,
             aggregate_files=partition_on if partition_on else True,
         )
 
@@ -2890,7 +2888,6 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
             str(tmpdir),
             engine=read_engine,
             chunksize=chunksize,
-            split_row_groups=False,
             aggregate_files=aggregate_files,
         )
 
@@ -2962,25 +2959,57 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
             # a single output partition
             assert ddf2.npartitions == 1
 
+
+@pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("blocksize", ["auto", 1024, 4096, "1MiB"])
+def test_blocksize(tmpdir, blocksize, engine, metadata):
+    nparts = 2
+    df_size = 100
+    row_group_size = 5
+
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
+        }
+    ).set_index("index")
+
+    ddf1 = dd.from_pandas(df, npartitions=nparts)
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        row_group_size=row_group_size,
+        write_metadata_file=metadata,
+    )
+
+    if metadata:
+        path = str(tmpdir)
+    else:
+        dirname = str(tmpdir)
+        files = os.listdir(dirname)
+        assert "_metadata" not in files
+        path = os.path.join(dirname, "*.parquet")
+
     # Use (default) split_row_groups="auto"
     # without file aggregation
-    ddf3 = dd.read_parquet(
+    ddf2 = dd.read_parquet(
         path,
         engine=engine,
-        chunksize=chunksize,
+        blocksize=blocksize,
         index="index",
-        aggregate_files=False,
     )
-    assert_eq(df, ddf3)
+    assert_eq(df, ddf2)
 
     num_row_groups = df_size // row_group_size
-    if chunksize in (1024, 4096):
+    if blocksize in (1024, 4096):
         # Should get partial aggregation
-        assert ddf3.npartitions < num_row_groups
-        assert ddf3.npartitions > ddf1.npartitions
+        assert ddf2.npartitions < num_row_groups
+        assert ddf2.npartitions > ddf1.npartitions
     else:
         # Should get single partition per file
-        assert ddf3.npartitions == ddf1.npartitions
+        assert ddf2.npartitions == ddf1.npartitions
 
 
 @write_read_engines()
@@ -2992,14 +3021,15 @@ def test_roundtrip_pandas_chunksize(tmpdir, write_engine, read_engine):
         path, engine="pyarrow" if write_engine.startswith("pyarrow") else "fastparquet"
     )
 
-    ddf_read = dd.read_parquet(
-        path,
-        engine=read_engine,
-        chunksize="10 kiB",
-        calculate_divisions=True,
-        split_row_groups=True,
-        index="index",
-    )
+    with pytest.warns(FutureWarning, match="argument will be deprecated"):
+        ddf_read = dd.read_parquet(
+            path,
+            engine=read_engine,
+            chunksize="10 kiB",
+            calculate_divisions=True,
+            split_row_groups=True,
+            index="index",
+        )
 
     assert_eq(pdf, ddf_read)
 

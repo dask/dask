@@ -185,6 +185,7 @@ def read_parquet(
     ignore_metadata_file=False,
     metadata_task_size=None,
     split_row_groups="auto",
+    blocksize="auto",
     chunksize=None,
     aggregate_files=None,
     parquet_file_extension=(".parq", ".parquet", ".pq"),
@@ -281,23 +282,26 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         If "auto" (the default), the uncompressed storage size of all row-groups
-        in the first file will be used to automatically set a value that is
-        consistent with ``chunksize``.
-    chunksize : int or str, default None
+        in the first file will be used to automatically set an integer value that
+        is consistent with ``blocksize``.
+    blocksize : int or str, default "auto"
         The desired size of each output ``DataFrame`` partition in terms of total
-        (uncompressed) parquet storage space. If ``split_row_groups='auto'``,
-        this argument will default to 1/10 the per-core system memory. The metadata
-        of the first file will then be used to choose an ``split_row_groups`` value
-        that is consistent with ``chunksize``.
+        (uncompressed) parquet storage space. This argument is currenlty used to
+        set the default value of ``split_row_groups`` (using row-group metadata
+        from a single file), and will be ignored if ``split_row_groups`` is not
+        set to 'auto'. Default may be engine-dependant, but corresponds to 1/10
+        the per-core system memory for the 'pyarrow' and 'fastparquet' engines.
+    chunksize : int or str, default None
+        WARNING: The ``chunksize`` argument will be deprecated in the future.
+        Please use ``blocksize`` to control partition sizes. If you strongly
+        oppose the deprecation of ``chunksize``, please comment at
+        https://github.com/dask/dask/issues/9043.
 
-        WARNING: Using the ``chunksize`` argument in the absence of
-        ``split_row_groups='auto'`` is often slow on large and/or remote datasets.
-
-        If ``split_row_groups`` is set to ``True``, ``chunksize`` defaults to
-        ``None``. If ``chunksize`` is set to an explicit value, adjacent row-groups
-        will be aggregated into the same output partition until the cumulative
-        ``total_byte_size`` parquet-metadata statistic reaches that value.
-        Use `aggregate_files` to enable/disable inter-file aggregation.
+        The desired size of each output ``DataFrame`` partition in terms of total
+        (uncompressed) parquet storage space. If specified, adjacent row-groups
+        and/or files will be aggregated into the same output partition until the
+        cumulative ``total_byte_size`` parquet-metadata statistic reaches this
+        value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
         WARNING: The ``aggregate_files`` argument will be deprecated in the future.
         Please consider using ``from_map`` to create a DataFrame collection with a
@@ -368,12 +372,14 @@ def read_parquet(
     pyarrow.parquet.ParquetDataset
     """
 
-    # Check `chunksize` setting
-    if chunksize and split_row_groups not in (True, False, "auto"):
-        raise ValueError(
-            f"chunksize not supported for split_row_groups={split_row_groups}. "
-            f"Please specify `'auto'` (or `True`) if row-group sizes vary "
-            f"significantly between files."
+    # "Pre-deprecation" warning for `chunksize`
+    if chunksize:
+        warnings.warn(
+            "The `chunksize` argument will be deprecated in the future. "
+            "Please use ``blocksize`` to control partition sizes.\n\n"
+            "If you strongly oppose the deprecation of `chunksize`, please "
+            "comment at https://github.com/dask/dask/issues/9043",
+            FutureWarning,
         )
 
     # "Pre-deprecation" warning for `aggregate_files`
@@ -441,6 +447,7 @@ def read_parquet(
         "ignore_metadata_file": ignore_metadata_file,
         "metadata_task_size": metadata_task_size,
         "split_row_groups": split_row_groups,
+        "blocksize": blocksize,
         "chunksize": chunksize,
         "aggregate_files": aggregate_files,
         "parquet_file_extension": parquet_file_extension,
@@ -482,6 +489,7 @@ def read_parquet(
         gather_statistics=calculate_divisions,
         filters=filters,
         split_row_groups=split_row_groups,
+        blocksize=blocksize,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,

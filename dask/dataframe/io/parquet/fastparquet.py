@@ -371,6 +371,7 @@ class FastParquetEngine(Engine):
         gather_statistics,
         filters,
         split_row_groups,
+        blocksize,
         chunksize,
         aggregate_files,
         ignore_metadata_file,
@@ -494,6 +495,22 @@ class FastParquetEngine(Engine):
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
+        # Handle split_row_groups default
+        if split_row_groups == "auto":
+            if blocksize:
+                # Sample row-group sizes in first file
+                pf_sample = ParquetFile(
+                    paths[0],
+                    open_with=fs.open,
+                    **dataset_kwargs,
+                )
+                split_row_groups = _auto_split_row_groups(
+                    [rg.total_byte_size for rg in pf_sample.row_groups],
+                    None if blocksize == "auto" else blocksize,
+                )
+            else:
+                split_row_groups = False
+
         return {
             "pf": pf,
             "paths": paths,
@@ -601,24 +618,6 @@ class FastParquetEngine(Engine):
         dataset_info["categories_dict"] = categories_dict
 
         return meta
-
-    @classmethod
-    def _update_partition_sizes(cls, dataset_info):
-        # Automatically set split_row_groups
-        split_row_groups = dataset_info["split_row_groups"]
-        if split_row_groups == "auto":
-            # Sample row-group sizes in first file
-            pf = ParquetFile(
-                dataset_info["paths"][0],
-                open_with=dataset_info["fs"].open,
-                **dataset_info["kwargs"]["dataset"],
-            )
-            split_row_groups = _auto_split_row_groups(
-                [rg.total_byte_size for rg in pf.row_groups],
-                dataset_info["chunksize"],
-            )
-            dataset_info["chunksize"] = None
-            dataset_info["split_row_groups"] = split_row_groups
 
     @classmethod
     def _construct_collection_plan(cls, dataset_info):
@@ -841,7 +840,8 @@ class FastParquetEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=False,
+        split_row_groups="auto",
+        blocksize="auto",
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
@@ -859,6 +859,7 @@ class FastParquetEngine(Engine):
             gather_statistics,
             filters,
             split_row_groups,
+            blocksize,
             chunksize,
             aggregate_files,
             ignore_metadata_file,
@@ -870,10 +871,7 @@ class FastParquetEngine(Engine):
         # Stage 2: Generate output `meta`
         meta = cls._create_dd_meta(dataset_info)
 
-        # Stage 3: Update split_row_groups
-        cls._update_partition_sizes(dataset_info)
-
-        # Stage 4: Generate parts and stats
+        # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
 
         # Cannot allow `None` in columns if the user has specified index=False
