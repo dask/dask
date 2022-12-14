@@ -23,7 +23,6 @@ dependencies:
   - pytables
   # - zarr
   # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
-  # We should unpin when possible.
   # https://github.com/dask/dask/pull/9569
   - tiledb-py
   # - pyspark
