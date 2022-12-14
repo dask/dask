@@ -4411,7 +4411,7 @@ def test_filesystem_option(tmpdir, engine):
     fs = LocalFileSystem()
     fs._myfs = True
     ddf = dd.read_parquet(
-        tmpdir,
+        str(tmpdir),
         engine=engine,
         filesystem=fs,
     )
@@ -4430,7 +4430,7 @@ def test_pyarrow_filesystem_option(tmpdir, fs):
     dd.from_pandas(df, npartitions=2).to_parquet(tmpdir)
     fs = fs or LocalFileSystem()
     ddf = dd.read_parquet(
-        tmpdir,
+        str(tmpdir),
         engine="pyarrow",
         filesystem=fs,
     )

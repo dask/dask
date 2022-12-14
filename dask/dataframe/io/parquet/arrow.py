@@ -371,13 +371,22 @@ class ArrowDatasetEngine(Engine):
                 )
 
             if isinstance(fs, pa_fs.FileSystem):
-                fs = ArrowFSWrapper(fs)
-                paths = expand_paths_if_needed(urlpath, "rb", 1, fs, None)
+                fsspec_fs = ArrowFSWrapper(fs)
+                if urlpath[0].startswith("C:") and isinstance(
+                    fs, pa_fs.LocalFileSystem
+                ):
+                    # ArrowFSWrapper._strip_protocol not reliable on windows
+                    from fsspec.implementations.local import LocalFileSystem
+
+                    fs_strip = LocalFileSystem()
+                else:
+                    fs_strip = fsspec_fs
+                paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
                 return (
-                    fs,
-                    [fs._strip_protocol(u) for u in paths],
+                    fsspec_fs,
+                    [fs_strip._strip_protocol(u) for u in paths],
                     dataset_options,
-                    {"open_file_func": fs.fs.open_input_file},
+                    {"open_file_func": fs.open_input_file},
                 )
 
         # Use default file-system initialization
