@@ -73,4 +73,3 @@ dependencies:
   - libprotobuf=3.19
   - pip:
     - git+https://github.com/dask/distributed
-    - pyarrow  # pyarrow on conda-forge is 9.0 needs 10+ for python3.11
