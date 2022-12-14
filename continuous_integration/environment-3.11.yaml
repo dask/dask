@@ -72,5 +72,5 @@ dependencies:
   # protobuf / abseil, see https://github.com/dask/dask/issues/9449
   - libprotobuf=3.19
   - pip:
-    - git+https://github.com/graingert/distributed@python-311
+    - git+https://github.com/dask/distributed
     - pyarrow  # pyarrow on conda-forge is 9.0 needs 10+ for python3.11
