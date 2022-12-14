@@ -38,7 +38,7 @@ jobs:
 
     steps:
       - name: Checkout source
-        uses: actions/checkout@v3.1.0
+        uses: actions/checkout@v3.2.0
         with:
           fetch-depth: 0  # Needed by codecov.io
       - name: Setup Java
@@ -48,7 +48,7 @@ jobs:
           distribution: "zulu"
           java-version: "11"
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v2.2.0
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest

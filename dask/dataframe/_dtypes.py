@@ -1,5 +1,6 @@
 import pandas as pd
 
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 
@@ -16,6 +17,13 @@ def _(x):
 @make_array_nonempty.register(pd.StringDtype)
 def _(dtype):
     return pd.array(["a", pd.NA], dtype=dtype)
+
+
+if PANDAS_GT_150:
+
+    @make_array_nonempty.register(pd.ArrowDtype)
+    def _make_array_nonempty_pyarrow_dtype(dtype):
+        return dtype.empty(2)
 
 
 @make_scalar.register(str)

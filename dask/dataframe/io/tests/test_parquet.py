@@ -595,6 +595,108 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
+def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
+    """
+    Test round-tripping nullable extension dtypes. Parquet engines will
+    typically add dtype metadata for this.
+    """
+    if read_engine == "fastparquet" or write_engine == "fastparquet":
+        pytest.xfail("https://github.com/dask/fastparquet/issues/465")
+
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmp_path, engine=write_engine)
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine)
+    assert_eq(df, ddf2)
+
+
+@PYARROW_MARK
+def test_use_nullable_dtypes(tmp_path, engine):
+    """
+    Test reading a parquet file without pandas metadata,
+    but forcing use of nullable dtypes where appropriate
+    """
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    @dask.delayed
+    def write_partition(df, i):
+        """Write a parquet file without the pandas metadata"""
+        table = pa.Table.from_pandas(df).replace_schema_metadata({})
+        pq.write_table(table, tmp_path / f"part.{i}.parquet")
+
+    # Create a pandas-metadata-free partitioned parquet. By default it will
+    # not read into nullable extension dtypes
+    partitions = ddf.to_delayed()
+    dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
+
+    # Not supported by fastparquet
+    if engine == "fastparquet":
+        with pytest.raises(ValueError, match="`use_nullable_dtypes` is not supported"):
+            dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+
+    # Works in pyarrow
+    else:
+        # Doesn't round-trip by default when we aren't using nullable dtypes
+        with pytest.raises(AssertionError):
+            ddf2 = dd.read_parquet(tmp_path, engine=engine)
+            assert_eq(df, ddf2)
+
+        # Round trip works when we use nullable dtypes
+        ddf2 = dd.read_parquet(tmp_path, engine=engine, use_nullable_dtypes=True)
+        assert_eq(df, ddf2, check_index=False)
+
+
+@pytest.mark.xfail(
+    not PANDAS_GT_130,
+    reason=(
+        "Known bug in pandas. "
+        "See https://issues.apache.org/jira/browse/ARROW-13413 "
+        "and https://github.com/pandas-dev/pandas/pull/41052."
+    ),
+)
+def test_use_nullable_dtypes_with_types_mapper(tmp_path, engine):
+    # Read in dataset with `use_nullable_dtypes=True` and a custom pyarrow `types_mapper`.
+    # Ensure `types_mapper` takes priority.
+    df = pd.DataFrame(
+        {
+            "a": pd.Series([1, 2, pd.NA, 3, 4], dtype="Int64"),
+            "b": pd.Series([True, pd.NA, False, True, False], dtype="boolean"),
+            "c": pd.Series([0.1, 0.2, 0.3, pd.NA, 0.4], dtype="Float64"),
+            "d": pd.Series(["a", "b", "c", "d", pd.NA], dtype="string"),
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=3)
+    ddf.to_parquet(tmp_path, engine=engine)
+
+    types_mapper = {
+        pa.int64(): pd.Float32Dtype(),
+    }
+    result = dd.read_parquet(
+        tmp_path,
+        engine="pyarrow",
+        use_nullable_dtypes=True,
+        arrow_to_pandas={"types_mapper": types_mapper.get},
+    )
+    expected = df.astype({"a": pd.Float32Dtype()})
+    assert_eq(result, expected)
+
+
+@write_read_engines()
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
@@ -3171,15 +3273,32 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
         @classmethod
         def _arrow_table_to_pandas(
-            cls, arrow_table: pa.Table, categories, **kwargs
+            cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
         ) -> pd.DataFrame:
             fixed_arrow_table = cls.clamp_arrow_datetimes(arrow_table)
             return super()._arrow_table_to_pandas(
-                fixed_arrow_table, categories, **kwargs
+                fixed_arrow_table, categories, use_nullable_dtypes, **kwargs
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+
+
+@PYARROW_MARK
+def test_arrow_to_pandas(tmpdir, engine):
+    # Test that dtypes are correct when arrow_to_pandas is used
+    # (See: https://github.com/dask/dask/issues/9664)
+
+    df = pd.DataFrame({"A": [pd.Timestamp("2000-01-01")]})
+    path = str(tmpdir.join("test.parquet"))
+    df.to_parquet(path, engine=engine)
+
+    arrow_to_pandas = {"timestamp_as_object": True}
+    expect = pq.ParquetFile(path).read().to_pandas(**arrow_to_pandas)
+    got = dd.read_parquet(path, engine="pyarrow", arrow_to_pandas=arrow_to_pandas)
+
+    assert_eq(expect, got)
+    assert got.A.dtype == got.compute().A.dtype
 
 
 @pytest.mark.parametrize(
@@ -3207,13 +3326,17 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
     else:
         path = str(tmpdir)
 
-    if write_cols == ["part", "kind", "col"]:
+    expect = pd.concat([_df1, _df2], ignore_index=True)
+    if engine == "fastparquet" and fastparquet_version > parse_version("0.8.3"):
+        # columns will change order and partitions will be categorical
         result = dd.read_parquet(path, engine=engine)
-        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert result.compute().reset_index(drop=True).to_dict() == expect.to_dict()
+    elif write_cols == ["part", "kind", "col"]:
+        result = dd.read_parquet(path, engine=engine)
         assert_eq(result, expect, check_index=False)
     else:
         # For now, partial overlap between partition columns and
-        # real columns is not allowed
+        # real columns is not allowed for pyarrow or older fastparquet
         with pytest.raises(ValueError):
             dd.read_parquet(path, engine=engine)
 
@@ -3767,8 +3890,9 @@ def test_dir_filter(tmpdir, engine):
     )
     ddf = dask.dataframe.from_pandas(df, npartitions=1)
     ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
-    dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
-    assert all
+    ddf2 = dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
+    ddf2["year"] = ddf2.year.astype("int64")
+    assert_eq(ddf2, df[df.year == 2020])
 
 
 @PYARROW_MARK
@@ -4329,3 +4453,14 @@ def test_retries_on_remote_filesystem(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-parquet")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+
+def test_select_filtered_column(tmp_path, engine):
+
+    df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})
+    path = tmp_path / "test_select_filtered_column.parquet"
+    df.to_parquet(path, index=False)
+
+    with pytest.warns(UserWarning, match="Sorted columns detected"):
+        ddf = dd.read_parquet(path, engine=engine, filters=[("b", "==", "cat")])
+    assert_eq(df, ddf)

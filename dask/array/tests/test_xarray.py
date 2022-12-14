@@ -35,3 +35,13 @@ def test_asarray_xarray_intersphinx_workaround():
         assert_eq(y, y)
     finally:
         xr.DataArray.__module__ = module
+
+
+def test_fft():
+    # Regression test for https://github.com/dask/dask/issues/9679
+    coord = da.arange(8, chunks=-1)
+    data = da.random.random((8, 8), chunks=-1) + 1
+    x = xr.DataArray(data, coords={"x": coord, "y": coord}, dims=["x", "y"])
+    result = da.fft.fft(x)
+    expected = da.fft.fft(x.data)
+    assert_eq(result, expected)

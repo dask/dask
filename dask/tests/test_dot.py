@@ -111,10 +111,11 @@ def test_to_graphviz_custom():
     assert set(shapes) == {"box", "circle", "square", "ellipse"}
 
 
-def test_cytoscape_graph_custom():
+def test_cytoscape_graph_custom(tmp_path):
     # Check that custom styling and layout propagates through
     g = cytoscape_graph(
         dsk,
+        filename=os.fsdecode(tmp_path / "mydask.html"),
         rankdir="LR",
         node_sep=20,
         edge_sep=30,

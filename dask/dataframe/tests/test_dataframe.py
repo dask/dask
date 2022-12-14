@@ -1,7 +1,9 @@
+import decimal
 import platform
 import warnings
 import weakref
 import xml.etree.ElementTree
+from datetime import datetime, timedelta
 from itertools import product
 from operator import add
 
@@ -695,6 +697,30 @@ def test_cumulative():
             "c": [np.nan] * 8,
         }
     )
+    ddf = dd.from_pandas(df, 3)
+
+    assert_eq(df.cumsum(), ddf.cumsum())
+    assert_eq(df.cummin(), ddf.cummin())
+    assert_eq(df.cummax(), ddf.cummax())
+    assert_eq(df.cumprod(), ddf.cumprod())
+
+    assert_eq(df.cumsum(skipna=False), ddf.cumsum(skipna=False))
+    assert_eq(df.cummin(skipna=False), ddf.cummin(skipna=False))
+    assert_eq(df.cummax(skipna=False), ddf.cummax(skipna=False))
+    assert_eq(df.cumprod(skipna=False), ddf.cumprod(skipna=False))
+
+    assert_eq(df.cumsum(axis=1), ddf.cumsum(axis=1))
+    assert_eq(df.cummin(axis=1), ddf.cummin(axis=1))
+    assert_eq(df.cummax(axis=1), ddf.cummax(axis=1))
+    assert_eq(df.cumprod(axis=1), ddf.cumprod(axis=1))
+
+    assert_eq(df.cumsum(axis=1, skipna=False), ddf.cumsum(axis=1, skipna=False))
+    assert_eq(df.cummin(axis=1, skipna=False), ddf.cummin(axis=1, skipna=False))
+    assert_eq(df.cummax(axis=1, skipna=False), ddf.cummax(axis=1, skipna=False))
+    assert_eq(df.cumprod(axis=1, skipna=False), ddf.cumprod(axis=1, skipna=False))
+
+    # With duplicate columns
+    df = pd.DataFrame(np.random.randn(100, 3), columns=list("abb"))
     ddf = dd.from_pandas(df, 3)
 
     assert_eq(df.cumsum(), ddf.cumsum())
@@ -2217,6 +2243,21 @@ def test_repartition_object_index():
     assert not b.known_divisions
 
 
+def test_repartition_datetime_tz_index():
+    # Regression test for https://github.com/dask/dask/issues/8788
+    # Use TZ-aware datetime index
+    s = pd.Series(range(10))
+    s.index = pd.to_datetime(
+        [datetime(2020, 1, 1, 12, 0) + timedelta(minutes=x) for x in s], utc=True
+    )
+    ds = dd.from_pandas(s, npartitions=2)
+    assert ds.npartitions == 2
+    assert_eq(s, ds)
+    result = ds.repartition(5)
+    assert result.npartitions == 5
+    assert_eq(s, result)
+
+
 @pytest.mark.slow
 @pytest.mark.parametrize("npartitions", [1, 20, 243])
 @pytest.mark.parametrize("freq", ["1D", "7D", "28h", "1h"])
@@ -3201,6 +3242,23 @@ def test_cov():
     assert res._name != res3._name
 
 
+@pytest.mark.gpu
+def test_cov_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.cov()
+    res2 = ddf.cov(split_every=2)
+    sol = df.cov()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.cov()._name
+    assert res._name != res2._name
+
+
 def test_corr():
     # DataFrame
     df = _compat.makeMissingDataframe()
@@ -3246,6 +3304,23 @@ def test_corr():
 
     pytest.raises(NotImplementedError, lambda: da.corr(db, method="spearman"))
     pytest.raises(TypeError, lambda: da.corr(ddf))
+
+
+@pytest.mark.gpu
+def test_corr_gpu():
+    cudf = pytest.importorskip("cudf")
+
+    # cudf DataFrame
+    df = cudf.from_pandas(_compat.makeDataFrame())
+    ddf = dd.from_pandas(df, npartitions=6)
+
+    res = ddf.corr()
+    res2 = ddf.corr(split_every=2)
+    sol = df.corr()
+    assert_eq(res, sol)
+    assert_eq(res2, sol)
+    assert res._name == ddf.corr()._name
+    assert res._name != res2._name
 
 
 def test_corr_same_name():
@@ -5404,3 +5479,52 @@ def test_repr_materialize():
     s.__repr__()
     s.to_frame().__repr__()
     assert all([not l.is_materialized() for l in s.dask.layers.values()])
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="Requires native PyArrow-backed ExtensionArrays"
+)
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int64[pyarrow]",
+        "int32[pyarrow]",
+        "float64[pyarrow]",
+        "float32[pyarrow]",
+        "uint8[pyarrow]",
+    ],
+)
+def test_pyarrow_extension_dtype(dtype):
+    # Ensure simple Dask DataFrame operations work with pyarrow extension dtypes
+    pytest.importorskip("pyarrow")
+    df = pd.DataFrame({"x": range(10)}, dtype=dtype)
+    ddf = dd.from_pandas(df, npartitions=3)
+    expected = (df.x + df.x) * 2
+    result = (ddf.x + ddf.x) * 2
+    assert_eq(expected, result)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_150, reason="Requires native PyArrow-backed ExtensionArrays"
+)
+def test_pyarrow_decimal_extension_dtype():
+    # Similar to `test_pyarrow_extension_dtype` but for pyarrow decimal dtypes
+    pa = pytest.importorskip("pyarrow")
+    pa_dtype = pa.decimal128(precision=7, scale=3)
+
+    data = pa.array(
+        [
+            decimal.Decimal("8093.234"),
+            decimal.Decimal("8094.234"),
+            decimal.Decimal("8095.234"),
+            decimal.Decimal("8096.234"),
+            decimal.Decimal("8097.234"),
+            decimal.Decimal("8098.234"),
+        ],
+        type=pa_dtype,
+    )
+    df = pd.DataFrame({"x": data}, dtype=pd.ArrowDtype(pa_dtype))
+    ddf = dd.from_pandas(df, npartitions=3)
+    expected = (df.x + df.x) * 2
+    result = (ddf.x + ddf.x) * 2
+    assert_eq(expected, result)

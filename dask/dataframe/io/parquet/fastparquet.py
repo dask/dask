@@ -403,7 +403,7 @@ class FastParquetEngine(Engine):
             # Find all files if we are not using a _metadata file
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
-                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
+                paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs, root=base)
                 _update_paths = False
                 for fn in ["_metadata", "_common_metadata"]:
                     try:
@@ -492,6 +492,7 @@ class FastParquetEngine(Engine):
                 raise ValueError(
                     "No partition-columns should be written in the \n"
                     "file unless they are ALL written in the file.\n"
+                    "This restriction is removed as of fastparquet 0.8.4\n"
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
@@ -838,6 +839,7 @@ class FastParquetEngine(Engine):
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         split_row_groups="auto",
@@ -849,6 +851,10 @@ class FastParquetEngine(Engine):
         parquet_file_extension=None,
         **kwargs,
     ):
+        if use_nullable_dtypes:
+            raise ValueError(
+                "`use_nullable_dtypes` is not supported by the fastparquet engine"
+            )
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -910,6 +916,7 @@ class FastParquetEngine(Engine):
         pieces,
         columns,
         index,
+        use_nullable_dtypes=False,
         categories=(),
         root_cats=None,
         root_file_scheme=None,
