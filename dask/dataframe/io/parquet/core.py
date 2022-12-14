@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import itertools
 import math
 import warnings
 
@@ -18,7 +19,7 @@ from dask.dataframe.io.io import from_map
 from dask.dataframe.io.parquet.utils import Engine, _sort_and_analyze_paths
 from dask.dataframe.io.utils import DataFrameIOFunction, _is_local_fs
 from dask.dataframe.methods import concat
-from dask.delayed import Delayed
+from dask.delayed import Delayed, delayed
 from dask.highlevelgraph import HighLevelGraph
 from dask.layers import DataFrameIOLayer
 from dask.utils import apply, import_required, natural_sort_key, parse_bytes
@@ -1556,6 +1557,86 @@ def aggregate_row_groups(
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
+
+
+def _read_partition_stats_group(parts, fs, engine, columns=None):
+    # Helper function used by _extract_statistics
+    return [engine.read_partition_stats(part, fs, columns=columns) for part in parts]
+
+
+def layer_statistics(
+    layer,
+    columns=None,
+    task_size=None,
+    compute_kwargs=None,
+):
+    """Load Parquet-metadata statistics from a DataFrameIOLayer
+
+    WARNING: This API is experimental, and is likely to change
+
+    Parameters
+    ----------
+    layer : DataFrameIOLayer
+        High-level-graph layer to extract Parquet statistics from.
+    columns : list or None, Optional
+        List of columns to collect min/max statistics for. If ``None``
+        (the default), only 'num-rows' statistics will be collected.
+    task_size : int or None, Optional
+        The number of ``layer`` tasks to collect statistics for
+        within each ``dask.delayed`` function. By default, this will
+        be set to the total number of ``layer`` tasks on local
+        filesystems, and 16 otherwise.
+    compute_kwargs : dict, Optional
+        Key-word argumentst to pass through to ``dask.compute``.
+
+    Returns
+    -------
+    statistics : List[dict]
+        List of Parquet statistics. Each list element corresponds
+        to a distinct task (partition) in ``layer``. Each element
+        of ``statistics`` will correspond to a dictionary with
+        'num-rows' and 'columns' keys::
+
+            ``{'num-rows': 1024, 'columns': [...]}``
+
+        If column statistics are available, each element of the
+        list stored under the "columns" key will correspond to
+        a dictionary with "name", "min", and "max" keys::
+
+            ``{'name': 'col0', 'min': 0, 'max': 100}``
+    """
+
+    # Make sure we are dealing with a
+    # ParquetFunctionWrapper-based DataFrameIOLayer
+    if not isinstance(layer, DataFrameIOLayer) or not isinstance(
+        layer.io_func, ParquetFunctionWrapper
+    ):
+        return None
+
+    # Collect statistics using layer information
+    parts = layer.inputs
+    fs = layer.io_func.fs
+    engine = layer.io_func.engine
+    if not hasattr(engine, "read_partition_stats"):
+        # Utility not supported for current engine
+        return None
+    func = delayed(_read_partition_stats_group)
+    task_size = task_size or (
+        # Use reasonable defaults for task size
+        len(parts)
+        if _is_local_fs(fs)
+        else 16
+    )
+
+    # Compute and return flattened result
+    result = dask.compute(
+        [
+            func(parts[i : i + task_size], fs, engine, columns=columns)
+            for i in range(0, len(parts), task_size)
+        ],
+        **(compute_kwargs or {}),
+    )[0]
+    return list(itertools.chain(*result))
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__

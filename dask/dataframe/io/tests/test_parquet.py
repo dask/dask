@@ -4403,6 +4403,38 @@ def test_retries_on_remote_filesystem(tmpdir):
         assert layer.annotations["retries"] == 2
 
 
+def test_layer_statistics(tmpdir, engine):
+    from dask.dataframe.io.parquet.core import layer_statistics
+
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=engine)
+    ddf2 = dd.read_parquet(tmp_path, engine=engine)
+
+    # Check num_rows
+    layer = ddf2.dask.layers[ddf2._name]
+    stats = layer_statistics(layer)
+    stats_len = pd.DataFrame.from_dict(stats)["num-rows"].sum()
+    assert len(ddf) == stats_len
+
+    # Check column statistics
+    columns = ["x", "y"]
+    stats = layer_statistics(layer, columns=columns)
+    maxes = {k: None for k in columns}
+    mins = {k: None for k in columns}
+    for part in stats:
+        for col in part["columns"]:
+            name = col["name"]
+            maxes[name] = max(
+                col["max"] if maxes[name] is None else maxes[name], col["max"]
+            )
+            mins[name] = min(
+                col["min"] if mins[name] is None else mins[name], col["min"]
+            )
+    for column in columns:
+        assert maxes[column] == ddf[column].max().compute()
+        assert mins[column] == ddf[column].min().compute()
+
+
 def test_select_filtered_column(tmp_path, engine):
 
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})

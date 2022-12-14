@@ -2,6 +2,7 @@ import json
 import textwrap
 from collections import defaultdict
 from datetime import datetime
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -1621,3 +1622,58 @@ class ArrowDatasetEngine(Engine):
             return None
         else:
             return meta
+
+    @classmethod
+    def read_partition_stats(cls, part, fs, columns=None):
+        """Read Parquet-metadata statistics for a single partition"""
+
+        if not isinstance(part, list):
+            part = [part]
+
+        column_stats = {}
+        num_rows = 0
+        columns = columns or []
+        for p in part:
+            piece = p["piece"]
+            path = piece[0]
+            row_groups = None if piece[1] == [None] else piece[1]
+            md = _get_md(path, fs)
+            if row_groups is None:
+                row_groups = list(range(md.num_row_groups))
+            for rg in row_groups:
+                row_group = md.row_group(rg)
+                num_rows += row_group.num_rows
+                for i in range(row_group.num_columns):
+                    col = row_group.column(i)
+                    name = col.path_in_schema
+                    if name in columns:
+                        if col.statistics and col.statistics.has_min_max:
+                            if name in column_stats:
+                                column_stats[name]["min"] = min(
+                                    column_stats[name]["min"], col.statistics.min
+                                )
+                                column_stats[name]["max"] = max(
+                                    column_stats[name]["max"], col.statistics.max
+                                )
+                            else:
+                                column_stats[name] = {
+                                    "min": col.statistics.min,
+                                    "max": col.statistics.max,
+                                }
+
+        column_stats_list = [
+            {
+                "name": name,
+                "min": column_stats[name]["min"],
+                "max": column_stats[name]["max"],
+            }
+            for name in column_stats.keys()
+        ]
+        return {"num-rows": num_rows, "columns": column_stats_list}
+
+
+@lru_cache(maxsize=1)
+def _get_md(path, fs):
+    # Caching utility used by ArrowDatasetEngine.read_partition_stats
+    with fs.open(path, default_cache="none") as f:
+        return pq.ParquetFile(f).metadata

@@ -4,6 +4,7 @@ import threading
 import warnings
 from collections import OrderedDict, defaultdict
 from contextlib import ExitStack
+from functools import lru_cache
 
 import numpy as np
 import pandas as pd
@@ -1301,3 +1302,73 @@ class FastParquetEngine(Engine):
         # if appending, could skip this, but would need to check existence
         fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
+
+    @classmethod
+    def read_partition_stats(cls, part, fs, columns=None):
+        """Read Parquet-metadata statistics for a single partition"""
+
+        if not isinstance(part, list):
+            part = [part]
+
+        column_stats = {}
+        num_rows = 0
+        columns = columns or []
+        for p in part:
+            piece = p["piece"]
+            if len(piece) == 1:
+                path = None
+                statistics = None
+                row_groups = piece[0]
+                row_group_indices = None
+            else:
+                path = piece[0]
+                row_group_indices = None if piece[1] == [None] else piece[1]
+                pf = _get_pf(path, fs)
+                statistics = pf.statistics if columns else None
+                row_groups = pf.row_groups
+
+            if row_group_indices is None:
+                row_group_indices = list(range(len(row_groups)))
+
+            for rg in row_group_indices:
+                row_group = row_groups[rg]
+                num_rows += row_group.num_rows
+                if statistics:
+                    for col in row_group.columns:
+                        col_md = col.meta_data
+                        name = col_md.path_in_schema
+                        if isinstance(name, (list, tuple)):
+                            name = name[0]
+                        if name in columns:
+                            cmin = statistics["min"][name]
+                            cmax = statistics["max"][name]
+                            if cmin is not None and cmax is not None:
+                                if name in column_stats:
+                                    column_stats[name]["min"] = min(
+                                        column_stats[name]["min"], cmin
+                                    )
+                                    column_stats[name]["max"] = max(
+                                        column_stats[name]["max"], cmax
+                                    )
+                                else:
+                                    column_stats[name] = {
+                                        "min": cmin,
+                                        "max": cmax,
+                                    }
+
+        column_stats_list = [
+            {
+                "name": name,
+                "min": column_stats[name]["min"],
+                "max": column_stats[name]["max"],
+            }
+            for name in column_stats.keys()
+        ]
+        return {"num-rows": num_rows, "columns": column_stats_list}
+
+
+@lru_cache(maxsize=1)
+def _get_pf(path, fs):
+    # Caching utility used by FastParquetEngine.read_partition_stats
+    with fs.open(path, default_cache="none") as f:
+        return fastparquet.ParquetFile(f)

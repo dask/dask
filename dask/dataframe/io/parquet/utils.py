@@ -254,6 +254,29 @@ class Engine:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def read_partition_stats(cls, part, fs, columns=None):
+        """Return Parquet-metadata statistics for a single partition
+
+        Parameters
+        ----------
+        part : object
+            Engine-specific information used to encode the path and
+            row-group list being mapped to a single DataFrame partition.
+        fs: FileSystem
+        columns: list or None, default None
+            Columns to collect Parquet statistics for. By default,
+            column statistics will be ignored, and only 'row-count'
+            metadata will be returned.
+
+        Returns
+        -------
+        statistics : dict
+            Dictionary of Parquet-metadata statistics. By default, this
+            will look like: ``{"num-rows": <int>, "columns": []}``.
+        """
+        raise NotImplementedError()
+
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
