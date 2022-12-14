@@ -69,7 +69,9 @@ class Engine:
         else:
             # Check that an initialized filesystem object was provided
             if not isinstance(fs, AbstractFileSystem):
-                raise ValueError(f"Expected fsspec.AbstractFileSystem. Got {type(fs)}")
+                raise ValueError(
+                    f"Expected fsspec.AbstractFileSystem or 'fsspec'. Got {fs}"
+                )
 
             if storage_options:
                 # The filesystem was already specified. Can't pass in

@@ -345,10 +345,9 @@ def read_parquet(
         It may be necessary to change this argument if the data files in your
         parquet dataset do not end in ".parq", ".parquet", or ".pq".
     filesystem: "fsspec", "arrow", fsspec.AbstractFileSystem, or pyarrow.fs.FileSystem
-        Filesystem backend to use. Default is "fsspec", unless reading from s3
-        storage with the "pyarrow" engine and ``open_file_options=None`` (in
-        which case the default is "arrow"). Note that the "fastparquet" engine
-        only supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
+        Filesystem backend to use. Note that the "fastparquet" engine only
+        supports "fsspec" or an explicit ``pyarrow.fs.FileSystem`` object.
+        Default is "fsspec".
     dataset: dict, default None
         Dictionary of options to use when creating a ``pyarrow.dataset.Dataset``
         or ``fastparquet.ParquetFile`` object. These options may include a
@@ -362,7 +361,7 @@ def read_parquet(
         Dictionary of options to use when converting from ``pyarrow.Table`` to
         a pandas ``DataFrame`` object. Only used by the "arrow" engine.
     **kwargs: dict (of dicts)
-        Options to pass through to ``engine.read_partitions`` as staand-alone
+        Options to pass through to ``engine.read_partitions`` as stand-alone
         key-word arguments. Note that these options will be ignored by the
         engines defined in ``dask.dataframe``, but may be used by other custom
         implementations.

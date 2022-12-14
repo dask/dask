@@ -4299,3 +4299,40 @@ def test_retries_on_remote_filesystem(tmpdir):
         layer = hlg_layer(ddf2.dask, "read-parquet")
         assert layer.annotations
         assert layer.annotations["retries"] == 2
+
+
+def test_filesystem_option(tmpdir, engine):
+    from fsspec.implementations.local import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmpdir, engine=engine)
+    fs = LocalFileSystem()
+    fs._myfs = True
+    ddf = dd.read_parquet(
+        tmpdir,
+        engine=engine,
+        filesystem=fs,
+    )
+    layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+    assert layer_fs._myfs
+    assert_eq(ddf, df)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("fs", ["arrow", None])
+def test_pyarrow_filesystem_option(tmpdir, fs):
+    from fsspec.implementations.arrow import ArrowFSWrapper
+    from pyarrow.fs import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmpdir)
+    fs = fs or LocalFileSystem()
+    ddf = dd.read_parquet(
+        tmpdir,
+        engine="pyarrow",
+        filesystem=fs,
+    )
+    layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+    assert isinstance(layer_fs, ArrowFSWrapper)
+    assert isinstance(layer_fs.fs, LocalFileSystem)
+    assert_eq(ddf, df)

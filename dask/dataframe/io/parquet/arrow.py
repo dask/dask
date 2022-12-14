@@ -1,6 +1,5 @@
 import json
 import textwrap
-import warnings
 from collections import defaultdict
 from datetime import datetime
 
@@ -45,32 +44,9 @@ del _pa_version
 #
 
 
-_s3_note = (
-    "Note that this version of `ArrowDatasetEngine` will attempt "
-    "to use `S3FileSystem` by default when reading from s3 storage. "
-    "If necessary, try passing in `filesystem='arrow'` to revert "
-    "the default to `s3fs` (if available)"
-)
-
-
 def _wrapped_fs(fs):
     """Return the wrapped filesystem if fs is ArrowFSWrapper"""
     return fs.fs if isinstance(fs, ArrowFSWrapper) else fs
-
-
-def _with_wrapped_fs(func, *args, filesystem=None, **kwargs):
-    """Call a function with a filesystem kwarg that may be wrapped"""
-    fs = _wrapped_fs(filesystem)
-    try:
-        return func(*args, filesystem=fs, **kwargs)
-    except Exception as err:
-        if not (hasattr(fs, "type_name") and fs.type_name == "s3"):
-            raise err
-        raise type(err)(
-            f"Call to {func} failed with `filesystem={filesystem}`.\n"
-            f"{_s3_note}\n"
-            f"Original Error: {err}"
-        )
 
 
 def _append_row_groups(metadata, md):
@@ -255,36 +231,27 @@ def _read_table_from_path(
         else {}
     )
 
-    try:
-        with _open_input_files(
-            [path],
-            fs=fs,
-            precache_options=precache_options,
-            **open_file_options,
-        )[0] as fil:
-            if row_groups == [None]:
-                return pq.ParquetFile(fil, **pre_buffer).read(
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
-            else:
-                return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
-                    row_groups,
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
-                    **read_kwargs,
-                )
-    except Exception as err:
-        if open_file_options.get("open_file_func", None):
-            raise type(err)(
-                f"Failed to open and read Parquet file.\n"
-                f"{_s3_note}\n"
-                f"Original Error: {err}"
+    with _open_input_files(
+        [path],
+        fs=fs,
+        precache_options=precache_options,
+        **open_file_options,
+    )[0] as fil:
+        if row_groups == [None]:
+            return pq.ParquetFile(fil, **pre_buffer).read(
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
             )
-        raise err
+        else:
+            return pq.ParquetFile(fil, **pre_buffer).read_row_groups(
+                row_groups,
+                columns=columns,
+                use_threads=False,
+                use_pandas_metadata=True,
+                **read_kwargs,
+            )
 
 
 def _get_rg_statistics(row_group, col_indices):
@@ -369,21 +336,9 @@ class ArrowDatasetEngine(Engine):
         if filesystem is not None:
             fs = filesystem
 
-        default_pa_s3 = False
-        default_pa_s3_error = None
-        if fs is None:
-            if isinstance(urlpath, (list, tuple, set)):
-                if not urlpath:
-                    raise ValueError("empty urlpath sequence")
-                strpath = stringify_path(next(iter(urlpath)))
-            else:
-                strpath = stringify_path(urlpath)
-            if strpath.startswith("s3://") and not open_file_options:
-                fs = "arrow"
-                default_pa_s3 = True
-            else:
-                fs = "fsspec"
+        fs = fs or "fsspec"  # Default is fsspec
 
+        # Handle pyarrow-based filesystem
         if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
             if isinstance(urlpath, (list, tuple, set)):
                 if not urlpath:
@@ -393,17 +348,9 @@ class ArrowDatasetEngine(Engine):
                 urlpath = [stringify_path(urlpath)]
 
             if fs in ("arrow", "pyarrow"):
-                try:
-                    fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
-                        **(storage_options or {})
-                    )
-                except (TypeError, pa.lib.ArrowInvalid) as err:
-                    if default_pa_s3:
-                        # Fall back to fsspec
-                        default_pa_s3_error = err
-                        fs = "fsspec"
-                    else:
-                        raise err
+                fs = type(pa_fs.FileSystem.from_uri(urlpath[0])[0])(
+                    **(storage_options or {})
+                )
 
             if isinstance(fs, pa_fs.FileSystem):
                 fs = ArrowFSWrapper(fs)
@@ -416,25 +363,13 @@ class ArrowDatasetEngine(Engine):
                 )
 
         # Use default file-system initialization
-        try:
-            return Engine.extract_filesystem(
-                urlpath,
-                fs,
-                dataset_options,
-                open_file_options,
-                storage_options,
-            )
-        except Exception as err:
-            if default_pa_s3_error is None:
-                raise err
-            # Inform the user that we tried falling back to fsspec
-            warnings.warn(
-                f"Failed to initialize an fsspec-based filesystem after "
-                f"failing to initialize a `pyarrow.fs.S3FileSystem`."
-                f"\nOriginal Error: {default_pa_s3_error}"
-                f"\nFallback Error: {err}"
-                f"\n{_s3_note}"
-            )
+        return Engine.extract_filesystem(
+            urlpath,
+            fs,
+            dataset_options,
+            open_file_options,
+            storage_options,
+        )
 
     @classmethod
     def read_metadata(
@@ -656,7 +591,7 @@ class ArrowDatasetEngine(Engine):
         metadata_file_exists = False
         if append:
             # Extract metadata and get file offset if appending
-            ds = _with_wrapped_fs(pa_ds.dataset, path, filesystem=fs, format="parquet")
+            ds = pa_ds.dataset(path, filesystem=_wrapped_fs(fs), format="parquet")
             i_offset = len(ds.files)
             if i_offset > 0:
                 try:
@@ -925,10 +860,9 @@ class ArrowDatasetEngine(Engine):
             meta_path = fs.sep.join([paths, "_metadata"])
             if not ignore_metadata_file and fs.exists(meta_path):
                 # Use _metadata file
-                ds = _with_wrapped_fs(
-                    pa_ds.parquet_dataset,
+                ds = pa_ds.parquet_dataset(
                     meta_path,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **_dataset_kwargs,
                 )
                 has_metadata_file = True
@@ -954,10 +888,9 @@ class ArrowDatasetEngine(Engine):
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
                 # Use _metadata file
                 if not ignore_metadata_file:
-                    ds = _with_wrapped_fs(
-                        pa_ds.parquet_dataset,
+                    ds = pa_ds.parquet_dataset(
                         meta_path,
-                        filesystem=fs,
+                        filesystem=_wrapped_fs(fs),
                         **_dataset_kwargs,
                     )
                     has_metadata_file = True
@@ -969,10 +902,9 @@ class ArrowDatasetEngine(Engine):
 
         # Final "catch-all" pyarrow.dataset call
         if ds is None:
-            ds = _with_wrapped_fs(
-                pa_ds.dataset,
+            ds = pa_ds.dataset(
                 paths,
-                filesystem=fs,
+                filesystem=_wrapped_fs(fs),
                 **_dataset_kwargs,
             )
 
@@ -1402,10 +1334,9 @@ class ArrowDatasetEngine(Engine):
 
             # Need more information - convert the path to a fragment
             file_frags = list(
-                _with_wrapped_fs(
-                    pa_ds.dataset,
+                pa_ds.dataset(
                     files_or_frags,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **dataset_options,
                 ).get_fragments()
             )
@@ -1596,10 +1527,9 @@ class ArrowDatasetEngine(Engine):
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
-                ds = _with_wrapped_fs(
-                    pa_ds.dataset,
+                ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
+                    filesystem=_wrapped_fs(fs),
                     **kwargs.get("dataset", {}),
                 )
                 frags = list(ds.get_fragments())
