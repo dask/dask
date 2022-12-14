@@ -446,3 +446,52 @@ def test_like_funcs(funcname):
         assert_eq(da.ma.getmaskarray(res), np.ma.getmaskarray(sol))
     else:
         assert_eq(res, sol)
+
+
+def test_nonzero():
+    data = np.arange(9).reshape((3, 3))
+    mask = np.array([[True, False, False], [True, True, False], [True, False, True]])
+    a = np.ma.array(data, mask=mask)
+    d_a = da.ma.masked_array(data=data, mask=mask, chunks=2)
+
+    for c1, c2 in [
+        (a > 4, d_a > 4),
+        (a, d_a),
+        (a <= -2, d_a <= -2),
+        (a == 0, d_a == 0),
+    ]:
+        sol = np.ma.nonzero(c1)
+        res = da.ma.nonzero(c2)
+        assert_eq(sol, res)
+
+
+def test_where():
+    # Copied and adapted from the da.where test.
+    x = np.random.randint(10, size=(15, 14))
+    mask = np.random.choice(a=[False, True], size=(15, 14), p=[0.5, 0.5])
+    x[5, 5] = x[4, 4] = 0  # Ensure some false elements
+    d = da.ma.masked_array(x, mask=mask, chunks=(4, 5))
+    x = np.ma.array(x, mask=mask)
+    y = np.random.randint(10, size=15).astype(np.uint8)
+    e = da.from_array(y, chunks=(4,))
+
+    # Nonzero test
+    sol = np.ma.where(x)
+    res = da.ma.where(d)
+    assert_eq(res, sol)
+
+    for c1, c2 in [
+        (d > 5, x > 5),
+        (d, x),
+        (1, 1),
+        (5, 5),
+        (True, True),
+        (np.True_, np.True_),
+        (0, 0),
+        (False, False),
+        (np.False_, np.False_),
+    ]:
+        for b1, b2 in [(0, 0), (-e[:, None], -y[:, None]), (e[:14], y[:14])]:
+            w1 = da.ma.where(c1, d, b1)
+            w2 = np.ma.where(c2, x, b2)
+            assert_eq(w1, w2)
