@@ -7214,7 +7214,8 @@ def _take_last(a, skipna=True):
             if a.empty:
                 return series_typ([], dtype="float")
             return series_typ(
-                {col: _last_valid(a[col]) for col in a.columns}, index=a.columns
+                [_last_valid(a.iloc[:, i]) for i in range(len(a.columns))],
+                index=a.columns,
             )
         else:
             return _last_valid(a)
@@ -7494,10 +7495,10 @@ def repartition_npartitions(df, npartitions):
         # value for min and max division
         original_divisions = divisions = pd.Series(df.divisions).drop_duplicates()
         if df.known_divisions and (
-            np.issubdtype(divisions.dtype, np.datetime64)
-            or np.issubdtype(divisions.dtype, np.number)
+            is_datetime64_any_dtype(divisions.dtype)
+            or is_numeric_dtype(divisions.dtype)
         ):
-            if np.issubdtype(divisions.dtype, np.datetime64):
+            if is_datetime64_any_dtype(divisions.dtype):
                 divisions = divisions.values.astype("float64")
 
             if is_series_like(divisions):
@@ -7509,7 +7510,7 @@ def repartition_npartitions(df, npartitions):
                 xp=np.linspace(0, n, n),
                 fp=divisions,
             )
-            if np.issubdtype(original_divisions.dtype, np.datetime64):
+            if is_datetime64_any_dtype(original_divisions.dtype):
                 divisions = methods.tolist(
                     pd.Series(divisions).astype(original_divisions.dtype)
                 )

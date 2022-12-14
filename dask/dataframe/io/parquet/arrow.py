@@ -11,6 +11,7 @@ from packaging.version import parse as parse_version
 
 from dask.base import tokenize
 from dask.core import flatten
+from dask.dataframe._compat import PANDAS_GT_120
 from dask.dataframe.backends import pyarrow_schema_dispatch
 from dask.dataframe.io.parquet.utils import (
     Engine,
@@ -38,6 +39,23 @@ subset_stats_supported = _pa_version > parse_version("2.0.0")
 pre_buffer_supported = _pa_version >= parse_version("5.0.0")
 partitioning_supported = _pa_version >= parse_version("5.0.0")
 del _pa_version
+
+PYARROW_NULLABLE_DTYPE_MAPPING = {
+    pa.int8(): pd.Int8Dtype(),
+    pa.int16(): pd.Int16Dtype(),
+    pa.int32(): pd.Int32Dtype(),
+    pa.int64(): pd.Int64Dtype(),
+    pa.uint8(): pd.UInt8Dtype(),
+    pa.uint16(): pd.UInt16Dtype(),
+    pa.uint32(): pd.UInt32Dtype(),
+    pa.uint64(): pd.UInt64Dtype(),
+    pa.bool_(): pd.BooleanDtype(),
+    pa.string(): pd.StringDtype(),
+}
+
+if PANDAS_GT_120:
+    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float32()] = pd.Float32Dtype()
+    PYARROW_NULLABLE_DTYPE_MAPPING[pa.float64()] = pd.Float64Dtype()
 
 #
 #  Helper Utilities
@@ -378,6 +396,7 @@ class ArrowDatasetEngine(Engine):
         paths,
         categories=None,
         index=None,
+        use_nullable_dtypes=False,
         gather_statistics=None,
         filters=None,
         split_row_groups=False,
@@ -407,7 +426,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info)
+        meta = cls._create_dd_meta(dataset_info, use_nullable_dtypes)
 
         # Stage 3: Generate parts and stats
         parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
@@ -432,6 +451,7 @@ class ArrowDatasetEngine(Engine):
         pieces,
         columns,
         index,
+        use_nullable_dtypes=False,
         categories=(),
         partitions=(),
         filters=None,
@@ -502,7 +522,9 @@ class ArrowDatasetEngine(Engine):
             arrow_table = pa.concat_tables(tables)
 
         # Convert to pandas
-        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+        df = cls._arrow_table_to_pandas(
+            arrow_table, categories, use_nullable_dtypes=use_nullable_dtypes, **kwargs
+        )
 
         # For pyarrow.dataset api, need to convert partition columns
         # to categorigal manually for integer types.
@@ -1010,7 +1032,7 @@ class ArrowDatasetEngine(Engine):
         }
 
     @classmethod
-    def _create_dd_meta(cls, dataset_info):
+    def _create_dd_meta(cls, dataset_info, use_nullable_dtypes=False):
         """Use parquet schema and hive-partition information
         (stored in dataset_info) to construct DataFrame metadata.
         """
@@ -1025,7 +1047,7 @@ class ArrowDatasetEngine(Engine):
         columns = None
 
         # Use pandas metadata to update categories
-        pandas_metadata = _get_pandas_metadata(schema)
+        pandas_metadata = _get_pandas_metadata(schema) or {}
         if pandas_metadata:
             if categories is None:
                 categories = []
@@ -1041,6 +1063,7 @@ class ArrowDatasetEngine(Engine):
             schema.empty_table(),
             categories,
             arrow_to_pandas=arrow_to_pandas,
+            use_nullable_dtypes=use_nullable_dtypes,
         )
         index_names = list(meta.index.names)
         column_names = list(meta.columns)
@@ -1050,7 +1073,15 @@ class ArrowDatasetEngine(Engine):
 
         # Use index specified in the pandas metadata if
         # the index column was not specified by the user
-        if index is None and index_names:
+        if (
+            index is None
+            and index_names
+            and (
+                # Only set to `[None]` if pandas metadata includes an index
+                index_names != [None]
+                or pandas_metadata.get("index_columns", None)
+            )
+        ):
             index = index_names
 
         # Set proper index for meta
@@ -1595,10 +1626,25 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _arrow_table_to_pandas(
-        cls, arrow_table: pa.Table, categories, **kwargs
+        cls, arrow_table: pa.Table, categories, use_nullable_dtypes=False, **kwargs
     ) -> pd.DataFrame:
         _kwargs = kwargs.get("arrow_to_pandas", {})
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
+
+        if use_nullable_dtypes:
+            if "types_mapper" in _kwargs:
+                # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
+                types_mapper = _kwargs["types_mapper"]
+
+                def _types_mapper(pa_type):
+                    return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
+                        pa_type
+                    )
+
+                _kwargs["types_mapper"] = _types_mapper
+
+            else:
+                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 

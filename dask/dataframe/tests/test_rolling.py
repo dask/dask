@@ -6,6 +6,7 @@ import pytest
 from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
+import dask.dataframe.rolling
 from dask.dataframe.utils import assert_eq
 
 N = 40
@@ -53,20 +54,29 @@ def shifted_sum(df, before, after, c=0):
 
 
 @pytest.mark.parametrize("npartitions", [1, 4])
-def test_map_overlap(npartitions):
-    ddf = dd.from_pandas(df, npartitions)
+@pytest.mark.parametrize("use_dask_input", [True, False])
+def test_map_overlap(npartitions, use_dask_input):
+    ddf = df
+    if use_dask_input:
+        ddf = dd.from_pandas(df, npartitions)
+
     for before, after in [(0, 3), (3, 0), (3, 3), (0, 0)]:
         # DataFrame
-        res = ddf.map_overlap(shifted_sum, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf, before, after, before, after, c=2
+        )
         sol = shifted_sum(df, before, after, c=2)
         assert_eq(res, sol)
 
         # Series
-        res = ddf.b.map_overlap(shifted_sum, before, after, before, after, c=2)
+        res = dask.dataframe.rolling.map_overlap(
+            shifted_sum, ddf.b, before, after, before, after, c=2
+        )
         sol = shifted_sum(df.b, before, after, c=2)
         assert_eq(res, sol)
 
 
+@pytest.mark.parametrize("use_dask_input", [True, False])
 @pytest.mark.parametrize("npartitions", [1, 4])
 @pytest.mark.parametrize("enforce_metadata", [True, False])
 @pytest.mark.parametrize("transform_divisions", [True, False])
@@ -87,12 +97,20 @@ def test_map_overlap(npartitions):
     ],
 )
 def test_map_overlap_multiple_dataframes(
-    npartitions, enforce_metadata, transform_divisions, align_dataframes, overlap_setup
+    use_dask_input,
+    npartitions,
+    enforce_metadata,
+    transform_divisions,
+    align_dataframes,
+    overlap_setup,
 ):
     dataframe, before, after = overlap_setup
 
-    ddf = dd.from_pandas(dataframe, npartitions)
-    ddf2 = dd.from_pandas(dataframe * 2, npartitions)
+    ddf = dataframe
+    ddf2 = dataframe * 2
+    if use_dask_input:
+        ddf = dd.from_pandas(ddf, npartitions)
+        ddf2 = dd.from_pandas(ddf2, npartitions)
 
     def get_shifted_sum_arg(overlap):
         return (
@@ -104,8 +122,9 @@ def test_map_overlap_multiple_dataframes(
     ), get_shifted_sum_arg(after)
 
     # DataFrame
-    res = ddf.map_overlap(
+    res = dask.dataframe.rolling.map_overlap(
         shifted_sum,
+        ddf,
         before,
         after,
         before_shifted_sum,
@@ -119,8 +138,9 @@ def test_map_overlap_multiple_dataframes(
     assert_eq(res, sol)
 
     # Series
-    res = ddf.b.map_overlap(
+    res = dask.dataframe.rolling.map_overlap(
         shifted_sum,
+        ddf.b,
         before,
         after,
         before_shifted_sum,
