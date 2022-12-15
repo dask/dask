@@ -55,8 +55,14 @@ class Engine:
         """
 
         # Check if fs was specified as a dataset option
-        fs = dataset_options.pop("fs", "fsspec")
-        if filesystem is not None:
+        if filesystem is None:
+            fs = dataset_options.pop("fs", "fsspec")
+        else:
+            if "fs" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'fs' dataset option is also defined."
+                )
             fs = filesystem
 
         if fs in (None, "fsspec"):
@@ -76,7 +82,10 @@ class Engine:
             if storage_options:
                 # The filesystem was already specified. Can't pass in
                 # any storage options
-                warnings.warn(f"Ignoring storage_options: {storage_options}")
+                raise ValueError(
+                    f"Cannot specify storage_options when an explicit "
+                    f"filesystem object is specified. Got: {storage_options}"
+                )
 
             if isinstance(urlpath, (list, tuple, set)):
                 if not urlpath:

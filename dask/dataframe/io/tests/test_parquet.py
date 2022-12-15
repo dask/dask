@@ -4403,34 +4403,35 @@ def test_retries_on_remote_filesystem(tmpdir):
         assert layer.annotations["retries"] == 2
 
 
-def test_filesystem_option(tmpdir, engine):
+@pytest.mark.parametrize("fs", ["fsspec", None])
+def test_filesystem_option(tmp_path, engine, fs):
     from fsspec.implementations.local import LocalFileSystem
 
     df = pd.DataFrame({"a": range(10)})
-    dd.from_pandas(df, npartitions=2).to_parquet(tmpdir, engine=engine)
-    fs = LocalFileSystem()
-    fs._myfs = True
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path, engine=engine)
+    filesystem = fs or LocalFileSystem()
     ddf = dd.read_parquet(
-        str(tmpdir),
+        tmp_path,
         engine=engine,
-        filesystem=fs,
+        filesystem=filesystem,
     )
-    layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
-    assert layer_fs._myfs
+    if fs is None:
+        layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+        assert layer_fs is filesystem
     assert_eq(ddf, df)
 
 
 @PYARROW_MARK
 @pytest.mark.parametrize("fs", ["arrow", None])
-def test_pyarrow_filesystem_option(tmpdir, fs):
+def test_pyarrow_filesystem_option(tmp_path, fs):
     from fsspec.implementations.arrow import ArrowFSWrapper
     from pyarrow.fs import LocalFileSystem
 
     df = pd.DataFrame({"a": range(10)})
-    dd.from_pandas(df, npartitions=2).to_parquet(tmpdir)
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path)
     fs = fs or LocalFileSystem()
     ddf = dd.read_parquet(
-        str(tmpdir),
+        tmp_path,
         engine="pyarrow",
         filesystem=fs,
     )

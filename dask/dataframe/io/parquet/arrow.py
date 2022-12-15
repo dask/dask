@@ -350,11 +350,15 @@ class ArrowDatasetEngine(Engine):
     ):
 
         # Check if filesystem was specified as a dataset option
-        fs = dataset_options.pop("filesystem", None)
-        if filesystem is not None:
+        if filesystem is None:
+            fs = dataset_options.pop("filesystem", "fsspec")
+        else:
+            if "filesystem" in dataset_options:
+                raise ValueError(
+                    "Cannot specify a filesystem argument if the "
+                    "'filesystem' dataset option is also defined."
+                )
             fs = filesystem
-
-        fs = fs or "fsspec"  # Default is fsspec
 
         # Handle pyarrow-based filesystem
         if isinstance(fs, pa_fs.FileSystem) or fs in ("arrow", "pyarrow"):
@@ -370,24 +374,21 @@ class ArrowDatasetEngine(Engine):
                     **(storage_options or {})
                 )
 
-            if isinstance(fs, pa_fs.FileSystem):
-                fsspec_fs = ArrowFSWrapper(fs)
-                if urlpath[0].startswith("C:") and isinstance(
-                    fs, pa_fs.LocalFileSystem
-                ):
-                    # ArrowFSWrapper._strip_protocol not reliable on windows
-                    from fsspec.implementations.local import LocalFileSystem
+            fsspec_fs = ArrowFSWrapper(fs)
+            if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
+                # ArrowFSWrapper._strip_protocol not reliable on windows
+                from fsspec.implementations.local import LocalFileSystem
 
-                    fs_strip = LocalFileSystem()
-                else:
-                    fs_strip = fsspec_fs
-                paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
-                return (
-                    fsspec_fs,
-                    [fs_strip._strip_protocol(u) for u in paths],
-                    dataset_options,
-                    {"open_file_func": fs.open_input_file},
-                )
+                fs_strip = LocalFileSystem()
+            else:
+                fs_strip = fsspec_fs
+            paths = expand_paths_if_needed(urlpath, "rb", 1, fsspec_fs, None)
+            return (
+                fsspec_fs,
+                [fs_strip._strip_protocol(u) for u in paths],
+                dataset_options,
+                {"open_file_func": fs.open_input_file},
+            )
 
         # Use default file-system initialization
         return Engine.extract_filesystem(
