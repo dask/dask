@@ -1,14 +1,15 @@
 import os
 import pathlib
-import sys
 from time import sleep
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
+from dask.compatibility import _PY_VERSION
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -48,7 +49,7 @@ def test_to_hdf():
 
 
 @pytest.mark.skipif(
-    sys.version_info >= (3, 11),
+    _PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_to_hdf_multiple_nodes():
@@ -394,7 +395,7 @@ def test_to_hdf_link_optimizations():
 
 
 @pytest.mark.skipif(
-    sys.version_info >= (3, 11),
+    _PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.slow
@@ -488,7 +489,7 @@ def test_to_hdf_exceptions():
 
 
 @pytest.mark.skipif(
-    sys.version_info >= (3, 11),
+    _PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
@@ -693,7 +694,7 @@ def test_read_hdf_multiply_open():
 
 
 @pytest.mark.skipif(
-    sys.version_info >= (3, 11),
+    _PY_VERSION >= Version("3.11"),
     reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_read_hdf_multiple():
