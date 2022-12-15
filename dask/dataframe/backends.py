@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import warnings
-from typing import Any, Iterable
+from typing import Iterable
 
 import numpy as np
 import pandas as pd
@@ -162,29 +162,6 @@ class DataFrameBackendEntrypoint(DaskBackendEntrypoint):
         dask.dataframe.io.hdf.read_hdf
         """
         raise NotImplementedError
-
-    @staticmethod
-    def array_to_frame_class(data: Any, attr: str = "DataFrame"):
-        """Return the appropriate meta class given array data
-
-        NOTE: Overriding this method is optional. The default
-        behavior is to invoke the ``meta_lib_from_array`` dispatch
-        function (which will map numpy->pandas and cupy->cudf).
-
-        Parameters
-        ----------
-        data : Array-like
-            Array data to inform the DataFrame-class choice.
-        attr: str, default 'DataFrame'
-            The dataframe-library attribute to return. Default is
-            'DataFrame', meaning that ``pd.DataFrame`` will be returned
-            if the array type dispatches to pandas.
-        """
-        try:
-            meta_lib = meta_lib_from_array(data)
-        except TypeError:
-            meta_lib = pd  # Default is pandas
-        return getattr(meta_lib, attr)
 
 
 dataframe_creation_dispatch = CreationDispatch(

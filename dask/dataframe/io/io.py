@@ -24,6 +24,7 @@ from dask.dataframe.core import (
     has_parallel_type,
     new_dd_object,
 )
+from dask.dataframe.dispatch import meta_lib_from_array
 from dask.dataframe.io.utils import DataFrameIOFunction
 from dask.dataframe.utils import (
     check_meta,
@@ -58,9 +59,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
         index = index._meta
 
     if meta is None:
-        meta = dataframe_creation_dispatch.dispatch(
-            dataframe_creation_dispatch.backend
-        ).array_to_frame_class(x)()
+        meta = meta_lib_from_array(x).DataFrame()
 
     if getattr(x.dtype, "names", None) is not None:
         # record array has named columns
