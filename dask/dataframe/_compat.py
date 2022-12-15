@@ -4,18 +4,19 @@ import warnings
 
 import numpy as np
 import pandas as pd
-from packaging.version import parse as parse_version
+from packaging.version import Version
 
-PANDAS_VERSION = parse_version(pd.__version__)
-PANDAS_GT_104 = PANDAS_VERSION >= parse_version("1.0.4")
-PANDAS_GT_110 = PANDAS_VERSION >= parse_version("1.1.0")
-PANDAS_GT_120 = PANDAS_VERSION >= parse_version("1.2.0")
-PANDAS_GT_121 = PANDAS_VERSION >= parse_version("1.2.1")
-PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
-PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
-PANDAS_GT_133 = PANDAS_VERSION >= parse_version("1.3.3")
-PANDAS_GT_140 = PANDAS_VERSION >= parse_version("1.4.0")
-PANDAS_GT_150 = PANDAS_VERSION >= parse_version("1.5.0")
+PANDAS_VERSION = Version(pd.__version__)
+PANDAS_GT_104 = PANDAS_VERSION >= Version("1.0.4")
+PANDAS_GT_110 = PANDAS_VERSION >= Version("1.1.0")
+PANDAS_GT_120 = PANDAS_VERSION >= Version("1.2.0")
+PANDAS_GT_121 = PANDAS_VERSION >= Version("1.2.1")
+PANDAS_GT_130 = PANDAS_VERSION >= Version("1.3.0")
+PANDAS_GT_131 = PANDAS_VERSION >= Version("1.3.1")
+PANDAS_GT_133 = PANDAS_VERSION >= Version("1.3.3")
+PANDAS_GT_140 = PANDAS_VERSION >= Version("1.4.0")
+PANDAS_GT_150 = PANDAS_VERSION >= Version("1.5.0")
+PANDAS_GT_200 = PANDAS_VERSION.major >= 2
 
 import pandas.testing as tm
 
