@@ -482,23 +482,31 @@ def test_from_dask_array_unknown_width_error():
 
 
 @pytest.mark.gpu
-def test_from_array_cupy():
+@pytest.mark.parametrize(
+    "array_backend, df_backend",
+    [("cupy", "cudf"), ("numpy", "pandas")],
+)
+def test_from_array_cupy(array_backend, df_backend):
     # Check cupy -> cudf dispatching
-    pytest.importorskip("cupy")
+    array_lib = pytest.importorskip(array_backend)
 
-    with config.set({"array.backend": "cupy"}):
+    with config.set({"array.backend": array_backend}):
         darr = da.ones(10)
+    assert isinstance(darr._meta, array_lib.ndarray)
 
     ddf1 = dd.from_array(darr)  # Invokes `from_dask_array`
 
-    # Import dask_cudf after from_array to
-    # check that import order is not a problem
-    dask_cudf = pytest.importorskip("dask_cudf")
+    # Import cudf after from_array to
+    # check that import order is not a problem.
+    # If the necessary dispatch function(s) are
+    # not registered until cudf/dask_cudf is
+    # user-imported, this test will fail
+    df_lib = pytest.importorskip(df_backend)
 
     ddf2 = dd.from_array(darr.compute())
 
-    assert isinstance(ddf1, dask_cudf.Series)
-    assert isinstance(ddf2, dask_cudf.Series)
+    assert isinstance(ddf1._meta, df_lib.Series)
+    assert isinstance(ddf2._meta, df_lib.Series)
     ddf1.compute()
     ddf2.compute()
 

@@ -436,13 +436,13 @@ def _nonempty_series(s, idx=None):
 
 
 @meta_lib_from_array.register(Array)
-def meta_lib_from_array_da(x):
+def _meta_lib_from_array_da(x):
     # Use x._meta for dask arrays
     return meta_lib_from_array(x._meta)
 
 
 @meta_lib_from_array.register(np.ndarray)
-def meta_lib_from_array_numpy(x):
+def _meta_lib_from_array_numpy(x):
     # numpy -> pandas
     return pd
 
