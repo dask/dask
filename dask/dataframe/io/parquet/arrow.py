@@ -377,6 +377,7 @@ class ArrowDatasetEngine(Engine):
             fsspec_fs = ArrowFSWrapper(fs)
             if urlpath[0].startswith("C:") and isinstance(fs, pa_fs.LocalFileSystem):
                 # ArrowFSWrapper._strip_protocol not reliable on windows
+                # See: https://github.com/fsspec/filesystem_spec/issues/1137
                 from fsspec.implementations.local import LocalFileSystem
 
                 fs_strip = LocalFileSystem()
