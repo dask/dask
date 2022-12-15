@@ -4406,6 +4406,44 @@ def test_retries_on_remote_filesystem(tmpdir):
         assert layer.annotations["retries"] == 2
 
 
+@pytest.mark.parametrize("fs", ["fsspec", None])
+def test_filesystem_option(tmp_path, engine, fs):
+    from fsspec.implementations.local import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path, engine=engine)
+    filesystem = fs or LocalFileSystem()
+    ddf = dd.read_parquet(
+        tmp_path,
+        engine=engine,
+        filesystem=filesystem,
+    )
+    if fs is None:
+        layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+        assert layer_fs is filesystem
+    assert_eq(ddf, df)
+
+
+@PYARROW_MARK
+@pytest.mark.parametrize("fs", ["arrow", None])
+def test_pyarrow_filesystem_option(tmp_path, fs):
+    from fsspec.implementations.arrow import ArrowFSWrapper
+    from pyarrow.fs import LocalFileSystem
+
+    df = pd.DataFrame({"a": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(tmp_path)
+    fs = fs or LocalFileSystem()
+    ddf = dd.read_parquet(
+        tmp_path,
+        engine="pyarrow",
+        filesystem=fs,
+    )
+    layer_fs = next(iter(ddf.dask.layers.values())).io_func.fs
+    assert isinstance(layer_fs, ArrowFSWrapper)
+    assert isinstance(layer_fs.fs, LocalFileSystem)
+    assert_eq(ddf, df)
+
+
 def test_select_filtered_column(tmp_path, engine):
 
     df = pd.DataFrame({"a": range(10), "b": ["cat"] * 10})

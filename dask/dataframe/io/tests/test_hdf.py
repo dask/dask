@@ -927,12 +927,12 @@ def test_hdf_nonpandas_keys():
         dd.read_hdf(path, "/bar")
 
 
-def test_hdf_empty_dataframe():
+def test_hdf_empty_dataframe(tmp_path):
     pytest.importorskip("tables")
     # https://github.com/dask/dask/issues/8707
     from dask.dataframe.io.hdf import dont_use_fixed_error_message
 
     df = pd.DataFrame({"A": [], "B": []}, index=[])
-    df.to_hdf("data.h5", format="fixed", key="df", mode="w")
+    df.to_hdf(tmp_path / "data.h5", format="fixed", key="df", mode="w")
     with pytest.raises(TypeError, match=dont_use_fixed_error_message):
-        dd.read_hdf("data.h5", "df")
+        dd.read_hdf(tmp_path / "data.h5", "df")
