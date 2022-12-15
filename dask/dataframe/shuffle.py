@@ -188,7 +188,7 @@ def sort_values(
 
     df = rearrange_by_divisions(
         df,
-        by,
+        by[0],
         divisions,
         ascending=ascending,
         na_position=na_position,

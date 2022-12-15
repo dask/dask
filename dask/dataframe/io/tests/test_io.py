@@ -1000,3 +1000,20 @@ def test_from_map_column_projection():
     assert_eq(ddf["A"], expect["A"])
     assert set(projected) == {"A"}
     assert_eq(ddf, expect)
+
+
+@pytest.mark.gpu
+@pytest.mark.parametrize("backend", ["pandas", "cudf"])
+def test_from_dict_backends(backend):
+    _lib = pytest.importorskip(backend)
+    with config.set({"dataframe.backend": backend}):
+        data = {"a": [1, 2, 3, 4], "B": [10, 11, 12, 13]}
+        expected = _lib.DataFrame(data)
+
+        # Check dd.from_dict API
+        got = dd.from_dict(data, npartitions=2)
+        assert_eq(expected, got)
+
+        # Check from_dict classmethod
+        got_classmethod = got.from_dict(data, npartitions=2)
+        assert_eq(expected, got_classmethod)

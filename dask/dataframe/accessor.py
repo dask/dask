@@ -265,7 +265,7 @@ class StringAccessor(Accessor):
                 delimiter = " " if pat is None else pat
                 meta = self._series._meta._constructor(
                     [delimiter.join(["a"] * (n + 1))],
-                    index=self._series._meta_nonempty[:1].index,
+                    index=self._series._meta_nonempty.iloc[:1].index,
                 )
                 meta = getattr(meta.str, method)(n=n, expand=expand, pat=pat)
         else:

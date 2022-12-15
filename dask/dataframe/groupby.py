@@ -3,14 +3,19 @@ import itertools as it
 import operator
 import uuid
 import warnings
+from functools import partial
 from numbers import Integral
 
 import numpy as np
 import pandas as pd
 
 from dask import config
-from dask.base import tokenize
-from dask.dataframe._compat import PANDAS_GT_150, check_numeric_only_deprecation
+from dask.base import is_dask_collection, tokenize
+from dask.dataframe._compat import (
+    PANDAS_GT_140,
+    PANDAS_GT_150,
+    check_numeric_only_deprecation,
+)
 from dask.dataframe.core import (
     GROUP_KEYS_DEFAULT,
     DataFrame,
@@ -30,12 +35,16 @@ from dask.dataframe.utils import (
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
+    is_index_like,
     is_series_like,
     make_meta,
     raise_on_meta_error,
 )
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, _deprecated, derived_from, funcname, itemgetter
+
+if PANDAS_GT_140:
+    from pandas.core.apply import reconstruct_func, validate_func_kwargs
 
 # #############################################
 #
@@ -524,7 +533,9 @@ def _mul_cols(df, cols):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
-    _df.index = [0] * len(_df)
+    # Make sure index dtype is int (even if _df is empty)
+    # https://github.com/dask/dask/pull/9701
+    _df.index = np.zeros(len(_df), dtype=int)
     return _df
 
 
@@ -633,8 +644,10 @@ def _drop_duplicates_reindex(df):
     # Fix index in a groupby().apply() context
     # https://github.com/dask/dask/issues/8137
     # https://github.com/pandas-dev/pandas/issues/43568
+    # Make sure index dtype is int (even if result is empty)
+    # https://github.com/dask/dask/pull/9701
     result = df.drop_duplicates()
-    result.index = [0] * len(result)
+    result.index = np.zeros(len(result), dtype=int)
     return result
 
 
@@ -803,7 +816,13 @@ def _build_agg_args(spec):
         applied after the ``agg_funcs``. They are used to create final results
         from intermediate representations.
     """
-    known_np_funcs = {np.min: "min", np.max: "max", np.median: "median"}
+    known_np_funcs = {
+        np.min: "min",
+        np.max: "max",
+        np.median: "median",
+        np.std: "std",
+        np.var: "var",
+    }
 
     # check that there are no name conflicts for a single input column
     by_name = {}
@@ -819,11 +838,20 @@ def _build_agg_args(spec):
     aggs = {}
     finalizers = []
 
+    # a partial may contain some arguments, pass them down
+    # https://github.com/dask/dask/issues/9615
     for (result_column, func, input_column) in spec:
+        func_args = ()
+        func_kwargs = {}
+        if isinstance(func, partial):
+            func_args, func_kwargs = func.args, func.keywords
+
         if not isinstance(func, Aggregation):
             func = funcname(known_np_funcs.get(func, func))
 
-        impls = _build_agg_args_single(result_column, func, input_column)
+        impls = _build_agg_args_single(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
         # overwrite existing result-columns, generate intermediates only once
         for spec in impls["chunk_funcs"]:
@@ -839,7 +867,7 @@ def _build_agg_args(spec):
     return chunks, aggs, finalizers
 
 
-def _build_agg_args_single(result_column, func, input_column):
+def _build_agg_args_single(result_column, func, func_args, func_kwargs, input_column):
     simple_impl = {
         "sum": (M.sum, M.sum),
         "min": (M.min, M.min),
@@ -861,10 +889,14 @@ def _build_agg_args_single(result_column, func, input_column):
         )
 
     elif func == "var":
-        return _build_agg_args_var(result_column, func, input_column)
+        return _build_agg_args_var(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "std":
-        return _build_agg_args_std(result_column, func, input_column)
+        return _build_agg_args_std(
+            result_column, func, func_args, func_kwargs, input_column
+        )
 
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
@@ -902,10 +934,24 @@ def _build_agg_args_simple(result_column, func, input_column, impl_pair):
     )
 
 
-def _build_agg_args_var(result_column, func, input_column):
+def _build_agg_args_var(result_column, func, func_args, func_kwargs, input_column):
     int_sum = _make_agg_id("sum", input_column)
     int_sum2 = _make_agg_id("sum2", input_column)
     int_count = _make_agg_id("count", input_column)
+
+    # we don't expect positional args here
+    if func_args:
+        raise TypeError(
+            f"aggregate function '{func}' doesn't support positional arguments, but got {func_args}"
+        )
+
+    # and we only expect ddof=N in kwargs
+    expected_kwargs = {"ddof"}
+    unexpected_kwargs = func_kwargs.keys() - expected_kwargs
+    if unexpected_kwargs:
+        raise TypeError(
+            f"aggregate function '{func}' supports {expected_kwargs} keyword arguments, but got {unexpected_kwargs}"
+        )
 
     return dict(
         chunk_funcs=[
@@ -920,13 +966,20 @@ def _build_agg_args_var(result_column, func, input_column):
         finalizer=(
             result_column,
             _finalize_var,
-            dict(sum_column=int_sum, count_column=int_count, sum2_column=int_sum2),
+            dict(
+                sum_column=int_sum,
+                count_column=int_count,
+                sum2_column=int_sum2,
+                **func_kwargs,
+            ),
         ),
     )
 
 
-def _build_agg_args_std(result_column, func, input_column):
-    impls = _build_agg_args_var(result_column, func, input_column)
+def _build_agg_args_std(result_column, func, func_args, func_kwargs, input_column):
+    impls = _build_agg_args_var(
+        result_column, func, func_args, func_kwargs, input_column
+    )
 
     result_column, _, kwargs = impls["finalizer"]
     impls["finalizer"] = (result_column, _finalize_std, kwargs)
@@ -1106,7 +1159,10 @@ def _finalize_mean(df, sum_column, count_column):
     return df[sum_column] / df[count_column]
 
 
-def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
+def _finalize_var(df, count_column, sum_column, sum2_column, **kwargs):
+    # arguments are being checked when building the finalizer. As of this moment,
+    # we're only using ddof, and raising an error on other keyword args.
+    ddof = kwargs.get("ddof", 1)
     n = df[count_column]
     x = df[sum_column]
     x2 = df[sum2_column]
@@ -1120,8 +1176,8 @@ def _finalize_var(df, count_column, sum_column, sum2_column, ddof=1):
     return result
 
 
-def _finalize_std(df, count_column, sum_column, sum2_column, ddof=1):
-    result = _finalize_var(df, count_column, sum_column, sum2_column, ddof)
+def _finalize_std(df, count_column, sum_column, sum2_column, **kwargs):
+    result = _finalize_var(df, count_column, sum_column, sum2_column, **kwargs)
     return np.sqrt(result)
 
 
@@ -1162,13 +1218,14 @@ def _aggregate_docstring(based_on=None):
         {based_on_str}
         Parameters
         ----------
-        arg : callable, str, list or dict
+        arg : callable, str, list or dict, optional
             Aggregation spec. Accepted combinations are:
 
             - callable function
             - string function name
             - list of functions and/or function names, e.g. ``[np.sum, 'mean']``
             - dict of column names -> function, function name or list of such.
+            - None only if named aggregation syntax is used
         split_every : int, optional
             Number of intermediate partitions that may be aggregated at once.
             This defaults to 8. If your intermediate partitions are likely to
@@ -1185,6 +1242,12 @@ def _aggregate_docstring(based_on=None):
             ``split_out = 1``. When ``split_out > 1``, it chooses the algorithm
             set by the ``shuffle`` option in the dask config system, or ``"tasks"``
             if nothing is set.
+        kwargs: tuple or pd.NamedAgg, optional
+            Used for named aggregations where the keywords are the output column
+            names and the values are tuples where the first element is the input
+            column name and the second element is the aggregation function.
+            ``pandas.NamedAgg`` can also be used as the value. To use the named
+            aggregation syntax, arg must be set to None.
         """
         return func
 
@@ -1231,9 +1294,29 @@ class _GroupBy:
         if any(isinstance(key, pd.Grouper) for key in by_):
             raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
+        # slicing key applied to _GroupBy instance
+        self._slice = slice
+
+        # Check if we can project columns
+        projection = None
+        if (
+            np.isscalar(self._slice)
+            or isinstance(self._slice, (str, list, tuple))
+            or (
+                (is_index_like(self._slice) or is_series_like(self._slice))
+                and not is_dask_collection(self._slice)
+            )
+        ):
+            projection = set(by_).union(
+                {self._slice}
+                if (np.isscalar(self._slice) or isinstance(self._slice, str))
+                else self._slice
+            )
+            projection = [c for c in df.columns if c in projection]
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
-        self.obj = df
+        self.obj = df[projection] if projection else df
         # grouping key passed via groupby method
         self.by = _normalize_by(df, by)
         self.sort = sort
@@ -1247,9 +1330,6 @@ class _GroupBy:
             raise NotImplementedError(
                 "The grouped object and 'by' of the groupby must have the same divisions."
             )
-
-        # slicing key applied to _GroupBy instance
-        self._slice = slice
 
         if isinstance(self.by, list):
             by_meta = [
@@ -1275,7 +1355,7 @@ class _GroupBy:
             by_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
-    @property  # type: ignore
+    @property
     @_deprecated()
     def index(self):
         return self.by
@@ -1430,12 +1510,20 @@ class _GroupBy:
         # rename "by" columns internally
         # to fix cumulative operations on the same "by" columns
         # ref: https://github.com/dask/dask/issues/9313
-        if columns is not None and set(columns).intersection(set(by_cols)):
+        if columns is not None:
+            # Handle series case (only a single column, but can't
+            # enlist above because that fails in pandas when
+            # constructing meta later)
+            grouping_columns = [columns] if is_series_like(meta) else columns
+            to_rename = set(grouping_columns) & set(by_cols)
             by = []
             for col in by_cols:
-                suffix = str(uuid.uuid4())
-                self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
-                by.append(col + suffix)
+                if col in to_rename:
+                    suffix = str(uuid.uuid4())
+                    self.obj = self.obj.assign(**{col + suffix: self.obj[col]})
+                    by.append(col + suffix)
+                else:
+                    by.append(col)
         else:
             by = by_cols
 
@@ -1881,7 +1969,9 @@ class _GroupBy:
         )
 
     @_aggregate_docstring()
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         if split_out is None:
             warnings.warn(
                 "split_out=None is deprecated, please use a positive integer, "
@@ -1891,7 +1981,20 @@ class _GroupBy:
             split_out = 1
         shuffle = _determine_shuffle(shuffle, split_out)
 
+        relabeling = None
+        columns = None
+        order = None
         column_projection = None
+        if PANDAS_GT_140:
+            if isinstance(self, DataFrameGroupBy):
+                if arg is None:
+                    relabeling, arg, columns, order = reconstruct_func(arg, **kwargs)
+
+            elif isinstance(self, SeriesGroupBy):
+                relabeling = arg is None
+                if relabeling:
+                    columns, arg = validate_func_kwargs(kwargs)
+
         if isinstance(self.obj, DataFrame):
             if isinstance(self.by, tuple) or np.isscalar(self.by):
                 group_columns = {self.by}
@@ -1921,7 +2024,9 @@ class _GroupBy:
 
             # Check if the aggregation involves implicit column projection
             if isinstance(arg, dict):
-                column_projection = group_columns | arg.keys()
+                column_projection = group_columns.union(arg.keys()).intersection(
+                    self.obj.columns
+                )
 
         elif isinstance(self.obj, Series):
             if isinstance(arg, (list, tuple, dict)):
@@ -1985,10 +2090,11 @@ class _GroupBy:
             # for larger values of split_out. However, the shuffle
             # step requires that the result of `chunk` produces a
             # proper DataFrame type
+
             # If we have a median in the spec, we cannot do an initial
             # aggregation.
             if has_median:
-                return _shuffle_aggregate(
+                result = _shuffle_aggregate(
                     chunk_args,
                     chunk=_non_agg_chunk,
                     chunk_kwargs={
@@ -2012,7 +2118,7 @@ class _GroupBy:
                     sort=self.sort,
                 )
             else:
-                return _shuffle_aggregate(
+                result = _shuffle_aggregate(
                     chunk_args,
                     chunk=_groupby_apply_funcs,
                     chunk_kwargs={
@@ -2035,49 +2141,56 @@ class _GroupBy:
                     shuffle=shuffle if isinstance(shuffle, str) else "tasks",
                     sort=self.sort,
                 )
+        else:
+            if self.sort is None and split_out > 1:
+                warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
 
-        if self.sort is None and split_out > 1:
-            warnings.warn(SORT_SPLIT_OUT_WARNING, FutureWarning)
+            # Check sort behavior
+            if self.sort and split_out > 1:
+                raise NotImplementedError(
+                    "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
+                    " Try using `shuffle=True` if you are grouping on a single column."
+                    " Otherwise, try using split_out=1, or grouping with sort=False."
+                )
 
-        # Check sort behavior
-        if self.sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1` and `shuffle=False`"
-                " Try using `shuffle=True` if you are grouping on a single column."
-                " Otherwise, try using split_out=1, or grouping with sort=False."
+            result = aca(
+                chunk_args,
+                chunk=_groupby_apply_funcs,
+                chunk_kwargs=dict(
+                    funcs=chunk_funcs,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                combine=_groupby_apply_funcs,
+                combine_kwargs=dict(
+                    funcs=aggregate_funcs,
+                    level=levels,
+                    sort=False,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                aggregate=_agg_finalize,
+                aggregate_kwargs=dict(
+                    aggregate_funcs=aggregate_funcs,
+                    finalize_funcs=finalizers,
+                    level=levels,
+                    **self.observed,
+                    **self.dropna,
+                ),
+                token="aggregate",
+                split_every=split_every,
+                split_out=split_out,
+                split_out_setup=split_out_on_index,
+                sort=self.sort,
             )
 
-        return aca(
-            chunk_args,
-            chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(
-                funcs=chunk_funcs,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            combine=_groupby_apply_funcs,
-            combine_kwargs=dict(
-                funcs=aggregate_funcs,
-                level=levels,
-                sort=False,
-                **self.observed,
-                **self.dropna,
-            ),
-            aggregate=_agg_finalize,
-            aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs,
-                finalize_funcs=finalizers,
-                level=levels,
-                **self.observed,
-                **self.dropna,
-            ),
-            token="aggregate",
-            split_every=split_every,
-            split_out=split_out,
-            split_out_setup=split_out_on_index,
-            sort=self.sort,
-        )
+        if relabeling and result is not None:
+            if order is not None:
+                result = result.iloc[:, order]
+            result.columns = columns
+
+        return result
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
@@ -2501,18 +2614,28 @@ class DataFrameGroupBy(_GroupBy):
             raise AttributeError(e) from e
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         if arg == "size":
             return self.size()
 
         return super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.DataFrameGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
 
@@ -2583,22 +2706,39 @@ class SeriesGroupBy(_GroupBy):
         )
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.aggregate")
-    def aggregate(self, arg, split_every=None, split_out=1, shuffle=None):
+    def aggregate(
+        self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs
+    ):
         result = super().aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
         if self._slice:
-            result = result[self._slice]
+            try:
+                result = result[self._slice]
+            except KeyError:
+                pass
 
-        if not isinstance(arg, (list, dict)) and isinstance(result, DataFrame):
+        if (
+            arg is not None
+            and not isinstance(arg, (list, dict))
+            and isinstance(result, DataFrame)
+        ):
             result = result[result.columns[0]]
 
         return result
 
     @_aggregate_docstring(based_on="pd.core.groupby.SeriesGroupBy.agg")
-    def agg(self, arg, split_every=None, split_out=1, shuffle=None):
+    def agg(self, arg=None, split_every=None, split_out=1, shuffle=None, **kwargs):
         return self.aggregate(
-            arg, split_every=split_every, split_out=split_out, shuffle=shuffle
+            arg=arg,
+            split_every=split_every,
+            split_out=split_out,
+            shuffle=shuffle,
+            **kwargs,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)

@@ -15,15 +15,17 @@ build:
   noarch: python
   string: py_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script: {{ PYTHON }} -m pip install . -vv
+  entry_points:
+    - dask = dask.__main__:main
 
 requirements:
   host:
     - python >=3.8
     - pip
-    - setuptools
 
   run:
     - python >=3.8
+    - click >=7.0
     - cloudpickle >=1.1.1
     - fsspec >=0.6.0
     - packaging >=20.0
@@ -36,6 +38,9 @@ test:
     - dask
   commands:
     - pip check
+    - dask docs --help
+    - dask info --help
+    - dask info versions --help
   requires:
     - pip
 
