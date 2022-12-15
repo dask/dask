@@ -49,7 +49,7 @@ def test_to_hdf():
 
 @pytest.mark.skipif(
     sys.version_info >= (3, 11),
-    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_to_hdf_multiple_nodes():
     pytest.importorskip("tables")
@@ -395,7 +395,7 @@ def test_to_hdf_link_optimizations():
 
 @pytest.mark.skipif(
     sys.version_info >= (3, 11),
-    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.slow
 def test_to_hdf_lock_delays():
@@ -489,7 +489,7 @@ def test_to_hdf_exceptions():
 
 @pytest.mark.skipif(
     sys.version_info >= (3, 11),
-    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
 @pytest.mark.parametrize("npartitions", [1, 4, 10])
@@ -694,7 +694,7 @@ def test_read_hdf_multiply_open():
 
 @pytest.mark.skipif(
     sys.version_info >= (3, 11),
-    reason="segfaults due to https://github.com/pandas-dev/pandas/issues/50105",
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
 )
 def test_read_hdf_multiple():
     pytest.importorskip("tables")
