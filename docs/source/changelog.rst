@@ -1,6 +1,42 @@
 Changelog
 =========
 
+.. _v2022.12.1:
+
+2022.12.1
+---------
+
+Released on December 16, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Support ``dtype_backend="pandas|pyarrow"`` configuration (:pr:`9719`) `James Bourbeau`_
+- Support ``cupy.ndarray`` to ``cudf.DataFrame`` dispatching in ``dask.dataframe`` (:pr:`9579`) `Richard (Rick) Zamora`_
+- Make filesystem-backend configurable in ``read_parquet`` (:pr:`9699`) `Richard (Rick) Zamora`_
+- Serialize all ``pyarrow`` extension arrays efficiently (:pr:`9740`) `James Bourbeau`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug when repartitioning with ``tz``-aware datetime index (:pr:`9741`) `James Bourbeau`_
+- Partial functions in aggs may have arguments (:pr:`9724`) `Irina Truong`_
+- Add support for simple operation with ``pyarrow``-backed extension dtypes (:pr:`9717`) `James Bourbeau`_
+- Rename columns correctly in case of ``SeriesGroupby`` (:pr:`9716`) `Lawrence Mitchell`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fix url link typo in collection backend doc (:pr:`9748`) `Shawn`_
+- Update Prometheus docs (:pr:`9696`) `Hendrik Makait`_
+
+Maintenance
+^^^^^^^^^^^
+- Add ``zarr`` to Python 3.11 CI environment (:pr:`9771`) `James Bourbeau`_
+- Add support for Python 3.11 (:pr:`9708`) `Thomas Grainger`_
+- Bump ``actions/checkout`` from 3.1.0 to 3.2.0 (:pr:`9753`)
+- Avoid ``np.bool8`` deprecation warning (:pr:`9737`) `James Bourbeau`_
+- Make sure dev packages aren't overwritten in ``upstream`` CI build (:pr:`9731`) `James Bourbeau`_
+- Avoid adding ``data.h5`` and ``mydask.html`` files during tests (:pr:`9726`) `Thomas Grainger`_
+
+
 .. _v2022.12.0:
 
 2022.12.0
@@ -6174,3 +6210,4 @@ Other
 .. _`Shingo OKAWA`: https://github.com/ognis1205
 .. _`qheuristics`: https://github.com/qheuristics
 .. _`Jacob Hayes`: https://github.com/JacobHayes
+.. _`Shawn`: https://github.com/chaokunyang
