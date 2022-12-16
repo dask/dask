@@ -1538,3 +1538,14 @@ def test_sort_values_timestamp(npartitions):
     result = ddf.sort_values("time")
     expected = df.sort_values("time")
     assert_eq(result, expected)
+
+
+def test_sort_values_with_null_partition():
+    df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
+    df["a"] = df["a"].astype("Int64")
+    # note the partition size means we will have one partition with only pd.NA
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    result = ddf.sort_values("a")
+    expected = df.sort_values("a")
+    assert_eq(result, expected)
