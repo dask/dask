@@ -405,11 +405,7 @@ redirect_files = [
     ("setup/adaptive.html", "how-to/adaptive.html"),
     ("setup/custom-startup.html", "how-to/customize-initialization.html"),
     ("setup/environment.html", "how-to/manage-environments.html"),
-    ("setup/prometheus.html", "https://distributed.dask.org/en/latest/prometheus.html"),
-    (
-        "how-to/setup-prometheus.html",
-        "https://distributed.dask.org/en/latest/prometheus.html",
-    ),
+    ("setup/prometheus.html", "how-to/setup-prometheus.html"),
 ]
 
 
