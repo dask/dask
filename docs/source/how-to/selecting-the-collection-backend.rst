@@ -128,6 +128,7 @@ Dask-Dataframe compute-based dispatch functions (as defined in ``dask.dataframe.
    - is_categorical_dtype_dispatch
    - make_meta_dispatch
    - make_meta_obj
+   - meta_lib_from_array
    - meta_nonempty
    - pyarrow_schema_dispatch
    - tolist_dispatch
