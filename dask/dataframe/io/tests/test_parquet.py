@@ -661,6 +661,7 @@ def test_use_nullable_dtypes(tmp_path, engine):
         assert_eq(df, ddf2, check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.xfail(
     not PANDAS_GT_130,
     reason=(
@@ -3005,6 +3006,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
     assert_eq(df1[["c", "d"]], df2[["c", "d"]], check_index=False)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
@@ -3998,6 +4000,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     assert_eq(ddf2b, ddf2c)
 
 
+@PYARROW_MARK
 @pytest.mark.parametrize("partition_on", ("b", None))
 def test_extra_file(tmpdir, engine, partition_on):
     # Check that read_parquet can handle spark output
