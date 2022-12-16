@@ -624,7 +624,7 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
 
 @PYARROW_MARK
 @pytest.mark.parametrize(
-    "nullable_backend",
+    "dtype_backend",
     [
         "pandas",
         pytest.param(
@@ -635,16 +635,16 @@ def test_roundtrip_nullable_dtypes(tmp_path, write_engine, read_engine):
         ),
     ],
 )
-def test_use_nullable_dtypes(tmp_path, engine, nullable_backend):
+def test_use_nullable_dtypes(tmp_path, engine, dtype_backend):
     """
     Test reading a parquet file without pandas metadata,
     but forcing use of nullable dtypes where appropriate
     """
 
-    if nullable_backend == "pandas":
+    if dtype_backend == "pandas":
         dtype_extra = ""
     else:
-        # nullable_backend == "pyarrow"
+        # dtype_backend == "pyarrow"
         dtype_extra = "[pyarrow]"
     df = pd.DataFrame(
         {
@@ -669,7 +669,7 @@ def test_use_nullable_dtypes(tmp_path, engine, nullable_backend):
     partitions = ddf.to_delayed()
     dask.compute([write_partition(p, i) for i, p in enumerate(partitions)])
 
-    with dask.config.set({"dataframe.nullable_backend": nullable_backend}):
+    with dask.config.set({"dataframe.dtype_backend": dtype_backend}):
         # Not supported by fastparquet
         if engine == "fastparquet":
             with pytest.raises(

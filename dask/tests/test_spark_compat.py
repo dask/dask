@@ -180,7 +180,7 @@ def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
     # already exists (as tmpdir does) and we don't set overwrite
     sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
 
-    with dask.config.set({"dataframe.nullable_backend": "pyarrow"}):
+    with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
         ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
     assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
     assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)

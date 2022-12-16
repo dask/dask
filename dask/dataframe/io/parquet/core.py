@@ -263,14 +263,14 @@ def read_parquet(
 
         .. note::
 
-            Use the ``dataframe.nullable_backend`` config option to select which
+            Use the ``dataframe.dtype_backend`` config option to select which
             dtype implementation to use.
 
-            ``dataframe.nullable_backend="pandas"`` (the default) will use
+            ``dataframe.dtype_backend="pandas"`` (the default) will use
             pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
-            ``string[python]``, etc.) while ``dataframe.nullable_backend="pyarrow"``
+            ``string[python]``, etc.) while ``dataframe.dtype_backend="pyarrow"``
             will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
-            ``string[pyarrow]``, etc.). ``dataframe.nullable_backend="pyarrow"``
+            ``string[pyarrow]``, etc.). ``dataframe.dtype_backend="pyarrow"``
             requires ``pandas`` 1.5+.
 
     calculate_divisions : bool, default False
@@ -383,7 +383,7 @@ def read_parquet(
     """
 
     if use_nullable_dtypes:
-        use_nullable_dtypes = dask.config.get("dataframe.nullable_backend")
+        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:

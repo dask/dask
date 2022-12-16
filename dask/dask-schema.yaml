@@ -72,7 +72,7 @@ properties:
               task when reading a parquet dataset from a REMOTE file system.
               Specifying 0 will result in serial execution on the client.
 
-      nullable_backend:
+      dtype_backend:
         enum:
           - pandas
           - pyarrow
