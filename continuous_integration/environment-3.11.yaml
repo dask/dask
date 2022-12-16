@@ -21,7 +21,7 @@ dependencies:
   - fastparquet>=0.8.0
   - h5py
   - pytables
-  # - zarr
+  - zarr
   # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
   # https://github.com/dask/dask/pull/9569
   # - tiledb-py # crashes on Python 3.11
