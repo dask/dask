@@ -24,9 +24,9 @@ dependencies:
   # - zarr
   # `tiledb-py=0.17.5` lead to strange seg faults in CI, However 0.18 is needed for 3.11
   # https://github.com/dask/dask/pull/9569
-  - tiledb-py
+  # - tiledb-py # crashes on Python 3.11
   # - pyspark
-  - tiledb>=2.5.0
+  # - tiledb>=2.5.0 # crashes on Python 3.11
   - xarray
   - fsspec
   - sqlalchemy>=1.4.0
