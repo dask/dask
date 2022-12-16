@@ -481,6 +481,28 @@ def test_from_dask_array_unknown_width_error():
         dd.from_dask_array(dx)
 
 
+@pytest.mark.gpu
+@pytest.mark.parametrize(
+    "array_backend, df_backend",
+    [("cupy", "cudf"), ("numpy", "pandas")],
+)
+def test_from_array_dispatching(array_backend, df_backend):
+    # Check array -> dataframe dispatching
+    array_lib = pytest.importorskip(array_backend)
+    df_lib = pytest.importorskip(df_backend)
+
+    with config.set({"array.backend": array_backend}):
+        darr = da.ones(10)
+    assert isinstance(darr._meta, array_lib.ndarray)
+
+    ddf1 = dd.from_array(darr)  # Invokes `from_dask_array`
+    ddf2 = dd.from_array(darr.compute())
+
+    assert isinstance(ddf1._meta, df_lib.Series)
+    assert isinstance(ddf2._meta, df_lib.Series)
+    assert_eq(ddf1, ddf2)
+
+
 def test_to_bag():
     a = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
