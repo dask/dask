@@ -416,7 +416,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     data = df
     interpolation = "linear"
 
-    if data.dtype.na_value is pd.NA:
+    if getattr(data.dtype, "na_value", None) is pd.NA:
         data = data.astype("float64")
     if is_categorical_dtype(data):
         data = data.cat.codes
@@ -446,7 +446,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if df.dtype.na_value is pd.NA:
+    if getattr(df.dtype, "na_value", None) is pd.NA:
         return "float64", info
     if is_categorical_dtype(df):
         data = df.values
