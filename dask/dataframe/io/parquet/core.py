@@ -189,7 +189,7 @@ def read_parquet(
     index=None,
     storage_options=None,
     engine="auto",
-    use_nullable_dtypes=False,
+    use_nullable_dtypes: bool = False,
     calculate_divisions=None,
     ignore_metadata_file=False,
     metadata_task_size=None,
@@ -264,6 +264,22 @@ def read_parquet(
     engine : {'auto', 'pyarrow', 'fastparquet'}, default 'auto'
         Parquet library to use. Defaults to 'auto', which uses ``pyarrow`` if
         it is installed, and falls back to ``fastparquet`` otherwise.
+    use_nullable_dtypes : {False, True}
+        Whether to use extension dtypes for the resulting ``DataFrame``.
+        ``use_nullable_dtypes=True`` is only supported when ``engine="pyarrow"``.
+
+        .. note::
+
+            Use the ``dataframe.dtype_backend`` config option to select which
+            dtype implementation to use.
+
+            ``dataframe.dtype_backend="pandas"`` (the default) will use
+            pandas' ``numpy``-backed nullable dtypes (e.g. ``Int64``,
+            ``string[python]``, etc.) while ``dataframe.dtype_backend="pyarrow"``
+            will use ``pyarrow``-backed extension dtypes (e.g. ``int64[pyarrow]``,
+            ``string[pyarrow]``, etc.). ``dataframe.dtype_backend="pyarrow"``
+            requires ``pandas`` 1.5+.
+
     calculate_divisions : bool, default False
         Whether to use min/max statistics from the footer metadata (or global
         ``_metadata`` file) to calculate divisions for the output DataFrame
@@ -380,6 +396,9 @@ def read_parquet(
     to_parquet
     pyarrow.parquet.ParquetDataset
     """
+
+    if use_nullable_dtypes:
+        use_nullable_dtypes = dask.config.get("dataframe.dtype_backend")
 
     # "Pre-deprecation" warning for `chunksize`
     if chunksize:
@@ -586,7 +605,7 @@ def read_parquet(
     if "retries" not in annotations and not _is_local_fs(fs):
         ctx = dask.annotate(retries=5)
     else:
-        ctx = contextlib.nullcontext()
+        ctx = contextlib.nullcontext()  # type: ignore
 
     with ctx:
         # Construct the output collection with from_map

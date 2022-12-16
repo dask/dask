@@ -1643,19 +1643,31 @@ class ArrowDatasetEngine(Engine):
         _kwargs.update({"use_threads": False, "ignore_metadata": False})
 
         if use_nullable_dtypes:
+            # Determine is `pandas` or `pyarrow`-backed dtypes should be used
+            if use_nullable_dtypes == "pandas":
+                default_types_mapper = PYARROW_NULLABLE_DTYPE_MAPPING.get
+            else:
+                # use_nullable_dtypes == "pyarrow"
+
+                def default_types_mapper(pyarrow_dtype):  # type: ignore
+                    # Special case pyarrow strings to use more feature complete dtype
+                    # See https://github.com/pandas-dev/pandas/issues/50074
+                    if pyarrow_dtype == pa.string():
+                        return pd.StringDtype("pyarrow")
+                    else:
+                        return pd.ArrowDtype(pyarrow_dtype)
+
             if "types_mapper" in _kwargs:
-                # User-provided entries take priority over PYARROW_NULLABLE_DTYPE_MAPPING
+                # User-provided entries take priority over default_types_mapper
                 types_mapper = _kwargs["types_mapper"]
 
                 def _types_mapper(pa_type):
-                    return types_mapper(pa_type) or PYARROW_NULLABLE_DTYPE_MAPPING.get(
-                        pa_type
-                    )
+                    return types_mapper(pa_type) or default_types_mapper(pa_type)
 
                 _kwargs["types_mapper"] = _types_mapper
 
             else:
-                _kwargs["types_mapper"] = PYARROW_NULLABLE_DTYPE_MAPPING.get
+                _kwargs["types_mapper"] = default_types_mapper
 
         return arrow_table.to_pandas(categories=categories, **_kwargs)
 
