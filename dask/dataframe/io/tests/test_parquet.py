@@ -1688,20 +1688,20 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     assert_eq(df, ddf2.compute(), check_index=False)
 
 
-def test_fiters_file_list(tmpdir, engine):
+def test_filters_file_list(tmpdir, engine):
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
     ddf = dd.from_pandas(df, npartitions=5)
 
     ddf.to_parquet(str(tmpdir), engine=engine)
-    fils = str(tmpdir.join("*.parquet"))
+    files = str(tmpdir.join("*.parquet"))
     ddf_out = dd.read_parquet(
-        fils, calculate_divisions=True, engine=engine, filters=[("x", ">", 3)]
+        files, calculate_divisions=True, engine=engine, filters=[("x", ">", 3)]
     )
 
     assert ddf_out.npartitions == 3
     assert_eq(df[df["x"] > 3], ddf_out.compute(), check_index=False)
 
-    # Check that first parition gets filtered for single-path input
+    # Check that first partition gets filtered for single-path input
     ddf2 = dd.read_parquet(
         str(tmpdir.join("part.0.parquet")),
         calculate_divisions=True,
@@ -1709,6 +1709,19 @@ def test_fiters_file_list(tmpdir, engine):
         filters=[("x", ">", 3)],
     )
     assert len(ddf2) == 0
+
+    # Make sure files list can be read with filters when they don't have the same columns order
+    pd.read_parquet(os.path.join(tmpdir, "part.4.parquet"), engine=engine)[
+        reversed(df.columns)
+    ].to_parquet(os.path.join(tmpdir, "part.4.parquet"), engine=engine)
+    ddf3 = dd.read_parquet(
+        str(tmpdir.join("*.parquet")),
+        calculate_divisions=True,
+        engine=engine,
+        filters=[("x", ">", 3)],
+    )
+    assert ddf3.npartitions == 3
+    assert_eq(df[df["x"] > 3], ddf3, check_index=False)
 
 
 def test_pyarrow_filter_divisions(tmpdir):
