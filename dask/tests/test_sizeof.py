@@ -82,7 +82,7 @@ def test_sparse_matrix():
     assert sizeof(sp.tocoo()) >= 240
     assert sizeof(sp.tocsc()) >= 232
     assert sizeof(sp.tocsr()) >= 232
-    assert sizeof(sp.todok()) >= 192
+    assert sizeof(sp.todok()) >= 188
     assert sizeof(sp.tolil()) >= 204
 
 
