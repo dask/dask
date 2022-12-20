@@ -1,3 +1,4 @@
+import contextlib
 import glob
 import math
 import os
@@ -14,6 +15,7 @@ from packaging.version import parse as parse_version
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
+from dask.array.numpy_compat import _numpy_124
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import (
     PANDAS_GT_110,
@@ -3197,9 +3199,16 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
 @PYARROW_MARK
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     info = np.iinfo(np.dtype("int64"))
-    arr_numeric = np.linspace(
-        start=info.min + 2, stop=info.max, num=1024, dtype="int64"
-    )
+    # In `numpy=1.24.0` NumPy warns when an overflow is encountered when casting from float to int
+    # https://numpy.org/doc/stable/release/1.24.0-notes.html#numpy-now-gives-floating-point-errors-in-casts
+    if _numpy_124:
+        ctx = pytest.warns(RuntimeWarning, match="invalid value encountered in cast")
+    else:
+        ctx = contextlib.nullcontext()
+    with ctx:
+        arr_numeric = np.linspace(
+            start=info.min + 2, stop=info.max, num=1024, dtype="int64"
+        )
     arr_dates = arr_numeric.astype("datetime64[ms]")
 
     table = pa.Table.from_arrays([pa.array(arr_dates)], names=["ts"])

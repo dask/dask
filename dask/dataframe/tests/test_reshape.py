@@ -1,3 +1,4 @@
+import contextlib
 import warnings
 
 import numpy as np
@@ -109,6 +110,19 @@ def check_pandas_issue_45618_warning(test_func):
     return decorator
 
 
+@contextlib.contextmanager
+def ignore_numpy_bool8_deprecation():
+    # This warning comes from inside `pandas`. We can't do anything about it, so we ignore the warning.
+    # Note it's been fixed upstream in `pandas` https://github.com/pandas-dev/pandas/pull/49886.
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            category=DeprecationWarning,
+            message="`np.bool8` is a deprecated alias for `np.bool_`",
+        )
+        yield
+
+
 @check_pandas_issue_45618_warning
 def test_get_dummies_sparse():
     s = pd.Series(pd.Categorical(["a", "b", "a"], categories=["a", "b", "c"]))
@@ -116,14 +130,16 @@ def test_get_dummies_sparse():
 
     exp = pd.get_dummies(s, sparse=True)
     res = dd.get_dummies(ds, sparse=True)
-    assert_eq(exp, res)
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
 
     assert res.compute().a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.a.compute())
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
     res = dd.get_dummies(ds.to_frame(name="a"), sparse=True)
-    assert_eq(exp, res)
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
     assert pd.api.types.is_sparse(res.a_a.compute())
 
 
@@ -139,7 +155,9 @@ def test_get_dummies_sparse_mix():
 
     exp = pd.get_dummies(df, sparse=True)
     res = dd.get_dummies(ddf, sparse=True)
-    assert_eq(exp, res)
+
+    with ignore_numpy_bool8_deprecation():
+        assert_eq(exp, res)
 
     assert res.compute().A_a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.A_a.compute())

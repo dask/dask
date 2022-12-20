@@ -10,6 +10,7 @@ _numpy_120 = _np_version >= parse_version("1.20.0")
 _numpy_121 = _np_version >= parse_version("1.21.0")
 _numpy_122 = _np_version >= parse_version("1.22.0")
 _numpy_123 = _np_version >= parse_version("1.23.0")
+_numpy_124 = _np_version >= parse_version("1.24.0")
 
 
 # Taken from scikit-learn:
