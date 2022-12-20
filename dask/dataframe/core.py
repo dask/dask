@@ -8140,7 +8140,13 @@ def _convert_to_numeric(series, skipna):
 
 def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     if axis == 1:
-        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
