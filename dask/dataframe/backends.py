@@ -15,6 +15,7 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.core import Array
 from dask.array.dispatch import percentile_lookup
 from dask.array.percentile import _percentile
 from dask.backends import CreationDispatch, DaskBackendEntrypoint
@@ -30,6 +31,7 @@ from dask.dataframe.dispatch import (
     is_categorical_dtype_dispatch,
     make_meta_dispatch,
     make_meta_obj,
+    meta_lib_from_array,
     meta_nonempty,
     pyarrow_schema_dispatch,
     tolist_dispatch,
@@ -433,6 +435,18 @@ def _nonempty_series(s, idx=None):
     return out
 
 
+@meta_lib_from_array.register(Array)
+def _meta_lib_from_array_da(x):
+    # Use x._meta for dask arrays
+    return meta_lib_from_array(x._meta)
+
+
+@meta_lib_from_array.register(np.ndarray)
+def _meta_lib_from_array_numpy(x):
+    # numpy -> pandas
+    return pd
+
+
 @union_categoricals_dispatch.register(
     (pd.DataFrame, pd.Series, pd.Index, pd.Categorical)
 )
@@ -713,3 +727,19 @@ dataframe_creation_dispatch.register_backend("pandas", PandasBackendEntrypoint()
 @percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@meta_lib_from_array.register_lazy("cupy")
+def _register_cupy_to_cudf():
+    # Handle cupy.ndarray -> cudf.DataFrame dispatching
+    try:
+        import cudf
+        import cupy
+
+        @meta_lib_from_array.register(cupy.ndarray)
+        def meta_lib_from_array_cupy(x):
+            # cupy -> cudf
+            return cudf
+
+    except ImportError:
+        pass
