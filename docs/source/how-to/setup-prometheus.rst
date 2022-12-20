@@ -1,3 +1,5 @@
+.. When modifying the contents of this page, please adjust the corresponding page in the dask.distributed documentation accordingly.
+
 Setup Prometheus monitoring
 ===========================
 
