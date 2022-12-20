@@ -1,19 +1,22 @@
+import decimal
 import signal
 import sys
 import threading
 
 import pytest
 
+import dask
 from dask.datasets import timeseries
 
 dd = pytest.importorskip("dask.dataframe")
 pyspark = pytest.importorskip("pyspark")
-pytest.importorskip("pyarrow")
+pa = pytest.importorskip("pyarrow")
 pytest.importorskip("fastparquet")
 
 import numpy as np
 import pandas as pd
 
+from dask.dataframe._compat import PANDAS_GT_150
 from dask.dataframe.utils import assert_eq
 
 pytestmark = pytest.mark.skipif(
@@ -149,3 +152,43 @@ def test_roundtrip_parquet_spark_to_dask_extension_dtypes(spark_session, tmpdir)
         [pd.api.types.is_extension_array_dtype(dtype) for dtype in ddf.dtypes]
     ), ddf.dtypes
     assert_eq(ddf, pdf, check_index=False)
+
+
+@pytest.mark.skipif(not PANDAS_GT_150, reason="Requires pyarrow-backed nullable dtypes")
+def test_read_decimal_dtype_pyarrow(spark_session, tmpdir):
+    tmpdir = str(tmpdir)
+    npartitions = 3
+    size = 6
+
+    decimal_data = [
+        decimal.Decimal("8093.234"),
+        decimal.Decimal("8094.234"),
+        decimal.Decimal("8095.234"),
+        decimal.Decimal("8096.234"),
+        decimal.Decimal("8097.234"),
+        decimal.Decimal("8098.234"),
+    ]
+    pdf = pd.DataFrame(
+        {
+            "a": range(size),
+            "b": decimal_data,
+        }
+    )
+    sdf = spark_session.createDataFrame(pdf)
+    sdf = sdf.withColumn("b", sdf["b"].cast(pyspark.sql.types.DecimalType(7, 3)))
+    # We are not overwriting any data, but spark complains if the directory
+    # already exists (as tmpdir does) and we don't set overwrite
+    sdf.repartition(npartitions).write.parquet(tmpdir, mode="overwrite")
+
+    with dask.config.set({"dataframe.dtype_backend": "pyarrow"}):
+        ddf = dd.read_parquet(tmpdir, engine="pyarrow", use_nullable_dtypes=True)
+    assert ddf.b.dtype.pyarrow_dtype == pa.decimal128(7, 3)
+    assert ddf.b.compute().dtype.pyarrow_dtype == pa.decimal128(7, 3)
+    expected = pdf.astype(
+        {
+            "a": "int64[pyarrow]",
+            "b": pd.ArrowDtype(pa.decimal128(7, 3)),
+        }
+    )
+
+    assert_eq(ddf, expected, check_index=False)

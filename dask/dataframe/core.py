@@ -36,6 +36,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -4185,16 +4186,18 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    @property
-    @derived_from(pd.Series)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return self.is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Series)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return self.is_monotonic_increasing
 
     @property
     @derived_from(pd.Series)
@@ -4406,16 +4409,18 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    @property
-    @derived_from(pd.Index)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return super().is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Index)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
@@ -8140,7 +8145,13 @@ def _convert_to_numeric(series, skipna):
 
 def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     if axis == 1:
-        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 
