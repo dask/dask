@@ -103,6 +103,11 @@ def test_sparse_matrix():
 @pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_pandas_object_dtype(dtype, cls_name):
     pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130
+
+    if dtype == "string[python]" and not PANDAS_GT_130:
+        raise pytest.skip("Need pandas >=1.3")
+
     cls = getattr(pd, cls_name)
     s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
     assert sizeof("x000") * 1000 < sizeof(s1) < 2 * sizeof("x000") * 1000
@@ -126,6 +131,10 @@ def test_pandas_object_dtype(dtype, cls_name):
 @pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_dataframe_object_dtype(dtype):
     pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130
+
+    if dtype == "string[python]" and not PANDAS_GT_130:
+        raise pytest.skip("Need pandas >=1.3")
 
     x = "x" * 100_000
     y = "y" * 100_000
@@ -148,6 +157,11 @@ def test_dataframe_object_dtype(dtype):
 def test_pandas_string_arrow_dtype(cls_name):
     pd = pytest.importorskip("pandas")
     pytest.importorskip("pyarrow")
+    from dask.dataframe._compat import PANDAS_GT_130
+
+    if not PANDAS_GT_130:
+        raise pytest.skip("Need pandas >=1.3")
+
     cls = getattr(pd, cls_name)
 
     s = cls(["x" * 100_000, "y" * 50_000], dtype="string[pyarrow]")
