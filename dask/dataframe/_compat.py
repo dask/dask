@@ -97,3 +97,12 @@ def check_numeric_only_deprecation():
             yield
     else:
         yield
+
+
+def dtype_eq(a: type, b: type) -> bool:
+    # CategoricalDtype in pandas <1.3 cannot be compared to numpy dtypes
+    if not PANDAS_GT_130 and isinstance(a, pd.CategoricalDtype) != isinstance(
+        b, pd.CategoricalDtype
+    ):
+        return False
+    return a == b
