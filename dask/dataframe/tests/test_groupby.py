@@ -739,10 +739,7 @@ def test_split_apply_combine_on_series(empty):
     pytest.raises(KeyError, lambda: ddf.groupby("x"))
     pytest.raises(KeyError, lambda: ddf.groupby(["a", "x"]))
     pytest.raises(KeyError, lambda: ddf.groupby("a")["x"])
-    with warnings.catch_warnings():
-        # pandas warns about using tuples before throwing the KeyError
-        warnings.simplefilter("ignore", FutureWarning)
-        pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
+    pytest.raises(KeyError, lambda: ddf.groupby("a")["b", "x"])
     pytest.raises(KeyError, lambda: ddf.groupby("a")[["b", "x"]])
 
     # test graph node labels
