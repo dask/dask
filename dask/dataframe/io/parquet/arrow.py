@@ -596,20 +596,23 @@ class ArrowDatasetEngine(Engine):
         index_cols=None,
         **kwargs,
     ):
+        if schema is not None:
 
-        # Start with inferred schema from _meta_nonempty
-        inferred_schema = pyarrow_schema_dispatch(
-            df._meta_nonempty.set_index(index_cols) if index_cols else df._meta_nonempty
-        ).remove_metadata()
+            # Start with inferred schema from _meta_nonempty
+            inferred_schema = pyarrow_schema_dispatch(
+                df._meta_nonempty.set_index(index_cols)
+                if index_cols
+                else df._meta_nonempty
+            ).remove_metadata()
 
-        # Use optional input schema to update our inferred schema
-        if isinstance(schema, (dict, pa.Schema)):
-            schema = pa.schema(schema)
-            for name in schema.names:
-                i = inferred_schema.get_field_index(name)
-                j = schema.get_field_index(name)
-                inferred_schema = inferred_schema.set(i, schema.field(j))
-        schema = inferred_schema
+            # Use optional input schema to update our inferred schema
+            if isinstance(schema, (dict, pa.Schema)):
+                schema = pa.schema(schema)
+                for name in schema.names:
+                    i = inferred_schema.get_field_index(name)
+                    j = schema.get_field_index(name)
+                    inferred_schema = inferred_schema.set(i, schema.field(j))
+            schema = inferred_schema
 
         # Check that target directory exists
         fs.mkdirs(path, exist_ok=True)
