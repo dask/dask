@@ -135,44 +135,78 @@ def register_pandas():
     import numpy as np
     import pandas as pd
 
-    def object_size(x):
-        if not len(x):
+    from dask.dataframe._compat import dtype_eq
+
+    def object_size(*xs):
+        if not xs:
             return 0
-        sample = np.random.choice(x, size=20, replace=True)
-        sample = list(map(sizeof, sample))
-        return sum(sample) / 20 * len(x)
+        ncells = sum(len(x) for x in xs)
+        if not ncells:
+            return 0
+
+        # Deduplicate Series of references to the same objects,
+        # e.g. as produced by read_parquet
+        unique_samples = {}
+        for x in xs:
+            sample = np.random.choice(x, size=100, replace=True)
+            for i in sample.tolist():
+                unique_samples[id(i)] = i
+
+        nsamples = 100 * len(xs)
+        sample_nbytes = sum(sizeof(i) for i in unique_samples.values())
+        if len(unique_samples) / nsamples > 0.5:
+            # Less than half of the references are duplicated.
+            # Assume that, if we were to analyze twice the amount of random references,
+            # we would get twice the amount of unique objects too.
+            return int(sample_nbytes * ncells / nsamples)
+        else:
+            # Assume we've already found all unique objects and that all references that
+            # we have not yet analyzed are going to point to the same data.
+            return sample_nbytes
 
     @sizeof.register(pd.DataFrame)
     def sizeof_pandas_dataframe(df):
-        p = sizeof(df.index)
-        for _, col in df.items():
-            p += col.memory_usage(index=False)
+        p = sizeof(df.index) + sizeof(df.columns)
+        object_cols = []
+        prev_dtype = None
+
+        # Unlike df.items(), df._series will not duplicate multiple views of the same
+        # column e.g. df[["x", "x", "x"]]
+        for col in df._series.values():
+            if prev_dtype is None or not dtype_eq(prev_dtype, col.dtype):
+                prev_dtype = col.dtype
+                # Contiguous columns of the same dtype share the same overhead
+                p += 1200
+            p += col.memory_usage(index=False, deep=False)
             if col.dtype == object:
-                p += object_size(col._values)
-        return int(p) + 1000
+                object_cols.append(col._values)
+
+        # Deduplicate references to the same objects appearing in different Series
+        p += object_size(*object_cols)
+
+        return max(1200, p)
 
     @sizeof.register(pd.Series)
     def sizeof_pandas_series(s):
-        p = int(s.memory_usage(index=True))
+        # https://github.com/dask/dask/pull/9776#issuecomment-1359085962
+        p = 1200 + sizeof(s.index) + s.memory_usage(index=False, deep=False)
         if s.dtype == object:
             p += object_size(s._values)
-        if s.index.dtype == object:
-            p += object_size(s.index)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.Index)
     def sizeof_pandas_index(i):
-        p = int(i.memory_usage())
+        p = 400 + i.memory_usage(deep=False)
         if i.dtype == object:
             p += object_size(i)
-        return int(p) + 1000
+        return p
 
     @sizeof.register(pd.MultiIndex)
     def sizeof_pandas_multiindex(i):
-        p = int(sum(object_size(l) for l in i.levels))
-        for c in i.codes if hasattr(i, "codes") else i.labels:
+        p = 400 + object_size(*i.levels)
+        for c in i.codes:
             p += c.nbytes
-        return int(p) + 1000
+        return p
 
 
 @sizeof.register_lazy("scipy")
