@@ -99,9 +99,12 @@ def test_sparse_matrix():
     assert sizeof(sp.tolil()) >= 204
 
 
-def test_series_object_dtype():
+@pytest.mark.parametrize("cls_name", ["Series", "Index"])
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
+def test_series_index_object_dtype(dtype, cls_name):
     pd = pytest.importorskip("pandas")
-    s1 = pd.Series([f"x{i:3d}" for i in range(1000)])
+    cls = getattr(pd, cls_name)
+    s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
     assert sizeof("x000") * 1000 < sizeof(s1) < 2 * sizeof("x000") * 1000
 
     x = "x" * 100_000
@@ -110,19 +113,22 @@ def test_series_object_dtype():
     w = "w" * 100_000
 
     # High duplication of references to the same object
-    s2 = pd.Series([x, y, z, w] * 1000)
+    s2 = cls([x, y, z, w] * 1000, dtype=dtype)
     assert 400_000 < sizeof(s2) < 500_000
 
     # Low duplication of references to the same object
-    s3 = pd.Series([x, y, z, w])
-    s4 = pd.Series([x, y, z, x])
-    s5 = pd.Series([x, x, x, x])
+    s3 = cls([x, y, z, w], dtype=dtype)
+    s4 = cls([x, y, z, x], dtype=dtype)
+    s5 = cls([x, x, x, x], dtype=dtype)
     assert sizeof(s5) < sizeof(s4) < sizeof(s3)
 
 
-def test_dataframe_object_dtype():
+@pytest.mark.parametrize("dtype", [object, "string[python]"])
+def test_dataframe_object_dtype(dtype):
     pd = pytest.importorskip("pandas")
-    df1 = pd.DataFrame([[f"x{i:3d}" for i in range(1000)] for _ in range(2)])
+    df1 = pd.DataFrame(
+        [[f"x{i:3d}" for i in range(1000)] for _ in range(2)], dtype=dtype
+    )
     assert sizeof("x000") * 2000 < sizeof(df1) < 2 * sizeof("x000") * 2000
 
     x = "x" * 100_000
@@ -132,13 +138,13 @@ def test_dataframe_object_dtype():
 
     # High duplication of references to the same object, across different columns
     objs = [x, y, z, w]
-    df2 = pd.DataFrame([objs * 3] * 1000)
+    df2 = pd.DataFrame([objs * 3] * 1000, dtype=dtype)
     assert 400_000 < sizeof(df2) < 550_000
 
     # Low duplication of references to the same object, across different columns
-    df3 = pd.DataFrame([[x, y], [z, w]])
-    df4 = pd.DataFrame([[x, y], [z, x]])
-    df5 = pd.DataFrame([[x, x], [x, x]])
+    df3 = pd.DataFrame([[x, y], [z, w]], dtype=dtype)
+    df4 = pd.DataFrame([[x, y], [z, x]], dtype=dtype)
+    df5 = pd.DataFrame([[x, x], [x, x]], dtype=dtype)
     assert sizeof(df5) < sizeof(df4) < sizeof(df3)
 
 
