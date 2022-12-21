@@ -99,9 +99,9 @@ def test_sparse_matrix():
     assert sizeof(sp.tolil()) >= 204
 
 
-@pytest.mark.parametrize("cls_name", ["Series", "Index"])
+@pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
 @pytest.mark.parametrize("dtype", [object, "string[python]"])
-def test_series_index_object_dtype(dtype, cls_name):
+def test_pandas_object_dtype(dtype, cls_name):
     pd = pytest.importorskip("pandas")
     cls = getattr(pd, cls_name)
     s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
@@ -126,10 +126,6 @@ def test_series_index_object_dtype(dtype, cls_name):
 @pytest.mark.parametrize("dtype", [object, "string[python]"])
 def test_dataframe_object_dtype(dtype):
     pd = pytest.importorskip("pandas")
-    df1 = pd.DataFrame(
-        [[f"x{i:3d}" for i in range(1000)] for _ in range(2)], dtype=dtype
-    )
-    assert sizeof("x000") * 2000 < sizeof(df1) < 2 * sizeof("x000") * 2000
 
     x = "x" * 100_000
     y = "y" * 100_000
@@ -138,14 +134,24 @@ def test_dataframe_object_dtype(dtype):
 
     # High duplication of references to the same object, across different columns
     objs = [x, y, z, w]
-    df2 = pd.DataFrame([objs * 3] * 1000, dtype=dtype)
-    assert 400_000 < sizeof(df2) < 550_000
+    df1 = pd.DataFrame([objs * 3] * 1000, dtype=dtype)
+    assert 400_000 < sizeof(df1) < 550_000
 
     # Low duplication of references to the same object, across different columns
-    df3 = pd.DataFrame([[x, y], [z, w]], dtype=dtype)
-    df4 = pd.DataFrame([[x, y], [z, x]], dtype=dtype)
-    df5 = pd.DataFrame([[x, x], [x, x]], dtype=dtype)
-    assert sizeof(df5) < sizeof(df4) < sizeof(df3)
+    df2 = pd.DataFrame([[x, y], [z, w]], dtype=dtype)
+    df3 = pd.DataFrame([[x, y], [z, x]], dtype=dtype)
+    df4 = pd.DataFrame([[x, x], [x, x]], dtype=dtype)
+    assert sizeof(df4) < sizeof(df3) < sizeof(df2)
+
+
+@pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
+def test_pandas_string_arrow_dtype(cls_name):
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    cls = getattr(pd, cls_name)
+
+    s = cls(["x" * 100_000, "y" * 50_000], dtype="string[pyarrow]")
+    assert 150_000 < sizeof(s) < 155_000
 
 
 def test_empty():
