@@ -8,6 +8,20 @@ from dask.multiprocessing import get_context
 from dask.sizeof import sizeof
 from dask.utils import funcname
 
+try:
+    import pandas as pd
+
+    from dask.dataframe._compat import PANDAS_GT_130
+
+except ImportError:
+    pd = None
+    PANDAS_GT_130 = False
+
+requires_pandas = pytest.mark.skipif(pd is None, reason="requires pandas")
+requires_pandas_130 = pytest.mark.skipif(
+    not PANDAS_GT_130, reason="requires pandas 1.3.0"
+)
+
 
 def test_base():
     assert sizeof(1) == sys.getsizeof(1)
@@ -41,8 +55,8 @@ def test_numpy_0_strided():
     assert sizeof(x) <= 8
 
 
+@requires_pandas
 def test_pandas():
-    pd = pytest.importorskip("pandas")
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": ["a" * 100, "b" * 100, "c" * 100]}, index=[10, 20, 30]
     )
@@ -57,18 +71,18 @@ def test_pandas():
     assert isinstance(sizeof(df.index), int)
 
 
+@requires_pandas
 def test_pandas_contiguous_dtypes():
     """2+ contiguous columns of the same dtype in the same DataFrame share the same
     surface thus have lower overhead
     """
-    pd = pytest.importorskip("pandas")
     df1 = pd.DataFrame([[1, 2.2], [3, 4.4]])
     df2 = pd.DataFrame([[1.1, 2.2], [3.3, 4.4]])
     assert sizeof(df2) < sizeof(df1)
 
 
+@requires_pandas
 def test_pandas_multiindex():
-    pd = pytest.importorskip("pandas")
     index = pd.MultiIndex.from_product([range(5), ["a", "b", "c", "d", "e"]])
     actual_size = sys.getsizeof(index)
 
@@ -76,8 +90,8 @@ def test_pandas_multiindex():
     assert isinstance(sizeof(index), int)
 
 
+@requires_pandas
 def test_pandas_repeated_column():
-    pd = pytest.importorskip("pandas")
     df = pd.DataFrame({"x": list(range(10_000))})
     df2 = df[["x", "x", "x"]]
     df3 = pd.DataFrame({"x": list(range(10_000)), "y": list(range(10_000))})
@@ -99,9 +113,14 @@ def test_sparse_matrix():
     assert sizeof(sp.tolil()) >= 204
 
 
-def test_series_object_dtype():
-    pd = pytest.importorskip("pandas")
-    s1 = pd.Series([f"x{i:3d}" for i in range(1000)])
+@requires_pandas
+@pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
+@pytest.mark.parametrize(
+    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
+)
+def test_pandas_object_dtype(dtype, cls_name):
+    cls = getattr(pd, cls_name)
+    s1 = cls([f"x{i:3d}" for i in range(1000)], dtype=dtype)
     assert sizeof("x000") * 1000 < sizeof(s1) < 2 * sizeof("x000") * 1000
 
     x = "x" * 100_000
@@ -110,21 +129,21 @@ def test_series_object_dtype():
     w = "w" * 100_000
 
     # High duplication of references to the same object
-    s2 = pd.Series([x, y, z, w] * 1000)
+    s2 = cls([x, y, z, w] * 1000, dtype=dtype)
     assert 400_000 < sizeof(s2) < 500_000
 
     # Low duplication of references to the same object
-    s3 = pd.Series([x, y, z, w])
-    s4 = pd.Series([x, y, z, x])
-    s5 = pd.Series([x, x, x, x])
+    s3 = cls([x, y, z, w], dtype=dtype)
+    s4 = cls([x, y, z, x], dtype=dtype)
+    s5 = cls([x, x, x, x], dtype=dtype)
     assert sizeof(s5) < sizeof(s4) < sizeof(s3)
 
 
-def test_dataframe_object_dtype():
-    pd = pytest.importorskip("pandas")
-    df1 = pd.DataFrame([[f"x{i:3d}" for i in range(1000)] for _ in range(2)])
-    assert sizeof("x000") * 2000 < sizeof(df1) < 2 * sizeof("x000") * 2000
-
+@requires_pandas
+@pytest.mark.parametrize(
+    "dtype", [object, pytest.param("string[python]", marks=requires_pandas_130)]
+)
+def test_dataframe_object_dtype(dtype):
     x = "x" * 100_000
     y = "y" * 100_000
     z = "z" * 100_000
@@ -132,18 +151,28 @@ def test_dataframe_object_dtype():
 
     # High duplication of references to the same object, across different columns
     objs = [x, y, z, w]
-    df2 = pd.DataFrame([objs * 3] * 1000)
-    assert 400_000 < sizeof(df2) < 550_000
+    df1 = pd.DataFrame([objs * 3] * 1000, dtype=dtype)
+    assert 400_000 < sizeof(df1) < 550_000
 
     # Low duplication of references to the same object, across different columns
-    df3 = pd.DataFrame([[x, y], [z, w]])
-    df4 = pd.DataFrame([[x, y], [z, x]])
-    df5 = pd.DataFrame([[x, x], [x, x]])
-    assert sizeof(df5) < sizeof(df4) < sizeof(df3)
+    df2 = pd.DataFrame([[x, y], [z, w]], dtype=dtype)
+    df3 = pd.DataFrame([[x, y], [z, x]], dtype=dtype)
+    df4 = pd.DataFrame([[x, x], [x, x]], dtype=dtype)
+    assert sizeof(df4) < sizeof(df3) < sizeof(df2)
 
 
-def test_empty():
-    pd = pytest.importorskip("pandas")
+@requires_pandas_130
+@pytest.mark.parametrize("cls_name", ["Series", "DataFrame", "Index"])
+def test_pandas_string_arrow_dtype(cls_name):
+    pytest.importorskip("pyarrow")
+    cls = getattr(pd, cls_name)
+
+    s = cls(["x" * 100_000, "y" * 50_000], dtype="string[pyarrow]")
+    assert 150_000 < sizeof(s) < 155_000
+
+
+@requires_pandas
+def test_pandas_empty():
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": ["a" * 100, "b" * 100, "c" * 100]}, index=[10, 20, 30]
     )
@@ -155,8 +184,8 @@ def test_empty():
     assert sizeof(empty.index) > 0
 
 
+@requires_pandas
 def test_pyarrow_table():
-    pd = pytest.importorskip("pandas")
     pa = pytest.importorskip("pyarrow")
     df = pd.DataFrame(
         {"x": [1, 2, 3], "y": ["a" * 100, "b" * 100, "c" * 100]}, index=[10, 20, 30]
