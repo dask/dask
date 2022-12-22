@@ -138,7 +138,7 @@ def register_pandas():
     from dask.dataframe._compat import PANDAS_GT_130, dtype_eq
 
     if PANDAS_GT_130:
-        OBJECT_DTYPES = (object, pd.StringDtype())
+        OBJECT_DTYPES = (object, pd.StringDtype("python"))
     else:
         OBJECT_DTYPES = (object,)
 
