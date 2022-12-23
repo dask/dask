@@ -22,6 +22,7 @@ from dask.dataframe._compat import (
     PANDAS_GT_121,
     PANDAS_GT_130,
     PANDAS_GT_150,
+    PANDAS_GT_200,
 )
 from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
@@ -1149,13 +1150,39 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": pd.Categorical([1, 2, 1])}), {}, {"categories": ["x"]}),
         (pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"), {}, {}),
+        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"), {}, {}),
         pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"),
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
             {},
             {},
+            marks=[
+                # fails on pyarrow
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                ),
+                # fails on fastparquet
+                pytest.mark.xfail(
+                    PANDAS_GT_200,
+                    reason="https://github.com/dask/fastparquet/issues/837",
+                ),
+            ],
         ),
-        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
-        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+            {},
+            {},
+            marks=[
+                # fails on pyarrow
+                pytest.mark.xfail(
+                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+                ),
+                # fails on fastparquet
+                pytest.mark.xfail(
+                    PANDAS_GT_200,
+                    reason="https://github.com/dask/fastparquet/issues/837",
+                ),
+            ],
+        ),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, UTC]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, CET]"), {}, {}),
@@ -2417,8 +2444,18 @@ def test_append_cat_fp(tmpdir, engine):
         pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}),  # us
         pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"),
         # pd.DataFrame({'x': [3, 2, 1]}).astype('M8[ns]'), # Casting errors
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-        pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
+        pytest.param(
+            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
+            ),
+        ),
         pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"),
         pd.DataFrame({"x": [3, 2, 1]}).astype("float32"),
         pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]),
