@@ -3543,6 +3543,7 @@ def test_contains_series_raises_deprecated_warning_preserves_behavior():
     assert not output
 
 
+@pytest.mark.skipif(PANDAS_GT_200, reason="iteritems has been removed")
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)
