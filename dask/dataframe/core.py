@@ -3763,24 +3763,26 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    @derived_from(pd.Series)
-    def iteritems(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "iteritems is deprecated and will be removed in a future version. "
-                "Use .items instead.",
-                FutureWarning,
-            )
-        # We use the `_` generator below to ensure the deprecation warning above
-        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
-        # iteration happens
+    if not PANDAS_GT_200:
 
-        def _(self):
-            for i in range(self.npartitions):
-                s = self.get_partition(i).compute()
-                yield from s.items()
+        @derived_from(pd.Series)
+        def iteritems(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "iteritems is deprecated and will be removed in a future version. "
+                    "Use .items instead.",
+                    FutureWarning,
+                )
+            # We use the `_` generator below to ensure the deprecation warning above
+            # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+            # iteration happens
 
-        return _(self)
+            def _(self):
+                for i in range(self.npartitions):
+                    s = self.get_partition(i).compute()
+                    yield from s.items()
+
+            return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
