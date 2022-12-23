@@ -3293,12 +3293,16 @@ def test_cov_gpu(numeric_only):
     df = cudf.from_pandas(_compat.makeDataFrame())
     ddf = dd.from_pandas(df, npartitions=6)
 
-    res = ddf.cov(**numeric_only)
+    numeric_only_kwarg = {}
+    if numeric_only is not None and PANDAS_GT_150:
+        numeric_only_kwarg = {"numeric_only": numeric_only}
+
+    res = ddf.cov(**numeric_only_kwarg)
     res2 = ddf.cov(**numeric_only, split_every=2)
-    sol = df.cov(**numeric_only)
+    sol = df.cov(**numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
-    assert res._name == ddf.cov(**numeric_only)._name
+    assert res._name == ddf.cov(**numeric_only_kwarg)._name
     assert res._name != res2._name
 
 
