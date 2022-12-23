@@ -3298,7 +3298,7 @@ def test_cov_gpu(numeric_only):
         numeric_only_kwarg = {"numeric_only": numeric_only}
 
     res = ddf.cov(**numeric_only_kwarg)
-    res2 = ddf.cov(**numeric_only, split_every=2)
+    res2 = ddf.cov(**numeric_only_kwarg, split_every=2)
     sol = df.cov(**numeric_only_kwarg)
     assert_eq(res, sol)
     assert_eq(res2, sol)
