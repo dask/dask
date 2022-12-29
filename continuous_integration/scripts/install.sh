@@ -72,6 +72,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
 fi
 
+# Install nuke-hlg distributed branch
+python -m pip install --no-deps git+https://github.com/mrocklin/distributed@nuke-hlg
+
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
 echo mamba list

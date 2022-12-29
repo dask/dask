@@ -13,16 +13,9 @@ from tlz.curried import map
 
 from dask.base import tokenize
 from dask.blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
-from dask.core import flatten, keys_in_tasks
+from dask.core import flatten
 from dask.highlevelgraph import Layer
-from dask.utils import (
-    apply,
-    cached_cumsum,
-    concrete,
-    insert,
-    stringify,
-    stringify_collection_keys,
-)
+from dask.utils import apply, cached_cumsum, concrete, insert, stringify
 
 #
 ##
@@ -71,15 +64,6 @@ class ArrayBlockwiseDep(BlockwiseDep):
 
     def __getitem__(self, idx: tuple[int, ...]):
         raise NotImplementedError("Subclasses must implement __getitem__")
-
-    def __dask_distributed_pack__(
-        self, required_indices: list[tuple[int, ...]] | None = None
-    ):
-        return {"chunks": self.chunks}
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)
 
 
 class ArrayChunkShapeDep(ArrayBlockwiseDep):
@@ -223,10 +207,6 @@ class ArrayOverlapLayer(Layer):
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state):
-        return cls(**state)._construct_graph(deserializing=True)
 
 
 def _expand_keys_around_center(k, dims, name=None, axes=None):
@@ -411,9 +391,7 @@ class SimpleShuffleLayer(Layer):
         # See https://github.com/dask/dask/pull/6051 for a detailed discussion.
         self.annotations = self.annotations or {}
         if "priority" not in self.annotations:
-            self.annotations["priority"] = {}
-        self.annotations["priority"]["__expanded_annotations__"] = None
-        self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
+            self.annotations["priority"] = 1
 
     def get_split_keys(self):
         # Return SimpleShuffleLayer "split" keys
@@ -522,47 +500,6 @@ class SimpleShuffleLayer(Layer):
             "annotations",
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def __dask_distributed_pack__(
-        self, all_hlg_keys, known_key_dependencies, client, client_keys
-    ):
-        from distributed.protocol.serialize import to_serialize
-
-        return {
-            "name": self.name,
-            "column": self.column,
-            "npartitions": self.npartitions,
-            "npartitions_input": self.npartitions_input,
-            "ignore_index": self.ignore_index,
-            "name_input": self.name_input,
-            "meta_input": to_serialize(self.meta_input),
-            "parts_out": list(self.parts_out),
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
-
-        # msgpack will convert lists into tuples, here
-        # we convert them back to lists
-        if isinstance(state["column"], tuple):
-            state["column"] = list(state["column"])
-        if "inputs" in state:
-            state["inputs"] = list(state["inputs"])
-
-        # Materialize the layer
-        layer_dsk = cls(**state)._construct_graph(deserializing=True)
-
-        # Convert all keys to strings and dump tasks
-        layer_dsk = {
-            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
-        }
-        keys = layer_dsk.keys() | dsk.keys()
-
-        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
-
-        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple shuffle operation."""
@@ -719,13 +656,6 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
 
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        ret = super().__dask_distributed_pack__(*args, **kwargs)
-        ret["inputs"] = self.inputs
-        ret["stage"] = self.stage
-        ret["nsplits"] = self.nsplits
-        return ret
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
@@ -920,47 +850,6 @@ class BroadcastJoinLayer(Layer):
 
     def __len__(self):
         return len(self._dict)
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        import pickle
-
-        # Pickle complex merge_kwargs elements. Also
-        # tuples, which may be confused with keys.
-        _merge_kwargs = {}
-        for k, v in self.merge_kwargs.items():
-            if not isinstance(v, (str, list, bool)):
-                _merge_kwargs[k] = pickle.dumps(v)
-            else:
-                _merge_kwargs[k] = v
-
-        return {
-            "name": self.name,
-            "npartitions": self.npartitions,
-            "lhs_name": self.lhs_name,
-            "lhs_npartitions": self.lhs_npartitions,
-            "rhs_name": self.rhs_name,
-            "rhs_npartitions": self.rhs_npartitions,
-            "parts_out": self.parts_out,
-            "merge_kwargs": _merge_kwargs,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
-
-        # Expand merge_kwargs
-        merge_kwargs = state.pop("merge_kwargs", {})
-        state.update(merge_kwargs)
-
-        # Materialize the layer
-        raw = cls(**state)._construct_graph(deserializing=True)
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
-
-        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -1512,49 +1401,3 @@ class DataFrameTreeReduction(Layer):
             return culled_layer, deps
         else:
             return self, deps
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        from distributed.protocol.serialize import to_serialize
-
-        # Pickle the (possibly) user-defined functions here
-        _concat_func = to_serialize(self.concat_func)
-        _tree_node_func = to_serialize(self.tree_node_func)
-        if self.finalize_func:
-            _finalize_func = to_serialize(self.finalize_func)
-        else:
-            _finalize_func = None
-
-        return {
-            "name": self.name,
-            "name_input": self.name_input,
-            "npartitions_input": self.npartitions_input,
-            "concat_func": _concat_func,
-            "tree_node_func": _tree_node_func,
-            "finalize_func": _finalize_func,
-            "split_every": self.split_every,
-            "split_out": self.split_out,
-            "output_partitions": self.output_partitions,
-            "tree_node_name": self.tree_node_name,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.protocol.serialize import to_serialize
-
-        # Materialize the layer
-        raw = cls(**state)._construct_graph()
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        keys = raw.keys() | dsk.keys()
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
-
-        # Must use `to_serialize` on the entire task.
-        # This is required because the task-tuples contain `Serialized`
-        # function objects instead of real functions. Using `dumps_task`
-        # may or may not correctly wrap the entire tuple in `to_serialize`.
-        # So we use `to_serialize` here to be explicit. When the task
-        # arrives at a worker, both the `Serialized` task-tuples and the
-        # `Serialized` functions nested within them should be deserialzed
-        # automatically by the comm.
-        return {"dsk": toolz.valmap(to_serialize, raw), "deps": deps}
