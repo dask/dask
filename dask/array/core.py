@@ -27,7 +27,6 @@ from threading import Lock
 from typing import Any, TypeVar, Union, cast
 
 import numpy as np
-from fsspec import get_mapper
 from tlz import accumulate, concat, first, frequencies, groupby, partition
 from tlz.curried import pluck
 
@@ -3562,11 +3561,13 @@ def from_zarr(
     elif isinstance(url, (str, os.PathLike)):
         if isinstance(url, os.PathLike):
             url = os.fspath(url)
-        mapper = get_mapper(url, **storage_options)
-        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        if storage_options:
+            store = zarr.storage.FSStore(url, **storage_options)
+        else:
+            store = url
+        z = zarr.Array(store, read_only=True, path=component, **kwargs)
     else:
-        mapper = url
-        z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
+        z = zarr.Array(url, read_only=True, path=component, **kwargs)
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
@@ -3674,11 +3675,10 @@ def to_zarr(
 
     storage_options = storage_options or {}
 
-    if isinstance(url, str):
-        mapper = get_mapper(url, **storage_options)
+    if storage_options:
+        store = zarr.storage.FSStore(url, **storage_options)
     else:
-        # assume the object passed is already a mapper
-        mapper = url
+        store = url
 
     chunks = [c[0] for c in arr.chunks]
 
@@ -3686,7 +3686,7 @@ def to_zarr(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
-        store=mapper,
+        store=store,
         path=component,
         overwrite=overwrite,
         **kwargs,
