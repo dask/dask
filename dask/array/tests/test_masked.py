@@ -462,7 +462,12 @@ def test_nonzero():
     ]:
         sol = np.ma.nonzero(c1)
         res = da.ma.nonzero(c2)
-        assert_eq(sol, res)
+
+        assert isinstance(res, type(sol))
+        assert len(res) == len(sol)
+
+        for i in range(len(sol)):
+            assert_eq(res[i], sol[i])
 
 
 def test_where():
@@ -478,7 +483,8 @@ def test_where():
     # Nonzero test
     sol = np.ma.where(x)
     res = da.ma.where(d)
-    assert_eq(res, sol)
+    for i in range(len(sol)):
+        assert_eq(res[i], sol[i])
 
     for c1, c2 in [
         (d > 5, x > 5),
