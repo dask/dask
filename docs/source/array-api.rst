@@ -373,8 +373,10 @@ Masked Arrays
    ma.masked_outside
    ma.masked_values
    ma.masked_where
+   ma.nonzero
    ma.ones_like
    ma.set_fill_value
+   ma.where
    ma.zeros_like
 
 Random

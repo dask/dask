@@ -3,9 +3,10 @@ from functools import wraps
 import numpy as np
 
 from dask.array import chunk
-from dask.array.core import asanyarray, blockwise, map_blocks
+from dask.array.core import asanyarray, blockwise, elemwise, map_blocks
 from dask.array.reductions import reduction
 from dask.array.routines import _average
+from dask.array.routines import nonzero as _nonzero
 from dask.base import normalize_token
 from dask.utils import derived_from
 
@@ -208,3 +209,18 @@ def zeros_like(a, **kwargs):
 def empty_like(a, **kwargs):
     a = asanyarray(a)
     return a.map_blocks(np.ma.core.empty_like, **kwargs)
+
+
+@derived_from(np.ma.core)
+def nonzero(a):
+    return _nonzero(getdata(a) * ~getmaskarray(a))
+
+
+@derived_from(np.ma.core)
+def where(condition, x=None, y=None):
+    if (x is None) != (y is None):
+        raise ValueError("either both or neither of x and y should be given")
+    if (x is None) and (y is None):
+        return nonzero(condition)
+    else:
+        return elemwise(np.ma.where, condition, x, y)
