@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+import sys
 from collections.abc import Hashable, Mapping, Sequence
 from typing import Any
 
 import pytest
-import sys
 
 import dask
 import dask.threaded
@@ -20,6 +20,7 @@ from dask.typing import (
 
 try:
     from IPython.display import DisplayObject
+
     # IPython imports jedi by default, which improperly raises this value, leading to stack overflows
     sys.setrecursionlimit(1000)
 except ImportError:

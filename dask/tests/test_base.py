@@ -547,6 +547,7 @@ def test_tokenize_dense_sparse_array(cls_name):
     b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
+
 def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
