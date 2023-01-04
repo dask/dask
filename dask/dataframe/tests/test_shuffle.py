@@ -1540,11 +1540,14 @@ def test_sort_values_timestamp(npartitions):
     assert_eq(result, expected)
 
 
-def test_sort_values_with_null_partition():
+@pytest.mark.parametrize(
+    "dtype", ["Int64", "Float64", "int64[pyarrow]", "float64[pyarrow]"]
+)
+def test_sort_values_with_null_partition(dtype):
     df = pd.DataFrame({"a": [2, 3, 1, 2, None, None]})
-    df["a"] = df["a"].astype("Int64")
+    df["a"] = df["a"].astype(dtype)
     # note the partition size means we will have one partition with only pd.NA
-    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = dd.from_pandas(df, npartitions=3)
 
     result = ddf.sort_values("a")
     expected = df.sort_values("a")
