@@ -547,11 +547,6 @@ def test_tokenize_dense_sparse_array(cls_name):
     b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
 
-
-@pytest.mark.skipif(
-    sys.platform == "win32" and sys.version_info[:2] == (3, 9),
-    reason="https://github.com/ipython/ipython/issues/12197",
-)
 def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
