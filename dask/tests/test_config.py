@@ -70,9 +70,9 @@ def test_collect_yaml_paths():
 
     with tmpfile(extension="yaml") as fn1:
         with tmpfile(extension="yaml") as fn2:
-            with open(fn1, "w") as f:
+            with open(fn1, "w", encoding="utf8") as f:
                 yaml.dump(a, f)
-            with open(fn2, "w") as f:
+            with open(fn2, "w", encoding="utf8") as f:
                 yaml.dump(b, f)
 
             config = merge(*collect_yaml(paths=[fn1, fn2]))
@@ -87,9 +87,9 @@ def test_collect_yaml_dir():
 
     with tmpfile() as dirname:
         os.mkdir(dirname)
-        with open(os.path.join(dirname, "a.yaml"), mode="w") as f:
+        with open(os.path.join(dirname, "a.yaml"), mode="w", encoding="utf8") as f:
             yaml.dump(a, f)
-        with open(os.path.join(dirname, "b.yaml"), mode="w") as f:
+        with open(os.path.join(dirname, "b.yaml"), mode="w", encoding="utf8") as f:
             yaml.dump(b, f)
 
         config = merge(*collect_yaml(paths=[dirname]))
@@ -119,9 +119,9 @@ def test_collect_yaml_permission_errors(tmpdir, kind):
     a_path = os.path.join(dir_path, "a.yaml")
     b_path = os.path.join(dir_path, "b.yaml")
 
-    with open(a_path, mode="w") as f:
+    with open(a_path, mode="w", encoding="utf8") as f:
         yaml.dump(a, f)
-    with open(b_path, mode="w") as f:
+    with open(b_path, mode="w", encoding="utf8") as f:
         yaml.dump(b, f)
 
     if kind == "directory":
@@ -198,9 +198,9 @@ def test_collect():
 
     with tmpfile(extension="yaml") as fn1:
         with tmpfile(extension="yaml") as fn2:
-            with open(fn1, "w") as f:
+            with open(fn1, "w", encoding="utf8") as f:
                 yaml.dump(a, f)
-            with open(fn2, "w") as f:
+            with open(fn2, "w", encoding="utf8") as f:
                 yaml.dump(b, f)
 
             config = collect([fn1, fn2], env=env)
@@ -231,22 +231,22 @@ def test_ensure_file(tmpdir):
     dest = os.path.join(str(tmpdir), "dest")
     destination = os.path.join(dest, "source.yaml")
 
-    with open(source, "w") as f:
+    with open(source, "w", encoding="utf8") as f:
         yaml.dump(a, f)
 
     ensure_file(source=source, destination=dest, comment=False)
 
-    with open(destination) as f:
+    with open(destination, "rb") as f:
         result = yaml.safe_load(f)
     assert result == a
 
     # don't overwrite old config files
-    with open(source, "w") as f:
+    with open(source, "w", encoding="utf8") as f:
         yaml.dump(b, f)
 
     ensure_file(source=source, destination=dest, comment=False)
 
-    with open(destination) as f:
+    with open(destination, "rb") as f:
         result = yaml.safe_load(f)
     assert result == a
 
@@ -255,11 +255,11 @@ def test_ensure_file(tmpdir):
     # Write again, now with comments
     ensure_file(source=source, destination=dest, comment=True)
 
-    with open(destination) as f:
+    with open(destination, encoding="utf8") as f:
         text = f.read()
     assert "123" in text
 
-    with open(destination) as f:
+    with open(destination, "rb") as f:
         result = yaml.safe_load(f)
     assert not result
 
@@ -326,7 +326,7 @@ def test_ensure_file_directory(mkdir, tmpdir):
     source = os.path.join(str(tmpdir), "source.yaml")
     dest = os.path.join(str(tmpdir), "dest")
 
-    with open(source, "w") as f:
+    with open(source, "w", encoding="utf8") as f:
         yaml.dump(a, f)
 
     if mkdir:
@@ -341,7 +341,7 @@ def test_ensure_file_directory(mkdir, tmpdir):
 def test_ensure_file_defaults_to_DASK_CONFIG_directory(tmpdir):
     a = {"x": 1, "y": {"a": 1}}
     source = os.path.join(str(tmpdir), "source.yaml")
-    with open(source, "w") as f:
+    with open(source, "w", encoding="utf8") as f:
         yaml.dump(a, f)
 
     destination = os.path.join(str(tmpdir), "dask")
@@ -449,10 +449,10 @@ def test_schema():
     config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
     schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
 
-    with open(config_fn) as f:
+    with open(config_fn, "rb") as f:
         config = yaml.safe_load(f)
 
-    with open(schema_fn) as f:
+    with open(schema_fn, "rb") as f:
         schema = yaml.safe_load(f)
 
     jsonschema.validate(config, schema)
@@ -462,10 +462,10 @@ def test_schema_is_complete():
     config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
     schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
 
-    with open(config_fn) as f:
+    with open(config_fn, "rb") as f:
         config = yaml.safe_load(f)
 
-    with open(schema_fn) as f:
+    with open(schema_fn, "rb") as f:
         schema = yaml.safe_load(f)
 
     def test_matches(c, s):

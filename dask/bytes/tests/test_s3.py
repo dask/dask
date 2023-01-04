@@ -207,7 +207,7 @@ def s3_with_yellow_tripdata(s3):
     sample = pd.DataFrame(data)
     df = sample.take(np.arange(5).repeat(10000))
     file = io.BytesIO()
-    sfile = io.TextIOWrapper(file)
+    sfile = io.TextIOWrapper(file, encoding="utf8")
     df.to_csv(sfile, index=False)
 
     key = "nyc-taxi/2015/yellow_tripdata_2015-01.csv"

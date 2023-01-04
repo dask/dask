@@ -148,7 +148,7 @@ def _load_config_file(path: str) -> dict | None:
     """A helper for loading a config file from a path, and erroring
     appropriately if the file is malformed."""
     try:
-        with open(path) as f:
+        with open(path, "rb") as f:
             config = yaml.safe_load(f.read())
     except OSError:
         # Ignore permission errors
@@ -282,17 +282,17 @@ def ensure_file(
             # a race condition where a process can be busy creating the
             # destination while another process reads an empty config file.
             tmp = "%s.tmp.%d" % (destination, os.getpid())
-            with open(source) as f:
+            with open(source, "rb") as f:
                 lines = list(f)
 
             if comment:
                 lines = [
-                    "# " + line if line.strip() and not line.startswith("#") else line
+                    b"# " + line if line.strip() and not line.startswith(b"#") else line
                     for line in lines
                 ]
 
-            with open(tmp, "w") as f:
-                f.write("".join(lines))
+            with open(tmp, "wb") as f:
+                f.write(b"".join(lines))
 
             try:
                 os.rename(tmp, destination)
@@ -709,7 +709,7 @@ def deserialize(data: str) -> Any:
 def _initialize() -> None:
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
 
-    with open(fn) as f:
+    with open(fn, "rb") as f:
         _defaults = yaml.safe_load(f)
 
     update_defaults(_defaults)

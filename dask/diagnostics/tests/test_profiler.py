@@ -356,7 +356,7 @@ def test_saves_file():
         prof.visualize(show=False, filename=fn)
 
         assert os.path.exists(fn)
-        with open(fn) as f:
+        with open(fn, encoding="utf8") as f:
             assert "html" in f.read().lower()
 
 

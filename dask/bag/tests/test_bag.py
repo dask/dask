@@ -644,7 +644,7 @@ def test_from_url():
 
 
 def test_read_text():
-    with filetexts({"a1.log": "A\nB", "a2.log": "C\nD"}) as fns:
+    with filetexts({"a1.log": b"A\nB", "a2.log": b"C\nD"}, mode="b") as fns:
         assert {line.strip() for line in db.read_text(fns)} == set("ABCD")
         assert {line.strip() for line in db.read_text("a*.log")} == set("ABCD")
 
@@ -1014,7 +1014,7 @@ def test_to_textfiles_endlines():
     with tmpfile() as fn:
         for last_endline in False, True:
             b.to_textfiles([fn], last_endline=last_endline)
-            with open(fn) as f:
+            with open(fn, encoding="utf8") as f:
                 result = f.readlines()
             assert result == ["a\n", "b\n", "c\n" if last_endline else "c"]
 

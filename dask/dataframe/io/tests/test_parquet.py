@@ -4015,8 +4015,8 @@ def test_ignore_metadata_file(tmpdir, engine, calculate_divisions):
 
     # Copy "bad" metadata into `dataset_with_bad_metadata`
     assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
-    with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "w") as f:
-        f.write("INVALID METADATA")
+    with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "wb") as f:
+        f.write(b"INVALID METADATA")
     assert "_metadata" in os.listdir(dataset_with_bad_metadata)
     assert "_metadata" not in os.listdir(dataset_without_metadata)
 
@@ -4089,8 +4089,8 @@ def test_extra_file(tmpdir, engine, partition_on):
         write_metadata_file=True,
         partition_on=partition_on,
     )
-    open(os.path.join(tmpdir, "_SUCCESS"), "w").close()
-    open(os.path.join(tmpdir, "part.0.parquet.crc"), "w").close()
+    open(os.path.join(tmpdir, "_SUCCESS"), "wb").close()
+    open(os.path.join(tmpdir, "part.0.parquet.crc"), "wb").close()
     os.remove(os.path.join(tmpdir, "_metadata"))
     out = dd.read_parquet(tmpdir, engine=engine, calculate_divisions=True)
     # Weird two-step since that we don't care if category ordering changes

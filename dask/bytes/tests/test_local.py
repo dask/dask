@@ -339,7 +339,7 @@ def test_abs_paths(tmpdir):
     tmpdir = str(tmpdir)
     here = os.getcwd()
     os.chdir(tmpdir)
-    with open("tmp", "w") as f:
+    with open("tmp", "w", encoding="utf8") as f:
         f.write("hi")
     out = LocalFileSystem().glob("*")
     assert len(out) == 1

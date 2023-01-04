@@ -97,8 +97,8 @@ def test_read_text_unicode_no_collection(tmp_path):
 
 
 def test_files_per_partition():
-    files3 = {f"{n:02}.txt": "line from {:02}" for n in range(20)}
-    with filetexts(files3):
+    files3 = {f"{n:02}.txt": f"line from {n:02}".encode() for n in range(20)}
+    with filetexts(files3, mode="b"):
         # single-threaded scheduler to ensure the warning happens in the
         # same thread as the pytest.warns
         with config.set({"scheduler": "single-threaded"}):
@@ -110,8 +110,8 @@ def test_files_per_partition():
 
             assert b.count().compute() == 20, "All 20 lines should be read"
 
+            b = read_text("*.txt", files_per_partition=10, include_path=True)
             with pytest.warns(UserWarning):
-                b = read_text("*.txt", files_per_partition=10, include_path=True)
                 p = b.take(100, npartitions=1)
 
             p_paths = tuple(zip(*p))[1]
@@ -134,8 +134,10 @@ def test_errors():
 
 
 def test_complex_delimiter():
-    longstr = "abc\ndef\n123\n$$$$\ndog\ncat\nfish\n\n\r\n$$$$hello"
-    with filetexts({".test.delim.txt": longstr}):
+    with filetexts(
+        {".test.delim.txt": b"abc\ndef\n123\n$$$$\ndog\ncat\nfish\n\n\r\n$$$$hello"},
+        mode="b",
+    ):
         assert read_text(".test.delim.txt", linedelimiter="$$$$").count().compute() == 3
         assert (
             read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
