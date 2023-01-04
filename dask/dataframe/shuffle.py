@@ -50,7 +50,10 @@ def _calculate_divisions(
         # 1) computing mins/maxes above, 2) every null being switched to NaN, and 3) NaN being a float.
         # Also, Pandas ExtensionDtypes may cause TypeErrors when dealing with special nulls such as pd.NaT or pd.NA.
         # If this happens, we hint the user about eliminating nulls beforehand.
-        if not is_numeric_dtype(partition_col.dtype):
+        if not (
+            is_numeric_dtype(partition_col.dtype)
+            or getattr(partition_col.dtype, "_is_numeric", False)
+        ):
             obj, suggested_method = (
                 ("column", f"`.dropna(subset=['{partition_col.name}'])`")
                 if any(partition_col._name == df[c]._name for c in df)
@@ -185,6 +188,10 @@ def sort_values(
     ):
         # divisions are in the right place
         return df.map_partitions(sort_function, **sort_kwargs)
+
+    # sometimes `_calculate_divisions`` will give us divisions containing pd.NA,
+    # which can't be used in `searchsorted` as part of `rearrange_by_divisions`
+    divisions = [np.NaN if x is pd.NA else x for x in divisions]
 
     df = rearrange_by_divisions(
         df,

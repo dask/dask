@@ -275,7 +275,11 @@ def merge_and_compress_summaries(vals_and_weights):
 
     Equal values will be combined, their weights summed together.
     """
-    vals_and_weights = [x for x in vals_and_weights if x]
+    vals_and_weights = [
+        (list(np.NaN if v is pd.NA else v for v in x[0]), x[1])
+        for x in vals_and_weights
+        if x
+    ]
     if not vals_and_weights:
         return ()
     it = merge_sorted(*[zip(x, y) for x, y in vals_and_weights])
@@ -285,13 +289,13 @@ def merge_and_compress_summaries(vals_and_weights):
     weights_append = weights.append
     val, weight = prev_val, prev_weight = next(it)
     for val, weight in it:
-        if val == prev_val:
+        if val == prev_val or val is prev_val:
             prev_weight += weight
         else:
             vals_append(prev_val)
             weights_append(prev_weight)
             prev_val, prev_weight = val, weight
-    if val == prev_val:
+    if val == prev_val or val is prev_val:
         vals_append(prev_val)
         weights_append(prev_weight)
     return vals, weights
@@ -416,12 +420,17 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     data = df
     interpolation = "linear"
 
-    if getattr(data.dtype, "na_value", None) is pd.NA:
-        data = data.astype("float64")
     if is_categorical_dtype(data):
         data = data.cat.codes
         interpolation = "nearest"
-    elif is_datetime64_dtype(data.dtype) or is_integer_dtype(data.dtype):
+    elif (
+        is_datetime64_dtype(data.dtype)
+        or is_integer_dtype(data.dtype)
+        or (
+            hasattr(data.dtype, "numpy_dtype")
+            and is_integer_dtype(data.dtype.numpy_dtype)
+        )
+    ):
         interpolation = "nearest"
 
     # FIXME: pandas quantile doesn't work with some data types (e.g. strings).
@@ -446,8 +455,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
 
 def dtype_info(df):
     info = None
-    if getattr(df.dtype, "na_value", None) is pd.NA:
-        return "float64", info
     if is_categorical_dtype(df):
         data = df.values
         info = (data.categories, data.ordered)
