@@ -26,7 +26,6 @@ from tlz.functoolz import Compose
 
 from dask import config, local
 from dask.compatibility import _EMSCRIPTEN, _PY_VERSION
-from dask.context import thread_state
 from dask.core import flatten
 from dask.core import get as simple_get
 from dask.core import literal, quote
@@ -1397,13 +1396,15 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     if config.get("get", None):
         raise ValueError(get_err_msg)
 
-    if getattr(thread_state, "key", False):
-        from distributed.worker import get_worker
-
-        return get_worker().client.get
-
     if cls is not None:
         return cls.__dask_scheduler__
+
+    try:
+        from distributed import get_client
+
+        return get_client().get
+    except ValueError:
+        pass
 
     if collections:
         collections = [c for c in collections if c is not None]
