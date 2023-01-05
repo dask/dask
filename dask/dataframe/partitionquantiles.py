@@ -75,11 +75,13 @@ import pandas as pd
 from pandas.api.types import (
     is_datetime64_dtype,
     is_datetime64tz_dtype,
+    is_extension_array_dtype,
     is_integer_dtype,
 )
 from tlz import merge, merge_sorted, take
 
 from dask.base import tokenize
+from dask.dataframe._compat import PANDAS_GT_140
 from dask.dataframe.core import Series
 from dask.dataframe.utils import is_categorical_dtype
 from dask.utils import is_cupy_type, random_state_data
@@ -439,6 +441,11 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
         vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+
+    # FIXME: `ExtensionArrays` don't support `tolist` in pandas<1.4 so we must
+    # cast to a ndarray.
+    if not PANDAS_GT_140 and is_extension_array_dtype(vals):
+        vals = vals.astype("object")
 
     if (
         is_cupy_type(data)
