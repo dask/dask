@@ -36,6 +36,7 @@ from dask.dataframe import methods
 from dask.dataframe._compat import (
     PANDAS_GT_140,
     PANDAS_GT_150,
+    PANDAS_GT_200,
     check_numeric_only_deprecation,
 )
 from dask.dataframe.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
@@ -3228,25 +3229,27 @@ Dask Name: {name}, {layers}"""
             M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
-    @derived_from(pd.Series)
-    def append(self, other, interleave_partitions=False):
-        if PANDAS_GT_140:
-            warnings.warn(
-                "The frame.append method is deprecated and will be removed from"
-                "dask in a future version. Use dask.dataframe.concat instead.",
-                FutureWarning,
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.Series)
+        def append(self, other, interleave_partitions=False):
+            if PANDAS_GT_140:
+                warnings.warn(
+                    "The frame.append method is deprecated and will be removed from"
+                    "dask in a future version. Use dask.dataframe.concat instead.",
+                    FutureWarning,
+                )
+            # because DataFrame.append will override the method,
+            # wrap by pd.Series.append docstring
+            from dask.dataframe.multi import concat
+
+            if isinstance(other, (list, dict)):
+                msg = "append doesn't support list or dict input"
+                raise NotImplementedError(msg)
+
+            return concat(
+                [self, other], join="outer", interleave_partitions=interleave_partitions
             )
-        # because DataFrame.append will override the method,
-        # wrap by pd.Series.append docstring
-        from dask.dataframe.multi import concat
-
-        if isinstance(other, (list, dict)):
-            msg = "append doesn't support list or dict input"
-            raise NotImplementedError(msg)
-
-        return concat(
-            [self, other], join="outer", interleave_partitions=interleave_partitions
-        )
 
     @derived_from(pd.Series)
     def dot(self, other, meta=no_default):
@@ -3760,24 +3763,26 @@ Dask Name: {name}, {layers}""".format(
     def _get_numeric_data(self, how="any", subset=None):
         return self
 
-    @derived_from(pd.Series)
-    def iteritems(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "iteritems is deprecated and will be removed in a future version. "
-                "Use .items instead.",
-                FutureWarning,
-            )
-        # We use the `_` generator below to ensure the deprecation warning above
-        # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
-        # iteration happens
+    if not PANDAS_GT_200:
 
-        def _(self):
-            for i in range(self.npartitions):
-                s = self.get_partition(i).compute()
-                yield from s.items()
+        @derived_from(pd.Series)
+        def iteritems(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "iteritems is deprecated and will be removed in a future version. "
+                    "Use .items instead.",
+                    FutureWarning,
+                )
+            # We use the `_` generator below to ensure the deprecation warning above
+            # is raised when `.iteritems()` is called, not when the first `next(<generator>)`
+            # iteration happens
 
-        return _(self)
+            def _(self):
+                for i in range(self.npartitions):
+                    s = self.get_partition(i).compute()
+                    yield from s.items()
+
+            return _(self)
 
     @derived_from(pd.Series)
     def __iter__(self):
@@ -4185,16 +4190,18 @@ Dask Name: {name}, {layers}""".format(
         res2 = other % self
         return res1, res2
 
-    @property
-    @derived_from(pd.Series)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return self.is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Series)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return self.is_monotonic_increasing
 
     @property
     @derived_from(pd.Series)
@@ -4406,16 +4413,18 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
-    @property
-    @derived_from(pd.Index)
-    def is_monotonic(self):
-        if PANDAS_GT_150:
-            warnings.warn(
-                "is_monotonic is deprecated and will be removed in a future version. "
-                "Use is_monotonic_increasing instead.",
-                FutureWarning,
-            )
-        return super().is_monotonic_increasing
+    if not PANDAS_GT_200:
+
+        @property
+        @derived_from(pd.Index)
+        def is_monotonic(self):
+            if PANDAS_GT_150:
+                warnings.warn(
+                    "is_monotonic is deprecated and will be removed in a future version. "
+                    "Use is_monotonic_increasing instead.",
+                    FutureWarning,
+                )
+            return super().is_monotonic_increasing
 
     @property
     @derived_from(pd.Index)
@@ -5499,17 +5508,19 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
-    def append(self, other, interleave_partitions=False):
-        if isinstance(other, Series):
-            msg = (
-                "Unable to appending dd.Series to dd.DataFrame."
-                "Use pd.Series to append as row."
-            )
-            raise ValueError(msg)
-        elif is_series_like(other):
-            other = other.to_frame().T
-        return super().append(other, interleave_partitions=interleave_partitions)
+    if not PANDAS_GT_200:
+
+        @derived_from(pd.DataFrame)
+        def append(self, other, interleave_partitions=False):
+            if isinstance(other, Series):
+                msg = (
+                    "Unable to appending dd.Series to dd.DataFrame."
+                    "Use pd.Series to append as row."
+                )
+                raise ValueError(msg)
+            elif is_series_like(other):
+                other = other.to_frame().T
+            return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
@@ -8140,7 +8151,13 @@ def _convert_to_numeric(series, skipna):
 
 def _sqrt_and_convert_to_timedelta(partition, axis, *args, **kwargs):
     if axis == 1:
-        return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                category=RuntimeWarning,
+                message="invalid value encountered in cast",
+            )
+            return pd.to_timedelta(M.std(partition, axis=axis, *args, **kwargs))
 
     is_df_like, time_cols = kwargs["is_df_like"], kwargs["time_cols"]
 

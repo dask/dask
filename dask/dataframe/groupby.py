@@ -2594,7 +2594,9 @@ class DataFrameGroupBy(_GroupBy):
                 self.obj, by=self.by, slice=key, sort=self.sort, **self.dropna
             )
 
-        # error is raised from pandas
+        # Need a list otherwise pandas will warn/error
+        if isinstance(key, tuple):
+            key = list(key)
         g._meta = g._meta[key]
         return g
 
