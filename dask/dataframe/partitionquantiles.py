@@ -386,7 +386,7 @@ def process_val_weights(vals_and_weights, npartitions, dtype_info):
         rv = pd.DatetimeIndex(rv).tz_localize(dtype.tz)
     elif "datetime64" in str(dtype):
         rv = pd.DatetimeIndex(rv, dtype=dtype)
-    elif rv.dtype != dtype:
+    elif str(rv.dtype) != str(dtype):
         rv = pd.array(rv, dtype=dtype)
     return rv
 
