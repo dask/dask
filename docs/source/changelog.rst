@@ -1,6 +1,95 @@
 Changelog
 =========
 
+.. _v2022.12.1:
+
+2022.12.1
+---------
+
+Released on December 16, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Support ``dtype_backend="pandas|pyarrow"`` configuration (:pr:`9719`) `James Bourbeau`_
+- Support ``cupy.ndarray`` to ``cudf.DataFrame`` dispatching in ``dask.dataframe`` (:pr:`9579`) `Richard (Rick) Zamora`_
+- Make filesystem-backend configurable in ``read_parquet`` (:pr:`9699`) `Richard (Rick) Zamora`_
+- Serialize all ``pyarrow`` extension arrays efficiently (:pr:`9740`) `James Bourbeau`_
+
+Bug Fixes
+^^^^^^^^^
+- Fix bug when repartitioning with ``tz``-aware datetime index (:pr:`9741`) `James Bourbeau`_
+- Partial functions in aggs may have arguments (:pr:`9724`) `Irina Truong`_
+- Add support for simple operation with ``pyarrow``-backed extension dtypes (:pr:`9717`) `James Bourbeau`_
+- Rename columns correctly in case of ``SeriesGroupby`` (:pr:`9716`) `Lawrence Mitchell`_
+
+Documentation
+^^^^^^^^^^^^^
+- Fix url link typo in collection backend doc (:pr:`9748`) `Shawn`_
+- Update Prometheus docs (:pr:`9696`) `Hendrik Makait`_
+
+Maintenance
+^^^^^^^^^^^
+- Add ``zarr`` to Python 3.11 CI environment (:pr:`9771`) `James Bourbeau`_
+- Add support for Python 3.11 (:pr:`9708`) `Thomas Grainger`_
+- Bump ``actions/checkout`` from 3.1.0 to 3.2.0 (:pr:`9753`)
+- Avoid ``np.bool8`` deprecation warning (:pr:`9737`) `James Bourbeau`_
+- Make sure dev packages aren't overwritten in ``upstream`` CI build (:pr:`9731`) `James Bourbeau`_
+- Avoid adding ``data.h5`` and ``mydask.html`` files during tests (:pr:`9726`) `Thomas Grainger`_
+
+
+.. _v2022.12.0:
+
+2022.12.0
+---------
+
+Released on December 2, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Remove statistics-based ``set_index`` logic from ``read_parquet`` (:pr:`9661`) `Richard (Rick) Zamora`_
+- Add support for ``use_nullable_dtypes`` to ``dd.read_parquet`` (:pr:`9617`) `Ian Rose`_
+- Fix ``map_overlap`` in order to accept pandas arguments (:pr:`9571`) `Fabien Aulaire`_
+- Fix pandas 1.5+ ``FutureWarning`` in ``.str.split(..., expand=True)`` (:pr:`9704`) `Jacob Hayes`_
+- Enable column projection for ``groupby`` slicing (:pr:`9667`) `Richard (Rick) Zamora`_
+- Support duplicate column cum-functions (:pr:`9685`) `Ben`_
+- Improve error message for failed backend dispatch call (:pr:`9677`) `Richard (Rick) Zamora`_
+
+Bug Fixes
+^^^^^^^^^
+- Revise meta creation in arrow parquet engine (:pr:`9672`) `Richard (Rick) Zamora`_
+- Fix ``da.fft.fft`` for array-like inputs (:pr:`9688`) `James Bourbeau`_
+- Fix ``groupby`` -aggregation when grouping on an index by name (:pr:`9646`) `Richard (Rick) Zamora`_
+
+Maintenance
+^^^^^^^^^^^
+- Avoid ``PytestReturnNotNoneWarning`` in ``test_inheriting_class`` (:pr:`9707`) `Thomas Grainger`_
+- Fix flaky ``test_dataframe_aggregations_multilevel`` (:pr:`9701`) `Richard (Rick) Zamora`_
+- Bump ``mypy`` version (:pr:`9697`) `crusaderky`_
+- Disable dashboard in ``test_map_partitions_df_input`` (:pr:`9687`) `James Bourbeau`_
+- Use latest ``xarray-contrib/issue-from-pytest-log`` in ``upstream`` build (:pr:`9682`) `James Bourbeau`_
+- ``xfail`` ``ttest_1samp`` for upstream ``scipy`` (:pr:`9670`) `James Bourbeau`_
+- Update gpuCI ``RAPIDS_VER`` to ``23.02`` (:pr:`9678`)
+
+
+.. _v2022.11.1:
+
+2022.11.1
+---------
+
+Released on November 18, 2022
+
+Enhancements
+^^^^^^^^^^^^
+- Restrict ``bokeh=3`` support (:pr:`9673`) `Gabe Joseph`_
+- Updates for ``fastparquet`` evolution (:pr:`9650`) `Martin Durant`_
+
+Maintenance
+^^^^^^^^^^^
+- Update ``ga-yaml-parser`` step in gpuCI updating workflow  (:pr:`9675`) `Charles Blackmon-Luca`_
+- Revert ``importlib.metadata`` workaround (:pr:`9658`) `James Bourbeau`_
+- Fix ``mindeps-distributed`` CI build to handle ``numpy``/``pandas`` not being installed  (:pr:`9668`) `James Bourbeau`_
+
+
 .. _v2022.11.0:
 
 2022.11.0
@@ -6120,3 +6209,5 @@ Other
 .. _`ChrisJar`: https://github.com/ChrisJar
 .. _`Shingo OKAWA`: https://github.com/ognis1205
 .. _`qheuristics`: https://github.com/qheuristics
+.. _`Jacob Hayes`: https://github.com/JacobHayes
+.. _`Shawn`: https://github.com/chaokunyang

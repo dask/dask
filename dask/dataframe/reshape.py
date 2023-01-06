@@ -5,6 +5,7 @@ import pandas as pd
 from pandas.api.types import is_list_like, is_scalar
 
 from dask.dataframe import methods
+from dask.dataframe._compat import PANDAS_GT_200
 from dask.dataframe.core import DataFrame, Series, apply_concat_apply, map_partitions
 from dask.dataframe.utils import has_known_categories
 from dask.utils import M
@@ -12,6 +13,9 @@ from dask.utils import M
 ###############################################################
 # Dummies
 ###############################################################
+
+
+_get_dummies_dtype_default = bool if PANDAS_GT_200 else np.uint8
 
 
 def get_dummies(
@@ -22,7 +26,7 @@ def get_dummies(
     columns=None,
     sparse=False,
     drop_first=False,
-    dtype=np.uint8,
+    dtype=_get_dummies_dtype_default,
     **kwargs,
 ):
     """
@@ -60,7 +64,7 @@ def get_dummies(
         Whether to get k-1 dummies out of k categorical levels by removing the
         first level.
 
-    dtype : dtype, default np.uint8
+    dtype : dtype, default bool
         Data type for new columns. Only a single dtype is allowed.
 
         .. versionadded:: 0.18.2

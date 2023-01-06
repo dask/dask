@@ -5,9 +5,11 @@ from time import sleep
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import Version
 
 import dask
 import dask.dataframe as dd
+from dask.compatibility import _PY_VERSION
 from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -46,6 +48,10 @@ def test_to_hdf():
         tm.assert_frame_equal(df, out[:])
 
 
+@pytest.mark.skipif(
+    _PY_VERSION >= Version("3.11"),
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
+)
 def test_to_hdf_multiple_nodes():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -388,6 +394,10 @@ def test_to_hdf_link_optimizations():
         assert dependency_depth(d.dask) == 2 + a.npartitions
 
 
+@pytest.mark.skipif(
+    _PY_VERSION >= Version("3.11"),
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
+)
 @pytest.mark.slow
 def test_to_hdf_lock_delays():
     pytest.importorskip("tables")
@@ -478,6 +488,10 @@ def test_to_hdf_exceptions():
                 a.to_hdf(hdf, "/data_*_*")
 
 
+@pytest.mark.skipif(
+    _PY_VERSION >= Version("3.11"),
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
+)
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
 @pytest.mark.parametrize("npartitions", [1, 4, 10])
 def test_to_hdf_schedulers(scheduler, npartitions):
@@ -679,6 +693,10 @@ def test_read_hdf_multiply_open():
             dd.read_hdf(fn, "/data", chunksize=2, mode="r")
 
 
+@pytest.mark.skipif(
+    _PY_VERSION >= Version("3.11"),
+    reason="segfaults due to https://github.com/PyTables/PyTables/issues/977",
+)
 def test_read_hdf_multiple():
     pytest.importorskip("tables")
     df = pd.DataFrame(
@@ -910,12 +928,12 @@ def test_hdf_nonpandas_keys():
         dd.read_hdf(path, "/bar")
 
 
-def test_hdf_empty_dataframe():
+def test_hdf_empty_dataframe(tmp_path):
     pytest.importorskip("tables")
     # https://github.com/dask/dask/issues/8707
     from dask.dataframe.io.hdf import dont_use_fixed_error_message
 
     df = pd.DataFrame({"A": [], "B": []}, index=[])
-    df.to_hdf("data.h5", format="fixed", key="df", mode="w")
+    df.to_hdf(tmp_path / "data.h5", format="fixed", key="df", mode="w")
     with pytest.raises(TypeError, match=dont_use_fixed_error_message):
-        dd.read_hdf("data.h5", "df")
+        dd.read_hdf(tmp_path / "data.h5", "df")
