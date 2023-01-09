@@ -1151,38 +1151,8 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         (pd.DataFrame({"x": list(map(pd.Timestamp, [3000, 2000, 1000]))}), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("M8[ns]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"), {}, {}),
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"),
-            {},
-            {},
-            marks=[
-                # fails on pyarrow
-                pytest.mark.xfail(
-                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
-                ),
-                # fails on fastparquet
-                pytest.mark.xfail(
-                    PANDAS_GT_200,
-                    reason="https://github.com/dask/fastparquet/issues/837",
-                ),
-            ],
-        ),
-        pytest.param(
-            pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"),
-            {},
-            {},
-            marks=[
-                # fails on pyarrow
-                pytest.mark.xfail(
-                    PANDAS_GT_200, reason="https://github.com/apache/arrow/issues/15079"
-                ),
-                # fails on fastparquet
-                pytest.mark.xfail(
-                    PANDAS_GT_200,
-                    reason="https://github.com/dask/fastparquet/issues/837",
-                ),
-            ],
-        ),
+        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
+        (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, UTC]"), {}, {}),
         (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, CET]"), {}, {}),
@@ -1209,6 +1179,19 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         and fastparquet_version <= parse_version("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
+    # non-ns times
+    if (
+        PANDAS_GT_200
+        and "x" in df
+        and (df.x.dtype == "M8[ms]" or df.x.dtype == "M8[us]")
+    ):
+        if engine == "pyarrow":
+            pytest.xfail("https://github.com/apache/arrow/issues/15079")
+        elif engine == "fastparquet" and fastparquet_version <= parse_version(
+            "2022.12.0"
+        ):
+            pytest.xfail(reason="https://github.com/dask/fastparquet/issues/837")
+
     if (
         PANDAS_GT_130
         and read_kwargs.get("categories", None)
