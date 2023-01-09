@@ -3,6 +3,8 @@ from __future__ import annotations
 from functools import lru_cache, wraps
 from typing import TYPE_CHECKING, Callable, Generic, TypeVar
 
+from packaging.version import parse as parse_version
+
 from dask import config
 from dask.compatibility import entry_points
 from dask.utils import funcname
@@ -88,7 +90,27 @@ class CreationDispatch(Generic[BackendEntrypointType]):
                 return self.register_backend(backend, entrypoints[backend].load()())
         else:
             return impl
-        raise ValueError(f"No backend dispatch registered for {backend}")
+
+        # Append additional info for cupy and cudf backends
+        extra = ""
+        if backend == "cupy":
+            try:
+                import cupy  # noqa: F401
+
+            except ImportError:
+                extra = " Please try installing cupy"
+        elif backend == "cudf":
+            try:
+                import dask_cudf
+
+            except ImportError:
+                version = "0.0"
+            else:
+                version = dask_cudf.__version__
+            if parse_version(version) < parse_version("22.12"):
+                extra = " Please try installing dask_cudf>=22.12"
+
+        raise ValueError(f"No backend dispatch registered for {backend}.{extra}")
 
     @property
     def backend(self) -> str:
