@@ -738,6 +738,7 @@ async def test_pack_MaterializedLayer_handles_futures_in_graph_properly(c, s, a,
     assert unpacked["deps"] == {"x": {fut.key}, "y": {fut.key}, "z": {"y"}}
 
 
+@pytest.mark.filterwarnings("ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning")
 @pytest.mark.filterwarnings(
     "ignore:Running on a single-machine scheduler when a distributed client "
     "is active might lead to unexpected results."
