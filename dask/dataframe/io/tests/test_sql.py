@@ -41,6 +41,7 @@ def db():
         yield uri
 
 
+@pytest.mark.filterwarnings("ignore:.*:dask.tests.warning_aliases.RemovedIn20Warning")
 def test_empty(db):
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
