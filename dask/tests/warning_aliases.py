@@ -5,5 +5,4 @@ except ModuleNotFoundError:
     class _RemovedIn20Warning(Warning):
         pass
 
-
-RemovedIn20Warning = RemovedIn20Warning or _RemovedIn20Warning
+    RemovedIn20Warning = _RemovedIn20Warning
