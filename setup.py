@@ -37,7 +37,7 @@ install_requires = [
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",
     "packaging >= 20.0",
-    "partd >= 0.3.10",
+    "partd >= 1.1.0",
     "pyyaml >= 5.3.1",
     "toolz >= 0.8.2",
 ]
