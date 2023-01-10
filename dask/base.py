@@ -1361,14 +1361,25 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
         elif isinstance(scheduler, str):
             scheduler = scheduler.lower()
 
+            try:
+                from distributed import default_client
+
+                default_client()
+                client_available = True
+            except ValueError:
+                client_available = False
             if scheduler in named_schedulers:
-                if config.get("scheduler", None) in ("dask.distributed", "distributed"):
+                if client_available:
                     warnings.warn(
                         "Running on a single-machine scheduler when a distributed client "
                         "is active might lead to unexpected results."
                     )
                 return named_schedulers[scheduler]
             elif scheduler in ("dask.distributed", "distributed"):
+                if not client_available:
+                    raise RuntimeError(
+                        f"Requested {scheduler} scheduler but no client active."
+                    )
                 from distributed.worker import get_client
 
                 return get_client().get
