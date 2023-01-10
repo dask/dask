@@ -1378,7 +1378,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             elif scheduler in ("dask.distributed", "distributed"):
                 if not client_available:
                     raise RuntimeError(
-                        f"Requested {scheduler} scheduler but no client active."
+                        f"Requested {scheduler} scheduler but no Client active."
                     )
                 from distributed.worker import get_client
 

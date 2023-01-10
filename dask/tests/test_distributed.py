@@ -808,7 +808,7 @@ def test_set_index_no_resursion_error(c):
 
 
 def test_get_scheduler_without_distributed_raises():
-    msg = "no client"
+    msg = "no Client"
     with pytest.raises(RuntimeError, match=msg):
         get_scheduler(scheduler="dask.distributed")
 
