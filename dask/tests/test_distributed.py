@@ -807,6 +807,15 @@ def test_set_index_no_resursion_error(c):
         pytest.fail("dd.set_index triggered a recursion error")
 
 
+def test_get_scheduler_without_distributed_raises():
+    msg = "no client"
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="dask.distributed")
+
+    with pytest.raises(RuntimeError, match=msg):
+        get_scheduler(scheduler="distributed")
+
+
 def test_get_scheduler_with_distributed_active(c):
     assert get_scheduler() == c.get
     warning_message = (
