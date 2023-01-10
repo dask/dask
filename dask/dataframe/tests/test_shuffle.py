@@ -1545,7 +1545,13 @@ def test_sort_values_timestamp(npartitions):
     "dtype",
     [
         "Int64",
-        "Float64",
+        pytest.param(
+            "Float64",
+            marks=pytest.mark.skipif(
+                not PANDAS_GT_120,
+                reason="Support for Float64 columns added in pandas 1.2",
+            ),
+        ),
         pytest.param(
             "int64[pyarrow]",
             marks=pytest.mark.skipif(
