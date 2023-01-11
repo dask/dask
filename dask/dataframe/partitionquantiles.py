@@ -272,11 +272,7 @@ def merge_and_compress_summaries(vals_and_weights):
 
     Equal values will be combined, their weights summed together.
     """
-    vals_and_weights = [
-        (list(np.NaN if v is pd.NA else v for v in x[0]), x[1])
-        for x in vals_and_weights
-        if x
-    ]
+    vals_and_weights = [x for x in vals_and_weights if x]
     if not vals_and_weights:
         return ()
     it = merge_sorted(*[zip(x, y) for x, y in vals_and_weights])
@@ -429,6 +425,8 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         vals = data.quantile(q=qs / 100, interpolation=interpolation).values
     except (TypeError, NotImplementedError):
         vals, _ = _percentile(array_safe(data, data.dtype), qs, interpolation)
+
+    vals = list(np.nan if v is pd.NA else v for v in vals)
 
     if (
         is_cupy_type(data)
